@@ -595,10 +595,13 @@ serve(async (req) => {
         const cpfFormatado = formatCPF(associado.cpf);
         
         const tentativas = [
-          { label: 'CPF limpo GET', url: `${hinovaApiUrl}/associado/buscar/${cpfLimpo}/cpf`, method: 'GET' as const },
-          { label: 'CPF formatado GET', url: `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`, method: 'GET' as const },
-          { label: 'CPF POST consultar', url: `${hinovaApiUrl}/associado/consultar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpo }) },
-          { label: 'CPF POST buscar', url: `${hinovaApiUrl}/associado/buscar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpo }) },
+          { label: 'GET buscar/cpf limpo', url: `${hinovaApiUrl}/associado/buscar/${cpfLimpo}/cpf`, method: 'GET' as const },
+          { label: 'GET buscar/cpf formatado', url: `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`, method: 'GET' as const },
+          { label: 'GET consultar/cpf', url: `${hinovaApiUrl}/associado/consultar/cpf/${cpfLimpo}`, method: 'GET' as const },
+          { label: 'GET associado/cpf', url: `${hinovaApiUrl}/associado/${cpfLimpo}`, method: 'GET' as const },
+          { label: 'POST consultar', url: `${hinovaApiUrl}/associado/consultar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpo }) },
+          { label: 'POST buscar', url: `${hinovaApiUrl}/associado/buscar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpo }) },
+          { label: 'POST pesquisar', url: `${hinovaApiUrl}/associado/pesquisar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpo }) },
         ];
 
         for (const tentativa of tentativas) {
@@ -606,79 +609,88 @@ serve(async (req) => {
             console.log(`[SGA Sync] Busca backup: ${tentativa.label}...`);
             const buscaResp = await fetchWithRetry(
               tentativa.url,
-              { method: tentativa.method, headers: operationHeaders, ...(tentativa.body && { body: tentativa.body }) }
+              { method: tentativa.method, headers: operationHeaders, ...(tentativa.body && { body: tentativa.body }) },
+              1 // single attempt for search endpoints
             );
             
-            // Tentar parsear body mesmo em respostas não-200 (Hinova pode retornar dados em 406)
+            // SEMPRE ler o body, independente do content-type
             const contentType = buscaResp.headers.get('content-type') || '';
-            if (contentType.includes('application/json')) {
-              const buscaText = await buscaResp.text();
-              console.log(`[SGA Sync] ${tentativa.label} - Status: ${buscaResp.status}, Body: ${buscaText.substring(0, 300)}`);
+            const buscaText = await buscaResp.text();
+            console.log(`[SGA Sync] ${tentativa.label} - Status: ${buscaResp.status}, CT: ${contentType}, Body: ${buscaText.substring(0, 500)}`);
+            
+            // Gravar diagnóstico em sga_sync_logs para cada tentativa
+            await logSync(veiculo_id, associado_id, 'busca_cpf_diagnostico', 
+              buscaResp.ok ? 'success' : 'info',
+              { metodo: tentativa.label, url: tentativa.url },
+              { status: buscaResp.status, content_type: contentType, body_preview: buscaText.substring(0, 500) },
+              buscaResp.ok ? null : `Status ${buscaResp.status}`
+            );
+
+            // Tentar parsear como JSON mesmo se content-type não indica
+            try {
+              const buscaData = JSON.parse(buscaText);
               
-              try {
-                const buscaData = JSON.parse(buscaText);
+              // Extrair código de MUITOS formatos possíveis
+              const codigo = buscaData?.codigo_associado || buscaData?.codigo || 
+                (Array.isArray(buscaData) && buscaData.length > 0 && (buscaData[0]?.codigo_associado || buscaData[0]?.codigo)) ||
+                (buscaData?.data?.codigo_associado) || (buscaData?.data?.codigo) ||
+                (buscaData?.associado?.codigo_associado) || (buscaData?.associado?.codigo) ||
+                (buscaData?.resultado?.codigo_associado) || (buscaData?.resultado?.codigo);
+              
+              if (codigo) {
+                codigoAssociadoHinova = parseInt(String(codigo));
+                console.log(`[SGA Sync] Associado já existe no Hinova! Código: ${codigoAssociadoHinova} (via ${tentativa.label})`);
                 
-                // Extrair código de diferentes formatos de resposta
-                const codigo = buscaData?.codigo_associado || buscaData?.codigo || 
-                  (Array.isArray(buscaData) && buscaData[0]?.codigo_associado) ||
-                  (buscaData?.data?.codigo_associado) ||
-                  (buscaData?.associado?.codigo_associado);
-                
-                if (codigo) {
-                  codigoAssociadoHinova = parseInt(String(codigo));
-                  console.log(`[SGA Sync] Associado já existe no Hinova! Código: ${codigoAssociadoHinova} (via ${tentativa.label})`);
-                  
-                  await supabase.from('associados').update({ 
-                    codigo_hinova: codigoAssociadoHinova,
-                    sincronizado_hinova: true,
-                    sincronizado_hinova_em: new Date().toISOString()
-                  }).eq('id', associado_id);
+                await supabase.from('associados').update({ 
+                  codigo_hinova: codigoAssociadoHinova,
+                  sincronizado_hinova: true,
+                  sincronizado_hinova_em: new Date().toISOString()
+                }).eq('id', associado_id);
 
-                  await logSync(veiculo_id, associado_id, 'busca_backup_cpf', 'success', 
-                    { cpf: '***', metodo: tentativa.label }, { codigo_associado: codigoAssociadoHinova }, null);
+                await logSync(veiculo_id, associado_id, 'busca_backup_cpf', 'success', 
+                  { cpf: '***', metodo: tentativa.label }, { codigo_associado: codigoAssociadoHinova }, null);
 
-                  // Check if vehicle already linked
-                  const veiculos = buscaData.veiculos || buscaData?.data?.veiculos || [];
-                  if (Array.isArray(veiculos)) {
-                    const veiculoExistente = veiculos.find(
-                      (v: any) => v.placa === veiculo.placa
+                // Check if vehicle already linked
+                const veiculos = buscaData.veiculos || buscaData?.data?.veiculos || [];
+                if (Array.isArray(veiculos)) {
+                  const veiculoExistente = veiculos.find(
+                    (v: any) => v.placa === veiculo.placa
+                  );
+                  if (veiculoExistente?.codigo_veiculo) {
+                    console.log(`[SGA Sync] Veículo também já existe no Hinova! Código: ${veiculoExistente.codigo_veiculo}`);
+                    
+                    await supabase.from('veiculos').update({ 
+                      codigo_hinova: parseInt(veiculoExistente.codigo_veiculo),
+                      sincronizado_hinova: true,
+                      sincronizado_hinova_em: new Date().toISOString(),
+                      status_sga: 'ativado_sga'
+                    }).eq('id', veiculo_id);
+
+                    await markQueueCompleted(supabase, veiculo_id, associado_id);
+
+                    return new Response(
+                      JSON.stringify({
+                        success: true,
+                        data: {
+                          codigo_associado_hinova: codigoAssociadoHinova,
+                          codigo_veiculo_hinova: parseInt(veiculoExistente.codigo_veiculo),
+                          recuperado_via: tentativa.label
+                        }
+                      }),
+                      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
                     );
-                    if (veiculoExistente?.codigo_veiculo) {
-                      console.log(`[SGA Sync] Veículo também já existe no Hinova! Código: ${veiculoExistente.codigo_veiculo}`);
-                      
-                      await supabase.from('veiculos').update({ 
-                        codigo_hinova: parseInt(veiculoExistente.codigo_veiculo),
-                        sincronizado_hinova: true,
-                        sincronizado_hinova_em: new Date().toISOString(),
-                        status_sga: 'ativado_sga'
-                      }).eq('id', veiculo_id);
-
-                      await markQueueCompleted(supabase, veiculo_id, associado_id);
-
-                      return new Response(
-                        JSON.stringify({
-                          success: true,
-                          data: {
-                            codigo_associado_hinova: codigoAssociadoHinova,
-                            codigo_veiculo_hinova: parseInt(veiculoExistente.codigo_veiculo),
-                            recuperado_via: tentativa.label
-                          }
-                        }),
-                        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                      );
-                    }
                   }
-                  
-                  break; // Found the code, exit tentativas loop
                 }
-              } catch (_parseErr) {
-                console.log(`[SGA Sync] ${tentativa.label}: resposta não parseável`);
+                
+                break; // Found the code, exit tentativas loop
               }
-            } else {
-              console.log(`[SGA Sync] ${tentativa.label} - Status: ${buscaResp.status}, Content-Type: ${contentType} (ignorando)`);
+            } catch (_parseErr) {
+              console.log(`[SGA Sync] ${tentativa.label}: body não é JSON válido`);
             }
           } catch (e) {
             console.log(`[SGA Sync] ${tentativa.label} falhou:`, e);
+            await logSync(veiculo_id, associado_id, 'busca_cpf_diagnostico', 'error',
+              { metodo: tentativa.label }, null, e instanceof Error ? e.message : 'Erro de rede');
           }
         }
         
