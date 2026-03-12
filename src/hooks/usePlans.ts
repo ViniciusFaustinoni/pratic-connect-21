@@ -6,6 +6,10 @@ import type {
   MainCoverage,
 } from '@/types/plans';
 
+// IDs de benefícios conhecidos
+const REBOQUE_BENEFIT_ID = 'be1fa928-b1fe-4bbb-a402-ec0604bc9e8e';
+const COB_ASS_CODIGO = 'COB-ASS';
+
 // Tipo para benefícios de plano
 export interface PlanBenefitItem {
   id: string;
