@@ -117,24 +117,24 @@ async function enviarViaMeta(
 
   const phoneNumberId = metaConfig.phone_number_id;
   let metaBody: any;
+  let bodyParams: string[] = templateParams || [];
+  let buttonParams: string[] = templateButtonParams || [];
+  let template: any = null;
 
   if (templateName) {
     // Enviar como template
-    const { data: template } = await supabase
+    const { data: tmpl } = await supabase
       .from("whatsapp_meta_templates")
       .select("nome, idioma, status, corpo, botoes")
       .eq("nome", templateName)
       .single();
 
+    template = tmpl;
     if (!template) throw new Error(`Template '${templateName}' não encontrado`);
     if (template.status !== "APPROVED") {
       console.warn(`[whatsapp-send-text] Template '${templateName}' não aprovado (${template.status})`);
       throw new Error(`Template '${templateName}' não aprovado. Status: ${template.status}`);
     }
-
-    // Auto-detectar quantos params são do body vs botão
-    let bodyParams = templateParams || [];
-    let buttonParams = templateButtonParams || [];
 
     // Se não temos buttonParams explícitos, verificar se template tem botão URL com {{}}
     if (buttonParams.length === 0 && bodyParams.length > 0) {
