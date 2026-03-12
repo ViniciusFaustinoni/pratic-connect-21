@@ -320,37 +320,25 @@ serve(async (req) => {
         const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] }> = {
           // Aprovações e boas-vindas → cadastro_aprovado ({{1}} nome, {{2}} placa, {{3}} marca+modelo, {{4}} cobertura, {{5}} próximo passo, {{6}} link)
           cadastro_aprovado: {
-            template_name: 'cadastro_aprovado',
-            getParams: () => [
-              primeiroNome,
-              (dados?.placa as string) || 'seu veículo',
-              `${(dados?.marca as string) || ''} ${(dados?.modelo as string) || ''}`.trim() || 'Veículo',
-              'Proteção Veicular',
-              'Instalação do rastreador',
-              (dados?.link_acompanhamento as string) || 'https://pratic-connect-21.lovable.app',
-            ],
+            template_name: 'boas_vindas_associado',
+            getParams: () => {
+              const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
+              return [primeiroNome, veiculoDesc];
+            },
           },
           proposta_aprovada_roubo_furto: {
-            template_name: 'cadastro_aprovado',
-            getParams: () => [
-              primeiroNome,
-              (dados?.placa as string) || 'seu veículo',
-              `${(dados?.marca as string) || ''} ${(dados?.modelo as string) || ''}`.trim() || 'Veículo',
-              'Roubo e Furto',
-              'Instalação do rastreador',
-              (dados?.link_acompanhamento as string) || 'https://pratic-connect-21.lovable.app',
-            ],
+            template_name: 'boas_vindas_associado',
+            getParams: () => {
+              const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
+              return [primeiroNome, veiculoDesc];
+            },
           },
           proposta_aprovada_cobertura_total: {
-            template_name: 'cadastro_aprovado',
-            getParams: () => [
-              primeiroNome,
-              (dados?.placa as string) || 'seu veículo',
-              `${(dados?.marca as string) || ''} ${(dados?.modelo as string) || ''}`.trim() || 'Veículo',
-              'Proteção 360º (Roubo, Furto, Colisão, Incêndio e mais)',
-              'Crie sua senha e acesse o App PRATIC',
-              (dados?.link_acompanhamento as string) || 'https://pratic-connect-21.lovable.app',
-            ],
+            template_name: 'boas_vindas_associado',
+            getParams: () => {
+              const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
+              return [primeiroNome, veiculoDesc];
+            },
           },
           cobertura_total_ativada: {
             template_name: 'boas_vindas_associado',
@@ -366,7 +354,7 @@ serve(async (req) => {
           },
           // Técnico a caminho → tecnico_a_caminho (7 params)
           tecnico_em_rota: {
-            template_name: 'tecnico_a_caminho',
+            template_name: 'tecnico_a_caminho_1',
             getParams: () => [
               primeiroNome,
               (dados?.tecnico_nome as string) || 'Técnico PRATIC',
@@ -374,15 +362,14 @@ serve(async (req) => {
               (dados?.tecnico_whatsapp_link as string) || '',
               (dados?.endereco as string) || 'Endereço a confirmar',
               (dados?.periodo as string) || 'A confirmar',
-              'Você pode entrar em contato com o técnico se precisar de mais informações!',
             ],
           },
           instalacao_agendada: {
-            template_name: 'assistencia_confirmada',
+            template_name: 'sinistro_atualizado',
             getParams: () => [
               primeiroNome,
-              'Técnico PRATIC',
-              (dados?.data as string) || 'em breve',
+              'instalação',
+              `Sua instalação foi agendada para ${(dados?.data as string) || 'em breve'}. Período: ${(dados?.periodo as string) || 'A confirmar'}. Nosso técnico entrará em contato!`,
             ],
           },
           assistencia_prestador_acionado: {
