@@ -6,7 +6,8 @@ import { EtapaDadosAssociado } from '@/components/cotacao/EtapaDadosAssociado';
 import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
 import { EtapaCriteriosCotacao } from '@/components/cotacao/EtapaCriteriosCotacao';
 import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
-import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
+import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
+import { AlertaElegibilidadeNegada } from '@/components/cotacao/AlertaElegibilidadeNegada';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 
 // ============================================
@@ -106,7 +107,7 @@ export default function CotacaoPage() {
   }, [marca, modelo]);
 
   // Hook de planos - busca do banco de dados e calcula baseado nos parâmetros
-  const { planos: planosCalculados, isLoading: isLoadingPlanos } = usePlanosCotacao({
+  const { planos: planosCalculados, planosNegados, isLoading: isLoadingPlanos } = usePlanosCotacao({
     valorFipe: valorFipe || 0,
     regiao: regiao || 'rio_de_janeiro',
     combustivel: combustivel || 'gasolina',
@@ -395,7 +396,20 @@ export default function CotacaoPage() {
 
         {/* ETAPA 4 - RESULTADO */}
         {etapaAtual === 4 && (
-          <EtapaResultado
+          <>
+            {planosNegados.length > 0 && (
+              <div className="mb-4">
+                <AlertaElegibilidadeNegada
+                  planosNegados={planosNegados.map(p => ({ ...p, solicitacaoStatus: null }))}
+                  marca={marca}
+                  modelo={modelo}
+                  ano={parseInt(ano) || new Date().getFullYear()}
+                  combustivel={combustivel || 'flex'}
+                  placa={placa}
+                />
+              </div>
+            )}
+            <EtapaResultado
             veiculoFipe={veiculoEncontrado}
             marca={marca}
             modelo={modelo}
@@ -414,7 +428,8 @@ export default function CotacaoPage() {
             onGerarPDF={handleGerarPDF}
             onIniciarCadastro={handleIniciarCadastro}
             isLoading={isCalculando || isLoadingPlanos}
-          />
+            />
+          </>
         )}
       </div>
     </div>

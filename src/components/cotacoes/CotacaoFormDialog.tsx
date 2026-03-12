@@ -54,7 +54,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
-import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
+import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
+import { AlertaElegibilidadeNegada } from '@/components/cotacao/AlertaElegibilidadeNegada';
 import { useCriarSolicitacaoFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useTabelasPreco } from '@/hooks/usePlanos';
@@ -300,7 +301,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   }, [veiculoEncontrado]);
 
   // Hook de planos calculados dinamicamente do banco
-  const { planos: planosCalculados, isLoading: planosLoading } = usePlanosCotacao({
+  const { planos: planosCalculados, planosNegados, isLoading: planosLoading } = usePlanosCotacao({
     valorFipe,
     valorAdicional,
     regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
@@ -1617,7 +1618,18 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   <Loader2 className="h-6 w-6 animate-spin text-primary" />
                 </div>
               ) : valorFipe > 0 && planosCalculados.length > 0 ? (
-                <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
+                <div className="space-y-3">
+                  {planosNegados.length > 0 && (
+                    <AlertaElegibilidadeNegada
+                      planosNegados={planosNegados.map(p => ({ ...p, solicitacaoStatus: null }))}
+                      marca={marcaResolvida}
+                      modelo={modeloResolvido}
+                      ano={anoNumerico || new Date().getFullYear()}
+                      combustivel={veiculoEncontrado?.vehicleData?.combustivel || 'flex'}
+                      placa={veiculoEncontrado?.extractedPlate}
+                    />
+                  )}
+                  <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {planosCalculados.map((plano) => {
                     const indexSelecionado = planosSelecionados.findIndex(p => p.id === plano.id);
                     const isSelecionado = indexSelecionado >= 0;
@@ -1743,6 +1755,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                       </Card>
                     );
                   })}
+                  </div>
                 </div>
               ) : valorFipe > 0 ? (
                 <Card className="border-amber-500/30 bg-amber-500/5">

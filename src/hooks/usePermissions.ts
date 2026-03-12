@@ -62,7 +62,9 @@ export type PermissionKey =
   | 'canImportUsers'
   | 'canResetPassword'
   | 'canDeleteAtivacao'
-  | 'canManageIntegracoes';
+  | 'canManageIntegracoes'
+  | 'canApproveElegibilidade'
+  | 'canViewElegibilidadePendente';
 
 export type CotacaoViewScope = 'own' | 'team' | 'all';
 
@@ -274,6 +276,8 @@ export function usePermissions() {
     canResetPassword: hasPerm('canResetPassword'),
     canDeleteAtivacao: hasPerm('canDeleteAtivacao'),
     canManageIntegracoes: hasPerm('canManageIntegracoes'),
+    canApproveElegibilidade: hasPerm('canApproveElegibilidade'),
+    canViewElegibilidadePendente: hasPerm('canViewElegibilidadePendente'),
   };
 
   return {

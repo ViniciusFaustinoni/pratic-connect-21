@@ -47,6 +47,14 @@ export interface PlanoCotacao {
   elegibilidadeStatus?: 'aprovado' | 'limitado' | 'negado';
 }
 
+export interface PlanoNegadoInfo {
+  planoId: string;
+  planoNome: string;
+  linha: string | null;
+  motivo: string;
+  observacao?: string;
+}
+
 interface CalcularPlanosParams {
   valorFipe: number;
   valorAdicional?: number;
@@ -199,11 +207,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     return 'aprovado';
   }
 
-  const planos = useMemo<PlanoCotacao[]>(() => {
+  const { planos, planosNegados } = useMemo<{ planos: PlanoCotacao[]; planosNegados: PlanoNegadoInfo[] }>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
 
     if (!valorFipe || valorFipe <= 0 || !planosBanco) {
-      return [];
+      return { planos: [], planosNegados: [] };
     }
 
     const regiaoLower = regiao.toLowerCase();
@@ -219,6 +227,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     const decAssistencia = decomposicao?.assistencia || 0.05;
 
     const planosCalculados: PlanoCotacao[] = [];
+    const negados: PlanoNegadoInfo[] = [];
 
     for (const plano of planosBanco) {
       const linha = plano.linha?.toLowerCase() || null;
@@ -285,7 +294,20 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
             combustivel: combustivelOriginal,
           },
         );
-        if (resultado === 'negado') continue;
+        if (resultado === 'negado') {
+          // Coletar plano negado para exibir alerta
+          const regraObs = elegibilidadeData?.find(
+            e => e.plano_id === plano.id && e.status === 'negado'
+          )?.observacao;
+          negados.push({
+            planoId: plano.id,
+            planoNome: plano.nome,
+            linha: plano.linha?.toLowerCase() || null,
+            motivo: 'Restrição de modelo/marca por elegibilidade',
+            observacao: regraObs || undefined,
+          });
+          continue;
+        }
       }
 
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
@@ -418,7 +440,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     }
 
     // Ordenar por sort_priority do product_lines (dinâmico do banco)
-    return planosCalculados.sort((a, b) => {
+    const sorted = planosCalculados.sort((a, b) => {
       const aPriority = planosBanco.find(p => p.id === a.id);
       const bPriority = planosBanco.find(p => p.id === b.id);
       const aSortP = (aPriority as any)?.product_lines?.sort_priority || 100;
@@ -426,10 +448,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (aSortP !== bSortP) return aSortP - bSortP;
       return a.valorMensal - b.valorMensal;
     });
+
+    return { planos: sorted, planosNegados: negados };
   }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading]);
 
   return {
     planos,
+    planosNegados,
     isLoading: isLoading || elegibilidadeLoading,
   };
 }

@@ -47,6 +47,7 @@ import Cotacao from "./pages/vendas/Cotacao";
 import Cotador from "./pages/vendas/Cotador";
 import Vendedores from "./pages/vendas/Vendedores";
 import AprovacoesFipeMenor from "./pages/vendas/AprovacoesFipeMenor";
+import AprovacoesElegibilidade from "./pages/vendas/AprovacoesElegibilidade";
 import VendedorHistorico from "./pages/vendas/VendedorHistorico";
 import Associados from "./pages/cadastro/Associados";
 import SubstituicaoVeiculoPage from "./pages/cadastro/SubstituicaoVeiculoPage";
@@ -442,6 +443,7 @@ const App = () => (
               <Route path="/vendas/vendedores/:id" element={<VendedorHistorico />} />
               <Route path="/vendas/configuracoes" element={<VendasConfig />} />
               <Route path="/vendas/aprovacoes-fipe" element={<AprovacoesFipeMenor />} />
+              <Route path="/aprovacoes-elegibilidade" element={<AprovacoesElegibilidade />} />
               
               {/* Auditoria */}
               <Route path="/auditoria/vendedores" element={<AuditoriaVendedores />} />

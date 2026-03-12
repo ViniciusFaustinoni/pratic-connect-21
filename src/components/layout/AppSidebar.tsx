@@ -66,6 +66,7 @@ import {
   Send,
   Layers,
   TrendingDown,
+  ShieldCheck,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -164,6 +165,7 @@ const menuConfig: {
         { title: 'Propostas', url: '/vendas/contratos', icon: FileCheck },
         { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
         { title: 'Aprovações FIPE', url: '/vendas/aprovacoes-fipe', icon: TrendingDown, permission: 'canManageConsultores' },
+        { title: 'Aprovações Elegibilidade', url: '/aprovacoes-elegibilidade', icon: ShieldCheck, permission: 'canManageConsultores' },
         { title: 'Equipe Comercial', url: '/vendas/equipe-comercial', icon: FileText, permission: 'canManageConsultores' },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
         { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
