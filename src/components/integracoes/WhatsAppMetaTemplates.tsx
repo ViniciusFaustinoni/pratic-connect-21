@@ -35,7 +35,9 @@ export function WhatsAppMetaTemplates() {
   const [editTemplate, setEditTemplate] = useState<any>(null);
   const [viewTemplate, setViewTemplate] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; nome: string } | null>(null);
-
+  const [testTemplate, setTestTemplate] = useState<any>(null);
+  const [testPhone, setTestPhone] = useState('');
+  const [testSending, setTestSending] = useState(false);
   const approved = templates.filter((t) => t.status === 'APPROVED').length;
   const pending = templates.filter((t) => t.status === 'PENDING').length;
   const rejected = templates.filter((t) => t.status === 'REJECTED').length;
