@@ -47,6 +47,14 @@ export interface PlanoCotacao {
   elegibilidadeStatus?: 'aprovado' | 'limitado' | 'negado';
 }
 
+export interface PlanoNegadoInfo {
+  planoId: string;
+  planoNome: string;
+  linha: string | null;
+  motivo: string;
+  observacao?: string;
+}
+
 interface CalcularPlanosParams {
   valorFipe: number;
   valorAdicional?: number;
