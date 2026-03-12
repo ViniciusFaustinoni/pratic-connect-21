@@ -368,14 +368,56 @@ serve(async (req) => {
           const result = await response.json();
 
           if (!response.ok) {
-            console.error(`[whatsapp-meta-templates] Erro ao enviar '${template.nome}':`, result);
-            await supabase.from("whatsapp_meta_templates").update({
-              status: "REJECTED",
-              motivo_rejeicao: result.error?.error_user_msg || result.error?.message || "Erro desconhecido",
-              updated_at: new Date().toISOString(),
-            }).eq("id", template.id);
-            erros++;
-            resultados.push({ nome: template.nome, sucesso: false, erro: result.error?.error_user_msg || result.error?.message });
+            const motivoErro = result.error?.error_user_msg || result.error?.message || "Erro desconhecido";
+            const jaExiste = motivoErro.toLowerCase().includes("já existe")
+              || motivoErro.toLowerCase().includes("already exists")
+              || motivoErro.toLowerCase().includes("content for this language already exists")
+              || (result.error?.code === 2388023);
+
+            if (jaExiste) {
+              console.log(`[whatsapp-meta-templates] '${template.nome}' já existe, deletando e recriando...`);
+              await fetch(
+                `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates?name=${template.nome}`,
+                { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
+              );
+              await new Promise((r) => setTimeout(r, 2000));
+
+              const retryRes = await fetch(
+                `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates`,
+                { method: "POST", headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" }, body: JSON.stringify(metaPayload) }
+              );
+              const retryResult = await retryRes.json();
+
+              if (retryRes.ok) {
+                await supabase.from("whatsapp_meta_templates").update({
+                  status: retryResult.status?.toUpperCase() || "PENDING",
+                  meta_template_id: retryResult.id,
+                  enviado_em: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                }).eq("id", template.id);
+                enviados++;
+                resultados.push({ nome: template.nome, sucesso: true, meta_id: retryResult.id });
+                console.log(`[whatsapp-meta-templates] ✓ '${template.nome}' recriado - ID: ${retryResult.id}`);
+              } else {
+                console.error(`[whatsapp-meta-templates] Retry falhou '${template.nome}':`, retryResult);
+                await supabase.from("whatsapp_meta_templates").update({
+                  status: "REJECTED",
+                  motivo_rejeicao: retryResult.error?.error_user_msg || retryResult.error?.message || "Erro no retry",
+                  updated_at: new Date().toISOString(),
+                }).eq("id", template.id);
+                erros++;
+                resultados.push({ nome: template.nome, sucesso: false, erro: retryResult.error?.message });
+              }
+            } else {
+              console.error(`[whatsapp-meta-templates] Erro ao enviar '${template.nome}':`, result);
+              await supabase.from("whatsapp_meta_templates").update({
+                status: "REJECTED",
+                motivo_rejeicao: motivoErro,
+                updated_at: new Date().toISOString(),
+              }).eq("id", template.id);
+              erros++;
+              resultados.push({ nome: template.nome, sucesso: false, erro: motivoErro });
+            }
           } else {
             await supabase.from("whatsapp_meta_templates").update({
               status: result.status?.toUpperCase() || "PENDING",
