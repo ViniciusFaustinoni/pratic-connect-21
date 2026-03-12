@@ -291,7 +291,8 @@ serve(async (req) => {
             });
 
           sendBody.template_name = 'boas_vindas_associado';
-          sendBody.template_params = [primeiroNome, veiculoDescricao];
+          // 4 body params + 1 button param (associado.id para URL dinâmica)
+          sendBody.template_params = [primeiroNome, veiculoDescricao, 'Roubo e Furto', 'Instalação do rastreador', associado.id];
           console.log(`[ativar-associado] Usando template Meta 'boas_vindas_associado' para ${telefoneWhatsapp}`);
         }
 
