@@ -174,7 +174,10 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
         const lead = contrato.leads;
         const vendedor = contrato.vendedor_id ? vendedoresMap.get(contrato.vendedor_id) : null;
         const vistoria = contrato.associado_id ? vistoriasMap.get(contrato.associado_id) : null;
-        const veiculo = contrato.associado_id ? veiculosMap.get(contrato.associado_id) : null;
+        // Priorizar veículo pelo veiculo_id do contrato, fallback por associado_id
+        const veiculo = contrato.veiculo_id 
+          ? veiculosByIdMap.get(contrato.veiculo_id) 
+          : (contrato.associado_id ? veiculosMap.get(contrato.associado_id) : null);
         const plano = contrato.plano_id ? planosMap.get(contrato.plano_id) : null;
 
         return {
