@@ -47,6 +47,7 @@ import Cotacao from "./pages/vendas/Cotacao";
 import Cotador from "./pages/vendas/Cotador";
 import Vendedores from "./pages/vendas/Vendedores";
 import AprovacoesFipeMenor from "./pages/vendas/AprovacoesFipeMenor";
+import AprovacoesElegibilidade from "./pages/vendas/AprovacoesElegibilidade";
 import VendedorHistorico from "./pages/vendas/VendedorHistorico";
 import Associados from "./pages/cadastro/Associados";
 import SubstituicaoVeiculoPage from "./pages/cadastro/SubstituicaoVeiculoPage";
