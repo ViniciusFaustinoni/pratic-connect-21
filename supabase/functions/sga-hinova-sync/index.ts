@@ -42,12 +42,45 @@ function cleanCPF(cpf: string | null): string {
   return cpf.replace(/\D/g, '');
 }
 
+// Helper para limpar telefone (apenas números)
+function cleanPhoneDigits(phone: string | null): string {
+  if (!phone) return '';
+  return phone.replace(/\D/g, '');
+}
+
 // Helper para formatar CPF com pontuação
 function formatCPF(cpf: string | null): string {
   if (!cpf) return '';
   const clean = cpf.replace(/\D/g, '');
   if (clean.length !== 11) return clean;
   return `${clean.slice(0,3)}.${clean.slice(3,6)}.${clean.slice(6,9)}-${clean.slice(9)}`;
+}
+
+// Helper para extrair código de associado de múltiplos formatos de payload
+function extractCodigoAssociado(payload: any): number | null {
+  if (!payload) return null;
+
+  const candidates = [
+    payload?.codigo_associado,
+    payload?.codigo,
+    payload?.data?.codigo_associado,
+    payload?.data?.codigo,
+    payload?.associado?.codigo_associado,
+    payload?.associado?.codigo,
+    payload?.resultado?.codigo_associado,
+    payload?.resultado?.codigo,
+    Array.isArray(payload) ? payload[0]?.codigo_associado : null,
+    Array.isArray(payload) ? payload[0]?.codigo : null,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 // Helper para formatar telefone
@@ -235,19 +268,23 @@ serve(async (req) => {
   let hinovaToken = Deno.env.get('HINOVA_TOKEN');
   let hinovaUsuario = Deno.env.get('HINOVA_USUARIO');
   let hinovaSenha = Deno.env.get('HINOVA_SENHA');
-  let hinovaCodigoConta = Deno.env.get('HINOVA_CODIGO_CONTA') || '1';
+  let hinovaCodigoConta = Deno.env.get('HINOVA_CODIGO_CONTA') || '';
   let hinovaCodigoRegional = Deno.env.get('HINOVA_CODIGO_REGIONAL');
   let hinovaCodigoCooperativa = Deno.env.get('HINOVA_CODIGO_COOPERATIVA');
   let hinovaCodigoVoluntario = Deno.env.get('HINOVA_CODIGO_VOLUNTARIO');
+  let codigoContaOrigem: 'env' | 'database' | 'historico' | 'fallback' = hinovaCodigoConta ? 'env' : 'fallback';
 
-  if (!hinovaToken || !hinovaUsuario || !hinovaSenha) {
-    console.log('[SGA Sync] Credenciais não encontradas em ENV, buscando do banco...');
+  if (!hinovaToken || !hinovaUsuario || !hinovaSenha || !hinovaCodigoConta) {
+    console.log('[SGA Sync] Credenciais incompletas em ENV, buscando do banco...');
     const credBanco = await getCredenciaisBanco('hinova');
     if (credBanco) {
       hinovaToken = credBanco.token || hinovaToken;
       hinovaUsuario = credBanco.usuario || hinovaUsuario;
       hinovaSenha = credBanco.senha || hinovaSenha;
-      hinovaCodigoConta = credBanco.codigo_conta || hinovaCodigoConta;
+      if (credBanco.codigo_conta) {
+        hinovaCodigoConta = String(credBanco.codigo_conta);
+        codigoContaOrigem = 'database';
+      }
       hinovaCodigoRegional = credBanco.codigo_regional || hinovaCodigoRegional;
       hinovaCodigoCooperativa = credBanco.codigo_cooperativa || hinovaCodigoCooperativa;
       hinovaCodigoVoluntario = credBanco.codigo_voluntario || hinovaCodigoVoluntario;
@@ -255,6 +292,39 @@ serve(async (req) => {
       console.log('[SGA Sync] Credenciais carregadas do banco');
     }
   }
+
+  if (!hinovaCodigoConta) {
+    try {
+      const { data: logsCodigoConta } = await supabase
+        .from('sga_sync_logs')
+        .select('request_payload, created_at')
+        .eq('action', 'cadastrar_associado')
+        .eq('status', 'success')
+        .not('request_payload', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (logsCodigoConta) {
+        for (const log of logsCodigoConta) {
+          const payload = (log.request_payload || {}) as Record<string, unknown>;
+          const candidato = Number(payload?.codigo_conta);
+          if (Number.isFinite(candidato) && candidato > 0) {
+            hinovaCodigoConta = String(candidato);
+            codigoContaOrigem = 'historico';
+            console.log(`[SGA Sync] codigo_conta inferido do histórico: ${hinovaCodigoConta}`);
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[SGA Sync] Falha ao inferir codigo_conta por histórico:', e);
+    }
+  }
+
+  const codigoContaResolvido = Number.parseInt(hinovaCodigoConta || '', 10);
+  const codigoContaValido = Number.isFinite(codigoContaResolvido) && codigoContaResolvido > 0;
+
+  console.log(`[SGA Sync] codigo_conta origem=${codigoContaOrigem}, valor=${codigoContaValido ? codigoContaResolvido : 'inválido'}`);
 
   console.log('[SGA Sync] Token Bearer carregado:', hinovaToken ? `${hinovaToken.slice(0, 10)}...` : 'VAZIO');
 
@@ -295,6 +365,17 @@ serve(async (req) => {
         JSON.stringify({
           success: false,
           error: 'Credenciais do Hinova não configuradas. Configure em Configurações > Integrações ou via Supabase Secrets.',
+          step: 'config'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    if (!codigoContaValido) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'codigo_conta do Hinova inválido ou ausente. Configure HINOVA_CODIGO_CONTA (ou integre em credenciais) e tente novamente.',
           step: 'config'
         }),
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -630,12 +711,8 @@ serve(async (req) => {
             try {
               const buscaData = JSON.parse(buscaText);
               
-              // Extrair código de MUITOS formatos possíveis
-              const codigo = buscaData?.codigo_associado || buscaData?.codigo || 
-                (Array.isArray(buscaData) && buscaData.length > 0 && (buscaData[0]?.codigo_associado || buscaData[0]?.codigo)) ||
-                (buscaData?.data?.codigo_associado) || (buscaData?.data?.codigo) ||
-                (buscaData?.associado?.codigo_associado) || (buscaData?.associado?.codigo) ||
-                (buscaData?.resultado?.codigo_associado) || (buscaData?.resultado?.codigo);
+              // Extrair código de formatos possíveis
+              const codigo = extractCodigoAssociado(buscaData);
               
               if (codigo) {
                 codigoAssociadoHinova = parseInt(String(codigo));
@@ -725,12 +802,12 @@ serve(async (req) => {
         estado: associado.uf || '',
         sexo: associado.sexo?.toUpperCase() === 'FEMININO' ? 'F' : 'M',
         dia_vencimento: associado.dia_vencimento || 10,
-        codigo_conta: parseInt(hinovaCodigoConta) || 1,
+        codigo_conta: codigoContaResolvido,
         ...(hinovaCodigoRegional && { codigo_regional: parseInt(hinovaCodigoRegional) }),
         ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
         ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
       };
-      console.log(`[SGA Sync] Payload associado: codigo_conta=${parseInt(hinovaCodigoConta) || 1}`);
+      console.log(`[SGA Sync] Payload associado: codigo_conta=${codigoContaResolvido}`);
 
       const associadoResponse = await fetchWithRetry(
         `${hinovaApiUrl}/associado/cadastrar`,
@@ -783,39 +860,105 @@ serve(async (req) => {
         
         if (isCpfDuplicado) {
           console.log('[SGA Sync] CPF já existe no Hinova, buscando código...');
-          
-          let codigoExistente: number | null = null;
-          
-          // Estratégia 1: Logs anteriores
-          try {
-            const { data: logAnterior } = await supabase
-              .from('sga_sync_logs')
-              .select('response_payload')
-              .eq('associado_id', associado_id)
-              .eq('action', 'cadastrar_associado')
-              .eq('status', 'success')
-              .not('response_payload', 'is', null)
-              .order('created_at', { ascending: false })
-              .limit(5);
-            
-            if (logAnterior) {
-              for (const log of logAnterior) {
-                const respPayload = log.response_payload as any;
-                if (respPayload?.codigo_associado) {
-                  codigoExistente = respPayload.codigo_associado;
-                  break;
+
+          let codigoExistente: number | null = extractCodigoAssociado(associadoData);
+
+          if (codigoExistente) {
+            console.log(`[SGA Sync] Código retornado no próprio erro de cadastro: ${codigoExistente}`);
+          }
+
+          // Estratégia 1: Logs anteriores do mesmo associado_id
+          if (!codigoExistente) {
+            try {
+              const { data: logAnterior } = await supabase
+                .from('sga_sync_logs')
+                .select('response_payload')
+                .eq('associado_id', associado_id)
+                .eq('action', 'cadastrar_associado')
+                .eq('status', 'success')
+                .not('response_payload', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(10);
+
+              if (logAnterior) {
+                for (const log of logAnterior) {
+                  const codigo = extractCodigoAssociado(log.response_payload);
+                  if (codigo) {
+                    codigoExistente = codigo;
+                    console.log(`[SGA Sync] Código recuperado via logs do próprio associado: ${codigoExistente}`);
+                    break;
+                  }
                 }
               }
+            } catch (e) {
+              console.log('[SGA Sync] Erro logs anteriores:', e);
             }
-          } catch (e) {
-            console.log('[SGA Sync] Erro logs anteriores:', e);
           }
-          
-           // Estratégia 2: Busca por CPF com logging completo (diagnóstico)
+
+          // Estratégia 2: Logs históricos por identidade (nome/email/telefone)
+          if (!codigoExistente) {
+            try {
+              const { data: logsIdentidade } = await supabase
+                .from('sga_sync_logs')
+                .select('request_payload, response_payload, created_at')
+                .eq('action', 'cadastrar_associado')
+                .eq('status', 'success')
+                .not('response_payload', 'is', null)
+                .order('created_at', { ascending: false })
+                .limit(200);
+
+              const nomeAtual = (associado.nome || '').trim().toLowerCase();
+              const emailAtual = (associado.email || '').trim().toLowerCase();
+              const cpfAtual = cleanCPF(associado.cpf);
+              const telefoneAtual = cleanPhoneDigits(associado.whatsapp || associado.telefone);
+
+              if (logsIdentidade) {
+                for (const log of logsIdentidade) {
+                  const reqPayload = (log.request_payload || {}) as Record<string, unknown>;
+                  const codigo = extractCodigoAssociado(log.response_payload);
+                  if (!codigo) continue;
+
+                  const nomeLog = String(reqPayload?.nome || '').trim().toLowerCase();
+                  const emailLog = String(reqPayload?.email || '').trim().toLowerCase();
+                  const cpfLog = cleanCPF(reqPayload?.cpf ? String(reqPayload.cpf) : null);
+                  const telefoneLog = cleanPhoneDigits(
+                    reqPayload?.celular ? String(reqPayload.celular) : (reqPayload?.telefone ? String(reqPayload.telefone) : null)
+                  );
+                  const codigoContaLog = Number(reqPayload?.codigo_conta);
+                  const codigoContaCompativel =
+                    !Number.isFinite(codigoContaLog) || !codigoContaValido || codigoContaLog === codigoContaResolvido;
+
+                  const cpfMatch = cpfLog.length === 11 && cpfAtual.length === 11 && cpfLog === cpfAtual;
+                  const nomeMatch = !!nomeAtual && !!nomeLog && nomeLog === nomeAtual;
+                  const emailMatch = !!emailAtual && !!emailLog && emailLog === emailAtual;
+                  const telefoneMatch = !!telefoneAtual && !!telefoneLog && telefoneLog === telefoneAtual;
+
+                  if (codigoContaCompativel && (cpfMatch || (nomeMatch && emailMatch) || (nomeMatch && telefoneMatch))) {
+                    codigoExistente = codigo;
+                    console.log(`[SGA Sync] Código recuperado via logs de identidade: ${codigoExistente}`);
+                    await logSync(
+                      veiculo_id,
+                      associado_id,
+                      'recovery_cpf_diagnostico',
+                      'success',
+                      { metodo: 'logs_identidade', created_at_origem: log.created_at },
+                      { codigo_associado: codigoExistente },
+                      null
+                    );
+                    break;
+                  }
+                }
+              }
+            } catch (e) {
+              console.log('[SGA Sync] Erro ao buscar código por logs de identidade:', e);
+            }
+          }
+
+          // Estratégia 3: Busca por CPF com logging completo (diagnóstico)
           if (!codigoExistente) {
             const cpfLimpoRecovery = cleanCPF(associado.cpf);
             const cpfFormatadoRecovery = formatCPF(associado.cpf);
-            
+
             const recoveryTentativas = [
               { label: 'Recovery GET buscar/cpf limpo', url: `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf`, method: 'GET' as const },
               { label: 'Recovery GET buscar/cpf formatado', url: `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoRecovery)}/cpf`, method: 'GET' as const },
@@ -826,6 +969,22 @@ serve(async (req) => {
               { label: 'Recovery POST pesquisar', url: `${hinovaApiUrl}/associado/pesquisar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
             ];
 
+            const codigoContaNum = codigoContaValido ? codigoContaResolvido : null;
+            if (codigoContaNum) {
+              recoveryTentativas.push(
+                {
+                  label: 'Recovery GET buscar/cpf limpo + codigo_conta',
+                  url: `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf?codigo_conta=${codigoContaNum}`,
+                  method: 'GET' as const,
+                },
+                {
+                  label: 'Recovery GET buscar/cpf formatado + codigo_conta',
+                  url: `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoRecovery)}/cpf?codigo_conta=${codigoContaNum}`,
+                  method: 'GET' as const,
+                }
+              );
+            }
+
             for (const t of recoveryTentativas) {
               if (codigoExistente) break;
               try {
@@ -833,42 +992,47 @@ serve(async (req) => {
                 const resp = await fetchWithRetry(
                   t.url,
                   { method: t.method, headers: operationHeaders, ...(t.body && { body: t.body }) },
-                  1 // single attempt
+                  1
                 );
                 const ct = resp.headers.get('content-type') || '';
-                // SEMPRE ler o body
                 const text = await resp.text();
                 console.log(`[SGA Sync] ${t.label} - Status: ${resp.status}, CT: ${ct}, Body: ${text.substring(0, 500)}`);
-                
-                // Gravar diagnóstico
-                await logSync(veiculo_id, associado_id, 'recovery_cpf_diagnostico',
+
+                await logSync(
+                  veiculo_id,
+                  associado_id,
+                  'recovery_cpf_diagnostico',
                   resp.ok ? 'success' : 'info',
                   { metodo: t.label, url: t.url },
                   { status: resp.status, content_type: ct, body_preview: text.substring(0, 500) },
                   resp.ok ? null : `Status ${resp.status}`
                 );
-                
-                // Tentar parsear como JSON independente do content-type
+
                 try {
                   const parsed = JSON.parse(text);
-                  const codigo = parsed?.codigo_associado || parsed?.codigo ||
-                    (Array.isArray(parsed) && parsed.length > 0 && (parsed[0]?.codigo_associado || parsed[0]?.codigo)) ||
-                    parsed?.data?.codigo_associado || parsed?.data?.codigo ||
-                    parsed?.associado?.codigo_associado || parsed?.associado?.codigo ||
-                    parsed?.resultado?.codigo_associado || parsed?.resultado?.codigo;
+                  const codigo = extractCodigoAssociado(parsed);
                   if (codigo) {
-                    codigoExistente = parseInt(String(codigo));
+                    codigoExistente = codigo;
                     console.log(`[SGA Sync] Recovery encontrou código ${codigoExistente} via ${t.label}`);
                   }
-                } catch (_) { /* body não é JSON */ }
+                } catch (_) {
+                  // body não é JSON
+                }
               } catch (e) {
                 console.log(`[SGA Sync] ${t.label} falhou:`, e);
-                await logSync(veiculo_id, associado_id, 'recovery_cpf_diagnostico', 'error',
-                  { metodo: t.label }, null, e instanceof Error ? e.message : 'Erro de rede');
+                await logSync(
+                  veiculo_id,
+                  associado_id,
+                  'recovery_cpf_diagnostico',
+                  'error',
+                  { metodo: t.label },
+                  null,
+                  e instanceof Error ? e.message : 'Erro de rede'
+                );
               }
             }
           }
-          
+
           // Estratégia 4: Banco local
           if (!codigoExistente) {
             const { data: associadoLocal } = await supabase
@@ -877,31 +1041,36 @@ serve(async (req) => {
               .eq('cpf', associado.cpf)
               .not('codigo_hinova', 'is', null)
               .limit(1)
-              .single();
-            
+              .maybeSingle();
+
             if (associadoLocal?.codigo_hinova) {
               codigoExistente = associadoLocal.codigo_hinova;
+              console.log(`[SGA Sync] Código recuperado do banco local: ${codigoExistente}`);
             }
           }
-          
+
           if (codigoExistente) {
-            await supabase.from('associados').update({ 
+            await supabase.from('associados').update({
               codigo_hinova: codigoExistente,
               sincronizado_hinova: true,
               sincronizado_hinova_em: new Date().toISOString()
             }).eq('id', associado_id);
-            
+
             codigoAssociadoHinova = codigoExistente;
             console.log(`[SGA Sync] Código existente recuperado: ${codigoAssociadoHinova}`);
           } else {
             await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
             await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'CPF duplicado - não foi possível recuperar código');
             return new Response(
-              JSON.stringify({ 
-                success: false, 
+              JSON.stringify({
+                success: false,
                 error: 'CPF já cadastrado no Hinova mas não foi possível recuperar o código automaticamente.',
                 step: 'associado',
-                details: { cadastro: associadoData }
+                action_required: 'preencher_codigo_hinova_manual',
+                details: {
+                  cadastro: associadoData,
+                  instrucoes: 'Preencha associados.codigo_hinova manualmente para este CPF e reprocessar a fila.'
+                }
               }),
               { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
             );
@@ -981,7 +1150,7 @@ serve(async (req) => {
       kilometragem: 0,
       numero_motor: '',
       dia_vencimento: associado.dia_vencimento || 10,
-      codigo_conta: parseInt(hinovaCodigoConta) || 1,
+      codigo_conta: codigoContaResolvido,
       codigo_cor: getMapeamento('cor', veiculo.cor),
       codigo_combustivel: getMapeamento('combustivel', combustivelNormalizado),
       codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase()) || tipoVeiculoInferido,
