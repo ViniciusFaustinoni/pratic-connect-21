@@ -692,9 +692,9 @@ ${planoFinalSelecionado.naoInclui.length > 0 ? `*Não incluído:*\n${planoFinalS
 💰 *VALORES*
 ━━━━━━━━━━━━━━━━━━━━
 
-*Taxa de Filiação:* ${formatCurrency(planoFinalSelecionado.valorAdesao)}
+*Taxa de Filiação:* ${formatCurrency(valorAdesaoCustom ?? planoFinalSelecionado.valorAdesao)}
 *Mensalidade:* ${formatCurrency(planoFinalSelecionado.valorMensal)}
-*1ª Parcela:* ${formatCurrency(planoFinalSelecionado.valorAdesao)}
+*1ª Parcela:* ${formatCurrency(valorAdesaoCustom ?? planoFinalSelecionado.valorAdesao)}
 
 _Cotação válida por 7 dias_
 
