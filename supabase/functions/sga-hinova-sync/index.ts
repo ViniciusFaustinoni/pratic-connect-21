@@ -691,6 +691,7 @@ serve(async (req) => {
         { ...associadoPayload, cpf: '***' }, associadoData, associadoResponse.ok ? null : associadoData.mensagem);
 
       if (!associadoResponse.ok) {
+        console.log(`[SGA Sync] Resposta cadastrar_associado (${associadoResponse.status}):`, JSON.stringify(associadoData));
         const errorMessages = (associadoData as any).error || [];
         const isTokenBearerError = 
           (associadoData.mensagem?.toLowerCase().includes('token de acesso') ||
