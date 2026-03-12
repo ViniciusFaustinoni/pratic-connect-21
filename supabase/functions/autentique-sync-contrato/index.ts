@@ -299,10 +299,6 @@ serve(async (req) => {
             original
             signed
           }
-          hashes {
-            sha256
-            sha512
-          }
         }
       }
     `;
