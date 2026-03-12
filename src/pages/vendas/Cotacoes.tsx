@@ -95,6 +95,11 @@ export default function Cotacoes() {
   // Filtros
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
   const [consultorFilter, setConsultorFilter] = useState<string>('all');
+  const [filtroOrfas, setFiltroOrfas] = useState(false);
+  
+  // Seleção em lote
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showExclusaoLoteDialog, setShowExclusaoLoteDialog] = useState(false);
   
   // Modal de detalhes
   const [showDetalhesModal, setShowDetalhesModal] = useState(false);
