@@ -917,6 +917,34 @@ export function useAprovarVeiculoServico() {
 
       if (servicoError) throw servicoError;
 
+      // 2.1 SINCRONIZAR com tabela instalacoes (o servico tem instalacao_origem_id)
+      // Buscar o servico para obter o instalacao_origem_id
+      const { data: servicoCompleto } = await supabase
+        .from('servicos')
+        .select('instalacao_origem_id')
+        .eq('id', data.servicoId)
+        .single();
+
+      if (servicoCompleto?.instalacao_origem_id) {
+        const instUpdate: Record<string, any> = {
+          status: 'concluida',
+          concluida_em: agora,
+        };
+        if (rastreadorId) {
+          instUpdate.rastreador_id = rastreadorId;
+        }
+        const { error: instError } = await supabase
+          .from('instalacoes')
+          .update(instUpdate)
+          .eq('id', servicoCompleto.instalacao_origem_id);
+
+        if (instError) {
+          console.error('[useAprovarVeiculoServico] Erro ao sincronizar instalacoes:', instError);
+        } else {
+          console.log('[useAprovarVeiculoServico] ✓ Instalação sincronizada para concluida');
+        }
+      }
+
       // 3. Vincular rastreador ao veículo e remover do porte (se rastreador fornecido)
       if (rastreadorId) {
         // Buscar foto do local_rastreador da vistoria mais recente do veículo
