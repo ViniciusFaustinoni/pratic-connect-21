@@ -400,9 +400,19 @@ export function CotacoesTable({
                     "cursor-pointer border-l-4 transition-all duration-200",
                     status.borderColor,
                     "hover:bg-primary/[0.06] hover:shadow-sm hover:translate-x-[2px]",
+                    selectable && selectedIds?.has(cotacao.id) && "bg-primary/[0.08]",
                   )}
                   onClick={() => onRowClick(cotacao)}
                 >
+                  {selectable && (
+                    <TableCell onClick={(e) => e.stopPropagation()} className="py-3">
+                      <Checkbox
+                        checked={selectedIds?.has(cotacao.id) ?? false}
+                        onCheckedChange={() => onToggleSelect?.(cotacao.id)}
+                        aria-label={`Selecionar cotação ${cotacao.numero}`}
+                      />
+                    </TableCell>
+                  )}
                   {/* Status / Etapa */}
                   <TableCell className="py-3">
                     <div className="flex flex-col gap-1.5">
