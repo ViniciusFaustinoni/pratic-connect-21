@@ -290,10 +290,9 @@ serve(async (req) => {
               usado: false
             });
 
-          sendBody.template_name = 'ativacao_conta_pratic';
-          sendBody.template_params = [primeiroNome, veiculoDescricao, cobertura];
-          sendBody.template_button_params = [tokenPrimeiroAcesso];
-          console.log(`[ativar-associado] Usando template Meta 'ativacao_conta_pratic' com botão dinâmico para ${telefoneWhatsapp}`);
+          sendBody.template_name = 'boas_vindas_associado';
+          sendBody.template_params = [primeiroNome, veiculoDescricao];
+          console.log(`[ativar-associado] Usando template Meta 'boas_vindas_associado' para ${telefoneWhatsapp}`);
         }
 
         await supabaseAdmin.functions.invoke('whatsapp-send-text', {

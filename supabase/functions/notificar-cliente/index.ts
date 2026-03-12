@@ -354,7 +354,7 @@ serve(async (req) => {
           },
           // Técnico a caminho → tecnico_a_caminho (7 params)
           tecnico_em_rota: {
-            template_name: 'tecnico_a_caminho',
+            template_name: 'tecnico_a_caminho_1',
             getParams: () => [
               primeiroNome,
               (dados?.tecnico_nome as string) || 'Técnico PRATIC',
@@ -362,15 +362,14 @@ serve(async (req) => {
               (dados?.tecnico_whatsapp_link as string) || '',
               (dados?.endereco as string) || 'Endereço a confirmar',
               (dados?.periodo as string) || 'A confirmar',
-              'Você pode entrar em contato com o técnico se precisar de mais informações!',
             ],
           },
           instalacao_agendada: {
-            template_name: 'assistencia_confirmada',
+            template_name: 'sinistro_atualizado',
             getParams: () => [
               primeiroNome,
-              'Técnico PRATIC',
-              (dados?.data as string) || 'em breve',
+              'instalação',
+              `Sua instalação foi agendada para ${(dados?.data as string) || 'em breve'}. Período: ${(dados?.periodo as string) || 'A confirmar'}. Nosso técnico entrará em contato!`,
             ],
           },
           assistencia_prestador_acionado: {
