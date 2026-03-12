@@ -448,6 +448,19 @@ serve(async (req) => {
                 .single();
 
               if (instCompleta?.associado_id) {
+                // Buscar dados do técnico para notificação
+                const { data: tecProfile } = await supabase
+                  .from('profiles')
+                  .select('nome, telefone')
+                  .eq('id', prof.vistoriador_id)
+                  .single();
+
+                const tecNome = tecProfile?.nome || 'Técnico PRATIC';
+                const tecTelefone = tecProfile?.telefone || '';
+                const tecTelefoneLimpo = tecTelefone.replace(/\D/g, '');
+                const tecWhatsappLink = tecTelefoneLimpo ? `https://wa.me/55${tecTelefoneLimpo}` : '';
+                const enderecoAssociado = [instCompleta.logradouro, instCompleta.numero, instCompleta.bairro, instCompleta.cidade, instCompleta.uf].filter(Boolean).join(', ');
+
                 // 1. Notificar ASSOCIADO via WhatsApp (técnico a caminho)
                 const periodoTexto = instCompleta.periodo === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)';
                 await supabase.functions.invoke('notificar-cliente', {
@@ -457,6 +470,11 @@ serve(async (req) => {
                     dados: {
                       data: servico.data_agendada,
                       periodo: periodoTexto,
+                      tecnico_nome: tecNome,
+                      tecnico_telefone: tecTelefone,
+                      tecnico_whatsapp_link: tecWhatsappLink,
+                      endereco: enderecoAssociado,
+                      tipo_servico: 'instalação do rastreador',
                     },
                   },
                 });
