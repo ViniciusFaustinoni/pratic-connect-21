@@ -810,14 +810,14 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
                   </Alert>
                 )}
 
-                <div className="flex gap-2">
-                  <Button onClick={processar} disabled={processando}>
-                    {processando ? (
-                      <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processando PDF...</>
-                    ) : (
-                      <><Upload className="h-4 w-4 mr-1" /> Processar PDF</>
-                    )}
-                  </Button>
+                 <div className="flex gap-2">
+                   <Button onClick={processar} disabled={processando}>
+                     {processando ? (
+                       <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processando...</>
+                     ) : (
+                       <><Upload className="h-4 w-4 mr-1" /> Processar Arquivo</>
+                     )}
+                   </Button>
                   <Button variant="outline" onClick={resetForm} disabled={processando}>Remover</Button>
                 </div>
               </div>
