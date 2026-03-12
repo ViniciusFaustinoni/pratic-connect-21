@@ -965,11 +965,19 @@ serve(async (req) => {
         // Estratégia 2: Busca backup - veículos do associado
         if (!codigoVeiculoExistente && codigoAssociadoHinova) {
           try {
-            const cpfFormatado = formatCPF(associado.cpf);
-            const buscaResponse = await fetchWithRetry(
-              `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`,
+            const cpfLimpoVeiculo = cleanCPF(associado.cpf);
+            let buscaResponse = await fetchWithRetry(
+              `${hinovaApiUrl}/associado/buscar/${cpfLimpoVeiculo}/cpf`,
               { method: 'GET', headers: operationHeaders }
             );
+            // Fallback: tentar com CPF formatado
+            if (!buscaResponse.ok) {
+              const cpfFormatadoVeiculo = formatCPF(associado.cpf);
+              buscaResponse = await fetchWithRetry(
+                `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoVeiculo)}/cpf`,
+                { method: 'GET', headers: operationHeaders }
+              );
+            }
             if (buscaResponse.ok) {
               const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_veiculo_via_associado');
               if (buscaData?.veiculos && Array.isArray(buscaData.veiculos)) {
