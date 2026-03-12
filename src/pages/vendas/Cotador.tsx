@@ -1450,8 +1450,15 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
             <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase">Adesão</p>
-                  <p className="text-xl font-bold">{formatCurrency(planoFinalSelecionado.valorAdesao)}</p>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Adesão</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={valorAdesaoCustom ?? ''}
+                    onChange={(e) => setValorAdesaoCustom(parseFloat(e.target.value) || 0)}
+                    className="text-center font-bold text-lg h-10"
+                  />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Mensal</p>
@@ -1462,7 +1469,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">1ª Parcela</p>
                   <p className="text-2xl font-bold text-primary">
-                    {formatCurrency(planoFinalSelecionado.valorAdesao)}
+                    {formatCurrency(valorAdesaoCustom ?? planoFinalSelecionado.valorAdesao)}
                   </p>
                 </div>
               </div>
