@@ -22,6 +22,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/vendas/cotacoes': { label: 'Cotações' },
   '/vendas/contratos': { label: 'Contratos' },
   '/vendas/aprovacoes-fipe': { label: 'Aprovações FIPE Menor' },
+  '/aprovacoes-elegibilidade': { label: 'Aprovações de Elegibilidade' },
   '/vendas/metas': { label: 'Metas' },
   '/vendas/relatorios': { label: 'Relatórios' },
   '/vendas/distribuicao': { label: 'Distribuição' },
