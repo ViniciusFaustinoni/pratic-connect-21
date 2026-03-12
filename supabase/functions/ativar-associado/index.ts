@@ -245,7 +245,8 @@ serve(async (req) => {
         // Se Meta ativo, usar template ativacao_conta_pratic com botão de acesso
         if (isMetaAtivo) {
           // Buscar dados do veículo para o template
-          let veiculoDescricao = 'seu veículo';
+          let placa = 'N/A';
+          let marcaModelo = 'seu veículo';
           if (body.veiculo_id) {
             const { data: veiculo } = await supabaseAdmin
               .from('veiculos')
@@ -253,8 +254,8 @@ serve(async (req) => {
               .eq('id', body.veiculo_id)
               .single();
             if (veiculo?.placa) {
-              const marcaModelo = [veiculo.marca, veiculo.modelo].filter(Boolean).join(' ');
-              veiculoDescricao = marcaModelo ? `${veiculo.placa} - ${marcaModelo}` : veiculo.placa;
+              placa = veiculo.placa;
+              marcaModelo = [veiculo.marca, veiculo.modelo].filter(Boolean).join(' ') || 'seu veículo';
             }
           }
 
@@ -290,11 +291,12 @@ serve(async (req) => {
               usado: false
             });
 
-          const linkAcesso = `https://pratic-connect-21.lovable.app/primeiro-acesso?id=${associado.id}`;
-          sendBody.template_name = 'boas_vindas_associado_v2';
-          // 5 body params + 1 button param (associado.id para URL dinâmica)
-          sendBody.template_params = [primeiroNome, veiculoDescricao, cobertura, 'Instalação do rastreador', linkAcesso, associado.id];
-          console.log(`[ativar-associado] Usando template Meta 'boas_vindas_associado_v2' para ${telefoneWhatsapp}`);
+          // Template cadastro_aprovado_botao: 5 body params + 1 button param
+          // Body: {{1}} nome, {{2}} placa, {{3}} marca+modelo, {{4}} cobertura, {{5}} próximo passo
+          // Button URL: https://pratic-connect-21.lovable.app/acompanhar/{{1}} → associado.id
+          sendBody.template_name = 'cadastro_aprovado_botao';
+          sendBody.template_params = [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador', associado.id];
+          console.log(`[ativar-associado] Usando template Meta 'cadastro_aprovado_botao' para ${telefoneWhatsapp}`);
         }
 
         await supabaseAdmin.functions.invoke('whatsapp-send-text', {
