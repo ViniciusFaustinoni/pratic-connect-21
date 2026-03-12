@@ -63,7 +63,15 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
       setHeaderTexto(template.header_texto || '');
       setCorpo(template.corpo || '');
       setRodape(template.rodape || '');
-      setBotoes((template.botoes as BotaoAcao[]) || []);
+      // Normalizar botões: aceitar tanto tipo/texto quanto type/text
+      const rawBotoes = (template.botoes as any[]) || [];
+      const normalized = rawBotoes.map((b: any) => ({
+        tipo: (b.tipo || (b.type || '').toLowerCase().replace('phone_number', 'telefone').replace('quick_reply', 'resposta_rapida')) as BotaoAcao['tipo'],
+        texto: b.texto || b.text || '',
+        url: b.url || '',
+        telefone: b.telefone || b.phone_number || '',
+      }));
+      setBotoes(normalized);
       setVarExemplos((template.variaveis_exemplo as Record<string, string>) || {});
       setValidacao(null);
     } else if (open && !template) {

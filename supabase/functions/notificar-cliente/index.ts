@@ -324,28 +324,32 @@ serve(async (req) => {
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
               const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
-              return [primeiroNome, veiculoDesc, cobertura, 'Instalação do rastreador', associado.id];
+              const linkAcesso = `https://pratic-connect-21.lovable.app/primeiro-acesso?id=${associado.id}`;
+              return [primeiroNome, veiculoDesc, cobertura, 'Instalação do rastreador', linkAcesso, associado.id];
             },
           },
           proposta_aprovada_roubo_furto: {
             template_name: 'boas_vindas_associado_v2',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
-              return [primeiroNome, veiculoDesc, 'Roubo e Furto', 'Instalação do rastreador', associado.id];
+              const linkAcesso = `https://pratic-connect-21.lovable.app/primeiro-acesso?id=${associado.id}`;
+              return [primeiroNome, veiculoDesc, 'Roubo e Furto', 'Instalação do rastreador', linkAcesso, associado.id];
             },
           },
           proposta_aprovada_cobertura_total: {
             template_name: 'boas_vindas_associado_v2',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
-              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Instalação do rastreador', associado.id];
+              const linkAcesso = `https://pratic-connect-21.lovable.app/primeiro-acesso?id=${associado.id}`;
+              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Instalação do rastreador', linkAcesso, associado.id];
             },
           },
           cobertura_total_ativada: {
             template_name: 'boas_vindas_associado_v2',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
-              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Proteção ativa!', associado.id];
+              const linkAcesso = `https://pratic-connect-21.lovable.app/primeiro-acesso?id=${associado.id}`;
+              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Proteção ativa!', linkAcesso, associado.id];
             },
           },
           vistoria_aprovada: {
@@ -353,14 +357,16 @@ serve(async (req) => {
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
               const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
-              return [primeiroNome, veiculoDesc, cobertura, 'Aguardando instalação', associado.id];
+              const linkAcesso = `https://pratic-connect-21.lovable.app/primeiro-acesso?id=${associado.id}`;
+              return [primeiroNome, veiculoDesc, cobertura, 'Aguardando instalação', linkAcesso, associado.id];
             },
           },
           instalacao_concluida: {
             template_name: 'boas_vindas_associado_v2',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
-              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Proteção ativa!', associado.id];
+              const linkAcesso = `https://pratic-connect-21.lovable.app/primeiro-acesso?id=${associado.id}`;
+              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Proteção ativa!', linkAcesso, associado.id];
             },
           },
           // Técnico a caminho → tecnico_a_caminho (7 params)

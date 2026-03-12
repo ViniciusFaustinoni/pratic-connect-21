@@ -290,9 +290,10 @@ serve(async (req) => {
               usado: false
             });
 
+          const linkAcesso = `https://pratic-connect-21.lovable.app/primeiro-acesso?id=${associado.id}`;
           sendBody.template_name = 'boas_vindas_associado_v2';
-          // 4 body params + 1 button param (associado.id para URL dinâmica)
-          sendBody.template_params = [primeiroNome, veiculoDescricao, 'Roubo e Furto', 'Instalação do rastreador', associado.id];
+          // 5 body params + 1 button param (associado.id para URL dinâmica)
+          sendBody.template_params = [primeiroNome, veiculoDescricao, cobertura, 'Instalação do rastreador', linkAcesso, associado.id];
           console.log(`[ativar-associado] Usando template Meta 'boas_vindas_associado_v2' para ${telefoneWhatsapp}`);
         }
 
