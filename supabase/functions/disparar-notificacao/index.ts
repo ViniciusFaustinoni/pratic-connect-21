@@ -391,8 +391,14 @@ serve(async (req) => {
               templateParams = [primeiroNome, String(dados.protocolo || ''), titulo];
             }
           } else if (tipo === 'assistencia') {
+            // Validar que tempo é numérico — se parece data ISO, usar fallback
+            let tempo = String(dados.tempo || '30');
+            if (/^\d{4}-\d{2}/.test(tempo) || isNaN(Number(tempo))) {
+              console.warn(`[disparar-notificacao] tempo inválido "${tempo}", usando fallback 30`);
+              tempo = '30';
+            }
             templateName = 'assistencia_confirmada';
-            templateParams = [primeiroNome, String(dados.prestador || 'Prestador'), String(dados.tempo || '30')];
+            templateParams = [primeiroNome, String(dados.prestador || 'Prestador'), tempo];
           } else {
             templateName = 'sinistro_atualizado';
             templateParams = [primeiroNome, tipo, titulo];

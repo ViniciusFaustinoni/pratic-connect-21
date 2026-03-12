@@ -213,8 +213,35 @@ serve(async (req) => {
     // Renderizar mensagem
     const mensagem = renderTemplate(config.mensagem, dadosTemplate);
 
-    // Enviar WhatsApp com template
+    // Determinar template correto por status
     const nomeAssociado = chamado.associado?.nome?.split(' ')[0] || 'Associado';
+    let templateName: string;
+    let templateParams: string[];
+
+    if (status_novo === 'prestador_a_caminho') {
+      // Único status que usa assistencia_confirmada (nome, prestador, minutos)
+      let tempo = String(dadosTemplate.tempo || '30');
+      // Validar que tempo é numérico — se parece data ISO, usar fallback
+      if (/^\d{4}-\d{2}/.test(tempo) || isNaN(Number(tempo))) {
+        console.warn(`[notificar-status-assistencia] tempo inválido "${tempo}", usando fallback 30`);
+        tempo = '30';
+      }
+      templateName = 'assistencia_confirmada';
+      templateParams = [
+        nomeAssociado,
+        dadosTemplate.prestador_nome as string || 'Praticcar',
+        tempo,
+      ];
+    } else {
+      // Todos os outros status usam sinistro_atualizado (nome, referência, atualização)
+      templateName = 'sinistro_atualizado';
+      templateParams = [
+        nomeAssociado,
+        `assistência ${dadosTemplate.protocolo}`,
+        mensagem.replace(/\*/g, '').replace(/\n/g, ' ').substring(0, 200),
+      ];
+    }
+
     try {
       const { error: whatsappError } = await supabase.functions.invoke('whatsapp-send-text', {
         body: {
@@ -222,12 +249,8 @@ serve(async (req) => {
           mensagem,
           referencia_tipo: 'chamado_assistencia',
           referencia_id: chamado_id,
-          template_name: 'assistencia_confirmada',
-          template_params: [
-            nomeAssociado,
-            dadosTemplate.prestador_nome as string || 'Praticcar',
-            (dadosTemplate.tempo as string) || '30',
-          ],
+          template_name: templateName,
+          template_params: templateParams,
         },
       });
 
