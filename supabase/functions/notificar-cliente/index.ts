@@ -323,34 +323,45 @@ serve(async (req) => {
             template_name: 'boas_vindas_associado',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
-              return [primeiroNome, veiculoDesc];
+              const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
+              return [primeiroNome, veiculoDesc, cobertura, 'Instalação do rastreador', associado.id];
             },
           },
           proposta_aprovada_roubo_furto: {
             template_name: 'boas_vindas_associado',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
-              return [primeiroNome, veiculoDesc];
+              return [primeiroNome, veiculoDesc, 'Roubo e Furto', 'Instalação do rastreador', associado.id];
             },
           },
           proposta_aprovada_cobertura_total: {
             template_name: 'boas_vindas_associado',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
-              return [primeiroNome, veiculoDesc];
+              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Instalação do rastreador', associado.id];
             },
           },
           cobertura_total_ativada: {
             template_name: 'boas_vindas_associado',
-            getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
+            getParams: () => {
+              const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
+              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Proteção ativa!', associado.id];
+            },
           },
           vistoria_aprovada: {
             template_name: 'boas_vindas_associado',
-            getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
+            getParams: () => {
+              const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
+              const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
+              return [primeiroNome, veiculoDesc, cobertura, 'Aguardando instalação', associado.id];
+            },
           },
           instalacao_concluida: {
             template_name: 'boas_vindas_associado',
-            getParams: () => [primeiroNome, (dados?.placa as string) || 'seu veículo'],
+            getParams: () => {
+              const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
+              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Proteção ativa!', associado.id];
+            },
           },
           // Técnico a caminho → tecnico_a_caminho (7 params)
           tecnico_em_rota: {
