@@ -1362,12 +1362,24 @@ export function useAprovarProposta() {
       
       const jaTemInstalacaoConcluida = !!instalacaoConcluida;
 
-      // 4. Buscar veículo do associado ANTES de verificar instalação ativa
-      const { data: veiculos } = await supabase
-        .from('veiculos')
-        .select('id, placa, modelo')
-        .eq('associado_id', associadoId)
-        .limit(1);
+      // 4. Buscar veículo do contrato (determinístico) ou fallback por associado
+      const veiculoIdDoContrato = (contrato as any).veiculo_id;
+      let veiculos: Array<{ id: string; placa: string | null; modelo: string | null }> | null = null;
+      
+      if (veiculoIdDoContrato) {
+        const { data } = await supabase
+          .from('veiculos')
+          .select('id, placa, modelo')
+          .eq('id', veiculoIdDoContrato);
+        veiculos = data;
+      } else {
+        const { data } = await supabase
+          .from('veiculos')
+          .select('id, placa, modelo')
+          .eq('associado_id', associadoId)
+          .limit(1);
+        veiculos = data;
+      }
 
       // Segundo: Verificar se já existe instalação ATIVA para o mesmo veículo
       // (isso cobre casos de contratos duplicados ou reprocessamento)
