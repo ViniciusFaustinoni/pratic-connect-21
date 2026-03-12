@@ -14,10 +14,11 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
-import { Plus, Pencil, ToggleLeft, FileUp, AlertTriangle, Upload, X, Download, Loader2, CheckCircle2, FileText } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, FileUp, AlertTriangle, Upload, X, Download, Loader2, CheckCircle2, FileText, FileSpreadsheet } from 'lucide-react';
 import { format } from 'date-fns';
 import { COMBUSTIVEIS_FALLBACK } from '@/data/combustiveis';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import * as XLSX from 'xlsx';
 
 type ElegibilidadeRecord = {
   id: string;
