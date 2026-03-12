@@ -227,6 +227,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     const decAssistencia = decomposicao?.assistencia || 0.05;
 
     const planosCalculados: PlanoCotacao[] = [];
+    const negados: PlanoNegadoInfo[] = [];
 
     for (const plano of planosBanco) {
       const linha = plano.linha?.toLowerCase() || null;
