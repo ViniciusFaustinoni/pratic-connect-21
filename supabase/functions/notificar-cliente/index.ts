@@ -335,7 +335,7 @@ serve(async (req) => {
             },
           },
           proposta_aprovada_cobertura_total: {
-            template_name: 'boas_vindas_associado',
+            template_name: 'boas_vindas_associado_v2',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
               return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Instalação do rastreador', associado.id];
