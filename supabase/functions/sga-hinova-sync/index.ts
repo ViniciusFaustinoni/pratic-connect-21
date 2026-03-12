@@ -663,12 +663,8 @@ serve(async (req) => {
             try {
               const buscaData = JSON.parse(buscaText);
               
-              // Extrair código de MUITOS formatos possíveis
-              const codigo = buscaData?.codigo_associado || buscaData?.codigo || 
-                (Array.isArray(buscaData) && buscaData.length > 0 && (buscaData[0]?.codigo_associado || buscaData[0]?.codigo)) ||
-                (buscaData?.data?.codigo_associado) || (buscaData?.data?.codigo) ||
-                (buscaData?.associado?.codigo_associado) || (buscaData?.associado?.codigo) ||
-                (buscaData?.resultado?.codigo_associado) || (buscaData?.resultado?.codigo);
+              // Extrair código de formatos possíveis
+              const codigo = extractCodigoAssociado(buscaData);
               
               if (codigo) {
                 codigoAssociadoHinova = parseInt(String(codigo));
