@@ -544,9 +544,11 @@ export default function Cotacoes() {
     setMesFilter('all');
     setDataFilter(undefined);
     setConsultorFilter('all');
+    setFiltroOrfas(false);
+    setSelectedIds(new Set());
   };
 
-  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all';
+  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas;
 
   // Stats - 9 status do fluxo de cotação
   const statusStats = useMemo(() => {
