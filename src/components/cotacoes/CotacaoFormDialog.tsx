@@ -271,9 +271,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const validadeDias = form.watch('validade_dias');
   const valorAdesao = form.watch('valor_adesao');
 
+  // Guard: só auto-preencher adesão se o consultor não editou manualmente
+  const adesaoEditadaManualmente = useRef(false);
+  
   // Auto-calcular adesão como 1% FIPE (mínimo R$ 100)
   useEffect(() => {
-    if (valorFipe && valorFipe > 0) {
+    if (valorFipe && valorFipe > 0 && !adesaoEditadaManualmente.current) {
       const MINIMO_ADESAO = 100;
       const adesaoCalculada = Math.max(valorFipe * 0.01, MINIMO_ADESAO);
       const adesaoArredondada = Math.round(adesaoCalculada * 100) / 100;
