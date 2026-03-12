@@ -1609,7 +1609,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 )}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Valor da taxa de filiação (NÃO inclui mensalidade)
+                Valor sugerido: 1% da FIPE (mín. R$ 100). Altere conforme necessário.
               </p>
             </div>
 
