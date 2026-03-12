@@ -1755,6 +1755,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                       </Card>
                     );
                   })}
+                  </div>
                 </div>
               ) : valorFipe > 0 ? (
                 <Card className="border-amber-500/30 bg-amber-500/5">
