@@ -313,14 +313,21 @@ export function WhatsAppMetaTemplates() {
               onClick={async () => {
                 setTestSending(true);
                 try {
-                  // Extrair variáveis únicas do corpo do template ({{1}}, {{2}}, etc.)
-                  const allMatches = testTemplate?.corpo?.match(/\{\{\d+\}\}/g) || [];
-                  const uniqueVars = [...new Set(allMatches)].sort();
-                  const params = uniqueVars.map((_: string, i: number) => `teste${i + 1}`);
+                  // Extrair variáveis únicas do CORPO do template ({{1}}, {{2}}, etc.)
+                  const bodyMatches = testTemplate?.corpo?.match(/\{\{\d+\}\}/g) || [];
+                  const uniqueBodyVars = [...new Set(bodyMatches)].sort();
+                  const bodyParams = uniqueBodyVars.map((_: string, i: number) => `teste${i + 1}`);
+
+                  // Detectar botões URL com variáveis dinâmicas
+                  const botoes = (testTemplate?.botoes || []) as Array<{ tipo?: string; type?: string; url?: string }>;
+                  const urlButtonCount = botoes.filter(
+                    (b) => (b.tipo === 'url' || b.type === 'URL') && b.url?.includes('{{')
+                  ).length;
+                  const buttonParams = Array.from({ length: urlButtonCount }, (_, i) => `link_teste${i + 1}`);
 
                   // Gerar mensagem fallback substituindo variáveis no corpo
                   let mensagemFallback = testTemplate?.corpo || 'Mensagem de teste';
-                  uniqueVars.forEach((m: string, i: number) => {
+                  uniqueBodyVars.forEach((m: string, i: number) => {
                     mensagemFallback = mensagemFallback.replaceAll(m, `teste${i + 1}`);
                   });
 
@@ -329,7 +336,8 @@ export function WhatsAppMetaTemplates() {
                       telefone: testPhone,
                       mensagem: mensagemFallback,
                       template_name: testTemplate?.nome,
-                      template_params: params.length > 0 ? params : undefined,
+                      template_params: bodyParams.length > 0 ? bodyParams : undefined,
+                      template_button_params: buttonParams.length > 0 ? buttonParams : undefined,
                     },
                   });
 
