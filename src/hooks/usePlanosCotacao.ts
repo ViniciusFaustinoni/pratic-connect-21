@@ -193,7 +193,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       return marcaMatch && modeloMatch && anoMatch && combustivelMatch;
     });
 
-    if (!regra) return 'negado';
+    if (!regra) return 'aprovado';
     if (regra.status === 'negado') return 'negado';
     if (regra.status === 'limitado') return 'limitado';
     return 'aprovado';
