@@ -113,6 +113,7 @@ function enrichBenefitsWithKm(
     return pb;
   });
 }
+/**
  * Hook para buscar todas as linhas de produtos ativas
  */
 export function useProductLines() {
