@@ -371,6 +371,19 @@ serve(async (req) => {
       );
     }
 
+    if (!codigoContaValido) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'codigo_conta do Hinova inválido ou ausente. Configure HINOVA_CODIGO_CONTA (ou integre em credenciais) e tente novamente.',
+          step: 'config'
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+      );
+    }
+
     const requestBody = await req.json();
     const { veiculo_id, associado_id, action } = requestBody as SyncRequest & { action?: string };
 
