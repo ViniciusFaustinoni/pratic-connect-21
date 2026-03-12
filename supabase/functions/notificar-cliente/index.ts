@@ -316,6 +316,19 @@ serve(async (req) => {
 
         const isMetaAtivo = metaConfig?.ativo === true;
 
+        // Buscar link_token do contrato ativo para URL do botão
+        const { data: contratoLink } = await supabase
+          .from('contratos')
+          .select('link_token')
+          .eq('associado_id', associado.id)
+          .in('status', ['ativo', 'assinado', 'pendente_assinatura'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        const linkToken = contratoLink?.link_token || associado.id;
+        console.log(`[notificar-cliente] linkToken para botão: ${linkToken} (contrato encontrado: ${!!contratoLink})`);
+
         // Mapear tipos de notificação para templates aprovados da Meta
         const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] }> = {
           // Aprovações e boas-vindas → cadastro_aprovado_botao
