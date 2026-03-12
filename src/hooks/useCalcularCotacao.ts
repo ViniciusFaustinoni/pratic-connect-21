@@ -109,7 +109,7 @@ export function useCalcularCotacao() {
         // Buscar valor_mensal da nova tabela via plano_preco_map
         const mapping = planoPrecoMap.find(m => m.plano_id === plano.id);
         const linhaSlug = mapping?.linha_slug;
-        const tipoUsoOriginal = mapping?.tipo_uso || params.tipo_uso;
+        const tipoUsoOriginal = params.tipo_uso === 'aplicativo' ? 'aplicativo' : (mapping?.tipo_uso || params.tipo_uso);
         // Resolver tipo_uso para query (regras de adicional app)
         const tipoUsoPricing = linhaSlug
           ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal)

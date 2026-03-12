@@ -311,7 +311,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
       const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);
       const linhaSlug = mapping?.linha_slug;
-      const tipoUsoOriginal = mapping?.tipo_uso || (params.usoApp ? 'aplicativo' : 'particular');
+      const tipoUsoOriginal = params.usoApp ? 'aplicativo' : (mapping?.tipo_uso || 'particular');
       // Resolver tipo_uso para query (regras de adicional app)
       const tipoUsoPricing = linhaSlug
         ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal)
