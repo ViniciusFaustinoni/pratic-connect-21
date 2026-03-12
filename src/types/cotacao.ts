@@ -179,4 +179,5 @@ export interface CriarCotacaoPayload {
   uso_aplicativo: boolean;
   categoria_veiculo?: string;
   nome_solicitante?: string | null;
+  valor_adesao?: number;
 }

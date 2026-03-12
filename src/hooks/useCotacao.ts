@@ -483,7 +483,7 @@ export function useCriarCotacao() {
         valor_rastreamento: resultado.valores.valor_rastreamento,
         valor_assistencia: resultado.valores.valor_assistencia,
         valor_total_mensal: resultado.valores.valor_mensal,
-        valor_adesao: resultado.valores.valor_adesao,
+        valor_adesao: payload.valor_adesao || resultado.valores.valor_adesao,
         status: 'rascunho' as const,
         validade_dias: 7,
         categoria: payload.categoria_veiculo,

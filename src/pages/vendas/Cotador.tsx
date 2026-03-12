@@ -645,6 +645,7 @@ export default function CotadorPage() {
         categoria_veiculo: categoriaVeiculo || undefined,
         nome_solicitante: leadSelecionado?.nome || nomeAssociado || null,
         veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
+        valor_adesao: valorAdesaoCustom || undefined,
       });
 
       setCotacaoSalva(cotacaoData);
