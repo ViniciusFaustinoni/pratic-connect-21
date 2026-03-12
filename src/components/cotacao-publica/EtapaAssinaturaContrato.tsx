@@ -41,6 +41,9 @@ export function EtapaAssinaturaContrato({
   const [erro, setErro] = useState<string | null>(null);
   const [verificando, setVerificando] = useState(false);
 
+  // Flag para evitar chamadas duplicadas em re-render
+  const [inicializado, setInicializado] = useState(false);
+
   // 1. Verificar/gerar contrato
   const verificarOuGerarContrato = useCallback(async () => {
     try {
@@ -65,30 +68,40 @@ export function EtapaAssinaturaContrato({
         throw new Error('Cotação não encontrada ou acesso negado');
       }
 
+      // ═══ NOVO: Buscar TODOS os contratos da cotação para priorizar assinado ═══
+      const { data: todosContratos } = await publicSupabase
+        .from('contratos')
+        .select('id, numero, autentique_documento_id, autentique_url, status')
+        .eq('cotacao_id', cotacaoId)
+        .order('created_at', { ascending: false });
+
+      // Priorizar contrato assinado/ativo
+      const contratoAssinado = todosContratos?.find(
+        (c: any) => c.status === 'assinado' || c.status === 'ativo'
+      );
+      
       let contratoId = cotacao?.contrato_gerado_id;
+      let contratoData = contratoAssinado || todosContratos?.find((c: any) => c.id === contratoId) || todosContratos?.[0];
 
-      // Se já existe contrato, buscar detalhes
-      if (contratoId) {
-        console.log('[EtapaAssinatura] Contrato já existe:', contratoId);
-        const { data: contratoData, error: contratoError } = await publicSupabase
-          .from('contratos')
-          .select('id, numero, autentique_documento_id, autentique_url, status')
-          .eq('id', contratoId)
-          .maybeSingle();
+      // Se encontrou um contrato assinado que não é o vinculado, corrigir
+      if (contratoAssinado && contratoAssinado.id !== contratoId) {
+        console.log('[EtapaAssinatura] Corrigindo: cotação aponta para contrato errado. Assinado:', contratoAssinado.id);
+        contratoId = contratoAssinado.id;
+        contratoData = contratoAssinado;
+        // Corrigir na base
+        await publicSupabase
+          .from('cotacoes')
+          .update({ contrato_gerado_id: contratoAssinado.id, status_contratacao: 'contrato_assinado' })
+          .eq('id', cotacaoId)
+          .eq('token_publico', tokenPublico);
+      }
 
-        if (contratoError) {
-          console.error('[EtapaAssinatura] Erro ao buscar contrato:', contratoError);
-          throw contratoError;
-        }
-        
-        if (!contratoData) {
-          console.warn('[EtapaAssinatura] Contrato não encontrado - RLS pode estar bloqueando');
-          // Continua para gerar novo contrato via edge function (usa service role)
-          contratoId = null;
-        } else {
+      // Se já existe contrato, processar
+      if (contratoData) {
+        console.log('[EtapaAssinatura] Contrato encontrado:', contratoData.id, 'status:', contratoData.status);
 
         // Se já foi assinado, ir direto para próxima etapa
-        if (contratoData?.status === 'assinado' || contratoData?.status === 'ativo') {
+        if (contratoData.status === 'assinado' || contratoData.status === 'ativo') {
           console.log('[EtapaAssinatura] Contrato já assinado!');
           setContrato({
             id: contratoData.id,
@@ -102,8 +115,7 @@ export function EtapaAssinaturaContrato({
         }
 
         // Se já tem link do Autentique, ir para aguardar
-        if (contratoData?.autentique_url) {
-          // Garantir que status reflete a etapa correta (avançar se ainda estiver em dados_preenchidos)
+        if (contratoData.autentique_url) {
           await publicSupabase
             .from('cotacoes')
             .update({ status_contratacao: 'documentos_ok' })
@@ -122,16 +134,16 @@ export function EtapaAssinaturaContrato({
           return contratoData.id;
         }
 
-          setContrato({
-            id: contratoData.id,
-            numero: contratoData.numero,
-            status: contratoData.status,
-          });
-        }
+        contratoId = contratoData.id;
+        setContrato({
+          id: contratoData.id,
+          numero: contratoData.numero,
+          status: contratoData.status,
+        });
       }
       
       if (!contratoId) {
-        // Gerar contrato
+        // Gerar contrato (idempotente via edge function)
         setEtapaInterna('gerando_contrato');
         console.log('[EtapaAssinatura] Gerando novo contrato...');
 
@@ -145,7 +157,6 @@ export function EtapaAssinaturaContrato({
         contratoId = data.contrato.id;
         console.log('[EtapaAssinatura] Contrato gerado:', data.contrato.numero);
 
-        // Atualizar cotação com ID do contrato e avançar status
         await publicSupabase
           .from('cotacoes')
           .update({ contrato_gerado_id: contratoId, status_contratacao: 'documentos_ok' })
