@@ -477,13 +477,31 @@ serve(async (req) => {
     // ========================================
     console.log('[SGA Sync] Buscando código voluntário do vendedor...');
     
-    const { data: contrato } = await supabase
+    // Priorizar contrato pelo veiculo_id (determinístico), fallback por associado_id
+    let contrato: { vendedor_id: string | null; veiculo_categoria: string | null } | null = null;
+    
+    const { data: contratoByVeiculo } = await supabase
       .from('contratos')
       .select('vendedor_id, veiculo_categoria')
-      .eq('associado_id', associado_id)
+      .eq('veiculo_id', veiculo_id)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
+    
+    if (contratoByVeiculo) {
+      contrato = contratoByVeiculo;
+      console.log(`[SGA Sync] Contrato encontrado por veiculo_id: ${veiculo_id}`);
+    } else {
+      const { data: contratoByAssociado } = await supabase
+        .from('contratos')
+        .select('vendedor_id, veiculo_categoria')
+        .eq('associado_id', associado_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      contrato = contratoByAssociado;
+      console.log(`[SGA Sync] Contrato fallback por associado_id: ${associado_id}`);
+    }
     
     if (contrato?.vendedor_id) {
       console.log(`[SGA Sync] Vendedor do contrato: ${contrato.vendedor_id}`);
@@ -695,11 +713,12 @@ serve(async (req) => {
         estado: associado.uf || '',
         sexo: associado.sexo?.toUpperCase() === 'FEMININO' ? 'F' : 'M',
         dia_vencimento: associado.dia_vencimento || 10,
-        codigo_conta: 2,
+        codigo_conta: parseInt(hinovaCodigoConta) || 1,
         ...(hinovaCodigoRegional && { codigo_regional: parseInt(hinovaCodigoRegional) }),
         ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
         ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
       };
+      console.log(`[SGA Sync] Payload associado: codigo_conta=${parseInt(hinovaCodigoConta) || 1}`);
 
       const associadoResponse = await fetchWithRetry(
         `${hinovaApiUrl}/associado/cadastrar`,
@@ -929,7 +948,7 @@ serve(async (req) => {
       kilometragem: 0,
       numero_motor: '',
       dia_vencimento: associado.dia_vencimento || 10,
-      codigo_conta: 2,
+      codigo_conta: parseInt(hinovaCodigoConta) || 1,
       codigo_cor: getMapeamento('cor', veiculo.cor),
       codigo_combustivel: getMapeamento('combustivel', combustivelNormalizado),
       codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase()) || tipoVeiculoInferido,

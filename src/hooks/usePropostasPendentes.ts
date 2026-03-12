@@ -153,7 +153,8 @@ export function usePropostasPendentes() {
           associado_id,
           cotacao_id,
           plano_id,
-          vendedor_id
+          vendedor_id,
+          veiculo_id
         `)
         .eq('status', 'assinado')
         .order('data_assinatura', { ascending: true });
@@ -1051,20 +1052,20 @@ export function useProposta(contratoId: string | undefined) {
       }
 
       // Buscar veículo_id e cobertura_total do veículo
+      // Priorizar contrato.veiculo_id (determinístico), fallback por associado_id
       let veiculoId: string | null = null;
       let veiculoCoberturaTotal: boolean | null = null;
       let veiculoRenavam: string | null = null;
       let veiculoChassi: string | null = null;
       
-      if (contrato.associado_id) {
-        const { data: veiculo } = await supabase
-          .from('veiculos')
-          .select('id, cobertura_total, renavam, chassi')
-          .eq('associado_id', contrato.associado_id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
+      const veiculoFilter = (contrato as any).veiculo_id 
+        ? supabase.from('veiculos').select('id, cobertura_total, renavam, chassi').eq('id', (contrato as any).veiculo_id).maybeSingle()
+        : contrato.associado_id 
+          ? supabase.from('veiculos').select('id, cobertura_total, renavam, chassi').eq('associado_id', contrato.associado_id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+          : null;
+      
+      if (veiculoFilter) {
+        const { data: veiculo } = await veiculoFilter;
         if (veiculo) {
           veiculoId = veiculo.id;
           veiculoCoberturaTotal = veiculo.cobertura_total;
@@ -1267,6 +1268,7 @@ export function useAprovarProposta() {
           id,
           status,
           associado_id,
+          veiculo_id,
           plano_id,
           valor_mensal,
           dia_vencimento,
@@ -1361,23 +1363,35 @@ export function useAprovarProposta() {
       
       const jaTemInstalacaoConcluida = !!instalacaoConcluida;
 
-      // 4. Buscar veículo do associado ANTES de verificar instalação ativa
-      const { data: veiculos } = await supabase
-        .from('veiculos')
-        .select('id, placa, modelo')
-        .eq('associado_id', associadoId)
-        .limit(1);
+      // 4. Buscar veículo do contrato (determinístico) ou fallback por associado
+      const veiculoIdDoContrato = (contrato as any).veiculo_id;
+      let veiculos: Array<{ id: string; placa: string | null; modelo: string | null }> | null = null;
+      
+      if (veiculoIdDoContrato) {
+        const { data } = await supabase
+          .from('veiculos')
+          .select('id, placa, modelo')
+          .eq('id', veiculoIdDoContrato);
+        veiculos = data;
+      } else {
+        const { data } = await supabase
+          .from('veiculos')
+          .select('id, placa, modelo')
+          .eq('associado_id', associadoId)
+          .limit(1);
+        veiculos = data;
+      }
 
       // Segundo: Verificar se já existe instalação ATIVA para o mesmo veículo
       // (isso cobre casos de contratos duplicados ou reprocessamento)
-      const veiculoIdDoContrato = (contrato as any).veiculo_id || (veiculos && veiculos[0]?.id);
+      const veiculoIdParaInstalacao = veiculoIdDoContrato || (veiculos && veiculos[0]?.id);
       let jaTemInstalacaoAtiva = false;
 
-      if (veiculoIdDoContrato) {
+      if (veiculoIdParaInstalacao) {
         const { data: instalacaoAtiva } = await supabase
           .from('instalacoes')
           .select('id, status, contrato_id')
-          .eq('veiculo_id', veiculoIdDoContrato)
+          .eq('veiculo_id', veiculoIdParaInstalacao)
           .in('status', ['agendada', 'em_rota', 'em_andamento'])
           .maybeSingle();
         
@@ -1385,7 +1399,7 @@ export function useAprovarProposta() {
         
         // Se a instalação ativa é de outro contrato, logar para debugging
         if (instalacaoAtiva && instalacaoAtiva.contrato_id !== contratoId) {
-          console.warn(`Veículo ${veiculoIdDoContrato} já tem instalação ativa do contrato ${instalacaoAtiva.contrato_id}. Usando instalação existente.`);
+          console.warn(`Veículo ${veiculoIdParaInstalacao} já tem instalação ativa do contrato ${instalacaoAtiva.contrato_id}. Usando instalação existente.`);
         }
       }
       

@@ -123,20 +123,33 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
 
       const vistoriasMap = new Map(vistoriasData.map(v => [v.associado_id, v]));
 
-      // Buscar veículos para cada associado (dados SGA)
+      // Buscar veículos - priorizar por contrato.veiculo_id, fallback por associado_id
+      const veiculoIds = [...new Set(filteredContratos.map((c: any) => c.veiculo_id).filter(Boolean))] as string[];
       let veiculosData: Array<{ id: string; associado_id: string; sincronizado_hinova: boolean | null; status_sga: string | null; codigo_hinova: number | null }> = [];
-      if (associadoIds.length > 0) {
+      
+      // Buscar por veiculo_id direto dos contratos
+      if (veiculoIds.length > 0) {
         const { data, error } = await supabase
           .from('veiculos')
           .select('id, associado_id, sincronizado_hinova, status_sga, codigo_hinova')
-          .in('associado_id', associadoIds);
-        
-        if (error) {
-          console.error('Erro ao buscar veículos:', error);
-        }
-        veiculosData = (data || []) as unknown as typeof veiculosData;
+          .in('id', veiculoIds);
+        if (!error && data) veiculosData = data as unknown as typeof veiculosData;
+      }
+      
+      // Fallback: buscar por associado_id para contratos sem veiculo_id
+      const associadosSemVeiculo = associadoIds.filter(aId => 
+        !filteredContratos.some((c: any) => c.veiculo_id && c.associado_id === aId)
+      );
+      if (associadosSemVeiculo.length > 0) {
+        const { data } = await supabase
+          .from('veiculos')
+          .select('id, associado_id, sincronizado_hinova, status_sga, codigo_hinova')
+          .in('associado_id', associadosSemVeiculo);
+        if (data) veiculosData = [...veiculosData, ...(data as unknown as typeof veiculosData)];
       }
 
+      // Map por veiculo_id E por associado_id para lookup flexível
+      const veiculosByIdMap = new Map(veiculosData.map(v => [v.id, v]));
       const veiculosMap = new Map(veiculosData.map(v => [v.associado_id, v]));
 
       // Buscar planos para verificar cobertura
@@ -161,7 +174,10 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
         const lead = contrato.leads;
         const vendedor = contrato.vendedor_id ? vendedoresMap.get(contrato.vendedor_id) : null;
         const vistoria = contrato.associado_id ? vistoriasMap.get(contrato.associado_id) : null;
-        const veiculo = contrato.associado_id ? veiculosMap.get(contrato.associado_id) : null;
+        // Priorizar veículo pelo veiculo_id do contrato, fallback por associado_id
+        const veiculo = contrato.veiculo_id 
+          ? veiculosByIdMap.get(contrato.veiculo_id) 
+          : (contrato.associado_id ? veiculosMap.get(contrato.associado_id) : null);
         const plano = contrato.plano_id ? planosMap.get(contrato.plano_id) : null;
 
         return {
@@ -253,10 +269,10 @@ export function useAtivarContrato() {
 
   return useMutation({
     mutationFn: async (contratoId: string) => {
-      // 1. Buscar contrato para pegar associado_id
+      // 1. Buscar contrato para pegar associado_id e veiculo_id
       const { data: contrato, error: fetchError } = await supabase
         .from('contratos')
-        .select('associado_id')
+        .select('associado_id, veiculo_id')
         .eq('id', contratoId)
         .single();
 
@@ -288,13 +304,27 @@ export function useAtivarContrato() {
         }
 
         // 4. Enviar automaticamente ao SGA (fire-and-forget)
-        const { data: veiculo } = await supabase
-          .from('veiculos')
-          .select('id, sincronizado_hinova')
-          .eq('associado_id', contrato.associado_id)
-          .eq('sincronizado_hinova', false)
-          .limit(1)
-          .maybeSingle();
+        // Priorizar veiculo_id do contrato (determinístico)
+        let veiculo: { id: string; sincronizado_hinova: boolean | null } | null = null;
+        
+        if (contrato.veiculo_id) {
+          const { data } = await supabase
+            .from('veiculos')
+            .select('id, sincronizado_hinova')
+            .eq('id', contrato.veiculo_id)
+            .eq('sincronizado_hinova', false)
+            .maybeSingle();
+          veiculo = data;
+        } else {
+          const { data } = await supabase
+            .from('veiculos')
+            .select('id, sincronizado_hinova')
+            .eq('associado_id', contrato.associado_id)
+            .eq('sincronizado_hinova', false)
+            .limit(1)
+            .maybeSingle();
+          veiculo = data;
+        }
 
         if (veiculo) {
           supabase.functions.invoke('sga-hinova-sync', {
