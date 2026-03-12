@@ -95,6 +95,7 @@ function TabPorPlano() {
         .from('planos')
         .select('id, nome, linha')
         .eq('ativo', true)
+        .eq('visivel_gestao', true)
         .order('nome');
       if (error) throw error;
       return data as PlanoOption[];
@@ -427,6 +428,7 @@ function TabImportarPlanilha({ onNavigateToPlano }: { onNavigateToPlano?: (plano
         .from('planos')
         .select('id, nome, linha')
         .eq('ativo', true)
+        .eq('visivel_gestao', true)
         .order('nome');
       if (error) throw error;
       return data as PlanoOption[];
@@ -840,6 +842,7 @@ function TabResumoGlobal() {
           .from('planos')
           .select('id, nome, linha')
           .eq('ativo', true)
+          .eq('visivel_gestao', true)
           .order('nome');
         if (pe) throw pe;
 
