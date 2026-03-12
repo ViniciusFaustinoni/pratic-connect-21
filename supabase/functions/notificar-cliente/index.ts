@@ -530,6 +530,18 @@ serve(async (req) => {
           const mapping = META_TEMPLATE_MAP[tipo];
           sendBody.template_name = mapping.template_name;
           sendBody.template_params = mapping.getParams();
+          
+          // Enviar button params explicitamente se disponível
+          if (mapping.getButtonParams) {
+            const btnParams = mapping.getButtonParams();
+            if (btnParams) {
+              sendBody.template_button_params = btnParams;
+              console.log(`[notificar-cliente] template_button_params: ${JSON.stringify(btnParams)}`);
+            } else {
+              console.warn(`[notificar-cliente] ⚠️ Sem link_token para botão do template '${mapping.template_name}'. Botão pode não funcionar.`);
+            }
+          }
+          
           console.log(`[notificar-cliente] Usando template Meta '${mapping.template_name}' para tipo '${tipo}'`);
         } else if (isMetaAtivo) {
           // Fallback: usar sinistro_atualizado como template genérico
