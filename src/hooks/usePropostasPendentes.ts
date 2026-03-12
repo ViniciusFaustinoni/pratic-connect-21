@@ -1387,11 +1387,11 @@ export function useAprovarProposta() {
       const veiculoIdParaInstalacao = veiculoIdDoContrato || (veiculos && veiculos[0]?.id);
       let jaTemInstalacaoAtiva = false;
 
-      if (veiculoIdDoContrato) {
+      if (veiculoIdParaInstalacao) {
         const { data: instalacaoAtiva } = await supabase
           .from('instalacoes')
           .select('id, status, contrato_id')
-          .eq('veiculo_id', veiculoIdDoContrato)
+          .eq('veiculo_id', veiculoIdParaInstalacao)
           .in('status', ['agendada', 'em_rota', 'em_andamento'])
           .maybeSingle();
         
@@ -1399,7 +1399,7 @@ export function useAprovarProposta() {
         
         // Se a instalação ativa é de outro contrato, logar para debugging
         if (instalacaoAtiva && instalacaoAtiva.contrato_id !== contratoId) {
-          console.warn(`Veículo ${veiculoIdDoContrato} já tem instalação ativa do contrato ${instalacaoAtiva.contrato_id}. Usando instalação existente.`);
+          console.warn(`Veículo ${veiculoIdParaInstalacao} já tem instalação ativa do contrato ${instalacaoAtiva.contrato_id}. Usando instalação existente.`);
         }
       }
       
