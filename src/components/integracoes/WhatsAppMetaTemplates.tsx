@@ -171,6 +171,18 @@ export function WhatsAppMetaTemplates() {
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
+                        {t.status === 'PENDING' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-yellow-600"
+                            title="Verificar status na Meta"
+                            onClick={() => sincronizar.mutate()}
+                            disabled={sincronizar.isPending}
+                          >
+                            <RefreshCw className="h-3 w-3" />
+                          </Button>
+                        )}
                         {t.status === 'APPROVED' && (
                           <Button
                             variant="ghost"
