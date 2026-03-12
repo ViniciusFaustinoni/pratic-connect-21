@@ -3,6 +3,7 @@ import { format, formatDistanceToNow, isToday, isYesterday } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { FileText, Send, Check, X, Eye, Car, Phone, User, MoreHorizontal, ClipboardCopy, ExternalLink, Link2, FileDown, Loader2, Plus, ArrowRight } from 'lucide-react';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -281,6 +282,10 @@ interface CotacoesTableProps {
   onExcluir: (id: string) => void;
   copiandoWhatsAppId: string | null;
   getPermissions: (cotacao: CotacaoWithRelations) => CotacoesTablePermissions;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleAll?: () => void;
 }
 
 // Avatar gradient colors based on initial
@@ -316,6 +321,10 @@ export function CotacoesTable({
   onExcluir,
   copiandoWhatsAppId,
   getPermissions,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
+  onToggleAll,
 }: CotacoesTableProps) {
   const formatPhone = (phone?: string | null) => {
     if (!phone) return null;
@@ -356,6 +365,15 @@ export function CotacoesTable({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-2 border-border/60">
+              {selectable && (
+                <TableHead className="w-[40px]">
+                  <Checkbox
+                    checked={cotacoes.length > 0 && selectedIds?.size === cotacoes.length}
+                    onCheckedChange={() => onToggleAll?.()}
+                    aria-label="Selecionar todas"
+                  />
+                </TableHead>
+              )}
               <TableHead className="w-[180px] font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Status</TableHead>
               <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Cliente</TableHead>
               <TableHead className="hidden md:table-cell font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Veículo</TableHead>
@@ -382,9 +400,19 @@ export function CotacoesTable({
                     "cursor-pointer border-l-4 transition-all duration-200",
                     status.borderColor,
                     "hover:bg-primary/[0.06] hover:shadow-sm hover:translate-x-[2px]",
+                    selectable && selectedIds?.has(cotacao.id) && "bg-primary/[0.08]",
                   )}
                   onClick={() => onRowClick(cotacao)}
                 >
+                  {selectable && (
+                    <TableCell onClick={(e) => e.stopPropagation()} className="py-3">
+                      <Checkbox
+                        checked={selectedIds?.has(cotacao.id) ?? false}
+                        onCheckedChange={() => onToggleSelect?.(cotacao.id)}
+                        aria-label={`Selecionar cotação ${cotacao.numero}`}
+                      />
+                    </TableCell>
+                  )}
                   {/* Status / Etapa */}
                   <TableCell className="py-3">
                     <div className="flex flex-col gap-1.5">

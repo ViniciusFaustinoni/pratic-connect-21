@@ -1,6 +1,6 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
-import { Plus, Search, FileText, Send, Check, Loader2, CheckCircle, TrendingUp, Calendar as CalendarIcon, User, RefreshCw, CalendarDays, Link, ListChecks, FileUp, PenTool, CreditCard, MapPin, Clock, Trophy } from 'lucide-react';
+import { Plus, Search, FileText, Send, Check, Loader2, CheckCircle, TrendingUp, Calendar as CalendarIcon, User, RefreshCw, CalendarDays, Link, ListChecks, FileUp, PenTool, CreditCard, MapPin, Clock, Trophy, Trash2, AlertTriangle } from 'lucide-react';
 import { formatDistanceToNow, format, isSameDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { Button } from '@/components/ui/button';
@@ -14,16 +14,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from '@/components/ui/alert-dialog';
 import {
   Popover,
   PopoverContent,
@@ -43,6 +33,7 @@ import { VincularLeadModal } from '@/components/cotacoes/VincularLeadModal';
 import { gerarPdfCotacao, gerarPdfCotacaoComparativa, type PlanoParaPdf, type CotacaoComparativaParaPdf } from '@/lib/gerarPdfCotacao';
 import { CotacoesTable, type CotacoesTablePermissions } from '@/components/cotacoes/CotacoesTable';
 import { CotacaoDetalhesModal } from '@/components/cotacoes/CotacaoDetalhesModal';
+import { ConfirmacaoExclusaoCotacaoDialog } from '@/components/cotacoes/ConfirmacaoExclusaoCotacaoDialog';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
@@ -104,6 +95,11 @@ export default function Cotacoes() {
   // Filtros
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
   const [consultorFilter, setConsultorFilter] = useState<string>('all');
+  const [filtroOrfas, setFiltroOrfas] = useState(false);
+  
+  // Seleção em lote
+  const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
+  const [showExclusaoLoteDialog, setShowExclusaoLoteDialog] = useState(false);
   
   // Modal de detalhes
   const [showDetalhesModal, setShowDetalhesModal] = useState(false);
@@ -183,10 +179,15 @@ export default function Cotacoes() {
       if (consultorFilter !== 'all') {
         matchesConsultor = cotacao.vendedor_id === consultorFilter;
       }
+
+      let matchesOrfas = true;
+      if (filtroOrfas) {
+        matchesOrfas = !cotacao.lead_id;
+      }
       
-      return matchesSearch && matchesStatus && matchesMes && matchesData && matchesConsultor;
+      return matchesSearch && matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas;
     });
-  }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter]);
+  }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas]);
 
   // Ordenação inteligente
   const sortedCotacoes = useMemo(() => {
@@ -235,14 +236,49 @@ export default function Cotacoes() {
 
   const handleExcluir = (id: string) => {
     setCotacaoParaExcluir(id);
+    setShowExclusaoLoteDialog(true);
+    setSelectedIds(new Set([id]));
   };
 
-  const confirmarExclusao = () => {
-    if (cotacaoParaExcluir) {
-      excluirCotacao.mutate(cotacaoParaExcluir);
-      setCotacaoParaExcluir(null);
+  const handleExcluirEmLote = async (motivo: string) => {
+    const ids = Array.from(selectedIds);
+    let sucesso = 0;
+    let erro = 0;
+    
+    for (const id of ids) {
+      try {
+        await excluirCotacao.mutateAsync(id);
+        sucesso++;
+      } catch {
+        erro++;
+      }
+    }
+    
+    setSelectedIds(new Set());
+    setCotacaoParaExcluir(null);
+    
+    if (erro === 0) {
+      toast.success(`${sucesso} cotação(ões) excluída(s) com sucesso`);
+    } else {
+      toast.warning(`${sucesso} excluída(s), ${erro} com erro`);
     }
   };
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds(prev => {
+      if (prev.size === sortedCotacoes.length) return new Set();
+      return new Set(sortedCotacoes.map(c => c.id));
+    });
+  }, [sortedCotacoes]);
 
   const handleMarkAsEnviada = async (id: string, leadId?: string | null) => {
     try {
@@ -508,9 +544,11 @@ export default function Cotacoes() {
     setMesFilter('all');
     setDataFilter(undefined);
     setConsultorFilter('all');
+    setFiltroOrfas(false);
+    setSelectedIds(new Set());
   };
 
-  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all';
+  const hasActiveFilters = search || statusFilter !== 'all' || mesFilter !== 'all' || dataFilter || consultorFilter !== 'all' || filtroOrfas;
 
   // Stats - 9 status do fluxo de cotação
   const statusStats = useMemo(() => {
@@ -694,6 +732,24 @@ export default function Cotacoes() {
             </SelectContent>
           </Select>
         )}
+
+        {permissions.cotacao.canDelete && (
+          <Button
+            variant={filtroOrfas ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              setFiltroOrfas(!filtroOrfas);
+              setSelectedIds(new Set());
+            }}
+            className={cn(
+              "h-9 px-3 shadow-sm",
+              !filtroOrfas && "border-0 bg-background/80"
+            )}
+          >
+            <AlertTriangle className="h-4 w-4 mr-1.5" />
+            Sem Lead
+          </Button>
+        )}
         
         {hasActiveFilters && (
           <Button 
@@ -705,11 +761,36 @@ export default function Cotacoes() {
             <RefreshCw className="h-3.5 w-3.5 mr-1" />
             Limpar
             <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
-              {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all'].filter(Boolean).length}
+              {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas].filter(Boolean).length}
             </Badge>
           </Button>
         )}
       </div>
+
+      {/* Barra de seleção em lote */}
+      {permissions.cotacao.canDelete && selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/20 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+          <span className="text-sm font-medium text-destructive">
+            {selectedIds.size} cotação(ões) selecionada(s)
+          </span>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setShowExclusaoLoteDialog(true)}
+          >
+            <Trash2 className="h-4 w-4 mr-1.5" />
+            Excluir selecionadas
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedIds(new Set())}
+            className="text-muted-foreground"
+          >
+            Limpar seleção
+          </Button>
+        </div>
+      )}
 
       {/* Tabela de Cotações */}
       <CotacoesTable 
@@ -721,6 +802,10 @@ export default function Cotacoes() {
         onExcluir={handleExcluir}
         copiandoWhatsAppId={copiandoWhatsApp}
         getPermissions={getPermissions}
+        selectable={permissions.cotacao.canDelete}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleAll={toggleSelectAll}
       />
 
       {/* Modal de Detalhes */}
@@ -795,25 +880,15 @@ export default function Cotacoes() {
         }}
       />
       
-      <AlertDialog open={!!cotacaoParaExcluir} onOpenChange={(open) => !open && setCotacaoParaExcluir(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir Cotação</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir esta cotação? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmarExclusao}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmacaoExclusaoCotacaoDialog
+        open={showExclusaoLoteDialog}
+        onOpenChange={(open) => {
+          setShowExclusaoLoteDialog(open);
+          if (!open) setCotacaoParaExcluir(null);
+        }}
+        quantidade={selectedIds.size}
+        onConfirm={handleExcluirEmLote}
+      />
     </div>
   );
 }
