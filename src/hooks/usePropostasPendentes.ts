@@ -1052,20 +1052,20 @@ export function useProposta(contratoId: string | undefined) {
       }
 
       // Buscar veículo_id e cobertura_total do veículo
+      // Priorizar contrato.veiculo_id (determinístico), fallback por associado_id
       let veiculoId: string | null = null;
       let veiculoCoberturaTotal: boolean | null = null;
       let veiculoRenavam: string | null = null;
       let veiculoChassi: string | null = null;
       
-      if (contrato.associado_id) {
-        const { data: veiculo } = await supabase
-          .from('veiculos')
-          .select('id, cobertura_total, renavam, chassi')
-          .eq('associado_id', contrato.associado_id)
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
-        
+      const veiculoFilter = (contrato as any).veiculo_id 
+        ? supabase.from('veiculos').select('id, cobertura_total, renavam, chassi').eq('id', (contrato as any).veiculo_id).maybeSingle()
+        : contrato.associado_id 
+          ? supabase.from('veiculos').select('id, cobertura_total, renavam, chassi').eq('associado_id', contrato.associado_id).order('created_at', { ascending: false }).limit(1).maybeSingle()
+          : null;
+      
+      if (veiculoFilter) {
+        const { data: veiculo } = await veiculoFilter;
         if (veiculo) {
           veiculoId = veiculo.id;
           veiculoCoberturaTotal = veiculo.cobertura_total;
