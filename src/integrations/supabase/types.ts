@@ -20531,6 +20531,7 @@ export type Database = {
           decisao_instalador: string | null
           em_rota_em: string | null
           encaixe_executado: boolean | null
+          etapa_atual: number | null
           fios_isolados: boolean | null
           followup_recusa_enviado_em: string | null
           fotos_manutencao: Json | null
@@ -20640,6 +20641,7 @@ export type Database = {
           decisao_instalador?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
+          etapa_atual?: number | null
           fios_isolados?: boolean | null
           followup_recusa_enviado_em?: string | null
           fotos_manutencao?: Json | null
@@ -20749,6 +20751,7 @@ export type Database = {
           decisao_instalador?: string | null
           em_rota_em?: string | null
           encaixe_executado?: boolean | null
+          etapa_atual?: number | null
           fios_isolados?: boolean | null
           followup_recusa_enviado_em?: string | null
           fotos_manutencao?: Json | null
