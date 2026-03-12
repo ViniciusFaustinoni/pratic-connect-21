@@ -385,7 +385,7 @@ serve(async (req) => {
       
       if (pdfDisponivel) {
         // Comparar com o original: se signed e original têm hashes diferentes, está assinado
-        const hasHashes = document.hashes?.sha256;
+        // Hashes removidos da query - usar apenas comparação de tamanho
         
         // Dupla verificação: baixar os primeiros bytes e verificar se é um PDF válido com assinaturas
         const signedResponse = await fetch(document.files.signed);
