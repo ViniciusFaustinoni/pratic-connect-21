@@ -1,60 +1,203 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
+
+## Resumo
+
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+
+---
+
+## ✅ CORRIGIDO (não mexer)
+
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+
+---
+
+## 🟡 PENDENTE
+
+### 1. ✅ `pricing.ts` — REMOVIDO
+
+Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
+
+### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
+
+Centralizada em `src/utils/format.ts`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+### 5. ✅ Veículo Blindado — CORRIGIDO
+
+### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
+
+Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
+
+### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
+
+Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
+
+### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
+
+Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
+
+### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
+
+Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
+
+### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
+
+### 12. ✅ Linhas de produto hardcoded — MIGRADO PARA BANCO
+
+`LINHAS_PLANO` em `PlanosConfig.tsx` substituído por `useProductLines()`. Linha "Select One" adicionada à tabela `product_lines`.
+
+### 13. ✅ Regiões hardcoded — MIGRADO PARA BANCO
+
+`REGIOES` em `EtapaDadosVeiculo.tsx`, `EtapaCriteriosCotacao.tsx`, `EtapaResultado.tsx` substituídos por `useRegioesAtivas()`.
+
+### 14. ✅ Lógica de negócio hardcoded em usePlanosCotacao — CORRIGIDO
+
+- `linha === 'advanced'` → `vehicle_type` da tabela `product_lines`
+- `linha === 'lancamento'` → `requires_recent_year` da tabela `product_lines`
+- Ordenação `linha === 'select'` → `sort_priority` da tabela `product_lines`
+- Mapeamento manual de códigos de região removido (usa `regioes.codigo` diretamente)
+
+### 15. ✅ LINHA_CORES hardcoded em PlanoCardSelecao — CORRIGIDO
+
+`gradient_class` adicionado à tabela `product_lines`. Fallback mantido no componente.
+
+### 16. ✅ CATEGORIAS_VEICULO hardcoded — MIGRADO PARA BANCO
+
+Categorias inseridas na tabela `configuracoes` (chave `categorias_veiculo`). Hook `useCategoriasVeiculo()` criado. `VehicleCategorySelect` agora busca do banco com fallback.
+
+### 17. ✅ OBSERVACOES_CATEGORIA hardcoded — MIGRADO PARA BANCO
+
+Observações inseridas na tabela `configuracoes` (chave `observacoes_categoria`). Hook `useObservacoesCategoria()` criado.
+
+### 18. ✅ Template WhatsApp hardcoded — MIGRADO PARA BANCO
+
+Template de benefícios inserido na tabela `configuracoes` (chave `template_whatsapp_cotacao`). Hook `useTemplateWhatsappCotacao()` criado.
+
+Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
+
+### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
+
+Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
 
-# Root Cause Analysis: Template `boas_vindas_associado` parameter mismatch
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-## The Definitive Problem
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
-The database record for `boas_vindas_associado` says `status: APPROVED` with 4 body variables (`{{1}}` to `{{4}}`) + 1 URL button variable. **But the actual template approved on Meta's servers only has 2 body variables** (an older version).
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
 
-Evidence from logs at 18:09:18:
-```
-body: number of localizable_params (4) does not match the expected number of params (2)
-```
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
 
-Then at 18:11:41, the auto-retry #2 **silently truncated** to 2 params and "succeeded" -- sending an **incomplete message** with only name and vehicle, dropping coverage and next step.
 
-The database status `APPROVED` is a lie -- it was never updated after the template was resubmitted with 4 variables. The old 2-variable version is what Meta actually has approved.
+---
 
-## Root Cause Chain
+## ❌ NÃO FAZER AGORA
 
-1. The old template on Meta has 2 body params (approved long ago)
-2. The database was updated locally to have 4 body params but the status was left as `APPROVED` without actually getting Meta to approve the new version
-3. The retry #2 (truncation) in `whatsapp-send-text` masks this by sending incomplete messages and reporting success
-4. The auto-delete+retry we added to `whatsapp-meta-templates` was never triggered because the user hasn't resubmitted since the fix was deployed
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
 
-## Fix (2 changes)
+---
 
-### 1. `supabase/functions/whatsapp-send-text/index.ts` -- Remove retry #2 (truncation)
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
 
-Remove lines 296-337 (the entire "retry #2: truncar" block). This block silently sends incomplete messages and hides the real problem. Keep only retry #1 (button split) which is structurally correct.
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
 
-Replace with a clear error log:
-```typescript
-// Do NOT truncate -- that sends incomplete messages
-console.error(`[whatsapp-send-text] ❌ Param mismatch definitivo: enviados=${sent}, esperados pela Meta=${expected}. O template na Meta está desatualizado. Reenvie o template pela aba de Templates Meta.`);
-```
+---
 
-### 2. Database: Reset template status to force resubmission
+# Visibilidade por Equipe — Supervisor de Vendas
 
-Run SQL to mark the template as `DRAFT` so the user is forced to resubmit it through the UI (which will trigger the auto-delete+retry logic we already added):
+## ✅ CORRIGIDO
 
-```sql
-UPDATE whatsapp_meta_templates 
-SET status = 'DRAFT', meta_template_id = NULL 
-WHERE nome = 'boas_vindas_associado';
-```
+### Tabela `equipes_comerciais`
+- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
+- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
 
-### What happens after the fix
+### Função `is_supervisor_of(_vendedor_id)`
+- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
+- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
 
-1. The template shows as DRAFT in the UI
-2. User clicks "Enviar para aprovação"
-3. Our auto-delete+retry detects the old version exists on Meta, deletes it, and recreates with 4 variables
-4. Meta reviews and approves (usually minutes for simple templates)
-5. After approval, sends will work correctly with all 4 variables + button URL
-6. If somehow a mismatch still occurs, the error will now fail loudly instead of sending broken messages
+### RLS de `leads` atualizada
+- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
+- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
 
-### Summary
-- **1 edge function** edited (remove dangerous truncation)
-- **1 SQL migration** (reset template to DRAFT)
-- No frontend changes needed
+### RLS de `cotacoes` atualizada
+- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
 
+### Hook `useEquipeComercial`
+- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
+- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
+- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
+- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
+
+### `usePermissions` atualizado
+- Adicionado `isSupervisorVendas` e `canManageEquipe`
+
+### `useVendasMetricas` atualizado
+- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
+
+### KanbanCard com badge do vendedor
+- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
+- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
+
+---
+
+## 🟡 PENDENTE
+
+### Tela de gerenciamento de equipe
+- UI para vincular/desvincular vendedores a supervisores
+- Acessível em configurações ou rota dedicada
+
+---
+
+# Fluxo de Assistência 24h — Reboque
+
+## ✅ CORRIGIDO
+
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
+
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.

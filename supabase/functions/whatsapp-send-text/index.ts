@@ -293,47 +293,8 @@ async function enviarViaMeta(
           console.warn("[whatsapp-send-text] Retry #1 (button split) falhou:", JSON.stringify(retryResult));
         }
 
-        // Tentativa 2: truncar para apenas os params esperados (sem buttons)
-        console.log(`[whatsapp-send-text] Auto-retry #2: truncando body para ${expected} param(s)`);
-        const truncatedParams = bodyParams.slice(0, expected);
-        const retryComponents2: any[] = [{
-          type: "body",
-          parameters: truncatedParams.map(p => ({ type: "text", text: p })),
-        }];
-
-        const retryBody2 = {
-          messaging_product: "whatsapp",
-          to: telefoneFormatado,
-          type: "template",
-          template: {
-            name: template.nome,
-            language: { code: template.idioma || "pt_BR" },
-            components: retryComponents2,
-          },
-        };
-
-        const retryResponse2 = await fetch(
-          `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
-          {
-            method: "POST",
-            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify(retryBody2),
-          }
-        );
-        const retryResult2 = await retryResponse2.json();
-
-        if (retryResponse2.ok) {
-          const retryMessageId = retryResult2.messages?.[0]?.id;
-          await supabase.from("whatsapp_mensagens").insert({
-            telefone: telefoneFormatado, tipo: "text", mensagem,
-            direcao: "saida", status: 'enviada', message_id: retryMessageId,
-            provedor: "meta_oficial",
-          });
-          console.log(`[whatsapp-send-text] ✓ Meta (retry #2 truncated): ${telefoneFormatado} - ID: ${retryMessageId}`);
-          return { success: true, message_id: retryMessageId, telefone: telefoneFormatado, provedor: 'meta_oficial' };
-        }
-
-        console.error("[whatsapp-send-text] Retry #2 (truncated) também falhou:", JSON.stringify(retryResult2));
+        // NÃO truncar — isso envia mensagens incompletas e mascara o problema real
+        console.error(`[whatsapp-send-text] ❌ Param mismatch definitivo: enviados=${sent}, esperados pela Meta=${expected}. O template na Meta está desatualizado. Reenvie o template pela aba de Templates Meta.`);
       }
     }
 

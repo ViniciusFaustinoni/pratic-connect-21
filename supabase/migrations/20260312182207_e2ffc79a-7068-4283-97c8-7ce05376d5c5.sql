@@ -1,0 +1,1 @@
+UPDATE whatsapp_meta_templates SET status = 'DRAFT', meta_template_id = NULL WHERE nome = 'boas_vindas_associado';
