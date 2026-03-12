@@ -48,6 +48,9 @@ const STATUS_OPTIONS = [
   { value: 'negado', label: 'Negado' },
 ];
 
+const STATUS_VALIDOS = ['aceito', 'limitado', 'negado'];
+const COMBUSTIVEIS_VALIDOS = ['qualquer', 'flex', 'gasolina', 'etanol', 'diesel', 'eletrico', 'hibrido', 'gnv'];
+
 const COMBUSTIVEL_OPTIONS = [
   { value: 'qualquer', label: 'Qualquer' },
   ...COMBUSTIVEIS_FALLBACK,
