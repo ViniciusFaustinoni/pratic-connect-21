@@ -236,14 +236,49 @@ export default function Cotacoes() {
 
   const handleExcluir = (id: string) => {
     setCotacaoParaExcluir(id);
+    setShowExclusaoLoteDialog(true);
+    setSelectedIds(new Set([id]));
   };
 
-  const confirmarExclusao = () => {
-    if (cotacaoParaExcluir) {
-      excluirCotacao.mutate(cotacaoParaExcluir);
-      setCotacaoParaExcluir(null);
+  const handleExcluirEmLote = async (motivo: string) => {
+    const ids = Array.from(selectedIds);
+    let sucesso = 0;
+    let erro = 0;
+    
+    for (const id of ids) {
+      try {
+        await excluirCotacao.mutateAsync(id);
+        sucesso++;
+      } catch {
+        erro++;
+      }
+    }
+    
+    setSelectedIds(new Set());
+    setCotacaoParaExcluir(null);
+    
+    if (erro === 0) {
+      toast.success(`${sucesso} cotação(ões) excluída(s) com sucesso`);
+    } else {
+      toast.warning(`${sucesso} excluída(s), ${erro} com erro`);
     }
   };
+
+  const toggleSelect = useCallback((id: string) => {
+    setSelectedIds(prev => {
+      const next = new Set(prev);
+      if (next.has(id)) next.delete(id);
+      else next.add(id);
+      return next;
+    });
+  }, []);
+
+  const toggleSelectAll = useCallback(() => {
+    setSelectedIds(prev => {
+      if (prev.size === sortedCotacoes.length) return new Set();
+      return new Set(sortedCotacoes.map(c => c.id));
+    });
+  }, [sortedCotacoes]);
 
   const handleMarkAsEnviada = async (id: string, leadId?: string | null) => {
     try {
