@@ -713,11 +713,16 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
     <div className="space-y-8">
       {/* ── Seção de Importação ── */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-foreground">Importar PDF de Elegibilidade</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-foreground">Importar Arquivo de Elegibilidade</h3>
+          <Button variant="outline" size="sm" onClick={baixarModelo}>
+            <Download className="h-4 w-4 mr-1" /> Baixar modelo Excel
+          </Button>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label>Para qual plano é este PDF? *</Label>
+            <Label>Para qual plano é este arquivo? *</Label>
             <Select value={selectedPlano} onValueChange={(v) => { setSelectedPlano(v); resetForm(); }}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione um plano..." />
