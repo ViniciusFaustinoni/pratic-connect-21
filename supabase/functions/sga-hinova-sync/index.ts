@@ -780,44 +780,41 @@ serve(async (req) => {
             console.log('[SGA Sync] Erro logs anteriores:', e);
           }
           
-          // Estratégia 2: Busca backup por CPF
+          // Estratégia 2: Busca por CPF com parse de respostas não-200
           if (!codigoExistente) {
-            try {
-              const cpfLimpoRecovery = cleanCPF(associado.cpf);
-              let buscaResponse = await fetchWithRetry(
-                `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf`,
-                { method: 'GET', headers: operationHeaders }
-              );
-              // Fallback: tentar com CPF formatado
-              if (!buscaResponse.ok) {
-                console.log(`[SGA Sync] Recovery busca CPF limpo retornou ${buscaResponse.status}, tentando formatado...`);
-                const cpfFormatadoRecovery = formatCPF(associado.cpf);
-                buscaResponse = await fetchWithRetry(
-                  `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoRecovery)}/cpf`,
-                  { method: 'GET', headers: operationHeaders }
-                );
-              }
-              if (buscaResponse.ok) {
-                const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_associado_cpf');
-                codigoExistente = buscaData?.codigo_associado ? parseInt(buscaData.codigo_associado) : null;
-              }
-            } catch (e) {
-              console.log('[SGA Sync] Busca backup CPF falhou:', e);
-            }
-          }
+            const cpfLimpoRecovery = cleanCPF(associado.cpf);
+            const cpfFormatadoRecovery = formatCPF(associado.cpf);
+            
+            const recoveryTentativas = [
+              { label: 'GET limpo', url: `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf`, method: 'GET' as const },
+              { label: 'GET formatado', url: `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoRecovery)}/cpf`, method: 'GET' as const },
+              { label: 'POST consultar', url: `${hinovaApiUrl}/associado/consultar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
+              { label: 'POST buscar', url: `${hinovaApiUrl}/associado/buscar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
+            ];
 
-          // Estratégia 3: Endpoints alternativos
-          if (!codigoExistente) {
-            try {
-              const buscaResponse = await fetchWithRetry(
-                `${hinovaApiUrl}/associado/consultar`,
-                { method: 'POST', headers: operationHeaders, body: JSON.stringify({ cpf: cleanCPF(associado.cpf) }) }
-              );
-              if (buscaResponse.ok) {
-                const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_associado_post');
-                codigoExistente = buscaData?.codigo_associado || buscaData?.codigo || null;
-              }
-            } catch (e) { console.log('[SGA Sync] POST consultar falhou:', e); }
+            for (const t of recoveryTentativas) {
+              if (codigoExistente) break;
+              try {
+                console.log(`[SGA Sync] Recovery ${t.label}...`);
+                const resp = await fetchWithRetry(
+                  t.url,
+                  { method: t.method, headers: operationHeaders, ...(t.body && { body: t.body }) }
+                );
+                const ct = resp.headers.get('content-type') || '';
+                if (ct.includes('application/json')) {
+                  const text = await resp.text();
+                  console.log(`[SGA Sync] Recovery ${t.label} - Status: ${resp.status}, Body: ${text.substring(0, 300)}`);
+                  const parsed = JSON.parse(text);
+                  const codigo = parsed?.codigo_associado || parsed?.codigo ||
+                    (Array.isArray(parsed) && parsed[0]?.codigo_associado) ||
+                    parsed?.data?.codigo_associado || parsed?.associado?.codigo_associado;
+                  if (codigo) {
+                    codigoExistente = parseInt(String(codigo));
+                    console.log(`[SGA Sync] Recovery encontrou código ${codigoExistente} via ${t.label}`);
+                  }
+                }
+              } catch (e) { console.log(`[SGA Sync] Recovery ${t.label} falhou:`, e); }
+            }
           }
           
           // Estratégia 4: Banco local
