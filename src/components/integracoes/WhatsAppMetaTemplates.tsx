@@ -316,7 +316,22 @@ export function WhatsAppMetaTemplates() {
                   // Extrair variáveis únicas do corpo do template ({{1}}, {{2}}, etc.)
                   const allMatches = testTemplate?.corpo?.match(/\{\{\d+\}\}/g) || [];
                   const uniqueVars = [...new Set(allMatches)].sort();
-                  const params = uniqueVars.map((_: string, i: number) => `teste${i + 1}`);
+                  
+                  // Verificar se template tem botões com URL dinâmica
+                  const botoes = testTemplate?.botoes as any[] | null;
+                  const hasUrlButton = botoes?.some((b: any) => b.type === 'URL' && b.url?.includes('{{'));
+                  
+                  // Se tem botão URL, o último parâmetro vai para template_button_params
+                  let bodyParams: string[];
+                  let buttonParams: string[] | undefined;
+                  
+                  if (hasUrlButton && uniqueVars.length > 0) {
+                    bodyParams = uniqueVars.slice(0, -1).map((_: string, i: number) => `teste${i + 1}`);
+                    buttonParams = [`teste${uniqueVars.length}`];
+                  } else {
+                    bodyParams = uniqueVars.map((_: string, i: number) => `teste${i + 1}`);
+                    buttonParams = undefined;
+                  }
 
                   // Gerar mensagem fallback substituindo variáveis no corpo
                   let mensagemFallback = testTemplate?.corpo || 'Mensagem de teste';
@@ -329,7 +344,8 @@ export function WhatsAppMetaTemplates() {
                       telefone: testPhone,
                       mensagem: mensagemFallback,
                       template_name: testTemplate?.nome,
-                      template_params: params.length > 0 ? params : undefined,
+                      template_params: bodyParams.length > 0 ? bodyParams : undefined,
+                      template_button_params: buttonParams,
                     },
                   });
 
