@@ -869,9 +869,9 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
                   Ver no plano
                 </Button>
               )}
-              <Button variant="outline" onClick={() => { resetForm(); setFile(null); }}>
-                Importar outro PDF
-              </Button>
+               <Button variant="outline" onClick={() => { resetForm(); setFile(null); }}>
+                 Importar outro arquivo
+               </Button>
             </div>
           </div>
         )}
