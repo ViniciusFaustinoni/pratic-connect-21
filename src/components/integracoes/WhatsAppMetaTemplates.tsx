@@ -12,6 +12,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useMetaTemplates, useSincronizarMetaTemplates, useExcluirMetaTemplate, useEnviarMetaTemplate } from '@/hooks/useWhatsAppMeta';
 import { WhatsAppMetaTemplateDrawer } from './WhatsAppMetaTemplateDrawer';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 const STATUS_BADGE: Record<string, { className: string; label: string }> = {
