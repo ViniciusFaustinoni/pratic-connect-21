@@ -342,7 +342,7 @@ serve(async (req) => {
             },
           },
           cobertura_total_ativada: {
-            template_name: 'boas_vindas_associado',
+            template_name: 'boas_vindas_associado_v2',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
               return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Proteção ativa!', associado.id];
