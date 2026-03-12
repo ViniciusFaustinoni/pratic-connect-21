@@ -440,7 +440,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     }
 
     // Ordenar por sort_priority do product_lines (dinâmico do banco)
-    return planosCalculados.sort((a, b) => {
+    const sorted = planosCalculados.sort((a, b) => {
       const aPriority = planosBanco.find(p => p.id === a.id);
       const bPriority = planosBanco.find(p => p.id === b.id);
       const aSortP = (aPriority as any)?.product_lines?.sort_priority || 100;
@@ -448,10 +448,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (aSortP !== bSortP) return aSortP - bSortP;
       return a.valorMensal - b.valorMensal;
     });
+
+    return { planos: sorted, planosNegados: negados };
   }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading]);
 
   return {
     planos,
+    planosNegados,
     isLoading: isLoading || elegibilidadeLoading,
   };
 }
