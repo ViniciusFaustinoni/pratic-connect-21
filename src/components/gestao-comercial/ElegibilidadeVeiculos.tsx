@@ -3,6 +3,8 @@ import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Tabs, TabsList, TabsTrigger, TabsContent } from '@/components/ui/tabs';
 import { Table, TableHeader, TableBody, TableHead, TableRow, TableCell } from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -833,7 +835,6 @@ function TabResumoGlobal() {
     queryKey: ['elegibilidade-resumo'],
     queryFn: async () => {
       const { data, error } = await supabase.rpc('get_elegibilidade_resumo' as never);
-      // Fallback: query manually if RPC not available
       if (error) {
         const { data: planos, error: pe } = await supabase
           .from('planos')
@@ -871,41 +872,120 @@ function TabResumoGlobal() {
     },
   });
 
-  if (isLoading) return <p className="text-sm text-muted-foreground">Carregando...</p>;
+  const getLinhaColor = (linha: string | null) => {
+    const l = (linha || '').toLowerCase();
+    if (l.includes('select')) return 'bg-blue-500/10 text-blue-700 border-blue-500/20';
+    if (l.includes('especial')) return 'bg-orange-500/10 text-orange-700 border-orange-500/20';
+    if (l.includes('lancamento') || l.includes('lançamento')) return 'bg-purple-500/10 text-purple-700 border-purple-500/20';
+    if (l.includes('advanced') || l.includes('avancad')) return 'bg-red-500/10 text-red-700 border-red-500/20';
+    return 'bg-muted text-muted-foreground';
+  };
+
+  const renderCount = (value: number, colorClass: string) => {
+    if (value === 0) return <span className="text-muted-foreground">—</span>;
+    return <span className={`font-medium ${colorClass}`}>{value}</span>;
+  };
+
+  const configurados = data?.filter((r: any) => r.total > 0).length ?? 0;
+  const totalPlanos = data?.length ?? 0;
 
   return (
-    <Table>
-      <TableHeader>
-        <TableRow>
-          <TableHead>Plano</TableHead>
-          <TableHead>Linha</TableHead>
-          <TableHead className="text-center">Total</TableHead>
-          <TableHead className="text-center">Aceitos</TableHead>
-          <TableHead className="text-center">Limitados</TableHead>
-          <TableHead className="text-center">Negados</TableHead>
-          <TableHead>Última Atualização</TableHead>
-        </TableRow>
-      </TableHeader>
-      <TableBody>
-        {data?.map((row: any, i: number) => (
-          <TableRow key={i} className={row.total === 0 ? 'bg-yellow-50' : ''}>
-            <TableCell className="font-medium">{row.nome}</TableCell>
-            <TableCell><Badge variant="outline">{row.linha || '—'}</Badge></TableCell>
-            <TableCell className="text-center">
-              {row.total === 0
-                ? <Badge className="bg-yellow-500 text-white hover:bg-yellow-600">Sem configuração</Badge>
-                : row.total}
-            </TableCell>
-            <TableCell className="text-center">{row.aceitos}</TableCell>
-            <TableCell className="text-center">{row.limitados}</TableCell>
-            <TableCell className="text-center">{row.negados}</TableCell>
-            <TableCell className="text-sm text-muted-foreground">
-              {row.ultima_atualizacao ? format(new Date(row.ultima_atualizacao), 'dd/MM/yyyy HH:mm') : '—'}
-            </TableCell>
-          </TableRow>
-        ))}
-      </TableBody>
-    </Table>
+    <Card>
+      <CardHeader className="pb-3">
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="text-lg">Resumo Global</CardTitle>
+            <CardDescription>
+              {isLoading ? 'Carregando...' : `${configurados} de ${totalPlanos} planos configurados`}
+            </CardDescription>
+          </div>
+          {!isLoading && totalPlanos - configurados > 0 && (
+            <Badge variant="secondary" className="gap-1">
+              <AlertTriangle className="h-3 w-3" />
+              {totalPlanos - configurados} sem configuração
+            </Badge>
+          )}
+        </div>
+      </CardHeader>
+      <CardContent className="p-0">
+        <Table>
+          <TableHeader>
+            <TableRow className="hover:bg-transparent">
+              <TableHead>Plano</TableHead>
+              <TableHead>Linha</TableHead>
+              <TableHead className="text-center">Total</TableHead>
+              <TableHead className="text-center">Aceitos</TableHead>
+              <TableHead className="text-center">Limitados</TableHead>
+              <TableHead className="text-center">Negados</TableHead>
+              <TableHead className="w-[180px]">Distribuição</TableHead>
+              <TableHead>Última Atualização</TableHead>
+            </TableRow>
+          </TableHeader>
+          <TableBody>
+            {isLoading ? (
+              Array.from({ length: 6 }).map((_, i) => (
+                <TableRow key={i}>
+                  {Array.from({ length: 8 }).map((_, j) => (
+                    <TableCell key={j}><Skeleton className="h-5 w-full" /></TableCell>
+                  ))}
+                </TableRow>
+              ))
+            ) : (
+              data?.map((row: any, i: number) => {
+                const hasData = row.total > 0;
+                return (
+                  <TableRow key={i} className={!hasData ? 'opacity-50' : 'hover:bg-muted/50'}>
+                    <TableCell className="font-medium">{row.nome}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={`text-xs ${getLinhaColor(row.linha)}`}>
+                        {row.linha || '—'}
+                      </Badge>
+                    </TableCell>
+                    <TableCell className="text-center font-semibold">
+                      {!hasData
+                        ? <Badge variant="secondary" className="text-xs">Sem config.</Badge>
+                        : row.total}
+                    </TableCell>
+                    <TableCell className="text-center">{renderCount(row.aceitos, 'text-green-600')}</TableCell>
+                    <TableCell className="text-center">{renderCount(row.limitados, 'text-amber-600')}</TableCell>
+                    <TableCell className="text-center">{renderCount(row.negados, 'text-red-600')}</TableCell>
+                    <TableCell>
+                      {hasData ? (
+                        <div className="flex h-2 w-full overflow-hidden rounded-full bg-muted">
+                          {row.aceitos > 0 && (
+                            <div
+                              className="bg-green-500 transition-all"
+                              style={{ width: `${(row.aceitos / row.total) * 100}%` }}
+                            />
+                          )}
+                          {row.limitados > 0 && (
+                            <div
+                              className="bg-amber-500 transition-all"
+                              style={{ width: `${(row.limitados / row.total) * 100}%` }}
+                            />
+                          )}
+                          {row.negados > 0 && (
+                            <div
+                              className="bg-red-500 transition-all"
+                              style={{ width: `${(row.negados / row.total) * 100}%` }}
+                            />
+                          )}
+                        </div>
+                      ) : (
+                        <span className="text-muted-foreground text-xs">—</span>
+                      )}
+                    </TableCell>
+                    <TableCell className="text-sm text-muted-foreground">
+                      {row.ultima_atualizacao ? format(new Date(row.ultima_atualizacao), 'dd/MM/yyyy HH:mm') : '—'}
+                    </TableCell>
+                  </TableRow>
+                );
+              })
+            )}
+          </TableBody>
+        </Table>
+      </CardContent>
+    </Card>
   );
 }
 
