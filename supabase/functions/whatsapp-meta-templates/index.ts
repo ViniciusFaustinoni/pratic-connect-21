@@ -149,22 +149,18 @@ serve(async (req) => {
       if (botoes && botoes.length > 0) {
         const buttons = botoes.map((b: any) => {
           if (b.tipo === "url") {
-            return { type: "URL", text: b.texto, url: b.url };
+            const btn: any = { type: "URL", text: b.texto, url: b.url };
+            if (b.url?.includes("{{")) {
+              btn.example = ["https://pratic-connect-21.lovable.app/app/criar-senha?token=exemplo-token-123"];
+            }
+            return btn;
           } else if (b.tipo === "telefone") {
             return { type: "PHONE_NUMBER", text: b.texto, phone_number: b.telefone };
           } else {
             return { type: "QUICK_REPLY", text: b.texto };
           }
         });
-        const urlExamples = buttons
-          .filter((b: any) => b.type === "URL" && b.url?.includes("{{"))
-          .map(() => "https://pratic-connect-21.lovable.app/app/criar-senha?token=exemplo-token-123");
-
-        if (urlExamples.length > 0) {
-          components.push({ type: "BUTTONS", buttons, example: urlExamples });
-        } else {
-          components.push({ type: "BUTTONS", buttons });
-        }
+        components.push({ type: "BUTTONS", buttons });
       }
 
       const metaPayload = {
@@ -278,7 +274,13 @@ serve(async (req) => {
           const botoes = template.botoes as any[] | null;
           if (botoes && botoes.length > 0) {
             const buttons = botoes.map((b: any) => {
-              if (b.tipo === "url") return { type: "URL", text: b.texto, url: b.url };
+              if (b.tipo === "url") {
+                const btn: any = { type: "URL", text: b.texto, url: b.url };
+                if (b.url?.includes("{{")) {
+                  btn.example = ["https://pratic-connect-21.lovable.app/app/criar-senha?token=exemplo-token-123"];
+                }
+                return btn;
+              }
               if (b.tipo === "telefone") return { type: "PHONE_NUMBER", text: b.texto, phone_number: b.telefone };
               return { type: "QUICK_REPLY", text: b.texto };
             });
