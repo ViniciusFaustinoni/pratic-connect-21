@@ -570,12 +570,22 @@ serve(async (req) => {
 
     if (!codigoAssociadoHinova) {
       console.log('[SGA Sync] Verificando se associado já existe no Hinova via busca por CPF...');
-      const cpfFormatado = formatCPF(associado.cpf);
+      const cpfLimpo = cleanCPF(associado.cpf);
       try {
-        const buscaBackupResponse = await fetchWithRetry(
-          `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`,
+        let buscaBackupResponse = await fetchWithRetry(
+          `${hinovaApiUrl}/associado/buscar/${cpfLimpo}/cpf`,
           { method: 'GET', headers: operationHeaders }
         );
+
+        // Fallback: tentar com CPF formatado se limpo falhar
+        if (!buscaBackupResponse.ok) {
+          console.log(`[SGA Sync] Busca com CPF limpo retornou ${buscaBackupResponse.status}, tentando com CPF formatado...`);
+          const cpfFormatado = formatCPF(associado.cpf);
+          buscaBackupResponse = await fetchWithRetry(
+            `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`,
+            { method: 'GET', headers: operationHeaders }
+          );
+        }
         
         if (buscaBackupResponse.ok) {
           const buscaData = await safeJsonParse<any>(buscaBackupResponse, 'busca_backup_cpf');
