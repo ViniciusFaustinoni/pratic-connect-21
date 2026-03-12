@@ -828,7 +828,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         form.setValue('valor_cota', plano.valorCota || 0);
         form.setValue('taxa_administrativa', plano.taxaAdministrativa || 0);
         form.setValue('valor_rastreamento', plano.valorRastreamento || 0);
-        form.setValue('valor_adesao', plano.valorAdesao || 0);
+        // NÃO sobrescrever valor_adesao aqui — ele é auto-calculado pelo useEffect (1% FIPE)
         const adicional = form.getValues('valor_adicional') || 0;
         form.setValue('valor_total_mensal', plano.valorMensal + adicional);
       }

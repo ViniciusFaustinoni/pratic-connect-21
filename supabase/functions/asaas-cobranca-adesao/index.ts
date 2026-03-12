@@ -113,9 +113,9 @@ serve(async (req) => {
         console.error('[asaas-cobranca-adesao] Erro ao buscar info do contrato:', contratoInfoError);
       }
 
-      // Tentar obter valor do plano
+      // Priorizar valor da cotação (definido pelo consultor) sobre o valor fixo do plano
       const cotacao = contratoInfo?.cotacoes as any;
-      const valorPlano = cotacao?.planos?.valor_adesao || cotacao?.valor_adesao;
+      const valorPlano = cotacao?.valor_adesao || cotacao?.planos?.valor_adesao;
       
       if (valorPlano && valorPlano >= VALOR_MINIMO_ASAAS) {
         console.log(`[asaas-cobranca-adesao] ✅ Valor corrigido de R$ ${valor} para R$ ${valorPlano} (valor do plano)`);

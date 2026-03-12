@@ -300,12 +300,14 @@ export function useCotacaoContratacao(token: string | undefined) {
     const planosComparacao = dadosExtras?.planos_comparacao;
 
     if (planosComparacao && planosComparacao.length > 0) {
+      // Sempre usar cotacao.valor_adesao como fonte de verdade (definido pelo consultor)
+      const adesaoCotacao = cotacao.valor_adesao;
       return planosComparacao.map((p) => ({
         id: p.id,
         nome: p.nome,
         codigo: p.codigo,
         valorMensal: p.valorMensal,
-        valorAdesao: p.valorAdesao,
+        valorAdesao: adesaoCotacao || p.valorAdesao,
         coberturas: p.coberturas,
         destaque: p.destaque,
         nivel: p.nivel,
