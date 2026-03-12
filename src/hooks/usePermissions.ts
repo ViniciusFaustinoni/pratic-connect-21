@@ -276,6 +276,8 @@ export function usePermissions() {
     canResetPassword: hasPerm('canResetPassword'),
     canDeleteAtivacao: hasPerm('canDeleteAtivacao'),
     canManageIntegracoes: hasPerm('canManageIntegracoes'),
+    canApproveElegibilidade: hasPerm('canApproveElegibilidade'),
+    canViewElegibilidadePendente: hasPerm('canViewElegibilidadePendente'),
   };
 
   return {
