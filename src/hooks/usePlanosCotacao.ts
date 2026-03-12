@@ -273,6 +273,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
 
       // Filtrar por elegibilidade de modelo (aditivo — só aplica se dados carregados e veículo informado)
+      // Usa o combustível original (não o normalizado para pricing) para compatibilidade com regras de elegibilidade
+      const combustivelOriginal = (combustivel || 'flex').toLowerCase();
       if (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData && !elegibilidadeLoading) {
         const resultado = verificarElegibilidadeModelo(
           plano.id,
@@ -280,7 +282,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
             marca: params.marca,
             modelo: params.modelo,
             ano: anoVeiculoNum,
-            combustivel: combustivelLower || 'flex',
+            combustivel: combustivelOriginal,
           },
         );
         if (resultado === 'negado') continue;
@@ -409,7 +411,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
               marca: params.marca,
               modelo: params.modelo,
               ano: anoVeiculoNum,
-              combustivel: combustivelLower || 'flex',
+              combustivel: combustivelOriginal,
             })
           : undefined,
       });
