@@ -95,6 +95,7 @@ function TabPorPlano() {
         .from('planos')
         .select('id, nome, linha')
         .eq('ativo', true)
+        .eq('visivel_gestao', true)
         .order('nome');
       if (error) throw error;
       return data as PlanoOption[];
