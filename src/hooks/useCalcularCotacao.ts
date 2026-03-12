@@ -83,6 +83,7 @@ export function useCalcularCotacao() {
       const configMap = Object.fromEntries((configRes.data || []).map(c => [c.chave, c.valor]));
       const taxaFallback = parseFloat(configMap.taxa_fallback_carro || '0.025');
       const adicionalApp = parseFloat(configMap.adicional_app || '35.90') || 35.90;
+      const minimoAdesao = parseFloat(configMap.adesao_minima || '100');
 
       const regiaoLower = (params.regiao || 'rj').toLowerCase();
       const combustivelLower = normalizarCombustivelParaPricing(params.combustivel);
