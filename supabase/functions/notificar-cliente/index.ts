@@ -362,13 +362,12 @@ serve(async (req) => {
             getButtonParams: () => linkToken ? [linkToken] : null,
           },
           cobertura_total_ativada: {
-            template_name: 'cadastro_aprovado_botao',
+            template_name: 'cobertura_total_ativada',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Proteção ativa!'];
+              return [primeiroNome, placa, marcaModelo];
             },
-            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           vistoria_aprovada: {
             template_name: 'cadastro_aprovado_botao',
