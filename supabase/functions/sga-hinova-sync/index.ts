@@ -928,6 +928,7 @@ serve(async (req) => {
     let codigoVeiculoHinova = veiculoData.codigo_veiculo;
 
     if (!veiculoResponse.ok) {
+      console.log(`[SGA Sync] Resposta cadastrar_veiculo (${veiculoResponse.status}):`, JSON.stringify(veiculoData));
       const statusCode = veiculoResponse.status;
       const mensagem = veiculoData.mensagem?.toLowerCase() || '';
       const errorMessages: string[] = (veiculoData as any).error || [];
