@@ -139,7 +139,7 @@ export function useAprovarVeiculoVistoria() {
       }
 
       // 8. Notificar cliente sobre cobertura total ativada
-      if (data.associadoId) {
+      if (data.associadoId && data.instalacaoId) {
         supabase.functions.invoke('notificar-cliente', {
           body: {
             tipo: 'cobertura_total_ativada',
