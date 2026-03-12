@@ -774,11 +774,11 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
                 }`}
               >
                 <input {...getInputProps()} />
-                <FileUp className="h-10 w-10 text-muted-foreground mb-3" />
-                <p className="font-medium text-foreground">
-                  {selectedPlano ? 'Arraste o PDF ou clique para selecionar' : 'Selecione um plano primeiro'}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">O PDF deve estar no formato padrão Praticcar</p>
+                 <FileUp className="h-10 w-10 text-muted-foreground mb-3" />
+                 <p className="font-medium text-foreground">
+                   {selectedPlano ? 'Arraste o arquivo (PDF ou Excel) ou clique para selecionar' : 'Selecione um plano primeiro'}
+                 </p>
+                 <p className="text-sm text-muted-foreground mt-1">Formatos aceitos: .xlsx, .xls, .pdf</p>
               </div>
             ) : (
               <div className="rounded-lg border p-6 space-y-4">
