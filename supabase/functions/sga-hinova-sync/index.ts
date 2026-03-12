@@ -956,8 +956,11 @@ serve(async (req) => {
                     reqPayload?.celular ? String(reqPayload.celular) : (reqPayload?.telefone ? String(reqPayload.telefone) : null)
                   );
                   const codigoContaLog = Number(reqPayload?.codigo_conta);
+                  // Validação OBRIGATÓRIA: rejeitar se codigo_conta é diferente
                   const codigoContaCompativel =
-                    !Number.isFinite(codigoContaLog) || !codigoContaValido || codigoContaLog === codigoContaResolvido;
+                    Number.isFinite(codigoContaLog) && codigoContaValido
+                      ? codigoContaLog === codigoContaResolvido
+                      : false; // Se não temos ambos os valores, rejeitar por segurança
 
                   const cpfMatch = cpfLog.length === 11 && cpfAtual.length === 11 && cpfLog === cpfAtual;
                   const nomeMatch = !!nomeAtual && !!nomeLog && nomeLog === nomeAtual;
