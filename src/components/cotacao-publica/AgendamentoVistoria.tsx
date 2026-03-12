@@ -241,12 +241,12 @@ export function AgendamentoVistoria({
               <div>
                 <p className="font-medium text-warning">
                   {tipoVistoria === 'autovistoria' 
-                    ? 'Cobertura contra Roubo/Furto ativa!'
+                    ? 'Autovistoria enviada — aguardando aprovação do cadastro'
                     : 'Aguardando vistoria completa'}
                 </p>
                 <p className="text-sm text-muted-foreground mt-1">
                   {tipoVistoria === 'autovistoria'
-                    ? 'Agende a vistoria completa para ativar todas as coberturas (colisão, incêndio, etc.)'
+                    ? 'Após aprovação, a cobertura contra Roubo/Furto será ativada. A Proteção 360º será liberada após a instalação do rastreador.'
                     : 'Complete o agendamento para ativar sua proteção'}
                 </p>
               </div>
