@@ -269,10 +269,10 @@ export function useAtivarContrato() {
 
   return useMutation({
     mutationFn: async (contratoId: string) => {
-      // 1. Buscar contrato para pegar associado_id
+      // 1. Buscar contrato para pegar associado_id e veiculo_id
       const { data: contrato, error: fetchError } = await supabase
         .from('contratos')
-        .select('associado_id')
+        .select('associado_id, veiculo_id')
         .eq('id', contratoId)
         .single();
 
