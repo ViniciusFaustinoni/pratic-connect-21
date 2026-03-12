@@ -120,6 +120,9 @@ import UsuarioForm from "./pages/configuracoes/UsuarioForm";
 import Perfis from "./pages/configuracoes/Perfis";
 
 import Integracoes from "./pages/configuracoes/Integracoes";
+import IntegracaoWhatsApp from "./pages/configuracoes/IntegracaoWhatsApp";
+import IntegracaoApiKeys from "./pages/configuracoes/IntegracaoApiKeys";
+import IntegracaoFontesLeads from "./pages/configuracoes/IntegracaoFontesLeads";
 import Sistema from "./pages/configuracoes/Sistema";
 import Logs from "./pages/configuracoes/Logs";
 import RateioConfig from "./pages/configuracoes/RateioConfig";
@@ -675,6 +678,9 @@ const App = () => (
                 <Route path="logs" element={<Navigate to="/configuracoes/usuarios-acessos?tab=logs" replace />} />
                 
                 <Route path="integracoes" element={<Integracoes />} />
+                <Route path="integracoes/whatsapp" element={<IntegracaoWhatsApp />} />
+                <Route path="integracoes/api-keys" element={<IntegracaoApiKeys />} />
+                <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="rateio" element={<RateioConfig />} />
                 <Route path="sistema" element={<Sistema />} />
               </Route>
