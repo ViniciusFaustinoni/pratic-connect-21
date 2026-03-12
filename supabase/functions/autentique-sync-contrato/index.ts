@@ -438,6 +438,23 @@ serve(async (req) => {
         throw updateError;
       }
 
+      // ═══ NOVO: Sincronizar cotacoes.status_contratacao para contrato_assinado ═══
+      if (contrato.cotacao_id) {
+        const { error: cotacaoUpdateError } = await supabase
+          .from("cotacoes")
+          .update({ 
+            status_contratacao: "contrato_assinado",
+            contrato_gerado_id: contrato.id
+          })
+          .eq("id", contrato.cotacao_id);
+        
+        if (cotacaoUpdateError) {
+          console.error("[autentique-sync-contrato] Erro ao atualizar cotação:", cotacaoUpdateError);
+        } else {
+          console.log("[autentique-sync-contrato] ✓ Cotação atualizada para contrato_assinado");
+        }
+      }
+
       await supabase.from("contratos_historico").insert({
         contrato_id: contrato.id,
         evento: "documento_assinado_sync",

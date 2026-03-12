@@ -925,6 +925,18 @@ serve(async (req) => {
 
         console.log("[autentique-webhook] ✓ Contrato atualizado para 'assinado'");
 
+        // ═══ NOVO: Sincronizar cotacoes.status_contratacao para contrato_assinado ═══
+        if (contrato.cotacao_id) {
+          await supabase
+            .from("cotacoes")
+            .update({ 
+              status_contratacao: "contrato_assinado",
+              contrato_gerado_id: contrato.id
+            })
+            .eq("id", contrato.cotacao_id);
+          console.log("[autentique-webhook] ✓ Cotação atualizada para contrato_assinado");
+        }
+
         // Registrar histórico do contrato
         await supabase.from("contratos_historico").insert({
           contrato_id: contrato.id,
@@ -1037,6 +1049,18 @@ serve(async (req) => {
               autentique_status: "signed",
             })
             .eq("id", contrato.id);
+
+          // ═══ NOVO: Sincronizar cotacoes.status_contratacao para contrato_assinado ═══
+          if (contrato.cotacao_id) {
+            await supabase
+              .from("cotacoes")
+              .update({ 
+                status_contratacao: "contrato_assinado",
+                contrato_gerado_id: contrato.id
+              })
+              .eq("id", contrato.cotacao_id);
+            console.log("[autentique-webhook] ✓ Cotação atualizada para contrato_assinado (via update)");
+          }
 
           await supabase.from("contratos_historico").insert({
             contrato_id: contrato.id,

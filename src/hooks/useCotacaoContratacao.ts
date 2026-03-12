@@ -131,34 +131,40 @@ export function useCotacaoContratacao(token: string | undefined) {
       
       console.log('[CotacaoContratacao] Buscando contrato via cotacao_token_publico...');
       
-      const { data, error } = await publicSupabase
+      // Buscar TODOS os contratos para priorizar assinado/ativo
+      const { data: contratos, error } = await publicSupabase
         .from('contratos')
         .select(`
           id,
           associado_id,
           link_token,
+          status,
           associados:associados!fk_contratos_associado(
             id,
             status
           )
         `)
         .eq('cotacao_token_publico', token)
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
+        .order('created_at', { ascending: false });
 
       if (error) {
         console.error('[CotacaoContratacao] Erro na query fallback:', error);
         return null;
       }
       
-      console.log('[CotacaoContratacao] Contrato fallback encontrado:', data?.id, 'link_token:', data?.link_token);
-      return data;
+      if (!contratos || contratos.length === 0) return null;
+      
+      // Priorizar contrato assinado/ativo sobre pendente
+      const contratoAssinado = contratos.find((c: any) => c.status === 'assinado' || c.status === 'ativo');
+      const result = contratoAssinado || contratos[0];
+      
+      console.log('[CotacaoContratacao] Contrato fallback:', result?.id, 'status:', result?.status, 'link_token:', result?.link_token);
+      return result;
     },
     enabled: !!token,
-    refetchInterval: 30000, // Polling reduzido (Realtime cuida das atualizações)
-    refetchOnWindowFocus: true, // Revalidar ao voltar para a aba
-    staleTime: 0, // Sempre considerar stale para garantir dados frescos
+    refetchInterval: 30000,
+    refetchOnWindowFocus: true,
+    staleTime: 0,
   });
 
   // Extrair associadoId do contrato vinculado - priorizar embed, usar fallback se necessário
