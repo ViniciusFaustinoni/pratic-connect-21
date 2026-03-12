@@ -123,20 +123,33 @@ export function useAtivacoes(filtro: FiltroAtivacao = 'todos') {
 
       const vistoriasMap = new Map(vistoriasData.map(v => [v.associado_id, v]));
 
-      // Buscar veículos para cada associado (dados SGA)
+      // Buscar veículos - priorizar por contrato.veiculo_id, fallback por associado_id
+      const veiculoIds = [...new Set(filteredContratos.map((c: any) => c.veiculo_id).filter(Boolean))] as string[];
       let veiculosData: Array<{ id: string; associado_id: string; sincronizado_hinova: boolean | null; status_sga: string | null; codigo_hinova: number | null }> = [];
-      if (associadoIds.length > 0) {
+      
+      // Buscar por veiculo_id direto dos contratos
+      if (veiculoIds.length > 0) {
         const { data, error } = await supabase
           .from('veiculos')
           .select('id, associado_id, sincronizado_hinova, status_sga, codigo_hinova')
-          .in('associado_id', associadoIds);
-        
-        if (error) {
-          console.error('Erro ao buscar veículos:', error);
-        }
-        veiculosData = (data || []) as unknown as typeof veiculosData;
+          .in('id', veiculoIds);
+        if (!error && data) veiculosData = data as unknown as typeof veiculosData;
+      }
+      
+      // Fallback: buscar por associado_id para contratos sem veiculo_id
+      const associadosSemVeiculo = associadoIds.filter(aId => 
+        !filteredContratos.some((c: any) => c.veiculo_id && c.associado_id === aId)
+      );
+      if (associadosSemVeiculo.length > 0) {
+        const { data } = await supabase
+          .from('veiculos')
+          .select('id, associado_id, sincronizado_hinova, status_sga, codigo_hinova')
+          .in('associado_id', associadosSemVeiculo);
+        if (data) veiculosData = [...veiculosData, ...(data as unknown as typeof veiculosData)];
       }
 
+      // Map por veiculo_id E por associado_id para lookup flexível
+      const veiculosByIdMap = new Map(veiculosData.map(v => [v.id, v]));
       const veiculosMap = new Map(veiculosData.map(v => [v.associado_id, v]));
 
       // Buscar planos para verificar cobertura
