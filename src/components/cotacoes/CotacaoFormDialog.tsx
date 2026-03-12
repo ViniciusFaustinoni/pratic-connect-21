@@ -1609,7 +1609,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 )}
               />
               <p className="text-xs text-muted-foreground mt-1">
-                Valor da taxa de filiação (NÃO inclui mensalidade)
+                Valor sugerido: 1% da FIPE (mín. R$ 100). Altere conforme necessário.
               </p>
             </div>
 
@@ -2043,7 +2043,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                 <FormControl>
                                   <CurrencyInput 
                                     value={field.value}
-                                    onChange={field.onChange}
+                                    onChange={(val) => { adesaoEditadaManualmente.current = true; field.onChange(val); }}
                                     className={cn(
                                       "w-28 h-7 text-center font-medium",
                                       field.value <= 0 && "border-destructive bg-destructive/5"
