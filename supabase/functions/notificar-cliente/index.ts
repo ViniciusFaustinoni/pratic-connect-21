@@ -345,7 +345,7 @@ serve(async (req) => {
             template_name: 'boas_vindas_associado',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
-              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Proteção ativa!', associadoId];
+              return [primeiroNome, veiculoDesc, 'Proteção 360º', 'Proteção ativa!', associado.id];
             },
           },
           vistoria_aprovada: {
