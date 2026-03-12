@@ -1641,35 +1641,10 @@ export function useAprovarProposta() {
         .eq('id', contratoId)
         .single();
 
+      // NOTA: A mensagem WhatsApp de boas-vindas já é enviada pela edge function 'ativar-associado'
+      // usando o template 'cadastro_aprovado_botao'. Não duplicar o envio aqui.
       if (contratoComLink?.link_token) {
-        try {
-          const linkAcompanhamento = `${window.location.origin}/acompanhar/${contratoComLink.link_token}`;
-          
-          // Buscar dados do veículo para notificação
-          const { data: veiculoNotif } = await supabase
-            .from('veiculos')
-            .select('placa, marca, modelo')
-            .eq('associado_id', associadoId)
-            .order('created_at', { ascending: false })
-            .limit(1)
-            .maybeSingle();
-          
-          await supabase.functions.invoke('notificar-cliente', {
-            body: {
-              tipo: jaTemInstalacaoConcluida ? 'proposta_aprovada_cobertura_total' : 'proposta_aprovada_roubo_furto',
-              associado_id: associadoId,
-              dados: {
-                link_acompanhamento: linkAcompanhamento,
-                placa: veiculoNotif?.placa || '',
-                marca: veiculoNotif?.marca || '',
-                modelo: veiculoNotif?.modelo || '',
-              },
-            },
-          });
-          console.log('[useAprovarProposta] Notificação WhatsApp enviada com link e veículo:', linkAcompanhamento, veiculoNotif?.placa);
-        } catch (notifError) {
-          console.warn('[useAprovarProposta] Erro ao enviar notificação (não crítico):', notifError);
-        }
+        console.log('[useAprovarProposta] WhatsApp de boas-vindas será enviado via ativar-associado (sem duplicidade)');
       }
 
       // 10. ENVIAR AUTOMATICAMENTE PARA SGA HINOVA
