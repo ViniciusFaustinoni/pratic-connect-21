@@ -611,6 +611,11 @@ export default function CotadorPage() {
     setCotacaoCalculada(true);
     setPlanoSelecionadoTab(planosDB?.find(p => p.destaque)?.id || planosDB?.[1]?.id || planosDB?.[0]?.id || '');
     setPlanoFinalSelecionado(null);
+    // Inicializar adesão com 1% FIPE (mínimo R$ 100)
+    const fipeAtual = valorFipe || (marca && ano ? estimarValorFipe(marca, parseInt(ano)) : 0);
+    if (fipeAtual > 0) {
+      setValorAdesaoCustom(Math.max(100, Math.round(fipeAtual * 0.01 * 100) / 100));
+    }
     setIsCalculando(false);
     
     toast.success('Cotação calculada com sucesso!');
