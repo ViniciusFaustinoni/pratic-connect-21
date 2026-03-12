@@ -739,6 +739,11 @@ export default function CotacaoContratacao() {
                               <CheckCircle2 className="h-5 w-5 text-success flex-shrink-0" />
                               <span className="text-sm text-muted-foreground">Instalação do rastreador agendada</span>
                             </div>
+                            
+                            <div className="flex items-center gap-3">
+                              <Clock className="h-5 w-5 text-amber-500 flex-shrink-0" />
+                              <span className="text-sm text-muted-foreground">Aguardando aprovação cadastral para ativar cobertura</span>
+                            </div>
                           </div>
 
                           {/* Detalhes do agendamento da instalação */}
