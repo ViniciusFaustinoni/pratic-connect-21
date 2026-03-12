@@ -388,7 +388,22 @@ serve(async (req) => {
 
     console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacao.id);
 
-    // 7. NOTIFICAR ASSOCIADO via WhatsApp (instalação agendada)
+    // 7. DISPARAR ATRIBUIÇÃO AUTOMÁTICA IMEDIATA
+    try {
+      await fetch(`${supabaseUrl}/functions/v1/cron-atribuir-tarefas`, {
+        method: 'POST',
+        headers: {
+          'Authorization': `Bearer ${serviceRoleKey}`,
+          'Content-Type': 'application/json',
+        },
+        body: JSON.stringify({}),
+      });
+      console.log('[CriarInstalacaoPosPagamento] ✓ Atribuição automática disparada imediatamente');
+    } catch (atribErr) {
+      console.warn('[CriarInstalacaoPosPagamento] Atribuição imediata falhou (será tentada no próximo cron):', atribErr);
+    }
+
+    // 8. NOTIFICAR ASSOCIADO via WhatsApp (instalação agendada)
     try {
       const periodoTexto = periodoValido === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)';
       await supabase.functions.invoke('notificar-cliente', {
