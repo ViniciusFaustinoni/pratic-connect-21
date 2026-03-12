@@ -324,7 +324,7 @@ serve(async (req) => {
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
               const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
-              return [primeiroNome, veiculoDesc, cobertura, 'Instalação do rastreador', associadoId];
+              return [primeiroNome, veiculoDesc, cobertura, 'Instalação do rastreador', associado.id];
             },
           },
           proposta_aprovada_roubo_furto: {
