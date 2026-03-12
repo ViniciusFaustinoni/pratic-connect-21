@@ -62,7 +62,9 @@ export type PermissionKey =
   | 'canImportUsers'
   | 'canResetPassword'
   | 'canDeleteAtivacao'
-  | 'canManageIntegracoes';
+  | 'canManageIntegracoes'
+  | 'canApproveElegibilidade'
+  | 'canViewElegibilidadePendente';
 
 export type CotacaoViewScope = 'own' | 'team' | 'all';
 
