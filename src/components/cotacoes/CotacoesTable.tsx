@@ -321,6 +321,10 @@ export function CotacoesTable({
   onExcluir,
   copiandoWhatsAppId,
   getPermissions,
+  selectable = false,
+  selectedIds,
+  onToggleSelect,
+  onToggleAll,
 }: CotacoesTableProps) {
   const formatPhone = (phone?: string | null) => {
     if (!phone) return null;
