@@ -97,11 +97,8 @@ export function useCalcularCotacao() {
         const isPlanoAplicativo = tipoUsoPlano === 'aplicativo' || categoriaPlano === 'aplicativo';
         const isMotoLine = linhaPlano === 'advanced' || categoriaPlano === 'advanced';
 
-        // Skip app/particular mismatch (but not for moto lines which don't distinguish)
-        if (!isMotoLine) {
-          if (params.tipo_uso === 'aplicativo' && !isPlanoAplicativo) continue;
-          if (params.tipo_uso === 'particular' && isPlanoAplicativo) continue;
-        }
+        // Excluir variantes internas "aplicativo" — o preço app é resolvido pelo motor de pricing nos planos principais
+        if (isPlanoAplicativo && !isMotoLine) continue;
 
         if (plano.fipe_minima && params.valor_fipe < Number(plano.fipe_minima)) continue;
         if (plano.fipe_maxima && params.valor_fipe > Number(plano.fipe_maxima)) continue;
@@ -109,7 +106,7 @@ export function useCalcularCotacao() {
         // Buscar valor_mensal da nova tabela via plano_preco_map
         const mapping = planoPrecoMap.find(m => m.plano_id === plano.id);
         const linhaSlug = mapping?.linha_slug;
-        const tipoUsoOriginal = mapping?.tipo_uso || params.tipo_uso;
+        const tipoUsoOriginal = params.tipo_uso === 'aplicativo' ? 'aplicativo' : (mapping?.tipo_uso || params.tipo_uso);
         // Resolver tipo_uso para query (regras de adicional app)
         const tipoUsoPricing = linhaSlug
           ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal)
