@@ -1626,7 +1626,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                       modelo={modeloResolvido}
                       ano={anoNumerico || new Date().getFullYear()}
                       combustivel={veiculoEncontrado?.vehicleData?.combustivel || 'flex'}
-                      placa={veiculoEncontrado?.placa}
+                      placa={veiculoEncontrado?.extractedPlate}
                     />
                   )}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
