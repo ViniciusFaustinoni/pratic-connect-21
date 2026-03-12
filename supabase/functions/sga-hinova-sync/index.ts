@@ -570,12 +570,22 @@ serve(async (req) => {
 
     if (!codigoAssociadoHinova) {
       console.log('[SGA Sync] Verificando se associado já existe no Hinova via busca por CPF...');
-      const cpfFormatado = formatCPF(associado.cpf);
+      const cpfLimpo = cleanCPF(associado.cpf);
       try {
-        const buscaBackupResponse = await fetchWithRetry(
-          `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`,
+        let buscaBackupResponse = await fetchWithRetry(
+          `${hinovaApiUrl}/associado/buscar/${cpfLimpo}/cpf`,
           { method: 'GET', headers: operationHeaders }
         );
+
+        // Fallback: tentar com CPF formatado se limpo falhar
+        if (!buscaBackupResponse.ok) {
+          console.log(`[SGA Sync] Busca com CPF limpo retornou ${buscaBackupResponse.status}, tentando com CPF formatado...`);
+          const cpfFormatado = formatCPF(associado.cpf);
+          buscaBackupResponse = await fetchWithRetry(
+            `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`,
+            { method: 'GET', headers: operationHeaders }
+          );
+        }
         
         if (buscaBackupResponse.ok) {
           const buscaData = await safeJsonParse<any>(buscaBackupResponse, 'busca_backup_cpf');
@@ -681,6 +691,7 @@ serve(async (req) => {
         { ...associadoPayload, cpf: '***' }, associadoData, associadoResponse.ok ? null : associadoData.mensagem);
 
       if (!associadoResponse.ok) {
+        console.log(`[SGA Sync] Resposta cadastrar_associado (${associadoResponse.status}):`, JSON.stringify(associadoData));
         const errorMessages = (associadoData as any).error || [];
         const isTokenBearerError = 
           (associadoData.mensagem?.toLowerCase().includes('token de acesso') ||
@@ -747,11 +758,20 @@ serve(async (req) => {
           // Estratégia 2: Busca backup por CPF
           if (!codigoExistente) {
             try {
-              const cpfFormatado = formatCPF(associado.cpf);
-              const buscaResponse = await fetchWithRetry(
-                `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`,
+              const cpfLimpoRecovery = cleanCPF(associado.cpf);
+              let buscaResponse = await fetchWithRetry(
+                `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf`,
                 { method: 'GET', headers: operationHeaders }
               );
+              // Fallback: tentar com CPF formatado
+              if (!buscaResponse.ok) {
+                console.log(`[SGA Sync] Recovery busca CPF limpo retornou ${buscaResponse.status}, tentando formatado...`);
+                const cpfFormatadoRecovery = formatCPF(associado.cpf);
+                buscaResponse = await fetchWithRetry(
+                  `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoRecovery)}/cpf`,
+                  { method: 'GET', headers: operationHeaders }
+                );
+              }
               if (buscaResponse.ok) {
                 const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_associado_cpf');
                 codigoExistente = buscaData?.codigo_associado ? parseInt(buscaData.codigo_associado) : null;
@@ -908,6 +928,7 @@ serve(async (req) => {
     let codigoVeiculoHinova = veiculoData.codigo_veiculo;
 
     if (!veiculoResponse.ok) {
+      console.log(`[SGA Sync] Resposta cadastrar_veiculo (${veiculoResponse.status}):`, JSON.stringify(veiculoData));
       const statusCode = veiculoResponse.status;
       const mensagem = veiculoData.mensagem?.toLowerCase() || '';
       const errorMessages: string[] = (veiculoData as any).error || [];
@@ -944,11 +965,19 @@ serve(async (req) => {
         // Estratégia 2: Busca backup - veículos do associado
         if (!codigoVeiculoExistente && codigoAssociadoHinova) {
           try {
-            const cpfFormatado = formatCPF(associado.cpf);
-            const buscaResponse = await fetchWithRetry(
-              `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`,
+            const cpfLimpoVeiculo = cleanCPF(associado.cpf);
+            let buscaResponse = await fetchWithRetry(
+              `${hinovaApiUrl}/associado/buscar/${cpfLimpoVeiculo}/cpf`,
               { method: 'GET', headers: operationHeaders }
             );
+            // Fallback: tentar com CPF formatado
+            if (!buscaResponse.ok) {
+              const cpfFormatadoVeiculo = formatCPF(associado.cpf);
+              buscaResponse = await fetchWithRetry(
+                `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoVeiculo)}/cpf`,
+                { method: 'GET', headers: operationHeaders }
+              );
+            }
             if (buscaResponse.ok) {
               const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_veiculo_via_associado');
               if (buscaData?.veiculos && Array.isArray(buscaData.veiculos)) {
