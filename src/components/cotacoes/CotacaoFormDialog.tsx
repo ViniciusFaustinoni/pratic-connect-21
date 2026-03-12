@@ -2043,7 +2043,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                 <FormControl>
                                   <CurrencyInput 
                                     value={field.value}
-                                    onChange={field.onChange}
+                                    onChange={(val) => { adesaoEditadaManualmente.current = true; field.onChange(val); }}
                                     className={cn(
                                       "w-28 h-7 text-center font-medium",
                                       field.value <= 0 && "border-destructive bg-destructive/5"
