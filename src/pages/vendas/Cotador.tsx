@@ -395,7 +395,7 @@ export default function CotadorPage() {
         observacoes: undefined,
       },
     };
-  }, [cotacaoCalculada, planoFinalSelecionado, valorFipe, leadSelecionado, nomeAssociado, marca, modelo, ano, veiculoEncontrado, placaBusca, cor, valorExtra, cotacaoSalva]);
+  }, [cotacaoCalculada, planoFinalSelecionado, valorFipe, leadSelecionado, nomeAssociado, marca, modelo, ano, veiculoEncontrado, placaBusca, cor, valorExtra, cotacaoSalva, valorAdesaoCustom]);
 
   // Verificar se pode calcular
   const podeCalcular = (modo === 'busca_placa' 
