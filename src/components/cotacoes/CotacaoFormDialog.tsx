@@ -1597,7 +1597,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     <FormControl>
                       <CurrencyInput 
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={(val) => {
+                          field.onChange(val);
+                          adesaoEditadaManualmente.current = true;
+                        }}
                         placeholder="R$ 0,00"
                       />
                     </FormControl>
