@@ -317,9 +317,16 @@ export function WhatsAppMetaTemplates() {
                   const matches = testTemplate?.corpo?.match(/\{\{\d+\}\}/g) || [];
                   const params = matches.map((_: string, i: number) => `teste${i + 1}`);
 
+                  // Gerar mensagem fallback substituindo variáveis no corpo
+                  let mensagemFallback = testTemplate?.corpo || 'Mensagem de teste';
+                  matches.forEach((m: string, i: number) => {
+                    mensagemFallback = mensagemFallback.replace(m, `teste${i + 1}`);
+                  });
+
                   const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
                     body: {
                       telefone: testPhone,
+                      mensagem: mensagemFallback,
                       template_name: testTemplate?.nome,
                       template_params: params.length > 0 ? params : undefined,
                     },
