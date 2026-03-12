@@ -281,6 +281,10 @@ interface CotacoesTableProps {
   onExcluir: (id: string) => void;
   copiandoWhatsAppId: string | null;
   getPermissions: (cotacao: CotacaoWithRelations) => CotacoesTablePermissions;
+  selectable?: boolean;
+  selectedIds?: Set<string>;
+  onToggleSelect?: (id: string) => void;
+  onToggleAll?: () => void;
 }
 
 // Avatar gradient colors based on initial
