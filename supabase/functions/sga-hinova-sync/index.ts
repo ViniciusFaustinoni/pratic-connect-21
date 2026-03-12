@@ -1334,6 +1334,47 @@ serve(async (req) => {
           );
         }
       } else {
+        // Verificar se o erro indica que o codigo_associado é inválido no Hinova
+        const allErrors = [...errorMessages, mensagem].join(' ').toLowerCase();
+        const isAssociadoInvalido = allErrors.includes('associado') && (
+          allErrors.includes('não está cadastrado') ||
+          allErrors.includes('nao esta cadastrado') ||
+          allErrors.includes('não encontrado') ||
+          allErrors.includes('nao encontrado') ||
+          allErrors.includes('not found')
+        );
+
+        if (isAssociadoInvalido && codigoAssociadoHinova) {
+          console.log(`[SGA Sync] ⚠️ codigo_associado ${codigoAssociadoHinova} rejeitado pelo Hinova. Invalidando e resetando para etapa associado.`);
+          
+          // Limpar codigo_hinova inválido
+          await supabase.from('associados').update({ 
+            codigo_hinova: null,
+            sincronizado_hinova: false,
+            sincronizado_hinova_em: null
+          }).eq('id', associado_id);
+
+          // Resetar fila para recomeçar do associado
+          await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 
+            `codigo_associado ${codigoAssociadoHinova} inválido no Hinova - resetando para recadastro`, null);
+
+          await logSync(veiculo_id, associado_id, 'invalidar_codigo_associado', 'info',
+            { codigo_invalidado: codigoAssociadoHinova, motivo: allErrors.substring(0, 300) },
+            veiculoData, 'Código associado inválido no Hinova');
+
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+          return new Response(
+            JSON.stringify({ 
+              success: false, 
+              error: `Código associado ${codigoAssociadoHinova} inválido no Hinova. Será recadastrado na próxima tentativa.`,
+              step: 'veiculo',
+              details: veiculoData,
+              action: 'codigo_associado_invalidado'
+            }),
+            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
         // Erro genérico no veículo - preservar estado parcial do associado
         if (codigoAssociadoHinova) {
           await supabase.from('associados').update({ 
