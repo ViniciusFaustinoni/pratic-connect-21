@@ -330,42 +330,45 @@ serve(async (req) => {
         console.log(`[notificar-cliente] linkToken para botão: ${linkToken} (contrato encontrado: ${!!contratoLink})`);
 
         // Mapear tipos de notificação para templates aprovados da Meta
-        const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] }> = {
-          // Aprovações e boas-vindas → cadastro_aprovado_botao
-          // Body: {{1}} nome, {{2}} placa, {{3}} marca+modelo, {{4}} cobertura, {{5}} próximo passo
-          // Button URL: .../acompanhar/{{1}} → associado.id
+        // REGRA: cadastro_aprovado_botao usa 5 body params + 1 button param (link_token)
+        // O botão URL é /acompanhar/{{1}} → {{1}} DEVE ser contratos.link_token
+        const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[]; getButtonParams?: () => string[] | null }> = {
           cadastro_aprovado: {
             template_name: 'cadastro_aprovado_botao',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
               const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
-              return [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador', linkToken];
+              return [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador'];
             },
+            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           proposta_aprovada_roubo_furto: {
             template_name: 'cadastro_aprovado_botao',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Roubo e Furto', 'Instalação do rastreador', linkToken];
+              return [primeiroNome, placa, marcaModelo, 'Roubo e Furto', 'Instalação do rastreador'];
             },
+            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           proposta_aprovada_cobertura_total: {
             template_name: 'cadastro_aprovado_botao',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Instalação do rastreador', linkToken];
+              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Instalação do rastreador'];
             },
+            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           cobertura_total_ativada: {
             template_name: 'cadastro_aprovado_botao',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Proteção ativa!', linkToken];
+              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Proteção ativa!'];
             },
+            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           vistoria_aprovada: {
             template_name: 'cadastro_aprovado_botao',
@@ -373,16 +376,18 @@ serve(async (req) => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
               const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
-              return [primeiroNome, placa, marcaModelo, cobertura, 'Aguardando instalação', linkToken];
+              return [primeiroNome, placa, marcaModelo, cobertura, 'Aguardando instalação'];
             },
+            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           instalacao_concluida: {
             template_name: 'cadastro_aprovado_botao',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Proteção ativa!', linkToken];
+              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Proteção ativa!'];
             },
+            getButtonParams: () => linkToken ? [linkToken] : null,
           },
           // Técnico a caminho → tecnico_a_caminho (7 params)
           tecnico_em_rota: {
