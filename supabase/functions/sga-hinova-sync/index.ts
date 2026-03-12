@@ -969,8 +969,8 @@ serve(async (req) => {
               { label: 'Recovery POST pesquisar', url: `${hinovaApiUrl}/associado/pesquisar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
             ];
 
-            const codigoContaNum = parseInt(hinovaCodigoConta || '', 10);
-            if (Number.isFinite(codigoContaNum) && codigoContaNum > 0) {
+            const codigoContaNum = codigoContaValido ? codigoContaResolvido : null;
+            if (codigoContaNum) {
               recoveryTentativas.push(
                 {
                   label: 'Recovery GET buscar/cpf limpo + codigo_conta',
