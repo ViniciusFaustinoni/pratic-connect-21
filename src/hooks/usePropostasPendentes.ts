@@ -1384,7 +1384,7 @@ export function useAprovarProposta() {
 
       // Segundo: Verificar se já existe instalação ATIVA para o mesmo veículo
       // (isso cobre casos de contratos duplicados ou reprocessamento)
-      const veiculoIdDoContrato = (contrato as any).veiculo_id || (veiculos && veiculos[0]?.id);
+      const veiculoIdParaInstalacao = veiculoIdDoContrato || (veiculos && veiculos[0]?.id);
       let jaTemInstalacaoAtiva = false;
 
       if (veiculoIdDoContrato) {
