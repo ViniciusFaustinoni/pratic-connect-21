@@ -198,7 +198,7 @@ export function useAtivarRastreadorPlataforma() {
       try {
         const { data: veiculoInfo } = await supabase
           .from('veiculos')
-          .select('placa')
+          .select('placa, marca, modelo')
           .eq('id', veiculoId)
           .single();
 
@@ -206,7 +206,7 @@ export function useAtivarRastreadorPlataforma() {
           body: {
             tipo: 'cobertura_total_ativada',
             associado_id: associadoId,
-            dados: { placa: veiculoInfo?.placa || '' },
+            dados: { placa: veiculoInfo?.placa || '', marca: veiculoInfo?.marca || '', modelo: veiculoInfo?.modelo || '' },
           },
         }).catch(err => console.warn('[ativar-rastreador] Erro ao notificar associado (não crítico):', err));
       } catch (notifError) {

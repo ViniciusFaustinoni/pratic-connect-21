@@ -1033,14 +1033,14 @@ export function useAprovarVeiculoServico() {
           try {
             const { data: veiculoInfo } = await supabase
               .from('veiculos')
-              .select('placa')
+              .select('placa, marca, modelo')
               .eq('id', data.veiculoId)
               .single();
             await supabase.functions.invoke('notificar-cliente', {
               body: {
                 tipo: 'cobertura_total_ativada',
                 associado_id: data.associadoId,
-                dados: { placa: veiculoInfo?.placa || '' },
+                dados: { placa: veiculoInfo?.placa || '', marca: veiculoInfo?.marca || '', modelo: veiculoInfo?.modelo || '' },
               },
             });
           } catch (err) {

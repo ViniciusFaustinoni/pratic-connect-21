@@ -146,6 +146,8 @@ export function useAprovarVeiculoVistoria() {
             associado_id: data.associadoId,
             dados: { 
               placa: veiculoData?.placa || 'N/A',
+              marca: veiculoData?.marca || '',
+              modelo: veiculoData?.modelo || '',
             }
           }
         }).catch(err => console.warn('Erro ao notificar cliente (não crítico):', err));
