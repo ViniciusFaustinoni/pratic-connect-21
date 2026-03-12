@@ -678,6 +678,9 @@ const App = () => (
                 <Route path="logs" element={<Navigate to="/configuracoes/usuarios-acessos?tab=logs" replace />} />
                 
                 <Route path="integracoes" element={<Integracoes />} />
+                <Route path="integracoes/whatsapp" element={<IntegracaoWhatsApp />} />
+                <Route path="integracoes/api-keys" element={<IntegracaoApiKeys />} />
+                <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="rateio" element={<RateioConfig />} />
                 <Route path="sistema" element={<Sistema />} />
               </Route>
