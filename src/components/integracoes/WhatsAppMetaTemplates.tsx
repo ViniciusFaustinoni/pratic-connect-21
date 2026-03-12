@@ -171,6 +171,17 @@ export function WhatsAppMetaTemplates() {
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
+                        {t.status === 'APPROVED' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-green-600"
+                            title="Disparo de teste"
+                            onClick={() => { setTestTemplate(t); setTestPhone(''); }}
+                          >
+                            <Rocket className="h-3 w-3" />
+                          </Button>
+                        )}
                         {canDelete(t.status) && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget({ id: t.id, nome: t.nome })}>
                             <Trash2 className="h-3 w-3" />
