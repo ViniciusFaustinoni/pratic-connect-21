@@ -880,11 +880,7 @@ serve(async (req) => {
                 // Tentar parsear como JSON independente do content-type
                 try {
                   const parsed = JSON.parse(text);
-                  const codigo = parsed?.codigo_associado || parsed?.codigo ||
-                    (Array.isArray(parsed) && parsed.length > 0 && (parsed[0]?.codigo_associado || parsed[0]?.codigo)) ||
-                    parsed?.data?.codigo_associado || parsed?.data?.codigo ||
-                    parsed?.associado?.codigo_associado || parsed?.associado?.codigo ||
-                    parsed?.resultado?.codigo_associado || parsed?.resultado?.codigo;
+                  const codigo = extractCodigoAssociado(parsed);
                   if (codigo) {
                     codigoExistente = parseInt(String(codigo));
                     console.log(`[SGA Sync] Recovery encontrou código ${codigoExistente} via ${t.label}`);
