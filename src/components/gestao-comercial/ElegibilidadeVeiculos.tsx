@@ -1014,7 +1014,7 @@ export function ElegibilidadeVeiculos() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="por-plano">Por Plano</TabsTrigger>
-          <TabsTrigger value="importar-pdf">Importar PDF</TabsTrigger>
+          <TabsTrigger value="importar-pdf">Importar Arquivo</TabsTrigger>
           <TabsTrigger value="resumo">Resumo Global</TabsTrigger>
         </TabsList>
 
