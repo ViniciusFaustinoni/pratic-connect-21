@@ -1355,7 +1355,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                       <div className="grid grid-cols-3 gap-4 text-center">
                         <div>
                           <p className="text-xs text-muted-foreground uppercase">Adesão</p>
-                          <p className="text-lg font-bold">{formatCurrency(planoAtual.valorAdesao)}</p>
+                          <p className="text-lg font-bold">{formatCurrency(valorAdesaoCustom ?? planoAtual.valorAdesao)}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground uppercase">Mensal</p>
