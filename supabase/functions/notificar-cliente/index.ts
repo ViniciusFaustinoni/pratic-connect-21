@@ -340,7 +340,7 @@ serve(async (req) => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
               const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
-              return [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador', associado.id];
+              return [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador', linkToken];
             },
           },
           proposta_aprovada_roubo_furto: {
@@ -348,7 +348,7 @@ serve(async (req) => {
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Roubo e Furto', 'Instalação do rastreador', associado.id];
+              return [primeiroNome, placa, marcaModelo, 'Roubo e Furto', 'Instalação do rastreador', linkToken];
             },
           },
           proposta_aprovada_cobertura_total: {
@@ -356,7 +356,7 @@ serve(async (req) => {
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Instalação do rastreador', associado.id];
+              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Instalação do rastreador', linkToken];
             },
           },
           cobertura_total_ativada: {
@@ -364,7 +364,7 @@ serve(async (req) => {
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Proteção ativa!', associado.id];
+              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Proteção ativa!', linkToken];
             },
           },
           vistoria_aprovada: {
@@ -373,7 +373,7 @@ serve(async (req) => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
               const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
-              return [primeiroNome, placa, marcaModelo, cobertura, 'Aguardando instalação', associado.id];
+              return [primeiroNome, placa, marcaModelo, cobertura, 'Aguardando instalação', linkToken];
             },
           },
           instalacao_concluida: {
@@ -381,7 +381,7 @@ serve(async (req) => {
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Proteção ativa!', associado.id];
+              return [primeiroNome, placa, marcaModelo, 'Proteção 360º', 'Proteção ativa!', linkToken];
             },
           },
           // Técnico a caminho → tecnico_a_caminho (7 params)
