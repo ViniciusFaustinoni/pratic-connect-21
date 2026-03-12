@@ -365,6 +365,15 @@ export function CotacoesTable({
         <Table>
           <TableHeader>
             <TableRow className="bg-muted/40 hover:bg-muted/40 border-b-2 border-border/60">
+              {selectable && (
+                <TableHead className="w-[40px]">
+                  <Checkbox
+                    checked={cotacoes.length > 0 && selectedIds?.size === cotacoes.length}
+                    onCheckedChange={() => onToggleAll?.()}
+                    aria-label="Selecionar todas"
+                  />
+                </TableHead>
+              )}
               <TableHead className="w-[180px] font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Status</TableHead>
               <TableHead className="font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Cliente</TableHead>
               <TableHead className="hidden md:table-cell font-semibold text-[11px] uppercase tracking-wider text-muted-foreground/80">Veículo</TableHead>
