@@ -58,9 +58,11 @@ serve(async (req) => {
 
       const metaTemplates = result.data || [];
       let atualizados = 0;
+      let novos = 0;
 
       for (const mt of metaTemplates) {
-        const { error } = await supabase
+        // Tentar atualizar existente
+        const { data: updated } = await supabase
           .from("whatsapp_meta_templates")
           .update({
             status: mt.status?.toUpperCase() || "PENDING",
@@ -69,15 +71,53 @@ serve(async (req) => {
             aprovado_em: mt.status === "APPROVED" ? new Date().toISOString() : null,
             updated_at: new Date().toISOString(),
           })
-          .eq("nome", mt.name);
+          .eq("nome", mt.name)
+          .select("id");
 
-        if (!error) atualizados++;
+        if (updated && updated.length > 0) {
+          atualizados++;
+        } else {
+          // Template existe na Meta mas não no banco — inserir
+          const bodyComp = mt.components?.find((c: any) => c.type === "BODY");
+          const headerComp = mt.components?.find((c: any) => c.type === "HEADER");
+          const footerComp = mt.components?.find((c: any) => c.type === "FOOTER");
+          const buttonsComp = mt.components?.find((c: any) => c.type === "BUTTONS");
+
+          let botoes = null;
+          if (buttonsComp?.buttons) {
+            botoes = buttonsComp.buttons.map((b: any) => ({
+              tipo: b.type?.toLowerCase(),
+              texto: b.text || "",
+              url: b.url || "",
+              telefone: b.phone_number || "",
+            }));
+          }
+
+          const { error: insertErr } = await supabase
+            .from("whatsapp_meta_templates")
+            .insert({
+              nome: mt.name,
+              categoria: mt.category || "UTILITY",
+              idioma: mt.language || "pt_BR",
+              status: mt.status?.toUpperCase() || "PENDING",
+              meta_template_id: mt.id,
+              header_tipo: headerComp ? headerComp.format?.toLowerCase() : "none",
+              header_texto: headerComp?.text || null,
+              corpo: bodyComp?.text || "",
+              rodape: footerComp?.text || null,
+              botoes: botoes,
+              motivo_rejeicao: mt.rejected_reason || null,
+              aprovado_em: mt.status === "APPROVED" ? new Date().toISOString() : null,
+            });
+
+          if (!insertErr) novos++;
+        }
       }
 
-      console.log(`[whatsapp-meta-templates] Sincronizados ${atualizados} templates`);
+      console.log(`[whatsapp-meta-templates] Sincronizados: ${atualizados} atualizados, ${novos} novos`);
 
       return new Response(
-        JSON.stringify({ success: true, total: metaTemplates.length, atualizados }),
+        JSON.stringify({ success: true, total: metaTemplates.length, atualizados, novos }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
