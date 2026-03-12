@@ -290,10 +290,10 @@ serve(async (req) => {
               usado: false
             });
 
-          sendBody.template_name = 'boas_vindas_associado';
+          sendBody.template_name = 'boas_vindas_associado_v2';
           // 4 body params + 1 button param (associado.id para URL dinâmica)
           sendBody.template_params = [primeiroNome, veiculoDescricao, 'Roubo e Furto', 'Instalação do rastreador', associado.id];
-          console.log(`[ativar-associado] Usando template Meta 'boas_vindas_associado' para ${telefoneWhatsapp}`);
+          console.log(`[ativar-associado] Usando template Meta 'boas_vindas_associado_v2' para ${telefoneWhatsapp}`);
         }
 
         await supabaseAdmin.functions.invoke('whatsapp-send-text', {
