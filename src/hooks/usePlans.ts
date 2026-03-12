@@ -6,6 +6,10 @@ import type {
   MainCoverage,
 } from '@/types/plans';
 
+// IDs de benefícios conhecidos
+const REBOQUE_BENEFIT_ID = 'be1fa928-b1fe-4bbb-a402-ec0604bc9e8e';
+const COB_ASS_CODIGO = 'COB-ASS';
+
 // Tipo para benefícios de plano
 export interface PlanBenefitItem {
   id: string;
@@ -68,6 +72,47 @@ export interface PlanWithDetails {
 // Alias antigo para compatibilidade
 export type PlanoUnificado = PlanWithDetails;
 
+/**
+ * Busca os km de assistência (COB-ASS) de planos_coberturas para cada plano.
+ * Retorna um Map<planoId, valorLimiteKm>
+ */
+async function fetchAssistenciaKmMap(planoIds: string[]): Promise<Map<string, number>> {
+  if (planoIds.length === 0) return new Map();
+  
+  const { data, error } = await supabase
+    .from('planos_coberturas')
+    .select('plano_id, valor_limite, coberturas!inner(codigo)')
+    .in('plano_id', planoIds)
+    .eq('coberturas.codigo', COB_ASS_CODIGO);
+  
+  if (error) {
+    console.warn('Erro ao buscar km de assistência:', error);
+    return new Map();
+  }
+  
+  const map = new Map<string, number>();
+  for (const row of data || []) {
+    if (row.valor_limite) {
+      map.set(row.plano_id, row.valor_limite);
+    }
+  }
+  return map;
+}
+
+/**
+ * Enriquecer plan_benefits com km dinâmico do Reboque
+ */
+function enrichBenefitsWithKm(
+  planBenefits: PlanBenefitItem[],
+  kmAssistencia: number | undefined
+): PlanBenefitItem[] {
+  return planBenefits.map(pb => {
+    if (pb.benefit_id === REBOQUE_BENEFIT_ID && !pb.custom_text && kmAssistencia) {
+      return { ...pb, custom_text: `${kmAssistencia}km Reboque` };
+    }
+    return pb;
+  });
+}
 /**
  * Hook para buscar todas as linhas de produtos ativas
  */
@@ -158,20 +203,13 @@ export function usePlans(productLineSlug?: string) {
       const { data, error } = await query;
       if (error) throw error;
       
+      // Buscar km de assistência para enriquecer Reboque
+      const planoIds = (data || []).map(p => p.id);
+      const kmMap = await fetchAssistenciaKmMap(planoIds);
+      
       // Mapear para formato esperado pelos componentes
-      return (data || []).map(plano => ({
-        ...plano,
-        name: plano.nome,
-        slug: plano.slug || plano.codigo?.toLowerCase(),
-        is_active: plano.ativo,
-        display_order: plano.ordem || plano.ordem_exibicao || 0,
-        additional_price: plano.adicional_mensal,
-        min_vehicle_year: plano.ano_minimo ? `${plano.ano_minimo}+` : null,
-        cota_passeio_percent: plano.cota_participacao,
-        cota_passeio_min: plano.cota_minima,
-        cota_desagio_percent: plano.cota_desagio,
-        cota_desagio_min: plano.cota_minima_desagio,
-        plan_benefits: (plano.planos_beneficios || [])
+      return (data || []).map(plano => {
+        const baseBenefits = (plano.planos_beneficios || [])
           .map((pb: any) => ({
             id: pb.id,
             plan_id: pb.plano_id,
@@ -183,8 +221,23 @@ export function usePlans(productLineSlug?: string) {
             display_order: pb.display_order || pb.ordem || 0,
             benefits: pb.benefits,
           }))
-          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)),
-      })) as PlanWithDetails[];
+          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0));
+        
+        return {
+          ...plano,
+          name: plano.nome,
+          slug: plano.slug || plano.codigo?.toLowerCase(),
+          is_active: plano.ativo,
+          display_order: plano.ordem || plano.ordem_exibicao || 0,
+          additional_price: plano.adicional_mensal,
+          min_vehicle_year: plano.ano_minimo ? `${plano.ano_minimo}+` : null,
+          cota_passeio_percent: plano.cota_participacao,
+          cota_passeio_min: plano.cota_minima,
+          cota_desagio_percent: plano.cota_desagio,
+          cota_desagio_min: plano.cota_minima_desagio,
+          plan_benefits: enrichBenefitsWithKm(baseBenefits, kmMap.get(plano.id)),
+        };
+      }) as PlanWithDetails[];
     },
   });
 }
@@ -214,6 +267,23 @@ export function usePlanById(id: string | undefined) {
       
       if (error) throw error;
       
+      // Buscar km de assistência
+      const kmMap = await fetchAssistenciaKmMap([data.id]);
+      
+      const baseBenefits = (data.planos_beneficios || [])
+        .map((pb: any) => ({
+          id: pb.id,
+          plan_id: pb.plano_id,
+          benefit_id: pb.benefit_id,
+          custom_text: pb.custom_text,
+          custom_value: pb.custom_value,
+          additional_info: pb.additional_info,
+          is_highlighted: pb.is_highlighted || false,
+          display_order: pb.display_order || pb.ordem || 0,
+          benefits: pb.benefits,
+        }))
+        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0));
+      
       // Mapear para formato esperado
       return {
         ...data,
@@ -227,19 +297,7 @@ export function usePlanById(id: string | undefined) {
         cota_passeio_min: data.cota_minima,
         cota_desagio_percent: data.cota_desagio,
         cota_desagio_min: data.cota_minima_desagio,
-        plan_benefits: (data.planos_beneficios || [])
-          .map((pb: any) => ({
-            id: pb.id,
-            plan_id: pb.plano_id,
-            benefit_id: pb.benefit_id,
-            custom_text: pb.custom_text,
-            custom_value: pb.custom_value,
-            additional_info: pb.additional_info,
-            is_highlighted: pb.is_highlighted || false,
-            display_order: pb.display_order || pb.ordem || 0,
-            benefits: pb.benefits,
-          }))
-          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)),
+        plan_benefits: enrichBenefitsWithKm(baseBenefits, kmMap.get(data.id)),
       } as PlanWithDetails;
     },
     enabled: !!id,
@@ -271,6 +329,22 @@ export function usePlanBySlug(slug: string | undefined) {
       
       if (error) throw error;
       
+      const kmMap = await fetchAssistenciaKmMap([data.id]);
+      
+      const baseBenefits = (data.planos_beneficios || [])
+        .map((pb: any) => ({
+          id: pb.id,
+          plan_id: pb.plano_id,
+          benefit_id: pb.benefit_id,
+          custom_text: pb.custom_text,
+          custom_value: pb.custom_value,
+          additional_info: pb.additional_info,
+          is_highlighted: pb.is_highlighted || false,
+          display_order: pb.display_order || pb.ordem || 0,
+          benefits: pb.benefits,
+        }))
+        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0));
+      
       return {
         ...data,
         name: data.nome,
@@ -283,19 +357,7 @@ export function usePlanBySlug(slug: string | undefined) {
         cota_passeio_min: data.cota_minima,
         cota_desagio_percent: data.cota_desagio,
         cota_desagio_min: data.cota_minima_desagio,
-        plan_benefits: (data.planos_beneficios || [])
-          .map((pb: any) => ({
-            id: pb.id,
-            plan_id: pb.plano_id,
-            benefit_id: pb.benefit_id,
-            custom_text: pb.custom_text,
-            custom_value: pb.custom_value,
-            additional_info: pb.additional_info,
-            is_highlighted: pb.is_highlighted || false,
-            display_order: pb.display_order || pb.ordem || 0,
-            benefits: pb.benefits,
-          }))
-          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)),
+        plan_benefits: enrichBenefitsWithKm(baseBenefits, kmMap.get(data.id)),
       } as PlanWithDetails;
     },
     enabled: !!slug,
@@ -395,20 +457,13 @@ export function usePlansGroupedByLine() {
       
       if (planosError) throw planosError;
       
+      // Buscar km de assistência
+      const planoIds = (planos || []).map(p => p.id);
+      const kmMap = await fetchAssistenciaKmMap(planoIds);
+      
       // Mapear e agrupar planos por linha
-      const planosFormatados = (planos || []).map(plano => ({
-        ...plano,
-        name: plano.nome,
-        slug: plano.slug || plano.codigo?.toLowerCase(),
-        is_active: plano.ativo,
-        display_order: plano.ordem || plano.ordem_exibicao || 0,
-        additional_price: plano.adicional_mensal,
-        min_vehicle_year: plano.ano_minimo ? `${plano.ano_minimo}+` : null,
-        cota_passeio_percent: plano.cota_participacao,
-        cota_passeio_min: plano.cota_minima,
-        cota_desagio_percent: plano.cota_desagio,
-        cota_desagio_min: plano.cota_minima_desagio,
-        plan_benefits: (plano.planos_beneficios || [])
+      const planosFormatados = (planos || []).map(plano => {
+        const baseBenefits = (plano.planos_beneficios || [])
           .map((pb: any) => ({
             id: pb.id,
             plan_id: pb.plano_id,
@@ -420,8 +475,23 @@ export function usePlansGroupedByLine() {
             display_order: pb.display_order || pb.ordem || 0,
             benefits: pb.benefits,
           }))
-          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)),
-      }));
+          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0));
+        
+        return {
+          ...plano,
+          name: plano.nome,
+          slug: plano.slug || plano.codigo?.toLowerCase(),
+          is_active: plano.ativo,
+          display_order: plano.ordem || plano.ordem_exibicao || 0,
+          additional_price: plano.adicional_mensal,
+          min_vehicle_year: plano.ano_minimo ? `${plano.ano_minimo}+` : null,
+          cota_passeio_percent: plano.cota_participacao,
+          cota_passeio_min: plano.cota_minima,
+          cota_desagio_percent: plano.cota_desagio,
+          cota_desagio_min: plano.cota_minima_desagio,
+          plan_benefits: enrichBenefitsWithKm(baseBenefits, kmMap.get(plano.id)),
+        };
+      });
 
       return (lines as ProductLine[]).map(line => ({
         productLine: line,
