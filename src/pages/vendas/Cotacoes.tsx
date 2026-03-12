@@ -179,10 +179,15 @@ export default function Cotacoes() {
       if (consultorFilter !== 'all') {
         matchesConsultor = cotacao.vendedor_id === consultorFilter;
       }
+
+      let matchesOrfas = true;
+      if (filtroOrfas) {
+        matchesOrfas = !cotacao.lead_id;
+      }
       
-      return matchesSearch && matchesStatus && matchesMes && matchesData && matchesConsultor;
+      return matchesSearch && matchesStatus && matchesMes && matchesData && matchesConsultor && matchesOrfas;
     });
-  }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter]);
+  }, [cotacoes, search, statusFilter, mesFilter, dataFilter, consultorFilter, filtroOrfas]);
 
   // Ordenação inteligente
   const sortedCotacoes = useMemo(() => {
