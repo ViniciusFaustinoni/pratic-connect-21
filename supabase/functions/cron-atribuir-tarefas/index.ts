@@ -560,7 +560,7 @@ serve(async (req) => {
             .from('rotas')
             .select('id')
             .eq('instalador_id', prof.vistoriador_id)
-            .eq('data', hoje)
+            .eq('data_rota', hoje)
             .maybeSingle();
 
           let rotaId = rotaExistente?.id;
