@@ -270,6 +270,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const planoId = form.watch('plano_id');
   const validadeDias = form.watch('validade_dias');
   const valorAdesao = form.watch('valor_adesao');
+
+  // Auto-calcular adesão como 1% FIPE (mínimo R$ 100)
+  useEffect(() => {
+    if (valorFipe && valorFipe > 0) {
+      const MINIMO_ADESAO = 100;
+      const adesaoCalculada = Math.max(valorFipe * 0.01, MINIMO_ADESAO);
+      const adesaoArredondada = Math.round(adesaoCalculada * 100) / 100;
+      form.setValue('valor_adesao', adesaoArredondada);
+    }
+  }, [valorFipe, form]);
   
   // Extrair ano numérico para o hook de planos
   const anoTexto = useMemo(() => {
