@@ -139,7 +139,7 @@ async function enviarViaMeta(
     // Se não temos buttonParams explícitos, verificar se template tem botão URL com {{}}
     if (buttonParams.length === 0 && bodyParams.length > 0) {
       const botoes = template.botoes as any[] | null;
-      const hasUrlButton = botoes?.some((b: any) => b.type === 'URL' && b.url?.includes('{{'));
+      const hasUrlButton = botoes?.some((b: any) => (b.type === 'URL' || b.tipo === 'url') && b.url?.includes('{{'));
       
       if (hasUrlButton) {
         // Contar variáveis únicas apenas no corpo do template
