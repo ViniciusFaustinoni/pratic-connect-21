@@ -293,9 +293,9 @@ serve(async (req) => {
 
           // Template cadastro_aprovado_botao: 5 body params + 1 button param
           // Body: {{1}} nome, {{2}} placa, {{3}} marca+modelo, {{4}} cobertura, {{5}} próximo passo
-          // Button URL: https://pratic-connect-21.lovable.app/acompanhar/{{1}} → associado.id
+          // Button URL: https://pratic-connect-21.lovable.app/app/criar-senha?token={{1}}
           sendBody.template_name = 'cadastro_aprovado_botao';
-          sendBody.template_params = [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador', associado.id];
+          sendBody.template_params = [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador', tokenPrimeiroAcesso];
           console.log(`[ativar-associado] Usando template Meta 'cadastro_aprovado_botao' para ${telefoneWhatsapp}`);
         }
 
