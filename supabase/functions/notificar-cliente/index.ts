@@ -353,7 +353,7 @@ serve(async (req) => {
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
               const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
-              return [primeiroNome, veiculoDesc, cobertura, 'Aguardando instalação', associadoId];
+              return [primeiroNome, veiculoDesc, cobertura, 'Aguardando instalação', associado.id];
             },
           },
           instalacao_concluida: {
