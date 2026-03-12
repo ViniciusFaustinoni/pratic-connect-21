@@ -758,11 +758,20 @@ serve(async (req) => {
           // Estratégia 2: Busca backup por CPF
           if (!codigoExistente) {
             try {
-              const cpfFormatado = formatCPF(associado.cpf);
-              const buscaResponse = await fetchWithRetry(
-                `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`,
+              const cpfLimpoRecovery = cleanCPF(associado.cpf);
+              let buscaResponse = await fetchWithRetry(
+                `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf`,
                 { method: 'GET', headers: operationHeaders }
               );
+              // Fallback: tentar com CPF formatado
+              if (!buscaResponse.ok) {
+                console.log(`[SGA Sync] Recovery busca CPF limpo retornou ${buscaResponse.status}, tentando formatado...`);
+                const cpfFormatadoRecovery = formatCPF(associado.cpf);
+                buscaResponse = await fetchWithRetry(
+                  `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoRecovery)}/cpf`,
+                  { method: 'GET', headers: operationHeaders }
+                );
+              }
               if (buscaResponse.ok) {
                 const buscaData = await safeJsonParse<any>(buscaResponse, 'buscar_associado_cpf');
                 codigoExistente = buscaData?.codigo_associado ? parseInt(buscaData.codigo_associado) : null;
