@@ -570,7 +570,7 @@ serve(async (req) => {
               .from('rotas')
               .insert({
                 instalador_id: prof.vistoriador_id,
-                data: hoje,
+                data_rota: hoje,
                 status: 'em_andamento',
                 tipo: 'automatica'
               })
