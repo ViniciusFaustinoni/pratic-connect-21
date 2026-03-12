@@ -384,7 +384,7 @@ export default function CotadorPage() {
       plano: {
         nome: planoFinalSelecionado.nome,
         coberturas: planoFinalSelecionado.coberturas,
-        valorAdesao: planoFinalSelecionado.valorAdesao,
+        valorAdesao: valorAdesaoCustom ?? planoFinalSelecionado.valorAdesao,
         valorMensal: planoFinalSelecionado.valorMensal,
         valorExtra: valorExtra > 0 ? valorExtra : undefined,
       },
