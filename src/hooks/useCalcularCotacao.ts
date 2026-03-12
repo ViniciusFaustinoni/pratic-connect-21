@@ -66,7 +66,7 @@ export function useCalcularCotacao() {
         publicSupabase
           .from('configuracoes')
           .select('chave, valor')
-          .in('chave', ['taxa_fallback_carro', 'adicional_app']),
+          .in('chave', ['taxa_fallback_carro', 'adicional_app', 'adesao_minima']),
       ]);
 
       if (planosRes.error) throw planosRes.error;
@@ -83,6 +83,7 @@ export function useCalcularCotacao() {
       const configMap = Object.fromEntries((configRes.data || []).map(c => [c.chave, c.valor]));
       const taxaFallback = parseFloat(configMap.taxa_fallback_carro || '0.025');
       const adicionalApp = parseFloat(configMap.adicional_app || '35.90') || 35.90;
+      const minimoAdesao = parseFloat(configMap.adesao_minima || '100');
 
       const regiaoLower = (params.regiao || 'rj').toLowerCase();
       const combustivelLower = normalizarCombustivelParaPricing(params.combustivel);
@@ -155,7 +156,8 @@ export function useCalcularCotacao() {
           continue;
         }
 
-        const valorAdesao = Number(plano.valor_adesao);
+        // Calcular adesão como 1% FIPE (mínimo configurável) em vez do valor fixo do plano
+        const valorAdesao = Math.max(params.valor_fipe * 0.01, minimoAdesao);
         const coberturas = Array.isArray(plano.coberturas) ? plano.coberturas as string[] : [];
 
         planos.push({

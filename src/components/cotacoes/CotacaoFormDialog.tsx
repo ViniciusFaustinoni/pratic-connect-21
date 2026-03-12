@@ -270,6 +270,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const planoId = form.watch('plano_id');
   const validadeDias = form.watch('validade_dias');
   const valorAdesao = form.watch('valor_adesao');
+
+  // Auto-calcular adesão como 1% FIPE (mínimo R$ 100)
+  useEffect(() => {
+    if (valorFipe && valorFipe > 0) {
+      const MINIMO_ADESAO = 100;
+      const adesaoCalculada = Math.max(valorFipe * 0.01, MINIMO_ADESAO);
+      const adesaoArredondada = Math.round(adesaoCalculada * 100) / 100;
+      form.setValue('valor_adesao', adesaoArredondada);
+    }
+  }, [valorFipe, form]);
   
   // Extrair ano numérico para o hook de planos
   const anoTexto = useMemo(() => {
@@ -802,7 +812,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           form.setValue('valor_cota', primeiro.valorCota || 0);
           form.setValue('taxa_administrativa', primeiro.taxaAdministrativa || 0);
           form.setValue('valor_rastreamento', primeiro.valorRastreamento || 0);
-          form.setValue('valor_adesao', primeiro.valorAdesao || 0);
+          // NÃO sobrescrever valor_adesao aqui — ele é auto-calculado pelo useEffect (1% FIPE)
           const adicional = form.getValues('valor_adicional') || 0;
           form.setValue('valor_total_mensal', primeiro.valorMensal + adicional);
         } else {
@@ -818,7 +828,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         form.setValue('valor_cota', plano.valorCota || 0);
         form.setValue('taxa_administrativa', plano.taxaAdministrativa || 0);
         form.setValue('valor_rastreamento', plano.valorRastreamento || 0);
-        form.setValue('valor_adesao', plano.valorAdesao || 0);
+        // NÃO sobrescrever valor_adesao aqui — ele é auto-calculado pelo useEffect (1% FIPE)
         const adicional = form.getValues('valor_adicional') || 0;
         form.setValue('valor_total_mensal', plano.valorMensal + adicional);
       }
