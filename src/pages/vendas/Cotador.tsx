@@ -246,6 +246,9 @@ export default function CotadorPage() {
   
   // Valor extra do vendedor
   const [valorExtra, setValorExtra] = useState<number>(0);
+  
+  // Valor de adesão customizado pelo consultor
+  const [valorAdesaoCustom, setValorAdesaoCustom] = useState<number | null>(null);
 
   // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
