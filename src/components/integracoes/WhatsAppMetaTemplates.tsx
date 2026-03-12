@@ -1,8 +1,9 @@
 import { useState } from 'react';
-import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit, Copy } from 'lucide-react';
+import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit, Copy, Rocket } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
+import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
@@ -11,6 +12,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { useMetaTemplates, useSincronizarMetaTemplates, useExcluirMetaTemplate, useEnviarMetaTemplate } from '@/hooks/useWhatsAppMeta';
 import { WhatsAppMetaTemplateDrawer } from './WhatsAppMetaTemplateDrawer';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import { format } from 'date-fns';
 
 const STATUS_BADGE: Record<string, { className: string; label: string }> = {
@@ -32,7 +35,9 @@ export function WhatsAppMetaTemplates() {
   const [editTemplate, setEditTemplate] = useState<any>(null);
   const [viewTemplate, setViewTemplate] = useState<any>(null);
   const [deleteTarget, setDeleteTarget] = useState<{ id: string; nome: string } | null>(null);
-
+  const [testTemplate, setTestTemplate] = useState<any>(null);
+  const [testPhone, setTestPhone] = useState('');
+  const [testSending, setTestSending] = useState(false);
   const approved = templates.filter((t) => t.status === 'APPROVED').length;
   const pending = templates.filter((t) => t.status === 'PENDING').length;
   const rejected = templates.filter((t) => t.status === 'REJECTED').length;
@@ -166,6 +171,17 @@ export function WhatsAppMetaTemplates() {
                         >
                           <Copy className="h-3 w-3" />
                         </Button>
+                        {t.status === 'APPROVED' && (
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7 text-green-600"
+                            title="Disparo de teste"
+                            onClick={() => { setTestTemplate(t); setTestPhone(''); }}
+                          >
+                            <Rocket className="h-3 w-3" />
+                          </Button>
+                        )}
                         {canDelete(t.status) && (
                           <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => setDeleteTarget({ id: t.id, nome: t.nome })}>
                             <Trash2 className="h-3 w-3" />
@@ -261,6 +277,70 @@ export function WhatsAppMetaTemplates() {
             >
               Excluir
             </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog disparo de teste */}
+      <AlertDialog open={!!testTemplate} onOpenChange={() => setTestTemplate(null)}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Rocket className="h-4 w-4 text-green-600" />
+              Enviar disparo de teste
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Template: <strong className="font-mono">{testTemplate?.nome}</strong>
+              <br />
+              Informe o número de WhatsApp que receberá a mensagem de teste.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Input
+              placeholder="5511999999999"
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value.replace(/\D/g, ''))}
+              maxLength={15}
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Formato: código do país + DDD + número (ex: 5511999999999)
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={testSending}>Cancelar</AlertDialogCancel>
+            <Button
+              disabled={testPhone.length < 12 || testSending}
+              onClick={async () => {
+                setTestSending(true);
+                try {
+                  // Extrair variáveis de exemplo do corpo do template
+                  const matches = testTemplate?.corpo?.match(/\{\{\d+\}\}/g) || [];
+                  const params = matches.map((_: string, i: number) => `teste${i + 1}`);
+
+                  const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+                    body: {
+                      telefone: testPhone,
+                      template_name: testTemplate?.nome,
+                      template_params: params.length > 0 ? params : undefined,
+                    },
+                  });
+
+                  if (error || !data?.success) {
+                    throw new Error(data?.error || error?.message || 'Erro ao enviar');
+                  }
+
+                  toast.success('Disparo de teste enviado com sucesso!');
+                  setTestTemplate(null);
+                } catch (err: any) {
+                  toast.error(err.message || 'Falha ao enviar disparo de teste');
+                } finally {
+                  setTestSending(false);
+                }
+              }}
+            >
+              {testSending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+              Enviar teste
+            </Button>
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
