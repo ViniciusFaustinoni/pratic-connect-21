@@ -667,6 +667,37 @@ serve(async (req) => {
     // ========================================
     let codigoAssociadoHinova = associado.codigo_hinova;
 
+    // Validar se o codigo_hinova existente é compatível com o codigo_conta atual
+    if (codigoAssociadoHinova && codigoContaValido) {
+      try {
+        const { data: logOrigem } = await supabase
+          .from('sga_sync_logs')
+          .select('request_payload')
+          .eq('associado_id', associado_id)
+          .in('action', ['cadastrar_associado', 'busca_backup_cpf'])
+          .eq('status', 'success')
+          .not('request_payload', 'is', null)
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (logOrigem) {
+          const codigoContaOrigem = Number((logOrigem.request_payload as any)?.codigo_conta);
+          if (Number.isFinite(codigoContaOrigem) && codigoContaOrigem !== codigoContaResolvido) {
+            console.log(`[SGA Sync] codigo_hinova ${codigoAssociadoHinova} pertence ao codigo_conta ${codigoContaOrigem}, mas atual é ${codigoContaResolvido}. Descartando.`);
+            await logSync(veiculo_id, associado_id, 'invalidar_codigo_conta_incompativel', 'info',
+              { codigo_hinova: codigoAssociadoHinova, codigo_conta_origem: codigoContaOrigem, codigo_conta_atual: codigoContaResolvido },
+              null, 'codigo_conta incompatível');
+            codigoAssociadoHinova = null;
+            // Limpar no banco para não reutilizar
+            await supabase.from('associados').update({ codigo_hinova: null, sincronizado_hinova: false }).eq('id', associado_id);
+          }
+        }
+      } catch (e) {
+        console.log('[SGA Sync] Erro ao validar codigo_conta do codigo_hinova existente:', e);
+      }
+    }
+
     if (!codigoAssociadoHinova) {
       console.log('[SGA Sync] Verificando se associado já existe no Hinova via busca por CPF...');
       const cpfLimpo = cleanCPF(associado.cpf);
