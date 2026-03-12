@@ -14,10 +14,11 @@ import { Tooltip, TooltipContent, TooltipTrigger, TooltipProvider } from '@/comp
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { toast } from 'sonner';
 import { useDropzone } from 'react-dropzone';
-import { Plus, Pencil, ToggleLeft, FileUp, AlertTriangle, Upload, X, Download, Loader2, CheckCircle2, FileText } from 'lucide-react';
+import { Plus, Pencil, ToggleLeft, FileUp, AlertTriangle, Upload, X, Download, Loader2, CheckCircle2, FileText, FileSpreadsheet } from 'lucide-react';
 import { format } from 'date-fns';
 import { COMBUSTIVEIS_FALLBACK } from '@/data/combustiveis';
 import { PDFDocument, rgb, StandardFonts } from 'pdf-lib';
+import * as XLSX from 'xlsx';
 
 type ElegibilidadeRecord = {
   id: string;
@@ -46,6 +47,9 @@ const STATUS_OPTIONS = [
   { value: 'limitado', label: 'Limitado' },
   { value: 'negado', label: 'Negado' },
 ];
+
+const STATUS_VALIDOS = ['aceito', 'limitado', 'negado'];
+const COMBUSTIVEIS_VALIDOS = ['qualquer', 'flex', 'gasolina', 'etanol', 'diesel', 'eletrico', 'hibrido', 'gnv'];
 
 const COMBUSTIVEL_OPTIONS = [
   { value: 'qualquer', label: 'Qualquer' },
@@ -397,12 +401,138 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'application/pdf': ['.pdf'] },
+    accept: {
+      'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel': ['.xls'],
+    },
     maxFiles: 1,
     disabled: !selectedPlano,
   });
 
-  const processar = async () => {
+  const isExcel = (f: File) => /\.(xlsx|xls)$/i.test(f.name);
+
+  const processarExcel = async () => {
+    if (!file || !selectedPlano || !selectedPlanoObj) return;
+    setProcessando(true);
+    setErro(null);
+    setResultado(null);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
+
+      if (rows.length === 0) {
+        setErro({ error: 'Planilha vazia', detalhe: 'Nenhuma linha de dados encontrada na primeira aba.' });
+        return;
+      }
+
+      // Validate headers
+      const headers = Object.keys(rows[0]).map(h => h.trim().toUpperCase());
+      const required = ['MARCA', 'MODELO', 'ANO_MIN', 'STATUS'];
+      const missing = required.filter(r => !headers.includes(r));
+      if (missing.length > 0) {
+        setErro({ error: 'Colunas obrigatórias ausentes', detalhe: `Faltam: ${missing.join(', ')}` });
+        return;
+      }
+
+      const errosValidacao: string[] = [];
+      const registros: Record<string, unknown>[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const get = (key: string) => String(row[Object.keys(row).find(k => k.trim().toUpperCase() === key) || ''] ?? '').trim();
+
+        const marca = get('MARCA');
+        const modelo = get('MODELO');
+        const anoMinStr = get('ANO_MIN');
+        const anoMaxStr = get('ANO_MAX');
+        const combustivel = get('COMBUSTIVEL') || 'qualquer';
+        const status = get('STATUS');
+        const observacao = get('OBSERVACAO');
+
+        if (!marca || !modelo) {
+          errosValidacao.push(`Linha ${i + 2}: MARCA ou MODELO vazio`);
+          continue;
+        }
+        const anoMin = parseInt(anoMinStr);
+        if (isNaN(anoMin)) {
+          errosValidacao.push(`Linha ${i + 2}: ANO_MIN inválido — "${anoMinStr}"`);
+          continue;
+        }
+        const anoMax = anoMaxStr === '' ? null : parseInt(anoMaxStr);
+        if (anoMax !== null && isNaN(anoMax)) {
+          errosValidacao.push(`Linha ${i + 2}: ANO_MAX inválido — "${anoMaxStr}"`);
+          continue;
+        }
+        if (!STATUS_VALIDOS.includes(status.toLowerCase())) {
+          errosValidacao.push(`Linha ${i + 2}: STATUS inválido — "${status}" (válidos: ${STATUS_VALIDOS.join(', ')})`);
+          continue;
+        }
+        if (!COMBUSTIVEIS_VALIDOS.includes(combustivel.toLowerCase())) {
+          errosValidacao.push(`Linha ${i + 2}: COMBUSTIVEL inválido — "${combustivel}"`);
+          continue;
+        }
+
+        registros.push({
+          plano_id: selectedPlano,
+          linha_slug: selectedPlanoObj.linha || '',
+          marca: marca.toUpperCase(),
+          modelo: modelo.toUpperCase(),
+          ano_min: anoMin,
+          ano_max: anoMax,
+          combustivel: combustivel.toLowerCase(),
+          status: status.toLowerCase(),
+          observacao: observacao || null,
+          is_active: true,
+        });
+      }
+
+      if (errosValidacao.length > 0) {
+        setErro({
+          error: 'Erros de validação — nenhum registro importado',
+          erros: errosValidacao,
+          detalhe: `${errosValidacao.length} erro(s) em ${rows.length} linhas`,
+        });
+        return;
+      }
+
+      if (modo === 'substituir') {
+        await supabase
+          .from('plano_elegibilidade_modelos')
+          .update({ is_active: false } as never)
+          .eq('plano_id', selectedPlano);
+      }
+
+      const { error: insertError } = await supabase
+        .from('plano_elegibilidade_modelos')
+        .insert(registros as never[]);
+
+      if (insertError) {
+        setErro({ error: 'Erro ao salvar no banco', detalhe: insertError.message });
+        return;
+      }
+
+      setResultado({
+        sucesso: true,
+        total_importados: registros.length,
+        modo,
+        registros,
+      });
+      toast.success(`${registros.length} modelos importados!`);
+      queryClient.invalidateQueries({ queryKey: ['elegibilidade', selectedPlano] });
+      queryClient.invalidateQueries({ queryKey: ['elegibilidade-resumo'] });
+      queryClient.invalidateQueries({ queryKey: ['plano_elegibilidade_modelos'] });
+    } catch (e: any) {
+      setErro({ error: 'Erro ao processar Excel', detalhe: e.message });
+    } finally {
+      setProcessando(false);
+    }
+  };
+
+  const processarPDF = async () => {
     if (!file || !selectedPlano || !selectedPlanoObj) return;
     setProcessando(true);
     setErro(null);
@@ -444,6 +574,30 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
     } finally {
       setProcessando(false);
     }
+  };
+
+  const processar = () => {
+    if (!file) return;
+    return isExcel(file) ? processarExcel() : processarPDF();
+  };
+
+  const baixarModelo = () => {
+    const dados = [
+      { MARCA: 'CHEVROLET', MODELO: 'ONIX', ANO_MIN: 2018, ANO_MAX: '', COMBUSTIVEL: 'qualquer', STATUS: 'aceito', OBSERVACAO: '' },
+      { MARCA: 'CHEVROLET', MODELO: 'MONTANA', ANO_MIN: 2005, ANO_MAX: 2023, COMBUSTIVEL: 'qualquer', STATUS: 'limitado', OBSERVACAO: 'Apenas até 2023' },
+      { MARCA: 'VW', MODELO: 'GOLF', ANO_MIN: 2010, ANO_MAX: '', COMBUSTIVEL: 'flex', STATUS: 'limitado', OBSERVACAO: 'Somente versão Flex' },
+      { MARCA: 'HYUNDAI', MODELO: 'HB20', ANO_MIN: 2015, ANO_MAX: '', COMBUSTIVEL: 'qualquer', STATUS: 'aceito', OBSERVACAO: '' },
+      { MARCA: 'FIAT', MODELO: 'MOBI', ANO_MIN: 2017, ANO_MAX: '', COMBUSTIVEL: 'qualquer', STATUS: 'negado', OBSERVACAO: 'Modelo não coberto' },
+    ];
+    const ws = XLSX.utils.json_to_sheet(dados);
+    ws['!cols'] = [
+      { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 10 },
+      { wch: 14 }, { wch: 10 }, { wch: 30 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Elegibilidade');
+    XLSX.writeFile(wb, 'modelo_elegibilidade.xlsx');
+    toast.success('Modelo baixado!');
   };
 
   const resetForm = () => {
@@ -559,11 +713,16 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
     <div className="space-y-8">
       {/* ── Seção de Importação ── */}
       <div className="space-y-4">
-        <h3 className="text-lg font-semibold text-foreground">Importar PDF de Elegibilidade</h3>
+        <div className="flex items-center justify-between">
+          <h3 className="text-lg font-semibold text-foreground">Importar Arquivo de Elegibilidade</h3>
+          <Button variant="outline" size="sm" onClick={baixarModelo}>
+            <Download className="h-4 w-4 mr-1" /> Baixar modelo Excel
+          </Button>
+        </div>
 
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
           <div>
-            <Label>Para qual plano é este PDF? *</Label>
+            <Label>Para qual plano é este arquivo? *</Label>
             <Select value={selectedPlano} onValueChange={(v) => { setSelectedPlano(v); resetForm(); }}>
               <SelectTrigger>
                 <SelectValue placeholder="Selecione um plano..." />
@@ -598,7 +757,7 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
           <Alert className="border-amber-500/50 bg-amber-500/10">
             <AlertTriangle className="h-4 w-4 text-amber-600" />
             <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
-              Atenção: todos os modelos atuais do plano serão desativados e substituídos pelos dados do PDF.
+              Atenção: todos os modelos atuais do plano serão desativados e substituídos pelos dados do arquivo.
             </AlertDescription>
           </Alert>
         )}
@@ -615,17 +774,17 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
                 }`}
               >
                 <input {...getInputProps()} />
-                <FileUp className="h-10 w-10 text-muted-foreground mb-3" />
-                <p className="font-medium text-foreground">
-                  {selectedPlano ? 'Arraste o PDF ou clique para selecionar' : 'Selecione um plano primeiro'}
-                </p>
-                <p className="text-sm text-muted-foreground mt-1">O PDF deve estar no formato padrão Praticcar</p>
+                 <FileUp className="h-10 w-10 text-muted-foreground mb-3" />
+                 <p className="font-medium text-foreground">
+                   {selectedPlano ? 'Arraste o arquivo (PDF ou Excel) ou clique para selecionar' : 'Selecione um plano primeiro'}
+                 </p>
+                 <p className="text-sm text-muted-foreground mt-1">Formatos aceitos: .xlsx, .xls, .pdf</p>
               </div>
             ) : (
               <div className="rounded-lg border p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <FileText className="h-8 w-8 text-primary" />
+                    <FileSpreadsheet className="h-8 w-8 text-primary" />
                     <div>
                       <p className="font-medium text-foreground">{file.name}</p>
                       <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(1)} KB • Plano: {selectedPlanoObj?.nome}</p>
@@ -651,14 +810,14 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
                   </Alert>
                 )}
 
-                <div className="flex gap-2">
-                  <Button onClick={processar} disabled={processando}>
-                    {processando ? (
-                      <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processando PDF...</>
-                    ) : (
-                      <><Upload className="h-4 w-4 mr-1" /> Processar PDF</>
-                    )}
-                  </Button>
+                 <div className="flex gap-2">
+                   <Button onClick={processar} disabled={processando}>
+                     {processando ? (
+                       <><Loader2 className="h-4 w-4 mr-1 animate-spin" /> Processando...</>
+                     ) : (
+                       <><Upload className="h-4 w-4 mr-1" /> Processar Arquivo</>
+                     )}
+                   </Button>
                   <Button variant="outline" onClick={resetForm} disabled={processando}>Remover</Button>
                 </div>
               </div>
@@ -710,9 +869,9 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
                   Ver no plano
                 </Button>
               )}
-              <Button variant="outline" onClick={() => { resetForm(); setFile(null); }}>
-                Importar outro PDF
-              </Button>
+               <Button variant="outline" onClick={() => { resetForm(); setFile(null); }}>
+                 Importar outro arquivo
+               </Button>
             </div>
           </div>
         )}
@@ -855,7 +1014,7 @@ export function ElegibilidadeVeiculos() {
       <Tabs value={activeTab} onValueChange={setActiveTab}>
         <TabsList>
           <TabsTrigger value="por-plano">Por Plano</TabsTrigger>
-          <TabsTrigger value="importar-pdf">Importar PDF</TabsTrigger>
+          <TabsTrigger value="importar-pdf">Importar Arquivo</TabsTrigger>
           <TabsTrigger value="resumo">Resumo Global</TabsTrigger>
         </TabsList>
 
