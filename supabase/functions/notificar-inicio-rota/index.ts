@@ -169,7 +169,6 @@ serve(async (req) => {
     }
 
     // 3. Notificar o VISTORIADOR/INSTALADOR com os dados do cliente
-    const profissionalTelefone = profissional.whatsapp || profissional.telefone;
     if (profissionalTelefone) {
       try {
         console.log(`[notificar-inicio-rota] Notificando profissional ${profissional.nome}...`);
