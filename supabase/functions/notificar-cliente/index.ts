@@ -320,37 +320,25 @@ serve(async (req) => {
         const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] }> = {
           // Aprovações e boas-vindas → cadastro_aprovado ({{1}} nome, {{2}} placa, {{3}} marca+modelo, {{4}} cobertura, {{5}} próximo passo, {{6}} link)
           cadastro_aprovado: {
-            template_name: 'cadastro_aprovado',
-            getParams: () => [
-              primeiroNome,
-              (dados?.placa as string) || 'seu veículo',
-              `${(dados?.marca as string) || ''} ${(dados?.modelo as string) || ''}`.trim() || 'Veículo',
-              'Proteção Veicular',
-              'Instalação do rastreador',
-              (dados?.link_acompanhamento as string) || 'https://pratic-connect-21.lovable.app',
-            ],
+            template_name: 'boas_vindas_associado',
+            getParams: () => {
+              const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
+              return [primeiroNome, veiculoDesc];
+            },
           },
           proposta_aprovada_roubo_furto: {
-            template_name: 'cadastro_aprovado',
-            getParams: () => [
-              primeiroNome,
-              (dados?.placa as string) || 'seu veículo',
-              `${(dados?.marca as string) || ''} ${(dados?.modelo as string) || ''}`.trim() || 'Veículo',
-              'Roubo e Furto',
-              'Instalação do rastreador',
-              (dados?.link_acompanhamento as string) || 'https://pratic-connect-21.lovable.app',
-            ],
+            template_name: 'boas_vindas_associado',
+            getParams: () => {
+              const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
+              return [primeiroNome, veiculoDesc];
+            },
           },
           proposta_aprovada_cobertura_total: {
-            template_name: 'cadastro_aprovado',
-            getParams: () => [
-              primeiroNome,
-              (dados?.placa as string) || 'seu veículo',
-              `${(dados?.marca as string) || ''} ${(dados?.modelo as string) || ''}`.trim() || 'Veículo',
-              'Proteção 360º (Roubo, Furto, Colisão, Incêndio e mais)',
-              'Crie sua senha e acesse o App PRATIC',
-              (dados?.link_acompanhamento as string) || 'https://pratic-connect-21.lovable.app',
-            ],
+            template_name: 'boas_vindas_associado',
+            getParams: () => {
+              const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
+              return [primeiroNome, veiculoDesc];
+            },
           },
           cobertura_total_ativada: {
             template_name: 'boas_vindas_associado',
