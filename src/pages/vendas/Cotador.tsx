@@ -246,6 +246,9 @@ export default function CotadorPage() {
   
   // Valor extra do vendedor
   const [valorExtra, setValorExtra] = useState<number>(0);
+  
+  // Valor de adesão customizado pelo consultor
+  const [valorAdesaoCustom, setValorAdesaoCustom] = useState<number | null>(null);
 
   // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
@@ -381,7 +384,7 @@ export default function CotadorPage() {
       plano: {
         nome: planoFinalSelecionado.nome,
         coberturas: planoFinalSelecionado.coberturas,
-        valorAdesao: planoFinalSelecionado.valorAdesao,
+        valorAdesao: valorAdesaoCustom ?? planoFinalSelecionado.valorAdesao,
         valorMensal: planoFinalSelecionado.valorMensal,
         valorExtra: valorExtra > 0 ? valorExtra : undefined,
       },
@@ -392,7 +395,7 @@ export default function CotadorPage() {
         observacoes: undefined,
       },
     };
-  }, [cotacaoCalculada, planoFinalSelecionado, valorFipe, leadSelecionado, nomeAssociado, marca, modelo, ano, veiculoEncontrado, placaBusca, cor, valorExtra, cotacaoSalva]);
+  }, [cotacaoCalculada, planoFinalSelecionado, valorFipe, leadSelecionado, nomeAssociado, marca, modelo, ano, veiculoEncontrado, placaBusca, cor, valorExtra, cotacaoSalva, valorAdesaoCustom]);
 
   // Verificar se pode calcular
   const podeCalcular = (modo === 'busca_placa' 
@@ -608,6 +611,11 @@ export default function CotadorPage() {
     setCotacaoCalculada(true);
     setPlanoSelecionadoTab(planosDB?.find(p => p.destaque)?.id || planosDB?.[1]?.id || planosDB?.[0]?.id || '');
     setPlanoFinalSelecionado(null);
+    // Inicializar adesão com 1% FIPE (mínimo R$ 100)
+    const fipeAtual = valorFipe || (marca && ano ? estimarValorFipe(marca, parseInt(ano)) : 0);
+    if (fipeAtual > 0) {
+      setValorAdesaoCustom(Math.max(100, Math.round(fipeAtual * 0.01 * 100) / 100));
+    }
     setIsCalculando(false);
     
     toast.success('Cotação calculada com sucesso!');
@@ -637,6 +645,7 @@ export default function CotadorPage() {
         categoria_veiculo: categoriaVeiculo || undefined,
         nome_solicitante: leadSelecionado?.nome || nomeAssociado || null,
         veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
+        valor_adesao: valorAdesaoCustom || undefined,
       });
 
       setCotacaoSalva(cotacaoData);
@@ -683,9 +692,9 @@ ${planoFinalSelecionado.naoInclui.length > 0 ? `*Não incluído:*\n${planoFinalS
 💰 *VALORES*
 ━━━━━━━━━━━━━━━━━━━━
 
-*Taxa de Filiação:* ${formatCurrency(planoFinalSelecionado.valorAdesao)}
+*Taxa de Filiação:* ${formatCurrency(valorAdesaoCustom ?? planoFinalSelecionado.valorAdesao)}
 *Mensalidade:* ${formatCurrency(planoFinalSelecionado.valorMensal)}
-*1ª Parcela:* ${formatCurrency(planoFinalSelecionado.valorAdesao)}
+*1ª Parcela:* ${formatCurrency(valorAdesaoCustom ?? planoFinalSelecionado.valorAdesao)}
 
 _Cotação válida por 7 dias_
 
@@ -1346,7 +1355,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                       <div className="grid grid-cols-3 gap-4 text-center">
                         <div>
                           <p className="text-xs text-muted-foreground uppercase">Adesão</p>
-                          <p className="text-lg font-bold">{formatCurrency(planoAtual.valorAdesao)}</p>
+                          <p className="text-lg font-bold">{formatCurrency(valorAdesaoCustom ?? planoAtual.valorAdesao)}</p>
                         </div>
                         <div>
                           <p className="text-xs text-muted-foreground uppercase">Mensal</p>
@@ -1355,7 +1364,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                         <div>
                           <p className="text-xs text-muted-foreground uppercase">1ª Parcela</p>
                           <p className="text-lg font-bold text-primary">
-                            {formatCurrency(planoAtual.valorAdesao)}
+                            {formatCurrency(valorAdesaoCustom ?? planoAtual.valorAdesao)}
                           </p>
                         </div>
                       </div>
@@ -1441,8 +1450,15 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
             <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
               <div className="grid grid-cols-3 gap-4 text-center">
                 <div>
-                  <p className="text-xs text-muted-foreground uppercase">Adesão</p>
-                  <p className="text-xl font-bold">{formatCurrency(planoFinalSelecionado.valorAdesao)}</p>
+                  <p className="text-xs text-muted-foreground uppercase mb-1">Adesão</p>
+                  <Input
+                    type="number"
+                    min={0}
+                    step={0.01}
+                    value={valorAdesaoCustom ?? ''}
+                    onChange={(e) => setValorAdesaoCustom(parseFloat(e.target.value) || 0)}
+                    className="text-center font-bold text-lg h-10"
+                  />
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Mensal</p>
@@ -1453,7 +1469,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">1ª Parcela</p>
                   <p className="text-2xl font-bold text-primary">
-                    {formatCurrency(planoFinalSelecionado.valorAdesao)}
+                    {formatCurrency(valorAdesaoCustom ?? planoFinalSelecionado.valorAdesao)}
                   </p>
                 </div>
               </div>

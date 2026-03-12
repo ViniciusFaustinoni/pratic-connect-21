@@ -1,4 +1,4 @@
-import { useEffect, useState, useMemo, useCallback } from 'react';
+import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
@@ -271,9 +271,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const validadeDias = form.watch('validade_dias');
   const valorAdesao = form.watch('valor_adesao');
 
+  // Guard: só auto-preencher adesão se o consultor não editou manualmente
+  const adesaoEditadaManualmente = useRef(false);
+  
   // Auto-calcular adesão como 1% FIPE (mínimo R$ 100)
   useEffect(() => {
-    if (valorFipe && valorFipe > 0) {
+    if (valorFipe && valorFipe > 0 && !adesaoEditadaManualmente.current) {
       const MINIMO_ADESAO = 100;
       const adesaoCalculada = Math.max(valorFipe * 0.01, MINIMO_ADESAO);
       const adesaoArredondada = Math.round(adesaoCalculada * 100) / 100;
@@ -1594,7 +1597,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     <FormControl>
                       <CurrencyInput 
                         value={field.value}
-                        onChange={field.onChange}
+                        onChange={(val) => {
+                          field.onChange(val);
+                          adesaoEditadaManualmente.current = true;
+                        }}
                         placeholder="R$ 0,00"
                       />
                     </FormControl>
