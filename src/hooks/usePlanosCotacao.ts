@@ -207,11 +207,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     return 'aprovado';
   }
 
-  const planos = useMemo<PlanoCotacao[]>(() => {
+  const { planos, planosNegados } = useMemo<{ planos: PlanoCotacao[]; planosNegados: PlanoNegadoInfo[] }>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
 
     if (!valorFipe || valorFipe <= 0 || !planosBanco) {
-      return [];
+      return { planos: [], planosNegados: [] };
     }
 
     const regiaoLower = regiao.toLowerCase();
