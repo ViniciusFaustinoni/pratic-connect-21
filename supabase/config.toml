@@ -122,3 +122,6 @@ verify_jwt = false
 
 [functions.parse-elegibilidade-pdf]
 verify_jwt = false
+
+[functions.parse-elegibilidade-xlsx]
+verify_jwt = false
