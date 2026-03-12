@@ -230,10 +230,13 @@ export function EtapaAssinaturaContrato({
     }
   };
 
-  // 3. Inicializar fluxo
+  // 3. Inicializar fluxo (proteger contra múltiplas chamadas)
   useEffect(() => {
-    verificarOuGerarContrato();
-  }, [verificarOuGerarContrato]);
+    if (!inicializado) {
+      setInicializado(true);
+      verificarOuGerarContrato();
+    }
+  }, [inicializado, verificarOuGerarContrato]);
 
   // 4. Polling para verificar status da assinatura
   useEffect(() => {

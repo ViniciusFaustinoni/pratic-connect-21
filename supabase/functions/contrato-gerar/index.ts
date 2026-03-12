@@ -147,15 +147,22 @@ serve(async (req) => {
       }
     }
 
-    // 4. Verificar se já existe contrato para esta cotação
-    const { data: contratoExistente } = await supabase
+    // 4. Verificar se já existe contrato ATIVO para esta cotação (idempotência)
+    // Priorizar contratos assinados/ativos, depois pendentes
+    const { data: contratosExistentes } = await supabase
       .from('contratos')
       .select('id, numero, status, validade_link, valor_mensal')
       .eq('cotacao_id', cotacao_id)
-      .maybeSingle();
+      .not('status', 'in', '("cancelado","expirado")')
+      .order('created_at', { ascending: false });
+
+    // Priorizar contrato assinado/ativo se existir
+    const contratoExistente = contratosExistentes?.find(
+      (c: any) => c.status === 'assinado' || c.status === 'ativo'
+    ) || contratosExistentes?.[0];
 
     if (contratoExistente) {
-      console.log('[CONTRATO-GERAR] Contrato já existe para esta cotação:', contratoExistente.numero);
+      console.log('[CONTRATO-GERAR] Contrato já existe para esta cotação:', contratoExistente.numero, 'status:', contratoExistente.status);
       
       // ═══════════════════════════════════════════════════════════════
       // IMPORTANTE: Mesmo com contrato existente, sincronizar email/telefone do associado
@@ -177,41 +184,33 @@ serve(async (req) => {
           .maybeSingle();
         
         if (associadoExistente) {
-          console.log('[SYNC-EXISTENTE] Associado encontrado:', {
-            id: associadoExistente.id,
-            email_banco: associadoExistente.email,
-            email_cotacao: clienteEmail,
-            telefone_banco: associadoExistente.telefone,
-            telefone_cotacao: clienteTelefone,
-          });
-          
           const updateData: Record<string, string> = {};
           
           if (clienteEmail && clienteEmail.trim() !== '' && clienteEmail !== associadoExistente.email) {
             updateData.email = clienteEmail;
-            console.log(`[SYNC-EXISTENTE] Email será atualizado: "${associadoExistente.email}" → "${clienteEmail}"`);
           }
           
           if (clienteTelefone && clienteTelefone.trim() !== '' && clienteTelefone !== associadoExistente.telefone) {
             updateData.telefone = clienteTelefone;
-            console.log(`[SYNC-EXISTENTE] Telefone será atualizado: "${associadoExistente.telefone}" → "${clienteTelefone}"`);
           }
           
           if (Object.keys(updateData).length > 0) {
-            const { error: updateError } = await supabase
+            await supabase
               .from('associados')
               .update(updateData)
               .eq('id', associadoExistente.id);
-            
-            if (updateError) {
-              console.error('[SYNC-EXISTENTE] Erro ao sincronizar:', updateError);
-            } else {
-              console.log('[SYNC-EXISTENTE] ✅ Dados sincronizados com sucesso:', Object.keys(updateData));
-            }
-          } else {
-            console.log('[SYNC-EXISTENTE] Nenhuma atualização necessária (dados iguais)');
+            console.log('[SYNC-EXISTENTE] ✅ Dados sincronizados:', Object.keys(updateData));
           }
         }
+      }
+
+      // Se cotação não aponta para contrato correto, corrigir
+      if (cotacao.contrato_gerado_id !== contratoExistente.id) {
+        console.log('[CONTRATO-GERAR] Corrigindo contrato_gerado_id na cotação');
+        await supabase
+          .from('cotacoes')
+          .update({ contrato_gerado_id: contratoExistente.id })
+          .eq('id', cotacao_id);
       }
       
       return new Response(

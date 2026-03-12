@@ -1050,6 +1050,18 @@ serve(async (req) => {
             })
             .eq("id", contrato.id);
 
+          // ═══ NOVO: Sincronizar cotacoes.status_contratacao para contrato_assinado ═══
+          if (contrato.cotacao_id) {
+            await supabase
+              .from("cotacoes")
+              .update({ 
+                status_contratacao: "contrato_assinado",
+                contrato_gerado_id: contrato.id
+              })
+              .eq("id", contrato.cotacao_id);
+            console.log("[autentique-webhook] ✓ Cotação atualizada para contrato_assinado (via update)");
+          }
+
           await supabase.from("contratos_historico").insert({
             contrato_id: contrato.id,
             evento: "documento_assinado",
