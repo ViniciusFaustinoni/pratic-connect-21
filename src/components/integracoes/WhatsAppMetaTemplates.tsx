@@ -313,14 +313,15 @@ export function WhatsAppMetaTemplates() {
               onClick={async () => {
                 setTestSending(true);
                 try {
-                  // Extrair variáveis de exemplo do corpo do template
-                  const matches = testTemplate?.corpo?.match(/\{\{\d+\}\}/g) || [];
-                  const params = matches.map((_: string, i: number) => `teste${i + 1}`);
+                  // Extrair variáveis únicas do corpo do template ({{1}}, {{2}}, etc.)
+                  const allMatches = testTemplate?.corpo?.match(/\{\{\d+\}\}/g) || [];
+                  const uniqueVars = [...new Set(allMatches)].sort();
+                  const params = uniqueVars.map((_: string, i: number) => `teste${i + 1}`);
 
                   // Gerar mensagem fallback substituindo variáveis no corpo
                   let mensagemFallback = testTemplate?.corpo || 'Mensagem de teste';
-                  matches.forEach((m: string, i: number) => {
-                    mensagemFallback = mensagemFallback.replace(m, `teste${i + 1}`);
+                  uniqueVars.forEach((m: string, i: number) => {
+                    mensagemFallback = mensagemFallback.replaceAll(m, `teste${i + 1}`);
                   });
 
                   const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
