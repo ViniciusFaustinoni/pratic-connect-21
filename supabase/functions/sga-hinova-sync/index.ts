@@ -381,8 +381,6 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
-      );
-    }
 
     const requestBody = await req.json();
     const { veiculo_id, associado_id, action } = requestBody as SyncRequest & { action?: string };
