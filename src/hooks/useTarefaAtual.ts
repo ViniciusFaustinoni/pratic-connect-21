@@ -65,10 +65,10 @@ export function useTarefaAtual() {
         },
         veiculo: {
           id: tarefa.veiculo_id || '',
-          placa: tarefa.veiculo_placa || '',
-          marca: tarefa.veiculo_marca || '',
-          modelo: tarefa.veiculo_modelo || '',
-          cor: tarefa.veiculo_cor,
+          placa: (tarefa as any).veiculo_placa || tarefa.placa || '',
+          marca: (tarefa as any).veiculo_marca || tarefa.marca || '',
+          modelo: (tarefa as any).veiculo_modelo || tarefa.modelo || '',
+          cor: (tarefa as any).veiculo_cor || tarefa.cor,
         },
         endereco: {
           logradouro: tarefa.logradouro,
