@@ -802,7 +802,7 @@ serve(async (req) => {
         estado: associado.uf || '',
         sexo: associado.sexo?.toUpperCase() === 'FEMININO' ? 'F' : 'M',
         dia_vencimento: associado.dia_vencimento || 10,
-        codigo_conta: parseInt(hinovaCodigoConta) || 1,
+        codigo_conta: codigoContaResolvido,
         ...(hinovaCodigoRegional && { codigo_regional: parseInt(hinovaCodigoRegional) }),
         ...(hinovaCodigoCooperativa && { codigo_cooperativa: parseInt(hinovaCodigoCooperativa) }),
         ...(hinovaCodigoVoluntario && { codigo_voluntario: parseInt(hinovaCodigoVoluntario) }),
