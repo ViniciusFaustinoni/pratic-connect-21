@@ -280,6 +280,70 @@ export function WhatsAppMetaTemplates() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog disparo de teste */}
+      <AlertDialog open={!!testTemplate} onOpenChange={() => setTestTemplate(null)}>
+        <AlertDialogContent className="max-w-sm">
+          <AlertDialogHeader>
+            <AlertDialogTitle className="flex items-center gap-2">
+              <Rocket className="h-4 w-4 text-green-600" />
+              Enviar disparo de teste
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              Template: <strong className="font-mono">{testTemplate?.nome}</strong>
+              <br />
+              Informe o número de WhatsApp que receberá a mensagem de teste.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <div className="py-2">
+            <Input
+              placeholder="5511999999999"
+              value={testPhone}
+              onChange={(e) => setTestPhone(e.target.value.replace(/\D/g, ''))}
+              maxLength={15}
+            />
+            <p className="text-[10px] text-muted-foreground mt-1">
+              Formato: código do país + DDD + número (ex: 5511999999999)
+            </p>
+          </div>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={testSending}>Cancelar</AlertDialogCancel>
+            <Button
+              disabled={testPhone.length < 12 || testSending}
+              onClick={async () => {
+                setTestSending(true);
+                try {
+                  // Extrair variáveis de exemplo do corpo do template
+                  const matches = testTemplate?.corpo?.match(/\{\{\d+\}\}/g) || [];
+                  const params = matches.map((_: string, i: number) => `teste${i + 1}`);
+
+                  const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
+                    body: {
+                      telefone: testPhone,
+                      template_name: testTemplate?.nome,
+                      template_params: params.length > 0 ? params : undefined,
+                    },
+                  });
+
+                  if (error || !data?.success) {
+                    throw new Error(data?.error || error?.message || 'Erro ao enviar');
+                  }
+
+                  toast.success('Disparo de teste enviado com sucesso!');
+                  setTestTemplate(null);
+                } catch (err: any) {
+                  toast.error(err.message || 'Falha ao enviar disparo de teste');
+                } finally {
+                  setTestSending(false);
+                }
+              }}
+            >
+              {testSending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Send className="h-4 w-4 mr-1" />}
+              Enviar teste
+            </Button>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
