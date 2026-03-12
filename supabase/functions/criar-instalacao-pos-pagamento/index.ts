@@ -388,6 +388,25 @@ serve(async (req) => {
 
     console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacao.id);
 
+    // 7. NOTIFICAR ASSOCIADO via WhatsApp (instalação agendada)
+    try {
+      const periodoTexto = periodoValido === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)';
+      await supabase.functions.invoke('notificar-cliente', {
+        body: {
+          tipo: 'instalacao_agendada',
+          associado_id: contrato.associado_id,
+          dados: {
+            data: dataAgendada,
+            periodo: periodoTexto,
+          },
+        },
+      });
+      console.log(`[CriarInstalacaoPosPagamento] ✓ Notificação 'instalacao_agendada' enviada ao associado ${contrato.associado_id}`);
+    } catch (notifErr) {
+      console.error('[CriarInstalacaoPosPagamento] Erro ao enviar notificação:', notifErr);
+      // Não falhar a criação da instalação por causa de notificação
+    }
+
     return new Response(JSON.stringify({
       success: true,
       instalacaoId: novaInstalacao.id,

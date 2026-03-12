@@ -436,8 +436,85 @@ serve(async (req) => {
                   .eq('id', servico.id);
               }
             }
-          }
-          
+            }
+
+            // ========== NOTIFICAÇÕES PARA INSTALAÇÕES ==========
+            // Buscar dados completos para notificar associado e instalador
+            try {
+              const { data: instCompleta } = await supabase
+                .from('instalacoes')
+                .select('associado_id, associados!instalacoes_associado_id_fkey(nome, telefone1, whatsapp), veiculos!instalacoes_veiculo_id_fkey(placa, marca, modelo), logradouro, numero, bairro, cidade, uf, periodo')
+                .eq('id', servico.instalacao_origem_id)
+                .single();
+
+              if (instCompleta?.associado_id) {
+                // 1. Notificar ASSOCIADO via WhatsApp (técnico a caminho)
+                const periodoTexto = instCompleta.periodo === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)';
+                await supabase.functions.invoke('notificar-cliente', {
+                  body: {
+                    tipo: 'tecnico_em_rota',
+                    associado_id: instCompleta.associado_id,
+                    dados: {
+                      data: servico.data_agendada,
+                      periodo: periodoTexto,
+                    },
+                  },
+                });
+                console.log(`[cron-atribuir-tarefas] ✓ WhatsApp 'tecnico_em_rota' enviado ao associado ${instCompleta.associado_id}`);
+              }
+
+              // 2. Push notification para o instalador
+              await supabase.functions.invoke('send-push-profissional', {
+                body: {
+                  profissional_id: prof.vistoriador_id,
+                  notification: {
+                    title: 'Nova Instalação Atribuída',
+                    body: `Instalação ${servico.is_encaixe ? '(encaixe) ' : ''}atribuída - ${servico.associado_nome}`,
+                    tag: `instalacao-${servico.instalacao_origem_id}`,
+                    data: { url: '/instalador', tarefa_id: servico.id, tipo: 'instalacao' },
+                  }
+                }
+              });
+              console.log(`[cron-atribuir-tarefas] ✓ Push enviado para instalador ${prof.vistoriador_id}`);
+
+              // 3. Notificar INSTALADOR via WhatsApp (dados do cliente)
+              if (instCompleta) {
+                const assocData = (instCompleta as any).associados;
+                const veicData = (instCompleta as any).veiculos;
+                const telefoneCliente = assocData?.whatsapp || assocData?.telefone1 || '';
+                const enderecoCompleto = [instCompleta.logradouro, instCompleta.numero, instCompleta.bairro, instCompleta.cidade, instCompleta.uf].filter(Boolean).join(', ');
+
+                // Buscar telefone do instalador
+                const { data: profProfile } = await supabase
+                  .from('profiles')
+                  .select('telefone, nome')
+                  .eq('id', prof.vistoriador_id)
+                  .single();
+
+                if (profProfile?.telefone) {
+                  const msgInstalador = `🔧 *Nova Instalação Atribuída*\n\n` +
+                    `👤 Cliente: ${assocData?.nome || servico.associado_nome}\n` +
+                    `📱 WhatsApp: ${telefoneCliente}\n` +
+                    `🚗 Veículo: ${veicData?.marca || ''} ${veicData?.modelo || ''} - ${veicData?.placa || servico.veiculo_placa}\n` +
+                    `📍 Endereço: ${enderecoCompleto}\n` +
+                    `${servico.is_encaixe ? '⚡ ENCAIXE' : ''}`;
+
+                  await supabase.functions.invoke('enviar-whatsapp', {
+                    body: {
+                      telefone: profProfile.telefone,
+                      mensagem: msgInstalador,
+                      referencia_tipo: 'instalacao',
+                      referencia_id: servico.instalacao_origem_id,
+                    }
+                  });
+                  console.log(`[cron-atribuir-tarefas] ✓ WhatsApp enviado ao instalador ${profProfile.nome}`);
+                }
+              }
+            } catch (notifErr) {
+              console.error('[cron-atribuir-tarefas] Erro ao enviar notificações de instalação:', notifErr);
+              // Não falhar a atribuição por causa de notificação
+            }
+
           if (servico.vistoria_origem_id) {
             console.log(`[cron-atribuir-tarefas] Sincronizando com vistorias ${servico.vistoria_origem_id}`);
             
@@ -483,7 +560,7 @@ serve(async (req) => {
             .from('rotas')
             .select('id')
             .eq('instalador_id', prof.vistoriador_id)
-            .eq('data', hoje)
+            .eq('data_rota', hoje)
             .maybeSingle();
 
           let rotaId = rotaExistente?.id;
@@ -493,7 +570,7 @@ serve(async (req) => {
               .from('rotas')
               .insert({
                 instalador_id: prof.vistoriador_id,
-                data: hoje,
+                data_rota: hoje,
                 status: 'em_andamento',
                 tipo: 'automatica'
               })

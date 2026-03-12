@@ -1,75 +1,203 @@
+# Auditoria Completa: Planos, Benefícios e Precificação
+
+## Resumo
+
+A maioria dos fluxos de planos/benefícios já é dinâmica. Restam 4 áreas pendentes: `pricing.ts` estático, `formatarMoeda` duplicada/espalhada, valores FIPE/idade hardcoded, e níveis hardcoded em `EscolhaPlano.tsx`.
+
+---
+
+## ✅ CORRIGIDO (não mexer)
+
+- `PlanosAdmin.tsx` — CRUD dinâmico de planos, benefícios, coberturas, linhas
+- `usePlanosCotacao.ts` — Hook principal dinâmico
+- `useCalcularCotacao.ts` — Busca planos e tabelas_preco do banco
+- `CotacaoDetalhe.tsx` — Dados do hook
+- `PlanoCardComparativo` / `PlanoDetalhesModal` — Props dinâmicas
+- `ContratoDetalhe.tsx` — Dinâmico
+- `Cotador.tsx` — Usa PlanoCotacao direto
+- `AppPlano.tsx` — Benefícios/coberturas do banco via planos_beneficios + benefits
+- `CardPlano.tsx` — Recebe benefícios/coberturas como props
+- `useMyData.ts` — Select expandido com coberturas + planos_beneficios
+- `ComparadorNiveis.tsx` — Dinâmico (usa `usePlans` + `useProductLines` do banco)
+- `CotacaoPublicaCompleta.tsx` — Dinâmico (define `formatarMoeda` local, sem pricing.ts)
+
+---
+
+## 🟡 PENDENTE
+
+### 1. ✅ `pricing.ts` — REMOVIDO
+
+Arquivo `src/data/planosPrecos.ts` deletado. Todos os dados migrados para `configuracoes` (JSON) e hooks dinâmicos em `useConteudosSistema.ts`.
+
+### 2. ✅ `formatarMoeda` duplicada — CORRIGIDO
+
+Centralizada em `src/utils/format.ts`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
+
+### 5. ✅ Veículo Blindado — CORRIGIDO
+
+### 6. ✅ Benefícios/preços hardcoded em StepBeneficios + StepFinanceiro — CORRIGIDO
+
+Hook `useBeneficiosAdicionaisCotacao` busca de `beneficios_adicionais`. Taxa de substituição via `useTaxaSubstituicao()` lê de `configuracoes`.
+
+### 7. ✅ Regiões/fallbacks hardcoded em usePlanosCotacao — CORRIGIDO
+
+Multiplicador de região via `useRegioesAtivas()`. Fallbacks via `useTaxaFallbackCarro/Moto()`. Decomposição via `useConfigDecomposicao()`. Todos leem de `configuracoes`.
+
+### 8. ✅ Fallback hardcoded em useCalcularCotacao — CORRIGIDO
+
+Busca `taxa_fallback_carro` de `configuracoes` em paralelo com planos.
+
+### 9. ✅ Categorização hardcoded em Cotacoes.tsx — CORRIGIDO
+
+Removido mapa CATEGORIAS_BENEFICIOS de 35 termos. Substituído por função `categorizarPorTermo()` simplificada.
+
+### 10. ✅ restricoesCategorias.ts — SIMPLIFICADO
+
+### 12. ✅ Linhas de produto hardcoded — MIGRADO PARA BANCO
+
+`LINHAS_PLANO` em `PlanosConfig.tsx` substituído por `useProductLines()`. Linha "Select One" adicionada à tabela `product_lines`.
+
+### 13. ✅ Regiões hardcoded — MIGRADO PARA BANCO
+
+`REGIOES` em `EtapaDadosVeiculo.tsx`, `EtapaCriteriosCotacao.tsx`, `EtapaResultado.tsx` substituídos por `useRegioesAtivas()`.
+
+### 14. ✅ Lógica de negócio hardcoded em usePlanosCotacao — CORRIGIDO
+
+- `linha === 'advanced'` → `vehicle_type` da tabela `product_lines`
+- `linha === 'lancamento'` → `requires_recent_year` da tabela `product_lines`
+- Ordenação `linha === 'select'` → `sort_priority` da tabela `product_lines`
+- Mapeamento manual de códigos de região removido (usa `regioes.codigo` diretamente)
+
+### 15. ✅ LINHA_CORES hardcoded em PlanoCardSelecao — CORRIGIDO
+
+`gradient_class` adicionado à tabela `product_lines`. Fallback mantido no componente.
+
+### 16. ✅ CATEGORIAS_VEICULO hardcoded — MIGRADO PARA BANCO
+
+Categorias inseridas na tabela `configuracoes` (chave `categorias_veiculo`). Hook `useCategoriasVeiculo()` criado. `VehicleCategorySelect` agora busca do banco com fallback.
+
+### 17. ✅ OBSERVACOES_CATEGORIA hardcoded — MIGRADO PARA BANCO
+
+Observações inseridas na tabela `configuracoes` (chave `observacoes_categoria`). Hook `useObservacoesCategoria()` criado.
+
+### 18. ✅ Template WhatsApp hardcoded — MIGRADO PARA BANCO
+
+Template de benefícios inserido na tabela `configuracoes` (chave `template_whatsapp_cotacao`). Hook `useTemplateWhatsappCotacao()` criado.
+
+Removido `RESTRICOES_CATEGORIA` estático. Todas as funções agora usam apenas dados do banco (`benefit_category_exclusions`).
+
+### 11. ✅ Dados de referência (glossário, regras, contatos, veículos aceitos) — MIGRADOS
+
+Todos inseridos como JSON em `configuracoes`. Hooks: `useGlossario()`, `useRegrasImportantes()`, `useCotasTaxas()`, `useTaxasProcedimentos()`, `useContatos()`, `useVeiculosAceitos()`, `useMotosAceitas()`.
+
+### 3. ✅ Valores FIPE/idade hardcoded — CORRIGIDO
+
+Criado hook `useConfigLimitesVeiculo` que lê 4 chaves da tabela `configuracoes`:
+- `fipe_limite_autorizacao` (120000) — usado em StepNovoVeiculo, SubstituicoesPendentesPage, SubstituicaoDetalhePage
+- `perfil_veiculo_idade_limite` (15), `perfil_veiculo_fipe_minimo` (15000), `perfil_veiculo_fipe_maximo` (500000) — VeiculoPerfilAlert
 
 
-# Correções no Fluxo Pós-Pagamento: Atribuição Automática + Notificações WhatsApp
+### 4. ✅ Níveis hardcoded em `EscolhaPlano.tsx` — CORRIGIDO
 
-## Diagnóstico (caso Faustinoni)
+Refatorado para usar mapa extensível `NIVEL_CONFIG` com fallback automático para novos níveis. Tipos `nivel` flexibilizados de union literal para `string`. Novos níveis adicionados ao mapa são automaticamente suportados sem alterar componentes.
 
-Consultei os dados e logs em detalhe. Para o Marcos Vinícius Faustinoni:
+### 5. ✅ Veículo Blindado — Autorização da Diretoria — CORRIGIDO
 
-- **Cotação** `fdb35013` → tipo `autovistoria`, `permite_encaixe: true`, coordenadas presentes
-- **Contrato** `53b8a79c` → `adesao_paga: true`
-- **Instalação** `717f2e22` → criada corretamente, status `em_rota`, atribuída ao instalador `68f4857b`
-- **Serviço** `4f517a61` → `em_rota`, atribuído pelo cron
+Blindado deixou de ser aditivo contratual e passou a exigir autorização da diretoria:
+- Coluna `blindado` (boolean) adicionada à tabela `veiculos`
+- Chave `aceitar_blindado` = `autorizar` inserida na tabela `configuracoes`
+- Hook `useConfigLimitesVeiculo` atualizado com `blindadoPolicy`
+- Toggle "Veículo blindado?" adicionado no `StepNovoVeiculo.tsx` com alerta
+- Alerta + checkbox de confirmação adicionado no `SubstituicaoDetalhePage.tsx`
+- Removido `veiculo_blindado` do sistema de aditivos (tipo, hook, form, labels, edge function)
+- Corrigido `GerarTermo.tsx` que passava `blindado: false` hardcoded
 
-A atribuição automática **funcionou** neste caso via `cron-atribuir-tarefas`. Porém, há **3 problemas** identificados:
 
-### Problema 1: Rota falha ao ser criada (coluna errada)
+---
 
-Nos logs do cron:
-```
-"Could not find the 'data' column of 'rotas' in the schema cache"
-```
-A tabela `rotas` usa `data_rota`, mas o cron usa `data` (linhas 486 e 496). Isso impede a criação da rota do dia e a vinculação dos serviços.
+## ❌ NÃO FAZER AGORA
 
-### Problema 2: Nenhuma notificação WhatsApp é enviada
+- Tabelas novas de regras de aceitação — complexidade alta, sem demanda imediata
+- Página de autorizações da diretoria — depende das tabelas acima
+- Campos de vistoria (rebaixado/turbinado) — escopo separado
+- Módulo financeiro completo para custos de reboque (tabela dedicada de despesas operacionais)
 
-- `criar-instalacao-pos-pagamento` **não envia nenhuma notificação** (nem ao associado, nem ao instalador)
-- `cron-atribuir-tarefas` **só envia push para vistorias** (linhas 462-478), mas **ignora instalações** — sem WhatsApp ao associado ("técnico a caminho") nem ao instalador ("nova tarefa")
-- A função `atribuir-proxima-tarefa` tem esse fluxo completo (notifica cliente e vistoriador via WhatsApp), mas o cron **não replica essa lógica**
+---
 
-### Problema 3: Falta notificação de "instalação agendada" ao associado
+## 📋 ORDEM DE EXECUÇÃO SUGERIDA
 
-Quando a instalação é criada pós-pagamento, o associado deveria receber a mensagem do template `instalacao_agendada` com data, horário e local. Isso nunca acontece.
+1. **Unificar `formatarMoeda`** → cria `src/utils/format.ts`, substitui 5+ locais (rápido, zero risco)
+2. **Migrar `pricing.ts`** → refatorar `QuoteCalculatorModal` + `useCotacaoAvancada` para hooks dinâmicos
+3. **Dinamizar limites FIPE/idade** → inserir chaves em `configuracoes`, criar hook, substituir hardcoded
+4. **Níveis `EscolhaPlano`** → mover metadata de nível para banco (se necessário)
 
-## Mudanças
+---
 
-### 1. Corrigir coluna `data` → `data_rota` em `cron-atribuir-tarefas`
+# Visibilidade por Equipe — Supervisor de Vendas
 
-Linhas 486, 496: trocar `.eq('data', hoje)` por `.eq('data_rota', hoje)` e `{ data: hoje }` por `{ data_rota: hoje }`.
+## ✅ CORRIGIDO
 
-### 2. Adicionar notificações WhatsApp em `cron-atribuir-tarefas` para instalações
+### Tabela `equipes_comerciais`
+- Criada com `supervisor_id` e `vendedor_id` (refs auth.users), UNIQUE constraint
+- RLS: supervisor/vendedor veem seus vínculos; gerência vê todos; apenas gerência pode INSERT/DELETE
 
-Após a sincronização com a tabela `instalacoes` (linha 438), adicionar a mesma lógica que já existe em `atribuir-proxima-tarefa`:
+### Função `is_supervisor_of(_vendedor_id)`
+- SECURITY DEFINER, verifica se `auth.uid()` é supervisor do vendedor
+- Converte `vendedor_id` (profile.id) → `user_id` via subquery no uso RLS
 
-- **Notificar o associado** via `notificar-cliente` (tipo `tecnico_em_rota`) com dados do técnico, endereço e período
-- **Enviar push ao instalador** (já existe para vistorias, replicar para instalações)
-- **Notificar o instalador** via WhatsApp (texto livre com dados do cliente, endereço, placa, link WhatsApp do cliente)
+### RLS de `leads` atualizada
+- SELECT: `is_gerencia OR vendedor_id = get_my_profile_id() OR vendedor_id IS NULL OR is_supervisor_of(user_id do vendedor)`
+- UPDATE/DELETE: mesma lógica (sem vendedor_id IS NULL)
 
-Para isso, buscar `associado_id` e dados do profissional/cliente dentro do bloco `if (servico.instalacao_origem_id)`.
+### RLS de `cotacoes` atualizada
+- UPDATE agora inclui `has_role(auth.uid(), 'supervisor_vendas')`
 
-### 3. Adicionar notificação `instalacao_agendada` em `criar-instalacao-pos-pagamento`
+### Hook `useEquipeComercial`
+- `useMinhaEquipe()` — retorna membros da equipe do supervisor logado com nomes
+- `useMinhaEquipeProfileIds()` — retorna profile IDs para filtro client-side
+- `useEquipesComerciais()` — retorna todos os vínculos (para gerência)
+- Mutations: `useAdicionarVendedorEquipe`, `useRemoverVendedorEquipe`
 
-Após criar a instalação com sucesso (linha 389), invocar `notificar-cliente`:
+### `usePermissions` atualizado
+- Adicionado `isSupervisorVendas` e `canManageEquipe`
 
-```typescript
-await supabase.functions.invoke('notificar-cliente', {
-  body: {
-    tipo: 'instalacao_agendada',
-    associado_id: contrato.associado_id,
-    dados: {
-      data: dataAgendada,
-      periodo: periodoValido === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)',
-    },
-  },
-});
-```
+### `useVendasMetricas` atualizado
+- Aceita `equipeProfileIds` opcional para filtrar métricas por equipe do supervisor
 
-Isso usa o template Meta `assistencia_confirmada` já mapeado para `instalacao_agendada`.
+### KanbanCard com badge do vendedor
+- Prop `showVendedor` no `LeadKanbanCard` e `KanbanBoard`
+- Exibe badge `👤 NomeVendedor` quando supervisor ou gerência está visualizando
 
-### 4. Resumo de arquivos impactados
+---
 
-| Arquivo | Mudança |
-|---------|---------|
-| `supabase/functions/cron-atribuir-tarefas/index.ts` | Corrigir `data` → `data_rota`; adicionar notificações WhatsApp (associado + instalador) para instalações |
-| `supabase/functions/criar-instalacao-pos-pagamento/index.ts` | Adicionar notificação `instalacao_agendada` ao associado após criar instalação |
+## 🟡 PENDENTE
 
+### Tela de gerenciamento de equipe
+- UI para vincular/desvincular vendedores a supervisores
+- Acessível em configurações ou rota dedicada
+
+---
+
+# Fluxo de Assistência 24h — Reboque
+
+## ✅ CORRIGIDO
+
+### Gap 1 — Valor sugerido na mensagem inicial
+Edge function `despacho-reboque-disparar` agora inclui `💰 Valor sugerido: R$ X` na mensagem broadcast quando disponível.
+
+### Gap 2 — Contato do associado para o reboquista
+Na atribuição, o reboquista agora recebe nome e telefone do associado na mensagem WhatsApp.
+
+### Gap 3 — Tela de conclusão com anexo de imagens
+Seção "Concluir Serviço" adicionada ao `CardDespachoReboque.tsx`:
+- Upload múltiplo de fotos usando `useFotosReboquista`
+- Campo de observação
+- Atualiza status do chamado para `concluido`
+- Registra no histórico e no status log do reboque
+
+### Gap 4 — Integração financeira (parcial)
+O `valor_atribuido` já está registrado no `despacho_reboque`. A conclusão atualiza o status para `concluido`, visível nos relatórios existentes. Integração com módulo financeiro completo adiada.
