@@ -153,7 +153,8 @@ export function usePropostasPendentes() {
           associado_id,
           cotacao_id,
           plano_id,
-          vendedor_id
+          vendedor_id,
+          veiculo_id
         `)
         .eq('status', 'assinado')
         .order('data_assinatura', { ascending: true });
