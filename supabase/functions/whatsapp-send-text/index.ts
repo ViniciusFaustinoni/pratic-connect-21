@@ -122,7 +122,7 @@ async function enviarViaMeta(
     // Enviar como template
     const { data: template } = await supabase
       .from("whatsapp_meta_templates")
-      .select("nome, idioma, status")
+      .select("nome, idioma, status, corpo, botoes")
       .eq("nome", templateName)
       .single();
 
@@ -132,17 +132,39 @@ async function enviarViaMeta(
       throw new Error(`Template '${templateName}' não aprovado. Status: ${template.status}`);
     }
 
+    // Auto-detectar quantos params são do body vs botão
+    let bodyParams = templateParams || [];
+    let buttonParams = templateButtonParams || [];
+
+    // Se não temos buttonParams explícitos, verificar se template tem botão URL com {{}}
+    if (buttonParams.length === 0 && bodyParams.length > 0) {
+      const botoes = template.botoes as any[] | null;
+      const hasUrlButton = botoes?.some((b: any) => b.type === 'URL' && b.url?.includes('{{'));
+      
+      if (hasUrlButton) {
+        // Contar variáveis únicas apenas no corpo do template
+        const bodyVarCount = new Set((template.corpo || '').match(/\{\{\d+\}\}/g) || []).size;
+        
+        if (bodyParams.length > bodyVarCount) {
+          // Separar: os primeiros são body, os restantes são button
+          buttonParams = bodyParams.slice(bodyVarCount);
+          bodyParams = bodyParams.slice(0, bodyVarCount);
+          console.log(`[whatsapp-send-text] Auto-split params: ${bodyParams.length} body + ${buttonParams.length} button`);
+        }
+      }
+    }
+
     const components: any[] = [];
-    if (templateParams && templateParams.length > 0) {
+    if (bodyParams.length > 0) {
       components.push({
         type: "body",
-        parameters: templateParams.map(p => ({ type: "text", text: p })),
+        parameters: bodyParams.map(p => ({ type: "text", text: p })),
       });
     }
 
     // Suporte a botões com URL dinâmica
-    if (templateButtonParams && templateButtonParams.length > 0) {
-      templateButtonParams.forEach((param: string, index: number) => {
+    if (buttonParams.length > 0) {
+      buttonParams.forEach((param: string, index: number) => {
         components.push({
           type: "button",
           sub_type: "url",
