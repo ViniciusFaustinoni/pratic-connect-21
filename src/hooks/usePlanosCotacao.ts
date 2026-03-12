@@ -411,7 +411,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
               marca: params.marca,
               modelo: params.modelo,
               ano: anoVeiculoNum,
-              combustivel: combustivelLower || 'flex',
+              combustivel: combustivelOriginal,
             })
           : undefined,
       });
