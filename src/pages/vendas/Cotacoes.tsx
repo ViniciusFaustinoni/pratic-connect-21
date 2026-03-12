@@ -732,6 +732,24 @@ export default function Cotacoes() {
             </SelectContent>
           </Select>
         )}
+
+        {permissions.cotacao.canDelete && (
+          <Button
+            variant={filtroOrfas ? 'default' : 'outline'}
+            size="sm"
+            onClick={() => {
+              setFiltroOrfas(!filtroOrfas);
+              setSelectedIds(new Set());
+            }}
+            className={cn(
+              "h-9 px-3 shadow-sm",
+              !filtroOrfas && "border-0 bg-background/80"
+            )}
+          >
+            <AlertTriangle className="h-4 w-4 mr-1.5" />
+            Sem Lead
+          </Button>
+        )}
         
         {hasActiveFilters && (
           <Button 
@@ -743,11 +761,36 @@ export default function Cotacoes() {
             <RefreshCw className="h-3.5 w-3.5 mr-1" />
             Limpar
             <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
-              {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all'].filter(Boolean).length}
+              {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas].filter(Boolean).length}
             </Badge>
           </Button>
         )}
       </div>
+
+      {/* Barra de seleção em lote */}
+      {permissions.cotacao.canDelete && selectedIds.size > 0 && (
+        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/20 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+          <span className="text-sm font-medium text-destructive">
+            {selectedIds.size} cotação(ões) selecionada(s)
+          </span>
+          <Button
+            variant="destructive"
+            size="sm"
+            onClick={() => setShowExclusaoLoteDialog(true)}
+          >
+            <Trash2 className="h-4 w-4 mr-1.5" />
+            Excluir selecionadas
+          </Button>
+          <Button
+            variant="ghost"
+            size="sm"
+            onClick={() => setSelectedIds(new Set())}
+            className="text-muted-foreground"
+          >
+            Limpar seleção
+          </Button>
+        </div>
+      )}
 
       {/* Tabela de Cotações */}
       <CotacoesTable 
@@ -759,6 +802,10 @@ export default function Cotacoes() {
         onExcluir={handleExcluir}
         copiandoWhatsAppId={copiandoWhatsApp}
         getPermissions={getPermissions}
+        selectable={permissions.cotacao.canDelete}
+        selectedIds={selectedIds}
+        onToggleSelect={toggleSelect}
+        onToggleAll={toggleSelectAll}
       />
 
       {/* Modal de Detalhes */}
