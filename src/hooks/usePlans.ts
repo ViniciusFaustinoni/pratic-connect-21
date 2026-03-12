@@ -329,6 +329,22 @@ export function usePlanBySlug(slug: string | undefined) {
       
       if (error) throw error;
       
+      const kmMap = await fetchAssistenciaKmMap([data.id]);
+      
+      const baseBenefits = (data.planos_beneficios || [])
+        .map((pb: any) => ({
+          id: pb.id,
+          plan_id: pb.plano_id,
+          benefit_id: pb.benefit_id,
+          custom_text: pb.custom_text,
+          custom_value: pb.custom_value,
+          additional_info: pb.additional_info,
+          is_highlighted: pb.is_highlighted || false,
+          display_order: pb.display_order || pb.ordem || 0,
+          benefits: pb.benefits,
+        }))
+        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0));
+      
       return {
         ...data,
         name: data.nome,
@@ -341,19 +357,7 @@ export function usePlanBySlug(slug: string | undefined) {
         cota_passeio_min: data.cota_minima,
         cota_desagio_percent: data.cota_desagio,
         cota_desagio_min: data.cota_minima_desagio,
-        plan_benefits: (data.planos_beneficios || [])
-          .map((pb: any) => ({
-            id: pb.id,
-            plan_id: pb.plano_id,
-            benefit_id: pb.benefit_id,
-            custom_text: pb.custom_text,
-            custom_value: pb.custom_value,
-            additional_info: pb.additional_info,
-            is_highlighted: pb.is_highlighted || false,
-            display_order: pb.display_order || pb.ordem || 0,
-            benefits: pb.benefits,
-          }))
-          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)),
+        plan_benefits: enrichBenefitsWithKm(baseBenefits, kmMap.get(data.id)),
       } as PlanWithDetails;
     },
     enabled: !!slug,
