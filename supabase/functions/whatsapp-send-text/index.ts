@@ -228,67 +228,112 @@ async function enviarViaMeta(
   const result = await response.json();
 
   if (!response.ok) {
-    // Se erro de contagem de params, tentar auto-corrigir movendo params do body para button
+    // Se erro de contagem de params, tentar auto-corrigir
     const errorDetails = result.error?.error_data?.details || '';
     const paramMismatch = errorDetails.match(/number of localizable_params \((\d+)\) does not match the expected number of params \((\d+)\)/);
     
-    if (paramMismatch && bodyParams.length > 0 && buttonParams.length === 0) {
+    if (paramMismatch && bodyParams.length > 0) {
       const sent = parseInt(paramMismatch[1]);
       const expected = parseInt(paramMismatch[2]);
       const excess = sent - expected;
       
       if (excess > 0 && excess < bodyParams.length) {
-        console.log(`[whatsapp-send-text] Auto-retry: movendo ${excess} param(s) do body para button`);
-        const newButtonParams = bodyParams.slice(bodyParams.length - excess);
-        const newBodyParams = bodyParams.slice(0, bodyParams.length - excess);
-        
-        const retryComponents: any[] = [];
-        if (newBodyParams.length > 0) {
-          retryComponents.push({
-            type: "body",
-            parameters: newBodyParams.map(p => ({ type: "text", text: p })),
+        // Tentativa 1: mover params excedentes para buttons (se template tem URL dinâmica)
+        if (buttonParams.length === 0) {
+          console.log(`[whatsapp-send-text] Auto-retry #1: movendo ${excess} param(s) do body para button`);
+          const newButtonParams = bodyParams.slice(bodyParams.length - excess);
+          const newBodyParams = bodyParams.slice(0, bodyParams.length - excess);
+          
+          const retryComponents: any[] = [];
+          if (newBodyParams.length > 0) {
+            retryComponents.push({
+              type: "body",
+              parameters: newBodyParams.map(p => ({ type: "text", text: p })),
+            });
+          }
+          newButtonParams.forEach((param: string, index: number) => {
+            retryComponents.push({
+              type: "button", sub_type: "url", index,
+              parameters: [{ type: "text", text: param }],
+            });
           });
-        }
-        newButtonParams.forEach((param: string, index: number) => {
-          retryComponents.push({
-            type: "button", sub_type: "url", index,
-            parameters: [{ type: "text", text: param }],
-          });
-        });
 
-        const retryBody = {
+          const retryBody = {
+            messaging_product: "whatsapp",
+            to: telefoneFormatado,
+            type: "template",
+            template: {
+              name: template.nome,
+              language: { code: template.idioma || "pt_BR" },
+              components: retryComponents,
+            },
+          };
+
+          const retryResponse = await fetch(
+            `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+            {
+              method: "POST",
+              headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+              body: JSON.stringify(retryBody),
+            }
+          );
+          const retryResult = await retryResponse.json();
+          
+          if (retryResponse.ok) {
+            const retryMessageId = retryResult.messages?.[0]?.id;
+            await supabase.from("whatsapp_mensagens").insert({
+              telefone: telefoneFormatado, tipo: "text", mensagem,
+              direcao: "saida", status: 'enviada', message_id: retryMessageId,
+              provedor: "meta_oficial",
+            });
+            console.log(`[whatsapp-send-text] ✓ Meta (retry #1 button split): ${telefoneFormatado} - ID: ${retryMessageId}`);
+            return { success: true, message_id: retryMessageId, telefone: telefoneFormatado, provedor: 'meta_oficial' };
+          }
+          
+          console.warn("[whatsapp-send-text] Retry #1 (button split) falhou:", JSON.stringify(retryResult));
+        }
+
+        // Tentativa 2: truncar para apenas os params esperados (sem buttons)
+        console.log(`[whatsapp-send-text] Auto-retry #2: truncando body para ${expected} param(s)`);
+        const truncatedParams = bodyParams.slice(0, expected);
+        const retryComponents2: any[] = [{
+          type: "body",
+          parameters: truncatedParams.map(p => ({ type: "text", text: p })),
+        }];
+
+        const retryBody2 = {
           messaging_product: "whatsapp",
           to: telefoneFormatado,
           type: "template",
           template: {
             name: template.nome,
             language: { code: template.idioma || "pt_BR" },
-            components: retryComponents,
+            components: retryComponents2,
           },
         };
 
-        const retryResponse = await fetch(
+        const retryResponse2 = await fetch(
           `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
           {
             method: "POST",
             headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
-            body: JSON.stringify(retryBody),
+            body: JSON.stringify(retryBody2),
           }
         );
-        const retryResult = await retryResponse.json();
-        
-        if (retryResponse.ok) {
-          const retryMessageId = retryResult.messages?.[0]?.id;
+        const retryResult2 = await retryResponse2.json();
+
+        if (retryResponse2.ok) {
+          const retryMessageId = retryResult2.messages?.[0]?.id;
           await supabase.from("whatsapp_mensagens").insert({
             telefone: telefoneFormatado, tipo: "text", mensagem,
             direcao: "saida", status: 'enviada', message_id: retryMessageId,
             provedor: "meta_oficial",
           });
-          console.log(`[whatsapp-send-text] ✓ Meta (retry): ${telefoneFormatado} - ID: ${retryMessageId}`);
+          console.log(`[whatsapp-send-text] ✓ Meta (retry #2 truncated): ${telefoneFormatado} - ID: ${retryMessageId}`);
           return { success: true, message_id: retryMessageId, telefone: telefoneFormatado, provedor: 'meta_oficial' };
         }
-        
-        console.error("[whatsapp-send-text] Erro Meta (retry):", JSON.stringify(retryResult));
+
+        console.error("[whatsapp-send-text] Retry #2 (truncated) também falhou:", JSON.stringify(retryResult2));
       }
     }
 
