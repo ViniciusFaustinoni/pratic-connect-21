@@ -117,24 +117,24 @@ async function enviarViaMeta(
 
   const phoneNumberId = metaConfig.phone_number_id;
   let metaBody: any;
+  let bodyParams: string[] = templateParams || [];
+  let buttonParams: string[] = templateButtonParams || [];
+  let template: any = null;
 
   if (templateName) {
     // Enviar como template
-    const { data: template } = await supabase
+    const { data: tmpl } = await supabase
       .from("whatsapp_meta_templates")
       .select("nome, idioma, status, corpo, botoes")
       .eq("nome", templateName)
       .single();
 
+    template = tmpl;
     if (!template) throw new Error(`Template '${templateName}' não encontrado`);
     if (template.status !== "APPROVED") {
       console.warn(`[whatsapp-send-text] Template '${templateName}' não aprovado (${template.status})`);
       throw new Error(`Template '${templateName}' não aprovado. Status: ${template.status}`);
     }
-
-    // Auto-detectar quantos params são do body vs botão
-    let bodyParams = templateParams || [];
-    let buttonParams = templateButtonParams || [];
 
     // Se não temos buttonParams explícitos, verificar se template tem botão URL com {{}}
     if (buttonParams.length === 0 && bodyParams.length > 0) {
@@ -228,13 +228,76 @@ async function enviarViaMeta(
   const result = await response.json();
 
   if (!response.ok) {
+    // Se erro de contagem de params, tentar auto-corrigir movendo params do body para button
+    const errorDetails = result.error?.error_data?.details || '';
+    const paramMismatch = errorDetails.match(/number of localizable_params \((\d+)\) does not match the expected number of params \((\d+)\)/);
+    
+    if (paramMismatch && bodyParams.length > 0 && buttonParams.length === 0) {
+      const sent = parseInt(paramMismatch[1]);
+      const expected = parseInt(paramMismatch[2]);
+      const excess = sent - expected;
+      
+      if (excess > 0 && excess < bodyParams.length) {
+        console.log(`[whatsapp-send-text] Auto-retry: movendo ${excess} param(s) do body para button`);
+        const newButtonParams = bodyParams.slice(bodyParams.length - excess);
+        const newBodyParams = bodyParams.slice(0, bodyParams.length - excess);
+        
+        const retryComponents: any[] = [];
+        if (newBodyParams.length > 0) {
+          retryComponents.push({
+            type: "body",
+            parameters: newBodyParams.map(p => ({ type: "text", text: p })),
+          });
+        }
+        newButtonParams.forEach((param: string, index: number) => {
+          retryComponents.push({
+            type: "button", sub_type: "url", index,
+            parameters: [{ type: "text", text: param }],
+          });
+        });
+
+        const retryBody = {
+          messaging_product: "whatsapp",
+          to: telefoneFormatado,
+          type: "template",
+          template: {
+            name: template.nome,
+            language: { code: template.idioma || "pt_BR" },
+            components: retryComponents,
+          },
+        };
+
+        const retryResponse = await fetch(
+          `https://graph.facebook.com/v21.0/${phoneNumberId}/messages`,
+          {
+            method: "POST",
+            headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+            body: JSON.stringify(retryBody),
+          }
+        );
+        const retryResult = await retryResponse.json();
+        
+        if (retryResponse.ok) {
+          const retryMessageId = retryResult.messages?.[0]?.id;
+          await supabase.from("whatsapp_mensagens").insert({
+            telefone: telefoneFormatado, tipo: "text", mensagem,
+            direcao: "saida", status: 'enviada', message_id: retryMessageId,
+            provedor: "meta_oficial",
+          });
+          console.log(`[whatsapp-send-text] ✓ Meta (retry): ${telefoneFormatado} - ID: ${retryMessageId}`);
+          return { success: true, message_id: retryMessageId, telefone: telefoneFormatado, provedor: 'meta_oficial' };
+        }
+        
+        console.error("[whatsapp-send-text] Erro Meta (retry):", JSON.stringify(retryResult));
+      }
+    }
+
     console.error("[whatsapp-send-text] Erro Meta:", JSON.stringify(result));
     
     const errorCode = result.error?.code;
     const errorSubCode = result.error?.error_subcode;
     let errorMsg = result.error?.message || "Erro ao enviar via Meta";
 
-    // Erro 131026 = fora da janela de 24h — precisa de template aprovado
     if (errorCode === 131026 || errorSubCode === 131026) {
       errorMsg = "Mensagem não enviada: o contato não interagiu nas últimas 24h. Use um template aprovado para iniciar a conversa.";
     }
