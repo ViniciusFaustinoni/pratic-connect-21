@@ -268,19 +268,23 @@ serve(async (req) => {
   let hinovaToken = Deno.env.get('HINOVA_TOKEN');
   let hinovaUsuario = Deno.env.get('HINOVA_USUARIO');
   let hinovaSenha = Deno.env.get('HINOVA_SENHA');
-  let hinovaCodigoConta = Deno.env.get('HINOVA_CODIGO_CONTA') || '1';
+  let hinovaCodigoConta = Deno.env.get('HINOVA_CODIGO_CONTA') || '';
   let hinovaCodigoRegional = Deno.env.get('HINOVA_CODIGO_REGIONAL');
   let hinovaCodigoCooperativa = Deno.env.get('HINOVA_CODIGO_COOPERATIVA');
   let hinovaCodigoVoluntario = Deno.env.get('HINOVA_CODIGO_VOLUNTARIO');
+  let codigoContaOrigem: 'env' | 'database' | 'historico' | 'fallback' = hinovaCodigoConta ? 'env' : 'fallback';
 
-  if (!hinovaToken || !hinovaUsuario || !hinovaSenha) {
-    console.log('[SGA Sync] Credenciais não encontradas em ENV, buscando do banco...');
+  if (!hinovaToken || !hinovaUsuario || !hinovaSenha || !hinovaCodigoConta) {
+    console.log('[SGA Sync] Credenciais incompletas em ENV, buscando do banco...');
     const credBanco = await getCredenciaisBanco('hinova');
     if (credBanco) {
       hinovaToken = credBanco.token || hinovaToken;
       hinovaUsuario = credBanco.usuario || hinovaUsuario;
       hinovaSenha = credBanco.senha || hinovaSenha;
-      hinovaCodigoConta = credBanco.codigo_conta || hinovaCodigoConta;
+      if (credBanco.codigo_conta) {
+        hinovaCodigoConta = String(credBanco.codigo_conta);
+        codigoContaOrigem = 'database';
+      }
       hinovaCodigoRegional = credBanco.codigo_regional || hinovaCodigoRegional;
       hinovaCodigoCooperativa = credBanco.codigo_cooperativa || hinovaCodigoCooperativa;
       hinovaCodigoVoluntario = credBanco.codigo_voluntario || hinovaCodigoVoluntario;
@@ -288,6 +292,39 @@ serve(async (req) => {
       console.log('[SGA Sync] Credenciais carregadas do banco');
     }
   }
+
+  if (!hinovaCodigoConta) {
+    try {
+      const { data: logsCodigoConta } = await supabase
+        .from('sga_sync_logs')
+        .select('request_payload, created_at')
+        .eq('action', 'cadastrar_associado')
+        .eq('status', 'success')
+        .not('request_payload', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(100);
+
+      if (logsCodigoConta) {
+        for (const log of logsCodigoConta) {
+          const payload = (log.request_payload || {}) as Record<string, unknown>;
+          const candidato = Number(payload?.codigo_conta);
+          if (Number.isFinite(candidato) && candidato > 0) {
+            hinovaCodigoConta = String(candidato);
+            codigoContaOrigem = 'historico';
+            console.log(`[SGA Sync] codigo_conta inferido do histórico: ${hinovaCodigoConta}`);
+            break;
+          }
+        }
+      }
+    } catch (e) {
+      console.log('[SGA Sync] Falha ao inferir codigo_conta por histórico:', e);
+    }
+  }
+
+  const codigoContaResolvido = Number.parseInt(hinovaCodigoConta || '', 10);
+  const codigoContaValido = Number.isFinite(codigoContaResolvido) && codigoContaResolvido > 0;
+
+  console.log(`[SGA Sync] codigo_conta origem=${codigoContaOrigem}, valor=${codigoContaValido ? codigoContaResolvido : 'inválido'}`);
 
   console.log('[SGA Sync] Token Bearer carregado:', hinovaToken ? `${hinovaToken.slice(0, 10)}...` : 'VAZIO');
 
