@@ -26457,6 +26457,7 @@ export type Database = {
           contato_realizado_em: string
           contato_tipo: string
           contrato_id: string
+          cor: string
           cotacao_id: string
           data_agendada: string
           em_rota_em: string
@@ -26470,20 +26471,19 @@ export type Database = {
           local_vistoria: string
           logradouro: string
           longitude: number
+          marca: string
+          modelo: string
           numero: string
           observacoes: string
           periodo: string
           permite_encaixe: boolean
+          placa: string
           rastreador_id: string
           rota_id: string
           status: string
           tipo: string
           uf: string
-          veiculo_cor: string
           veiculo_id: string
-          veiculo_marca: string
-          veiculo_modelo: string
-          veiculo_placa: string
           vistoria_origem_id: string
         }[]
       }
