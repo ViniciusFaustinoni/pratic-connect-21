@@ -457,20 +457,13 @@ export function usePlansGroupedByLine() {
       
       if (planosError) throw planosError;
       
+      // Buscar km de assistência
+      const planoIds = (planos || []).map(p => p.id);
+      const kmMap = await fetchAssistenciaKmMap(planoIds);
+      
       // Mapear e agrupar planos por linha
-      const planosFormatados = (planos || []).map(plano => ({
-        ...plano,
-        name: plano.nome,
-        slug: plano.slug || plano.codigo?.toLowerCase(),
-        is_active: plano.ativo,
-        display_order: plano.ordem || plano.ordem_exibicao || 0,
-        additional_price: plano.adicional_mensal,
-        min_vehicle_year: plano.ano_minimo ? `${plano.ano_minimo}+` : null,
-        cota_passeio_percent: plano.cota_participacao,
-        cota_passeio_min: plano.cota_minima,
-        cota_desagio_percent: plano.cota_desagio,
-        cota_desagio_min: plano.cota_minima_desagio,
-        plan_benefits: (plano.planos_beneficios || [])
+      const planosFormatados = (planos || []).map(plano => {
+        const baseBenefits = (plano.planos_beneficios || [])
           .map((pb: any) => ({
             id: pb.id,
             plan_id: pb.plano_id,
@@ -482,8 +475,23 @@ export function usePlansGroupedByLine() {
             display_order: pb.display_order || pb.ordem || 0,
             benefits: pb.benefits,
           }))
-          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0)),
-      }));
+          .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0));
+        
+        return {
+          ...plano,
+          name: plano.nome,
+          slug: plano.slug || plano.codigo?.toLowerCase(),
+          is_active: plano.ativo,
+          display_order: plano.ordem || plano.ordem_exibicao || 0,
+          additional_price: plano.adicional_mensal,
+          min_vehicle_year: plano.ano_minimo ? `${plano.ano_minimo}+` : null,
+          cota_passeio_percent: plano.cota_participacao,
+          cota_passeio_min: plano.cota_minima,
+          cota_desagio_percent: plano.cota_desagio,
+          cota_desagio_min: plano.cota_minima_desagio,
+          plan_benefits: enrichBenefitsWithKm(baseBenefits, kmMap.get(plano.id)),
+        };
+      });
 
       return (lines as ProductLine[]).map(line => ({
         productLine: line,
