@@ -880,25 +880,15 @@ export default function Cotacoes() {
         }}
       />
       
-      <AlertDialog open={!!cotacaoParaExcluir} onOpenChange={(open) => !open && setCotacaoParaExcluir(null)}>
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Excluir Cotação</AlertDialogTitle>
-            <AlertDialogDescription>
-              Tem certeza que deseja excluir esta cotação? Esta ação não pode ser desfeita.
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          <AlertDialogFooter>
-            <AlertDialogCancel>Cancelar</AlertDialogCancel>
-            <AlertDialogAction 
-              onClick={confirmarExclusao}
-              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            >
-              Excluir
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+      <ConfirmacaoExclusaoCotacaoDialog
+        open={showExclusaoLoteDialog}
+        onOpenChange={(open) => {
+          setShowExclusaoLoteDialog(open);
+          if (!open) setCotacaoParaExcluir(null);
+        }}
+        quantidade={selectedIds.size}
+        onConfirm={handleExcluirEmLote}
+      />
     </div>
   );
 }
