@@ -401,7 +401,11 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
 
   const { getRootProps, getInputProps, isDragActive } = useDropzone({
     onDrop,
-    accept: { 'application/pdf': ['.pdf'] },
+    accept: {
+      'application/pdf': ['.pdf'],
+      'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet': ['.xlsx'],
+      'application/vnd.ms-excel': ['.xls'],
+    },
     maxFiles: 1,
     disabled: !selectedPlano,
   });
