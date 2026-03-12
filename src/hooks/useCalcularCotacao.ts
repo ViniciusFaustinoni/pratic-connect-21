@@ -97,11 +97,8 @@ export function useCalcularCotacao() {
         const isPlanoAplicativo = tipoUsoPlano === 'aplicativo' || categoriaPlano === 'aplicativo';
         const isMotoLine = linhaPlano === 'advanced' || categoriaPlano === 'advanced';
 
-        // Skip app/particular mismatch (but not for moto lines which don't distinguish)
-        if (!isMotoLine) {
-          if (params.tipo_uso === 'aplicativo' && !isPlanoAplicativo) continue;
-          if (params.tipo_uso === 'particular' && isPlanoAplicativo) continue;
-        }
+        // Excluir variantes internas "aplicativo" — o preço app é resolvido pelo motor de pricing nos planos principais
+        if (isPlanoAplicativo && !isMotoLine) continue;
 
         if (plano.fipe_minima && params.valor_fipe < Number(plano.fipe_minima)) continue;
         if (plano.fipe_maxima && params.valor_fipe > Number(plano.fipe_maxima)) continue;
