@@ -320,7 +320,7 @@ serve(async (req) => {
         const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] }> = {
           // Aprovações e boas-vindas → cadastro_aprovado ({{1}} nome, {{2}} placa, {{3}} marca+modelo, {{4}} cobertura, {{5}} próximo passo, {{6}} link)
           cadastro_aprovado: {
-            template_name: 'boas_vindas_associado',
+            template_name: 'boas_vindas_associado_v2',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
               const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
