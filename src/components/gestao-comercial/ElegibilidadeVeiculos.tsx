@@ -410,7 +410,129 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
     disabled: !selectedPlano,
   });
 
-  const processar = async () => {
+  const isExcel = (f: File) => /\.(xlsx|xls)$/i.test(f.name);
+
+  const processarExcel = async () => {
+    if (!file || !selectedPlano || !selectedPlanoObj) return;
+    setProcessando(true);
+    setErro(null);
+    setResultado(null);
+
+    try {
+      const buffer = await file.arrayBuffer();
+      const wb = XLSX.read(buffer, { type: 'array' });
+      const sheet = wb.Sheets[wb.SheetNames[0]];
+      const rows = XLSX.utils.sheet_to_json<Record<string, any>>(sheet, { defval: '' });
+
+      if (rows.length === 0) {
+        setErro({ error: 'Planilha vazia', detalhe: 'Nenhuma linha de dados encontrada na primeira aba.' });
+        return;
+      }
+
+      // Validate headers
+      const headers = Object.keys(rows[0]).map(h => h.trim().toUpperCase());
+      const required = ['MARCA', 'MODELO', 'ANO_MIN', 'STATUS'];
+      const missing = required.filter(r => !headers.includes(r));
+      if (missing.length > 0) {
+        setErro({ error: 'Colunas obrigatórias ausentes', detalhe: `Faltam: ${missing.join(', ')}` });
+        return;
+      }
+
+      const errosValidacao: string[] = [];
+      const registros: Record<string, unknown>[] = [];
+
+      for (let i = 0; i < rows.length; i++) {
+        const row = rows[i];
+        const get = (key: string) => String(row[Object.keys(row).find(k => k.trim().toUpperCase() === key) || ''] ?? '').trim();
+
+        const marca = get('MARCA');
+        const modelo = get('MODELO');
+        const anoMinStr = get('ANO_MIN');
+        const anoMaxStr = get('ANO_MAX');
+        const combustivel = get('COMBUSTIVEL') || 'qualquer';
+        const status = get('STATUS');
+        const observacao = get('OBSERVACAO');
+
+        if (!marca || !modelo) {
+          errosValidacao.push(`Linha ${i + 2}: MARCA ou MODELO vazio`);
+          continue;
+        }
+        const anoMin = parseInt(anoMinStr);
+        if (isNaN(anoMin)) {
+          errosValidacao.push(`Linha ${i + 2}: ANO_MIN inválido — "${anoMinStr}"`);
+          continue;
+        }
+        const anoMax = anoMaxStr === '' ? null : parseInt(anoMaxStr);
+        if (anoMax !== null && isNaN(anoMax)) {
+          errosValidacao.push(`Linha ${i + 2}: ANO_MAX inválido — "${anoMaxStr}"`);
+          continue;
+        }
+        if (!STATUS_VALIDOS.includes(status.toLowerCase())) {
+          errosValidacao.push(`Linha ${i + 2}: STATUS inválido — "${status}" (válidos: ${STATUS_VALIDOS.join(', ')})`);
+          continue;
+        }
+        if (!COMBUSTIVEIS_VALIDOS.includes(combustivel.toLowerCase())) {
+          errosValidacao.push(`Linha ${i + 2}: COMBUSTIVEL inválido — "${combustivel}"`);
+          continue;
+        }
+
+        registros.push({
+          plano_id: selectedPlano,
+          linha_slug: selectedPlanoObj.linha || '',
+          marca: marca.toUpperCase(),
+          modelo: modelo.toUpperCase(),
+          ano_min: anoMin,
+          ano_max: anoMax,
+          combustivel: combustivel.toLowerCase(),
+          status: status.toLowerCase(),
+          observacao: observacao || null,
+          is_active: true,
+        });
+      }
+
+      if (errosValidacao.length > 0) {
+        setErro({
+          error: 'Erros de validação — nenhum registro importado',
+          erros: errosValidacao,
+          detalhe: `${errosValidacao.length} erro(s) em ${rows.length} linhas`,
+        });
+        return;
+      }
+
+      if (modo === 'substituir') {
+        await supabase
+          .from('plano_elegibilidade_modelos')
+          .update({ is_active: false } as never)
+          .eq('plano_id', selectedPlano);
+      }
+
+      const { error: insertError } = await supabase
+        .from('plano_elegibilidade_modelos')
+        .insert(registros as never[]);
+
+      if (insertError) {
+        setErro({ error: 'Erro ao salvar no banco', detalhe: insertError.message });
+        return;
+      }
+
+      setResultado({
+        sucesso: true,
+        total_importados: registros.length,
+        modo,
+        registros,
+      });
+      toast.success(`${registros.length} modelos importados!`);
+      queryClient.invalidateQueries({ queryKey: ['elegibilidade', selectedPlano] });
+      queryClient.invalidateQueries({ queryKey: ['elegibilidade-resumo'] });
+      queryClient.invalidateQueries({ queryKey: ['plano_elegibilidade_modelos'] });
+    } catch (e: any) {
+      setErro({ error: 'Erro ao processar Excel', detalhe: e.message });
+    } finally {
+      setProcessando(false);
+    }
+  };
+
+  const processarPDF = async () => {
     if (!file || !selectedPlano || !selectedPlanoObj) return;
     setProcessando(true);
     setErro(null);
@@ -452,6 +574,30 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
     } finally {
       setProcessando(false);
     }
+  };
+
+  const processar = () => {
+    if (!file) return;
+    return isExcel(file) ? processarExcel() : processarPDF();
+  };
+
+  const baixarModelo = () => {
+    const dados = [
+      { MARCA: 'CHEVROLET', MODELO: 'ONIX', ANO_MIN: 2018, ANO_MAX: '', COMBUSTIVEL: 'qualquer', STATUS: 'aceito', OBSERVACAO: '' },
+      { MARCA: 'CHEVROLET', MODELO: 'MONTANA', ANO_MIN: 2005, ANO_MAX: 2023, COMBUSTIVEL: 'qualquer', STATUS: 'limitado', OBSERVACAO: 'Apenas até 2023' },
+      { MARCA: 'VW', MODELO: 'GOLF', ANO_MIN: 2010, ANO_MAX: '', COMBUSTIVEL: 'flex', STATUS: 'limitado', OBSERVACAO: 'Somente versão Flex' },
+      { MARCA: 'HYUNDAI', MODELO: 'HB20', ANO_MIN: 2015, ANO_MAX: '', COMBUSTIVEL: 'qualquer', STATUS: 'aceito', OBSERVACAO: '' },
+      { MARCA: 'FIAT', MODELO: 'MOBI', ANO_MIN: 2017, ANO_MAX: '', COMBUSTIVEL: 'qualquer', STATUS: 'negado', OBSERVACAO: 'Modelo não coberto' },
+    ];
+    const ws = XLSX.utils.json_to_sheet(dados);
+    ws['!cols'] = [
+      { wch: 14 }, { wch: 16 }, { wch: 10 }, { wch: 10 },
+      { wch: 14 }, { wch: 10 }, { wch: 30 },
+    ];
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, ws, 'Elegibilidade');
+    XLSX.writeFile(wb, 'modelo_elegibilidade.xlsx');
+    toast.success('Modelo baixado!');
   };
 
   const resetForm = () => {
