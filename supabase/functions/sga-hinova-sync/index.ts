@@ -924,13 +924,16 @@ serve(async (req) => {
                   const telefoneLog = cleanPhoneDigits(
                     reqPayload?.celular ? String(reqPayload.celular) : (reqPayload?.telefone ? String(reqPayload.telefone) : null)
                   );
+                  const codigoContaLog = Number(reqPayload?.codigo_conta);
+                  const codigoContaCompativel =
+                    !Number.isFinite(codigoContaLog) || !codigoContaValido || codigoContaLog === codigoContaResolvido;
 
                   const cpfMatch = cpfLog.length === 11 && cpfAtual.length === 11 && cpfLog === cpfAtual;
                   const nomeMatch = !!nomeAtual && !!nomeLog && nomeLog === nomeAtual;
                   const emailMatch = !!emailAtual && !!emailLog && emailLog === emailAtual;
                   const telefoneMatch = !!telefoneAtual && !!telefoneLog && telefoneLog === telefoneAtual;
 
-                  if (cpfMatch || (nomeMatch && emailMatch) || (nomeMatch && telefoneMatch)) {
+                  if (codigoContaCompativel && (cpfMatch || (nomeMatch && emailMatch) || (nomeMatch && telefoneMatch))) {
                     codigoExistente = codigo;
                     console.log(`[SGA Sync] Código recuperado via logs de identidade: ${codigoExistente}`);
                     await logSync(
