@@ -811,40 +811,61 @@ serve(async (req) => {
             console.log('[SGA Sync] Erro logs anteriores:', e);
           }
           
-          // Estratégia 2: Busca por CPF com parse de respostas não-200
+           // Estratégia 2: Busca por CPF com logging completo (diagnóstico)
           if (!codigoExistente) {
             const cpfLimpoRecovery = cleanCPF(associado.cpf);
             const cpfFormatadoRecovery = formatCPF(associado.cpf);
             
             const recoveryTentativas = [
-              { label: 'GET limpo', url: `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf`, method: 'GET' as const },
-              { label: 'GET formatado', url: `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoRecovery)}/cpf`, method: 'GET' as const },
-              { label: 'POST consultar', url: `${hinovaApiUrl}/associado/consultar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
-              { label: 'POST buscar', url: `${hinovaApiUrl}/associado/buscar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
+              { label: 'Recovery GET buscar/cpf limpo', url: `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf`, method: 'GET' as const },
+              { label: 'Recovery GET buscar/cpf formatado', url: `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoRecovery)}/cpf`, method: 'GET' as const },
+              { label: 'Recovery GET consultar/cpf', url: `${hinovaApiUrl}/associado/consultar/cpf/${cpfLimpoRecovery}`, method: 'GET' as const },
+              { label: 'Recovery GET associado/cpf', url: `${hinovaApiUrl}/associado/${cpfLimpoRecovery}`, method: 'GET' as const },
+              { label: 'Recovery POST consultar', url: `${hinovaApiUrl}/associado/consultar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
+              { label: 'Recovery POST buscar', url: `${hinovaApiUrl}/associado/buscar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
+              { label: 'Recovery POST pesquisar', url: `${hinovaApiUrl}/associado/pesquisar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
             ];
 
             for (const t of recoveryTentativas) {
               if (codigoExistente) break;
               try {
-                console.log(`[SGA Sync] Recovery ${t.label}...`);
+                console.log(`[SGA Sync] ${t.label}...`);
                 const resp = await fetchWithRetry(
                   t.url,
-                  { method: t.method, headers: operationHeaders, ...(t.body && { body: t.body }) }
+                  { method: t.method, headers: operationHeaders, ...(t.body && { body: t.body }) },
+                  1 // single attempt
                 );
                 const ct = resp.headers.get('content-type') || '';
-                if (ct.includes('application/json')) {
-                  const text = await resp.text();
-                  console.log(`[SGA Sync] Recovery ${t.label} - Status: ${resp.status}, Body: ${text.substring(0, 300)}`);
+                // SEMPRE ler o body
+                const text = await resp.text();
+                console.log(`[SGA Sync] ${t.label} - Status: ${resp.status}, CT: ${ct}, Body: ${text.substring(0, 500)}`);
+                
+                // Gravar diagnóstico
+                await logSync(veiculo_id, associado_id, 'recovery_cpf_diagnostico',
+                  resp.ok ? 'success' : 'info',
+                  { metodo: t.label, url: t.url },
+                  { status: resp.status, content_type: ct, body_preview: text.substring(0, 500) },
+                  resp.ok ? null : `Status ${resp.status}`
+                );
+                
+                // Tentar parsear como JSON independente do content-type
+                try {
                   const parsed = JSON.parse(text);
                   const codigo = parsed?.codigo_associado || parsed?.codigo ||
-                    (Array.isArray(parsed) && parsed[0]?.codigo_associado) ||
-                    parsed?.data?.codigo_associado || parsed?.associado?.codigo_associado;
+                    (Array.isArray(parsed) && parsed.length > 0 && (parsed[0]?.codigo_associado || parsed[0]?.codigo)) ||
+                    parsed?.data?.codigo_associado || parsed?.data?.codigo ||
+                    parsed?.associado?.codigo_associado || parsed?.associado?.codigo ||
+                    parsed?.resultado?.codigo_associado || parsed?.resultado?.codigo;
                   if (codigo) {
                     codigoExistente = parseInt(String(codigo));
                     console.log(`[SGA Sync] Recovery encontrou código ${codigoExistente} via ${t.label}`);
                   }
-                }
-              } catch (e) { console.log(`[SGA Sync] Recovery ${t.label} falhou:`, e); }
+                } catch (_) { /* body não é JSON */ }
+              } catch (e) {
+                console.log(`[SGA Sync] ${t.label} falhou:`, e);
+                await logSync(veiculo_id, associado_id, 'recovery_cpf_diagnostico', 'error',
+                  { metodo: t.label }, null, e instanceof Error ? e.message : 'Erro de rede');
+              }
             }
           }
           
