@@ -42,12 +42,45 @@ function cleanCPF(cpf: string | null): string {
   return cpf.replace(/\D/g, '');
 }
 
+// Helper para limpar telefone (apenas números)
+function cleanPhoneDigits(phone: string | null): string {
+  if (!phone) return '';
+  return phone.replace(/\D/g, '');
+}
+
 // Helper para formatar CPF com pontuação
 function formatCPF(cpf: string | null): string {
   if (!cpf) return '';
   const clean = cpf.replace(/\D/g, '');
   if (clean.length !== 11) return clean;
   return `${clean.slice(0,3)}.${clean.slice(3,6)}.${clean.slice(6,9)}-${clean.slice(9)}`;
+}
+
+// Helper para extrair código de associado de múltiplos formatos de payload
+function extractCodigoAssociado(payload: any): number | null {
+  if (!payload) return null;
+
+  const candidates = [
+    payload?.codigo_associado,
+    payload?.codigo,
+    payload?.data?.codigo_associado,
+    payload?.data?.codigo,
+    payload?.associado?.codigo_associado,
+    payload?.associado?.codigo,
+    payload?.resultado?.codigo_associado,
+    payload?.resultado?.codigo,
+    Array.isArray(payload) ? payload[0]?.codigo_associado : null,
+    Array.isArray(payload) ? payload[0]?.codigo : null,
+  ];
+
+  for (const candidate of candidates) {
+    const parsed = Number(candidate);
+    if (Number.isFinite(parsed) && parsed > 0) {
+      return parsed;
+    }
+  }
+
+  return null;
 }
 
 // Helper para formatar telefone
