@@ -291,11 +291,52 @@ serve(async (req) => {
               usado: false
             });
 
-          // Template cadastro_aprovado_botao: 5 body params + 1 button param
+          // Buscar link_token do contrato para o botão /acompanhar/{{1}}
+          let linkToken: string | null = null;
+          
+          // Prioridade: contrato do veículo específico
+          if (body.veiculo_id) {
+            const { data: contratoVeiculo } = await supabaseAdmin
+              .from('contratos')
+              .select('link_token')
+              .eq('associado_id', associado.id)
+              .eq('veiculo_id', body.veiculo_id)
+              .in('status', ['ativo', 'assinado', 'pendente_assinatura'])
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            linkToken = contratoVeiculo?.link_token || null;
+          }
+          
+          // Fallback: qualquer contrato ativo do associado
+          if (!linkToken) {
+            const { data: contratoFallback } = await supabaseAdmin
+              .from('contratos')
+              .select('link_token')
+              .eq('associado_id', associado.id)
+              .in('status', ['ativo', 'assinado', 'pendente_assinatura'])
+              .order('created_at', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            linkToken = contratoFallback?.link_token || null;
+          }
+
+          console.log(`[ativar-associado] link_token resolvido: ${linkToken} (veiculo_id: ${body.veiculo_id})`);
+
+          // Template cadastro_aprovado_botao: 5 body params + 1 button param separado
           // Body: {{1}} nome, {{2}} placa, {{3}} marca+modelo, {{4}} cobertura, {{5}} próximo passo
-          // Button URL: https://pratic-connect-21.lovable.app/app/criar-senha?token={{1}}
+          // Button URL: .../acompanhar/{{1}} → DEVE ser contratos.link_token
           sendBody.template_name = 'cadastro_aprovado_botao';
-          sendBody.template_params = [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador', tokenPrimeiroAcesso];
+          sendBody.template_params = [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador'];
+          
+          if (linkToken) {
+            sendBody.template_button_params = [linkToken];
+          } else {
+            console.warn(`[ativar-associado] ⚠️ Nenhum link_token encontrado para associado ${associado.id}. Botão de URL pode não funcionar.`);
+            // Enviar tokenPrimeiroAcesso como fallback para não quebrar o envio
+            sendBody.template_button_params = [tokenPrimeiroAcesso];
+          }
+          
           console.log(`[ativar-associado] Usando template Meta 'cadastro_aprovado_botao' para ${telefoneWhatsapp}`);
         }
 

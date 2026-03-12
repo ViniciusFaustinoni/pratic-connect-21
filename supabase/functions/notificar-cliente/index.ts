@@ -326,7 +326,7 @@ serve(async (req) => {
           .limit(1)
           .maybeSingle();
 
-        const linkToken = contratoLink?.link_token || associado.id;
+        const linkToken = contratoLink?.link_token || null;
         console.log(`[notificar-cliente] linkToken para botão: ${linkToken} (contrato encontrado: ${!!contratoLink})`);
 
         // Mapear tipos de notificação para templates aprovados da Meta
