@@ -66,6 +66,7 @@ import {
   Send,
   Layers,
   TrendingDown,
+  ShieldCheck,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
