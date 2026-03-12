@@ -757,7 +757,7 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
           <Alert className="border-amber-500/50 bg-amber-500/10">
             <AlertTriangle className="h-4 w-4 text-amber-600" />
             <AlertDescription className="text-amber-700 dark:text-amber-400 text-sm">
-              Atenção: todos os modelos atuais do plano serão desativados e substituídos pelos dados do PDF.
+              Atenção: todos os modelos atuais do plano serão desativados e substituídos pelos dados do arquivo.
             </AlertDescription>
           </Alert>
         )}
