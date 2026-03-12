@@ -229,7 +229,10 @@ export function useSincronizarMetaTemplates() {
     },
     onSuccess: (data) => {
       qc.invalidateQueries({ queryKey: ['whatsapp-meta-templates'] });
-      toast.success(`${data.atualizados} templates sincronizados!`);
+      const msgs: string[] = [];
+      if (data.atualizados > 0) msgs.push(`${data.atualizados} atualizados`);
+      if (data.novos > 0) msgs.push(`${data.novos} novos importados`);
+      toast.success(msgs.length > 0 ? `Templates: ${msgs.join(', ')}` : 'Nenhum template novo encontrado');
     },
     onError: (e: any) => toast.error(e.message || 'Erro ao sincronizar'),
   });
