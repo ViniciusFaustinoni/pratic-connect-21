@@ -461,24 +461,9 @@ serve(async (req) => {
                 const tecWhatsappLink = tecTelefoneLimpo ? `https://wa.me/55${tecTelefoneLimpo}` : '';
                 const enderecoAssociado = [instCompleta.logradouro, instCompleta.numero, instCompleta.bairro, instCompleta.cidade, instCompleta.uf].filter(Boolean).join(', ');
 
-                // 1. Notificar ASSOCIADO via WhatsApp (técnico a caminho)
-                const periodoTexto = instCompleta.periodo === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)';
-                await supabase.functions.invoke('notificar-cliente', {
-                  body: {
-                    tipo: 'tecnico_em_rota',
-                    associado_id: instCompleta.associado_id,
-                    dados: {
-                      data: servico.data_agendada,
-                      periodo: periodoTexto,
-                      tecnico_nome: tecNome,
-                      tecnico_telefone: tecTelefone,
-                      tecnico_whatsapp_link: tecWhatsappLink,
-                      endereco: enderecoAssociado,
-                      tipo_servico: 'instalação do rastreador',
-                    },
-                  },
-                });
-                console.log(`[cron-atribuir-tarefas] ✓ WhatsApp 'tecnico_em_rota' enviado ao associado ${instCompleta.associado_id}`);
+                // 1. Notificação "técnico a caminho" removida daqui — agora é enviada apenas
+                // quando o instalador clica "Iniciar Rota" (via notificar-inicio-rota)
+                console.log(`[cron-atribuir-tarefas] ℹ WhatsApp 'tecnico_em_rota' será enviado quando instalador iniciar rota`);
               }
 
               // 2. Push notification para o instalador

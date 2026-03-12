@@ -817,61 +817,8 @@ serve(async (req) => {
           // Não bloqueia o fluxo principal
         }
 
-        // 9. NOTIFICAR CLIENTE via WhatsApp que técnico está a caminho
-        if (servico.associado_id) {
-          try {
-            // Buscar dados do técnico (nome + telefone)
-            const { data: profissionalData } = await supabase
-              .from('profiles')
-              .select('nome, whatsapp, telefone')
-              .eq('id', profissionalId)
-              .single();
-            
-            const tecnicoNome = profissionalData?.nome || 'Técnico PRATIC';
-            const tecnicoTelefone = profissionalData?.whatsapp || profissionalData?.telefone;
-            const tecnicoTelefoneFormatado = tecnicoTelefone 
-              ? tecnicoTelefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
-              : 'Não informado';
-            const tecnicoWhatsappLink = tecnicoTelefone 
-              ? `https://wa.me/55${tecnicoTelefone.replace(/\D/g, '')}`
-              : 'Não disponível';
-            
-            const tipoServicoLabel = servico.tipo === 'instalacao' 
-              ? 'instalação do rastreador' 
-              : 'vistoria';
-            const periodoLabel = servico.periodo === 'manha' 
-              ? 'Manhã (08:00-12:00)' 
-              : servico.periodo === 'tarde'
-                ? 'Tarde (14:00-18:00)'
-                : 'A definir';
-            const endereco = [
-              servico.logradouro,
-              servico.numero,
-              servico.bairro,
-              servico.cidade
-            ].filter(Boolean).join(', ') || 'Endereço cadastrado';
-
-            await supabase.functions.invoke('notificar-cliente', {
-              body: {
-                tipo: 'tecnico_em_rota',
-                associado_id: servico.associado_id,
-                dados: {
-                  tecnico_nome: tecnicoNome,
-                  tecnico_telefone: tecnicoTelefoneFormatado,
-                  tecnico_whatsapp_link: tecnicoWhatsappLink,
-                  tipo_servico: tipoServicoLabel,
-                  endereco: endereco,
-                  periodo: periodoLabel,
-                },
-              },
-            });
-            
-            console.log(`[atribuir-proxima-tarefa] ✓ Cliente notificado sobre técnico em rota`);
-          } catch (notifError) {
-            console.error('[atribuir-proxima-tarefa] Erro ao notificar cliente:', notifError);
-            // Não bloqueia o fluxo principal
-          }
-        }
+        // 9. Notificação "técnico a caminho" removida daqui — agora é enviada apenas
+        // quando o instalador clica "Iniciar Rota" (via notificar-inicio-rota)
 
         // 10. NOTIFICAR VISTORIADOR via WhatsApp com dados do cliente
         try {
