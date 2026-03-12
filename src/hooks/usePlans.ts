@@ -73,6 +73,46 @@ export interface PlanWithDetails {
 export type PlanoUnificado = PlanWithDetails;
 
 /**
+ * Busca os km de assistência (COB-ASS) de planos_coberturas para cada plano.
+ * Retorna um Map<planoId, valorLimiteKm>
+ */
+async function fetchAssistenciaKmMap(planoIds: string[]): Promise<Map<string, number>> {
+  if (planoIds.length === 0) return new Map();
+  
+  const { data, error } = await supabase
+    .from('planos_coberturas')
+    .select('plano_id, valor_limite, coberturas!inner(codigo)')
+    .in('plano_id', planoIds)
+    .eq('coberturas.codigo', COB_ASS_CODIGO);
+  
+  if (error) {
+    console.warn('Erro ao buscar km de assistência:', error);
+    return new Map();
+  }
+  
+  const map = new Map<string, number>();
+  for (const row of data || []) {
+    if (row.valor_limite) {
+      map.set(row.plano_id, row.valor_limite);
+    }
+  }
+  return map;
+}
+
+/**
+ * Enriquecer plan_benefits com km dinâmico do Reboque
+ */
+function enrichBenefitsWithKm(
+  planBenefits: PlanBenefitItem[],
+  kmAssistencia: number | undefined
+): PlanBenefitItem[] {
+  return planBenefits.map(pb => {
+    if (pb.benefit_id === REBOQUE_BENEFIT_ID && !pb.custom_text && kmAssistencia) {
+      return { ...pb, custom_text: `${kmAssistencia}km Reboque` };
+    }
+    return pb;
+  });
+}
  * Hook para buscar todas as linhas de produtos ativas
  */
 export function useProductLines() {
