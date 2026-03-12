@@ -349,7 +349,7 @@ serve(async (req) => {
             },
           },
           vistoria_aprovada: {
-            template_name: 'boas_vindas_associado',
+            template_name: 'boas_vindas_associado_v2',
             getParams: () => {
               const veiculoDesc = [dados?.placa, [dados?.marca, dados?.modelo].filter(Boolean).join(' ')].filter(Boolean).join(' - ') || 'seu veículo';
               const cobertura = (dados?.cobertura as string) || 'Roubo e Furto';
