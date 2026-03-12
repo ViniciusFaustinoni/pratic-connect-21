@@ -1149,6 +1149,100 @@ export type Database = {
         }
         Relationships: []
       }
+      aprovacoes_elegibilidade: {
+        Row: {
+          ano: number
+          aprovador_id: string | null
+          combustivel: string
+          cotacao_id: string
+          created_at: string
+          id: string
+          justificativa: string
+          marca: string
+          modelo: string
+          motivo_bloqueio: string
+          observacao_aprovador: string | null
+          observacao_regra: string | null
+          placa: string | null
+          plano_id: string
+          respondido_em: string | null
+          solicitante_id: string
+          status: string
+          supervisor_check: boolean
+          supervisor_check_em: string | null
+          supervisor_id: string | null
+          updated_at: string
+        }
+        Insert: {
+          ano: number
+          aprovador_id?: string | null
+          combustivel?: string
+          cotacao_id: string
+          created_at?: string
+          id?: string
+          justificativa: string
+          marca: string
+          modelo: string
+          motivo_bloqueio?: string
+          observacao_aprovador?: string | null
+          observacao_regra?: string | null
+          placa?: string | null
+          plano_id: string
+          respondido_em?: string | null
+          solicitante_id: string
+          status?: string
+          supervisor_check?: boolean
+          supervisor_check_em?: string | null
+          supervisor_id?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ano?: number
+          aprovador_id?: string | null
+          combustivel?: string
+          cotacao_id?: string
+          created_at?: string
+          id?: string
+          justificativa?: string
+          marca?: string
+          modelo?: string
+          motivo_bloqueio?: string
+          observacao_aprovador?: string | null
+          observacao_regra?: string | null
+          placa?: string | null
+          plano_id?: string
+          respondido_em?: string | null
+          solicitante_id?: string
+          status?: string
+          supervisor_check?: boolean
+          supervisor_check_em?: string | null
+          supervisor_id?: string | null
+          updated_at?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aprovacoes_elegibilidade_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_elegibilidade_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "aprovacoes_elegibilidade_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       aprovacoes_fipe_menor: {
         Row: {
           cotacao_id: string
