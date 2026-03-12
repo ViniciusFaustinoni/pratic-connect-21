@@ -207,7 +207,7 @@ export function calcularValoresCotacao(
     valor_rastreamento,
     valor_assistencia,
     valor_mensal: valorMensalDireto,
-    valor_adesao: plano.valor_adesao,
+    valor_adesao: Math.max(100, Math.round(valorFipe * 0.01 * 100) / 100),
   };
 }
 
