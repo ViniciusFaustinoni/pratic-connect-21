@@ -144,20 +144,24 @@ serve(async (req) => {
         components.push({ type: "FOOTER", text: template.rodape });
       }
 
-      // Botões
+      // Botões (aceita tanto tipo/texto quanto type/text)
       const botoes = template.botoes as any[] | null;
       if (botoes && botoes.length > 0) {
         const buttons = botoes.map((b: any) => {
-          if (b.tipo === "url") {
-            const btn: any = { type: "URL", text: b.texto, url: b.url };
-            if (b.url?.includes("{{")) {
-              btn.example = ["https://pratic-connect-21.lovable.app/app/criar-senha?token=exemplo-token-123"];
+          const bTipo = (b.tipo || b.type || '').toLowerCase();
+          const bTexto = b.texto || b.text || '';
+          const bUrl = b.url || '';
+          const bTelefone = b.telefone || b.phone_number || '';
+          if (bTipo === "url") {
+            const btn: any = { type: "URL", text: bTexto, url: bUrl };
+            if (bUrl?.includes("{{")) {
+              btn.example = ["https://pratic-connect-21.lovable.app/primeiro-acesso?id=exemplo-id-123"];
             }
             return btn;
-          } else if (b.tipo === "telefone") {
-            return { type: "PHONE_NUMBER", text: b.texto, phone_number: b.telefone };
+          } else if (bTipo === "telefone" || bTipo === "phone_number") {
+            return { type: "PHONE_NUMBER", text: bTexto, phone_number: bTelefone };
           } else {
-            return { type: "QUICK_REPLY", text: b.texto };
+            return { type: "QUICK_REPLY", text: bTexto };
           }
         });
         components.push({ type: "BUTTONS", buttons });
