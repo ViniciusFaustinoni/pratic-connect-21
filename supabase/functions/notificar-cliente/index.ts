@@ -366,19 +366,38 @@ serve(async (req) => {
           },
           instalacao_agendada: {
             template_name: 'sinistro_atualizado',
-            getParams: () => [
-              primeiroNome,
-              'instalação',
-              `Sua instalação foi agendada para ${(dados?.data as string) || 'em breve'}. Período: ${(dados?.periodo as string) || 'A confirmar'}. Nosso técnico entrará em contato!`,
-            ],
+            getParams: () => {
+              // Formatar data de ISO (2026-03-12) para dd/MM/yyyy
+              let dataFormatada = 'em breve';
+              const dataRaw = dados?.data as string;
+              if (dataRaw && /^\d{4}-\d{2}-\d{2}/.test(dataRaw)) {
+                const [ano, mes, dia] = dataRaw.split('-');
+                dataFormatada = `${dia}/${mes}/${ano}`;
+              } else if (dataRaw) {
+                dataFormatada = dataRaw;
+              }
+              return [
+                primeiroNome,
+                'instalação',
+                `Sua instalação foi agendada para ${dataFormatada}. Período: ${(dados?.periodo as string) || 'A confirmar'}. Nosso técnico entrará em contato!`,
+              ];
+            },
           },
           assistencia_prestador_acionado: {
             template_name: 'assistencia_confirmada',
-            getParams: () => [
-              primeiroNome,
-              (dados?.prestador_nome as string) || 'Prestador',
-              (dados?.previsao as string) || '30',
-            ],
+            getParams: () => {
+              // Validar que previsao é numérico
+              let previsao = (dados?.previsao as string) || '30';
+              if (/^\d{4}-\d{2}/.test(previsao) || isNaN(Number(previsao))) {
+                console.warn(`[notificar-cliente] previsao inválida "${previsao}", usando fallback 30`);
+                previsao = '30';
+              }
+              return [
+                primeiroNome,
+                (dados?.prestador_nome as string) || 'Prestador',
+                previsao,
+              ];
+            },
           },
           // Documentação → documentacao_pendente ({{1}} nome, {{2}} documentos)
           documentos_solicitados: {
