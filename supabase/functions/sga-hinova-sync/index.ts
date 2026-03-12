@@ -948,7 +948,7 @@ serve(async (req) => {
       kilometragem: 0,
       numero_motor: '',
       dia_vencimento: associado.dia_vencimento || 10,
-      codigo_conta: 2,
+      codigo_conta: parseInt(hinovaCodigoConta) || 1,
       codigo_cor: getMapeamento('cor', veiculo.cor),
       codigo_combustivel: getMapeamento('combustivel', combustivelNormalizado),
       codigo_tipo_veiculo: getMapeamento('tipo_veiculo', contrato?.veiculo_categoria?.toLowerCase()) || tipoVeiculoInferido,

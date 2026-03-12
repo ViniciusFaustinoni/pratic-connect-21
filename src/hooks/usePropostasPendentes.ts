@@ -1268,6 +1268,7 @@ export function useAprovarProposta() {
           id,
           status,
           associado_id,
+          veiculo_id,
           plano_id,
           valor_mensal,
           dia_vencimento,
