@@ -784,7 +784,7 @@ function TabImportarPDF({ onNavigateToPlano }: { onNavigateToPlano?: (planoId: s
               <div className="rounded-lg border p-6 space-y-4">
                 <div className="flex items-center justify-between">
                   <div className="flex items-center gap-3">
-                    <FileText className="h-8 w-8 text-primary" />
+                    <FileSpreadsheet className="h-8 w-8 text-primary" />
                     <div>
                       <p className="font-medium text-foreground">{file.name}</p>
                       <p className="text-sm text-muted-foreground">{(file.size / 1024).toFixed(1)} KB • Plano: {selectedPlanoObj?.nome}</p>
