@@ -106,7 +106,7 @@ export default function CotacaoPage() {
   }, [marca, modelo]);
 
   // Hook de planos - busca do banco de dados e calcula baseado nos parâmetros
-  const { planos: planosCalculados, isLoading: isLoadingPlanos } = usePlanosCotacao({
+  const { planos: planosCalculados, planosNegados, isLoading: isLoadingPlanos } = usePlanosCotacao({
     valorFipe: valorFipe || 0,
     regiao: regiao || 'rio_de_janeiro',
     combustivel: combustivel || 'gasolina',
