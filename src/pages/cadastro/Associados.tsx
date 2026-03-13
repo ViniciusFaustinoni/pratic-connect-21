@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Search, Plus, MoreVertical, Loader2, 
+  Search, MoreVertical, Loader2, 
   UserCheck, Clock, AlertTriangle, UserX,
   Eye, Edit, FileText, Receipt, Lock, Unlock, Pause, XCircle,
   MessageCircle, X, ChevronLeft, ChevronRight, Users, Download, Filter, DollarSign, Trash2,
@@ -49,7 +49,7 @@ import {
 import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database';
 import { useAssociados, useAssociadosContagem, useAssociadosCidades, useUpdateAssociadoStatus, useDeleteAssociado } from '@/hooks/useAssociados';
 import { usePlanos } from '@/hooks/usePlanos';
-import { AssociadoFormDialog } from '@/components/associados/AssociadoFormDialog';
+
 import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
@@ -107,7 +107,7 @@ export default function Associados() {
   const [cidadeFilter, setCidadeFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  
   const [acaoDialog, setAcaoDialog] = useState<{
     open: boolean;
     acao: 'bloquear' | 'suspender' | 'cancelar' | 'excluir';
@@ -652,18 +652,13 @@ export default function Associados() {
                           <p className="text-sm text-muted-foreground mt-1">
                             {hasFilters 
                               ? 'Tente ajustar os filtros para encontrar o que procura'
-                              : 'Comece adicionando o primeiro associado'}
+                              : 'Associados são cadastrados automaticamente pelo fluxo de cotação'}
                           </p>
                         </div>
-                        {hasFilters ? (
+                        {hasFilters && (
                           <Button variant="outline" size="sm" onClick={clearFilters}>
                             <X className="mr-2 h-4 w-4" />
                             Limpar filtros
-                          </Button>
-                        ) : (
-                          <Button size="sm" onClick={() => setFormDialogOpen(true)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Adicionar associado
                           </Button>
                         )}
                       </div>
@@ -947,10 +942,6 @@ export default function Associados() {
         )}
 
         {/* Dialogs */}
-        <AssociadoFormDialog
-          open={formDialogOpen}
-          onOpenChange={setFormDialogOpen}
-        />
 
         {acaoDialog && (
           <ConfirmacaoAcaoDialog
