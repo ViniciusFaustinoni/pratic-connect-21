@@ -209,8 +209,8 @@ export function WhatsAppTestChat() {
       <Alert className="border-amber-500/30 bg-amber-500/5">
         <FlaskConical className="h-4 w-4 text-amber-600" />
         <AlertDescription className="text-sm">
-          <strong>Modo Teste</strong> — Mensagens enviadas via Evolution API para o número Meta configurado.
-          Isso permite testar o fluxo completo: Evolution → Meta → Webhook → IA → Resposta.
+          <strong>Modo Teste</strong> — Simula uma mensagem de entrada no webhook da Meta, acionando o fluxo completo:
+          Mensagem → Webhook → IA → Resposta. A resposta da IA aparecerá no chat abaixo.
         </AlertDescription>
       </Alert>
 
