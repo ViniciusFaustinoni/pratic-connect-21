@@ -81,6 +81,7 @@ export default function IntegracaoWhatsApp() {
             <WhatsAppIAConfig />
             <WhatsAppStats />
           </div>
+          <WhatsAppConversasPainel />
         </TabsContent>
 
         {/* ── Tab Templates Meta ── */}
