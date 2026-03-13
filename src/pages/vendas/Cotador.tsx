@@ -1135,6 +1135,21 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               </p>
             </div>
 
+            {/* Região de atendimento */}
+            <div className="space-y-2">
+              <Label>Região de atendimento</Label>
+              <Select value={regiao} onValueChange={setRegiao}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a região" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rj">Rio de Janeiro</SelectItem>
+                  <SelectItem value="lagos">Região dos Lagos</SelectItem>
+                  <SelectItem value="sp">São Paulo</SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
+
             {/* Uso para aplicativo */}
             <div className="space-y-2">
               <Label>Uso para aplicativo? (Uber, 99, etc)</Label>
