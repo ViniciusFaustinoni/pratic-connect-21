@@ -1,18 +1,13 @@
 
 
-## Remover envio duplicado de mensagem de boas-vindas
+## Exibição Progressiva de Planos + Campo de Região — ✅ Implementado
 
-### Problema
+### Alterações realizadas
 
-Quando o instalador finaliza a instalação, o código em `src/hooks/useServicos.ts` (linha ~1159) chama `notificar-cliente` com tipo `instalacao_concluida`, que usa o template `cadastro_aprovado_botao` — o mesmo template de boas-vindas. Depois, quando o analista de cadastro aprova, a edge function `ativar-associado` envia novamente o `cadastro_aprovado_botao`. Resultado: mensagem duplicada.
-
-### Solução
-
-Remover o envio da notificação WhatsApp `instalacao_concluida` no `useServicos.ts`. O histórico e a notificação in-app podem permanecer — apenas o disparo para `notificar-cliente` com tipo `instalacao_concluida` deve ser removido.
-
-A mensagem de boas-vindas continuará sendo enviada apenas pelo fluxo de aprovação do analista (`ativar-associado`).
-
-### Alteração
-
-**`src/hooks/useServicos.ts`** — Remover o bloco fire-and-forget (linhas ~1156-1170) que invoca `notificar-cliente` com `instalacao_concluida`.
-
+1. **Removidos 5 resets desnecessários** de `setCotacaoCalculada(false)` em `Cotador.tsx` — mantido apenas no `limparTudo`
+2. **Adicionado `useEffect` auto-display** — seta `cotacaoCalculada = true` quando `valorFipe > 0` e `planosDB` tem resultados
+3. **Adicionado campo Região** (RJ, Lagos, SP) no formulário, antes de "Uso para aplicativo"
+4. **Substituído hardcode `regiao: 'rj'`** por estado `regiao` no `parametrosPlanos`
+5. **Auto-atualização de tab** — quando lista de planos muda, tab selecionada é revalidada
+6. **`regiao` incluída** no payload de salvar cotação (`CriarCotacaoPayload` + `useCotacao.ts`)
+7. **`regiao` resetada** no `limparTudo` para `'rj'`
