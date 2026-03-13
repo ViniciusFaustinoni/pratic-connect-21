@@ -106,7 +106,7 @@ export function WhatsAppTestChat() {
 
     setEnviando(true);
     try {
-      // Adicionar mensagem localmente de imediato
+      // Adicionar mensagem localmente de imediato (aparece como "saída" = usuário digitou)
       const msgLocal: ChatMessage = {
         id: `local-${Date.now()}`,
         texto,
@@ -117,20 +117,54 @@ export function WhatsAppTestChat() {
       setMensagens(prev => [...prev, msgLocal]);
       setMensagem('');
 
-      const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
-        body: {
-          telefone: telefoneDestino.replace(/\D/g, ''),
-          mensagem: texto,
-        },
+      const telLimpo = telefoneDestino.replace(/\D/g, '');
+      const telComDDI = telLimpo.startsWith('55') ? telLimpo : `55${telLimpo}`;
+
+      // Salvar a mensagem de teste na tabela como "entrada" (simula o usuário enviando)
+      await supabase.from('whatsapp_mensagens').insert({
+        telefone: telComDDI,
+        mensagem: texto,
+        direcao: 'entrada',
+        status: 'received',
+        tipo: 'text',
+        message_id: `test_${Date.now()}`,
+      });
+
+      // Simular payload Meta webhook para acionar o fluxo da IA
+      const metaPayload = {
+        object: 'whatsapp_business_account',
+        entry: [{
+          id: 'test',
+          changes: [{
+            value: {
+              messaging_product: 'whatsapp',
+              metadata: { phone_number_id: telLimpo, display_phone_number: telLimpo },
+              messages: [{
+                from: telComDDI,
+                id: `test_${Date.now()}`,
+                timestamp: Math.floor(Date.now() / 1000).toString(),
+                type: 'text',
+                text: { body: texto },
+              }],
+              contacts: [{ profile: { name: 'Teste' }, wa_id: telComDDI }],
+            },
+            field: 'messages',
+          }],
+        }],
+      };
+
+      const { error } = await supabase.functions.invoke('whatsapp-meta-webhook', {
+        body: metaPayload,
       });
 
       if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Erro ao enviar');
 
       // Atualizar status local
       setMensagens(prev => prev.map(m =>
         m.id === msgLocal.id ? { ...m, status: 'enviada' } : m
       ));
+
+      toast.success('Mensagem enviada para o fluxo da IA');
     } catch (err: any) {
       toast.error(`Erro ao enviar: ${err.message}`);
       // Marcar como erro
@@ -175,8 +209,8 @@ export function WhatsAppTestChat() {
       <Alert className="border-amber-500/30 bg-amber-500/5">
         <FlaskConical className="h-4 w-4 text-amber-600" />
         <AlertDescription className="text-sm">
-          <strong>Modo Teste</strong> — Mensagens enviadas via Evolution API para o número Meta configurado.
-          Isso permite testar o fluxo completo: Evolution → Meta → Webhook → IA → Resposta.
+          <strong>Modo Teste</strong> — Simula uma mensagem de entrada no webhook da Meta, acionando o fluxo completo:
+          Mensagem → Webhook → IA → Resposta. A resposta da IA aparecerá no chat abaixo.
         </AlertDescription>
       </Alert>
 
