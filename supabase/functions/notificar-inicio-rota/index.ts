@@ -181,6 +181,9 @@ serve(async (req) => {
         console.error("[notificar-inicio-rota] Exceção ao notificar cliente:", err);
         resultados.erros.push(`Exceção ao notificar cliente: ${err.message}`);
       }
+    } else if (jaNotificadoPeloCron) {
+      console.log("[notificar-inicio-rota] ℹ Cliente já notificado pelo cron-atribuir-tarefas, pulando duplicata");
+      resultados.cliente_notificado = true; // já foi notificado antes
     } else {
       console.warn("[notificar-inicio-rota] Cliente sem telefone cadastrado");
       resultados.erros.push("Cliente sem telefone cadastrado");
