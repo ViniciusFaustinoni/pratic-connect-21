@@ -201,7 +201,7 @@ serve(async (req) => {
           id: vist.id,
           tipo: 'vistoria',
           data_agendada: vist.data_agendada,
-          hora_agendada: vist.hora_agendada,
+          hora_agendada: vist.horario_agendado,
           endereco_latitude: vist.endereco_latitude,
           endereco_longitude: vist.endereco_longitude,
           associado_id: vist.associado_id,
