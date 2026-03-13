@@ -60,11 +60,14 @@ Deno.serve(async (req) => {
       `${linkReagendamento}\n\n` +
       `Equipe PRATIC 🚗`;
 
-    // Enviar via whatsapp-send-text
+    // Enviar via whatsapp-send-text usando template Meta
     const { error: sendErr } = await supabase.functions.invoke("whatsapp-send-text", {
       body: {
         telefone: telefone.startsWith("55") ? telefone : `55${telefone}`,
-        mensagem,
+        mensagem, // fallback para Evolution API
+        template_name: "reagendamento_servico",
+        template_params: [primeiroNome, tipoLabel],
+        template_button_params: [servico.reagendamento_token],
         referencia_tipo: "reagendamento_vistoria",
         referencia_id: servico_id,
       },
