@@ -163,7 +163,7 @@ serve(async (req) => {
     // Vistorias FUTURAS com encaixe habilitado
     const { data: vistoriasEncaixe, error: vistError } = await supabase
       .from('vistorias')
-      .select('id, data_agendada, hora_agendada, endereco_latitude, endereco_longitude, associado_id, veiculo_id, bairro, cidade')
+      .select('id, data_agendada, horario_agendado, endereco_latitude, endereco_longitude, associado_id, veiculo_id, bairro, cidade')
       .eq('permite_encaixe', true)
       .is('vistoriador_id', null)
       .gt('data_agendada', hoje) // > hoje (datas FUTURAS)
