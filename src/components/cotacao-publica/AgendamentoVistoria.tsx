@@ -42,6 +42,9 @@ export interface AgendamentoVistoriaProps {
   
   // Tipo de vistoria original (apenas para contexto pós-autovistoria)
   tipoVistoria?: 'autovistoria' | 'agendada';
+
+  // Endereço pré-preenchido (coletado pela IA no comprovante de residência)
+  enderecoInicial?: Partial<EnderecoForm>;
 }
 
 export function AgendamentoVistoria({ 
