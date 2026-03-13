@@ -487,6 +487,7 @@ export function useCriarCotacao() {
         status: 'rascunho' as const,
         validade_dias: 7,
         categoria: payload.categoria_veiculo,
+        regiao: payload.regiao || null,
         nome_solicitante: payload.nome_solicitante || null,
       };
 
