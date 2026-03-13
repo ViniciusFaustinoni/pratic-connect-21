@@ -2522,10 +2522,30 @@ serve(async (req) => {
     const payload = await req.json();
     console.log("[whatsapp-webhook] Payload:", JSON.stringify(payload).substring(0, 500));
 
-    // Validar que o payload tem estrutura esperada da Evolution API
+    // Validar que o payload tem estrutura esperada
     if (!payload || typeof payload !== 'object') {
       console.error("[whatsapp-webhook] Payload inválido recebido");
       return new Response(JSON.stringify({ error: "Invalid payload" }), { status: 400, headers: corsHeaders });
+    }
+
+    // ── BLINDAGEM: Detectar payload nativo da Meta e encaminhar ──
+    if (payload.object === "whatsapp_business_account" && Array.isArray(payload.entry)) {
+      console.log("[whatsapp-webhook] Payload da Meta detectado — encaminhando para whatsapp-meta-webhook");
+      try {
+        const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+        const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+        const metaRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-meta-webhook`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify(payload),
+        });
+        const metaResult = await metaRes.json();
+        console.log("[whatsapp-webhook] Resultado encaminhamento Meta:", JSON.stringify(metaResult).substring(0, 200));
+        return new Response(JSON.stringify(metaResult), { status: 200, headers: corsHeaders });
+      } catch (fwdErr: any) {
+        console.error("[whatsapp-webhook] Erro ao encaminhar para Meta webhook:", fwdErr);
+        return new Response(JSON.stringify({ success: false, error: fwdErr.message }), { status: 200, headers: corsHeaders });
+      }
     }
 
     // Validar apikey da Evolution API (apenas log, não rejeitar)

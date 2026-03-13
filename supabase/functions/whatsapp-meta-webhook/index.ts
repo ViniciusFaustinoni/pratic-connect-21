@@ -487,20 +487,37 @@ serve(async (req) => {
 
   // POST - Eventos da Meta
   if (req.method === "POST") {
+    let totalMessages = 0;
+    let totalStatuses = 0;
+    let lastError: string | null = null;
+    let eventType = "unknown";
+
     try {
       const body = await req.json();
-      console.log("[whatsapp-meta-webhook] Evento recebido:", JSON.stringify(body).substring(0, 500));
+      console.log("[whatsapp-meta-webhook] POST recebido:", JSON.stringify(body).substring(0, 800));
+
+      // Detectar tipo de evento
+      eventType = body.object || "unknown";
 
       const entries = body.entry || [];
+      if (entries.length === 0) {
+        console.warn("[whatsapp-meta-webhook] Nenhum entry no payload");
+      }
 
       for (const entry of entries) {
         const changes = entry.changes || [];
 
         for (const change of changes) {
           const value = change.value;
+          if (!value) {
+            console.warn("[whatsapp-meta-webhook] change sem value:", JSON.stringify(change).substring(0, 200));
+            continue;
+          }
+
+          const field = change.field;
 
           // Atualização de status de template
-          if (change.field === "message_template_status_update") {
+          if (field === "message_template_status_update") {
             const templateName = value.message_template_name;
             const newStatus = value.event?.toUpperCase();
             const reason = value.reason;
@@ -521,11 +538,17 @@ serve(async (req) => {
             continue;
           }
 
-          // Mensagens recebidas
-          if (change.field === "messages") {
+          // Processar mensagens e statuses — aceitar field "messages" OU detectar pela presença de value.messages/value.statuses
+          const hasMessages = Array.isArray(value.messages) && value.messages.length > 0;
+          const hasStatuses = Array.isArray(value.statuses) && value.statuses.length > 0;
+
+          if (field === "messages" || hasMessages || hasStatuses) {
             const messages = value.messages || [];
             const contacts = value.contacts || [];
             const statuses = value.statuses || [];
+
+            totalMessages += messages.length;
+            totalStatuses += statuses.length;
 
             // Processar mensagens recebidas
             for (const msg of messages) {
@@ -549,7 +572,7 @@ serve(async (req) => {
                 longitude = msg.location.longitude;
               }
 
-              console.log(`[whatsapp-meta-webhook] Mensagem de ${telefone}: ${texto?.substring(0, 100)}`);
+              console.log(`[whatsapp-meta-webhook] MSG from=${telefone} type=${msg.type} id=${msg.id} texto="${texto?.substring(0, 80)}"`);
 
               // ---- VERIFICAR SE É RESPOSTA DE PRESTADOR (DESPACHO REBOQUE) ----
               const foiProcessado = await processarRespostaPrestador(
@@ -574,18 +597,28 @@ serve(async (req) => {
               });
 
               if (insertError) {
-                console.error(`[whatsapp-meta-webhook] Erro ao inserir mensagem:`, JSON.stringify(insertError));
+                console.error(`[whatsapp-meta-webhook] ERRO INSERT msg id=${msg.id}:`, JSON.stringify(insertError));
+                lastError = `INSERT msg: ${insertError.message || insertError.code}`;
+              } else {
+                console.log(`[whatsapp-meta-webhook] ✓ Mensagem salva no banco: ${msg.id}`);
               }
 
               if (foiProcessado) {
-                console.log(`[whatsapp-meta-webhook] Mensagem processada como resposta de prestador`);
+                console.log(`[whatsapp-meta-webhook] Processada como resposta de prestador`);
               } else {
                 // Delegar para fluxo de IA (associado, lead ou desconhecido)
-                await processarMensagemUsuario(
-                  supabase, supabaseUrl, serviceKey,
-                  telefone, texto || "", msg.type,
-                  latitude, longitude, msg.id
-                );
+                console.log(`[whatsapp-meta-webhook] Delegando para IA: telefone=${telefone}`);
+                try {
+                  await processarMensagemUsuario(
+                    supabase, supabaseUrl, serviceKey,
+                    telefone, texto || "", msg.type,
+                    latitude, longitude, msg.id
+                  );
+                  console.log(`[whatsapp-meta-webhook] ✓ Delegação IA concluída para ${telefone}`);
+                } catch (delegErr: any) {
+                  console.error(`[whatsapp-meta-webhook] ERRO delegação IA:`, delegErr);
+                  lastError = `Delegação IA: ${delegErr.message}`;
+                }
               }
             }
 
@@ -611,12 +644,43 @@ serve(async (req) => {
         }
       }
 
-      return new Response(JSON.stringify({ success: true }), {
+      // ---- ATUALIZAR TELEMETRIA ----
+      try {
+        await supabase
+          .from("whatsapp_meta_config")
+          .update({
+            last_webhook_at: new Date().toISOString(),
+            last_webhook_event: eventType,
+            last_webhook_messages_count: totalMessages,
+            last_webhook_statuses_count: totalStatuses,
+            last_webhook_error: lastError,
+          })
+          .neq("id", "00000000-0000-0000-0000-000000000000");
+      } catch (telErr) {
+        console.error("[whatsapp-meta-webhook] Erro ao atualizar telemetria:", telErr);
+      }
+
+      console.log(`[whatsapp-meta-webhook] ✓ Processado: ${totalMessages} msgs, ${totalStatuses} statuses, erro: ${lastError || "nenhum"}`);
+
+      return new Response(JSON.stringify({ success: true, messages: totalMessages, statuses: totalStatuses }), {
         status: 200,
         headers: { "Content-Type": "application/json" },
       });
     } catch (error: any) {
-      console.error("[whatsapp-meta-webhook] Erro:", error);
+      console.error("[whatsapp-meta-webhook] ERRO GERAL:", error);
+
+      // Atualizar telemetria com erro
+      try {
+        await supabase
+          .from("whatsapp_meta_config")
+          .update({
+            last_webhook_at: new Date().toISOString(),
+            last_webhook_event: eventType,
+            last_webhook_error: error.message || "Erro desconhecido",
+          })
+          .neq("id", "00000000-0000-0000-0000-000000000000");
+      } catch (_) { /* ignore */ }
+
       // Sempre retornar 200 para a Meta não desativar o webhook
       return new Response(JSON.stringify({ success: false, error: error.message }), {
         status: 200,
