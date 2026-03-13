@@ -3378,12 +3378,29 @@ Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato c
 
     // Salvar e enviar resposta - capturar messageId para tracking de status
     await saveMessage(supabase, associado.id, "assistant", respostaFinal);
-    const sendResult = isMetaDelegate
-      ? await sendWhatsAppViaProxy(telefone, respostaFinal)
-      : await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, respostaFinal);
-    await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", sendResult.messageId);
 
-    console.log(`[whatsapp-webhook] Resposta enviada para ${telefone}`);
+    // Try/catch robusto no envio para evitar perda silenciosa em timeout
+    let sendResult: { ok: boolean; messageId?: string } = { ok: false };
+    try {
+      sendResult = isMetaDelegate
+        ? await sendWhatsAppViaProxy(telefone, respostaFinal)
+        : await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, respostaFinal);
+      await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", sendResult.messageId);
+      console.log(`[whatsapp-webhook] Resposta enviada para ${telefone}`);
+    } catch (sendErr: any) {
+      console.error(`[whatsapp-webhook] FALHA ao enviar resposta para ${telefone}:`, sendErr);
+      // Salvar log de erro para rastreabilidade
+      try {
+        await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", undefined);
+        await supabase.from("whatsapp_logs").insert({
+          instancia_id: instancia.id,
+          tipo: "erro_envio_ia",
+          evento: "send_failed",
+          erro: sendErr?.message || "Timeout ou erro no envio",
+          payload: { telefone, resposta_length: respostaFinal.length, is_meta: isMetaDelegate },
+        });
+      } catch (_) { /* ignore log failure */ }
+    }
 
     return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
   } catch (error: any) {

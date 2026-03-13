@@ -90,22 +90,42 @@ async function processarMensagemUsuario(
         },
       };
 
-      const res = await fetch(`${supabaseUrl}/functions/v1/whatsapp-webhook`, {
+      // Fire-and-forget: não aguardar a resposta do whatsapp-webhook
+      // para evitar timeout em cadeia (Meta API → meta-webhook → webhook → IA → send)
+      const controller = new AbortController();
+      const timeoutId = setTimeout(() => controller.abort(), 140000); // 140s safety timeout
+
+      fetch(`${supabaseUrl}/functions/v1/whatsapp-webhook`, {
         method: "POST",
         headers: {
           "Content-Type": "application/json",
           Authorization: `Bearer ${serviceKey}`,
         },
         body: JSON.stringify(syntheticPayload),
-      });
+        signal: controller.signal,
+      })
+        .then(async (res) => {
+          clearTimeout(timeoutId);
+          const result = await res.json();
+          console.log(`[whatsapp-meta-webhook] Delegação IA resultado:`, JSON.stringify(result).substring(0, 200));
+        })
+        .catch(async (err) => {
+          clearTimeout(timeoutId);
+          const isAbort = err?.name === "AbortError";
+          console.error(`[whatsapp-meta-webhook] Erro ao delegar para IA (${isAbort ? "TIMEOUT 140s" : "ERRO"}):`, err);
+          // Só envia fallback se NÃO for timeout (timeout = a IA pode ainda estar processando)
+          if (!isAbort) {
+            try {
+              await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+                "Desculpe, estou com dificuldades para processar sua mensagem. Tente novamente em alguns instantes. 🙏"
+              );
+            } catch (_) { /* ignore */ }
+          }
+        });
 
-      const result = await res.json();
-      console.log(`[whatsapp-meta-webhook] Delegação IA resultado:`, JSON.stringify(result).substring(0, 200));
+      console.log(`[whatsapp-meta-webhook] Delegação IA disparada (fire-and-forget) para ${telLimpo}`);
     } catch (err) {
-      console.error(`[whatsapp-meta-webhook] Erro ao delegar para IA:`, err);
-      await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
-        "Desculpe, estou com dificuldades para processar sua mensagem. Tente novamente em alguns instantes. 🙏"
-      );
+      console.error(`[whatsapp-meta-webhook] Erro ao preparar delegação para IA:`, err);
     }
     return;
   }
