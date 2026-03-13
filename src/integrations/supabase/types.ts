@@ -25419,6 +25419,11 @@ export type Database = {
           ativo: boolean | null
           created_at: string | null
           id: string
+          last_webhook_at: string | null
+          last_webhook_error: string | null
+          last_webhook_event: string | null
+          last_webhook_messages_count: number | null
+          last_webhook_statuses_count: number | null
           phone_number_id: string
           testado: boolean | null
           testado_em: string | null
@@ -25431,6 +25436,11 @@ export type Database = {
           ativo?: boolean | null
           created_at?: string | null
           id?: string
+          last_webhook_at?: string | null
+          last_webhook_error?: string | null
+          last_webhook_event?: string | null
+          last_webhook_messages_count?: number | null
+          last_webhook_statuses_count?: number | null
           phone_number_id?: string
           testado?: boolean | null
           testado_em?: string | null
@@ -25443,6 +25453,11 @@ export type Database = {
           ativo?: boolean | null
           created_at?: string | null
           id?: string
+          last_webhook_at?: string | null
+          last_webhook_error?: string | null
+          last_webhook_event?: string | null
+          last_webhook_messages_count?: number | null
+          last_webhook_statuses_count?: number | null
           phone_number_id?: string
           testado?: boolean | null
           testado_em?: string | null

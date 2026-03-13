@@ -1,10 +1,11 @@
 import { useState, useEffect } from 'react';
-import { Server, Smartphone, Check, Loader2, Eye, EyeOff, Copy, ChevronDown, Wifi, WifiOff, Shield } from 'lucide-react';
+import { Server, Smartphone, Check, Loader2, Eye, EyeOff, Copy, ChevronDown, Wifi, WifiOff, Shield, AlertTriangle, Clock } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Separator } from '@/components/ui/separator';
 import { supabase } from '@/integrations/supabase/client';
 import {
@@ -275,6 +276,11 @@ export function WhatsAppProvedorSelector() {
                 </ol>
               </CollapsibleContent>
             </Collapsible>
+
+            {/* Telemetria do webhook */}
+            {metaAtivo && metaConfig && (
+              <WebhookTelemetry config={metaConfig} />
+            )}
           </CardContent>
         </Card>
       </div>
@@ -298,6 +304,60 @@ export function WhatsAppProvedorSelector() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+    </div>
+  );
+}
+
+function WebhookTelemetry({ config }: { config: any }) {
+  const lastAt = config.last_webhook_at;
+  const error = config.last_webhook_error;
+  const msgs = config.last_webhook_messages_count || 0;
+  const sts = config.last_webhook_statuses_count || 0;
+
+  const isStale = lastAt
+    ? (Date.now() - new Date(lastAt).getTime()) > 24 * 60 * 60 * 1000
+    : true;
+
+  const formatDate = (d: string) => {
+    try {
+      return new Date(d).toLocaleString('pt-BR', { day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+    } catch { return d; }
+  };
+
+  return (
+    <div className="space-y-2 pt-2 border-t">
+      <p className="text-[10px] font-medium text-muted-foreground uppercase tracking-wider">Telemetria Webhook</p>
+      
+      {isStale && (
+        <Alert variant="destructive" className="py-2">
+          <AlertTriangle className="h-3 w-3" />
+          <AlertDescription className="text-xs">
+            {lastAt
+              ? `Nenhum webhook recebido desde ${formatDate(lastAt)}. Verifique a configuração no painel da Meta.`
+              : 'Nenhum webhook recebido ainda. Verifique se o callback está configurado corretamente no painel da Meta.'}
+          </AlertDescription>
+        </Alert>
+      )}
+
+      <div className="grid grid-cols-2 gap-1 text-[11px]">
+        <div className="flex items-center gap-1 text-muted-foreground">
+          <Clock className="h-3 w-3" />
+          Último:
+        </div>
+        <span className="font-mono">{lastAt ? formatDate(lastAt) : '—'}</span>
+
+        <span className="text-muted-foreground">Mensagens:</span>
+        <span className="font-mono">{msgs}</span>
+
+        <span className="text-muted-foreground">Statuses:</span>
+        <span className="font-mono">{sts}</span>
+      </div>
+
+      {error && (
+        <p className="text-[10px] text-destructive bg-destructive/10 rounded px-2 py-1">
+          Último erro: {error}
+        </p>
+      )}
     </div>
   );
 }
