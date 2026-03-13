@@ -467,18 +467,39 @@ serve(async (req) => {
       );
     }
 
-    // Se já existe processamento em andamento, evitar disparo paralelo
+    // Se já existe processamento em andamento, verificar se é stale lock
     if (veiculoCheck?.status_sga === 'sincronizando') {
-      console.log(`[SGA Sync] Veículo ${veiculo_id} já em sincronização. Ignorando chamada duplicada.`);
-      await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped_in_progress', { veiculo_id, associado_id }, null);
-      return new Response(
-        JSON.stringify({
-          success: true,
-          data: { already_in_progress: true },
-          step: 'idempotency_guard'
-        }),
-        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      const { data: lastLog } = await supabase
+        .from('sga_sync_logs')
+        .select('created_at')
+        .eq('veiculo_id', veiculo_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const lockAge = lastLog?.created_at
+        ? Date.now() - new Date(lastLog.created_at).getTime()
+        : Infinity;
+
+      const STALE_THRESHOLD_MS = 5 * 60 * 1000; // 5 minutos
+
+      if (lockAge < STALE_THRESHOLD_MS) {
+        console.log(`[SGA Sync] Veículo ${veiculo_id} em sincronização há ${Math.round(lockAge / 1000)}s. Ignorando.`);
+        await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped_in_progress', { veiculo_id, associado_id }, null);
+        return new Response(
+          JSON.stringify({ success: true, data: { already_in_progress: true }, step: 'idempotency_guard' }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      // Stale lock detectado — resetar e permitir nova tentativa
+      console.log(`[SGA Sync] Stale lock detectado para veículo ${veiculo_id} (${Math.round(lockAge / 1000)}s). Resetando status.`);
+      await supabase
+        .from('veiculos')
+        .update({ status_sga: 'erro_sincronizacao' })
+        .eq('id', veiculo_id);
+      await logSync(veiculo_id, associado_id, 'stale_lock_recovery', 'recovered', { veiculo_id, lock_age_ms: lockAge }, null);
+      // Continua execução normal
     }
 
     await supabase
