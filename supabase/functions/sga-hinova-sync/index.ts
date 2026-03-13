@@ -1108,9 +1108,11 @@ serve(async (req) => {
               .limit(1)
               .maybeSingle();
 
-            if (associadoLocal?.codigo_hinova) {
+            if (associadoLocal?.codigo_hinova && !codigosInvalidados.has(associadoLocal.codigo_hinova)) {
               codigoExistente = associadoLocal.codigo_hinova;
               console.log(`[SGA Sync] Código recuperado do banco local: ${codigoExistente}`);
+            } else if (associadoLocal?.codigo_hinova && codigosInvalidados.has(associadoLocal.codigo_hinova)) {
+              console.log(`[SGA Sync] Código ${associadoLocal.codigo_hinova} do banco local IGNORADO (já invalidado)`);
             }
           }
 
