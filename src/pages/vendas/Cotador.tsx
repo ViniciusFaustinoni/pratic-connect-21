@@ -660,6 +660,7 @@ export default function CotadorPage() {
         valor_fipe: valorFipe,
         codigo_fipe: veiculoEncontrado?.codigoFipe,
         uso_aplicativo: usoApp,
+        regiao: regiao,
         categoria_veiculo: categoriaVeiculo || undefined,
         nome_solicitante: leadSelecionado?.nome || nomeAssociado || null,
         veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
