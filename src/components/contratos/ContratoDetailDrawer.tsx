@@ -555,11 +555,29 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
 
                         {/* Documento assinado */}
                         {autentiqueStatus.document?.signedFileUrl && (
-                          <Button variant="default" size="sm" className="w-full" asChild>
-                            <a href={autentiqueStatus.document.signedFileUrl} target="_blank" rel="noopener noreferrer">
-                              <FileText className="mr-2 h-3.5 w-3.5" />
-                              Baixar Documento Assinado
-                            </a>
+                          <Button
+                            variant="default"
+                            size="sm"
+                            className="w-full"
+                            onClick={async () => {
+                              try {
+                                const res = await fetch(autentiqueStatus.document.signedFileUrl);
+                                const blob = await res.blob();
+                                const url = URL.createObjectURL(blob);
+                                const a = document.createElement('a');
+                                a.href = url;
+                                a.download = `contrato-${contrato.id}.pdf`;
+                                document.body.appendChild(a);
+                                a.click();
+                                document.body.removeChild(a);
+                                URL.revokeObjectURL(url);
+                              } catch {
+                                toast.error('Erro ao baixar documento');
+                              }
+                            }}
+                          >
+                            <FileText className="mr-2 h-3.5 w-3.5" />
+                            Baixar Documento Assinado
                           </Button>
                         )}
                       </div>
