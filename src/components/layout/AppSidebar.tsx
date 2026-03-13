@@ -838,7 +838,6 @@ export function AppSidebar() {
             ))}
           </>
         )}
-        )
       </SidebarContent>
 
       {!collapsed && (
