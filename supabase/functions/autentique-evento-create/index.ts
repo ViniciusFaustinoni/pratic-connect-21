@@ -4,6 +4,7 @@
 // ============================================
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { gerarPosicoesAssinatura } from "../_shared/autentique-positions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import {
   substituirVariaveisEvento,
@@ -403,7 +404,7 @@ serve(async (req) => {
           name: signerName,
           email: signerEmail,
           action: "SIGN",
-          positions: [{ x: "65.0", y: "85.0", z: "1", element: "SIGNATURE" }],
+          positions: gerarPosicoesAssinatura(),
         }],
         file: null,
       },
