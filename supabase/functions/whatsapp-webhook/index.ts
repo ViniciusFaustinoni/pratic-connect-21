@@ -1287,8 +1287,8 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       });
     }
 
-    case "enviar_localizacao_veiculo": {
-      // Nova tool: Enviar localização do veículo via pin nativo do WhatsApp
+    case "consultar_localizacao_veiculo": {
+      // Consulta localização e retorna endereço em texto (sem enviar pin)
       const { veiculo_id } = args;
 
       // Buscar veículo do associado
@@ -1325,10 +1325,6 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         return JSON.stringify({ success: false, message: "Posição do veículo não disponível. O rastreador ainda não enviou dados de localização." });
       }
 
-      if (!telefone || !instancia) {
-        return JSON.stringify({ success: false, message: "Erro de contexto: telefone ou instância não disponíveis" });
-      }
-
       // Calcular há quanto tempo a posição foi atualizada
       let tempoAtras = "";
       if (rastreador.ultima_comunicacao) {
@@ -1342,94 +1338,52 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         }
       }
 
+      // Buscar endereço via reverse geocoding
+      let endereco = "Endereço não disponível";
+      let rua = "";
+      let numero = "";
+      let bairro = "";
+      let cidade = "";
       try {
-        const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
         const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-
-        // Buscar endereço via reverse geocoding
-        let endereco = "Última posição conhecida";
-        try {
-          const geoResponse = await fetch(`${SUPABASE_URL}/functions/v1/reverse-geocode`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({
-              latitude: rastreador.ultima_posicao_lat,
-              longitude: rastreador.ultima_posicao_lng,
-            }),
-          });
-          if (geoResponse.ok) {
-            const geoData = await geoResponse.json();
-            if (geoData.success && geoData.endereco_completo) {
-              endereco = geoData.endereco_completo;
-            }
-          }
-        } catch (geoErr) {
-          console.warn("[whatsapp-webhook] Erro no geocoding:", geoErr);
-        }
-
-        // Enviar pin de localização
-        const locationBody = {
-          number: telefone,
-          name: `Veículo ${veiculo.placa}`,
-          address: endereco + (tempoAtras ? ` (${tempoAtras})` : ""),
-          latitude: rastreador.ultima_posicao_lat,
-          longitude: rastreador.ultima_posicao_lng,
-        };
-
-        console.log(`[whatsapp-webhook] Enviando localização do veículo ${veiculo.placa}`);
-
-        const toolApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
-        const response = await fetch(
-          `${toolApiUrl}/message/sendLocation/${instancia.instance_name}`,
-          {
-            method: "POST",
-            headers: {
-              "apikey": EVOLUTION_API_KEY || "",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(locationBody),
-          }
-        );
-
-        const result = await response.json();
-
-        if (result.key?.id) {
-          // Registrar mensagem no banco
-          await supabase.from("whatsapp_mensagens").insert({
-            instancia_id: instancia.id,
-            telefone: telefone,
-            tipo: "location",
-            mensagem: `📍 ${locationBody.name}: ${locationBody.address}`,
-            status: "enviada",
-            message_id: result.key.id,
-            referencia_tipo: "veiculo",
-            referencia_id: veiculo.id,
-            direcao: "saida",
-            sent_at: new Date().toISOString(),
-          });
-
-          console.log(`[whatsapp-webhook] Localização enviada com sucesso: ${result.key.id}`);
-          return JSON.stringify({ 
-            success: true, 
-            message: `Pronto! A localização do seu veículo ${veiculo.placa} foi enviada. Verifique o mapa na conversa! 📍${tempoAtras ? ` (Atualizado ${tempoAtras})` : ''}` 
-          });
-        } else {
-          console.error(`[whatsapp-webhook] Erro ao enviar localização:`, result);
-          return JSON.stringify({ 
-            success: false, 
-            message: "Não foi possível enviar a localização. Tente novamente mais tarde." 
-          });
-        }
-      } catch (err) {
-        console.error(`[whatsapp-webhook] Erro ao enviar localização:`, err);
-        return JSON.stringify({ 
-          success: false, 
-          message: "Erro ao enviar localização. Tente novamente mais tarde." 
+        const geoResponse = await fetch(`${SUPABASE_URL}/functions/v1/reverse-geocode`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            latitude: rastreador.ultima_posicao_lat,
+            longitude: rastreador.ultima_posicao_lng,
+          }),
         });
+        if (geoResponse.ok) {
+          const geoData = await geoResponse.json();
+          if (geoData.success) {
+            endereco = geoData.endereco_completo || endereco;
+            rua = geoData.rua || geoData.logradouro || "";
+            numero = geoData.numero || "próximo";
+            bairro = geoData.bairro || "";
+            cidade = geoData.cidade || geoData.localidade || "";
+          }
+        }
+      } catch (geoErr) {
+        console.warn("[whatsapp-webhook] Erro no geocoding:", geoErr);
       }
+
+      console.log(`[whatsapp-webhook] Consulta localização veículo ${veiculo.placa}: ${endereco}`);
+
+      return JSON.stringify({ 
+        success: true, 
+        veiculo: `${veiculo.marca} ${veiculo.modelo} - ${veiculo.placa}`,
+        endereco,
+        rua,
+        numero,
+        bairro,
+        cidade,
+        atualizado: tempoAtras || "recentemente",
+        message: `Seu veículo ${veiculo.placa} está localizado em: ${endereco}${tempoAtras ? ` (atualizado ${tempoAtras})` : ''}.`
+      });
     }
 
     case "enviar_contato_central": {
