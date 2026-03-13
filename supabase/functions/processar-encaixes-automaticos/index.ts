@@ -63,7 +63,7 @@ async function temTarefasNaJanela(
     .lte('data_agendada', limiteJanelaStr);
 
   // Filtrar apenas tarefas DENTRO da janela de tempo
-  const todasTarefas = [...(instAgendadas || []), ...(vistAgendadas || [])];
+  const todasTarefas = [...(instAgendadas || []), ...(vistAgendadas || []).map(v => ({ ...v, hora_agendada: v.horario_agendado }))];
   
   const tarefasNaJanela = todasTarefas.filter(tarefa => {
     // Se é de um dia futuro (dentro do limite), conta
