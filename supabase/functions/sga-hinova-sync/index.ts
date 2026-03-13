@@ -938,10 +938,13 @@ serve(async (req) => {
               if (logAnterior) {
                 for (const log of logAnterior) {
                   const codigo = extractCodigoAssociado(log.response_payload);
-                  if (codigo) {
+                  if (codigo && !codigosInvalidados.has(codigo)) {
                     codigoExistente = codigo;
                     console.log(`[SGA Sync] Código recuperado via logs do próprio associado: ${codigoExistente}`);
                     break;
+                  } else if (codigo && codigosInvalidados.has(codigo)) {
+                    console.log(`[SGA Sync] Código ${codigo} dos logs do associado IGNORADO (já invalidado)`);
+                  }
                   }
                 }
               }
