@@ -1,18 +1,26 @@
 
 
-## Remover envio duplicado de mensagem de boas-vindas
+## Permitir edição e reenvio de templates Pendentes e Rejeitados com IA
 
-### Problema
-
-Quando o instalador finaliza a instalação, o código em `src/hooks/useServicos.ts` (linha ~1159) chama `notificar-cliente` com tipo `instalacao_concluida`, que usa o template `cadastro_aprovado_botao` — o mesmo template de boas-vindas. Depois, quando o analista de cadastro aprova, a edge function `ativar-associado` envia novamente o `cadastro_aprovado_botao`. Resultado: mensagem duplicada.
+### Problema atual
+Templates com status `PENDING` não podem ser editados nem reenviados pela interface. O `canEdit` e `canSend` só permitem `DRAFT` e `REJECTED`. Para corrigir um template pendente, o usuário precisa esperar a rejeição.
 
 ### Solução
 
-Remover o envio da notificação WhatsApp `instalacao_concluida` no `useServicos.ts`. O histórico e a notificação in-app podem permanecer — apenas o disparo para `notificar-cliente` com tipo `instalacao_concluida` deve ser removido.
+**1. `src/components/integracoes/WhatsAppMetaTemplates.tsx`**
+- Adicionar `PENDING` ao `canEdit` e `canSend` para permitir edição e reenvio de templates pendentes
 
-A mensagem de boas-vindas continuará sendo enviada apenas pelo fluxo de aprovação do analista (`ativar-associado`).
+**2. `src/components/integracoes/WhatsAppMetaTemplateDrawer.tsx`**
+- Permitir edição do corpo, rodapé, header e botões em templates PENDING (manter nome bloqueado)
+- Mostrar alerta informativo quando o template está PENDING ou REJECTED, indicando que ao reenviar o anterior será substituído
+- Ao reenviar, o backend já faz delete + recreate automaticamente (fluxo `jaExiste`)
 
-### Alteração
+**3. `supabase/functions/whatsapp-meta-templates/index.ts`**
+- No fluxo `enviar`, quando o status atual é PENDING, forçar delete do template anterior na Meta antes de enviar a nova versão (garantir que o delete+recreate aconteça mesmo sem erro "already exists")
 
-**`src/hooks/useServicos.ts`** — Remover o bloco fire-and-forget (linhas ~1156-1170) que invoca `notificar-cliente` com `instalacao_concluida`.
+### Detalhes técnicos
+
+- A edge function já possui lógica de auto-retry (delete + recreate) quando detecta "already exists". Para templates PENDING, precisamos forçar esse fluxo proativamente: deletar o template existente na Meta antes de enviar o novo corpo.
+- O nome do template permanece bloqueado (não-DRAFT) para evitar problemas com o cooldown de 4 semanas da Meta.
+- A validação com IA já funciona para templates editados (passa `motivo_rejeicao` quando disponível).
 
