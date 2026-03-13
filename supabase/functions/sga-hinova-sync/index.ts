@@ -1216,8 +1216,18 @@ serve(async (req) => {
         e.toLowerCase().includes('parametros invalidos') ||
         e.toLowerCase().includes('verifique o campo')
       );
+
+      // Check if the error is about the associate code being invalid/not registered
+      const allErrorsJoined = [...errorMessages.map((e: string) => e.toLowerCase()), mensagem].join(' ');
+      const isAssociadoInvalidoError = allErrorsJoined.includes('associado') && (
+        allErrorsJoined.includes('não está cadastrado') ||
+        allErrorsJoined.includes('nao esta cadastrado') ||
+        allErrorsJoined.includes('não encontrado') ||
+        allErrorsJoined.includes('nao encontrado') ||
+        allErrorsJoined.includes('not found')
+      );
       
-      const isDuplicate = !isValidationError && (
+      const isDuplicate = !isValidationError && !isAssociadoInvalidoError && (
         statusCode === 406 || mensagem.includes('já cadastrad') || mensagem.includes('duplicad') || mensagem.includes('existe')
       );
       
