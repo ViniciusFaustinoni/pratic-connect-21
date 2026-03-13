@@ -217,7 +217,7 @@ ${conteudoHTML}
           name: associado.nome,
           email: associado.email,
           action: "SIGN",
-          positions: gerarPosicoesAssinatura(),
+          positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
         }],
         file: null,
       },

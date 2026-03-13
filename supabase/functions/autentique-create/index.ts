@@ -294,7 +294,7 @@ serve(async (req) => {
             name: signerName || undefined,
             email: signerEmail,
             action: "SIGN",
-            positions: gerarPosicoesAssinatura(),
+            positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
           },
         ],
         file: null,

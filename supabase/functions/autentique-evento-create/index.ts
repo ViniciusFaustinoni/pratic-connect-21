@@ -404,7 +404,7 @@ serve(async (req) => {
           name: signerName,
           email: signerEmail,
           action: "SIGN",
-          positions: gerarPosicoesAssinatura(),
+          positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
         }],
         file: null,
       },

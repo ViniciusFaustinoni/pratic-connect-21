@@ -300,7 +300,7 @@ serve(async (req) => {
             email: clienteEmail,
             action: "SIGN",
             delivery_method: "DELIVERY_METHOD_LINK",
-            positions: gerarPosicoesAssinatura(),
+            positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
           },
         ],
         file: null,
