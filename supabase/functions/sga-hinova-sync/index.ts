@@ -898,6 +898,30 @@ serve(async (req) => {
             console.log(`[SGA Sync] Código retornado no próprio erro de cadastro: ${codigoExistente}`);
           }
 
+          // Buscar códigos já invalidados para não reutilizá-los (previne loop infinito)
+          let codigosInvalidados = new Set<number>();
+          try {
+            const { data: logsInvalidados } = await supabase
+              .from('sga_sync_logs')
+              .select('request_payload')
+              .eq('associado_id', associado_id)
+              .eq('action', 'invalidar_codigo_associado')
+              .order('created_at', { ascending: false })
+              .limit(50);
+
+            if (logsInvalidados) {
+              for (const l of logsInvalidados) {
+                const cod = Number((l.request_payload as any)?.codigo_invalidado);
+                if (Number.isFinite(cod) && cod > 0) codigosInvalidados.add(cod);
+              }
+            }
+            if (codigosInvalidados.size > 0) {
+              console.log(`[SGA Sync] Códigos já invalidados (${codigosInvalidados.size}): ${[...codigosInvalidados].join(', ')}`);
+            }
+          } catch (e) {
+            console.log('[SGA Sync] Erro ao buscar códigos invalidados:', e);
+          }
+
           // Estratégia 1: Logs anteriores do mesmo associado_id
           if (!codigoExistente) {
             try {
@@ -914,10 +938,12 @@ serve(async (req) => {
               if (logAnterior) {
                 for (const log of logAnterior) {
                   const codigo = extractCodigoAssociado(log.response_payload);
-                  if (codigo) {
+                  if (codigo && !codigosInvalidados.has(codigo)) {
                     codigoExistente = codigo;
                     console.log(`[SGA Sync] Código recuperado via logs do próprio associado: ${codigoExistente}`);
                     break;
+                  } else if (codigo && codigosInvalidados.has(codigo)) {
+                    console.log(`[SGA Sync] Código ${codigo} dos logs do associado IGNORADO (já invalidado)`);
                   }
                 }
               }
@@ -948,6 +974,10 @@ serve(async (req) => {
                   const reqPayload = (log.request_payload || {}) as Record<string, unknown>;
                   const codigo = extractCodigoAssociado(log.response_payload);
                   if (!codigo) continue;
+                  if (codigosInvalidados.has(codigo)) {
+                    console.log(`[SGA Sync] Código ${codigo} dos logs de identidade IGNORADO (já invalidado)`);
+                    continue;
+                  }
 
                   const nomeLog = String(reqPayload?.nome || '').trim().toLowerCase();
                   const emailLog = String(reqPayload?.email || '').trim().toLowerCase();
@@ -1077,9 +1107,11 @@ serve(async (req) => {
               .limit(1)
               .maybeSingle();
 
-            if (associadoLocal?.codigo_hinova) {
+            if (associadoLocal?.codigo_hinova && !codigosInvalidados.has(associadoLocal.codigo_hinova)) {
               codigoExistente = associadoLocal.codigo_hinova;
               console.log(`[SGA Sync] Código recuperado do banco local: ${codigoExistente}`);
+            } else if (associadoLocal?.codigo_hinova && codigosInvalidados.has(associadoLocal.codigo_hinova)) {
+              console.log(`[SGA Sync] Código ${associadoLocal.codigo_hinova} do banco local IGNORADO (já invalidado)`);
             }
           }
 
