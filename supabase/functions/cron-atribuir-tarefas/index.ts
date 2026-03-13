@@ -403,7 +403,7 @@ serve(async (req) => {
             // Preparar dados para instalação
             const instUpdateData: any = {
               instalador_responsavel_id: prof.vistoriador_id,
-              status: 'em_rota'
+              status: 'agendada'
             };
             
             // Se é encaixe, atualizar data também na tabela de origem
