@@ -630,7 +630,16 @@ export function AppSidebar() {
       </SidebarHeader>
 
       <SidebarContent className="scrollbar-thin">
-        {collapsed ? (
+        {isDataLoading ? (
+          /* LOADING STATE */
+          <SidebarGroup className="p-3">
+            <div className="space-y-3">
+              {Array.from({ length: 6 }).map((_, i) => (
+                <div key={i} className="h-8 rounded-md bg-sidebar-accent/30 animate-pulse" />
+              ))}
+            </div>
+          </SidebarGroup>
+        ) : collapsed ? (
           /* MODO COLAPSADO */
           <SidebarGroup className="p-1">
             <SidebarMenu className="gap-0.5">
