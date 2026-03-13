@@ -1668,8 +1668,9 @@ export function useAprovarProposta() {
           .from('veiculos')
           .select('id')
           .eq('associado_id', associadoId)
+          .eq('sincronizado_hinova', false)
           .limit(1)
-          .single();
+          .maybeSingle();
 
         if (veiculoParaSGA?.id) {
           console.log('[useAprovarProposta] Iniciando envio automático para SGA...');

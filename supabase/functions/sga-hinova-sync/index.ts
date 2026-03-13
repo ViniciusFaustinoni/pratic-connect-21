@@ -443,6 +443,44 @@ serve(async (req) => {
 
     console.log(`[SGA Sync] Iniciando sincronização - Veículo: ${veiculo_id}, Associado: ${associado_id}`);
 
+    // ========================================
+    // GUARD DE IDEMPOTÊNCIA
+    // ========================================
+    const { data: veiculoCheck } = await supabase
+      .from('veiculos')
+      .select('sincronizado_hinova, codigo_hinova, status_sga')
+      .eq('id', veiculo_id)
+      .single();
+
+    // Se já está sincronizado com sucesso, retornar sem chamar Hinova
+    if (veiculoCheck?.sincronizado_hinova && veiculoCheck?.codigo_hinova) {
+      console.log(`[SGA Sync] Veículo ${veiculo_id} já sincronizado (codigo_hinova=${veiculoCheck.codigo_hinova}). Retornando sucesso.`);
+      await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped', { veiculo_id, associado_id }, { codigo_hinova: veiculoCheck.codigo_hinova });
+      await markQueueCompleted(supabase, veiculo_id, associado_id);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: { already_synced: true, codigo_veiculo_hinova: veiculoCheck.codigo_hinova },
+          step: 'idempotency_guard'
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    // Se já existe processamento em andamento, evitar disparo paralelo
+    if (veiculoCheck?.status_sga === 'sincronizando') {
+      console.log(`[SGA Sync] Veículo ${veiculo_id} já em sincronização. Ignorando chamada duplicada.`);
+      await logSync(veiculo_id, associado_id, 'idempotency_guard', 'skipped_in_progress', { veiculo_id, associado_id }, null);
+      return new Response(
+        JSON.stringify({
+          success: true,
+          data: { already_in_progress: true },
+          step: 'idempotency_guard'
+        }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     await supabase
       .from('veiculos')
       .update({ status_sga: 'sincronizando' })
