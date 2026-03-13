@@ -543,6 +543,15 @@ export default function CotacaoContratacao() {
                       clienteEmail={cotacao.email_solicitante || undefined}
                       veiculoPlaca={cotacao.veiculo_placa || undefined}
                       veiculoDescricao={[cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.veiculo_ano].filter(Boolean).join(' ') || undefined}
+                      enderecoInicial={{
+                        cep: cotacao.cliente_cep || '',
+                        logradouro: cotacao.cliente_logradouro || '',
+                        numero: cotacao.cliente_numero || '',
+                        complemento: cotacao.cliente_complemento || '',
+                        bairro: cotacao.cliente_bairro || '',
+                        cidade: cotacao.cliente_cidade || '',
+                        estado: cotacao.cliente_uf || '',
+                      }}
                       onComplete={() => setEtapaAtual(4)}
                       onAgendar={() => setEtapaAtual(4)}
                       readOnly={isEtapaConcluida(3)}

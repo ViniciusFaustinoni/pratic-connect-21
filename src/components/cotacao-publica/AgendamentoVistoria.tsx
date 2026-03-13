@@ -65,13 +65,13 @@ export function AgendamentoVistoria({
   const [buscandoCep, setBuscandoCep] = useState(false);
   
   const [endereco, setEndereco] = useState<EnderecoForm>({
-    cep: '',
-    logradouro: '',
-    numero: '',
-    complemento: '',
-    bairro: '',
-    cidade: '',
-    estado: ''
+    cep: enderecoInicial?.cep || '',
+    logradouro: enderecoInicial?.logradouro || '',
+    numero: enderecoInicial?.numero || '',
+    complemento: enderecoInicial?.complemento || '',
+    bairro: enderecoInicial?.bairro || '',
+    cidade: enderecoInicial?.cidade || '',
+    estado: enderecoInicial?.estado || ''
   });
 
   // Hooks de mutations

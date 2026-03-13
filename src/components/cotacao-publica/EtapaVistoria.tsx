@@ -282,6 +282,7 @@ export function EtapaVistoria({
           <AgendamentoCotacao
             cotacaoId={cotacaoId}
             onConfirmar={handleAgendamentoConfirmado}
+            enderecoInicial={enderecoInicial}
           />
         </motion.div>
       )}
