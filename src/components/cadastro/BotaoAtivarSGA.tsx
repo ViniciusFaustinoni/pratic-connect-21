@@ -174,9 +174,8 @@ export function BotaoAtivarSGA({
             <AlertDialogAction
               onClick={handleAtivar}
               className="bg-blue-600 hover:bg-blue-700"
-              disabled={!checklist.pronto}
             >
-              {!checklist.pronto ? 'Dados incompletos' : 'Confirmar Ativação'}
+              Confirmar Ativação
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
