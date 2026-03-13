@@ -272,7 +272,7 @@ const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsAp
 - Para localização, peça o endereço digitado OU use a tool reverse_geocode se receber coordenadas
 
 ## Capacidades
-1. Consultar faturas pendentes e enviar PIX/PDF — quando o associado perguntar sobre boleto, fatura, pagamento em aberto, dívida ou mensalidade, use get_boletos_pendentes. Se não houver faturas em aberto, informe que está em dia. Se houver, mostre resumo e OFEREÇA enviar o PDF pelo WhatsApp (use enviar_boleto_pdf com o id E o campo fonte retornados).
+1. Consultar faturas pendentes e enviar link — quando o associado perguntar sobre boleto, fatura, pagamento em aberto, dívida ou mensalidade, use get_boletos_pendentes. Se não houver faturas em aberto, informe que está em dia. Se houver, mostre resumo com os dados de pagamento (PIX, linha digitável). Se o associado quiser o link da fatura, use enviar_link_fatura com o id e o campo fonte retornados.
 2. Histórico de pagamentos
 3. Status de sinistros
 4. Abrir sinistro (coleta dados para aprovação)
@@ -614,8 +614,8 @@ const tools = [
   {
     type: "function",
     function: {
-      name: "enviar_boleto_pdf",
-      description: "Envia boleto em PDF via WhatsApp para o associado. Use quando o cliente pedir para receber o boleto no WhatsApp. Inclua o campo 'fonte' retornado por get_boletos_pendentes.",
+      name: "enviar_link_fatura",
+      description: "Retorna o link da fatura no Asaas para o associado acessar e pagar. Use quando o cliente pedir o link do boleto ou da fatura. Inclua o campo 'fonte' retornado por get_boletos_pendentes.",
       parameters: {
         type: "object",
         properties: {
@@ -629,8 +629,8 @@ const tools = [
 {
   type: "function",
   function: {
-    name: "enviar_localizacao_veiculo",
-    description: "Envia a localização atual do veículo como pin nativo do WhatsApp. Use quando o associado pedir para ver onde está o carro ou a última posição do rastreador.",
+    name: "consultar_localizacao_veiculo",
+    description: "Consulta a localização atual do veículo e retorna o endereço em texto (rua, número, bairro, cidade). NÃO envia pin de localização. Use quando o associado perguntar onde está o carro.",
     parameters: {
       type: "object",
       properties: {
@@ -750,7 +750,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       return JSON.stringify({
         boletos: todosboletos,
         total: `R$ ${total.toFixed(2)}`,
-        instrucao: "Para receber o boleto em PDF no WhatsApp, use a tool enviar_boleto_pdf com o id do boleto e o campo fonte (asaas_cobrancas ou cobrancas).",
+        instrucao: "Mostre os dados de pagamento (PIX, linha digitável). Se o associado quiser o link da fatura, use a tool enviar_link_fatura com o id do boleto e o campo fonte.",
       });
     }
 
@@ -1246,7 +1246,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       }
     }
 
-    case "enviar_boleto_pdf": {
+    case "enviar_link_fatura": {
       const { boleto_id, fonte } = args;
       
       if (!boleto_id) {
@@ -1257,7 +1257,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       const tabela = fonte === "asaas_cobrancas" ? "asaas_cobrancas" : "cobrancas";
       const { data: boleto, error: boletoError } = await supabase
         .from(tabela)
-        .select("id, valor, data_vencimento, boleto_url, associado_id")
+        .select("id, valor, data_vencimento, boleto_url, pix_copia_cola, linha_digitavel, associado_id")
         .eq("id", boleto_id)
         .eq("associado_id", associadoId)
         .single();
@@ -1268,90 +1268,27 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       }
 
       if (!boleto.boleto_url) {
-        return JSON.stringify({ success: false, message: "Este boleto não possui PDF disponível. Tente gerar uma segunda via no portal." });
+        return JSON.stringify({ success: false, message: "Link da fatura não disponível para este boleto." });
       }
 
-      if (!telefone || !instancia) {
-        return JSON.stringify({ success: false, message: "Erro de contexto: telefone ou instância não disponíveis" });
-      }
-
-      // Formatar dados para caption
       const valor = `R$ ${boleto.valor?.toFixed(2)}`;
       const vencimento = boleto.data_vencimento 
         ? new Date(boleto.data_vencimento).toLocaleDateString("pt-BR") 
         : "";
 
-      try {
-        const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
-        
-        // Enviar via Evolution API diretamente
-        const mediaBody = {
-          number: telefone,
-          mediatype: "document",
-          mimetype: "application/pdf",
-          caption: `📄 *Boleto PRATICCAR*\n💰 Valor: ${valor}\n📅 Vencimento: ${vencimento}`,
-          media: boleto.boleto_url,
-          fileName: `boleto_praticcar_${vencimento.replace(/\//g, "-")}.pdf`,
-        };
-
-        console.log(`[whatsapp-webhook] Enviando boleto PDF para ${telefone}`);
-
-        const toolApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
-        const response = await fetch(
-          `${toolApiUrl}/message/sendMedia/${instancia.instance_name}`,
-          {
-            method: "POST",
-            headers: {
-              "apikey": EVOLUTION_API_KEY || "",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(mediaBody),
-          }
-        );
-
-        const result = await response.json();
-
-        if (result.key?.id) {
-          // Registrar mensagem no banco
-          await supabase.from("whatsapp_mensagens").insert({
-            instancia_id: instancia.id,
-            telefone: telefone,
-            tipo: "document",
-            mensagem: mediaBody.caption,
-            media_url: boleto.boleto_url,
-            media_mimetype: "application/pdf",
-            media_filename: mediaBody.fileName,
-            status: "enviada",
-            message_id: result.key.id,
-            referencia_tipo: "cobranca",
-            referencia_id: boleto.id,
-            direcao: "saida",
-            sent_at: new Date().toISOString(),
-          });
-
-          console.log(`[whatsapp-webhook] Boleto PDF enviado com sucesso: ${result.key.id}`);
-          return JSON.stringify({ 
-            success: true, 
-            message: "Pronto! O boleto em PDF foi enviado. Verifique nossa conversa! 📄" 
-          });
-        } else {
-          console.error(`[whatsapp-webhook] Erro ao enviar boleto PDF:`, result);
-          return JSON.stringify({ 
-            success: false, 
-            message: "Não foi possível enviar o boleto. Tente novamente mais tarde." 
-          });
-        }
-      } catch (err) {
-        console.error(`[whatsapp-webhook] Erro ao enviar boleto PDF:`, err);
-        return JSON.stringify({ 
-          success: false, 
-          message: "Erro ao enviar boleto. Tente novamente mais tarde." 
-        });
-      }
+      console.log(`[whatsapp-webhook] Retornando link da fatura para boleto ${boleto_id}`);
+      
+      return JSON.stringify({ 
+        success: true, 
+        link: boleto.boleto_url,
+        valor,
+        vencimento,
+        message: `Aqui está o link da sua fatura:\n\n📄 Valor: ${valor}\n📅 Vencimento: ${vencimento}\n🔗 ${boleto.boleto_url}\n\nVocê pode acessar o link para visualizar e pagar!` 
+      });
     }
 
-    case "enviar_localizacao_veiculo": {
-      // Nova tool: Enviar localização do veículo via pin nativo do WhatsApp
+    case "consultar_localizacao_veiculo": {
+      // Consulta localização e retorna endereço em texto (sem enviar pin)
       const { veiculo_id } = args;
 
       // Buscar veículo do associado
@@ -1388,10 +1325,6 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         return JSON.stringify({ success: false, message: "Posição do veículo não disponível. O rastreador ainda não enviou dados de localização." });
       }
 
-      if (!telefone || !instancia) {
-        return JSON.stringify({ success: false, message: "Erro de contexto: telefone ou instância não disponíveis" });
-      }
-
       // Calcular há quanto tempo a posição foi atualizada
       let tempoAtras = "";
       if (rastreador.ultima_comunicacao) {
@@ -1405,94 +1338,52 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         }
       }
 
+      // Buscar endereço via reverse geocoding
+      let endereco = "Endereço não disponível";
+      let rua = "";
+      let numero = "";
+      let bairro = "";
+      let cidade = "";
       try {
-        const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
         const SUPABASE_URL = Deno.env.get("SUPABASE_URL");
-
-        // Buscar endereço via reverse geocoding
-        let endereco = "Última posição conhecida";
-        try {
-          const geoResponse = await fetch(`${SUPABASE_URL}/functions/v1/reverse-geocode`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
-            },
-            body: JSON.stringify({
-              latitude: rastreador.ultima_posicao_lat,
-              longitude: rastreador.ultima_posicao_lng,
-            }),
-          });
-          if (geoResponse.ok) {
-            const geoData = await geoResponse.json();
-            if (geoData.success && geoData.endereco_completo) {
-              endereco = geoData.endereco_completo;
-            }
-          }
-        } catch (geoErr) {
-          console.warn("[whatsapp-webhook] Erro no geocoding:", geoErr);
-        }
-
-        // Enviar pin de localização
-        const locationBody = {
-          number: telefone,
-          name: `Veículo ${veiculo.placa}`,
-          address: endereco + (tempoAtras ? ` (${tempoAtras})` : ""),
-          latitude: rastreador.ultima_posicao_lat,
-          longitude: rastreador.ultima_posicao_lng,
-        };
-
-        console.log(`[whatsapp-webhook] Enviando localização do veículo ${veiculo.placa}`);
-
-        const toolApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
-        const response = await fetch(
-          `${toolApiUrl}/message/sendLocation/${instancia.instance_name}`,
-          {
-            method: "POST",
-            headers: {
-              "apikey": EVOLUTION_API_KEY || "",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(locationBody),
-          }
-        );
-
-        const result = await response.json();
-
-        if (result.key?.id) {
-          // Registrar mensagem no banco
-          await supabase.from("whatsapp_mensagens").insert({
-            instancia_id: instancia.id,
-            telefone: telefone,
-            tipo: "location",
-            mensagem: `📍 ${locationBody.name}: ${locationBody.address}`,
-            status: "enviada",
-            message_id: result.key.id,
-            referencia_tipo: "veiculo",
-            referencia_id: veiculo.id,
-            direcao: "saida",
-            sent_at: new Date().toISOString(),
-          });
-
-          console.log(`[whatsapp-webhook] Localização enviada com sucesso: ${result.key.id}`);
-          return JSON.stringify({ 
-            success: true, 
-            message: `Pronto! A localização do seu veículo ${veiculo.placa} foi enviada. Verifique o mapa na conversa! 📍${tempoAtras ? ` (Atualizado ${tempoAtras})` : ''}` 
-          });
-        } else {
-          console.error(`[whatsapp-webhook] Erro ao enviar localização:`, result);
-          return JSON.stringify({ 
-            success: false, 
-            message: "Não foi possível enviar a localização. Tente novamente mais tarde." 
-          });
-        }
-      } catch (err) {
-        console.error(`[whatsapp-webhook] Erro ao enviar localização:`, err);
-        return JSON.stringify({ 
-          success: false, 
-          message: "Erro ao enviar localização. Tente novamente mais tarde." 
+        const geoResponse = await fetch(`${SUPABASE_URL}/functions/v1/reverse-geocode`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            latitude: rastreador.ultima_posicao_lat,
+            longitude: rastreador.ultima_posicao_lng,
+          }),
         });
+        if (geoResponse.ok) {
+          const geoData = await geoResponse.json();
+          if (geoData.success) {
+            endereco = geoData.endereco_completo || endereco;
+            rua = geoData.rua || geoData.logradouro || "";
+            numero = geoData.numero || "próximo";
+            bairro = geoData.bairro || "";
+            cidade = geoData.cidade || geoData.localidade || "";
+          }
+        }
+      } catch (geoErr) {
+        console.warn("[whatsapp-webhook] Erro no geocoding:", geoErr);
       }
+
+      console.log(`[whatsapp-webhook] Consulta localização veículo ${veiculo.placa}: ${endereco}`);
+
+      return JSON.stringify({ 
+        success: true, 
+        veiculo: `${veiculo.marca} ${veiculo.modelo} - ${veiculo.placa}`,
+        endereco,
+        rua,
+        numero,
+        bairro,
+        cidade,
+        atualizado: tempoAtras || "recentemente",
+        message: `Seu veículo ${veiculo.placa} está localizado em: ${endereco}${tempoAtras ? ` (atualizado ${tempoAtras})` : ''}.`
+      });
     }
 
     case "enviar_contato_central": {
