@@ -14,6 +14,15 @@ interface AgendamentoVistoriaCompletaProps {
   clienteEmail?: string;
   veiculoPlaca?: string;
   veiculoDescricao?: string;
+  enderecoInicial?: {
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
+    cidade?: string;
+    estado?: string;
+  };
   onConfirmar: () => void;
 }
 
