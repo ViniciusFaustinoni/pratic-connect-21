@@ -1246,7 +1246,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       }
     }
 
-    case "enviar_boleto_pdf": {
+    case "enviar_link_fatura": {
       const { boleto_id, fonte } = args;
       
       if (!boleto_id) {
@@ -1257,7 +1257,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       const tabela = fonte === "asaas_cobrancas" ? "asaas_cobrancas" : "cobrancas";
       const { data: boleto, error: boletoError } = await supabase
         .from(tabela)
-        .select("id, valor, data_vencimento, boleto_url, associado_id")
+        .select("id, valor, data_vencimento, boleto_url, pix_copia_cola, linha_digitavel, associado_id")
         .eq("id", boleto_id)
         .eq("associado_id", associadoId)
         .single();
@@ -1268,86 +1268,23 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       }
 
       if (!boleto.boleto_url) {
-        return JSON.stringify({ success: false, message: "Este boleto não possui PDF disponível. Tente gerar uma segunda via no portal." });
+        return JSON.stringify({ success: false, message: "Link da fatura não disponível para este boleto." });
       }
 
-      if (!telefone || !instancia) {
-        return JSON.stringify({ success: false, message: "Erro de contexto: telefone ou instância não disponíveis" });
-      }
-
-      // Formatar dados para caption
       const valor = `R$ ${boleto.valor?.toFixed(2)}`;
       const vencimento = boleto.data_vencimento 
         ? new Date(boleto.data_vencimento).toLocaleDateString("pt-BR") 
         : "";
 
-      try {
-        const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
-        
-        // Enviar via Evolution API diretamente
-        const mediaBody = {
-          number: telefone,
-          mediatype: "document",
-          mimetype: "application/pdf",
-          caption: `📄 *Boleto PRATICCAR*\n💰 Valor: ${valor}\n📅 Vencimento: ${vencimento}`,
-          media: boleto.boleto_url,
-          fileName: `boleto_praticcar_${vencimento.replace(/\//g, "-")}.pdf`,
-        };
-
-        console.log(`[whatsapp-webhook] Enviando boleto PDF para ${telefone}`);
-
-        const toolApiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
-        const response = await fetch(
-          `${toolApiUrl}/message/sendMedia/${instancia.instance_name}`,
-          {
-            method: "POST",
-            headers: {
-              "apikey": EVOLUTION_API_KEY || "",
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify(mediaBody),
-          }
-        );
-
-        const result = await response.json();
-
-        if (result.key?.id) {
-          // Registrar mensagem no banco
-          await supabase.from("whatsapp_mensagens").insert({
-            instancia_id: instancia.id,
-            telefone: telefone,
-            tipo: "document",
-            mensagem: mediaBody.caption,
-            media_url: boleto.boleto_url,
-            media_mimetype: "application/pdf",
-            media_filename: mediaBody.fileName,
-            status: "enviada",
-            message_id: result.key.id,
-            referencia_tipo: "cobranca",
-            referencia_id: boleto.id,
-            direcao: "saida",
-            sent_at: new Date().toISOString(),
-          });
-
-          console.log(`[whatsapp-webhook] Boleto PDF enviado com sucesso: ${result.key.id}`);
-          return JSON.stringify({ 
-            success: true, 
-            message: "Pronto! O boleto em PDF foi enviado. Verifique nossa conversa! 📄" 
-          });
-        } else {
-          console.error(`[whatsapp-webhook] Erro ao enviar boleto PDF:`, result);
-          return JSON.stringify({ 
-            success: false, 
-            message: "Não foi possível enviar o boleto. Tente novamente mais tarde." 
-          });
-        }
-      } catch (err) {
-        console.error(`[whatsapp-webhook] Erro ao enviar boleto PDF:`, err);
-        return JSON.stringify({ 
-          success: false, 
-          message: "Erro ao enviar boleto. Tente novamente mais tarde." 
-        });
-      }
+      console.log(`[whatsapp-webhook] Retornando link da fatura para boleto ${boleto_id}`);
+      
+      return JSON.stringify({ 
+        success: true, 
+        link: boleto.boleto_url,
+        valor,
+        vencimento,
+        message: `Aqui está o link da sua fatura:\n\n📄 Valor: ${valor}\n📅 Vencimento: ${vencimento}\n🔗 ${boleto.boleto_url}\n\nVocê pode acessar o link para visualizar e pagar!` 
+      });
     }
 
     case "enviar_localizacao_veiculo": {
