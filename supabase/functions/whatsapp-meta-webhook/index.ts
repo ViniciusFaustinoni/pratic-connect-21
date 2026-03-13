@@ -571,6 +571,13 @@ serve(async (req) => {
 
               if (foiProcessado) {
                 console.log(`[whatsapp-meta-webhook] Mensagem processada como resposta de prestador`);
+              } else {
+                // Delegar para fluxo de IA (associado, lead ou desconhecido)
+                await processarMensagemUsuario(
+                  supabase, supabaseUrl, serviceKey,
+                  telefone, texto || "", msg.type,
+                  latitude, longitude, msg.id
+                );
               }
             }
 
