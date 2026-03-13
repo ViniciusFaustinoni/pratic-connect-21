@@ -289,5 +289,6 @@ export function usePermissions() {
     operationalRedirectPath,
     userIsOnlyOperational,
     hasPermission: (key: PermissionKey) => permissions[key] ?? false,
+    isPermissionsLoading: isRolesConfigLoading,
   };
 }
