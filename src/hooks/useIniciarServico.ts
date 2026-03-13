@@ -26,8 +26,8 @@ interface GeolocationState {
 // Intervalo de atualização de localização (5 minutos)
 const LOCATION_UPDATE_INTERVAL = 5 * 60 * 1000;
 
-// Intervalo de polling para buscar novas tarefas (2 minutos)
-const TASK_POLLING_INTERVAL = 2 * 60 * 1000;
+// Intervalo de polling para buscar novas tarefas (30 segundos — Realtime é o primário)
+const TASK_POLLING_INTERVAL = 30 * 1000;
 
 /**
  * Hook para gerenciar o fluxo de iniciar serviço com geolocalização
