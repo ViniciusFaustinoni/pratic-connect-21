@@ -572,7 +572,6 @@ export default function CotadorPage() {
     setMarca(novaMarca);
     setModelo('');
     setValorFipe(null);
-    setCotacaoCalculada(false);
     setPlanoFinalSelecionado(null);
     setCotacaoSalva(null);
     // Limpar modelo customizado ao trocar marca
