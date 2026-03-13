@@ -1036,7 +1036,6 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                       onValueChange={(v) => {
                         setModelo(v);
                         setValorFipe(null);
-                        setCotacaoCalculada(false);
                       }}
                       disabled={!marca}
                     >
