@@ -942,10 +942,6 @@ export default function Associados() {
         )}
 
         {/* Dialogs */}
-        <AssociadoFormDialog
-          open={formDialogOpen}
-          onOpenChange={setFormDialogOpen}
-        />
 
         {acaoDialog && (
           <ConfirmacaoAcaoDialog
