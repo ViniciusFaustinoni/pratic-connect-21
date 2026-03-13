@@ -67,11 +67,12 @@ export function AgendamentoVistoriaCompleta({
           <Button variant="ghost" size="sm" onClick={() => setModo('escolha')} className="mb-2">
             <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
           </Button>
-          <AgendamentoVistoria
+           <AgendamentoVistoria
             cotacaoId={cotacaoId}
             onConfirmar={onConfirmar}
             contexto="pos-autovistoria"
             tipoVistoria={tipoVistoria}
+            enderecoInicial={enderecoInicial}
           />
         </motion.div>
       )}
