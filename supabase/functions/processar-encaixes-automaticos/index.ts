@@ -56,14 +56,14 @@ async function temTarefasNaJanela(
   // Buscar vistorias agendadas nas próximas X horas
   const { data: vistAgendadas } = await supabase
     .from('vistorias')
-    .select('id, data_agendada, hora_agendada')
+    .select('id, data_agendada, horario_agendado')
     .eq('vistoriador_id', profissionalId)
     .in('status', ['pendente', 'agendada'])
     .gte('data_agendada', hojeStr)
     .lte('data_agendada', limiteJanelaStr);
 
   // Filtrar apenas tarefas DENTRO da janela de tempo
-  const todasTarefas = [...(instAgendadas || []), ...(vistAgendadas || [])];
+  const todasTarefas = [...(instAgendadas || []), ...(vistAgendadas || []).map(v => ({ ...v, hora_agendada: v.horario_agendado }))];
   
   const tarefasNaJanela = todasTarefas.filter(tarefa => {
     // Se é de um dia futuro (dentro do limite), conta
@@ -163,7 +163,7 @@ serve(async (req) => {
     // Vistorias FUTURAS com encaixe habilitado
     const { data: vistoriasEncaixe, error: vistError } = await supabase
       .from('vistorias')
-      .select('id, data_agendada, hora_agendada, endereco_latitude, endereco_longitude, associado_id, veiculo_id, bairro, cidade')
+      .select('id, data_agendada, horario_agendado, endereco_latitude, endereco_longitude, associado_id, veiculo_id, bairro, cidade')
       .eq('permite_encaixe', true)
       .is('vistoriador_id', null)
       .gt('data_agendada', hoje) // > hoje (datas FUTURAS)
@@ -201,7 +201,7 @@ serve(async (req) => {
           id: vist.id,
           tipo: 'vistoria',
           data_agendada: vist.data_agendada,
-          hora_agendada: vist.hora_agendada,
+          hora_agendada: vist.horario_agendado,
           endereco_latitude: vist.endereco_latitude,
           endereco_longitude: vist.endereco_longitude,
           associado_id: vist.associado_id,

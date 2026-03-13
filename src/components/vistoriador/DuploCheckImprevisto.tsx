@@ -70,12 +70,16 @@ export function DuploCheckImprevisto({
 
     const timer = setTimeout(() => {
       onOpenChange(false);
+      // Invalidate all relevant queries to ensure task disappears from installer view
       queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos'] });
+      queryClient.invalidateQueries({ queryKey: ['servicos-historico'] });
+      queryClient.invalidateQueries({ queryKey: ['servico-detalhes'] });
       navigate('/instalador');
     }, 4000);
 
     return () => clearTimeout(timer);
-  }, [etapa, onOpenChange, queryClient]);
+  }, [etapa, onOpenChange, queryClient, navigate]);
 
   const abrirWhatsApp = () => {
     const numero = clienteWhatsapp || clienteTelefone;
