@@ -35,7 +35,7 @@ const categoriaConfig: Record<string, CategoriaConfig> = {
   operacional: { label: 'Operacional', icon: Settings, desc: 'Prazos e regras operacionais' },
   notificacoes: { label: 'Notificações', icon: Bell, desc: 'Canais de comunicação' },
   atuarial: { label: 'Atuarial', icon: Calculator, desc: 'Parâmetros de cálculo' },
-  
+  documentos: { label: 'Documentos', icon: FileSignature, desc: 'Posição de rubrica e assinatura nos documentos' },
 };
 
 type ConfigRow = {
