@@ -51,7 +51,8 @@ export function AgendamentoVistoria({
   cotacaoId, 
   onConfirmar, 
   contexto,
-  tipoVistoria 
+  tipoVistoria,
+  enderecoInicial
 }: AgendamentoVistoriaProps) {
   // Estados
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
