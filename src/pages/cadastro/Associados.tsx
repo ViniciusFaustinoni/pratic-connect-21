@@ -107,7 +107,7 @@ export default function Associados() {
   const [cidadeFilter, setCidadeFilter] = useState<string>('all');
   const [page, setPage] = useState(1);
   const [pageSize, setPageSize] = useState(20);
-  const [formDialogOpen, setFormDialogOpen] = useState(false);
+  
   const [acaoDialog, setAcaoDialog] = useState<{
     open: boolean;
     acao: 'bloquear' | 'suspender' | 'cancelar' | 'excluir';
