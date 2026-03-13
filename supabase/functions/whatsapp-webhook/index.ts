@@ -1944,6 +1944,10 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
 
 // Enviar mensagem via Evolution API - ATUALIZADO para retornar messageId
 async function sendWhatsAppMessage(apiUrl: string, instanceName: string, telefone: string, texto: string): Promise<{ ok: boolean; messageId?: string }> {
+  // Fallback: se sem URL da Evolution (ex: delegação Meta), usar proxy que auto-roteia
+  if (!apiUrl || !instanceName) {
+    return sendWhatsAppViaProxy(telefone, texto);
+  }
   const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
   if (!EVOLUTION_API_KEY) throw new Error("EVOLUTION_API_KEY não configurada");
 
@@ -1974,6 +1978,24 @@ async function sendWhatsAppMessage(apiUrl: string, instanceName: string, telefon
   } catch (e) {
     console.warn(`[whatsapp-webhook] Resposta não é JSON, sem messageId`);
     return { ok: true };
+  }
+}
+
+// Enviar mensagem via proxy (whatsapp-send-text) — usado para delegação Meta
+async function sendWhatsAppViaProxy(telefone: string, texto: string): Promise<{ ok: boolean; messageId?: string }> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const res = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+      body: JSON.stringify({ telefone, mensagem: texto, allow_text: true }),
+    });
+    const result = await res.json();
+    return { ok: result.success, messageId: result.message_id };
+  } catch (e) {
+    console.error("[whatsapp-webhook] Erro no proxy meta:", e);
+    return { ok: false };
   }
 }
 
@@ -2835,6 +2857,10 @@ serve(async (req) => {
     }
 
     const data = payload.data;
+    const isMetaDelegate = !!payload._meta_delegate;
+    if (isMetaDelegate) {
+      console.log("[whatsapp-webhook] Delegação Meta detectada");
+    }
     if (!data?.key || data.key.fromMe) {
       return new Response(JSON.stringify({ ok: true, ignored: "própria mensagem" }), { headers: corsHeaders });
     }
@@ -2910,15 +2936,22 @@ serve(async (req) => {
     let mediaArmazenada: string | null = null;
 
     // Buscar instância primeiro (precisamos para download de mídia)
-    const { data: instancia } = await supabase
-      .from("whatsapp_instancias")
-      .select("id, api_url, instance_name, ia_habilitada")
-      .eq("principal", true)
-      .single();
+    let instancia: any;
+    if (isMetaDelegate) {
+      // Delegação Meta: usar instância sintética (IA habilitada, sem Evolution API)
+      instancia = { id: "meta_delegate", api_url: "", instance_name: "", ia_habilitada: true };
+    } else {
+      const { data: instanciaDb } = await supabase
+        .from("whatsapp_instancias")
+        .select("id, api_url, instance_name, ia_habilitada")
+        .eq("principal", true)
+        .single();
 
-    if (!instancia) {
-      console.error("[whatsapp-webhook] Instância não encontrada");
-      return new Response(JSON.stringify({ error: "Instância não configurada" }), { headers: corsHeaders });
+      if (!instanciaDb) {
+        console.error("[whatsapp-webhook] Instância não encontrada");
+        return new Response(JSON.stringify({ error: "Instância não configurada" }), { headers: corsHeaders });
+      }
+      instancia = instanciaDb;
     }
 
     // PRIORIZAR URL do secret sobre a URL do banco de dados
@@ -3434,7 +3467,9 @@ Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato c
 
     // Salvar e enviar resposta - capturar messageId para tracking de status
     await saveMessage(supabase, associado.id, "assistant", respostaFinal);
-    const sendResult = await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, respostaFinal);
+    const sendResult = isMetaDelegate
+      ? await sendWhatsAppViaProxy(telefone, respostaFinal)
+      : await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, respostaFinal);
     await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", sendResult.messageId);
 
     console.log(`[whatsapp-webhook] Resposta enviada para ${telefone}`);
