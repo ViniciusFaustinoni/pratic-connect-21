@@ -225,7 +225,7 @@ serve(async (req) => {
           { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
         );
         console.log(`[whatsapp-meta-templates] DELETE proativo status: ${delRes.status}`);
-        await new Promise((r) => setTimeout(r, 2000));
+        await new Promise((r) => setTimeout(r, 5000));
       }
 
       const response = await fetch(
