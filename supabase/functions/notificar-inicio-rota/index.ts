@@ -49,7 +49,7 @@ serve(async (req) => {
         associado_id,
         veiculo_id,
         profissional_id,
-        associado:associados(
+        associado:associados!servicos_associado_id_fkey(
           id,
           nome,
           telefone,
