@@ -1,13 +1,34 @@
 
 
-## Exibição Progressiva de Planos + Campo de Região — ✅ Implementado
+## Correção: Checklist apenas informativo, sem bloqueio
 
-### Alterações realizadas
+### Problema
+O checklist foi implementado com bloqueio: o botão "Confirmar Ativação" fica desabilitado quando `checklist.pronto === false` e o texto muda para "Dados incompletos". Isso não foi solicitado.
 
-1. **Removidos 5 resets desnecessários** de `setCotacaoCalculada(false)` em `Cotador.tsx` — mantido apenas no `limparTudo`
-2. **Adicionado `useEffect` auto-display** — seta `cotacaoCalculada = true` quando `valorFipe > 0` e `planosDB` tem resultados
-3. **Adicionado campo Região** (RJ, Lagos, SP) no formulário, antes de "Uso para aplicativo"
-4. **Substituído hardcode `regiao: 'rj'`** por estado `regiao` no `parametrosPlanos`
-5. **Auto-atualização de tab** — quando lista de planos muda, tab selecionada é revalidada
-6. **`regiao` incluída** no payload de salvar cotação (`CriarCotacaoPayload` + `useCotacao.ts`)
-7. **`regiao` resetada** no `limparTudo` para `'rj'`
+### Alteração necessária
+
+**Arquivo:** `src/components/cadastro/BotaoAtivarSGA.tsx`
+
+**Linha 174-179** — Remover o `disabled` e o texto condicional:
+
+De:
+```tsx
+<AlertDialogAction
+  onClick={handleAtivar}
+  className="bg-blue-600 hover:bg-blue-700"
+  disabled={!checklist.pronto}
+>
+  {!checklist.pronto ? 'Dados incompletos' : 'Confirmar Ativação'}
+```
+
+Para:
+```tsx
+<AlertDialogAction
+  onClick={handleAtivar}
+  className="bg-blue-600 hover:bg-blue-700"
+>
+  Confirmar Ativação
+```
+
+Isso é a única mudança. O checklist continua aparecendo como diagnóstico visual dentro do dialog, mas não impede a ativação.
+
