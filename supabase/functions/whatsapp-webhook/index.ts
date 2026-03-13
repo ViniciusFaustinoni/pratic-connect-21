@@ -750,7 +750,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
       return JSON.stringify({
         boletos: todosboletos,
         total: `R$ ${total.toFixed(2)}`,
-        instrucao: "Para receber o boleto em PDF no WhatsApp, use a tool enviar_boleto_pdf com o id do boleto e o campo fonte (asaas_cobrancas ou cobrancas).",
+        instrucao: "Mostre os dados de pagamento (PIX, linha digitável). Se o associado quiser o link da fatura, use a tool enviar_link_fatura com o id do boleto e o campo fonte.",
       });
     }
 
