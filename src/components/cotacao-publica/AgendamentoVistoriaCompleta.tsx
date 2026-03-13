@@ -36,6 +36,7 @@ export function AgendamentoVistoriaCompleta({
   clienteEmail,
   veiculoPlaca,
   veiculoDescricao,
+  enderecoInicial,
   onConfirmar 
 }: AgendamentoVistoriaCompletaProps) {
   const [modo, setModo] = useState<ModoAgendamento>('escolha');
