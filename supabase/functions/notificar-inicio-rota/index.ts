@@ -142,7 +142,7 @@ serve(async (req) => {
       ? `https://wa.me/55${profissionalTelefone.replace(/\D/g, '')}`
       : 'Não disponível';
     
-    if (clienteTelefone) {
+    if (clienteTelefone && !jaNotificadoPeloCron) {
       try {
         console.log(`[notificar-inicio-rota] Notificando cliente ${associado.nome} via notificar-cliente...`);
         
