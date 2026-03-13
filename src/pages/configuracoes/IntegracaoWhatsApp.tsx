@@ -11,6 +11,7 @@ import { WhatsAppIAConfig } from '@/components/integracoes/WhatsAppIAConfig';
 import { WhatsAppStats } from '@/components/integracoes/WhatsAppStats';
 import { WhatsAppMetaTemplates } from '@/components/integracoes/WhatsAppMetaTemplates';
 import { WhatsAppConversasPainel } from '@/components/integracoes/WhatsAppConversasPainel';
+import { WhatsAppTestChat } from '@/components/whatsapp/WhatsAppTestChat';
 
 export default function IntegracaoWhatsApp() {
   const navigate = useNavigate();
