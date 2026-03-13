@@ -252,33 +252,31 @@ serve(async (req) => {
         
         const motivoRejeicao = result.error?.error_user_msg || result.error?.message || "Erro desconhecido";
         
-        // Detectar tipo de conflito
-        const sendoExcluido = motivoRejeicao.toLowerCase().includes("sendo excluído")
+        // Detectar conflito de nome (já existe ou sendo excluído)
+        const isConflito = motivoRejeicao.toLowerCase().includes("sendo excluído")
           || motivoRejeicao.toLowerCase().includes("being deleted")
-          || (result.error?.error_subcode === 2388023);
-        
-        const jaExiste = motivoRejeicao.toLowerCase().includes("já existe")
+          || motivoRejeicao.toLowerCase().includes("já existe")
           || motivoRejeicao.toLowerCase().includes("already exists")
-          || motivoRejeicao.toLowerCase().includes("content for this language already exists");
+          || motivoRejeicao.toLowerCase().includes("content for this language already exists")
+          || (result.error?.error_subcode === 2388023);
 
-        if (sendoExcluido || jaExiste) {
-          // Se já existe (mas não está sendo excluído), deletar primeiro
-          if (jaExiste && !sendoExcluido) {
-            console.log(`[whatsapp-meta-templates] Template '${template.nome}' já existe, deletando...`);
-            const delRes = await fetch(
-              `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates?name=${template.nome}`,
-              { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
-            );
-            console.log(`[whatsapp-meta-templates] DELETE status: ${delRes.status}`);
-          } else {
-            console.log(`[whatsapp-meta-templates] Template '${template.nome}' está sendo excluído pela Meta, aguardando sem re-deletar...`);
-          }
+        if (isConflito) {
+          // 1. Sempre deletar primeiro
+          console.log(`[whatsapp-meta-templates] Conflito detectado para '${template.nome}', deletando na Meta...`);
+          const delRes = await fetch(
+            `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates?name=${template.nome}`,
+            { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
+          );
+          const delBody = await delRes.json().catch(() => ({}));
+          console.log(`[whatsapp-meta-templates] DELETE status: ${delRes.status}`, JSON.stringify(delBody));
 
-          // Tentar recriar com backoff progressivo (20s, 30s, 40s) - NÃO re-deletar
-          const delays = [20000, 30000, 40000];
+          // 2. Retry com nome original (2 tentativas: 10s, 15s)
+          const delays = [10000, 15000];
+          let recriadoComSucesso = false;
+
           for (let attempt = 1; attempt <= delays.length; attempt++) {
             const delay = delays[attempt - 1];
-            console.log(`[whatsapp-meta-templates] Aguardando ${delay/1000}s antes do retry #${attempt}...`);
+            console.log(`[whatsapp-meta-templates] Aguardando ${delay/1000}s antes do retry #${attempt} com nome original...`);
             await new Promise((r) => setTimeout(r, delay));
 
             const retryResponse = await fetch(
@@ -303,32 +301,79 @@ serve(async (req) => {
                 .eq("id", template_id);
 
               console.log(`[whatsapp-meta-templates] ✓ Template '${template.nome}' recriado na tentativa #${attempt} - ID: ${retryResult.id}`);
+              recriadoComSucesso = true;
               return new Response(
                 JSON.stringify({ success: true, meta_id: retryResult.id, status: retryResult.status }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
               );
             }
 
-            const retryMotivo = retryResult.error?.error_user_msg || retryResult.error?.message || "";
-            const aindaDeletando = retryMotivo.toLowerCase().includes("sendo excluído")
-              || retryMotivo.toLowerCase().includes("being deleted");
+            console.log(`[whatsapp-meta-templates] Retry #${attempt} com nome original falhou:`, retryResult.error?.message || "");
+          }
 
-            if (!aindaDeletando || attempt === delays.length) {
-              console.error(`[whatsapp-meta-templates] Retry #${attempt} falhou:`, retryResult);
-              const finalMotivo = aindaDeletando
-                ? "Template ainda sendo excluído pela Meta. Aguarde 2 minutos e tente novamente."
-                : (retryMotivo || "Erro no retry");
+          // 3. Fallback: versionamento de nome
+          if (!recriadoComSucesso) {
+            console.log(`[whatsapp-meta-templates] Retries com nome original falharam. Tentando com nome versionado...`);
+
+            // Gerar próximo nome versionado
+            const nomeOriginal = template.nome as string;
+            const versionMatch = nomeOriginal.match(/_v(\d+)$/);
+            let novoNome: string;
+            if (versionMatch) {
+              const nextVersion = parseInt(versionMatch[1]) + 1;
+              novoNome = nomeOriginal.replace(/_v\d+$/, `_v${nextVersion}`);
+            } else {
+              novoNome = `${nomeOriginal}_v2`;
+            }
+
+            console.log(`[whatsapp-meta-templates] Tentando com nome versionado: '${novoNome}'`);
+
+            const versionedPayload = { ...metaPayload, name: novoNome };
+
+            const vRetry = await fetch(
+              `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates`,
+              {
+                method: "POST",
+                headers: { Authorization: `Bearer ${accessToken}`, "Content-Type": "application/json" },
+                body: JSON.stringify(versionedPayload),
+              }
+            );
+            const vResult = await vRetry.json();
+
+            if (vRetry.ok) {
+              // Atualizar nome no banco para refletir o novo nome na Meta
               await supabase
                 .from("whatsapp_meta_templates")
-                .update({ status: "REJECTED", motivo_rejeicao: finalMotivo, updated_at: new Date().toISOString() })
+                .update({
+                  nome: novoNome,
+                  status: vResult.status?.toUpperCase() || "PENDING",
+                  meta_template_id: vResult.id,
+                  enviado_em: new Date().toISOString(),
+                  updated_at: new Date().toISOString(),
+                  motivo_rejeicao: null,
+                })
                 .eq("id", template_id);
 
+              console.log(`[whatsapp-meta-templates] ✓ Template recriado com nome versionado '${novoNome}' - ID: ${vResult.id}`);
               return new Response(
-                JSON.stringify({ success: false, error: finalMotivo }),
+                JSON.stringify({ success: true, meta_id: vResult.id, status: vResult.status, nome_atualizado: novoNome }),
                 { headers: { ...corsHeaders, "Content-Type": "application/json" } }
               );
             }
-            console.log(`[whatsapp-meta-templates] Template ainda sendo excluído, tentando novamente...`);
+
+            // Tudo falhou
+            const finalMotivo = vResult.error?.error_user_msg || vResult.error?.message || "Falha ao recriar template mesmo com nome versionado";
+            console.error(`[whatsapp-meta-templates] Fallback versionado também falhou:`, vResult);
+
+            await supabase
+              .from("whatsapp_meta_templates")
+              .update({ status: "REJECTED", motivo_rejeicao: finalMotivo, updated_at: new Date().toISOString() })
+              .eq("id", template_id);
+
+            return new Response(
+              JSON.stringify({ success: false, error: finalMotivo }),
+              { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+            );
           }
         }
 
