@@ -299,14 +299,7 @@ serve(async (req) => {
             email: clienteEmail,
             action: "SIGN",
             delivery_method: "DELIVERY_METHOD_LINK",
-            positions: [
-              {
-                x: "65.0",
-                y: "85.0",
-                z: "1",
-                element: "SIGNATURE",
-              },
-            ],
+            positions: gerarPosicoesAssinatura(),
           },
         ],
         file: null,

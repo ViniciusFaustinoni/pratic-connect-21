@@ -293,14 +293,7 @@ serve(async (req) => {
             name: signerName || undefined,
             email: signerEmail,
             action: "SIGN",
-            positions: [
-              {
-                x: "65.0",
-                y: "85.0", // Posição ajustada para área de assinatura
-                z: "1",
-                element: "SIGNATURE",
-              },
-            ],
+            positions: gerarPosicoesAssinatura(),
           },
         ],
         file: null,
