@@ -544,7 +544,7 @@ serve(async (req) => {
             // Preparar dados para vistoria
             const vistUpdateData: any = {
               vistoriador_id: prof.vistoriador_id,
-              status: 'em_rota'
+              status: 'agendada'
             };
             
             // Se é encaixe, atualizar data também na tabela de origem

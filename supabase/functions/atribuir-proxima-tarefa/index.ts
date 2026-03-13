@@ -717,7 +717,7 @@ serve(async (req) => {
           
           const vistoriaUpdate: Record<string, any> = {
             vistoriador_id: profissionalId,
-            status: 'em_rota'
+            status: 'agendada'
           };
           
           // Se for encaixe, sincronizar data também na tabela de origem
