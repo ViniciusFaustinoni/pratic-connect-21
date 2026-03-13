@@ -43,6 +43,7 @@ export function EtapaVistoria({
   clienteEmail,
   veiculoPlaca,
   veiculoDescricao,
+  enderecoInicial,
   onComplete, 
   onAgendar, 
   readOnly = false, 
