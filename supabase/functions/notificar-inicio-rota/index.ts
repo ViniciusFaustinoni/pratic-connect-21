@@ -115,24 +115,7 @@ serve(async (req) => {
     };
 
     // 2. Notificar o CLIENTE que o técnico está a caminho
-    // Verificar se a notificação já foi enviada durante a atribuição automática (cron-atribuir-tarefas)
-    // Se em_rota_em já estava definido ANTES do instalador clicar "Iniciar Rota", significa que
-    // o cron já atribuiu com status em_rota e já enviou a notificação
-    const { data: servicoAtual } = await supabase
-      .from('servicos')
-      .select('em_rota_em, created_at')
-      .eq('id', servico_id)
-      .single();
-
-    // Se em_rota_em foi definido há mais de 30s, a notificação já foi enviada pelo cron
-    const jaNotificadoPeloCron = (() => {
-      if (!servicoAtual?.em_rota_em) return false;
-      const emRotaEm = new Date(servicoAtual.em_rota_em).getTime();
-      const agora = Date.now();
-      // Se em_rota_em foi definido há mais de 30 segundos, o cron já notificou
-      return (agora - emRotaEm) > 30000;
-    })();
-
+    // Esta é a ÚNICA origem desta notificação (disparada pelo botão "Iniciar Tarefa")
     const clienteTelefone = associado.whatsapp || associado.telefone;
     const profissionalTelefone = profissional.whatsapp || profissional.telefone;
     const profissionalTelefoneFormatado = profissionalTelefone 
@@ -142,7 +125,7 @@ serve(async (req) => {
       ? `https://wa.me/55${profissionalTelefone.replace(/\D/g, '')}`
       : 'Não disponível';
     
-    if (clienteTelefone && !jaNotificadoPeloCron) {
+    if (clienteTelefone) {
       try {
         console.log(`[notificar-inicio-rota] Notificando cliente ${associado.nome} via notificar-cliente...`);
         
