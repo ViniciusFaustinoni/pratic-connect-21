@@ -508,9 +508,11 @@ export function AppSidebar() {
   };
   const location = useLocation();
   const permissions = usePermissions();
-  const { visibleModules } = useModuleVisibility();
+  const { visibleModules, isLoading: isModuleVisLoading } = useModuleVisibility();
   const { isItemVisible } = useModuleItemVisibility();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
+
+  const isDataLoading = permissions.isPermissionsLoading || isModuleVisLoading;
 
   const isActive = (path: string) => {
     if (path === '/dashboard') return location.pathname === path;
