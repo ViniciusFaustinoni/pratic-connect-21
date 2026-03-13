@@ -49,7 +49,7 @@ import {
 import { STATUS_ASSOCIADO_LABELS, type StatusAssociado } from '@/types/database';
 import { useAssociados, useAssociadosContagem, useAssociadosCidades, useUpdateAssociadoStatus, useDeleteAssociado } from '@/hooks/useAssociados';
 import { usePlanos } from '@/hooks/usePlanos';
-import { AssociadoFormDialog } from '@/components/associados/AssociadoFormDialog';
+
 import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
