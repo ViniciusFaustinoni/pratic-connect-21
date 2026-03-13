@@ -5,6 +5,7 @@
 // ============================================
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { gerarPosicoesAssinatura } from "../_shared/autentique-positions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/termo-afiliacao-template.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa } from "../_shared/termo-afiliacao-utils.ts";
