@@ -276,6 +276,11 @@ export function WhatsAppProvedorSelector() {
                 </ol>
               </CollapsibleContent>
             </Collapsible>
+
+            {/* Telemetria do webhook */}
+            {metaAtivo && metaConfig && (
+              <WebhookTelemetry config={metaConfig} />
+            )}
           </CardContent>
         </Card>
       </div>
