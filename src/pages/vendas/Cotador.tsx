@@ -441,6 +441,7 @@ export default function CotadorPage() {
     setCotacaoSalva(null);
     setCategoriaVeiculo(null);
     setErroCategoriaVeiculo(false);
+    setRegiao('rj');
     // Limpar valores customizados
     setModeloCustom(null);
     setAnoCustom(null);
