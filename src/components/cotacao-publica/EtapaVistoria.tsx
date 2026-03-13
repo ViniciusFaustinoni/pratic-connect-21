@@ -18,6 +18,15 @@ interface EtapaVistoriaProps {
   clienteEmail?: string;
   veiculoPlaca?: string;
   veiculoDescricao?: string;
+  enderecoInicial?: {
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
+    cidade?: string;
+    estado?: string;
+  };
   onComplete: () => void;
   onAgendar?: (data: string, horario: string) => void;
   readOnly?: boolean;
@@ -34,6 +43,7 @@ export function EtapaVistoria({
   clienteEmail,
   veiculoPlaca,
   veiculoDescricao,
+  enderecoInicial,
   onComplete, 
   onAgendar, 
   readOnly = false, 
@@ -272,6 +282,7 @@ export function EtapaVistoria({
           <AgendamentoCotacao
             cotacaoId={cotacaoId}
             onConfirmar={handleAgendamentoConfirmado}
+            enderecoInicial={enderecoInicial}
           />
         </motion.div>
       )}

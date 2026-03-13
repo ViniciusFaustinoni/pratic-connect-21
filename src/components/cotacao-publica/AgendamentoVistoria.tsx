@@ -42,13 +42,17 @@ export interface AgendamentoVistoriaProps {
   
   // Tipo de vistoria original (apenas para contexto pós-autovistoria)
   tipoVistoria?: 'autovistoria' | 'agendada';
+
+  // Endereço pré-preenchido (coletado pela IA no comprovante de residência)
+  enderecoInicial?: Partial<EnderecoForm>;
 }
 
 export function AgendamentoVistoria({ 
   cotacaoId, 
   onConfirmar, 
   contexto,
-  tipoVistoria 
+  tipoVistoria,
+  enderecoInicial
 }: AgendamentoVistoriaProps) {
   // Estados
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
@@ -61,13 +65,13 @@ export function AgendamentoVistoria({
   const [buscandoCep, setBuscandoCep] = useState(false);
   
   const [endereco, setEndereco] = useState<EnderecoForm>({
-    cep: '',
-    logradouro: '',
-    numero: '',
-    complemento: '',
-    bairro: '',
-    cidade: '',
-    estado: ''
+    cep: enderecoInicial?.cep || '',
+    logradouro: enderecoInicial?.logradouro || '',
+    numero: enderecoInicial?.numero || '',
+    complemento: enderecoInicial?.complemento || '',
+    bairro: enderecoInicial?.bairro || '',
+    cidade: enderecoInicial?.cidade || '',
+    estado: enderecoInicial?.estado || ''
   });
 
   // Hooks de mutations

@@ -14,6 +14,15 @@ interface AgendamentoVistoriaCompletaProps {
   clienteEmail?: string;
   veiculoPlaca?: string;
   veiculoDescricao?: string;
+  enderecoInicial?: {
+    cep?: string;
+    logradouro?: string;
+    numero?: string;
+    complemento?: string;
+    bairro?: string;
+    cidade?: string;
+    estado?: string;
+  };
   onConfirmar: () => void;
 }
 
@@ -27,6 +36,7 @@ export function AgendamentoVistoriaCompleta({
   clienteEmail,
   veiculoPlaca,
   veiculoDescricao,
+  enderecoInicial,
   onConfirmar 
 }: AgendamentoVistoriaCompletaProps) {
   const [modo, setModo] = useState<ModoAgendamento>('escolha');
@@ -57,11 +67,12 @@ export function AgendamentoVistoriaCompleta({
           <Button variant="ghost" size="sm" onClick={() => setModo('escolha')} className="mb-2">
             <ArrowLeft className="h-4 w-4 mr-2" /> Voltar
           </Button>
-          <AgendamentoVistoria
+           <AgendamentoVistoria
             cotacaoId={cotacaoId}
             onConfirmar={onConfirmar}
             contexto="pos-autovistoria"
             tipoVistoria={tipoVistoria}
+            enderecoInicial={enderecoInicial}
           />
         </motion.div>
       )}
