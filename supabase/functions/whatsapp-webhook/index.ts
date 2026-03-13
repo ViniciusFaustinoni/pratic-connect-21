@@ -614,8 +614,8 @@ const tools = [
   {
     type: "function",
     function: {
-      name: "enviar_boleto_pdf",
-      description: "Envia boleto em PDF via WhatsApp para o associado. Use quando o cliente pedir para receber o boleto no WhatsApp. Inclua o campo 'fonte' retornado por get_boletos_pendentes.",
+      name: "enviar_link_fatura",
+      description: "Retorna o link da fatura no Asaas para o associado acessar e pagar. Use quando o cliente pedir o link do boleto ou da fatura. Inclua o campo 'fonte' retornado por get_boletos_pendentes.",
       parameters: {
         type: "object",
         properties: {
@@ -629,8 +629,8 @@ const tools = [
 {
   type: "function",
   function: {
-    name: "enviar_localizacao_veiculo",
-    description: "Envia a localização atual do veículo como pin nativo do WhatsApp. Use quando o associado pedir para ver onde está o carro ou a última posição do rastreador.",
+    name: "consultar_localizacao_veiculo",
+    description: "Consulta a localização atual do veículo e retorna o endereço em texto (rua, número, bairro, cidade). NÃO envia pin de localização. Use quando o associado perguntar onde está o carro.",
     parameters: {
       type: "object",
       properties: {
