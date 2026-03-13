@@ -652,18 +652,13 @@ export default function Associados() {
                           <p className="text-sm text-muted-foreground mt-1">
                             {hasFilters 
                               ? 'Tente ajustar os filtros para encontrar o que procura'
-                              : 'Comece adicionando o primeiro associado'}
+                              : 'Associados são cadastrados automaticamente pelo fluxo de cotação'}
                           </p>
                         </div>
-                        {hasFilters ? (
+                        {hasFilters && (
                           <Button variant="outline" size="sm" onClick={clearFilters}>
                             <X className="mr-2 h-4 w-4" />
                             Limpar filtros
-                          </Button>
-                        ) : (
-                          <Button size="sm" onClick={() => setFormDialogOpen(true)}>
-                            <Plus className="mr-2 h-4 w-4" />
-                            Adicionar associado
                           </Button>
                         )}
                       </div>
