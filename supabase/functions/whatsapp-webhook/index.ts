@@ -2932,15 +2932,22 @@ serve(async (req) => {
     let mediaArmazenada: string | null = null;
 
     // Buscar instância primeiro (precisamos para download de mídia)
-    const { data: instancia } = await supabase
-      .from("whatsapp_instancias")
-      .select("id, api_url, instance_name, ia_habilitada")
-      .eq("principal", true)
-      .single();
+    let instancia: any;
+    if (isMetaDelegate) {
+      // Delegação Meta: usar instância sintética (IA habilitada, sem Evolution API)
+      instancia = { id: "meta_delegate", api_url: "", instance_name: "", ia_habilitada: true };
+    } else {
+      const { data: instanciaDb } = await supabase
+        .from("whatsapp_instancias")
+        .select("id, api_url, instance_name, ia_habilitada")
+        .eq("principal", true)
+        .single();
 
-    if (!instancia) {
-      console.error("[whatsapp-webhook] Instância não encontrada");
-      return new Response(JSON.stringify({ error: "Instância não configurada" }), { headers: corsHeaders });
+      if (!instanciaDb) {
+        console.error("[whatsapp-webhook] Instância não encontrada");
+        return new Response(JSON.stringify({ error: "Instância não configurada" }), { headers: corsHeaders });
+      }
+      instancia = instanciaDb;
     }
 
     // PRIORIZAR URL do secret sobre a URL do banco de dados
