@@ -361,6 +361,25 @@ export default function CotadorPage() {
     return planos.find(p => p.id === planoSelecionadoTab) || planos[1] || planos[0] || null;
   }, [planos, planoSelecionadoTab]);
 
+  // Auto-exibir planos quando valorFipe > 0 e há planos disponíveis
+  useEffect(() => {
+    if (valorFipe && valorFipe > 0 && planosDB && planosDB.length > 0) {
+      if (!cotacaoCalculada) {
+        setCotacaoCalculada(true);
+        setPlanoSelecionadoTab(planosDB.find(p => p.destaque)?.id || planosDB[1]?.id || planosDB[0]?.id || '');
+        // Inicializar adesão com 1% FIPE (mínimo R$ 100)
+        setValorAdesaoCustom(Math.max(100, Math.round(valorFipe * 0.01 * 100) / 100));
+      }
+    }
+  }, [valorFipe, planosDB]);
+
+  // Auto-atualizar tab quando lista de planos muda
+  useEffect(() => {
+    if (planos.length > 0 && !planos.find(p => p.id === planoSelecionadoTab)) {
+      setPlanoSelecionadoTab(planos.find(p => p.destaque)?.id || planos[1]?.id || planos[0]?.id || '');
+    }
+  }, [planos]);
+
   // Dados para geração de proposta PDF
   const dadosProposta: DadosProposta | null = useMemo(() => {
     if (!cotacaoCalculada || !planoFinalSelecionado || !valorFipe) return null;
