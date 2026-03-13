@@ -352,8 +352,8 @@ serve(async (req) => {
               .eq('id', cobranca.associado_id)
               .single();
 
-            // Disparar notificação centralizada
-            if (associadoUser?.user_id) {
+            // Disparar notificação centralizada (apenas para mensalidades, não adesão)
+            if (associadoUser?.user_id && cobranca?.tipo !== 'adesao') {
               await supabase.functions.invoke('disparar-notificacao', {
                 body: {
                   user_id: associadoUser.user_id,
