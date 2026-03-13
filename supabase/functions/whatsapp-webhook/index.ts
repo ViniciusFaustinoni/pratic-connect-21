@@ -1944,6 +1944,10 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
 
 // Enviar mensagem via Evolution API - ATUALIZADO para retornar messageId
 async function sendWhatsAppMessage(apiUrl: string, instanceName: string, telefone: string, texto: string): Promise<{ ok: boolean; messageId?: string }> {
+  // Fallback: se sem URL da Evolution (ex: delegação Meta), usar proxy que auto-roteia
+  if (!apiUrl || !instanceName) {
+    return sendWhatsAppViaProxy(telefone, texto);
+  }
   const EVOLUTION_API_KEY = Deno.env.get("EVOLUTION_API_KEY");
   if (!EVOLUTION_API_KEY) throw new Error("EVOLUTION_API_KEY não configurada");
 
