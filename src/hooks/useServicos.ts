@@ -1153,21 +1153,7 @@ export function useAprovarVeiculoServico() {
       // Nota: O laudo de vistoria é gerado no momento da assinatura do cliente (useAssinatura.ts)
       // Isso garante que o laudo só é gerado após fotos + assinatura estarem completos
 
-      // 8. Notificar associado sobre instalação concluída (fire-and-forget)
-      ;(async () => {
-        try {
-          await supabase.functions.invoke('notificar-cliente', {
-            body: {
-              tipo: 'instalacao_concluida',
-              associado_id: data.associadoId,
-              dados: {},
-            },
-          });
-          console.log('[useAprovarVeiculoServico] ✓ Notificação instalacao_concluida enviada');
-        } catch (err) {
-          console.warn('[useAprovarVeiculoServico] Erro ao notificar (não crítico):', err);
-        }
-      })();
+      // 8. Notificação de boas-vindas removida daqui — enviada apenas pelo fluxo de aprovação do analista (ativar-associado)
 
       return { sucesso: true };
     },
