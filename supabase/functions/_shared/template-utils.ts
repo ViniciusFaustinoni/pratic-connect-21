@@ -150,14 +150,14 @@ export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData)
     );
   }
   
-  // Remover bloco "Serviços: {{plano.descricao}}" que não deveria existir no termo
+  // Remover bloco "Serviços:" — captura qualquer conteúdo após "Serviços:"
   resultado = resultado.replace(
-    /<p[^>]*>\s*(<strong>)?\s*Serviços\s*:?\s*(<\/strong>)?\s*({{[^}]*}}|—|)\s*<\/p>/gi,
+    /<p[^>]*>\s*(<strong>)?\s*Serviços\s*:?\s*(<\/strong>)?\s*[^<]*<\/p>/gi,
     ''
   );
-  // Também remover formato inline (sem tags de parágrafo)
+  // Formato inline
   resultado = resultado.replace(
-    /Serviços\s*:\s*({{plano\.descricao}}|—)/gi,
+    /Serviços\s*:\s*[^\n<]*/gi,
     ''
   );
 
