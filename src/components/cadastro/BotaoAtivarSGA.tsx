@@ -21,6 +21,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useChecklistSGA } from '@/hooks/useChecklistSGA';
+import { ChecklistSGA } from '@/components/ativacao/ChecklistSGA';
 
 export type StatusSGA = 'pendente' | 'sincronizando' | 'ativado_sga' | 'erro_sincronizacao';
 
@@ -47,6 +49,7 @@ export function BotaoAtivarSGA({
 }: BotaoAtivarSGAProps) {
   const [status, setStatus] = useState<StatusSGA>(statusAtual);
   const [dialogOpen, setDialogOpen] = useState(false);
+  const checklist = useChecklistSGA(veiculoId, associadoId);
 
   const handleAtivar = async () => {
     setStatus('sincronizando');
@@ -149,7 +152,7 @@ export function BotaoAtivarSGA({
       {renderButton()}
 
       <AlertDialog open={dialogOpen} onOpenChange={setDialogOpen}>
-        <AlertDialogContent>
+        <AlertDialogContent className="max-w-xl">
           <AlertDialogHeader>
             <AlertDialogTitle className="flex items-center gap-2">
               <Upload className="w-5 h-5 text-blue-600" />
@@ -160,21 +163,20 @@ export function BotaoAtivarSGA({
                 Esta ação irá enviar todos os dados do associado, veículo e documentos para o
                 sistema SGA Hinova.
               </p>
-              <ul className="list-disc list-inside text-sm space-y-1 mt-2">
-                <li>Dados pessoais do associado</li>
-                <li>Informações do veículo</li>
-                <li>Documentos e fotos aprovados</li>
-              </ul>
-              <p className="text-sm font-medium mt-3">Deseja continuar?</p>
             </AlertDialogDescription>
           </AlertDialogHeader>
+
+          {/* Checklist pré-envio */}
+          <ChecklistSGA checklist={checklist} />
+
           <AlertDialogFooter>
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               onClick={handleAtivar}
               className="bg-blue-600 hover:bg-blue-700"
+              disabled={!checklist.pronto}
             >
-              Confirmar Ativação
+              {!checklist.pronto ? 'Dados incompletos' : 'Confirmar Ativação'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
