@@ -975,6 +975,10 @@ serve(async (req) => {
                   const reqPayload = (log.request_payload || {}) as Record<string, unknown>;
                   const codigo = extractCodigoAssociado(log.response_payload);
                   if (!codigo) continue;
+                  if (codigosInvalidados.has(codigo)) {
+                    console.log(`[SGA Sync] Código ${codigo} dos logs de identidade IGNORADO (já invalidado)`);
+                    continue;
+                  }
 
                   const nomeLog = String(reqPayload?.nome || '').trim().toLowerCase();
                   const emailLog = String(reqPayload?.email || '').trim().toLowerCase();
