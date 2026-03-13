@@ -2835,6 +2835,10 @@ serve(async (req) => {
     }
 
     const data = payload.data;
+    const isMetaDelegate = !!payload._meta_delegate;
+    if (isMetaDelegate) {
+      console.log("[whatsapp-webhook] Delegação Meta detectada");
+    }
     if (!data?.key || data.key.fromMe) {
       return new Response(JSON.stringify({ ok: true, ignored: "própria mensagem" }), { headers: corsHeaders });
     }
