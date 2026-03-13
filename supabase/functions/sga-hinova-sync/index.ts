@@ -339,16 +339,21 @@ serve(async (req) => {
     errorMessage: string | null = null
   ) {
     try {
-      await supabase.from('sga_sync_logs').insert({
-        veiculo_id: veiculoId,
-        associado_id: associadoId,
+      const record = {
+        veiculo_id: veiculoId || null,
+        associado_id: associadoId || null,
         action,
         status,
         request_payload: requestPayload,
         response_payload: responsePayload,
         error_message: errorMessage,
         duracao_ms: Date.now() - startTime,
-      });
+      };
+      console.log(`[Log] Gravando log: action=${action}, veiculo_id=${veiculoId}, associado_id=${associadoId}`);
+      const { error: insertError } = await supabase.from('sga_sync_logs').insert(record);
+      if (insertError) {
+        console.error('[Log] Erro no insert:', JSON.stringify(insertError));
+      }
     } catch (e) {
       console.error('[Log] Erro ao registrar log:', e);
     }
