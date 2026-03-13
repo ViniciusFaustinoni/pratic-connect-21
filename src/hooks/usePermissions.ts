@@ -97,7 +97,7 @@ export interface CotacaoPermissions {
  */
 export function usePermissions() {
   const { profile, roles, hasRole, isGerencia, isVendedor, isFuncionario, user } = useAuth();
-  const { getPermissionsForRoles, isOnlyOperational, getOperationalRedirectPath, isRoleOperational } = useAppRoles();
+  const { getPermissionsForRoles, isOnlyOperational, getOperationalRedirectPath, isRoleOperational, isLoading: isRolesConfigLoading } = useAppRoles();
 
   // ============================================
   // PERMISSIONS DERIVADAS DO BANCO
@@ -289,5 +289,6 @@ export function usePermissions() {
     operationalRedirectPath,
     userIsOnlyOperational,
     hasPermission: (key: PermissionKey) => permissions[key] ?? false,
+    isPermissionsLoading: isRolesConfigLoading,
   };
 }
