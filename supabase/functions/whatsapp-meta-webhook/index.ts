@@ -519,7 +519,13 @@ serve(async (req) => {
       // Detectar tipo de evento
       eventType = body.object || "unknown";
 
-      const entries = body.entry || [];
+      // Normalizar formato 2 (field/value direto) para formato 1 (entry/changes)
+      let entries = body.entry || [];
+      if (entries.length === 0 && body.field && body.value) {
+        console.log("[whatsapp-meta-webhook] Formato 2 detectado (field/value direto) — normalizando");
+        entries = [{ changes: [{ field: body.field, value: body.value }] }];
+        eventType = "whatsapp_business_account";
+      }
       if (entries.length === 0) {
         console.warn("[whatsapp-meta-webhook] Nenhum entry no payload");
       }
