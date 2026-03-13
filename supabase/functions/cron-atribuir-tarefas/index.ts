@@ -347,8 +347,7 @@ serve(async (req) => {
         // Preparar dados de atualização
         const updateData: any = {
           profissional_id: prof.vistoriador_id,
-          status: 'em_rota',
-          em_rota_em: agora,
+          status: 'agendada',
           updated_at: agora
         };
 
