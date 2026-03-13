@@ -594,7 +594,6 @@ export default function CotadorPage() {
         lead.veiculo_ano || new Date().getFullYear()
       );
       setValorFipe(fipe);
-      setCotacaoCalculada(false);
       setPlanoFinalSelecionado(null);
       setCotacaoSalva(null);
       toast.success('Dados do veículo preenchidos automaticamente');
