@@ -304,7 +304,7 @@ serve(async (req) => {
             const aindaDeletando = retryMotivo.toLowerCase().includes("sendo excluído")
               || retryMotivo.toLowerCase().includes("being deleted");
 
-            if (!aindaDeletando || attempt === 3) {
+            if (!aindaDeletando || attempt === delays.length) {
               console.error(`[whatsapp-meta-templates] Retry #${attempt} falhou:`, retryResult);
               const finalMotivo = retryMotivo || "Erro no retry";
               await supabase
