@@ -192,8 +192,21 @@ export function WhatsAppMetaTemplates() {
                           </Button>
                         )}
                         {canSend(t.status) && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => enviar.mutate(t.id)} disabled={enviar.isPending}>
-                            <Send className="h-3 w-3" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title={t.status === 'DRAFT' ? 'Enviar para aprovação' : 'IA ajusta e reenvia'}
+                            onClick={() => {
+                              if (t.status === 'PENDING' || t.status === 'REJECTED') {
+                                handleReenviarComIA(t.id);
+                              } else {
+                                enviar.mutate(t.id);
+                              }
+                            }}
+                            disabled={enviar.isPending || reenvioId === t.id}
+                          >
+                            {reenvioId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                           </Button>
                         )}
                         <Button
