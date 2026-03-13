@@ -238,6 +238,7 @@ export default function CotadorPage() {
   const [usoApp, setUsoApp] = useState(false);
   const [valorFipe, setValorFipe] = useState<number | null>(null);
   const [categoriaVeiculo, setCategoriaVeiculo] = useState<string | null>(null);
+  const [regiao, setRegiao] = useState('rj');
   
   // Estados para valores customizados da API (fora das listas estáticas)
   const [modeloCustom, setModeloCustom] = useState<string | null>(null);
