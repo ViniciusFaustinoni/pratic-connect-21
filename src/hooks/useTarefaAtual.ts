@@ -100,8 +100,8 @@ export function useTarefaAtual() {
       };
     },
     enabled: !!profissionalId,
-    refetchInterval: 10000, // Fallback polling a cada 10s (Realtime é o primário)
-    staleTime: 5000,
+    refetchInterval: 5000, // Fallback polling a cada 5s (Realtime é o primário)
+    staleTime: 3000,
   });
 
   // Detectar quando uma nova tarefa é atribuída automaticamente
