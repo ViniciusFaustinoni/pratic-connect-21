@@ -551,7 +551,6 @@ export default function CotadorPage() {
           setValorFipe(estimarValorFipe(marcaNormalizada, anoNormalizado));
         }
 
-        setCotacaoCalculada(false);
         setPlanoFinalSelecionado(null);
         setCotacaoSalva(null);
         
