@@ -2955,7 +2955,7 @@ serve(async (req) => {
     }
 
     // PRIORIZAR URL do secret sobre a URL do banco de dados
-    const apiUrl = Deno.env.get('EVOLUTION_API_URL') || instancia.api_url;
+    const apiUrl = isMetaDelegate ? "" : (Deno.env.get('EVOLUTION_API_URL') || instancia.api_url);
     console.log(`[whatsapp-webhook] Usando API URL: ${apiUrl}`);
 
     switch (tipoPrincipal) {
