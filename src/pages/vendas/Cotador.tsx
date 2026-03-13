@@ -302,15 +302,15 @@ export default function CotadorPage() {
   // Hook de planos com filtro por uso (aplicativo vs passeio)
   const parametrosPlanos = useMemo(() => ({
     valorFipe: valorFipe || 0,
-    regiao: 'rj',
+    regiao,
     combustivel: veiculoEncontrado?.combustivel || undefined,
     anoVeiculo: parseInt(ano) || undefined,
     tipoVeiculo: tipoVeiculoDetectado,
-    usoApp: usoApp, // Filtra planos por uso
+    usoApp: usoApp,
     categoria: categoriaVeiculo || undefined,
     marca: marca || undefined,
     modelo: modelo || undefined,
-  }), [valorFipe, ano, usoApp, categoriaVeiculo, tipoVeiculoDetectado, marca, modelo, veiculoEncontrado?.combustivel]);
+  }), [valorFipe, ano, usoApp, categoriaVeiculo, tipoVeiculoDetectado, marca, modelo, veiculoEncontrado?.combustivel, regiao]);
   
   const { planos: planosDB, planosNegados, isLoading: loadingPlanos } = usePlanosCotacao(parametrosPlanos);
   const criarCotacao = useCriarCotacao();
