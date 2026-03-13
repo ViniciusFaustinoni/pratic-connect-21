@@ -678,7 +678,7 @@ serve(async (req) => {
           // Atualizar status na instalação de origem
           const instalacaoUpdate: Record<string, any> = {
             instalador_responsavel_id: profissionalId,
-            status: 'em_rota'
+            status: 'agendada'
           };
           
           // Se for encaixe, sincronizar data também na tabela de origem
