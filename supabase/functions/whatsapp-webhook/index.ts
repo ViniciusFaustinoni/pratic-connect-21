@@ -2528,8 +2528,10 @@ serve(async (req) => {
       return new Response(JSON.stringify({ error: "Invalid payload" }), { status: 400, headers: corsHeaders });
     }
 
-    // ── BLINDAGEM: Detectar payload nativo da Meta e encaminhar ──
-    if (payload.object === "whatsapp_business_account" && Array.isArray(payload.entry)) {
+    // ── BLINDAGEM: Detectar payload nativo da Meta (formato 1 ou 2) e encaminhar ──
+    const isMetaFormat1 = payload.object === "whatsapp_business_account" && Array.isArray(payload.entry);
+    const isMetaFormat2 = payload.field === "messages" && payload.value && !payload.entry;
+    if (isMetaFormat1 || isMetaFormat2) {
       console.log("[whatsapp-webhook] Payload da Meta detectado — encaminhando para whatsapp-meta-webhook");
       try {
         const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
