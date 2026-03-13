@@ -224,8 +224,13 @@ serve(async (req) => {
           `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates?name=${template.nome}`,
           { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
         );
-        console.log(`[whatsapp-meta-templates] DELETE proativo status: ${delRes.status}`);
-        await new Promise((r) => setTimeout(r, 5000));
+        const delBody = await delRes.json().catch(() => ({}));
+        console.log(`[whatsapp-meta-templates] DELETE proativo status: ${delRes.status}`, JSON.stringify(delBody));
+        
+        // Se o DELETE retornou 400, pode ser que já está sendo excluído - aguardar mais
+        const deleteDelay = delRes.ok ? 10000 : 20000;
+        console.log(`[whatsapp-meta-templates] Aguardando ${deleteDelay/1000}s após delete proativo...`);
+        await new Promise((r) => setTimeout(r, deleteDelay));
       }
 
       const response = await fetch(
