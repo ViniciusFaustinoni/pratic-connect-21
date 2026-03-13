@@ -16,8 +16,11 @@ import { JornadaStatusBar } from '@/components/vistoriador/JornadaStatusBar';
 import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOverlay';
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
+import { useServicosRealtime } from '@/hooks/useServicosRealtime';
 
 export default function InstaladorHome() {
+  // Realtime: receber tarefas instantaneamente
+  useServicosRealtime();
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading } = useTarefaAtual();
