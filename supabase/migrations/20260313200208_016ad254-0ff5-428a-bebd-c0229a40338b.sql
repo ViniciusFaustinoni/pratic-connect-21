@@ -1,0 +1,1 @@
+DELETE FROM plano_elegibilidade_modelos WHERE plano_id = '12cdd378-b42b-4389-a28f-1eba1fe7c837';
