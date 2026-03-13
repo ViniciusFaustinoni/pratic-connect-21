@@ -1977,6 +1977,24 @@ async function sendWhatsAppMessage(apiUrl: string, instanceName: string, telefon
   }
 }
 
+// Enviar mensagem via proxy (whatsapp-send-text) — usado para delegação Meta
+async function sendWhatsAppViaProxy(telefone: string, texto: string): Promise<{ ok: boolean; messageId?: string }> {
+  try {
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const res = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+      body: JSON.stringify({ telefone, mensagem: texto, allow_text: true }),
+    });
+    const result = await res.json();
+    return { ok: result.success, messageId: result.message_id };
+  } catch (e) {
+    console.error("[whatsapp-webhook] Erro no proxy meta:", e);
+    return { ok: false };
+  }
+}
+
 // Salvar mensagem no histórico
 async function saveMessage(supabase: any, associadoId: string, role: string, content: string) {
   await supabase.from("chat_mensagens_ia").insert({
