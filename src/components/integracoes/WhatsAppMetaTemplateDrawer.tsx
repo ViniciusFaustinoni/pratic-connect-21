@@ -235,8 +235,20 @@ export function WhatsAppMetaTemplateDrawer({ open, onOpenChange, template }: Pro
     <Sheet open={open} onOpenChange={onOpenChange}>
       <SheetContent className="sm:max-w-[900px] w-full overflow-y-auto">
         <SheetHeader>
-          <SheetTitle>{isEdit ? 'Editar Template' : 'Novo Template'}</SheetTitle>
+        <SheetTitle>{isEdit ? 'Editar Template' : 'Novo Template'}</SheetTitle>
         </SheetHeader>
+
+        {/* Alerta para templates PENDING ou REJECTED */}
+        {isEdit && (template?.status === 'PENDING' || template?.status === 'REJECTED') && (
+          <Alert className={`mt-4 ${template.status === 'REJECTED' ? 'border-destructive/40 bg-destructive/5' : 'border-yellow-500/40 bg-yellow-500/5'}`}>
+            <AlertTriangle className="h-4 w-4" />
+            <AlertDescription className="text-xs">
+              {template.status === 'PENDING'
+                ? 'Este template está pendente de aprovação na Meta. Ao editar e reenviar, a versão anterior será deletada e substituída pela nova.'
+                : `Este template foi rejeitado. ${template.motivo_rejeicao ? `Motivo: "${template.motivo_rejeicao}". ` : ''}Corrija o conteúdo e reenvie para aprovação — a versão anterior será substituída.`}
+            </AlertDescription>
+          </Alert>
+        )}
 
         <div className="grid md:grid-cols-2 gap-6 mt-6">
           {/* Formulário */}

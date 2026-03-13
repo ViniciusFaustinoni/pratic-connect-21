@@ -42,9 +42,9 @@ export function WhatsAppMetaTemplates() {
   const pending = templates.filter((t) => t.status === 'PENDING').length;
   const rejected = templates.filter((t) => t.status === 'REJECTED').length;
 
-  const canEdit = (status: string) => ['DRAFT', 'REJECTED'].includes(status);
+  const canEdit = (status: string) => ['DRAFT', 'REJECTED', 'PENDING'].includes(status);
   const canDelete = (status: string) => ['DRAFT', 'PENDING', 'REJECTED'].includes(status);
-  const canSend = (status: string) => ['DRAFT', 'REJECTED'].includes(status);
+  const canSend = (status: string) => ['DRAFT', 'REJECTED', 'PENDING'].includes(status);
 
   return (
     <div className="space-y-4">

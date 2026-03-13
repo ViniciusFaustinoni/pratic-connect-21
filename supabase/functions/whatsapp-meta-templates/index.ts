@@ -216,6 +216,18 @@ serve(async (req) => {
 
       console.log("[whatsapp-meta-templates] Enviando template:", JSON.stringify(metaPayload));
 
+      // Se o template está PENDING ou REJECTED, forçar delete proativo na Meta antes de recriar
+      const statusAtual = template.status?.toUpperCase();
+      if (statusAtual === "PENDING" || statusAtual === "REJECTED") {
+        console.log(`[whatsapp-meta-templates] Template '${template.nome}' está ${statusAtual}, deletando na Meta antes de recriar...`);
+        const delRes = await fetch(
+          `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates?name=${template.nome}`,
+          { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
+        );
+        console.log(`[whatsapp-meta-templates] DELETE proativo status: ${delRes.status}`);
+        await new Promise((r) => setTimeout(r, 2000));
+      }
+
       const response = await fetch(
         `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates`,
         {
