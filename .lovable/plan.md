@@ -1,31 +1,18 @@
 
 
-## Plano: Remover bloco "Serviços: {{plano.descricao}}" do contrato Autentique
+## Remover envio duplicado de mensagem de boas-vindas
 
 ### Problema
-O contrato gerado no Autentique mostra literalmente `Serviços: {{plano.descricao}}` — a variável não foi substituída nem removida. O regex de limpeza na linha 153 do `template-utils.ts` é muito restritivo (espera `<strong>` em `<p>` separado) e não captura o HTML real do template.
+
+Quando o instalador finaliza a instalação, o código em `src/hooks/useServicos.ts` (linha ~1159) chama `notificar-cliente` com tipo `instalacao_concluida`, que usa o template `cadastro_aprovado_botao` — o mesmo template de boas-vindas. Depois, quando o analista de cadastro aprova, a edge function `ativar-associado` envia novamente o `cadastro_aprovado_botao`. Resultado: mensagem duplicada.
 
 ### Solução
-Atualizar o regex de remoção em `supabase/functions/_shared/template-utils.ts` (linhas 153-157) para cobrir todas as variações possíveis do bloco "Serviços":
 
-```typescript
-// Remover qualquer bloco/parágrafo que contenha "Serviços:" seguido de variável ou traço
-resultado = resultado.replace(
-  /<p[^>]*>\s*(<strong>)?\s*Serviços\s*:?\s*(<\/strong>)?\s*({{[^}]*}}|—|)\s*<\/p>/gi,
-  ''
-);
-// Também remover se estiver em formato inline (sem tags de parágrafo)
-resultado = resultado.replace(
-  /Serviços\s*:\s*({{plano\.descricao}}|—)/gi,
-  ''
-);
-```
+Remover o envio da notificação WhatsApp `instalacao_concluida` no `useServicos.ts`. O histórico e a notificação in-app podem permanecer — apenas o disparo para `notificar-cliente` com tipo `instalacao_concluida` deve ser removido.
 
-Mover esta limpeza para **antes** da substituição de variáveis para garantir que o bloco inteiro seja removido antes de qualquer processamento.
+A mensagem de boas-vindas continuará sendo enviada apenas pelo fluxo de aprovação do analista (`ativar-associado`).
 
-### Arquivo alterado
-- `supabase/functions/_shared/template-utils.ts` — linhas 153-157: ampliar regex de remoção do bloco "Serviços"
+### Alteração
 
-### Necessidade de deploy
-Sim — a edge function `_shared` é usada por `autentique-create` e `autentique-create-by-token`, que precisarão ser re-deployed.
+**`src/hooks/useServicos.ts`** — Remover o bloco fire-and-forget (linhas ~1156-1170) que invoca `notificar-cliente` com `instalacao_concluida`.
 

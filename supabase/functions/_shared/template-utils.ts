@@ -152,7 +152,12 @@ export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData)
   
   // Remover bloco "Serviços: {{plano.descricao}}" que não deveria existir no termo
   resultado = resultado.replace(
-    /<p>\s*<strong>\s*Serviços\s*:\s*<\/strong>\s*<\/p>\s*<p>[^<]*<\/p>/gi,
+    /<p[^>]*>\s*(<strong>)?\s*Serviços\s*:?\s*(<\/strong>)?\s*({{[^}]*}}|—|)\s*<\/p>/gi,
+    ''
+  );
+  // Também remover formato inline (sem tags de parágrafo)
+  resultado = resultado.replace(
+    /Serviços\s*:\s*({{plano\.descricao}}|—)/gi,
     ''
   );
 
