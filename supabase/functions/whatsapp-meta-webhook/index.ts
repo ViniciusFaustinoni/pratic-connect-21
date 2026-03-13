@@ -557,17 +557,25 @@ serve(async (req) => {
                 telefone, texto || "", msg.type, latitude, longitude
               );
 
+              // Normalizar tipo para valores válidos no banco
+              const tiposPermitidos = ["text", "image", "document", "audio", "video", "template"];
+              const tipoNormalizado = tiposPermitidos.includes(msg.type) ? msg.type : "text";
+
               // Registrar no banco (sempre, mesmo se processado)
-              await supabase.from("whatsapp_mensagens").insert({
+              const { error: insertError } = await supabase.from("whatsapp_mensagens").insert({
                 telefone,
-                tipo: msg.type === "text" ? "text" : msg.type,
+                tipo: tipoNormalizado,
                 mensagem: texto,
                 direcao: "entrada",
-                status: "recebida",
+                status: "entregue",
                 message_id: msg.id,
                 nome_contato: contact?.profile?.name || null,
                 provedor: "meta_oficial",
               });
+
+              if (insertError) {
+                console.error(`[whatsapp-meta-webhook] Erro ao inserir mensagem:`, JSON.stringify(insertError));
+              }
 
               if (foiProcessado) {
                 console.log(`[whatsapp-meta-webhook] Mensagem processada como resposta de prestador`);
