@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { gerarPosicoesAssinatura } from "../_shared/autentique-positions.ts";
+import { gerarPosicoesAssinatura, buscarPosicoesConfig } from "../_shared/autentique-positions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import {
   substituirVariaveisEvento,
@@ -217,7 +217,7 @@ ${conteudoHTML}
           name: associado.nome,
           email: associado.email,
           action: "SIGN",
-          positions: gerarPosicoesAssinatura(),
+          positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
         }],
         file: null,
       },
