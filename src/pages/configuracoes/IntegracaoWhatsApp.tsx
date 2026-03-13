@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, Wifi, Bot, FileText, Settings } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Wifi, Bot, FileText, Settings, FlaskConical } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
