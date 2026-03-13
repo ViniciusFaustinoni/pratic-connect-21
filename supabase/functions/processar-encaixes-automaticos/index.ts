@@ -56,7 +56,7 @@ async function temTarefasNaJanela(
   // Buscar vistorias agendadas nas próximas X horas
   const { data: vistAgendadas } = await supabase
     .from('vistorias')
-    .select('id, data_agendada, hora_agendada')
+    .select('id, data_agendada, horario_agendado')
     .eq('vistoriador_id', profissionalId)
     .in('status', ['pendente', 'agendada'])
     .gte('data_agendada', hojeStr)
