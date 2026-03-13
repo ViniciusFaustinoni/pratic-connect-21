@@ -265,9 +265,10 @@ serve(async (req) => {
           );
           console.log(`[whatsapp-meta-templates] DELETE status: ${delRes.status}`);
 
-          // Tentar recriar com backoff progressivo (5s, 10s, 15s)
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            const delay = attempt * 5000;
+          // Tentar recriar com backoff progressivo (15s, 25s, 35s)
+          const delays = [15000, 25000, 35000];
+          for (let attempt = 1; attempt <= delays.length; attempt++) {
+            const delay = delays[attempt - 1];
             console.log(`[whatsapp-meta-templates] Aguardando ${delay/1000}s antes do retry #${attempt}...`);
             await new Promise((r) => setTimeout(r, delay));
 
