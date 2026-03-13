@@ -622,8 +622,7 @@ serve(async (req) => {
       // Preparar dados de atualização
       const updateData: Record<string, any> = {
         profissional_id: profissionalId,
-        status: 'em_rota',
-        em_rota_em: agora,
+        status: 'agendada',
         updated_at: agora
       };
 
@@ -679,7 +678,7 @@ serve(async (req) => {
           // Atualizar status na instalação de origem
           const instalacaoUpdate: Record<string, any> = {
             instalador_responsavel_id: profissionalId,
-            status: 'em_rota'
+            status: 'agendada'
           };
           
           // Se for encaixe, sincronizar data também na tabela de origem
@@ -718,7 +717,7 @@ serve(async (req) => {
           
           const vistoriaUpdate: Record<string, any> = {
             vistoriador_id: profissionalId,
-            status: 'em_rota'
+            status: 'agendada'
           };
           
           // Se for encaixe, sincronizar data também na tabela de origem

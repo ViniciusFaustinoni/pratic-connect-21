@@ -347,8 +347,7 @@ serve(async (req) => {
         // Preparar dados de atualização
         const updateData: any = {
           profissional_id: prof.vistoriador_id,
-          status: 'em_rota',
-          em_rota_em: agora,
+          status: 'agendada',
           updated_at: agora
         };
 
@@ -404,7 +403,7 @@ serve(async (req) => {
             // Preparar dados para instalação
             const instUpdateData: any = {
               instalador_responsavel_id: prof.vistoriador_id,
-              status: 'em_rota'
+              status: 'agendada'
             };
             
             // Se é encaixe, atualizar data também na tabela de origem
@@ -545,7 +544,7 @@ serve(async (req) => {
             // Preparar dados para vistoria
             const vistUpdateData: any = {
               vistoriador_id: prof.vistoriador_id,
-              status: 'em_rota'
+              status: 'agendada'
             };
             
             // Se é encaixe, atualizar data também na tabela de origem
