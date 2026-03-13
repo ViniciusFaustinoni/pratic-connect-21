@@ -10,6 +10,7 @@ import { WhatsAppStatusCard } from '@/components/whatsapp/WhatsAppStatusCard';
 import { WhatsAppIAConfig } from '@/components/integracoes/WhatsAppIAConfig';
 import { WhatsAppStats } from '@/components/integracoes/WhatsAppStats';
 import { WhatsAppMetaTemplates } from '@/components/integracoes/WhatsAppMetaTemplates';
+import { WhatsAppConversasPainel } from '@/components/integracoes/WhatsAppConversasPainel';
 
 export default function IntegracaoWhatsApp() {
   const navigate = useNavigate();
