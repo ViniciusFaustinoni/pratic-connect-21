@@ -898,6 +898,30 @@ serve(async (req) => {
             console.log(`[SGA Sync] Código retornado no próprio erro de cadastro: ${codigoExistente}`);
           }
 
+          // Buscar códigos já invalidados para não reutilizá-los (previne loop infinito)
+          let codigosInvalidados = new Set<number>();
+          try {
+            const { data: logsInvalidados } = await supabase
+              .from('sga_sync_logs')
+              .select('request_payload')
+              .eq('associado_id', associado_id)
+              .eq('action', 'invalidar_codigo_associado')
+              .order('created_at', { ascending: false })
+              .limit(50);
+
+            if (logsInvalidados) {
+              for (const l of logsInvalidados) {
+                const cod = Number((l.request_payload as any)?.codigo_invalidado);
+                if (Number.isFinite(cod) && cod > 0) codigosInvalidados.add(cod);
+              }
+            }
+            if (codigosInvalidados.size > 0) {
+              console.log(`[SGA Sync] Códigos já invalidados (${codigosInvalidados.size}): ${[...codigosInvalidados].join(', ')}`);
+            }
+          } catch (e) {
+            console.log('[SGA Sync] Erro ao buscar códigos invalidados:', e);
+          }
+
           // Estratégia 1: Logs anteriores do mesmo associado_id
           if (!codigoExistente) {
             try {
