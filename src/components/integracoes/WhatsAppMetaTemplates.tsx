@@ -10,7 +10,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useMetaTemplates, useSincronizarMetaTemplates, useExcluirMetaTemplate, useEnviarMetaTemplate } from '@/hooks/useWhatsAppMeta';
+import { useMetaTemplates, useSincronizarMetaTemplates, useExcluirMetaTemplate, useEnviarMetaTemplate, useAtualizarMetaTemplate } from '@/hooks/useWhatsAppMeta';
 import { WhatsAppMetaTemplateDrawer } from './WhatsAppMetaTemplateDrawer';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
