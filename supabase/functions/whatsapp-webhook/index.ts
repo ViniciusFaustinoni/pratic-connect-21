@@ -3463,7 +3463,9 @@ Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato c
 
     // Salvar e enviar resposta - capturar messageId para tracking de status
     await saveMessage(supabase, associado.id, "assistant", respostaFinal);
-    const sendResult = await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, respostaFinal);
+    const sendResult = isMetaDelegate
+      ? await sendWhatsAppViaProxy(telefone, respostaFinal)
+      : await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, respostaFinal);
     await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", sendResult.messageId);
 
     console.log(`[whatsapp-webhook] Resposta enviada para ${telefone}`);
