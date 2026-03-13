@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect } from 'react';
 import { formatarMoeda } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -238,6 +238,7 @@ export default function CotadorPage() {
   const [usoApp, setUsoApp] = useState(false);
   const [valorFipe, setValorFipe] = useState<number | null>(null);
   const [categoriaVeiculo, setCategoriaVeiculo] = useState<string | null>(null);
+  const [regiao, setRegiao] = useState('rj');
   
   // Estados para valores customizados da API (fora das listas estáticas)
   const [modeloCustom, setModeloCustom] = useState<string | null>(null);
@@ -301,15 +302,15 @@ export default function CotadorPage() {
   // Hook de planos com filtro por uso (aplicativo vs passeio)
   const parametrosPlanos = useMemo(() => ({
     valorFipe: valorFipe || 0,
-    regiao: 'rj',
+    regiao,
     combustivel: veiculoEncontrado?.combustivel || undefined,
     anoVeiculo: parseInt(ano) || undefined,
     tipoVeiculo: tipoVeiculoDetectado,
-    usoApp: usoApp, // Filtra planos por uso
+    usoApp: usoApp,
     categoria: categoriaVeiculo || undefined,
     marca: marca || undefined,
     modelo: modelo || undefined,
-  }), [valorFipe, ano, usoApp, categoriaVeiculo, tipoVeiculoDetectado, marca, modelo, veiculoEncontrado?.combustivel]);
+  }), [valorFipe, ano, usoApp, categoriaVeiculo, tipoVeiculoDetectado, marca, modelo, veiculoEncontrado?.combustivel, regiao]);
   
   const { planos: planosDB, planosNegados, isLoading: loadingPlanos } = usePlanosCotacao(parametrosPlanos);
   const criarCotacao = useCriarCotacao();
@@ -359,6 +360,25 @@ export default function CotadorPage() {
   const planoAtual = useMemo(() => {
     return planos.find(p => p.id === planoSelecionadoTab) || planos[1] || planos[0] || null;
   }, [planos, planoSelecionadoTab]);
+
+  // Auto-exibir planos quando valorFipe > 0 e há planos disponíveis
+  useEffect(() => {
+    if (valorFipe && valorFipe > 0 && planosDB && planosDB.length > 0) {
+      if (!cotacaoCalculada) {
+        setCotacaoCalculada(true);
+        setPlanoSelecionadoTab(planosDB.find(p => p.destaque)?.id || planosDB[1]?.id || planosDB[0]?.id || '');
+        // Inicializar adesão com 1% FIPE (mínimo R$ 100)
+        setValorAdesaoCustom(Math.max(100, Math.round(valorFipe * 0.01 * 100) / 100));
+      }
+    }
+  }, [valorFipe, planosDB]);
+
+  // Auto-atualizar tab quando lista de planos muda
+  useEffect(() => {
+    if (planos.length > 0 && !planos.find(p => p.id === planoSelecionadoTab)) {
+      setPlanoSelecionadoTab(planos.find(p => p.destaque)?.id || planos[1]?.id || planos[0]?.id || '');
+    }
+  }, [planos]);
 
   // Dados para geração de proposta PDF
   const dadosProposta: DadosProposta | null = useMemo(() => {
@@ -421,6 +441,7 @@ export default function CotadorPage() {
     setCotacaoSalva(null);
     setCategoriaVeiculo(null);
     setErroCategoriaVeiculo(false);
+    setRegiao('rj');
     // Limpar valores customizados
     setModeloCustom(null);
     setAnoCustom(null);
@@ -530,7 +551,6 @@ export default function CotadorPage() {
           setValorFipe(estimarValorFipe(marcaNormalizada, anoNormalizado));
         }
 
-        setCotacaoCalculada(false);
         setPlanoFinalSelecionado(null);
         setCotacaoSalva(null);
         
@@ -552,7 +572,6 @@ export default function CotadorPage() {
     setMarca(novaMarca);
     setModelo('');
     setValorFipe(null);
-    setCotacaoCalculada(false);
     setPlanoFinalSelecionado(null);
     setCotacaoSalva(null);
     // Limpar modelo customizado ao trocar marca
@@ -575,7 +594,6 @@ export default function CotadorPage() {
         lead.veiculo_ano || new Date().getFullYear()
       );
       setValorFipe(fipe);
-      setCotacaoCalculada(false);
       setPlanoFinalSelecionado(null);
       setCotacaoSalva(null);
       toast.success('Dados do veículo preenchidos automaticamente');
@@ -642,6 +660,7 @@ export default function CotadorPage() {
         valor_fipe: valorFipe,
         codigo_fipe: veiculoEncontrado?.codigoFipe,
         uso_aplicativo: usoApp,
+        regiao: regiao,
         categoria_veiculo: categoriaVeiculo || undefined,
         nome_solicitante: leadSelecionado?.nome || nomeAssociado || null,
         veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
@@ -1018,7 +1037,6 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                       onValueChange={(v) => {
                         setModelo(v);
                         setValorFipe(null);
-                        setCotacaoCalculada(false);
                       }}
                       disabled={!marca}
                     >
@@ -1044,7 +1062,6 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                           const fipe = estimarValorFipe(marca, parseInt(v));
                           setValorFipe(fipe);
                         }
-                        setCotacaoCalculada(false);
                       }}
                     >
                       <SelectTrigger>
@@ -1117,6 +1134,21 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               <p className="text-xs text-muted-foreground">
                 Informe o nome do cliente para identificar a cotação
               </p>
+            </div>
+
+            {/* Região de atendimento */}
+            <div className="space-y-2">
+              <Label>Região de atendimento</Label>
+              <Select value={regiao} onValueChange={setRegiao}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a região" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="rj">Rio de Janeiro</SelectItem>
+                  <SelectItem value="lagos">Região dos Lagos</SelectItem>
+                  <SelectItem value="sp">São Paulo</SelectItem>
+                </SelectContent>
+              </Select>
             </div>
 
             {/* Uso para aplicativo */}
