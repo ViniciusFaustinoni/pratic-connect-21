@@ -224,8 +224,13 @@ serve(async (req) => {
           `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates?name=${template.nome}`,
           { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
         );
-        console.log(`[whatsapp-meta-templates] DELETE proativo status: ${delRes.status}`);
-        await new Promise((r) => setTimeout(r, 5000));
+        const delBody = await delRes.json().catch(() => ({}));
+        console.log(`[whatsapp-meta-templates] DELETE proativo status: ${delRes.status}`, JSON.stringify(delBody));
+        
+        // Se o DELETE retornou 400, pode ser que já está sendo excluído - aguardar mais
+        const deleteDelay = delRes.ok ? 10000 : 20000;
+        console.log(`[whatsapp-meta-templates] Aguardando ${deleteDelay/1000}s após delete proativo...`);
+        await new Promise((r) => setTimeout(r, deleteDelay));
       }
 
       const response = await fetch(
@@ -247,27 +252,32 @@ serve(async (req) => {
         
         const motivoRejeicao = result.error?.error_user_msg || result.error?.message || "Erro desconhecido";
         
-        // Auto-resolver: template já existe ou está sendo excluído na Meta
+        // Detectar tipo de conflito
+        const sendoExcluido = motivoRejeicao.toLowerCase().includes("sendo excluído")
+          || motivoRejeicao.toLowerCase().includes("being deleted")
+          || (result.error?.error_subcode === 2388023);
+        
         const jaExiste = motivoRejeicao.toLowerCase().includes("já existe")
           || motivoRejeicao.toLowerCase().includes("already exists")
-          || motivoRejeicao.toLowerCase().includes("content for this language already exists")
-          || motivoRejeicao.toLowerCase().includes("está sendo excluído")
-          || motivoRejeicao.toLowerCase().includes("is being deleted")
-          || (result.error?.code === 2388023);
+          || motivoRejeicao.toLowerCase().includes("content for this language already exists");
 
-        if (jaExiste) {
-          console.log(`[whatsapp-meta-templates] Template '${template.nome}' conflito na Meta, deletando e recriando com retry...`);
+        if (sendoExcluido || jaExiste) {
+          // Se já existe (mas não está sendo excluído), deletar primeiro
+          if (jaExiste && !sendoExcluido) {
+            console.log(`[whatsapp-meta-templates] Template '${template.nome}' já existe, deletando...`);
+            const delRes = await fetch(
+              `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates?name=${template.nome}`,
+              { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
+            );
+            console.log(`[whatsapp-meta-templates] DELETE status: ${delRes.status}`);
+          } else {
+            console.log(`[whatsapp-meta-templates] Template '${template.nome}' está sendo excluído pela Meta, aguardando sem re-deletar...`);
+          }
 
-          // Deletar da Meta
-          const delRes = await fetch(
-            `https://graph.facebook.com/v21.0/${config.waba_id}/message_templates?name=${template.nome}`,
-            { method: "DELETE", headers: { Authorization: `Bearer ${accessToken}` } }
-          );
-          console.log(`[whatsapp-meta-templates] DELETE status: ${delRes.status}`);
-
-          // Tentar recriar com backoff progressivo (5s, 10s, 15s)
-          for (let attempt = 1; attempt <= 3; attempt++) {
-            const delay = attempt * 5000;
+          // Tentar recriar com backoff progressivo (20s, 30s, 40s) - NÃO re-deletar
+          const delays = [20000, 30000, 40000];
+          for (let attempt = 1; attempt <= delays.length; attempt++) {
+            const delay = delays[attempt - 1];
             console.log(`[whatsapp-meta-templates] Aguardando ${delay/1000}s antes do retry #${attempt}...`);
             await new Promise((r) => setTimeout(r, delay));
 
@@ -303,9 +313,11 @@ serve(async (req) => {
             const aindaDeletando = retryMotivo.toLowerCase().includes("sendo excluído")
               || retryMotivo.toLowerCase().includes("being deleted");
 
-            if (!aindaDeletando || attempt === 3) {
+            if (!aindaDeletando || attempt === delays.length) {
               console.error(`[whatsapp-meta-templates] Retry #${attempt} falhou:`, retryResult);
-              const finalMotivo = retryMotivo || "Erro no retry";
+              const finalMotivo = aindaDeletando
+                ? "Template ainda sendo excluído pela Meta. Aguarde 2 minutos e tente novamente."
+                : (retryMotivo || "Erro no retry");
               await supabase
                 .from("whatsapp_meta_templates")
                 .update({ status: "REJECTED", motivo_rejeicao: finalMotivo, updated_at: new Date().toISOString() })
