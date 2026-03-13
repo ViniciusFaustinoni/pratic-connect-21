@@ -1061,7 +1061,6 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                           const fipe = estimarValorFipe(marca, parseInt(v));
                           setValorFipe(fipe);
                         }
-                        setCotacaoCalculada(false);
                       }}
                     >
                       <SelectTrigger>
