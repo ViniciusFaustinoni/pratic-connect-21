@@ -1,18 +1,61 @@
 
 
-## Remover envio duplicado de mensagem de boas-vindas
+## Painel de Conversas IA na aba "IA & Respostas"
 
-### Problema
+### O que será construído
 
-Quando o instalador finaliza a instalação, o código em `src/hooks/useServicos.ts` (linha ~1159) chama `notificar-cliente` com tipo `instalacao_concluida`, que usa o template `cadastro_aprovado_botao` — o mesmo template de boas-vindas. Depois, quando o analista de cadastro aprova, a edge function `ativar-associado` envia novamente o `cadastro_aprovado_botao`. Resultado: mensagem duplicada.
+Um painel de conversas abaixo dos cards existentes (Assistente IA + Estatísticas) na tab "IA & Respostas", mostrando todas as conversas WhatsApp agrupadas por contato, com possibilidade de clicar para ver o histórico completo em um dialog.
 
-### Solução
+### Componentes
 
-Remover o envio da notificação WhatsApp `instalacao_concluida` no `useServicos.ts`. O histórico e a notificação in-app podem permanecer — apenas o disparo para `notificar-cliente` com tipo `instalacao_concluida` deve ser removido.
+**1. Novo componente `WhatsAppConversasPainel`** (`src/components/integracoes/WhatsAppConversasPainel.tsx`)
 
-A mensagem de boas-vindas continuará sendo enviada apenas pelo fluxo de aprovação do analista (`ativar-associado`).
+- Lista de conversas agrupadas por telefone, consultando `whatsapp_mensagens` agrupado por `telefone`
+- Cada item mostra: nome do contato, telefone, última mensagem (preview), data/hora, total de mensagens, badge de direção
+- Filtro/busca por nome ou telefone
+- Paginação ou scroll infinito
+- Ao clicar em uma conversa, abre o dialog `ConversaIADialog` (já existente) ou reutiliza o `HistoricoConversaWhatsApp` em um dialog
+- Botão de atualizar lista
 
-### Alteração
+**2. Query direta no banco** (sem depender da edge function `whatsapp-find-chats`)
 
-**`src/hooks/useServicos.ts`** — Remover o bloco fire-and-forget (linhas ~1156-1170) que invoca `notificar-cliente` com `instalacao_concluida`.
+```sql
+-- Conversas agrupadas
+SELECT telefone, nome_contato, 
+       COUNT(*) as total_mensagens,
+       MAX(created_at) as ultima_mensagem,
+       (SELECT mensagem FROM whatsapp_mensagens m2 
+        WHERE m2.telefone = m1.telefone 
+        ORDER BY created_at DESC LIMIT 1) as ultima_msg_texto
+FROM whatsapp_mensagens m1
+GROUP BY telefone, nome_contato
+ORDER BY ultima_mensagem DESC
+```
+
+Como o Supabase client não suporta `GROUP BY` diretamente, usaremos uma abordagem de buscar as mensagens mais recentes por telefone distinto, ou criaremos um hook dedicado com RPC/query criativa.
+
+**Abordagem simplificada**: Buscar as últimas N mensagens ordenadas por `created_at DESC`, agrupar no frontend por telefone. Isso é viável dado o volume atual (poucos contatos).
+
+**3. Alteração em `IntegracaoWhatsApp.tsx`**
+
+Na tab `ia`, adicionar o componente abaixo do grid dos 2 cards:
+
+```tsx
+<TabsContent value="ia" className="space-y-6">
+  <div className="grid gap-6 md:grid-cols-2">
+    <WhatsAppIAConfig />
+    <WhatsAppStats />
+  </div>
+  <WhatsAppConversasPainel />  {/* NOVO */}
+</TabsContent>
+```
+
+**4. Dialog de conversa individual**
+
+Reutilizar o `HistoricoConversaWhatsApp` existente dentro de um `Dialog`, passando o telefone selecionado. Assim o histórico completo com balões de chat, sincronização e auto-scroll já funciona.
+
+### Arquivos modificados
+
+- `src/components/integracoes/WhatsAppConversasPainel.tsx` — novo
+- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — adicionar import e uso
 
