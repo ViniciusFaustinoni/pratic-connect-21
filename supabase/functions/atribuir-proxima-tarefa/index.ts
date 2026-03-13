@@ -622,8 +622,7 @@ serve(async (req) => {
       // Preparar dados de atualização
       const updateData: Record<string, any> = {
         profissional_id: profissionalId,
-        status: 'em_rota',
-        em_rota_em: agora,
+        status: 'agendada',
         updated_at: agora
       };
 
