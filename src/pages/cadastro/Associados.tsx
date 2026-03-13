@@ -740,6 +740,11 @@ export default function Associados() {
                             <span className={`h-1.5 w-1.5 rounded-full ${statusDotColors[associado.status]}`} />
                             {STATUS_ASSOCIADO_LABELS[associado.status]}
                           </Badge>
+                          {associado.status === 'ativo' && !associado.sincronizado_hinova && (
+                            <Badge variant="outline" className="text-[10px] px-1.5 py-0 bg-amber-100 text-amber-700 dark:bg-amber-900/30 dark:text-amber-300 border-amber-300 dark:border-amber-700 w-fit">
+                              Não enviado SGA
+                            </Badge>
+                          )}
                           {(associado.status === 'cancelado' || associado.status === 'bloqueado') && (() => {
                             const ts = (associado as any).tipo_saida;
                             if (associado.status === 'bloqueado' && !ts) {
