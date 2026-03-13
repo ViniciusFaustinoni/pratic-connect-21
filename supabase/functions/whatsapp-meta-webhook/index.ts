@@ -37,6 +37,143 @@ async function enviarWhatsApp(supabaseUrl: string, serviceKey: string, telefone:
 }
 
 /**
+ * Processa mensagem de usuário (associado, lead ou desconhecido) via IA
+ */
+async function processarMensagemUsuario(
+  supabase: ReturnType<typeof createClient>,
+  supabaseUrl: string,
+  serviceKey: string,
+  telefone: string,
+  texto: string,
+  tipoMsg: string,
+  latitude: number | null,
+  longitude: number | null,
+  messageId: string,
+) {
+  // Normalizar telefone para busca (múltiplas variantes)
+  const telLimpo = telefone.replace(/\D/g, "");
+  const telefonesBusca = [telLimpo];
+  if (telLimpo.startsWith("55") && telLimpo.length >= 12) {
+    telefonesBusca.push(telLimpo.substring(2));
+  }
+  if (!telLimpo.startsWith("55")) {
+    telefonesBusca.push("55" + telLimpo);
+  }
+
+  // ---- 1. BUSCAR ASSOCIADO ATIVO ----
+  const { data: associado } = await supabase
+    .from("associados")
+    .select("id, nome, status")
+    .or(`whatsapp.in.(${telefonesBusca.join(",")}),telefone.in.(${telefonesBusca.join(",")})`)
+    .eq("status", "ativo")
+    .maybeSingle();
+
+  if (associado) {
+    console.log(`[whatsapp-meta-webhook] Associado encontrado: ${associado.nome} (${associado.id}), delegando para IA`);
+
+    // Delegar para whatsapp-webhook com payload sintético (formato Evolution API)
+    try {
+      const syntheticPayload: Record<string, unknown> = {
+        event: "messages.upsert",
+        sender: `${telLimpo}@s.whatsapp.net`,
+        _meta_delegate: true,
+        data: {
+          key: {
+            remoteJid: `${telLimpo}@s.whatsapp.net`,
+            fromMe: false,
+            id: messageId || `meta_${Date.now()}`,
+          },
+          message:
+            tipoMsg === "location" && latitude && longitude
+              ? { locationMessage: { degreesLatitude: latitude, degreesLongitude: longitude } }
+              : { conversation: texto || "[Mensagem recebida]" },
+        },
+      };
+
+      const res = await fetch(`${supabaseUrl}/functions/v1/whatsapp-webhook`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${serviceKey}`,
+        },
+        body: JSON.stringify(syntheticPayload),
+      });
+
+      const result = await res.json();
+      console.log(`[whatsapp-meta-webhook] Delegação IA resultado:`, JSON.stringify(result).substring(0, 200));
+    } catch (err) {
+      console.error(`[whatsapp-meta-webhook] Erro ao delegar para IA:`, err);
+      await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+        "Desculpe, estou com dificuldades para processar sua mensagem. Tente novamente em alguns instantes. 🙏"
+      );
+    }
+    return;
+  }
+
+  // ---- 2. BUSCAR LEAD ----
+  const { data: lead } = await supabase
+    .from("leads")
+    .select("id, nome, vendedor_id")
+    .or(`telefone.in.(${telefonesBusca.join(",")})`)
+    .maybeSingle();
+
+  if (lead) {
+    console.log(`[whatsapp-meta-webhook] Lead encontrado: ${lead.nome}`);
+    await supabase.from("leads_historico").insert({
+      lead_id: lead.id,
+      tipo: "mensagem_whatsapp",
+      descricao: texto.substring(0, 500),
+      dados_extras: { telefone, provedor: "meta_oficial" },
+    });
+    await supabase.from("leads").update({
+      data_ultimo_contato: new Date().toISOString(),
+      updated_at: new Date().toISOString(),
+    }).eq("id", lead.id);
+
+    const primeiroNome = lead.nome?.split(" ")[0] || "Cliente";
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+      `Olá ${primeiroNome}! 😊\n\nRecebemos sua mensagem. Nosso consultor entrará em contato em breve.\n\nAgradecemos o interesse na PRATICCAR! 🚗`
+    );
+    return;
+  }
+
+  // ---- 3. NÚMERO DESCONHECIDO - TENTAR CPF ----
+  const cpfLimpo = texto.replace(/\D/g, "");
+  if (cpfLimpo.length === 11 && tipoMsg === "text") {
+    console.log(`[whatsapp-meta-webhook] Tentando identificar por CPF: ${cpfLimpo}`);
+    const { data: associadoPorCpf } = await supabase
+      .from("associados")
+      .select("id, nome")
+      .eq("cpf", cpfLimpo)
+      .eq("status", "ativo")
+      .maybeSingle();
+
+    if (associadoPorCpf) {
+      await supabase.from("associados").update({
+        whatsapp: telefone,
+        updated_at: new Date().toISOString(),
+      }).eq("id", associadoPorCpf.id);
+
+      const primeiroNome = associadoPorCpf.nome.split(" ")[0];
+      await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+        `Encontrei você, *${primeiroNome}*! 🎉\n\nSeu número foi vinculado ao seu cadastro. A partir de agora, posso te ajudar diretamente por aqui!\n\nComo posso te ajudar hoje? 😊`
+      );
+      return;
+    }
+
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+      `Não encontrei nenhum associado ativo com esse CPF. 😕\n\nVerifique se o CPF está correto ou entre em contato com nossa central.\n\n📞 *Central de Atendimento*: praticcar.com.br`
+    );
+    return;
+  }
+
+  // ---- 4. PEDIR CPF PARA IDENTIFICAÇÃO ----
+  await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+    `Olá! 👋 Não consegui identificar seu número em nosso sistema.\n\nPor favor, me informe seu *CPF* (apenas números) para que eu possa te ajudar.\n\nSe você ainda não é associado PRATIC, acesse nosso site! 📞`
+  );
+}
+
+/**
  * Processa resposta de um prestador no fluxo de despacho de reboque
  */
 async function processarRespostaPrestador(
