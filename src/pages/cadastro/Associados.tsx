@@ -1,7 +1,7 @@
 import { useState, useMemo, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { 
-  Search, Plus, MoreVertical, Loader2, 
+  Search, MoreVertical, Loader2, 
   UserCheck, Clock, AlertTriangle, UserX,
   Eye, Edit, FileText, Receipt, Lock, Unlock, Pause, XCircle,
   MessageCircle, X, ChevronLeft, ChevronRight, Users, Download, Filter, DollarSign, Trash2,
