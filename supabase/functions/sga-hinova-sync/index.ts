@@ -945,7 +945,6 @@ serve(async (req) => {
                   } else if (codigo && codigosInvalidados.has(codigo)) {
                     console.log(`[SGA Sync] Código ${codigo} dos logs do associado IGNORADO (já invalidado)`);
                   }
-                  }
                 }
               }
             } catch (e) {
