@@ -377,9 +377,9 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                   {isIniciandoRota ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
                   ) : (
-                    <Route className="h-4 w-4" />
+                    <Play className="h-4 w-4" />
                   )}
-                  Iniciar Percurso
+                  Iniciar Tarefa
                 </Button>
                 
                 {/* Feedback visual quando bloqueado por horário */}
