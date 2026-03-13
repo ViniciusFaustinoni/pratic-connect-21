@@ -93,6 +93,11 @@ export default function IntegracaoWhatsApp() {
         <TabsContent value="templates" className="space-y-6">
           <WhatsAppMetaTemplates />
         </TabsContent>
+
+        {/* ── Tab Testes ── */}
+        <TabsContent value="testes" className="space-y-6">
+          <WhatsAppTestChat />
+        </TabsContent>
       </Tabs>
     </div>
   );
