@@ -460,30 +460,9 @@ serve(async (req) => {
                 const tecWhatsappLink = tecTelefoneLimpo ? `https://wa.me/55${tecTelefoneLimpo}` : '';
                 const enderecoAssociado = [instCompleta.logradouro, instCompleta.numero, instCompleta.bairro, instCompleta.cidade, instCompleta.uf].filter(Boolean).join(', ');
 
-                // 1. Notificar associado que o técnico está a caminho (template tecnico_a_caminho_1)
-                try {
-                  const periodoLabel = instCompleta.periodo === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)';
-                  const { error: notifyError } = await supabase.functions.invoke('notificar-cliente', {
-                    body: {
-                      tipo: 'tecnico_em_rota',
-                      associado_id: instCompleta.associado_id,
-                      dados: {
-                        tecnico_nome: tecNome,
-                        tecnico_telefone: tecTelefoneLimpo ? tecTelefoneLimpo.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3') : 'Não informado',
-                        tecnico_whatsapp_link: tecWhatsappLink,
-                        endereco: enderecoAssociado,
-                        periodo: periodoLabel,
-                      }
-                    }
-                  });
-                  if (notifyError) {
-                    console.error(`[cron-atribuir-tarefas] Erro ao enviar tecnico_a_caminho_1:`, notifyError);
-                  } else {
-                    console.log(`[cron-atribuir-tarefas] ✓ WhatsApp 'tecnico_a_caminho_1' enviado para associado ${instCompleta.associado_id}`);
-                  }
-                } catch (notifyErr) {
-                  console.error(`[cron-atribuir-tarefas] Exceção ao enviar tecnico_a_caminho_1:`, notifyErr);
-                }
+                // Notificação tecnico_em_rota removida daqui - agora é disparada exclusivamente
+                // quando o instalador clica "Iniciar Tarefa" (via notificar-inicio-rota)
+                console.log(`[cron-atribuir-tarefas] Atribuição concluída para associado ${instCompleta.associado_id} - WhatsApp será enviado quando instalador iniciar rota`);
               }
 
               // 2. Push notification para o instalador
