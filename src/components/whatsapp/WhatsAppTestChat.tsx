@@ -37,7 +37,7 @@ export function WhatsAppTestChat() {
       try {
         const { data, error } = await supabase
           .from('whatsapp_meta_config')
-          .select('display_phone_number, phone_number_id, ativo')
+          .select('phone_number_id, ativo')
           .limit(1)
           .maybeSingle();
 
@@ -45,7 +45,7 @@ export function WhatsAppTestChat() {
 
         if (data) {
           setMetaAtiva(!!data.ativo);
-          const numero = data.display_phone_number || '';
+          const numero = data.phone_number_id || '';
           setTelefoneDestino(numero);
           setTelefoneEditavel(numero);
         }
