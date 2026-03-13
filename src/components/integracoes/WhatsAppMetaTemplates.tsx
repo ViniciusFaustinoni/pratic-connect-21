@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useCallback } from 'react';
 import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit, Copy, Rocket } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -10,7 +10,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useMetaTemplates, useSincronizarMetaTemplates, useExcluirMetaTemplate, useEnviarMetaTemplate } from '@/hooks/useWhatsAppMeta';
+import { useMetaTemplates, useSincronizarMetaTemplates, useExcluirMetaTemplate, useEnviarMetaTemplate, useAtualizarMetaTemplate } from '@/hooks/useWhatsAppMeta';
 import { WhatsAppMetaTemplateDrawer } from './WhatsAppMetaTemplateDrawer';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -30,6 +30,7 @@ export function WhatsAppMetaTemplates() {
   const sincronizar = useSincronizarMetaTemplates();
   const excluir = useExcluirMetaTemplate();
   const enviar = useEnviarMetaTemplate();
+  const atualizar = useAtualizarMetaTemplate();
 
   const [drawerOpen, setDrawerOpen] = useState(false);
   const [editTemplate, setEditTemplate] = useState<any>(null);
@@ -38,9 +39,51 @@ export function WhatsAppMetaTemplates() {
   const [testTemplate, setTestTemplate] = useState<any>(null);
   const [testPhone, setTestPhone] = useState('');
   const [testSending, setTestSending] = useState(false);
+  const [reenvioId, setReenvioId] = useState<string | null>(null);
   const approved = templates.filter((t) => t.status === 'APPROVED').length;
   const pending = templates.filter((t) => t.status === 'PENDING').length;
   const rejected = templates.filter((t) => t.status === 'REJECTED').length;
+
+  const handleReenviarComIA = useCallback(async (templateId: string) => {
+    const t = templates.find((tpl) => tpl.id === templateId);
+    if (!t) return;
+
+    setReenvioId(templateId);
+    try {
+      // 1. Chamar IA para ajustar o texto
+      toast.info('IA analisando e ajustando o template...');
+      const { data: validacao, error: valError } = await supabase.functions.invoke('whatsapp-template-validar', {
+        body: {
+          nome: t.nome,
+          categoria: t.categoria,
+          corpo: t.corpo,
+          header_tipo: t.header_tipo,
+          header_texto: t.header_texto,
+          rodape: t.rodape,
+          variaveis_exemplo: t.variaveis_exemplo,
+          motivo_rejeicao: t.motivo_rejeicao || 'Template pendente de aprovação, ajustar texto mantendo a mesma abordagem para aumentar chance de aprovação.',
+        },
+      });
+
+      if (valError) throw new Error(valError.message || 'Erro ao consultar IA');
+
+      // 2. Se houver corpo sugerido, atualizar
+      if (validacao?.corpo_sugerido) {
+        await atualizar.mutateAsync({ id: templateId, corpo: validacao.corpo_sugerido });
+        toast.info('Texto ajustado pela IA. Reenviando para a Meta...');
+      } else {
+        toast.info('IA não sugeriu alterações. Reenviando para a Meta...');
+      }
+
+      // 3. Reenviar para aprovação
+      await enviar.mutateAsync(templateId);
+      toast.success('Template reenviado para aprovação da Meta!');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao reenviar template com IA');
+    } finally {
+      setReenvioId(null);
+    }
+  }, [templates, atualizar, enviar]);
 
   const canEdit = (status: string) => ['DRAFT', 'REJECTED', 'PENDING'].includes(status);
   const canDelete = (status: string) => ['DRAFT', 'PENDING', 'REJECTED'].includes(status);
@@ -149,8 +192,21 @@ export function WhatsAppMetaTemplates() {
                           </Button>
                         )}
                         {canSend(t.status) && (
-                          <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => enviar.mutate(t.id)} disabled={enviar.isPending}>
-                            <Send className="h-3 w-3" />
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-7 w-7"
+                            title={t.status === 'DRAFT' ? 'Enviar para aprovação' : 'IA ajusta e reenvia'}
+                            onClick={() => {
+                              if (t.status === 'PENDING' || t.status === 'REJECTED') {
+                                handleReenviarComIA(t.id);
+                              } else {
+                                enviar.mutate(t.id);
+                              }
+                            }}
+                            disabled={enviar.isPending || reenvioId === t.id}
+                          >
+                            {reenvioId === t.id ? <Loader2 className="h-3 w-3 animate-spin" /> : <Send className="h-3 w-3" />}
                           </Button>
                         )}
                         <Button

@@ -1,33 +1,18 @@
 
 
-## Reenvio automático com IA para templates Pendentes/Rejeitados
+## Remover envio duplicado de mensagem de boas-vindas
 
-### O que será feito
+### Problema
 
-Ao clicar no botão de reenviar (Send) na lista de templates com status PENDING ou REJECTED, o sistema automaticamente:
-1. Chama a IA (`whatsapp-template-validar`) passando o corpo atual + motivo de rejeição
-2. Se a IA retornar `corpo_sugerido`, aplica automaticamente o novo texto
-3. Salva o template atualizado no banco
-4. Reenvia para aprovação da Meta (delete + recreate)
-5. Exibe toast com feedback do processo
+Quando o instalador finaliza a instalação, o código em `src/hooks/useServicos.ts` (linha ~1159) chama `notificar-cliente` com tipo `instalacao_concluida`, que usa o template `cadastro_aprovado_botao` — o mesmo template de boas-vindas. Depois, quando o analista de cadastro aprova, a edge function `ativar-associado` envia novamente o `cadastro_aprovado_botao`. Resultado: mensagem duplicada.
 
-Para templates DRAFT ou sem problemas, o fluxo continua igual (envio direto).
+### Solução
 
-### Alterações
+Remover o envio da notificação WhatsApp `instalacao_concluida` no `useServicos.ts`. O histórico e a notificação in-app podem permanecer — apenas o disparo para `notificar-cliente` com tipo `instalacao_concluida` deve ser removido.
 
-**`src/components/integracoes/WhatsAppMetaTemplates.tsx`**
+A mensagem de boas-vindas continuará sendo enviada apenas pelo fluxo de aprovação do analista (`ativar-associado`).
 
-Substituir o `onClick` do botão Send (linha 152) para templates PENDING/REJECTED por uma nova função `handleReenviarComIA`:
+### Alteração
 
-- Função assíncrona que:
-  1. Busca o template completo do array `templates`
-  2. Invoca `whatsapp-template-validar` com corpo + motivo_rejeicao
-  3. Se houver `corpo_sugerido`, atualiza o template via `useAtualizarMetaTemplate`
-  4. Chama `enviar.mutateAsync(id)` para reenviar
-  5. Toast informando: "IA ajustou o texto e reenviou para aprovação"
-- Se o status for DRAFT, mantém o comportamento atual (envio direto)
-- Adicionar loading state dedicado para o reenvio com IA
-- Importar `useAtualizarMetaTemplate` no componente
-
-**Nenhuma alteração em edge functions** — a lógica de validação e reenvio já existe.
+**`src/hooks/useServicos.ts`** — Remover o bloco fire-and-forget (linhas ~1156-1170) que invoca `notificar-cliente` com `instalacao_concluida`.
 
