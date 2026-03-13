@@ -566,7 +566,7 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                                 const url = URL.createObjectURL(blob);
                                 const a = document.createElement('a');
                                 a.href = url;
-                                a.download = `contrato-${contrato.numero_contrato || contrato.id}.pdf`;
+                                a.download = `contrato-${contrato.id}.pdf`;
                                 document.body.appendChild(a);
                                 a.click();
                                 document.body.removeChild(a);
