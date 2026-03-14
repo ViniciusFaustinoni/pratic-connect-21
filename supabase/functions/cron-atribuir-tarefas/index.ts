@@ -644,6 +644,38 @@ serve(async (req) => {
             } catch (pushErr) {
               console.error('[cron-atribuir-tarefas] Erro ao enviar push:', pushErr);
             }
+
+            // Enviar template WhatsApp ao vistoriador
+            try {
+              const { data: vistProfile } = await supabase
+                .from('profiles')
+                .select('telefone, nome')
+                .eq('id', prof.vistoriador_id)
+                .single();
+
+              if (vistProfile?.telefone) {
+                const dataFormatada = new Date(servico.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR');
+                const endereco = [servico.logradouro, servico.numero, servico.bairro, servico.cidade].filter(Boolean).join(', ') || servico.local_vistoria || 'A definir';
+
+                await supabase.functions.invoke('whatsapp-send-text', {
+                  body: {
+                    telefone: vistProfile.telefone,
+                    template_name: 'tarefa_vistoriador_v2',
+                    template_params: [
+                      vistProfile.nome?.split(' ')[0] || 'Vistoriador',
+                      servico.associado_nome,
+                      endereco,
+                      dataFormatada,
+                    ],
+                    referencia_tipo: 'vistoria',
+                    referencia_id: servico.vistoria_origem_id,
+                  }
+                });
+                console.log(`[cron-atribuir-tarefas] ✓ WhatsApp template enviado ao vistoriador ${vistProfile.nome}`);
+              }
+            } catch (whatsErr) {
+              console.error('[cron-atribuir-tarefas] Erro ao enviar WhatsApp ao vistoriador:', whatsErr);
+            }
           }
 
           // 6. Criar ou atualizar rota do dia
