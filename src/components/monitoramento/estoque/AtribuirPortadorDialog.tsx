@@ -85,11 +85,15 @@ export function AtribuirPortadorDialog({
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['lista-rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+      if (rastreador?.id) {
+        queryClient.invalidateQueries({ queryKey: ['rastreador', rastreador.id] });
+      }
       queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
       queryClient.invalidateQueries({ queryKey: ['estoque-movimentacoes'] });
       toast.success(
-        portadorId === 'remover' 
-          ? 'Portador removido com sucesso!' 
+        portadorId === 'remover'
+          ? 'Portador removido com sucesso!'
           : 'Portador atribuído com sucesso!'
       );
       onOpenChange(false);
