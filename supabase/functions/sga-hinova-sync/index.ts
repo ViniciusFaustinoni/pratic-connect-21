@@ -1572,36 +1572,35 @@ serve(async (req) => {
       fotos_com_erro: fotosComErro.length
     }, null);
 
+    console.log('[SGA Sync] Background sync concluído com sucesso');
+
+      } catch (bgError) {
+        console.error('[SGA Sync] Erro no background sync:', bgError);
+        try {
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+          await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado',
+            bgError instanceof Error ? bgError.message : 'Erro inesperado no background');
+          await logSync(veiculo_id, associado_id, 'sync_background_error', 'error', null, null,
+            bgError instanceof Error ? bgError.message : 'Erro inesperado');
+        } catch (_) {}
+      }
+    };
+
+    // @ts-ignore: EdgeRuntime is available in Supabase Edge Functions
+    EdgeRuntime.waitUntil(doBackgroundSync());
+
     return new Response(
-      JSON.stringify({
-        success: true,
-        data: {
-          codigo_associado_hinova: codigoAssociadoHinova,
-          codigo_veiculo_hinova: codigoVeiculoHinova,
-          fotos_enviadas: fotosEnviadas,
-          fotos_com_erro: fotosComErro
-        }
-      }),
-      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({ success: true, status: 'processing', step: 'sync_started' }),
+      { status: 202, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
 
   } catch (error) {
-    console.error('[SGA Sync] Erro inesperado:', error);
-
-    // Tentar gravar na fila mesmo em erro inesperado
-    try {
-      const body = await req.clone().json().catch(() => ({}));
-      if (body.veiculo_id && body.associado_id) {
-        await upsertSyncQueue(supabase, body.veiculo_id, body.associado_id, 'associado', 
-          error instanceof Error ? error.message : 'Erro inesperado');
-      }
-    } catch (_) {}
-    
+    console.error('[SGA Sync] Erro na preparação:', error);
     return new Response(
       JSON.stringify({
         success: false,
         error: error instanceof Error ? error.message : 'Erro interno',
-        step: 'unknown'
+        step: 'setup'
       }),
       { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
