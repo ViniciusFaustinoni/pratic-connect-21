@@ -1506,6 +1506,25 @@ export function useAprovarProposta() {
               });
               
               console.log('[useAprovarProposta] Cobertura total ativada - instalação já concluída');
+
+              // Notificar associado sobre Proteção 360º
+              const { data: veiculoInfo } = await supabase
+                .from('veiculos')
+                .select('placa, marca, modelo')
+                .eq('id', veiculoId)
+                .single();
+
+              supabase.functions.invoke('notificar-cliente', {
+                body: {
+                  tipo: 'cobertura_total_ativada',
+                  associado_id: associadoId,
+                  dados: {
+                    placa: veiculoInfo?.placa || '',
+                    marca: veiculoInfo?.marca || '',
+                    modelo: veiculoInfo?.modelo || '',
+                  },
+                },
+              }).catch(err => console.warn('[useAprovarProposta] Erro ao notificar cobertura 360 (não crítico):', err));
             }
           } catch (ativacaoError) {
             console.warn('[useAprovarProposta] Erro na ativação automática:', ativacaoError);
