@@ -681,7 +681,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       if (cotacaoBase.valor_adicional) {
         form.setValue('valor_adicional', cotacaoBase.valor_adicional);
       }
-      if (cotacaoBase.valor_adesao) {
+      if (cotacaoBase.valor_adesao !== null && cotacaoBase.valor_adesao !== undefined) {
         form.setValue('valor_adesao', cotacaoBase.valor_adesao);
       }
       if (cotacaoBase.validade_dias) {
