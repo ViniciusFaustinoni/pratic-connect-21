@@ -1539,23 +1539,63 @@ export function useAprovarProposta() {
         // - NÃO existir instalação ativa para este veículo (evita duplicatas)
         if (!jaTemInstalacaoConcluida && !jaTemInstalacaoAtiva) {
           const associadoData = contrato.associado as any;
-          const dataAgendada = new Date().toISOString().split('T')[0];
+          
+          // Buscar preferências de agendamento preenchidas pelo cliente na cotação
+          let dataAgendada = new Date().toISOString().split('T')[0];
+          let periodoPreferido = 'manha';
+          let enderecoLogradouro = associadoData?.logradouro || null;
+          let enderecoNumero = associadoData?.numero || null;
+          let enderecoBairro = associadoData?.bairro || null;
+          let enderecoCidade = associadoData?.cidade || null;
+          let enderecoUf = associadoData?.uf || null;
+          let enderecoCep = associadoData?.cep || null;
+          let permiteEncaixe = false;
+          
+          if (contrato.cotacao_id) {
+            try {
+              const { data: cotacaoDados } = await supabase
+                .from('cotacoes')
+                .select('vistoria_completa_data_agendada, vistoria_completa_horario_agendado, vistoria_completa_periodo, vistoria_completa_endereco_cep, vistoria_completa_endereco_logradouro, vistoria_completa_endereco_numero, vistoria_completa_endereco_bairro, vistoria_completa_endereco_cidade, vistoria_completa_endereco_estado, vistoria_permite_encaixe')
+                .eq('id', contrato.cotacao_id)
+                .single();
+              
+              if (cotacaoDados?.vistoria_completa_data_agendada) {
+                dataAgendada = cotacaoDados.vistoria_completa_data_agendada;
+                periodoPreferido = cotacaoDados.vistoria_completa_periodo || cotacaoDados.vistoria_completa_horario_agendado || 'manha';
+                console.log(`[useAprovarProposta] Usando preferências do cliente: data=${dataAgendada}, periodo=${periodoPreferido}`);
+              }
+              if (cotacaoDados?.vistoria_completa_endereco_logradouro) {
+                enderecoLogradouro = cotacaoDados.vistoria_completa_endereco_logradouro;
+                enderecoNumero = cotacaoDados.vistoria_completa_endereco_numero || null;
+                enderecoBairro = cotacaoDados.vistoria_completa_endereco_bairro || null;
+                enderecoCidade = cotacaoDados.vistoria_completa_endereco_cidade || null;
+                enderecoUf = cotacaoDados.vistoria_completa_endereco_estado || null;
+                enderecoCep = cotacaoDados.vistoria_completa_endereco_cep || null;
+                console.log(`[useAprovarProposta] Usando endereço do cliente: ${enderecoLogradouro}, ${enderecoCidade}`);
+              }
+              if (cotacaoDados?.vistoria_permite_encaixe) {
+                permiteEncaixe = true;
+              }
+            } catch (cotErr) {
+              console.warn('[useAprovarProposta] Erro ao buscar preferências da cotação, usando fallback:', cotErr);
+            }
+          }
           
           // GEOCODIFICAR endereço antes de criar instalação para atribuição automática funcionar
           let endereco_latitude: number | null = null;
           let endereco_longitude: number | null = null;
           
-          if (associadoData?.logradouro && associadoData?.cidade) {
+          if (enderecoLogradouro && enderecoCidade) {
             try {
-              console.log('[Aprovação] Geocodificando endereço do associado...');
+              console.log('[Aprovação] Geocodificando endereço...');
               const { data: geoResult, error: geoError } = await supabase.functions.invoke('geocode-endereco', {
                 body: {
-                  logradouro: associadoData.logradouro,
-                  numero: associadoData.numero,
-                  bairro: associadoData.bairro,
-                  cidade: associadoData.cidade,
-                  uf: associadoData.uf,
-                  cep: associadoData.cep,
+                  logradouro: enderecoLogradouro,
+                  numero: enderecoNumero,
+                  bairro: enderecoBairro,
+                  cidade: enderecoCidade,
+                  uf: enderecoUf,
+                  cep: enderecoCep,
                 }
               });
               
@@ -1577,24 +1617,28 @@ export function useAprovarProposta() {
               associado_id: associadoId,
               veiculo_id: veiculoId,
               contrato_id: contratoId,
+              cotacao_id: contrato.cotacao_id || null,
               status: 'agendada',
               data_agendada: dataAgendada,
-              periodo: 'manha',
-              logradouro: associadoData?.logradouro || null,
-              numero: associadoData?.numero || null,
-              bairro: associadoData?.bairro || null,
-              cidade: associadoData?.cidade || null,
-              uf: associadoData?.uf || null,
-              cep: associadoData?.cep || null,
+              periodo: ['manha', 'tarde'].includes(periodoPreferido) ? periodoPreferido : 'manha',
+              logradouro: enderecoLogradouro,
+              numero: enderecoNumero,
+              bairro: enderecoBairro,
+              cidade: enderecoCidade,
+              uf: enderecoUf,
+              cep: enderecoCep,
               endereco_latitude,
               endereco_longitude,
               local_vistoria: 'cliente',
+              permite_encaixe: permiteEncaixe,
             } as any);
           
           if (instalacaoError) {
             console.error('Erro ao criar instalação:', instalacaoError);
             throw new Error(`Falha ao criar instalação: ${instalacaoError.message}`);
           }
+          
+          console.log(`[useAprovarProposta] Instalação criada com preferências do cliente: data=${dataAgendada}, periodo=${periodoPreferido}`);
         } else if (jaTemInstalacaoAtiva) {
           console.log(`Instalação já existe para o veículo ${veiculoId}. Aprovação prossegue sem criar nova instalação.`);
         }
