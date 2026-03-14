@@ -69,78 +69,41 @@ async function processarMensagemUsuario(
     .maybeSingle();
 
   if (associado) {
-    console.log(`[whatsapp-meta-webhook] Associado encontrado: ${associado.nome} (${associado.id}), delegando para IA`);
+    console.log(`[whatsapp-meta-webhook] Associado encontrado: ${associado.nome} (${associado.id}), inserindo na fila IA`);
 
-    // Delegar para whatsapp-webhook com payload sintético (formato Evolution API)
+    // Inserir na fila de processamento IA
     try {
-      const syntheticPayload: Record<string, unknown> = {
-        event: "messages.upsert",
-        sender: `${telLimpo}@s.whatsapp.net`,
-        _meta_delegate: true,
-        data: {
-          key: {
-            remoteJid: `${telLimpo}@s.whatsapp.net`,
-            fromMe: false,
-            id: messageId || `meta_${Date.now()}`,
-          },
-          message:
-            tipoMsg === "location" && latitude && longitude
-              ? { locationMessage: { degreesLatitude: latitude, degreesLongitude: longitude } }
-              : { conversation: texto || "[Mensagem recebida]" },
-        },
-      };
+      const { error: filaError } = await supabase.from("whatsapp_fila_ia").insert({
+        telefone,
+        texto,
+        tipo_msg: tipoMsg,
+        latitude,
+        longitude,
+        message_id: messageId,
+        status: "pendente",
+      });
 
-      // Usar EdgeRuntime.waitUntil para garantir que a delegação complete
-      // mesmo após retornar 200 para a Meta
-      const delegationPromise = (async () => {
-        try {
-          const controller = new AbortController();
-          const timeoutId = setTimeout(() => controller.abort(), 140000);
-
-          const res = await fetch(`${supabaseUrl}/functions/v1/whatsapp-webhook`, {
-            method: "POST",
-            headers: {
-              "Content-Type": "application/json",
-              Authorization: `Bearer ${serviceKey}`,
-            },
-            body: JSON.stringify(syntheticPayload),
-            signal: controller.signal,
-          });
-          clearTimeout(timeoutId);
-
-          const resultText = await res.text();
-          console.log(`[whatsapp-meta-webhook] Delegação IA status=${res.status} resultado: ${resultText.substring(0, 200)}`);
-
-          if (!res.ok) {
-            console.error(`[whatsapp-meta-webhook] Delegação falhou HTTP ${res.status}, enviando fallback`);
-            await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
-              "Desculpe, estou com dificuldades para processar sua mensagem. Tente novamente em alguns instantes. 🙏"
-            );
-          }
-        } catch (err: any) {
-          const isAbort = err?.name === "AbortError";
-          console.error(`[whatsapp-meta-webhook] Erro delegação IA (${isAbort ? "TIMEOUT" : "ERRO"}):`, err);
-          if (!isAbort) {
-            try {
-              await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
-                "Desculpe, estou com dificuldades para processar sua mensagem. Tente novamente em alguns instantes. 🙏"
-              );
-            } catch (_) { /* ignore */ }
-          }
-        }
-      })();
-
-      // EdgeRuntime.waitUntil garante que a promise sobrevive ao return do handler
-      try {
-        (globalThis as any).EdgeRuntime?.waitUntil?.(delegationPromise);
-      } catch (_) {
-        // Fallback: se waitUntil não disponível, await direto (menos ideal mas funcional)
-        // Não fazemos await aqui pois já estamos dentro do processamento
+      if (filaError) {
+        console.error(`[whatsapp-meta-webhook] Erro ao inserir na fila:`, filaError);
+      } else {
+        console.log(`[whatsapp-meta-webhook] ✓ Inserido na fila IA para ${telefone}`);
       }
 
-      console.log(`[whatsapp-meta-webhook] Delegação IA disparada com waitUntil para ${telLimpo}`);
+      // Best-effort: disparar processador imediatamente (não depender disso)
+      try {
+        fetch(`${supabaseUrl}/functions/v1/processar-fila-ia`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${serviceKey}`,
+          },
+          body: JSON.stringify({ trigger: "immediate" }),
+        }).catch(() => {
+          // Ignorar erro - o cron vai pegar em até 1 minuto
+        });
+      } catch (_) { /* ignore */ }
     } catch (err) {
-      console.error(`[whatsapp-meta-webhook] Erro ao preparar delegação para IA:`, err);
+      console.error(`[whatsapp-meta-webhook] Erro ao inserir na fila IA:`, err);
     }
     return;
   }
