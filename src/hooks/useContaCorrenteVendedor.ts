@@ -138,7 +138,8 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
 
       const inserts: any[] = [];
       const cobrou = valor_adesao > 0;
-      const volante = tipo_instalacao === 'volante';
+      // Normalizar: cotação salva 'rota', mas comissão usa 'volante'
+      const volante = tipo_instalacao === 'volante' || tipo_instalacao === 'rota';
 
       // Cenário 3: nenhum lançamento
       if (!cobrou && !volante) return;

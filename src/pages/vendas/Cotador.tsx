@@ -1594,6 +1594,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     value={valorAdesaoCustom ?? ''}
                     onChange={(e) => setValorAdesaoCustom(parseFloat(e.target.value) || 0)}
                     className="text-center font-bold text-lg h-10"
+                    disabled={isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base')}
                   />
                 </div>
                 <div>
