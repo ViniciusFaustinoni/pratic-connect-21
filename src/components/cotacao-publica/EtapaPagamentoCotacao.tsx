@@ -212,8 +212,49 @@ export function EtapaPagamentoCotacao({
           console.log('[EtapaPagamento] Contrato já está pago!');
           setContratoId(cotacao.contrato_gerado_id);
           setEtapaInterna('pago');
-          return; // Não precisa buscar/criar cobrança
+          return;
         }
+      }
+
+      // ===== ADESÃO ZERADA: pular cobrança ASAAS =====
+      if (valorAdesao <= 0) {
+        console.log('[EtapaPagamento] Adesão zerada — pulando cobrança ASAAS');
+
+        // Buscar mensagem configurada
+        const { data: configMsg } = await publicSupabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'comissao_ext_msg_adesao_zero')
+          .maybeSingle();
+
+        const msg = configMsg?.valor || 'Parabéns! Sua adesão foi isenta. Bem-vindo à Praticcar!';
+        setMsgAdesaoZerada(msg);
+
+        // Gerar contrato normalmente
+        const idContrato = await gerarContrato();
+        if (!idContrato) return;
+
+        // Marcar adesão como paga (nada a cobrar)
+        await publicSupabase
+          .from('contratos')
+          .update({ adesao_paga: true })
+          .eq('id', idContrato);
+
+        // Criar instalação pós-adesão zerada
+        try {
+          await publicSupabase.functions.invoke('criar-instalacao-pos-pagamento', {
+            body: { cotacaoId },
+          });
+        } catch (instErr) {
+          console.error('[EtapaPagamento] Erro ao criar instalação (adesão zerada):', instErr);
+        }
+
+        setAdesaoZerada(true);
+        setEtapaInterna('pago');
+
+        // Avançar após breve delay
+        setTimeout(() => onPagamentoConfirmado(), 1500);
+        return;
       }
 
       // Se não está pago, continuar fluxo normal
@@ -223,7 +264,7 @@ export function EtapaPagamentoCotacao({
       }
     };
     inicializar();
-  }, [cotacaoId, gerarContrato, criarCobranca]);
+  }, [cotacaoId, gerarContrato, criarCobranca, valorAdesao, onPagamentoConfirmado]);
 
   // 4. Polling automático para verificar pagamento - consulta diretamente na API do Asaas
   useEffect(() => {
