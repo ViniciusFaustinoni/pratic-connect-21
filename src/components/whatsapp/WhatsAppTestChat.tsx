@@ -31,7 +31,7 @@ export function WhatsAppTestChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Buscar config da Meta para pegar o número destino
+  // Buscar config da Meta e número real do WhatsApp da IA
   useEffect(() => {
     async function carregarConfig() {
       try {
@@ -45,12 +45,14 @@ export function WhatsAppTestChat() {
 
         if (data) {
           setMetaAtiva(!!data.ativo);
-          const numero = data.phone_number_id || '';
-          setTelefoneDestino(numero);
-          setTelefoneEditavel(numero);
         }
+        // Número real da IA no WhatsApp (fixo)
+        setTelefoneDestino('5521969379982');
+        setTelefoneEditavel('5521969379982');
       } catch (err) {
         console.error('[TestChat] Erro ao carregar config Meta:', err);
+        setTelefoneDestino('5521969379982');
+        setTelefoneEditavel('5521969379982');
       } finally {
         setCarregandoConfig(false);
       }
@@ -188,7 +190,7 @@ export function WhatsAppTestChat() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Phone className="h-4 w-4" />
-            Número de Destino (Meta)
+            Número da IA (destino real)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -196,7 +198,7 @@ export function WhatsAppTestChat() {
             <Input
               value={telefoneEditavel}
               onChange={(e) => setTelefoneEditavel(e.target.value)}
-              placeholder="5511999999999"
+              placeholder="5521969379982"
               className="font-mono"
             />
             <Button
@@ -214,7 +216,7 @@ export function WhatsAppTestChat() {
             </Badge>
             {telefoneDestino && (
               <span className="text-xs text-muted-foreground font-mono">
-                Destino: {telefoneDestino}
+                Evolution → {telefoneDestino}
               </span>
             )}
           </div>
