@@ -119,13 +119,6 @@ export function WhatsAppTestChat() {
       setMensagens(prev => [...prev, msgLocal]);
       setMensagem('');
 
-      // Buscar o número da instância Evolution (sender) para usar no payload sintético
-      const { data: instanciaData } = await supabase
-        .from('whatsapp_instancias')
-        .select('instance_name, api_url')
-        .limit(1)
-        .maybeSingle();
-
       // Enviar mensagem REAL via Evolution API (forçando Evolution mesmo com Meta ativa)
       const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
         body: {
@@ -143,28 +136,19 @@ export function WhatsAppTestChat() {
         m.id === msgLocal.id ? { ...m, status: 'enviada' } : m
       ));
 
-      // Buscar número da Evolution (o sender) para simular entrada como associado
-      // O número da Evolution é o que está cadastrado como associado para testes
-      let senderNumber = '';
-      try {
-        const { data: statusData } = await supabase.functions.invoke('whatsapp-status', {
-          body: {},
-        });
-        senderNumber = statusData?.ownerJid?.replace('@s.whatsapp.net', '').replace(/\D/g, '') || '';
-      } catch {
-        // fallback: tentar pegar do log de envio
-      }
+      // Buscar número do remetente (o número conectado na Evolution, cadastrado como associado)
+      // Invocar whatsapp-webhook diretamente com payload _meta_delegate
+      // para simular a entrada do associado (pois o webhook da Meta não dispara para mensagens da Evolution)
+      const { data: senderData } = await supabase.functions.invoke('whatsapp-get-sender', {
+        body: {},
+      });
 
-      if (!senderNumber) {
-        // Fallback: usar o número da Evolution dos logs de envio
-        senderNumber = data?.sender?.replace('@s.whatsapp.net', '').replace(/\D/g, '') || '';
-      }
+      const senderNumber = senderData?.sender?.replace(/\D/g, '');
 
       if (senderNumber) {
-        // Invocar diretamente o whatsapp-webhook com payload sintético _meta_delegate
-        // Isso simula o que o whatsapp-meta-webhook faria quando a Meta recebe a mensagem
         console.log(`[TestChat] Simulando entrada da IA com sender: ${senderNumber}`);
         
+        // Fire-and-forget: invocar webhook simulando mensagem de entrada do associado
         supabase.functions.invoke('whatsapp-webhook', {
           body: {
             event: 'messages.upsert',
@@ -187,7 +171,7 @@ export function WhatsAppTestChat() {
 
         toast.success('Mensagem enviada! IA processando...');
       } else {
-        toast.success('Mensagem enviada via Evolution API! Aguarde a resposta da IA...');
+        toast.success('Mensagem enviada via Evolution! Aguarde resposta da IA...');
       }
     } catch (err: any) {
       toast.error(`Erro ao enviar: ${err.message}`);
