@@ -82,7 +82,16 @@ serve(async (req) => {
   try {
     let { contratoId, valor, formaPagamento, cliente }: CobrancaAdesaoRequest = await req.json();
 
-  console.log(`[asaas-cobranca-adesao] Iniciando para contrato ${contratoId}, valor recebido: R$ ${valor}, forma: ${formaPagamento || 'UNDEFINED'}`);
+    // GUARD: Adesão zerada — retorna sucesso sem criar cobrança
+    if (valor <= 0) {
+      console.log(`[asaas-cobranca-adesao] Adesão isenta (valor=${valor}). Pulando criação de cobrança.`);
+      return new Response(
+        JSON.stringify({ success: true, isento: true, message: 'Adesão isenta — nenhuma cobrança criada.' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`[asaas-cobranca-adesao] Iniciando para contrato ${contratoId}, valor recebido: R$ ${valor}, forma: ${formaPagamento || 'UNDEFINED'}`);
 
     // Definir billingType - usar UNDEFINED como padrão para permitir PIX e Cartão
     const billingType = formaPagamento || 'UNDEFINED';

@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CreditCard, QrCode, Loader2, Check, Copy, FileText, AlertCircle, RefreshCw, Calendar, Clock, MapPin, Wrench, ExternalLink, Shield } from 'lucide-react';
+import { CreditCard, QrCode, Loader2, Check, Copy, FileText, AlertCircle, RefreshCw, Calendar, Clock, MapPin, Wrench, ExternalLink, Shield, PartyPopper } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -66,6 +66,8 @@ export function EtapaPagamentoCotacao({
   const [verificando, setVerificando] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('PIX');
+  const [adesaoZerada, setAdesaoZerada] = useState(false);
+  const [msgAdesaoZerada, setMsgAdesaoZerada] = useState<string>('');
 
   // 1. Gerar contrato ao montar
   const gerarContrato = useCallback(async () => {
@@ -210,8 +212,49 @@ export function EtapaPagamentoCotacao({
           console.log('[EtapaPagamento] Contrato já está pago!');
           setContratoId(cotacao.contrato_gerado_id);
           setEtapaInterna('pago');
-          return; // Não precisa buscar/criar cobrança
+          return;
         }
+      }
+
+      // ===== ADESÃO ZERADA: pular cobrança ASAAS =====
+      if (valorAdesao <= 0) {
+        console.log('[EtapaPagamento] Adesão zerada — pulando cobrança ASAAS');
+
+        // Buscar mensagem configurada
+        const { data: configMsg } = await publicSupabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'comissao_ext_msg_adesao_zero')
+          .maybeSingle();
+
+        const msg = configMsg?.valor || 'Parabéns! Sua adesão foi isenta. Bem-vindo à Praticcar!';
+        setMsgAdesaoZerada(msg);
+
+        // Gerar contrato normalmente
+        const idContrato = await gerarContrato();
+        if (!idContrato) return;
+
+        // Marcar adesão como paga (nada a cobrar)
+        await publicSupabase
+          .from('contratos')
+          .update({ adesao_paga: true })
+          .eq('id', idContrato);
+
+        // Criar instalação pós-adesão zerada
+        try {
+          await publicSupabase.functions.invoke('criar-instalacao-pos-pagamento', {
+            body: { cotacaoId },
+          });
+        } catch (instErr) {
+          console.error('[EtapaPagamento] Erro ao criar instalação (adesão zerada):', instErr);
+        }
+
+        setAdesaoZerada(true);
+        setEtapaInterna('pago');
+
+        // Avançar após breve delay
+        setTimeout(() => onPagamentoConfirmado(), 1500);
+        return;
       }
 
       // Se não está pago, continuar fluxo normal
@@ -221,7 +264,7 @@ export function EtapaPagamentoCotacao({
       }
     };
     inicializar();
-  }, [cotacaoId, gerarContrato, criarCobranca]);
+  }, [cotacaoId, gerarContrato, criarCobranca, valorAdesao, onPagamentoConfirmado]);
 
   // 4. Polling automático para verificar pagamento - consulta diretamente na API do Asaas
   useEffect(() => {
@@ -416,6 +459,55 @@ export function EtapaPagamentoCotacao({
       </motion.div>
     );
   };
+
+  // ===== UI: Adesão Zerada (celebratória) =====
+  if (adesaoZerada) {
+    return (
+      <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
+        <CardContent className="py-12 text-center">
+          <motion.div
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+            className="space-y-6"
+          >
+            <div className="w-24 h-24 mx-auto rounded-full bg-success/10 flex items-center justify-center">
+              <PartyPopper className="h-12 w-12 text-success" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-bold text-foreground">Adesão Isenta!</h3>
+              <p className="text-muted-foreground max-w-md mx-auto text-base leading-relaxed">
+                {msgAdesaoZerada}
+              </p>
+            </div>
+
+            <InstalacaoAgendadaInfo />
+
+            <div className="pt-4 space-y-4">
+              <Button
+                size="lg"
+                className="gap-2"
+                onClick={() => window.location.href = '/login'}
+              >
+                <ExternalLink className="h-4 w-4" />
+                Ir para o aplicativo
+              </Button>
+
+              <div className="flex items-center justify-center">
+                <img
+                  src="/pratic-logo.png"
+                  alt="Praticcar"
+                  className="h-8 opacity-60"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   // Modo read-only: mostrar pagamento confirmado
   if (readOnly) {
