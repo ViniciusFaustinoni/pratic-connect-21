@@ -1,41 +1,13 @@
 
 
-# Atribuição de Planos a Regiões — Revisão e Plano
+## Exibição Progressiva de Planos + Campo de Região — ✅ Implementado
 
-## Estado Atual
+### Alterações realizadas
 
-Existem **dois sistemas de gestão de planos** no projeto:
-
-| Sistema | Componente | Regiões? |
-|---|---|---|
-| **Legado** | `PlanosConfig.tsx` + `usePlanosAdmin.ts` | ✅ Tem checkboxes de região, faz CRUD em `planos_regioes` |
-| **Principal** (Gestão Comercial) | `PlanFormModal.tsx` + `usePlansAdmin.ts` | ❌ Não gerencia regiões |
-
-A tabela `planos_regioes` **existe e está populada** (todos os planos vinculados a RJ, Lagos, SP). Porém o formulário principal (`PlanFormModal`) e os hooks modernos (`usePlansAdmin.ts`) **ignoram completamente** essa tabela.
-
-Resultado: ao criar ou editar um plano pela Gestão Comercial, os vínculos de região não são criados nem atualizados.
-
-## Alterações Necessárias
-
-### 1. `src/hooks/usePlansAdmin.ts`
-- Adicionar `regioes?: string[]` ao `PlanInput`
-- Em `useCreatePlan`: após criar o plano, inserir vínculos em `planos_regioes`
-- Em `useUpdatePlan`: deletar vínculos existentes e inserir novos
-- Em `useDuplicatePlan`: copiar vínculos de região do plano original
-
-### 2. `src/components/admin/planos/PlanFormModal.tsx`
-- Importar `useRegioes` de `@/hooks/useRegioes`
-- Adicionar estado `selectedRegioes: string[]` ao formulário
-- Na aba "Básico", adicionar seção de checkboxes de regiões (similar ao que `PlanosConfig.tsx` já faz)
-- No `handleSubmit`, passar `regioes` no payload
-- No `useEffect` de reset, carregar regiões atuais do plano
-
-### 3. `src/hooks/usePlans.ts` (query)
-- Incluir `planos_regioes(regiao_id)` no select da query de planos para que a lista tenha os dados de região
-
-### 4. `src/components/gestao-comercial/ProdutosPlanos.tsx`
-- Exibir badge com contagem de regiões na listagem de planos (coluna ou badge inline)
-
-### Sem mudanças no banco
-A tabela `planos_regioes` já existe com a estrutura correta (`plano_id`, `regiao_id`, `ativo`). Não precisa de migration.
-
+1. **Removidos 5 resets desnecessários** de `setCotacaoCalculada(false)` em `Cotador.tsx` — mantido apenas no `limparTudo`
+2. **Adicionado `useEffect` auto-display** — seta `cotacaoCalculada = true` quando `valorFipe > 0` e `planosDB` tem resultados
+3. **Adicionado campo Região** (RJ, Lagos, SP) no formulário, antes de "Uso para aplicativo"
+4. **Substituído hardcode `regiao: 'rj'`** por estado `regiao` no `parametrosPlanos`
+5. **Auto-atualização de tab** — quando lista de planos muda, tab selecionada é revalidada
+6. **`regiao` incluída** no payload de salvar cotação (`CriarCotacaoPayload` + `useCotacao.ts`)
+7. **`regiao` resetada** no `limparTudo` para `'rj'`

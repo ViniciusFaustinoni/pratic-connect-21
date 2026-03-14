@@ -25,6 +25,7 @@ import { useProductLines } from '@/hooks/usePlans';
 import { useBenefits } from '@/hooks/usePlans';
 import { useCreatePlan, useUpdatePlan, PlanBenefitInput } from '@/hooks/usePlansAdmin';
 import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
+import { useRegioes } from '@/hooks/useRegioes';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
 import { useQuery } from '@tanstack/react-query';
@@ -80,6 +81,7 @@ export function PlanFormModal({
 }: PlanFormModalProps) {
   const { data: productLines } = useProductLines();
   const { data: benefits } = useBenefits();
+  const { data: regioes } = useRegioes();
   const createPlan = useCreatePlan();
   const updatePlan = useUpdatePlan();
   const updateExclusions = useUpdateBenefitExclusions();
@@ -97,6 +99,20 @@ export function PlanFormModal({
       return Array.from(slugs).sort();
     },
     enabled: open,
+  });
+
+  // Fetch current region links for editing
+  const { data: currentRegioes } = useQuery({
+    queryKey: ['plano-regioes', plan?.id],
+    queryFn: async () => {
+      if (!plan?.id) return [];
+      const { data } = await supabase
+        .from('planos_regioes')
+        .select('regiao_id')
+        .eq('plano_id', plan.id);
+      return (data || []).map(r => r.regiao_id);
+    },
+    enabled: !!plan?.id && open,
   });
 
   // Fetch current plano_preco_map for editing
@@ -159,6 +175,7 @@ export function PlanFormModal({
   const [selectedBenefits, setSelectedBenefits] = useState<PlanBenefitInput[]>([]);
   const [pendingExclusions, setPendingExclusions] = useState<Map<string, string[]>>(new Map());
   const [cotasCategorias, setCotasCategorias] = useState<CotaCategoria[]>([]);
+  const [selectedRegioes, setSelectedRegioes] = useState<string[]>([]);
 
   // Callback for exclusion changes from BenefitsSelector
   const handleExclusionsChange = useCallback((exclusions: Map<string, string[]>) => {
@@ -230,6 +247,7 @@ export function PlanFormModal({
         categorias_veiculo: [],
       });
       setSelectedBenefits([]);
+      setSelectedRegioes([]);
     }
   }, [plan, defaultProductLineId]);
 
@@ -239,6 +257,13 @@ export function PlanFormModal({
       setFormData(prev => ({ ...prev, linha_slug: currentPrecoMap.linha_slug }));
     }
   }, [currentPrecoMap]);
+
+  // Sync selectedRegioes from DB when editing
+  useEffect(() => {
+    if (currentRegioes) {
+      setSelectedRegioes(currentRegioes);
+    }
+  }, [currentRegioes]);
 
   // Sync cotasCategorias from DB when editing
   useEffect(() => {
@@ -315,6 +340,7 @@ export function PlanFormModal({
       benefits: selectedBenefits,
       linha_slug: formData.linha_slug || null,
       categorias_veiculo: formData.categorias_veiculo.length > 0 ? formData.categorias_veiculo.join(',') : null,
+      regioes: selectedRegioes,
     };
 
     try {
@@ -596,6 +622,34 @@ export function PlanFormModal({
                           </div>
                         ))}
                       </div>
+                    </div>
+
+                    {/* Regiões */}
+                    <div className="space-y-2">
+                      <Label>Regiões Disponíveis</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {regioes?.filter(r => r.ativa).map((regiao) => (
+                          <div key={regiao.id} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`regiao-${regiao.id}`}
+                              checked={selectedRegioes.includes(regiao.id)}
+                              onCheckedChange={(checked) => {
+                                setSelectedRegioes(prev =>
+                                  checked
+                                    ? [...prev, regiao.id]
+                                    : prev.filter(id => id !== regiao.id)
+                                );
+                              }}
+                            />
+                            <Label htmlFor={`regiao-${regiao.id}`} className="text-sm font-normal cursor-pointer">
+                              {regiao.nome}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Selecione em quais regiões este plano está disponível
+                      </p>
                     </div>
 
                     <div className="flex items-center gap-4">

@@ -39,6 +39,7 @@ export interface PlanInput {
   benefits?: PlanBenefitInput[];
   linha_slug?: string | null;
   categorias_veiculo?: string | null;
+  regioes?: string[];
 }
 
 // ==================== PLAN MUTATIONS ====================
@@ -48,7 +49,7 @@ export function useCreatePlan() {
 
   return useMutation({
     mutationFn: async (input: PlanInput) => {
-      const { benefits, linha_slug, categorias_veiculo, ...planData } = input;
+      const { benefits, linha_slug, categorias_veiculo, regioes, ...planData } = input;
 
       // Mapear para campos da tabela planos
       const planoData = {
@@ -120,6 +121,17 @@ export function useCreatePlan() {
         if (benefitsError) throw benefitsError;
       }
 
+      // Create region links
+      if (regioes && regioes.length > 0) {
+        const { error: regioesError } = await supabase
+          .from('planos_regioes')
+          .insert(regioes.map(regiaoId => ({
+            plano_id: plan.id,
+            regiao_id: regiaoId,
+          })));
+        if (regioesError) throw regioesError;
+      }
+
       return plan;
     },
     onSuccess: () => {
@@ -138,7 +150,7 @@ export function useUpdatePlan() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: PlanInput & { id: string }) => {
-      const { benefits, linha_slug, categorias_veiculo, ...planData } = input;
+      const { benefits, linha_slug, categorias_veiculo, regioes, ...planData } = input;
 
       // Mapear para campos da tabela planos
       const planoData = {
@@ -222,6 +234,20 @@ export function useUpdatePlan() {
         }
       }
 
+      // Update region links
+      if (regioes !== undefined) {
+        await supabase.from('planos_regioes').delete().eq('plano_id', id);
+        if (regioes.length > 0) {
+          const { error: regioesError } = await supabase
+            .from('planos_regioes')
+            .insert(regioes.map(regiaoId => ({
+              plano_id: id,
+              regiao_id: regiaoId,
+            })));
+          if (regioesError) throw regioesError;
+        }
+      }
+
       return plan;
     },
     onSuccess: () => {
@@ -288,17 +314,17 @@ export function useDuplicatePlan() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // Get original plan with benefits
+      // Get original plan with benefits and regions
       const { data: original, error: fetchError } = await supabase
         .from('planos')
-        .select('*, planos_beneficios(*)')
+        .select('*, planos_beneficios(*), planos_regioes(regiao_id)')
         .eq('id', id)
         .single();
 
       if (fetchError) throw fetchError;
 
       // Create new plan
-      const { id: _, created_at, updated_at, planos_beneficios, ...planData } = original;
+      const { id: _, created_at, updated_at, planos_beneficios, planos_regioes, ...planData } = original;
       const newPlan = {
         ...planData,
         nome: `${planData.nome} (cópia)`,
@@ -330,6 +356,15 @@ export function useDuplicatePlan() {
         }));
 
         await supabase.from('planos_beneficios').insert(newBenefits);
+      }
+
+      // Duplicate region links
+      if (planos_regioes && (planos_regioes as any[]).length > 0) {
+        const newRegioes = (planos_regioes as any[]).map((pr: any) => ({
+          plano_id: createdPlan.id,
+          regiao_id: pr.regiao_id,
+        }));
+        await supabase.from('planos_regioes').insert(newRegioes);
       }
 
       return createdPlan;

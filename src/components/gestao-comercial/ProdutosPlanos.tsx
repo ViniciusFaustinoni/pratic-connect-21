@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Package, Plus, Users, DollarSign, Shield, ChevronRight, Edit, Copy, Trash2, MoreVertical, Star, Gift } from 'lucide-react';
+import { Package, Plus, Users, DollarSign, Shield, ChevronRight, Edit, Copy, Trash2, MoreVertical, Star, Gift, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -243,8 +243,14 @@ export function ProdutosPlanos() {
                     </Badge>
                   )}
                 </div>
-                <p className="text-xs text-muted-foreground mt-0.5">
+                <p className="text-xs text-muted-foreground mt-0.5 flex items-center gap-1">
                   {plan.product_lines?.name || 'Sem linha'}
+                  {(plan as any).planos_regioes?.length > 0 && (
+                    <Badge variant="outline" className="text-[10px] px-1 py-0 ml-1">
+                      <MapPin className="h-2.5 w-2.5 mr-0.5" />
+                      {(plan as any).planos_regioes.length}
+                    </Badge>
+                  )}
                 </p>
               </button>
             );
