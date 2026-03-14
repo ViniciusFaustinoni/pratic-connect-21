@@ -196,6 +196,8 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         // Defer Supabase calls with setTimeout to prevent deadlock
         if (currentSession?.user) {
+          setLoading(true);
+          hasLoadedData = false;
           setTimeout(async () => {
             if (!mounted) return;
             await loadUserData(currentSession);
