@@ -1089,29 +1089,9 @@ serve(async (req) => {
 
             const recoveryTentativas = [
               { label: 'Recovery GET buscar/cpf limpo', url: `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf`, method: 'GET' as const },
-              { label: 'Recovery GET buscar/cpf formatado', url: `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoRecovery)}/cpf`, method: 'GET' as const },
-              { label: 'Recovery GET consultar/cpf', url: `${hinovaApiUrl}/associado/consultar/cpf/${cpfLimpoRecovery}`, method: 'GET' as const },
-              { label: 'Recovery GET associado/cpf', url: `${hinovaApiUrl}/associado/${cpfLimpoRecovery}`, method: 'GET' as const },
               { label: 'Recovery POST consultar', url: `${hinovaApiUrl}/associado/consultar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
               { label: 'Recovery POST buscar', url: `${hinovaApiUrl}/associado/buscar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
-              { label: 'Recovery POST pesquisar', url: `${hinovaApiUrl}/associado/pesquisar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpoRecovery }) },
             ];
-
-            const codigoContaNum = codigoContaValido ? codigoContaResolvido : null;
-            if (codigoContaNum) {
-              recoveryTentativas.push(
-                {
-                  label: 'Recovery GET buscar/cpf limpo + codigo_conta',
-                  url: `${hinovaApiUrl}/associado/buscar/${cpfLimpoRecovery}/cpf?codigo_conta=${codigoContaNum}`,
-                  method: 'GET' as const,
-                },
-                {
-                  label: 'Recovery GET buscar/cpf formatado + codigo_conta',
-                  url: `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatadoRecovery)}/cpf?codigo_conta=${codigoContaNum}`,
-                  method: 'GET' as const,
-                }
-              );
-            }
 
             for (const t of recoveryTentativas) {
               if (codigoExistente) break;
