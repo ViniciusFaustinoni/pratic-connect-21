@@ -70,7 +70,6 @@ Deno.serve(async (req) => {
     }
 
     // Criar cliente admin para operações privilegiadas
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
     if (!supabaseServiceKey) {
       return new Response(
         JSON.stringify({ error: "Configuração do servidor inválida" }),
