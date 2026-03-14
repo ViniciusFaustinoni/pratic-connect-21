@@ -1245,6 +1245,93 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               )}
             </div>
 
+            {/* Cenário de Adesão para Vendedor Externo */}
+            {isVendedorExterno && (
+              <div className="border-t pt-4 mt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="h-4 w-4 text-primary" />
+                  <Label className="font-semibold">Cenário de Adesão / Instalação</Label>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Selecione o cenário que se aplica a esta cotação
+                </p>
+                <RadioGroup
+                  value={cenarioExterno || ''}
+                  onValueChange={(v) => {
+                    setCenarioExterno(v);
+                    switch (v) {
+                      case 'cobra_rota':
+                        setTipoInstalacao('rota');
+                        // Mantém adesão editável (valor sugerido)
+                        break;
+                      case 'isenta_rota':
+                        setTipoInstalacao('rota');
+                        setValorAdesaoCustom(0);
+                        break;
+                      case 'isenta_base':
+                        setTipoInstalacao('base');
+                        setValorAdesaoCustom(0);
+                        break;
+                      case 'cobra_base':
+                        setTipoInstalacao('base');
+                        // Mantém adesão editável (valor sugerido)
+                        break;
+                    }
+                  }}
+                  className="grid grid-cols-1 gap-3"
+                >
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                      cenarioExterno === 'cobra_rota' ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <RadioGroupItem value="cobra_rota" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Cobrar adesão + Instalação na rota</p>
+                      <p className="text-xs text-muted-foreground">R$ 50 descontado da adesão para cobrir a rota. Sem desconto no recorrente.</p>
+                    </div>
+                  </label>
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                      cenarioExterno === 'isenta_rota' ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <RadioGroupItem value="isenta_rota" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Isentar adesão + Instalação na rota</p>
+                      <p className="text-xs text-muted-foreground">Adesão zerada. Desconto de rota abatido do recorrente do consultor.</p>
+                    </div>
+                  </label>
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                      cenarioExterno === 'isenta_base' ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <RadioGroupItem value="isenta_base" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Isentar adesão + Instalação na base</p>
+                      <p className="text-xs text-muted-foreground">Sem adesão, sem cobrança. Zero a zero.</p>
+                    </div>
+                  </label>
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                      cenarioExterno === 'cobra_base' ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <RadioGroupItem value="cobra_base" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Cobrar adesão + Instalação na base</p>
+                      <p className="text-xs text-muted-foreground">Adesão integral para o consultor. Nada para a empresa.</p>
+                    </div>
+                  </label>
+                </RadioGroup>
+              </div>
+            )}
+
             {/* Botão Calcular */}
             <Button
               onClick={handleCalcular}
