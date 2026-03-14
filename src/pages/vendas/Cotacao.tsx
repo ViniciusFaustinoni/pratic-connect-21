@@ -448,6 +448,7 @@ export default function CotacaoPage() {
             onGerarPDF={handleGerarPDF}
             onIniciarCadastro={handleIniciarCadastro}
             isLoading={isCalculando || isLoadingPlanos}
+            isCenarioIsento={isVendedorExterno}
             />
           </>
         )}
