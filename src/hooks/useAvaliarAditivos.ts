@@ -160,6 +160,8 @@ function avaliarRegra(
 export function useAvaliarAditivos(
   veiculo: VeiculoParaAvaliacao | null,
   beneficios?: BeneficiosContratados,
+  contrato?: ContratoParaAvaliacao,
+  sinistro?: SinistroParaAvaliacao,
 ) {
   const { data: aditivos = [], isLoading: loadingAditivos } = useAditivos(true);
 
