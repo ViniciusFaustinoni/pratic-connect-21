@@ -1125,6 +1125,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setDiaVencimento(null);
       setSolicitarFipeMenor(false);
       setJustificativaFipeMenor('');
+      setCenarioExterno(null);
 
       setShowConfirmDialog(false);
       onOpenChange(false);
