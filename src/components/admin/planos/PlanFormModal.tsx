@@ -101,6 +101,20 @@ export function PlanFormModal({
     enabled: open,
   });
 
+  // Fetch current region links for editing
+  const { data: currentRegioes } = useQuery({
+    queryKey: ['plano-regioes', plan?.id],
+    queryFn: async () => {
+      if (!plan?.id) return [];
+      const { data } = await supabase
+        .from('planos_regioes')
+        .select('regiao_id')
+        .eq('plano_id', plan.id);
+      return (data || []).map(r => r.regiao_id);
+    },
+    enabled: !!plan?.id && open,
+  });
+
   // Fetch current plano_preco_map for editing
   const { data: currentPrecoMap } = useQuery({
     queryKey: ['plano-preco-map', plan?.id],
