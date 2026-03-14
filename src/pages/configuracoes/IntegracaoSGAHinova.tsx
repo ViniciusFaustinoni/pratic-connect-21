@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   ArrowLeft, Building2, CheckCircle, XCircle, RefreshCw, Trash2,
   Play, Clock, AlertTriangle, Activity, Loader2, Wifi, WifiOff,
-  List, Send, Settings,
+  List, Send, Settings, HeartPulse,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -13,6 +13,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { cn } from '@/lib/utils';
 import { useSGAHealthCheck } from '@/hooks/useSGAHealthCheck';
 import { ConfigurarIntegracaoSheet } from '@/components/integracoes/ConfigurarIntegracaoSheet';
+import { IntegracaoHealthPanel } from '@/components/integracoes/IntegracaoHealthPanel';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
