@@ -1,128 +1,50 @@
-## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
-### Causas Raiz Identificadas
-1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
-2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
-3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-### Correções Aplicadas
+# Correção: Menu incompleto após login (race condition no `loading`)
 
-1. **`sga-hinova-sync/index.ts`**:
-   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
-   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
+## Causa raiz
 
-2. **`cron-sga-retry/index.ts`**:
-   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
+O problema persiste porque a correção anterior (incluir `isAuthLoading` no `isPermissionsLoading`) não cobre o cenário de **login ativo** (quando o usuário digita email/senha e loga).
 
----
+Sequência do bug:
 
-## Painel de Monitoramento SGA Hinova — ✅ Implementado
+1. Página carrega sem sessão → `loading` é setado para `false` (linha 224)
+2. Usuário faz login → `onAuthStateChange(SIGNED_IN)` dispara
+3. Linha 195: `setUser(session.user)` — user é preenchido imediatamente
+4. Linha 198-202: `loadUserData` é agendado via `setTimeout(0)` — perfis ainda é `[]`
+5. **Nesse gap**: `loading = false`, `user` existe, `perfis = []` → `isAuthLoading = false` → sidebar renderiza com menu vazio
+6. `setTimeout` roda, busca perfis, mas `openGroups` já foi inicializado vazio
 
-### O que foi criado
+O `loading` nunca volta para `true` entre o login e o fetch de perfis.
 
-1. **Página `/configuracoes/integracoes/sga-hinova`** com:
-   - Status de conexão com API Hinova (teste em tempo real)
-   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
-   - Logs recentes dos últimos 50 registros
-   - Veículos pendentes (ativos não sincronizados) com envio individual
-   - Histórico de health checks
+## Correção
 
-2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
+### `src/contexts/AuthContext.tsx` — Reativar loading ao receber nova sessão
 
-3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
+Na linha 198, antes do `setTimeout`, adicionar `setLoading(true)` e resetar `hasLoadedData`:
 
-4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
+```typescript
+if (currentSession?.user) {
+  setLoading(true);        // ← ADICIONAR
+  hasLoadedData = false;   // ← ADICIONAR (permitir novo carregamento)
+  setTimeout(async () => {
+    if (!mounted) return;
+    await loadUserData(currentSession);
+  }, 0);
+}
+```
 
----
+Isso garante que qualquer componente que dependa de `loading` (incluindo `isPermissionsLoading` no sidebar) mostre skeleton até os perfis serem carregados.
 
-## Health Check Universal para Todas as Integrações — ✅ Implementado
+### Arquivo alterado
 
-### O que foi criado
+| Arquivo | Mudança |
+|---------|---------|
+| `src/contexts/AuthContext.tsx` | Adicionar `setLoading(true)` e `hasLoadedData = false` antes do setTimeout no `onAuthStateChange` |
 
-1. **Tabela `integracoes_health_checks`** (genérica):
-   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
-   - Dados existentes do SGA migrados automaticamente
-   - RLS: leitura para autenticados, escrita para service_role
+### Impacto
 
-2. **Edge Function `cron-integracoes-health-check`**:
-   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
-   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
-   - Notifica admins (role `diretor`) se qualquer integração falhar
-   - Grava resultado por integração na tabela genérica
+- Sidebar mostra skeleton loader durante o gap entre login e carregamento de perfis
+- Quando perfis chegam, `loading` volta a `false` e o menu renderiza completo
+- Nenhum outro fluxo é afetado — o `setLoading(true)` só é chamado quando há sessão válida
 
-3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
-   - Props: `integracao` (slug) e `titulo` (opcional)
-   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
-   - Botão "Testar agora" invoca a edge function para a integração específica
-
-4. **Hook `useIntegracaoHealthCheck(integracao)`**:
-   - Busca histórico filtrado por integração
-   - Mutation `testNow` para teste manual
-   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
-
-5. **Integração nas páginas**:
-   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
-   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
-   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
-
-6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
-   ```sql
-   select cron.schedule(
-     'integracoes-health-check-3x-dia',
-     '0 8,13,18 * * *',
-     $$ select net.http_post(
-       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
-       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
-       body:='{}'::jsonb
-     ) as request_id; $$
-   );
-   ```
-
-### Arquivos criados/modificados
-- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
-- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
-- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
-- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
-- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
-- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
-- `supabase/config.toml` — verify_jwt para nova function
-
----
-
-## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
-
-### Causas Raiz
-1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
-2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
-3. Triggers de sync sobrescreviam coordenadas válidas com `null`
-
-### Correções Aplicadas
-
-1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
-
-2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
-
-3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
-
-4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
-
----
-
-## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
-
-### Bloqueios de adesão zero removidos
-
-| Arquivo | Correção |
-|---------|----------|
-| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
-| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
-| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
-
-### Geração automática de lançamentos CC vendedor externo
-
-Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
-1. Após criar instalação, busca `vendedor_id` da cotação
-2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
-3. Busca configurações de comissão da tabela `configuracoes`
-4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
-5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
