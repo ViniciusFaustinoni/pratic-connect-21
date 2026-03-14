@@ -60,11 +60,10 @@ export default function AditivoForm() {
   const [conteudoHtml, setConteudoHtml] = useState('');
   const [ativo, setAtivo] = useState(true);
   const [ordem, setOrdem] = useState(0);
-  const [regras, setRegras] = useState<Record<string, boolean>>({
-    veiculo_0km: false,
-    fipe_acima_de: false,
-    evento_vidros: false,
-    veiculo_blindado: false,
+  const [regras, setRegras] = useState<Record<string, boolean>>(() => {
+    const initial: Record<string, boolean> = {};
+    TIPOS_REGRA.forEach(t => { initial[t.tipo] = false; });
+    return initial;
   });
 
   useEffect(() => {
