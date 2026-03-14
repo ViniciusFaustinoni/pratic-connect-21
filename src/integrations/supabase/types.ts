@@ -25196,6 +25196,62 @@ export type Database = {
           },
         ]
       }
+      whatsapp_fila_ia: {
+        Row: {
+          created_at: string | null
+          erro: string | null
+          id: string
+          latitude: number | null
+          longitude: number | null
+          mensagem_id: string | null
+          message_id: string | null
+          processed_at: string | null
+          status: string | null
+          telefone: string
+          tentativas: number | null
+          texto: string | null
+          tipo_msg: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          erro?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          mensagem_id?: string | null
+          message_id?: string | null
+          processed_at?: string | null
+          status?: string | null
+          telefone: string
+          tentativas?: number | null
+          texto?: string | null
+          tipo_msg?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          erro?: string | null
+          id?: string
+          latitude?: number | null
+          longitude?: number | null
+          mensagem_id?: string | null
+          message_id?: string | null
+          processed_at?: string | null
+          status?: string | null
+          telefone?: string
+          tentativas?: number | null
+          texto?: string | null
+          tipo_msg?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "whatsapp_fila_ia_mensagem_id_fkey"
+            columns: ["mensagem_id"]
+            isOneToOne: false
+            referencedRelation: "whatsapp_mensagens"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       whatsapp_instancias: {
         Row: {
           api_url: string
