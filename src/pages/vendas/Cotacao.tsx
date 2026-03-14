@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CotacaoStepper } from '@/components/cotacao/CotacaoStepper';
@@ -38,6 +39,7 @@ import { estimarValorFipe } from '@/utils/fipe';
 
 export default function CotacaoPage() {
   const navigate = useNavigate();
+  const { isVendedorExterno } = usePermissions();
   
   // Estado da etapa atual
   const [etapaAtual, setEtapaAtual] = useState(1);
@@ -269,7 +271,7 @@ export default function CotacaoPage() {
     // Usa o primeiro plano selecionado para o contrato
     const planoParaContrato = planosSelecionados[0];
     const valorAdesaoFinal = valorAdesaoCustomizado ?? planoParaContrato.valorAdesao ?? 0;
-    if (valorAdesaoFinal <= 0) {
+    if (valorAdesaoFinal <= 0 && !isVendedorExterno) {
       toast.error('A taxa de filiação deve ser maior que zero');
       return;
     }
@@ -446,6 +448,7 @@ export default function CotacaoPage() {
             onGerarPDF={handleGerarPDF}
             onIniciarCadastro={handleIniciarCadastro}
             isLoading={isCalculando || isLoadingPlanos}
+            isCenarioIsento={isVendedorExterno}
             />
           </>
         )}

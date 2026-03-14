@@ -2117,7 +2117,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                     onChange={(val) => { adesaoEditadaManualmente.current = true; field.onChange(val); }}
                                     className={cn(
                                       "w-28 h-7 text-center font-medium",
-                                      field.value <= 0 && "border-destructive bg-destructive/5"
+                                      field.value <= 0 && !isCenarioIsento && "border-destructive bg-destructive/5"
                                     )}
                                     placeholder="R$ 0,00"
                                   />
@@ -2126,7 +2126,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                             )}
                           />
                         </div>
-                        {valorAdesao <= 0 && (
+                        {valorAdesao <= 0 && !isCenarioIsento && (
                           <p className="text-xs text-destructive flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
                             A taxa de filiação não pode ser zero
@@ -2165,7 +2165,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             <div className="flex items-center justify-end pt-2 border-t">
               <Button 
                 type="submit" 
-                disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || valorAdesao <= 0 || !dadosAssociadoValidos}
+                disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || (valorAdesao <= 0 && !isCenarioIsento) || !dadosAssociadoValidos}
               >
                 {(createCotacao.isPending || updateCotacao.isPending) ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />

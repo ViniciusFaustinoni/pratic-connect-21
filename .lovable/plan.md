@@ -1,124 +1,128 @@
+## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
-# Análise da Lógica Existente — Conta Corrente do Vendedor Externo
+### Causas Raiz Identificadas
+1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
+2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
+3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-## Como funciona hoje
+### Correções Aplicadas
 
-A lógica de controle financeiro do vendedor externo está centralizada em `src/hooks/useContaCorrenteVendedor.ts`, na mutation `gerarLancamentosAtivacao`. Ela opera com base em 4 cenários derivados de duas variáveis: `valor_adesao > 0` (cobrou) e `tipo_instalacao === rota/volante` (volante).
+1. **`sga-hinova-sync/index.ts`**:
+   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
+   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
 
-### Os 4 cenários da ativação
+2. **`cron-sga-retry/index.ts`**:
+   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
 
-| # | Cenário | Lançamentos gerados |
-|---|---------|-------------------|
-| 1 | **Cobra adesão + Rota** | Crédito adesão (% configurável) + Débito volante (R$ fixo) + Parcelas recorrentes |
-| 2 | **Isenta adesão + Rota** | Débito volante (status `pendente`, abatido das recorrentes) + Parcelas recorrentes |
-| 3 | **Isenta adesão + Base** | **Nenhum lançamento** (cenário neutro — `return` direto na linha 145) |
-| 4 | **Cobra adesão + Base** | Crédito adesão + Parcelas recorrentes (sem débito volante) |
+---
 
-### Configurações utilizadas (tabela `configuracoes`)
+## Painel de Monitoramento SGA Hinova — ✅ Implementado
 
-- `comissao_ext_pct_adesao`: Percentual da adesão que vira crédito (default 100%)
-- `comissao_ext_valor_volante`: Valor fixo do débito volante (default R$ 50)
-- `comissao_ext_tipo_recorrente`: `fixo` ou `percentual`
-- `comissao_ext_valor_recorrente`: Valor/percentual por parcela
-- `comissao_ext_parcelas_recorrente`: Quantidade de parcelas
+### O que foi criado
 
-### Mecanismo de abatimento
+1. **Página `/configuracoes/integracoes/sga-hinova`** com:
+   - Status de conexão com API Hinova (teste em tempo real)
+   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
+   - Logs recentes dos últimos 50 registros
+   - Veículos pendentes (ativos não sincronizados) com envio individual
+   - Histórico de health checks
 
-Quando há débito volante e o associado paga a mensalidade, a mutation `confirmarParcelaRecorrente` abate automaticamente o valor do débito volante das parcelas recorrentes do vendedor até quitar.
+2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
 
-## Problema identificado: `gerarLancamentosAtivacao` nunca é chamado
+3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
 
-A mutation existe e está correta, mas **não é invocada em nenhum lugar do código**. Ou seja, quando um associado é ativado, os lançamentos na conta corrente do vendedor externo **não são gerados automaticamente**.
+4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
 
-## Outros bloqueios pendentes (validações de adesão zero)
+---
 
-Além do `CotacaoFormDialog` (já corrigido no plano anterior), ainda existem **3 pontos** que bloqueiam adesão zero sem verificar se é vendedor externo:
+## Health Check Universal para Todas as Integrações — ✅ Implementado
 
-| Arquivo | Linha | Bloqueio |
-|---------|-------|----------|
-| `EtapaResultado.tsx` | 289 | Botão "Iniciar Cadastro" desabilitado quando `valorAdesao <= 0` |
-| `Cotacao.tsx` | 272 | `handleIniciarCadastro` retorna erro quando `valorAdesaoFinal <= 0` |
-| `CotacaoFormDialog.tsx` | 2129-2134 | Mensagem de erro visual "não pode ser zero" sempre aparece |
-| `CotacaoFormDialog.tsx` | 2168 | Botão submit desabilitado quando `valorAdesao <= 0` |
+### O que foi criado
 
-## Plano de correção
+1. **Tabela `integracoes_health_checks`** (genérica):
+   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
+   - Dados existentes do SGA migrados automaticamente
+   - RLS: leitura para autenticados, escrita para service_role
 
-### 1. `CotacaoFormDialog.tsx` — Remover bloqueios visuais e de submit para cenário isento
+2. **Edge Function `cron-integracoes-health-check`**:
+   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
+   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
+   - Notifica admins (role `diretor`) se qualquer integração falhar
+   - Grava resultado por integração na tabela genérica
 
-- **Linha 2129**: Condicionar mensagem de erro: só exibir se `!isCenarioIsento`
-- **Linha 2168**: Condicionar disabled do botão: `valorAdesao <= 0 && !isCenarioIsento`
+3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
+   - Props: `integracao` (slug) e `titulo` (opcional)
+   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
+   - Botão "Testar agora" invoca a edge function para a integração específica
 
-### 2. `EtapaResultado.tsx` — Permitir adesão zero para externo
+4. **Hook `useIntegracaoHealthCheck(integracao)`**:
+   - Busca histórico filtrado por integração
+   - Mutation `testNow` para teste manual
+   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
 
-- Receber prop `isVendedorExterno` (ou `isCenarioIsento`)
-- **Linha 289**: Condicionar disabled: permitir quando isento
+5. **Integração nas páginas**:
+   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
+   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
+   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
 
-### 3. `Cotacao.tsx` — Permitir adesão zero para externo
+6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
+   ```sql
+   select cron.schedule(
+     'integracoes-health-check-3x-dia',
+     '0 8,13,18 * * *',
+     $$ select net.http_post(
+       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
+       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
+       body:='{}'::jsonb
+     ) as request_id; $$
+   );
+   ```
 
-- **Linha 272**: Adicionar gate `if (!isVendedorExterno && valorAdesaoFinal <= 0)`
+### Arquivos criados/modificados
+- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
+- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
+- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
+- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
+- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
+- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
+- `supabase/config.toml` — verify_jwt para nova function
 
-### 4. Integrar `gerarLancamentosAtivacao` no fluxo de ativação
+---
 
-A mutation precisa ser chamada quando o associado for ativado. O ponto natural de integração é no momento em que `adesao_paga` é marcado como `true` — seja no `EtapaPagamentoCotacao`
+## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
 
-<lov-plan>
-# Análise da Lógica Existente — Conta Corrente do Vendedor Externo
+### Causas Raiz
+1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
+2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
+3. Triggers de sync sobrescreviam coordenadas válidas com `null`
 
-## Como funciona hoje
+### Correções Aplicadas
 
-A lógica está em `src/hooks/useContaCorrenteVendedor.ts`, mutation `gerarLancamentosAtivacao`. Opera com 4 cenários:
+1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
 
-| # | Cenário | Lançamentos gerados |
-|---|---------|-------------------|
-| 1 | **Cobra adesão + Rota** | Crédito adesão + Débito volante + Parcelas recorrentes |
-| 2 | **Isenta adesão + Rota** | Débito volante (pendente, abatido das recorrentes) + Parcelas recorrentes |
-| 3 | **Isenta adesão + Base** | Nenhum lançamento (return direto) |
-| 4 | **Cobra adesão + Base** | Crédito adesão + Parcelas recorrentes |
+2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
 
-Configurações em `configuracoes`: `comissao_ext_pct_adesao`, `comissao_ext_valor_volante`, `comissao_ext_tipo_recorrente`, `comissao_ext_valor_recorrente`, `comissao_ext_parcelas_recorrente`.
+3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
 
-O abatimento automático do débito volante acontece via `confirmarParcelaRecorrente` quando o associado paga a mensalidade.
+4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
 
-## Problema principal: `gerarLancamentosAtivacao` nunca é chamado
+---
 
-A mutation existe e está correta, mas **não é invocada em nenhum lugar do código**. Os lançamentos na conta corrente do vendedor externo não são gerados automaticamente na ativação.
+## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
 
-## Bloqueios de adesão zero ainda pendentes
+### Bloqueios de adesão zero removidos
 
-| Arquivo | Linha | Bloqueio |
-|---------|-------|----------|
-| `CotacaoFormDialog.tsx` | 2129 | Mensagem "não pode ser zero" sempre aparece |
-| `CotacaoFormDialog.tsx` | 2168 | Botão submit desabilitado quando `valorAdesao <= 0` |
-| `EtapaResultado.tsx` | 289 | Botão "Iniciar Cadastro" desabilitado |
-| `Cotacao.tsx` | 272 | `handleIniciarCadastro` retorna erro |
+| Arquivo | Correção |
+|---------|----------|
+| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
+| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
+| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
 
-## Plano de correção
+### Geração automática de lançamentos CC vendedor externo
 
-### 1. `CotacaoFormDialog.tsx` — Remover bloqueios visuais para cenário isento
-- Linha 2129: mensagem de erro só aparece se `!isCenarioIsento`
-- Linha 2168: botão submit permite `valorAdesao <= 0` quando `isCenarioIsento`
-
-### 2. `EtapaResultado.tsx` — Permitir adesão zero para externo
-- Receber prop `isCenarioIsento` (boolean)
-- Linha 289: condicionar disabled para permitir quando isento
-
-### 3. `Cotacao.tsx` — Permitir adesão zero para externo
-- Usar `usePermissions` para obter `isVendedorExterno`
-- Linha 272: gate `if (!isVendedorExterno && valorAdesaoFinal <= 0)`
-
-### 4. Integrar `gerarLancamentosAtivacao` no fluxo de ativação
-O ponto natural é no `EtapaPagamentoCotacao.tsx`, após marcar `adesao_paga = true`. Quando o vendedor da cotação for externo:
-- Buscar `vendedor_id` da cotação
-- Verificar se é externo (perfil `vendedor_externo`)
-- Chamar edge function ou inserir diretamente os lançamentos na `cc_vendedor_lancamentos`
-
-Como isso roda no **link público** (sem auth do vendedor), a melhor abordagem é criar a lógica dentro da Edge Function `criar-instalacao-pos-pagamento`, que já tem service role e acesso a todos os dados. Após criar a instalação, verificar se o vendedor da cotação é externo e gerar os lançamentos.
-
-### Arquivos alterados
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/cotacoes/CotacaoFormDialog.tsx` | Condicionar erro visual e botão por `isCenarioIsento` |
-| `src/components/cotacao/EtapaResultado.tsx` | Receber prop e condicionar botão |
-| `src/pages/vendas/Cotacao.tsx` | Gate de adesão zero para externo |
-| `supabase/functions/criar-instalacao-pos-pagamento/index.ts` | Gerar lançamentos CC vendedor externo na ativação |
+Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
+1. Após criar instalação, busca `vendedor_id` da cotação
+2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
+3. Busca configurações de comissão da tabela `configuracoes`
+4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
+5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
