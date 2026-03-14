@@ -263,6 +263,15 @@ function IntegracaoCardUI({
   const extra = card.extraInfo?.(ctx);
   const isLoading = ctx.integracoes.isLoading;
 
+  // Health check data
+  const hc = ctx.healthChecks[card.id];
+  const healthLabel = hc
+    ? (hc.conexao_ok ? 'Online' : 'Offline')
+    : null;
+  const healthTime = hc?.created_at
+    ? formatDistanceToNow(new Date(hc.created_at), { addSuffix: true, locale: ptBR })
+    : null;
+
   const handleClick = () => {
     if (card.href) {
       navigate(card.href);
@@ -310,6 +319,23 @@ function IntegracaoCardUI({
                 >
                   {card.sempreAtivo ? 'Ativo' : ativo ? 'Conectado' : 'Pendente'}
                 </Badge>
+              )}
+              {/* Health check indicator */}
+              {hc && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={cn(
+                        "h-2 w-2 rounded-full flex-shrink-0",
+                        hc.conexao_ok ? "bg-green-500" : "bg-destructive"
+                      )} />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <p>{healthLabel} — {healthTime}</p>
+                      {hc.erro_mensagem && <p className="text-destructive">{hc.erro_mensagem}</p>}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
               )}
             </div>
             <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{card.descricao}</p>
