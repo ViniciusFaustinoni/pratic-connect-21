@@ -47,6 +47,7 @@ interface StatusContext {
   credenciais: any[];
   apiKeysCount: number;
   leadsAtivas: number;
+  healthChecks: Record<string, any>;
 }
 
 // ── Data ──────────────────────────────────────────────
