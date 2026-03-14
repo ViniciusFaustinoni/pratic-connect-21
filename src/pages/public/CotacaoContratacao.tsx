@@ -852,6 +852,15 @@ export default function CotacaoContratacao() {
                         clienteEmail={cotacao?.email_solicitante}
                         veiculoPlaca={cotacao?.veiculo_placa}
                         veiculoDescricao={`${cotacao?.veiculo_marca || ''} ${cotacao?.veiculo_modelo || ''}`.trim()}
+                        enderecoInicial={{
+                          cep: cotacao?.cliente_cep || '',
+                          logradouro: cotacao?.cliente_logradouro || '',
+                          numero: cotacao?.cliente_numero || '',
+                          complemento: cotacao?.cliente_complemento || '',
+                          bairro: cotacao?.cliente_bairro || '',
+                          cidade: cotacao?.cliente_cidade || '',
+                          estado: cotacao?.cliente_uf || '',
+                        }}
                         onConfirmar={() => {
                           setAgendamentoConcluido(true);
                           queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao'] });
