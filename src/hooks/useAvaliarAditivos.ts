@@ -108,6 +108,50 @@ function avaliarRegra(
     case 'beneficio_carencia_zero':
       return (beneficios?.codigos || []).some(c => c.includes('CARENCIA_ZERO'));
 
+    // ===== REGRAS POR SINISTRO/EVENTO =====
+
+    case 'evento_sub_rogacao':
+      return !!sinistro?.tipoEvento;
+
+    case 'evento_aprovacao_conserto':
+      return sinistro?.reparoAprovado === true;
+
+    case 'evento_incendio':
+      return sinistro?.tipoEvento?.toLowerCase().includes('incêndio') === true && sinistro?.comBombeiros === false;
+
+    // ===== REGRAS POR GRUPO/CATEGORIA ESPECIAL =====
+
+    case 'grupo_raridades_especial': {
+      const grupo = (veiculo.grupo || '').toLowerCase();
+      return grupo.includes('raridade') || grupo.includes('especial');
+    }
+
+    case 'categoria_depreciacao': {
+      const cat = (veiculo.categoriaVeiculo || '').toLowerCase();
+      return cat.includes('leilao') || cat.includes('leilão') || cat.includes('chassi_remarcado') || cat.includes('ex_taxi') || cat.includes('placa_vermelha');
+    }
+
+    // ===== GESTÃO DE EQUIPAMENTO =====
+
+    case 'rastreador_terceiros':
+      return veiculo.rastreadorTerceiros === true;
+
+    // ===== MANUTENÇÃO/ATUALIZAÇÃO =====
+
+    case 'opcao_atualizacao_fipe':
+      return true; // Sempre disponível para formalização
+
+    case 'vistoria_reativacao':
+      return contrato?.emReativacao === true || (contrato?.inadimplenciaDias || 0) > 5;
+
+    // ===== PROPRIEDADE TERCEIRA =====
+
+    case 'anuencia_proprietario': {
+      const prop = (veiculo.proprietarioNome || '').trim().toLowerCase();
+      const assoc = (veiculo.associadoNome || '').trim().toLowerCase();
+      return prop !== '' && assoc !== '' && prop !== assoc;
+    }
+
     default:
       return false;
   }
