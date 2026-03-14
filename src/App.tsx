@@ -162,6 +162,7 @@ import ExtratoAssociado from "./pages/financeiro/ExtratoAssociado";
 import ComissionamentoExternoConfig from "./pages/financeiro/ComissionamentoExternoConfig";
 import ContaCorrenteVendedor from "./pages/financeiro/ContaCorrenteVendedor";
 import GestaoContaVendedor from "./pages/financeiro/GestaoContaVendedor";
+import DashboardVendaExterna from "./pages/financeiro/DashboardVendaExterna";
 
 // Contabilidade
 import ContabilidadeDashboard from "./pages/contabilidade/ContabilidadeDashboard";
@@ -512,7 +513,7 @@ const App = () => (
               <Route path="/financeiro/contas-bancarias" element={<ContasBancarias />} />
               <Route path="/financeiro/extrato-associado" element={<ExtratoAssociado />} />
               <Route path="/financeiro/configuracoes/comissionamento-externo" element={<ComissionamentoExternoConfig />} />
-              <Route path="/financeiro/venda-externa" element={<GestaoContaVendedor />} />
+              <Route path="/financeiro/venda-externa" element={<DashboardVendaExterna />} />
               <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
               <Route path="/perfil/conta-corrente" element={<ContaCorrenteVendedor />} />
               
