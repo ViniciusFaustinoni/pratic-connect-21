@@ -35,6 +35,13 @@ export function useTarefaAtual() {
     queryFn: async (): Promise<(TarefaAtual & { confirmacao_whatsapp?: string | null; confirmado_via_whatsapp_em?: string | null }) | null> => {
       if (!profissionalId) return null;
 
+      // Verificar se a sessão auth ainda é do mesmo usuário (proteção contra session bleed)
+      const { data: { user } } = await supabase.auth.getUser();
+      if (!user || user.id !== profissionalId) {
+        console.warn('[useTarefaAtual] Session mismatch detectado - user.id:', user?.id?.substring(0, 8), 'profile.id:', profissionalId?.substring(0, 8));
+        return null;
+      }
+
       // Usar a nova RPC que consulta a tabela servicos
       const { data, error } = await supabase.rpc('buscar_tarefa_atual_profissional', {
         p_profissional_id: profissionalId
@@ -45,11 +52,57 @@ export function useTarefaAtual() {
         throw error;
       }
 
+      // FALLBACK: Se RPC retornou vazio, buscar diretamente na tabela servicos
+      let tarefa: any = null;
       if (!data || data.length === 0) {
-        return null;
+        const { data: fallbackData, error: fallbackError } = await supabase
+          .from('servicos')
+          .select(`
+            id, tipo, status, data_agendada, hora_agendada, periodo,
+            associado_id, veiculo_id, cotacao_id, contrato_id, rastreador_id,
+            local_vistoria, observacoes, rota_id, iniciada_em, em_rota_em,
+            instalacao_origem_id, vistoria_origem_id, confirmacao_whatsapp,
+            confirmado_via_whatsapp_em, permite_encaixe, contato_realizado_em,
+            contato_tipo, etapa_atual, logradouro, numero, bairro, cidade, uf, cep,
+            latitude, longitude,
+            associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
+            veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo, cor),
+            rastreador:rastreadores(imei)
+          `)
+          .eq('profissional_id', profissionalId)
+          .in('status', ['em_andamento', 'em_analise', 'em_rota', 'agendada'])
+          .is('imprevisto_registrado_em', null)
+          .order('data_agendada', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        if (fallbackError) {
+          console.error('[useTarefaAtual] Fallback também falhou:', fallbackError);
+          return null;
+        }
+
+        if (!fallbackData) return null;
+
+        // Mapear formato do fallback para o formato esperado
+        const assoc = fallbackData.associado as any;
+        const veic = fallbackData.veiculo as any;
+        const rast = fallbackData.rastreador as any;
+        tarefa = {
+          ...fallbackData,
+          associado_nome: assoc?.nome || 'Cliente',
+          associado_telefone: assoc?.telefone || '',
+          associado_whatsapp: assoc?.whatsapp,
+          placa: veic?.placa || '',
+          marca: veic?.marca || '',
+          modelo: veic?.modelo || '',
+          cor: veic?.cor,
+          imei_rastreador: rast?.imei,
+        };
+        console.log('[useTarefaAtual] Tarefa recuperada via fallback:', tarefa.id);
+      } else {
+        tarefa = data[0];
       }
 
-      const tarefa = data[0];
       return {
         id: tarefa.id,
         tipo: tarefa.tipo as TipoServico,
@@ -100,7 +153,7 @@ export function useTarefaAtual() {
       };
     },
     enabled: !!profissionalId,
-    refetchInterval: 5000, // Fallback polling a cada 5s (Realtime é o primário)
+    refetchInterval: 5000,
     staleTime: 3000,
   });
 

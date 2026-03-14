@@ -905,11 +905,12 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
           .maybeSingle();
 
         if (vistoriaInstalacao) {
-          // Atualizar serviço com vistoria_origem_id
-          await supabase
+          // Atualizar serviço com vistoria_origem_id (com checagem de erro)
+          const { error: updateErr } = await supabase
             .from('servicos')
             .update({ vistoria_origem_id: vistoriaInstalacao.id })
             .eq('id', servicoId);
+          if (updateErr) console.error('[useVistoriaCompletaPorServico] Erro ao vincular vistoria_origem_id:', updateErr);
           return vistoriaInstalacao;
         }
       }
@@ -933,11 +934,12 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
           .maybeSingle();
 
         if (vistoriaCotacao) {
-          // Atualizar serviço com vistoria_origem_id
-          await supabase
+          // Atualizar serviço com vistoria_origem_id (com checagem de erro)
+          const { error: updateErr2 } = await supabase
             .from('servicos')
             .update({ vistoria_origem_id: vistoriaCotacao.id })
             .eq('id', servicoId);
+          if (updateErr2) console.error('[useVistoriaCompletaPorServico] Erro ao vincular vistoria_origem_id (cotação):', updateErr2);
           return vistoriaCotacao;
         }
       }
@@ -1021,11 +1023,12 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
           novaVistoria = vistoriaComVistoriador;
         }
 
-        // Atualizar serviço com vistoria_origem_id
-        await supabase
+        // Atualizar serviço com vistoria_origem_id (com checagem de erro)
+        const { error: updateVistErr } = await supabase
           .from('servicos')
           .update({ vistoria_origem_id: novaVistoria.id })
           .eq('id', servicoId);
+        if (updateVistErr) console.error('[useVistoriaCompletaPorServico] Erro ao vincular vistoria_origem_id (nova):', updateVistErr);
 
         console.log('[useVistoriaCompletaPorServico] Vistoria criada com sucesso:', novaVistoria.id);
         return novaVistoria;

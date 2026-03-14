@@ -424,6 +424,18 @@ export function useUploadFotoVistoriaCompleta() {
       file: File;
       visivelCliente?: boolean;
     }) => {
+      // VALIDAÇÃO: Verificar se a vistoria existe antes de qualquer operação
+      const { data: vistoriaExiste, error: vistoriaCheckError } = await supabase
+        .from('vistorias')
+        .select('id')
+        .eq('id', data.vistoriaId)
+        .maybeSingle();
+
+      if (vistoriaCheckError || !vistoriaExiste) {
+        console.error('[Upload Foto] Vistoria não encontrada:', data.vistoriaId, vistoriaCheckError);
+        throw new Error('Vistoria não encontrada. Recarregue a página e tente novamente.');
+      }
+
       // Primeiro, verificar se já existe uma foto desse tipo para essa vistoria
       const { data: fotoExistente } = await supabase
         .from('vistoria_fotos')
@@ -432,19 +444,7 @@ export function useUploadFotoVistoriaCompleta() {
         .eq('tipo', data.tipo)
         .maybeSingle();
 
-      // Se existir, deletar do storage e da tabela
-      if (fotoExistente) {
-        // Extrair o path do arquivo da URL
-        const urlParts = fotoExistente.arquivo_url.split('/vistoria-fotos/');
-        if (urlParts[1]) {
-          const filePath = urlParts[1];
-          await supabase.storage.from('vistoria-fotos').remove([filePath]);
-        }
-        // Deletar registro da tabela
-        await supabase.from('vistoria_fotos').delete().eq('id', fotoExistente.id);
-      }
-
-      // Fazer upload do novo arquivo
+      // Fazer upload do novo arquivo ANTES de deletar o antigo (evitar perda)
       const fileExt = data.file.name.split('.').pop();
       const fileName = `${data.vistoriaId}/${data.tipo}_${Date.now()}.${fileExt}`;
 
@@ -459,19 +459,61 @@ export function useUploadFotoVistoriaCompleta() {
         .from('vistoria-fotos')
         .getPublicUrl(fileName);
 
-      // Inserir novo registro na tabela
-      const { data: result, error } = await supabase
+      // Se existir foto antiga, deletar do storage e da tabela DEPOIS do upload
+      if (fotoExistente) {
+        const urlParts = fotoExistente.arquivo_url.split('/vistoria-fotos/');
+        if (urlParts[1]) {
+          await supabase.storage.from('vistoria-fotos').remove([urlParts[1]]);
+        }
+        await supabase.from('vistoria_fotos').delete().eq('id', fotoExistente.id);
+      }
+
+      // Inserir novo registro na tabela com retry em caso de FK error
+      let result: any = null;
+      const insertPayload = {
+        vistoria_id: data.vistoriaId,
+        tipo: data.tipo,
+        arquivo_url: publicUrl.publicUrl,
+        visivel_cliente: data.visivelCliente ?? true,
+      };
+
+      const { data: insertResult, error: insertError } = await supabase
         .from('vistoria_fotos')
-        .insert({
-          vistoria_id: data.vistoriaId,
-          tipo: data.tipo,
-          arquivo_url: publicUrl.publicUrl,
-          visivel_cliente: data.visivelCliente ?? true,
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
-      if (error) throw error;
+      if (insertError) {
+        // FK violation (23503) - vistoria pode ter sido recriada, tentar revalidar
+        if (insertError.code === '23503') {
+          console.warn('[Upload Foto] FK violation, revalidando vistoria...', insertError);
+          
+          // Revalidar existência da vistoria
+          const { data: recheck } = await supabase
+            .from('vistorias')
+            .select('id')
+            .eq('id', data.vistoriaId)
+            .maybeSingle();
+
+          if (!recheck) {
+            throw new Error('Vistoria foi removida. Recarregue a página para continuar.');
+          }
+
+          // Retry uma vez
+          const { data: retryResult, error: retryError } = await supabase
+            .from('vistoria_fotos')
+            .insert(insertPayload)
+            .select()
+            .single();
+
+          if (retryError) throw retryError;
+          result = retryResult;
+        } else {
+          throw insertError;
+        }
+      } else {
+        result = insertResult;
+      }
 
       // Se for foto do odômetro, chamar OCR para identificar quilometragem
       let ocrResult = null;

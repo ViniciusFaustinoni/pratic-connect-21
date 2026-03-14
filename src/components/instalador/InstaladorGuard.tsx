@@ -1,5 +1,7 @@
+import { useEffect, useRef } from 'react';
 import { Navigate, useLocation } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
+import { useQueryClient } from '@tanstack/react-query';
 import { Loader2 } from 'lucide-react';
 
 interface InstaladorGuardProps {
@@ -9,6 +11,21 @@ interface InstaladorGuardProps {
 export function InstaladorGuard({ children }: InstaladorGuardProps) {
   const { user, loading, hasRole } = useAuth();
   const location = useLocation();
+  const queryClient = useQueryClient();
+  const lastUserIdRef = useRef<string | null>(null);
+
+  // Detectar troca de usuário e limpar cache de queries sensíveis
+  useEffect(() => {
+    if (user?.id && lastUserIdRef.current && user.id !== lastUserIdRef.current) {
+      console.warn('[InstaladorGuard] Troca de usuário detectada, limpando cache');
+      queryClient.removeQueries({ queryKey: ['tarefa-atual'] });
+      queryClient.removeQueries({ queryKey: ['vistoria-completa'] });
+      queryClient.removeQueries({ queryKey: ['vistoria-completa-servico'] });
+      queryClient.removeQueries({ queryKey: ['servicos'] });
+      queryClient.removeQueries({ queryKey: ['servicos-historico'] });
+    }
+    lastUserIdRef.current = user?.id ?? null;
+  }, [user?.id, queryClient]);
 
   if (loading) {
     return (
