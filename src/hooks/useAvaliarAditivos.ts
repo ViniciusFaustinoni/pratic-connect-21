@@ -13,6 +13,22 @@ export interface VeiculoParaAvaliacao {
   tipo?: 'carro' | 'moto';
   tipoUso?: string;
   instalacaoMesmoDia?: boolean;
+  grupo?: string;
+  categoriaVeiculo?: string; // 'leilao' | 'chassi_remarcado' | 'ex_taxi' | 'placa_vermelha'
+  rastreadorTerceiros?: boolean;
+  proprietarioNome?: string;
+  associadoNome?: string;
+}
+
+export interface ContratoParaAvaliacao {
+  emReativacao?: boolean;
+  inadimplenciaDias?: number;
+}
+
+export interface SinistroParaAvaliacao {
+  tipoEvento?: string;
+  comBombeiros?: boolean;
+  reparoAprovado?: boolean;
 }
 
 export interface BeneficiosContratados {
@@ -25,6 +41,8 @@ function avaliarRegra(
   fipeLimite: number,
   configRastreador?: { fipeMinCarro: number; fipeMinMoto: number },
   beneficios?: BeneficiosContratados,
+  contrato?: ContratoParaAvaliacao,
+  sinistro?: SinistroParaAvaliacao,
 ): boolean {
   if (!regra.ativo) return false;
 
@@ -90,6 +108,50 @@ function avaliarRegra(
     case 'beneficio_carencia_zero':
       return (beneficios?.codigos || []).some(c => c.includes('CARENCIA_ZERO'));
 
+    // ===== REGRAS POR SINISTRO/EVENTO =====
+
+    case 'evento_sub_rogacao':
+      return !!sinistro?.tipoEvento;
+
+    case 'evento_aprovacao_conserto':
+      return sinistro?.reparoAprovado === true;
+
+    case 'evento_incendio':
+      return sinistro?.tipoEvento?.toLowerCase().includes('incêndio') === true && sinistro?.comBombeiros === false;
+
+    // ===== REGRAS POR GRUPO/CATEGORIA ESPECIAL =====
+
+    case 'grupo_raridades_especial': {
+      const grupo = (veiculo.grupo || '').toLowerCase();
+      return grupo.includes('raridade') || grupo.includes('especial');
+    }
+
+    case 'categoria_depreciacao': {
+      const cat = (veiculo.categoriaVeiculo || '').toLowerCase();
+      return cat.includes('leilao') || cat.includes('leilão') || cat.includes('chassi_remarcado') || cat.includes('ex_taxi') || cat.includes('placa_vermelha');
+    }
+
+    // ===== GESTÃO DE EQUIPAMENTO =====
+
+    case 'rastreador_terceiros':
+      return veiculo.rastreadorTerceiros === true;
+
+    // ===== MANUTENÇÃO/ATUALIZAÇÃO =====
+
+    case 'opcao_atualizacao_fipe':
+      return true; // Sempre disponível para formalização
+
+    case 'vistoria_reativacao':
+      return contrato?.emReativacao === true || (contrato?.inadimplenciaDias || 0) > 5;
+
+    // ===== PROPRIEDADE TERCEIRA =====
+
+    case 'anuencia_proprietario': {
+      const prop = (veiculo.proprietarioNome || '').trim().toLowerCase();
+      const assoc = (veiculo.associadoNome || '').trim().toLowerCase();
+      return prop !== '' && assoc !== '' && prop !== assoc;
+    }
+
     default:
       return false;
   }
@@ -98,6 +160,8 @@ function avaliarRegra(
 export function useAvaliarAditivos(
   veiculo: VeiculoParaAvaliacao | null,
   beneficios?: BeneficiosContratados,
+  contrato?: ContratoParaAvaliacao,
+  sinistro?: SinistroParaAvaliacao,
 ) {
   const { data: aditivos = [], isLoading: loadingAditivos } = useAditivos(true);
 
@@ -135,13 +199,13 @@ export function useAvaliarAditivos(
 
     return aditivos.map((aditivo) => {
       const regras = (aditivo.regras || []) as RegraAditivo[];
-      const regrasBatem = regras.some(r => avaliarRegra(r, veiculo, fipeLimite, configRastreador, beneficios));
+      const regrasBatem = regras.some(r => avaliarRegra(r, veiculo, fipeLimite, configRastreador, beneficios, contrato, sinistro));
       return {
         aditivo,
         autoSelecionado: regrasBatem,
       };
     });
-  }, [aditivos, veiculo, fipeLimite, configRastreador, beneficios]);
+  }, [aditivos, veiculo, fipeLimite, configRastreador, beneficios, contrato, sinistro]);
 
   return {
     aditivosAvaliados: resultado,

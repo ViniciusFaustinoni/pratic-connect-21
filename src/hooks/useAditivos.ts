@@ -17,7 +17,21 @@ export type TipoRegraAditivo =
   | 'beneficio_danos_terceiros'
   | 'beneficio_carro_reserva'
   | 'beneficio_reboque_excedente'
-  | 'beneficio_carencia_zero';
+  | 'beneficio_carencia_zero'
+  // Regras por sinistro/evento
+  | 'evento_sub_rogacao'
+  | 'evento_aprovacao_conserto'
+  | 'evento_incendio'
+  // Regras por grupo/categoria especial
+  | 'grupo_raridades_especial'
+  | 'categoria_depreciacao'
+  // Gestão de equipamento
+  | 'rastreador_terceiros'
+  // Manutenção/atualização
+  | 'opcao_atualizacao_fipe'
+  | 'vistoria_reativacao'
+  // Propriedade terceira
+  | 'anuencia_proprietario';
 
 export interface RegraAditivo {
   tipo: TipoRegraAditivo;

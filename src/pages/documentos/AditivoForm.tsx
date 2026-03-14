@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Car, DollarSign, ExternalLink, GripVertical, GlassWater, Shield, MapPin, Smartphone, Wrench, Fuel, Clock, Truck, ShieldCheck, Ambulance } from 'lucide-react';
+import { ArrowLeft, Car, DollarSign, ExternalLink, GripVertical, GlassWater, Shield, MapPin, Smartphone, Wrench, Fuel, Clock, Truck, ShieldCheck, FileText, Hammer, Flame, Star, Tag, Radio, RefreshCw, Eye, UserCheck } from 'lucide-react';
 import { formatCurrency } from '@/types/termo-filiacao';
 import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
@@ -30,8 +30,21 @@ const TIPOS_REGRA = [
   { tipo: 'beneficio_carro_reserva' as const, label: 'Carro Reserva', desc: 'Consultor selecionou duração (7, 15 ou 30 dias — reembolso até R$ 2.200)', icon: Car, grupo: 'beneficio' },
   { tipo: 'beneficio_reboque_excedente' as const, label: 'Reboque Excedente', desc: 'Consultor marcou benefício (2 acionamentos extras/ano, mín. 6 meses entre eles)', icon: Wrench, grupo: 'beneficio' },
   { tipo: 'beneficio_carencia_zero' as const, label: 'Carência Zero', desc: 'Consultor marcou e pagamento confirmado — isenta período de espera', icon: Clock, grupo: 'beneficio' },
-  // --- Regra por evento ---
+  // --- Regras por sinistro/evento ---
   { tipo: 'evento_vidros' as const, label: 'Evento Vidros e Faróis', desc: 'Anexado automaticamente quando o sinistro for do tipo vidros e faróis', icon: GlassWater, grupo: 'evento' },
+  { tipo: 'evento_sub_rogacao' as const, label: 'Sub-Rogação de Direitos', desc: 'Obrigatório em acionamento PSM — transfere à ABP direitos de cobrança contra terceiros', icon: FileText, grupo: 'evento' },
+  { tipo: 'evento_aprovacao_conserto' as const, label: 'Aprovação de Conserto (Test Drive)', desc: 'Assinado na entrega do veículo reparado — confirma aprovação do serviço', icon: Hammer, grupo: 'evento' },
+  { tipo: 'evento_incendio' as const, label: 'Declaração de Incêndio', desc: 'Incêndio sem atuação do Corpo de Bombeiros — declaração de próprio punho com firma reconhecida', icon: Flame, grupo: 'evento' },
+  // --- Regras por grupo/categoria especial ---
+  { tipo: 'grupo_raridades_especial' as const, label: 'Grupo Raridades / Especial', desc: 'Proteção restrita a roubo, furto, assistência 24h e rastreador — sem colisão, incêndio ou terceiros', icon: Star, grupo: 'grupo' },
+  { tipo: 'categoria_depreciacao' as const, label: 'Depreciação (Leilão/Chassi/Ex-Táxi)', desc: 'Veículos de leilão, chassi remarcado ou ex-táxi — depreciação fixa de 25-30% sobre FIPE', icon: Tag, grupo: 'grupo' },
+  // --- Regras por gestão de equipamento ---
+  { tipo: 'rastreador_terceiros' as const, label: 'Rastreador de Terceiros', desc: 'Associado utiliza rastreador próprio não homologado — exige prova de funcionamento', icon: Radio, grupo: 'equipamento' },
+  // --- Regras por manutenção/atualização ---
+  { tipo: 'opcao_atualizacao_fipe' as const, label: 'Opção Atualização FIPE', desc: 'Formaliza se o associado deseja atualizar contribuição mensal conforme oscilação FIPE', icon: RefreshCw, grupo: 'manutencao' },
+  { tipo: 'vistoria_reativacao' as const, label: 'Vistoria de Reativação', desc: 'Associados com atraso > 5 dias — proteção suspensa, reativação depende de nova vistoria', icon: Eye, grupo: 'manutencao' },
+  // --- Regras por propriedade terceira ---
+  { tipo: 'anuencia_proprietario' as const, label: 'Anuência do Proprietário Legal', desc: 'Veículo em nome de terceiro — proprietário legal deve assinar para indenização integral', icon: UserCheck, grupo: 'propriedade' },
 ];
 
 export default function AditivoForm() {
@@ -112,6 +125,41 @@ export default function AditivoForm() {
 
   const isSaving = createMutation.isPending || updateMutation.isPending;
 
+  const renderGrupoRegras = (grupo: string, titulo: string) => {
+    const items = TIPOS_REGRA.filter(t => t.grupo === grupo);
+    if (items.length === 0) return null;
+    return (
+      <div className="space-y-2">
+        <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">{titulo}</p>
+        {items.map(({ tipo, label, desc, icon: Icon }) => (
+          <div key={tipo} className="flex items-start gap-3 p-3 rounded-lg border">
+            <Checkbox
+              checked={regras[tipo]}
+              onCheckedChange={(checked) => setRegras(prev => ({ ...prev, [tipo]: !!checked }))}
+            />
+            <div className="flex-1">
+              <div className="flex items-center gap-2">
+                <Icon className="h-4 w-4 text-muted-foreground" />
+                <span className="font-medium text-sm">{label}</span>
+              </div>
+              <p className="text-xs text-muted-foreground mt-1">{desc}</p>
+              {tipo === 'fipe_acima_de' && fipeLimite && (
+                <div className="flex items-center gap-2 mt-2">
+                  <span className="text-xs">Valor atual: <strong>{formatCurrency(fipeLimite)}</strong></span>
+                  <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
+                    <a href="/diretoria/configuracoes" target="_blank">
+                      Editar <ExternalLink className="h-3 w-3 ml-1" />
+                    </a>
+                  </Button>
+                </div>
+              )}
+            </div>
+          </div>
+        ))}
+      </div>
+    );
+  };
+
   if (isEditing && isLoading) {
     return <div className="p-6 space-y-4">{[1, 2, 3].map(i => <Skeleton key={i} className="h-20 w-full" />)}</div>;
   }
@@ -186,74 +234,25 @@ export default function AditivoForm() {
             </p>
 
             {/* Grupo: Veículo */}
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Por Característica do Veículo</p>
-              {TIPOS_REGRA.filter(t => t.grupo === 'veiculo').map(({ tipo, label, desc, icon: Icon }) => (
-                <div key={tipo} className="flex items-start gap-3 p-3 rounded-lg border">
-                  <Checkbox
-                    checked={regras[tipo]}
-                    onCheckedChange={(checked) => setRegras(prev => ({ ...prev, [tipo]: !!checked }))}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">{label}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{desc}</p>
-                    {tipo === 'fipe_acima_de' && fipeLimite && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-xs">Valor atual: <strong>{formatCurrency(fipeLimite)}</strong></span>
-                        <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
-                          <a href="/diretoria/configuracoes" target="_blank">
-                            Editar <ExternalLink className="h-3 w-3 ml-1" />
-                          </a>
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            {renderGrupoRegras('veiculo', 'Por Característica do Veículo')}
 
             {/* Grupo: Benefício */}
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Por Benefício Contratado</p>
-              {TIPOS_REGRA.filter(t => t.grupo === 'beneficio').map(({ tipo, label, desc, icon: Icon }) => (
-                <div key={tipo} className="flex items-start gap-3 p-3 rounded-lg border">
-                  <Checkbox
-                    checked={regras[tipo]}
-                    onCheckedChange={(checked) => setRegras(prev => ({ ...prev, [tipo]: !!checked }))}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">{label}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {renderGrupoRegras('beneficio', 'Por Benefício Contratado')}
 
-            {/* Grupo: Evento */}
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Por Tipo de Evento/Sinistro</p>
-              {TIPOS_REGRA.filter(t => t.grupo === 'evento').map(({ tipo, label, desc, icon: Icon }) => (
-                <div key={tipo} className="flex items-start gap-3 p-3 rounded-lg border">
-                  <Checkbox
-                    checked={regras[tipo]}
-                    onCheckedChange={(checked) => setRegras(prev => ({ ...prev, [tipo]: !!checked }))}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">{label}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* Grupo: Evento/Sinistro */}
+            {renderGrupoRegras('evento', 'Por Procedimento de Sinistro/Evento')}
+
+            {/* Grupo: Grupos Especiais */}
+            {renderGrupoRegras('grupo', 'Por Características e Grupos Especiais')}
+
+            {/* Grupo: Gestão de Equipamento */}
+            {renderGrupoRegras('equipamento', 'Por Gestão do Equipamento')}
+
+            {/* Grupo: Manutenção */}
+            {renderGrupoRegras('manutencao', 'Por Atualização e Manutenção')}
+
+            {/* Grupo: Propriedade */}
+            {renderGrupoRegras('propriedade', 'Por Propriedade Terceira')}
           </CardContent>
         </Card>
 

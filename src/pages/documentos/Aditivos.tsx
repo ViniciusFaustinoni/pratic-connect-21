@@ -8,12 +8,31 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Plus, Edit, Trash2, Car, DollarSign, Shield } from 'lucide-react';
+import { Plus, Edit, Trash2, Car, DollarSign, Shield, MapPin, Truck, Smartphone, GlassWater, Fuel, ShieldCheck, Clock, Wrench, FileText, Hammer, Flame, Star, Tag, Radio, RefreshCw, Eye, UserCheck } from 'lucide-react';
 
 const REGRA_LABELS: Record<string, { label: string; icon: typeof Car }> = {
   veiculo_0km: { label: '0KM', icon: Car },
   fipe_acima_de: { label: 'FIPE acima', icon: DollarSign },
   veiculo_blindado: { label: 'Blindado', icon: Shield },
+  rastreador_obrigatorio: { label: 'Rastreador', icon: MapPin },
+  rastreador_movel: { label: 'Rastreador Móvel', icon: Truck },
+  veiculo_aplicativo: { label: 'Aplicativo', icon: Smartphone },
+  beneficio_vidros: { label: 'Vidros', icon: GlassWater },
+  beneficio_kit_gas: { label: 'Kit Gás', icon: Fuel },
+  beneficio_danos_terceiros: { label: 'Terceiros', icon: ShieldCheck },
+  beneficio_carro_reserva: { label: 'Carro Reserva', icon: Car },
+  beneficio_reboque_excedente: { label: 'Reboque', icon: Wrench },
+  beneficio_carencia_zero: { label: 'Carência Zero', icon: Clock },
+  evento_vidros: { label: 'Evento Vidros', icon: GlassWater },
+  evento_sub_rogacao: { label: 'Sub-Rogação', icon: FileText },
+  evento_aprovacao_conserto: { label: 'Aprov. Conserto', icon: Hammer },
+  evento_incendio: { label: 'Incêndio', icon: Flame },
+  grupo_raridades_especial: { label: 'Raridades/Especial', icon: Star },
+  categoria_depreciacao: { label: 'Depreciação', icon: Tag },
+  rastreador_terceiros: { label: 'Rastr. Terceiros', icon: Radio },
+  opcao_atualizacao_fipe: { label: 'Atual. FIPE', icon: RefreshCw },
+  vistoria_reativacao: { label: 'Reativação', icon: Eye },
+  anuencia_proprietario: { label: 'Anuência Prop.', icon: UserCheck },
 };
 
 export default function Aditivos() {
