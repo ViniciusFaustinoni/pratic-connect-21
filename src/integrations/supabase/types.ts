@@ -7533,6 +7533,8 @@ export type Database = {
           adesao_paga_em: string | null
           adicionais_selecionados: Json | null
           analista_id: string | null
+          app_apolice_enviada: boolean | null
+          app_apolice_enviada_em: string | null
           aprovado_em: string | null
           aprovado_por: string | null
           associado_id: string | null
@@ -7637,6 +7639,8 @@ export type Database = {
           adesao_paga_em?: string | null
           adicionais_selecionados?: Json | null
           analista_id?: string | null
+          app_apolice_enviada?: boolean | null
+          app_apolice_enviada_em?: string | null
           aprovado_em?: string | null
           aprovado_por?: string | null
           associado_id?: string | null
@@ -7741,6 +7745,8 @@ export type Database = {
           adesao_paga_em?: string | null
           adicionais_selecionados?: Json | null
           analista_id?: string | null
+          app_apolice_enviada?: boolean | null
+          app_apolice_enviada_em?: string | null
           aprovado_em?: string | null
           aprovado_por?: string | null
           associado_id?: string | null

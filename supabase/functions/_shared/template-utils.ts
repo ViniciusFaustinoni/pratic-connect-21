@@ -744,8 +744,33 @@ interface TermoAditivo {
   ordem: number;
 }
 
-function avaliarRegraEdge(regra: RegraAditivo, veiculo: any, fipeLimite: number, contexto?: { tipo_evento?: string }): boolean {
+/**
+ * Extrai códigos de benefícios adicionais contratados do templateData/contrato.
+ * Procura em adicionais_selecionados (array de objetos com codigo) ou beneficios_codigos.
+ */
+export function extrairCodigosBeneficios(dados: any): string[] {
+  // Se já tem array de códigos direto
+  if (Array.isArray(dados?.beneficios_codigos)) return dados.beneficios_codigos;
+  
+  // Extrair de adicionais_selecionados (formato cotação/contrato)
+  const adicionais = dados?.adicionais_selecionados || dados?.contrato?.adicionais_selecionados || [];
+  if (Array.isArray(adicionais)) {
+    return adicionais
+      .map((a: any) => typeof a === 'string' ? a : (a?.codigo || a?.id || ''))
+      .filter(Boolean);
+  }
+  return [];
+}
+
+function avaliarRegraEdge(
+  regra: RegraAditivo,
+  veiculo: any,
+  fipeLimite: number,
+  contexto?: { tipo_evento?: string; beneficios_codigos?: string[]; configRastreador?: { fipeMinCarro: number; fipeMinMoto: number } }
+): boolean {
   if (!regra.ativo) return false;
+
+  const beneficios = contexto?.beneficios_codigos || [];
 
   switch (regra.tipo) {
     case 'veiculo_0km':
@@ -759,7 +784,50 @@ function avaliarRegraEdge(regra: RegraAditivo, veiculo: any, fipeLimite: number,
     
     case 'veiculo_blindado':
       return veiculo.blindado === true;
-    
+
+    // ===== REGRAS POR CARACTERÍSTICA DO VEÍCULO =====
+
+    case 'rastreador_obrigatorio': {
+      const fipe = veiculo.valor_fipe || 0;
+      const combustivel = (veiculo.combustivel || '').toLowerCase();
+      if (combustivel === 'diesel') return true;
+      const categoria = (veiculo.categoria || '').toLowerCase();
+      if (categoria.includes('moto')) {
+        const limMoto = contexto?.configRastreador?.fipeMinMoto ?? 9000;
+        return fipe >= limMoto;
+      }
+      const limCarro = contexto?.configRastreador?.fipeMinCarro ?? 30000;
+      return fipe >= limCarro;
+    }
+
+    case 'rastreador_movel':
+      return veiculo.instalacao_mesmo_dia === false;
+
+    case 'veiculo_aplicativo': {
+      const uso = (veiculo.tipo_uso || veiculo.uso_aplicativo || '').toString().toLowerCase();
+      return uso.includes('app') || uso.includes('uber') || uso.includes('táxi') || uso.includes('taxi') || uso.includes('aplicativo') || veiculo.uso_aplicativo === true;
+    }
+
+    // ===== REGRAS POR BENEFÍCIO CONTRATADO =====
+
+    case 'beneficio_vidros':
+      return beneficios.some((c: string) => c.includes('VIDROS'));
+
+    case 'beneficio_kit_gas':
+      return beneficios.some((c: string) => c.includes('KIT_GAS'));
+
+    case 'beneficio_danos_terceiros':
+      return beneficios.some((c: string) => c.includes('TERCEIROS'));
+
+    case 'beneficio_carro_reserva':
+      return beneficios.some((c: string) => c.includes('CARRO_RESERVA'));
+
+    case 'beneficio_reboque_excedente':
+      return beneficios.some((c: string) => c.includes('REBOQUE_EXCEDENTE'));
+
+    case 'beneficio_carencia_zero':
+      return beneficios.some((c: string) => c.includes('CARENCIA_ZERO'));
+
     default:
       return false;
   }
@@ -773,7 +841,7 @@ export async function buscarEGerarAditivos(
   supabase: any,
   dadosVeiculo: any,
   dadosTemplate: any,
-  contexto?: { tipo_evento?: string }
+  contexto?: { tipo_evento?: string; beneficios_codigos?: string[]; configRastreador?: { fipeMinCarro: number; fipeMinMoto: number } }
 ): Promise<string> {
   // 1. Buscar aditivos ativos ordenados
   const { data: aditivos, error: aditivosError } = await supabase

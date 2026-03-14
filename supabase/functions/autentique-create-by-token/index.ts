@@ -8,7 +8,7 @@ import { gerarPosicoesAssinatura, buscarPosicoesConfig } from "../_shared/autent
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/termo-afiliacao-template.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa } from "../_shared/termo-afiliacao-utils.ts";
-import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, generateSecaoAssinatura, markdownParaHTML, hasSignatureArea, sanitizeSignatureBlocks, exigeRastreador } from "../_shared/template-utils.ts";
+import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, generateSecaoAssinatura, markdownParaHTML, hasSignatureArea, sanitizeSignatureBlocks, exigeRastreador, extrairCodigosBeneficios } from "../_shared/template-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -205,7 +205,10 @@ serve(async (req) => {
       let conteudoHTML = markdownParaHTML(conteudoPreenchido);
       // Sanitizar blocos de assinatura manual que possam existir no template
       conteudoHTML = sanitizeSignatureBlocks(conteudoHTML);
-      const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData);
+      const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData, {
+        beneficios_codigos: extrairCodigosBeneficios(contrato),
+        configRastreador: templateData.configRastreador,
+      });
 
       // Injetar seção de rastreador se obrigatório (não coberta pelos aditivos do banco)
       const rastreadorResult = exigeRastreador(templateData.veiculo, templateData.configRastreador);
@@ -240,7 +243,10 @@ serve(async (req) => {
       contratoHTML = generateTermoAfiliacao(templateData);
       
       // Injetar aditivos dinâmicos antes do </body>
-      const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData);
+      const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData, {
+        beneficios_codigos: extrairCodigosBeneficios(contrato),
+        configRastreador: templateData.configRastreador,
+      });
       if (aditivosHTML) {
         contratoHTML = contratoHTML.replace('</body>', `${aditivosHTML}</body>`);
       }
