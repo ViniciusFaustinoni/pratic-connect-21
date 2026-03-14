@@ -1607,41 +1607,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
             <Separator />
 
-            {/* BLOCO 2.5: TAXA DE FILIAÇÃO */}
-            <div>
-              <Label className="text-sm font-semibold">Taxa de Filiação {!isCenarioIsento && '*'}</Label>
-              <FormField
-                control={form.control}
-                name="valor_adesao"
-                render={({ field }) => (
-                  <FormItem>
-                    <FormControl>
-                      <CurrencyInput 
-                        value={field.value}
-                        onChange={(val) => {
-                          field.onChange(val);
-                          adesaoEditadaManualmente.current = true;
-                        }}
-                        placeholder="R$ 0,00"
-                        disabled={isCenarioIsento}
-                      />
-                    </FormControl>
-                    <FormMessage />
-                  </FormItem>
-                )}
-              />
-              {isCenarioIsento ? (
-                <p className="text-xs text-green-600 mt-1 font-medium">
-                  Adesão isenta conforme cenário selecionado.
-                </p>
-              ) : (
-                <p className="text-xs text-muted-foreground mt-1">
-                  Valor sugerido: 1% da FIPE (mín. R$ 100). Altere conforme necessário.
-                </p>
-              )}
-            </div>
-
-            {/* BLOCO 2.6: CENÁRIO VENDEDOR EXTERNO */}
+            {/* BLOCO 2.6: CENÁRIO VENDEDOR EXTERNO (antes da taxa) */}
             {isVendedorExterno && (
               <div className="space-y-2">
                 <Label className="text-sm font-semibold">Cenário de Adesão e Instalação *</Label>
@@ -1661,7 +1627,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           form.setValue('valor_adesao', 0);
                           adesaoEditadaManualmente.current = true;
                         } else if (cenarioExterno?.startsWith('isenta')) {
-                          // Voltando de isento para cobra: recalcular adesão
                           adesaoEditadaManualmente.current = false;
                           if (valorFipe && valorFipe > 0) {
                             const adesaoCalculada = Math.max(valorFipe * 0.01, 100);
@@ -1687,6 +1652,35 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     Selecione um cenário para continuar
                   </p>
                 )}
+              </div>
+            )}
+
+            {/* BLOCO 2.5: TAXA DE FILIAÇÃO — oculto para externo quando isento ou sem cenário */}
+            {(!isVendedorExterno || (cenarioExterno && cenarioExterno.startsWith('cobra'))) && (
+              <div>
+                <Label className="text-sm font-semibold">Taxa de Filiação *</Label>
+                <FormField
+                  control={form.control}
+                  name="valor_adesao"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormControl>
+                        <CurrencyInput 
+                          value={field.value}
+                          onChange={(val) => {
+                            field.onChange(val);
+                            adesaoEditadaManualmente.current = true;
+                          }}
+                          placeholder="R$ 0,00"
+                        />
+                      </FormControl>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+                <p className="text-xs text-muted-foreground mt-1">
+                  Valor sugerido: 1% da FIPE (mín. R$ 100). Altere conforme necessário.
+                </p>
               </div>
             )}
 
