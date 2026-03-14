@@ -520,7 +520,7 @@ export function usePropostasPendentes() {
       
       const temVistoriaBaseRealizada = !!vistoriaBaseInfo;
       
-      if (!instalacaoInfo && !temAutovistoria && !temVistoriaBaseRealizada) {
+      if (!instalacaoInfo) {
         return null;
       }
 
