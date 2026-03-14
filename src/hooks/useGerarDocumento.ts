@@ -143,13 +143,21 @@ export function useGerarDocumento() {
       return '';
     });
 
-    // Remover bloco "Serviços:" residual — qualquer contexto HTML
+    // Remover bloco "Serviços:" residual — todas as variantes
     resultado = resultado.replace(
       /<(p|div|td|li|tr)[^>]*>[\s\S]*?Servi[çc]os\s*:[\s\S]*?<\/\1>/gi,
       ''
     );
     resultado = resultado.replace(
-      /Servi[çc]os\s*:\s*[^\n<]*/gi,
+      /<(p|div|td|li|tr)[^>]*>[\s\S]*?Servi&ccedil;os\s*:[\s\S]*?<\/\1>/gi,
+      ''
+    );
+    resultado = resultado.replace(
+      /<span[^>]*data-variable="[^"]*plano\.descricao[^"]*"[^>]*>[^<]*<\/span>/gi,
+      ''
+    );
+    resultado = resultado.replace(
+      /Servi([çc]|&ccedil;)os\s*:\s*[^\n<]*/gi,
       ''
     );
 

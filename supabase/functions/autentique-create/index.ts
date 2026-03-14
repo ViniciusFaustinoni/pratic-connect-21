@@ -66,7 +66,21 @@ async function buscarConfigRastreador(supabase: any) {
 
 async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dados: any): Promise<string> {
   // 1. Substituir variáveis no conteúdo do banco
-  const conteudoPreenchido = substituirVariaveis(templateConteudo, dados);
+  let conteudoPreenchido = substituirVariaveis(templateConteudo, dados);
+  
+  // 1b. Limpeza extra: remover qualquer resíduo de "Serviços: {{plano.descricao}}"
+  conteudoPreenchido = conteudoPreenchido.replace(
+    /<(p|div|td|li|tr)[^>]*>[\s\S]*?Servi([çc]|&ccedil;)os\s*:[\s\S]*?<\/\1>/gi,
+    ''
+  );
+  conteudoPreenchido = conteudoPreenchido.replace(
+    /<span[^>]*data-variable="[^"]*plano\.descricao[^"]*"[^>]*>[^<]*<\/span>/gi,
+    ''
+  );
+  conteudoPreenchido = conteudoPreenchido.replace(
+    /Servi([çc]|&ccedil;)os\s*:\s*[^\n<]*/gi,
+    ''
+  );
   
   // 2. Converter markdown para HTML
   let conteudoHTML = markdownParaHTML(conteudoPreenchido);
