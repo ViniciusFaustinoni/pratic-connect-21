@@ -287,114 +287,122 @@ serve(async (req) => {
     console.log(`[CriarInstalacaoPosPagamento] endereco: ${JSON.stringify(endereco)}`);
 
     // 5. Verificar se tem data agendada
+    // Para autovistoria sem data: pular criação de instalação (cadastro criará depois)
+    // mas ainda gerar lançamentos CC do vendedor externo
+    let novaInstalacaoId: string | null = null;
+    
     if (!dataAgendada) {
-      console.log('[CriarInstalacaoPosPagamento] Nenhuma data de agendamento encontrada');
-      return new Response(JSON.stringify({ 
-        success: false, 
-        error: 'Dados de agendamento não encontrados',
-        message: 'A cotação não possui dados de agendamento de instalação'
-      }), {
-        status: 400,
-        headers: { ...corsHeaders, 'Content-Type': 'application/json' }
-      });
+      if (tipoVistoria === 'autovistoria') {
+        console.log('[CriarInstalacaoPosPagamento] Autovistoria sem data de agendamento — pulando criação de instalação (cadastro criará após aprovação)');
+      } else {
+        console.log('[CriarInstalacaoPosPagamento] Nenhuma data de agendamento encontrada');
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: 'Dados de agendamento não encontrados',
+          message: 'A cotação não possui dados de agendamento de instalação'
+        }), {
+          status: 400,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' }
+        });
+      }
     }
 
-    // 5.1 VALIDAÇÃO CRÍTICA: Verificar coordenadas para atribuição automática
-    // Se não tiver coordenadas, GEOCODIFICAR para garantir que atribuição automática funcione
-    if (!endereco.latitude || !endereco.longitude) {
-      console.warn('[CriarInstalacaoPosPagamento] ⚠️ Coordenadas ausentes! Tentando geocodificar...');
-      console.log('[CriarInstalacaoPosPagamento] Endereço para geocodificação:', JSON.stringify(endereco));
-      
-      if (endereco.logradouro && endereco.cidade) {
-        try {
-          const geoResponse = await fetch(`${supabaseUrl}/functions/v1/geocode-endereco`, {
-            method: 'POST',
-            headers: {
-              'Content-Type': 'application/json',
-              'Authorization': `Bearer ${serviceRoleKey}`,
-            },
-            body: JSON.stringify({
-              logradouro: endereco.logradouro,
-              numero: endereco.numero,
-              bairro: endereco.bairro,
-              cidade: endereco.cidade,
-              uf: endereco.estado,
-              cep: endereco.cep,
-            }),
-          });
-          
-          if (geoResponse.ok) {
-            const geoData = await geoResponse.json();
-            if (geoData.success && geoData.latitude && geoData.longitude) {
-              endereco.latitude = geoData.latitude;
-              endereco.longitude = geoData.longitude;
-              console.log(`[CriarInstalacaoPosPagamento] ✓ Geocodificado com sucesso: (${endereco.latitude}, ${endereco.longitude})`);
+    // Se tem data, criar instalação normalmente
+    if (dataAgendada) {
+      // 5.1 VALIDAÇÃO CRÍTICA: Verificar coordenadas para atribuição automática
+      if (!endereco.latitude || !endereco.longitude) {
+        console.warn('[CriarInstalacaoPosPagamento] ⚠️ Coordenadas ausentes! Tentando geocodificar...');
+        console.log('[CriarInstalacaoPosPagamento] Endereço para geocodificação:', JSON.stringify(endereco));
+        
+        if (endereco.logradouro && endereco.cidade) {
+          try {
+            const geoResponse = await fetch(`${supabaseUrl}/functions/v1/geocode-endereco`, {
+              method: 'POST',
+              headers: {
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${serviceRoleKey}`,
+              },
+              body: JSON.stringify({
+                logradouro: endereco.logradouro,
+                numero: endereco.numero,
+                bairro: endereco.bairro,
+                cidade: endereco.cidade,
+                uf: endereco.estado,
+                cep: endereco.cep,
+              }),
+            });
+            
+            if (geoResponse.ok) {
+              const geoData = await geoResponse.json();
+              if (geoData.success && geoData.latitude && geoData.longitude) {
+                endereco.latitude = geoData.latitude;
+                endereco.longitude = geoData.longitude;
+                console.log(`[CriarInstalacaoPosPagamento] ✓ Geocodificado com sucesso: (${endereco.latitude}, ${endereco.longitude})`);
+              } else {
+                console.warn('[CriarInstalacaoPosPagamento] Geocodificação retornou sem coordenadas:', geoData);
+              }
             } else {
-              console.warn('[CriarInstalacaoPosPagamento] Geocodificação retornou sem coordenadas:', geoData);
+              console.warn('[CriarInstalacaoPosPagamento] Geocodificação falhou com status:', geoResponse.status);
             }
-          } else {
-            console.warn('[CriarInstalacaoPosPagamento] Geocodificação falhou com status:', geoResponse.status);
+          } catch (geoError) {
+            console.warn('[CriarInstalacaoPosPagamento] Erro na geocodificação:', geoError);
           }
-        } catch (geoError) {
-          console.warn('[CriarInstalacaoPosPagamento] Erro na geocodificação:', geoError);
+        } else {
+          console.warn('[CriarInstalacaoPosPagamento] Dados insuficientes para geocodificar');
         }
       } else {
-        console.warn('[CriarInstalacaoPosPagamento] Dados insuficientes para geocodificar');
+        console.log(`[CriarInstalacaoPosPagamento] ✓ Coordenadas já presentes: (${endereco.latitude}, ${endereco.longitude})`);
       }
-    } else {
-      console.log(`[CriarInstalacaoPosPagamento] ✓ Coordenadas já presentes: (${endereco.latitude}, ${endereco.longitude})`);
+
+      // 5.2 Log do permite_encaixe
+      const permiteEncaixe = cotacao.vistoria_permite_encaixe || false;
+      console.log(`[CriarInstalacaoPosPagamento] permite_encaixe: ${permiteEncaixe}`);
+
+      // 6. CRIAR INSTALAÇÃO
+      const periodoValido = ['manha', 'tarde'].includes(periodoAgendado || '') ? periodoAgendado : null;
+      
+      const instalacaoData = {
+        contrato_id: contrato.id,
+        cotacao_id: cotacaoId,
+        associado_id: contrato.associado_id,
+        veiculo_id: veiculoIdFinal,
+        status: 'agendada',
+        data_agendada: dataAgendada,
+        hora_agendada: null,
+        periodo: periodoValido,
+        cep: endereco.cep,
+        logradouro: endereco.logradouro,
+        numero: endereco.numero,
+        bairro: endereco.bairro,
+        cidade: endereco.cidade,
+        uf: endereco.estado,
+        endereco_latitude: endereco.latitude || null,
+        endereco_longitude: endereco.longitude || null,
+        observacoes: obsResponsavel,
+        permite_encaixe: permiteEncaixe,
+        local_vistoria: 'cliente',
+        instalador_responsavel_id: null,
+      };
+      
+      console.log('[CriarInstalacaoPosPagamento] Criando instalação:', JSON.stringify(instalacaoData));
+
+      const { data: novaInstalacao, error: instalacaoError } = await supabase
+        .from('instalacoes')
+        .insert(instalacaoData)
+        .select('id')
+        .single();
+
+      if (instalacaoError) {
+        console.error('[CriarInstalacaoPosPagamento] Erro ao criar instalação:', instalacaoError);
+        throw new Error(`Erro ao criar instalação: ${instalacaoError.message}`);
+      }
+
+      novaInstalacaoId = novaInstalacao.id;
+      console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacaoId);
     }
 
-    // 5.2 Log do permite_encaixe
-    const permiteEncaixe = cotacao.vistoria_permite_encaixe || false;
-    console.log(`[CriarInstalacaoPosPagamento] permite_encaixe: ${permiteEncaixe} (origem: cotacao.vistoria_permite_encaixe = ${cotacao.vistoria_permite_encaixe})`);
-
-    // 6. CRIAR INSTALAÇÃO (única, tipo instalacao, não entrada)
-    // Determinar o período válido (manha ou tarde)
-    const periodoValido = ['manha', 'tarde'].includes(periodoAgendado || '') ? periodoAgendado : null;
-    
-    const instalacaoData = {
-      contrato_id: contrato.id,
-      cotacao_id: cotacaoId,
-      associado_id: contrato.associado_id,
-      veiculo_id: veiculoIdFinal, // CORREÇÃO: Usar veiculoIdFinal que foi validado/recuperado
-      status: 'agendada', // ✅ Status correto para atribuição automática
-      data_agendada: dataAgendada,
-      hora_agendada: null, // Não usa mais horário específico
-      periodo: periodoValido, // ✅ Usa o período (manha/tarde)
-      cep: endereco.cep,
-      logradouro: endereco.logradouro,
-      numero: endereco.numero,
-      bairro: endereco.bairro,
-      cidade: endereco.cidade,
-      uf: endereco.estado,
-      endereco_latitude: endereco.latitude || null,
-      endereco_longitude: endereco.longitude || null,
-      observacoes: obsResponsavel,
-      permite_encaixe: permiteEncaixe, // ✅ Usando variável já logada
-      local_vistoria: 'cliente', // ✅ CRÍTICO: Define que é atendimento no cliente (não na base)
-      instalador_responsavel_id: null, // ✅ CRÍTICO: NULL para ser elegível à atribuição automática
-    };
-    
-    console.log('[CriarInstalacaoPosPagamento] Período:', periodoValido);
-    console.log('[CriarInstalacaoPosPagamento] Criando instalação:', JSON.stringify(instalacaoData));
-
-    const { data: novaInstalacao, error: instalacaoError } = await supabase
-      .from('instalacoes')
-      .insert(instalacaoData)
-      .select('id')
-      .single();
-
-    if (instalacaoError) {
-      console.error('[CriarInstalacaoPosPagamento] Erro ao criar instalação:', instalacaoError);
-      throw new Error(`Erro ao criar instalação: ${instalacaoError.message}`);
-    }
-
-    console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacao.id);
-
-    // 6.1 GERAR LANÇAMENTOS CC VENDEDOR EXTERNO (se aplicável)
+    // 6.1 GERAR LANÇAMENTOS CC VENDEDOR EXTERNO (roda INDEPENDENTE da criação de instalação)
     try {
-      // Buscar vendedor_id e tipo_instalacao da cotação
       const { data: cotacaoVendedor } = await supabase
         .from('cotacoes')
         .select('vendedor_id, tipo_instalacao, valor_adesao')
@@ -402,7 +410,6 @@ serve(async (req) => {
         .single();
 
       if (cotacaoVendedor?.vendedor_id) {
-        // Verificar se o vendedor é externo (tem perfil vendedor_externo)
         const { data: perfilVendedor } = await supabase
           .from('user_roles')
           .select('role')
@@ -413,7 +420,6 @@ serve(async (req) => {
         if (perfilVendedor) {
           console.log('[CriarInstalacaoPosPagamento] Vendedor externo detectado, gerando lançamentos CC...');
           
-          // Verificar se já existem lançamentos para este contrato (evitar duplicatas)
           const { data: lancExistente } = await supabase
             .from('cc_vendedor_lancamentos')
             .select('id')
@@ -424,7 +430,6 @@ serve(async (req) => {
           if (lancExistente && lancExistente.length > 0) {
             console.log('[CriarInstalacaoPosPagamento] Lançamentos CC já existem, pulando...');
           } else {
-            // Buscar configurações de comissão
             const { data: configs } = await supabase
               .from('configuracoes')
               .select('chave, valor')
@@ -457,7 +462,6 @@ serve(async (req) => {
             const volante = tipoInstalacao === 'volante' || tipoInstalacao === 'rota';
             const hoje = new Date().toISOString().slice(0, 10);
 
-            // Buscar nome do associado
             const { data: assocData } = await supabase
               .from('associados')
               .select('nome')
@@ -465,13 +469,11 @@ serve(async (req) => {
               .single();
             const nomeAssociado = assocData?.nome || 'Associado';
 
-            // Cenário 3: nenhum lançamento
             if (!cobrou && !volante) {
               console.log('[CriarInstalacaoPosPagamento] Cenário isenta+base: nenhum lançamento CC');
             } else {
               const inserts: any[] = [];
 
-              // Crédito adesão (cenários 1 e 4)
               if (cobrou) {
                 const comissaoAdesao = valorAdesao * pctAdesao;
                 inserts.push({
@@ -485,7 +487,6 @@ serve(async (req) => {
                 });
               }
 
-              // Débito volante (cenários 1 e 2)
               if (volante) {
                 inserts.push({
                   vendedor_id: cotacaoVendedor.vendedor_id,
@@ -499,7 +500,6 @@ serve(async (req) => {
                 });
               }
 
-              // Parcelas recorrentes (cenários 1, 2, 4)
               for (let i = 1; i <= parcelasRecorrente; i++) {
                 const valorBruto = tipoRecorrente === 'fixo' ? valorRecorrente : 0;
                 inserts.push({
@@ -527,47 +527,51 @@ serve(async (req) => {
       }
     } catch (ccErr) {
       console.error('[CriarInstalacaoPosPagamento] Erro ao processar CC vendedor externo:', ccErr);
-      // Não falhar a criação da instalação por causa de CC
     }
 
-    // 7. DISPARAR ATRIBUIÇÃO AUTOMÁTICA IMEDIATA
-    try {
-      await fetch(`${supabaseUrl}/functions/v1/cron-atribuir-tarefas`, {
-        method: 'POST',
-        headers: {
-          'Authorization': `Bearer ${serviceRoleKey}`,
-          'Content-Type': 'application/json',
-        },
-        body: JSON.stringify({}),
-      });
-      console.log('[CriarInstalacaoPosPagamento] ✓ Atribuição automática disparada imediatamente');
-    } catch (atribErr) {
-      console.warn('[CriarInstalacaoPosPagamento] Atribuição imediata falhou (será tentada no próximo cron):', atribErr);
-    }
-
-    // 8. NOTIFICAR ASSOCIADO via WhatsApp (instalação agendada)
-    try {
-      const periodoTexto = periodoValido === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)';
-      await supabase.functions.invoke('notificar-cliente', {
-        body: {
-          tipo: 'instalacao_agendada',
-          associado_id: contrato.associado_id,
-          dados: {
-            data: dataAgendada,
-            periodo: periodoTexto,
+    // 7. DISPARAR ATRIBUIÇÃO AUTOMÁTICA (só se instalação foi criada)
+    if (novaInstalacaoId) {
+      try {
+        await fetch(`${supabaseUrl}/functions/v1/cron-atribuir-tarefas`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${serviceRoleKey}`,
+            'Content-Type': 'application/json',
           },
-        },
-      });
-      console.log(`[CriarInstalacaoPosPagamento] ✓ Notificação 'instalacao_agendada' enviada ao associado ${contrato.associado_id}`);
-    } catch (notifErr) {
-      console.error('[CriarInstalacaoPosPagamento] Erro ao enviar notificação:', notifErr);
-      // Não falhar a criação da instalação por causa de notificação
+          body: JSON.stringify({}),
+        });
+        console.log('[CriarInstalacaoPosPagamento] ✓ Atribuição automática disparada');
+      } catch (atribErr) {
+        console.warn('[CriarInstalacaoPosPagamento] Atribuição imediata falhou:', atribErr);
+      }
+
+      // 8. NOTIFICAR ASSOCIADO via WhatsApp
+      try {
+        const periodoValido2 = ['manha', 'tarde'].includes(periodoAgendado || '') ? periodoAgendado : 'manha';
+        const periodoTexto = periodoValido2 === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)';
+        await supabase.functions.invoke('notificar-cliente', {
+          body: {
+            tipo: 'instalacao_agendada',
+            associado_id: contrato.associado_id,
+            dados: {
+              data: dataAgendada,
+              periodo: periodoTexto,
+            },
+          },
+        });
+        console.log(`[CriarInstalacaoPosPagamento] ✓ Notificação enviada ao associado`);
+      } catch (notifErr) {
+        console.error('[CriarInstalacaoPosPagamento] Erro ao enviar notificação:', notifErr);
+      }
     }
 
     return new Response(JSON.stringify({
       success: true,
-      instalacaoId: novaInstalacao.id,
-      message: 'Instalação criada com sucesso'
+      instalacaoId: novaInstalacaoId,
+      instalacaoCriada: !!novaInstalacaoId,
+      message: novaInstalacaoId 
+        ? 'Instalação criada com sucesso' 
+        : 'Lançamentos CC gerados (instalação será criada após aprovação do cadastro)'
     }), {
       status: 200,
       headers: { ...corsHeaders, 'Content-Type': 'application/json' }
