@@ -131,6 +131,7 @@ export function WhatsAppTestChat() {
       });
 
       // Simular payload Meta webhook para acionar o fluxo da IA
+      const messageId = `test_${Date.now()}`;
       const metaPayload = {
         object: 'whatsapp_business_account',
         entry: [{
@@ -141,7 +142,7 @@ export function WhatsAppTestChat() {
               metadata: { phone_number_id: telLimpo, display_phone_number: telLimpo },
               messages: [{
                 from: telComDDI,
-                id: `test_${Date.now()}`,
+                id: messageId,
                 timestamp: Math.floor(Date.now() / 1000).toString(),
                 type: 'text',
                 text: { body: texto },
@@ -153,18 +154,24 @@ export function WhatsAppTestChat() {
         }],
       };
 
-      const { error } = await supabase.functions.invoke('whatsapp-meta-webhook', {
+      // Fire-and-forget: não bloquear no resultado da edge function
+      // A resposta da IA virá via polling da tabela whatsapp_mensagens
+      supabase.functions.invoke('whatsapp-meta-webhook', {
         body: metaPayload,
+      }).then(({ error }) => {
+        if (error) {
+          console.warn('[TestChat] Invoke retornou erro (processamento pode continuar no backend):', error.message);
+        }
+      }).catch((err) => {
+        console.warn('[TestChat] Invoke falhou (processamento pode continuar no backend):', err);
       });
-
-      if (error) throw error;
 
       // Atualizar status local
       setMensagens(prev => prev.map(m =>
         m.id === msgLocal.id ? { ...m, status: 'enviada' } : m
       ));
 
-      toast.success('Mensagem enviada para o fluxo da IA');
+      toast.success('Mensagem enviada para o fluxo da IA. Aguarde a resposta...');
     } catch (err: any) {
       toast.error(`Erro ao enviar: ${err.message}`);
       // Marcar como erro

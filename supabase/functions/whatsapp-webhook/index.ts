@@ -1916,7 +1916,7 @@ async function saveWhatsAppLog(
   nomeContato?: string
 ) {
   await supabase.from("whatsapp_mensagens").insert({
-    instancia_id: instanciaId,
+    instancia_id: instanciaId && instanciaId !== "meta_delegate" ? instanciaId : null,
     telefone,
     nome_contato: nomeContato || null,
     tipo: tipo || "text",
@@ -2851,8 +2851,13 @@ serve(async (req) => {
     // Buscar instância primeiro (precisamos para download de mídia)
     let instancia: any;
     if (isMetaDelegate) {
-      // Delegação Meta: usar instância sintética (IA habilitada, sem Evolution API)
-      instancia = { id: "meta_delegate", api_url: "", instance_name: "", ia_habilitada: true };
+      // Delegação Meta: buscar instância principal para ter um ID válido para logs
+      const { data: instPrincipal } = await supabase
+        .from("whatsapp_instancias")
+        .select("id")
+        .eq("principal", true)
+        .maybeSingle();
+      instancia = { id: instPrincipal?.id || null, api_url: "", instance_name: "", ia_habilitada: true };
     } else {
       const { data: instanciaDb } = await supabase
         .from("whatsapp_instancias")
