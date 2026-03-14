@@ -252,6 +252,10 @@ export default function CotadorPage() {
   // Valor de adesão customizado pelo consultor
   const [valorAdesaoCustom, setValorAdesaoCustom] = useState<number | null>(null);
 
+  // Cenário de adesão para vendedor externo
+  const [cenarioExterno, setCenarioExterno] = useState<string | null>(null);
+  const [tipoInstalacao, setTipoInstalacao] = useState<'rota' | 'base' | null>(null);
+
   // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
   const [buscaLead, setBuscaLead] = useState('');
