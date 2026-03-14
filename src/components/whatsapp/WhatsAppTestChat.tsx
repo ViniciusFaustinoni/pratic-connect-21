@@ -158,14 +158,8 @@ export function WhatsAppTestChat() {
         m.id === msgLocal.id ? { ...m, status: 'enviada' } : m
       ));
 
-      // Buscar número do remetente (o número conectado na Evolution, cadastrado como associado)
-      // Invocar whatsapp-webhook diretamente com payload _meta_delegate
-      // para simular a entrada do associado (pois o webhook da Meta não dispara para mensagens da Evolution)
-      const { data: senderData } = await supabase.functions.invoke('whatsapp-get-sender', {
-        body: {},
-      });
-
-      const senderNumber = senderData?.sender?.replace(/\D/g, '');
+      // Usar o número do sender (Evolution) já carregado para simular entrada do associado
+      // O webhook da Meta não dispara para mensagens da Evolution, então invocamos diretamente
 
       if (senderNumber) {
         console.log(`[TestChat] Simulando entrada da IA com sender: ${senderNumber}`);
