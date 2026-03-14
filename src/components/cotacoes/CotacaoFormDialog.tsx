@@ -1608,7 +1608,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
             {/* BLOCO 2.5: TAXA DE FILIAÇÃO */}
             <div>
-              <Label className="text-sm font-semibold">Taxa de Filiação *</Label>
+              <Label className="text-sm font-semibold">Taxa de Filiação {!isCenarioIsento && '*'}</Label>
               <FormField
                 control={form.control}
                 name="valor_adesao"
@@ -1622,16 +1622,72 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           adesaoEditadaManualmente.current = true;
                         }}
                         placeholder="R$ 0,00"
+                        disabled={isCenarioIsento}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Valor sugerido: 1% da FIPE (mín. R$ 100). Altere conforme necessário.
-              </p>
+              {isCenarioIsento ? (
+                <p className="text-xs text-green-600 mt-1 font-medium">
+                  Adesão isenta conforme cenário selecionado.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Valor sugerido: 1% da FIPE (mín. R$ 100). Altere conforme necessário.
+                </p>
+              )}
             </div>
+
+            {/* BLOCO 2.6: CENÁRIO VENDEDOR EXTERNO */}
+            {isVendedorExterno && (
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Cenário de Adesão e Instalação *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: 'cobra_rota' as CenarioExterno, label: 'Cobra Adesão + Rota', desc: 'Cliente paga adesão, instalação em rota' },
+                    { value: 'cobra_base' as CenarioExterno, label: 'Cobra Adesão + Base', desc: 'Cliente paga adesão, instalação na base' },
+                    { value: 'isenta_rota' as CenarioExterno, label: 'Isenta Adesão + Rota', desc: 'Sem adesão, instalação em rota' },
+                    { value: 'isenta_base' as CenarioExterno, label: 'Isenta Adesão + Base', desc: 'Sem adesão, instalação na base' },
+                  ]).map((cenario) => (
+                    <button
+                      key={cenario.value}
+                      type="button"
+                      onClick={() => {
+                        setCenarioExterno(cenario.value);
+                        if (cenario.value.startsWith('isenta')) {
+                          form.setValue('valor_adesao', 0);
+                          adesaoEditadaManualmente.current = true;
+                        } else if (cenarioExterno?.startsWith('isenta')) {
+                          // Voltando de isento para cobra: recalcular adesão
+                          adesaoEditadaManualmente.current = false;
+                          if (valorFipe && valorFipe > 0) {
+                            const adesaoCalculada = Math.max(valorFipe * 0.01, 100);
+                            form.setValue('valor_adesao', Math.round(adesaoCalculada * 100) / 100);
+                          }
+                        }
+                      }}
+                      className={cn(
+                        'p-3 rounded-lg border text-left transition-all text-sm',
+                        cenarioExterno === cenario.value
+                          ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                          : 'border-border hover:border-primary/50'
+                      )}
+                    >
+                      <span className="font-medium block">{cenario.label}</span>
+                      <span className="text-xs text-muted-foreground">{cenario.desc}</span>
+                    </button>
+                  ))}
+                </div>
+                {!cenarioExterno && (
+                  <p className="text-xs text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Selecione um cenário para continuar
+                  </p>
+                )}
+              </div>
+            )}
 
             <Separator />
 
