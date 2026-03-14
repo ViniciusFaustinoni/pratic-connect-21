@@ -108,6 +108,18 @@
 
 ---
 
+## Correção Triggers Enum Mismatch (status_instalacao → status_servico) — ✅ Implementado
+
+### Causa Raiz
+Triggers `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` faziam `status = NEW.status` direto, mas `NEW.status` é `status_instalacao` e `servicos.status` é `status_servico` — erro PostgreSQL 42804 abortava toda atribuição automática.
+
+### Correções Aplicadas
+1. **Função `map_to_status_servico(text)`**: Mapeamento explícito e imutável de qualquer texto para `status_servico`, com fallback seguro.
+2. **Triggers corrigidos**: Ambos agora usam `public.map_to_status_servico(NEW.status::text)` em vez de atribuição direta.
+3. **Observabilidade**: `processar-encaixes-automaticos` agora loga `code/message/details/hint` do erro antes de classificar como concorrência.
+
+---
+
 ## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
 
 ### Bloqueios de adesão zero removidos
