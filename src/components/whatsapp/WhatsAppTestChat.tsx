@@ -31,13 +31,13 @@ export function WhatsAppTestChat() {
   const scrollRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
-  // Buscar config da Meta para pegar o número destino
+  // Buscar config da Meta e número real do WhatsApp da IA
   useEffect(() => {
     async function carregarConfig() {
       try {
         const { data, error } = await supabase
           .from('whatsapp_meta_config')
-          .select('phone_number_id, ativo')
+          .select('phone_number_id, ativo, numero_telefone')
           .limit(1)
           .maybeSingle();
 
@@ -45,12 +45,19 @@ export function WhatsAppTestChat() {
 
         if (data) {
           setMetaAtiva(!!data.ativo);
-          const numero = data.phone_number_id || '';
+          // Usar o número real do WhatsApp da IA (não o phone_number_id da Meta)
+          const numero = (data as any).numero_telefone || '5521969379982';
           setTelefoneDestino(numero);
           setTelefoneEditavel(numero);
+        } else {
+          // Fallback: número fixo da IA
+          setTelefoneDestino('5521969379982');
+          setTelefoneEditavel('5521969379982');
         }
       } catch (err) {
         console.error('[TestChat] Erro ao carregar config Meta:', err);
+        setTelefoneDestino('5521969379982');
+        setTelefoneEditavel('5521969379982');
       } finally {
         setCarregandoConfig(false);
       }
