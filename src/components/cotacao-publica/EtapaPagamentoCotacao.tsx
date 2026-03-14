@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { CreditCard, QrCode, Loader2, Check, Copy, FileText, AlertCircle, RefreshCw, Calendar, Clock, MapPin, Wrench, ExternalLink, Shield } from 'lucide-react';
+import { CreditCard, QrCode, Loader2, Check, Copy, FileText, AlertCircle, RefreshCw, Calendar, Clock, MapPin, Wrench, ExternalLink, Shield, PartyPopper } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
