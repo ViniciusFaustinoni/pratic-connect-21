@@ -52,7 +52,7 @@ interface DadosAtivacao {
   associado_id: string;
   contrato_id: string;
   valor_adesao: number;
-  tipo_instalacao: 'base' | 'volante';
+  tipo_instalacao: 'base' | 'volante' | 'rota';
   nome_associado: string;
 }
 
