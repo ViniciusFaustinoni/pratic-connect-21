@@ -690,6 +690,7 @@ const App = () => (
                 <Route path="integracoes/whatsapp" element={<IntegracaoWhatsApp />} />
                 <Route path="integracoes/api-keys" element={<IntegracaoApiKeys />} />
                 <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
+                <Route path="integracoes/sga-hinova" element={<IntegracaoSGAHinova />} />
                 <Route path="rateio" element={<RateioConfig />} />
                 <Route path="sistema" element={<Sistema />} />
               </Route>
