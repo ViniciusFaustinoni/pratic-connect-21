@@ -349,6 +349,7 @@ serve(async (req) => {
     const template_params = body.template_params;
     const template_button_params = body.template_button_params;
     const allow_text = body.allow_text === true;
+    const force_provider = body.force_provider; // 'evolution' | 'meta_oficial' | undefined
 
     if (!telefone || !mensagem) {
       return new Response(
