@@ -1023,11 +1023,12 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
           novaVistoria = vistoriaComVistoriador;
         }
 
-        // Atualizar serviço com vistoria_origem_id
-        await supabase
+        // Atualizar serviço com vistoria_origem_id (com checagem de erro)
+        const { error: updateVistErr } = await supabase
           .from('servicos')
           .update({ vistoria_origem_id: novaVistoria.id })
           .eq('id', servicoId);
+        if (updateVistErr) console.error('[useVistoriaCompletaPorServico] Erro ao vincular vistoria_origem_id (nova):', updateVistErr);
 
         console.log('[useVistoriaCompletaPorServico] Vistoria criada com sucesso:', novaVistoria.id);
         return novaVistoria;
