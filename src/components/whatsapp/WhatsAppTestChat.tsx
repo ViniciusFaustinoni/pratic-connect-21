@@ -195,7 +195,7 @@ export function WhatsAppTestChat() {
         <CardHeader className="pb-3">
           <CardTitle className="text-sm font-medium flex items-center gap-2">
             <Phone className="h-4 w-4" />
-            Número de Destino (Meta)
+            Número da IA (destino real)
           </CardTitle>
         </CardHeader>
         <CardContent>
@@ -203,7 +203,7 @@ export function WhatsAppTestChat() {
             <Input
               value={telefoneEditavel}
               onChange={(e) => setTelefoneEditavel(e.target.value)}
-              placeholder="5511999999999"
+              placeholder="5521969379982"
               className="font-mono"
             />
             <Button
@@ -221,7 +221,7 @@ export function WhatsAppTestChat() {
             </Badge>
             {telefoneDestino && (
               <span className="text-xs text-muted-foreground font-mono">
-                Destino: {telefoneDestino}
+                Evolution → {telefoneDestino}
               </span>
             )}
           </div>
