@@ -324,7 +324,7 @@ export function useDuplicatePlan() {
       if (fetchError) throw fetchError;
 
       // Create new plan
-      const { id: _, created_at, updated_at, planos_beneficios, ...planData } = original;
+      const { id: _, created_at, updated_at, planos_beneficios, planos_regioes, ...planData } = original;
       const newPlan = {
         ...planData,
         nome: `${planData.nome} (cópia)`,
