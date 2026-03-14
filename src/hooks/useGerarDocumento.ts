@@ -143,6 +143,16 @@ export function useGerarDocumento() {
       return '';
     });
 
+    // Remover bloco "Serviços:" residual — qualquer contexto HTML
+    resultado = resultado.replace(
+      /<(p|div|td|li|tr)[^>]*>[\s\S]*?Servi[çc]os\s*:[\s\S]*?<\/\1>/gi,
+      ''
+    );
+    resultado = resultado.replace(
+      /Servi[çc]os\s*:\s*[^\n<]*/gi,
+      ''
+    );
+
     return resultado;
   };
 
