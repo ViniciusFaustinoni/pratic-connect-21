@@ -1,0 +1,1 @@
+UPDATE documento_templates SET is_default_autentique = false, updated_at = now() WHERE codigo = 'CONTRATO_ADESAO_V1' AND is_default_autentique = true;
