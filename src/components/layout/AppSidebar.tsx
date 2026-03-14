@@ -625,6 +625,19 @@ export function AppSidebar() {
     }
   }, [location.pathname]);
 
+  // Re-sync openGroups when permissions finish loading
+  useEffect(() => {
+    if (!isDataLoading && visibleGroups.length > 0) {
+      setOpenGroups(prev => {
+        const activeIds = visibleGroups
+          .filter(g => isGroupActive(g.items))
+          .map(g => g.id);
+        const merged = [...new Set([...prev, ...activeIds])];
+        return merged;
+      });
+    }
+  }, [isDataLoading, visibleGroups.length]);
+
   return (
     <Sidebar collapsible="icon" className="border-r border-border bg-sidebar">
       <SidebarHeader className="border-b border-sidebar-border p-4">
