@@ -128,3 +128,6 @@ verify_jwt = false
 
 [functions.parse-elegibilidade-xlsx]
 verify_jwt = false
+
+[functions.whatsapp-get-sender]
+verify_jwt = false
