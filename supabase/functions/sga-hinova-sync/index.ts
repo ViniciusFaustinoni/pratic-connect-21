@@ -1026,7 +1026,7 @@ serve(async (req) => {
                 .eq('status', 'success')
                 .not('response_payload', 'is', null)
                 .order('created_at', { ascending: false })
-                .limit(200);
+                .limit(20);
 
               const nomeAtual = (associado.nome || '').trim().toLowerCase();
               const emailAtual = (associado.email || '').trim().toLowerCase();
