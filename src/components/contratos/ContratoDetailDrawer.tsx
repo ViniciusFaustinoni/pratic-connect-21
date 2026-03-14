@@ -755,23 +755,6 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                   </Button>
                 )}
 
-                {/* Ativar - apenas Diretor/Analista de Cadastro e após pagamento OK */}
-                {contrato.status === 'assinado' && podeAtivarProposta && (
-                  contrato.cotacoes?.status_contratacao === 'pagamento_ok' ? (
-                    <Button onClick={handleAtivar} className="w-full">
-                      <CheckCircle className="mr-2 h-4 w-4" />
-                      Ativar Proposta
-                    </Button>
-                  ) : (
-                    <div className="p-3 bg-muted rounded-lg text-sm text-muted-foreground flex items-start gap-2">
-                      <Info className="h-4 w-4 mt-0.5 shrink-0" />
-                      <div>
-                        <p className="font-medium">Ativação pendente</p>
-                        <p>A proposta só poderá ser ativada após a confirmação do pagamento.</p>
-                      </div>
-                    </div>
-                  )
-                )}
               </section>
             </TabsContent>
 
