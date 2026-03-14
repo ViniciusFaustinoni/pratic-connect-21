@@ -234,6 +234,20 @@ export function useUpdatePlan() {
         }
       }
 
+      // Update region links
+      if (regioes !== undefined) {
+        await supabase.from('planos_regioes').delete().eq('plano_id', id);
+        if (regioes.length > 0) {
+          const { error: regioesError } = await supabase
+            .from('planos_regioes')
+            .insert(regioes.map(regiaoId => ({
+              plano_id: id,
+              regiao_id: regiaoId,
+            })));
+          if (regioesError) throw regioesError;
+        }
+      }
+
       return plan;
     },
     onSuccess: () => {
