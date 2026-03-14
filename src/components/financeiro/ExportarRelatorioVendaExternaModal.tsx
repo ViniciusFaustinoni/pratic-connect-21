@@ -30,6 +30,7 @@ export function ExportarRelatorioVendaExternaModal({ open, onClose, vendedores }
   const handleExportar = async () => {
     setLoading(true);
     try {
+      // 1) Fetch lancamentos in period
       let query = supabase
         .from('cc_vendedor_lancamentos')
         .select('*')
@@ -44,8 +45,30 @@ export function ExportarRelatorioVendaExternaModal({ open, onClose, vendedores }
 
       const { data, error } = await query;
       if (error) throw error;
-
       const lancamentos = (data || []) as any[];
+
+      // 2) Fetch lancamentos BEFORE period for opening balance
+      let queryAntes = supabase
+        .from('cc_vendedor_lancamentos')
+        .select('vendedor_id, tipo, valor_liquido, status')
+        .lt('data_lancamento', dataInicio)
+        .neq('status', 'cancelado');
+
+      if (vendedorId !== 'todos') {
+        queryAntes = queryAntes.eq('vendedor_id', vendedorId);
+      }
+
+      const { data: dataAntes, error: errorAntes } = await queryAntes;
+      if (errorAntes) throw errorAntes;
+      const lancamentosAntes = (dataAntes || []) as any[];
+
+      // Compute opening balances per vendor
+      const saldoInicial: Record<string, number> = {};
+      lancamentosAntes.forEach(l => {
+        if (!saldoInicial[l.vendedor_id]) saldoInicial[l.vendedor_id] = 0;
+        const val = Number(l.valor_liquido);
+        saldoInicial[l.vendedor_id] += l.tipo === 'credito' ? val : -val;
+      });
 
       // Group by vendor
       const byVendedor: Record<string, any[]> = {};
@@ -57,41 +80,72 @@ export function ExportarRelatorioVendaExternaModal({ open, onClose, vendedores }
       const nomeMap: Record<string, string> = {};
       vendedores.forEach(v => { nomeMap[v.vendedor_id] = v.vendedor_nome; });
 
+      // Dashboard card calculations (within period, non-cancelled)
+      const active = lancamentos.filter(l => l.status !== 'cancelado');
+      const aPagar = active.filter(l => l.status === 'a_pagar' && l.tipo === 'credito').reduce((s, l) => s + Number(l.valor_liquido), 0);
+      const antecipacoes = active.filter(l => l.status === 'antecipado').reduce((s, l) => s + Number(l.valor_liquido), 0);
+      const debitosPendentes = active.filter(l => l.status === 'em_abatimento' && l.tipo === 'debito').reduce((s, l) => s + Number(l.valor_liquido), 0);
+      const totalPago = active.filter(l => l.status === 'pago' && l.tipo === 'credito').reduce((s, l) => s + Number(l.valor_liquido), 0);
+
+      // Build PDF
       const doc = new jsPDF();
       const pageWidth = doc.internal.pageSize.getWidth();
 
       // Header
       doc.setFontSize(16);
+      doc.setFont('helvetica', 'bold');
       doc.text('Relatório de Venda Externa', pageWidth / 2, 20, { align: 'center' });
       doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
       doc.text(`Período: ${format(new Date(dataInicio), 'dd/MM/yyyy')} a ${format(new Date(dataFim), 'dd/MM/yyyy')}`, pageWidth / 2, 28, { align: 'center' });
       doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, pageWidth / 2, 34, { align: 'center' });
 
-      let y = 44;
+      // Dashboard cards as 2x2 grid table
+      autoTable(doc, {
+        startY: 42,
+        head: [['Indicador', 'Valor']],
+        body: [
+          ['A Pagar (Créditos)', formatarMoeda(aPagar)],
+          ['Antecipações em Aberto', formatarMoeda(antecipacoes)],
+          ['Débitos Pendentes', formatarMoeda(debitosPendentes)],
+          ['Total Pago no Período', formatarMoeda(totalPago)],
+        ],
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [59, 130, 246] },
+        columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+        margin: { left: 14, right: 14 },
+        theme: 'grid',
+      });
 
-      // Global summary
-      const totalCreditos = lancamentos.filter(l => l.tipo === 'credito' && l.status !== 'cancelado').reduce((s, l) => s + Number(l.valor_liquido), 0);
-      const totalDebitos = lancamentos.filter(l => l.tipo === 'debito' && l.status !== 'cancelado').reduce((s, l) => s + Number(l.valor_liquido), 0);
-      const totalPago = lancamentos.filter(l => l.status === 'pago' && l.tipo === 'credito').reduce((s, l) => s + Number(l.valor_liquido), 0);
+      let y = (doc as any).lastAutoTable.finalY + 12;
 
-      doc.setFontSize(12);
-      doc.text('Resumo Geral', 14, y); y += 6;
-      doc.setFontSize(9);
-      doc.text(`Total Créditos: ${formatarMoeda(totalCreditos)}`, 14, y); y += 5;
-      doc.text(`Total Débitos: ${formatarMoeda(totalDebitos)}`, 14, y); y += 5;
-      doc.text(`Total Pago: ${formatarMoeda(totalPago)}`, 14, y); y += 10;
-
-      // Per vendor
+      // Per vendor sections
       for (const [vid, items] of Object.entries(byVendedor)) {
-        if (y > 250) { doc.addPage(); y = 20; }
+        if (y > 230) { doc.addPage(); y = 20; }
 
         const nome = nomeMap[vid] || 'Vendedor';
+        const saldoIni = saldoInicial[vid] || 0;
+
+        // Compute period totals for this vendor
+        const vendorActive = items.filter((l: any) => l.status !== 'cancelado');
+        const creditos = vendorActive.filter((l: any) => l.tipo === 'credito').reduce((s: number, l: any) => s + Number(l.valor_liquido), 0);
+        const debitos = vendorActive.filter((l: any) => l.tipo === 'debito').reduce((s: number, l: any) => s + Number(l.valor_liquido), 0);
+        const saldoFinal = saldoIni + creditos - debitos;
+        const vendorPago = vendorActive.filter((l: any) => l.status === 'pago' && l.tipo === 'credito').reduce((s: number, l: any) => s + Number(l.valor_liquido), 0);
+
+        // Vendor header
         doc.setFontSize(11);
         doc.setFont('helvetica', 'bold');
         doc.text(nome, 14, y); y += 6;
-        doc.setFont('helvetica', 'normal');
 
-        const tableData = items.map(l => [
+        // Balance summary row
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Saldo Inicial: ${formatarMoeda(saldoIni)}   |   Saldo Final: ${formatarMoeda(saldoFinal)}   |   Total Pago: ${formatarMoeda(vendorPago)}`, 14, y);
+        y += 6;
+
+        // Lancamentos table
+        const tableData = items.map((l: any) => [
           format(new Date(l.data_lancamento), 'dd/MM/yy'),
           l.descricao.substring(0, 50),
           l.tipo === 'credito' ? 'Crédito' : 'Débito',
@@ -110,7 +164,16 @@ export function ExportarRelatorioVendaExternaModal({ open, onClose, vendedores }
           margin: { left: 14 },
         });
 
-        y = (doc as any).lastAutoTable.finalY + 10;
+        y = (doc as any).lastAutoTable.finalY + 12;
+      }
+
+      // Footer with page numbers
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
       }
 
       doc.save(`relatorio-venda-externa-${dataInicio}-a-${dataFim}.pdf`);
