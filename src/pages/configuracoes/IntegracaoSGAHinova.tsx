@@ -202,7 +202,7 @@ export default function IntegracaoSGAHinova() {
             <Send className="h-4 w-4" /> Pendentes ({pendingVehicles.length})
           </TabsTrigger>
           <TabsTrigger value="health" className="gap-1.5">
-            <Wifi className="h-4 w-4" /> Health Checks
+            <HeartPulse className="h-4 w-4" /> Health Check
           </TabsTrigger>
         </TabsList>
 
