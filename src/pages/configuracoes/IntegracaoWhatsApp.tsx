@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, Wifi, Bot, FileText, Settings, FlaskConical } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Wifi, Bot, FileText, Settings, FlaskConical, HeartPulse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
@@ -12,6 +12,7 @@ import { WhatsAppStats } from '@/components/integracoes/WhatsAppStats';
 import { WhatsAppMetaTemplates } from '@/components/integracoes/WhatsAppMetaTemplates';
 import { WhatsAppConversasPainel } from '@/components/integracoes/WhatsAppConversasPainel';
 import { WhatsAppTestChat } from '@/components/whatsapp/WhatsAppTestChat';
+import { IntegracaoHealthPanel } from '@/components/integracoes/IntegracaoHealthPanel';
 
 export default function IntegracaoWhatsApp() {
   const navigate = useNavigate();
