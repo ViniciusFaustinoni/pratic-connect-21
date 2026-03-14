@@ -205,7 +205,7 @@ export function useAvaliarAditivos(
         autoSelecionado: regrasBatem,
       };
     });
-  }, [aditivos, veiculo, fipeLimite, configRastreador, beneficios]);
+  }, [aditivos, veiculo, fipeLimite, configRastreador, beneficios, contrato, sinistro]);
 
   return {
     aditivosAvaliados: resultado,
