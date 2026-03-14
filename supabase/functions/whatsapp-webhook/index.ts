@@ -1821,7 +1821,7 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
       Authorization: `Bearer ${LOVABLE_API_KEY}`,
     },
     body: JSON.stringify(body),
-    signal: AbortSignal.timeout(25000), // 25 segundos máximo por chamada
+    signal: AbortSignal.timeout(55000), // 55 segundos máximo por chamada
   });
 
   if (!response.ok) {
