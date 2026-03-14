@@ -1,25 +1,13 @@
 
 
-# Fix: Exportar PDF completo do Dashboard Executivo
+## Exibição Progressiva de Planos + Campo de Região — ✅ Implementado
 
-## Problema
-O botão "Exportar" gera um PDF com apenas 6 KPIs básicos e a evolução mensal. Faltam todos os outros dados visíveis no dashboard: indicadores operacionais, distribuição por plano, rateio, métricas de tempo, rastreadores por portador.
+### Alterações realizadas
 
-## Solução
-Expandir o PDF exportado para incluir todas as seções de dados disponíveis no dashboard:
-
-**Arquivo:** `src/pages/diretoria/DiretoriaDashboard.tsx` (linhas 292-340)
-
-Adicionar ao PDF após os KPIs e evolução mensal:
-
-1. **Indicadores Operacionais** - tabela com instalações e assistências do período (`operacionais`)
-2. **Distribuição por Plano** - tabela com nome do plano e quantidade de associados (`distribuicao`)
-3. **Rateio Atual** - valor da cota e status do rateio (`rateioAtual`)
-4. **Métricas de Tempo** - tempos médios de processos (`metricasTempo`)
-5. **Rastreadores por Portador** - distribuição dos rastreadores (`rastreadoresPortador`)
-
-Cada seção será adicionada como uma tabela `autoTable` com título, verificando se os dados existem antes de incluir. Páginas adicionais serão criadas automaticamente pelo jsPDF quando necessário.
-
-## Arquivos a modificar
-1. `src/pages/diretoria/DiretoriaDashboard.tsx` — expandir lógica do onClick do botão Exportar
-
+1. **Removidos 5 resets desnecessários** de `setCotacaoCalculada(false)` em `Cotador.tsx` — mantido apenas no `limparTudo`
+2. **Adicionado `useEffect` auto-display** — seta `cotacaoCalculada = true` quando `valorFipe > 0` e `planosDB` tem resultados
+3. **Adicionado campo Região** (RJ, Lagos, SP) no formulário, antes de "Uso para aplicativo"
+4. **Substituído hardcode `regiao: 'rj'`** por estado `regiao` no `parametrosPlanos`
+5. **Auto-atualização de tab** — quando lista de planos muda, tab selecionada é revalidada
+6. **`regiao` incluída** no payload de salvar cotação (`CriarCotacaoPayload` + `useCotacao.ts`)
+7. **`regiao` resetada** no `limparTudo` para `'rj'`
