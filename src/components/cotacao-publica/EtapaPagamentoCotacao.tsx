@@ -243,7 +243,7 @@ export function EtapaPagamentoCotacao({
         // Criar instalação pós-adesão zerada
         try {
           await publicSupabase.functions.invoke('criar-instalacao-pos-pagamento', {
-            body: { cotacaoId },
+            body: { cotacaoId, skipPaymentCheck: true },
           });
         } catch (instErr) {
           console.error('[EtapaPagamento] Erro ao criar instalação (adesão zerada):', instErr);

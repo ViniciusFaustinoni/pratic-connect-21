@@ -520,7 +520,9 @@ export function usePropostasPendentes() {
       
       const temVistoriaBaseRealizada = !!vistoriaBaseInfo;
       
-      if (!instalacaoInfo) {
+      // Permitir propostas COM autovistoria ou vistoria na base mesmo sem instalação
+      // (a instalação será criada pelo cadastro após aprovação)
+      if (!instalacaoInfo && !temAutovistoria && !temVistoriaBaseRealizada) {
         return null;
       }
 
