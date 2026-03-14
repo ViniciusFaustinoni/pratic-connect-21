@@ -44,7 +44,7 @@ export default function IntegracaoWhatsApp() {
 
       {/* Tabs organizadas */}
       <Tabs defaultValue="conexao" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
           <TabsTrigger value="conexao" className="gap-2">
             <Wifi className="h-4 w-4" />
             <span className="hidden sm:inline">Conexão</span>
@@ -60,6 +60,10 @@ export default function IntegracaoWhatsApp() {
           <TabsTrigger value="testes" className="gap-2">
             <FlaskConical className="h-4 w-4" />
             <span className="hidden sm:inline">Testes</span>
+          </TabsTrigger>
+          <TabsTrigger value="health" className="gap-2">
+            <HeartPulse className="h-4 w-4" />
+            <span className="hidden sm:inline">Health</span>
           </TabsTrigger>
         </TabsList>
 
