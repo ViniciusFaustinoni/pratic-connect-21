@@ -1,90 +1,35 @@
 
+Objetivo: eliminar o erro de upload de fotos (FK 23503), impedir troca silenciosa para usuário errado no app do instalador e garantir que a tarefa não “desapareça”.
 
-## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
+1) Diagnóstico consolidado (o que está acontecendo)
+- Upload falha em `vistoria_fotos` quando `vistoria_id` não existe mais em `vistorias` (hook atual insere direto sem revalidar pai).
+- O app pode abrir com sessão de outro usuário no mesmo navegador (cliente Supabase usa `localStorage` compartilhado), causando “entrou como diretor”.
+- Se a tarefa sair do retorno da RPC (filtro atual), a aba “Atual” fica vazia mesmo com serviço ainda ativo.
 
-### Causas Raiz Identificadas
-1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
-2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
-3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
+2) Correção do fluxo de vistoria/fotos (robustez)
+- `src/hooks/useVistoriaCompleta.ts` (`useUploadFotoVistoriaCompleta`):
+  - Validar existência da vistoria antes de inserir foto.
+  - Em `23503`, reconsultar/recriar vínculo da vistoria e tentar upload 1x (retry controlado).
+  - Trocar sequência para evitar inconsistência (garantir DB antes de remover foto antiga do storage).
+- `src/hooks/useVistorias.ts` (`useVistoriaCompletaPorServico`):
+  - Após criar vistoria, confirmar leitura imediata da linha criada.
+  - Validar update de `servicos.vistoria_origem_id` (hoje sem checagem de erro).
+  - Preencher `instalacao_id` quando houver `instalacao_origem_id` para manter rastreabilidade.
 
-### Correções Aplicadas
+3) Correção de sessão/troca de usuário no app instalador
+- `src/pages/instalador/InstaladorLogin.tsx` + `src/contexts/AuthContext.tsx`:
+  - Travar sessão ativa por usuário no app instalador (detectar troca inesperada em rota de execução).
+  - Ao detectar mismatch em tarefa em andamento: bloquear tela e forçar relogin explícito.
+  - Limpar cache de queries sensíveis ao trocar usuário (evitar estado “sem tarefa” herdado).
 
-1. **`sga-hinova-sync/index.ts`**:
-   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
-   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
+4) Recuperação de tarefa “sumida”
+- SQL migration da RPC `buscar_tarefa_atual_profissional`:
+  - Ajustar filtro para não ocultar tarefa ativa indevidamente.
+  - Manter prioridade por `em_andamento/em_analise/em_rota/agendada`.
+- `src/hooks/useTarefaAtual.ts`:
+  - Fallback: se RPC vier vazia, buscar em `servicos` por `profissional_id` + status ativos e retornar a mais prioritária.
 
-2. **`cron-sga-retry/index.ts`**:
-   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
-
----
-
-## Painel de Monitoramento SGA Hinova — ✅ Implementado
-
-### O que foi criado
-
-1. **Página `/configuracoes/integracoes/sga-hinova`** com:
-   - Status de conexão com API Hinova (teste em tempo real)
-   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
-   - Logs recentes dos últimos 50 registros
-   - Veículos pendentes (ativos não sincronizados) com envio individual
-   - Histórico de health checks
-
-2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
-
-3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
-
-4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
-
----
-
-## Health Check Universal para Todas as Integrações — ✅ Implementado
-
-### O que foi criado
-
-1. **Tabela `integracoes_health_checks`** (genérica):
-   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
-   - Dados existentes do SGA migrados automaticamente
-   - RLS: leitura para autenticados, escrita para service_role
-
-2. **Edge Function `cron-integracoes-health-check`**:
-   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
-   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
-   - Notifica admins (role `diretor`) se qualquer integração falhar
-   - Grava resultado por integração na tabela genérica
-
-3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
-   - Props: `integracao` (slug) e `titulo` (opcional)
-   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
-   - Botão "Testar agora" invoca a edge function para a integração específica
-
-4. **Hook `useIntegracaoHealthCheck(integracao)`**:
-   - Busca histórico filtrado por integração
-   - Mutation `testNow` para teste manual
-   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
-
-5. **Integração nas páginas**:
-   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
-   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
-   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
-
-6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
-   ```sql
-   select cron.schedule(
-     'integracoes-health-check-3x-dia',
-     '0 8,13,18 * * *',
-     $$ select net.http_post(
-       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
-       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
-       body:='{}'::jsonb
-     ) as request_id; $$
-   );
-   ```
-
-### Arquivos criados/modificados
-- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
-- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
-- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
-- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
-- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
-- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
-- `supabase/config.toml` — verify_jwt para nova function
+5) Validação final
+- Testar E2E: iniciar tarefa → criar/obter vistoria → enviar várias fotos seguidas → refresh de tela → manter mesmo usuário e mesma tarefa.
+- Testar troca de conta no mesmo navegador (diretor ↔ vistoriador) e garantir bloqueio/mensagem clara.
+- Confirmar que tarefas voltam a aparecer em “Atual” após relogin correto.
