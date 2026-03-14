@@ -1916,7 +1916,7 @@ async function saveWhatsAppLog(
   nomeContato?: string
 ) {
   await supabase.from("whatsapp_mensagens").insert({
-    instancia_id: instanciaId,
+    instancia_id: instanciaId && instanciaId !== "meta_delegate" ? instanciaId : null,
     telefone,
     nome_contato: nomeContato || null,
     tipo: tipo || "text",
