@@ -1395,16 +1395,7 @@ serve(async (req) => {
           
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
           await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', 'Placa duplicada - código não recuperado', codigoAssociadoHinova);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Placa já cadastrada no Hinova. Código não recuperado automaticamente.',
-              step: 'veiculo',
-              codigo_associado_hinova: codigoAssociadoHinova,
-              details: veiculoData
-            }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          return;
         }
       } else {
         // Verificar se o erro indica que o codigo_associado é inválido no Hinova
