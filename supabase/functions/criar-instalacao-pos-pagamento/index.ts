@@ -26,7 +26,7 @@ serve(async (req) => {
     });
 
     const body: CriarInstalacaoRequest = await req.json();
-    const { cotacaoId } = body;
+    const { cotacaoId, skipPaymentCheck } = body;
 
     console.log('[CriarInstalacaoPosPagamento] Iniciando para cotação:', cotacaoId);
 
