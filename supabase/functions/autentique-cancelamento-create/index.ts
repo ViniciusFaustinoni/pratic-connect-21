@@ -153,7 +153,7 @@ ${conteudoHTML}
       htmlContent = `<!DOCTYPE html><html lang="pt-BR"><head><meta charset="UTF-8"><title>Termo de Cancelamento</title>${generateStyles()}</head><body><div class="page">
 <div class="header">
   <div class="header-gradient"></div>
-  <div class="header-logo-area"><img src="https://pratic-connect-21.lovable.app/images/logo-praticcar.jpg" alt="Logo" onerror="this.style.display='none'" /></div>
+  <div class="header-logo-area"><img src="https://pratic-connect-21.lovable.app/logos/logo-full-light.png" alt="Logo" onerror="this.style.display='none'" /></div>
   <div class="header-empresa">${variaveis["empresa.nome"]}<br>CNPJ: ${variaveis["empresa.cnpj"]} | ${variaveis["empresa.endereco"]}</div>
   <div class="header-titulo">TERMO DE CANCELAMENTO DE FILIAÇÃO</div>
 </div>

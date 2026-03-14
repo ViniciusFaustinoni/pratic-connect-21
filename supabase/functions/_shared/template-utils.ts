@@ -553,7 +553,7 @@ export function generateHeader(dados: TermoAfiliacaoData): string {
 <div class="header">
   <div class="header-gradient"></div>
   <div class="header-logo-area">
-    <img src="https://pratic-connect-21.lovable.app/images/logo-praticcar.jpg" alt="Logo PraticCar" onerror="this.style.display='none'" />
+    <img src="https://pratic-connect-21.lovable.app/logos/logo-full-light.png" alt="Logo PraticCar" onerror="this.style.display='none'" />
   </div>
   <div class="header-empresa">
     ${dados.empresa.razao_social || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'}<br>
