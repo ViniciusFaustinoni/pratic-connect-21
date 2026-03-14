@@ -292,7 +292,7 @@ export function EscolhaPlano({
 
                   {/* Preço - Valor mensal */}
                   <div className="mb-2 text-center">
-                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Valor mensal</p>
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Valor médio mensal</p>
                     <div className="flex items-baseline justify-center gap-1 flex-wrap">
                       <span className={cn(
                         'text-4xl font-bold tracking-tight',
