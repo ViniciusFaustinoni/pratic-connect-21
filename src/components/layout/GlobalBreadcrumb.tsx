@@ -56,6 +56,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/financeiro/extrato': { label: 'Extrato' },
   '/financeiro/extratos-bancarios': { label: 'Extratos Bancários' },
   '/financeiro/contas-bancarias': { label: 'Contas Bancárias' },
+  '/financeiro/configuracoes/comissionamento-externo': { label: 'Comissionamento Externo' },
   
   // Cobrança
   '/cobranca': { label: 'Cobrança' },
