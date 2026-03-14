@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
