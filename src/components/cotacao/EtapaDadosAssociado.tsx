@@ -4,8 +4,11 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Separator } from '@/components/ui/separator';
-import { User, ArrowRight, Phone } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { User, ArrowRight, Phone, UserPlus, X } from 'lucide-react';
 import { useVendedores } from '@/hooks/useVendedores';
+import { useState } from 'react';
+import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
@@ -21,6 +24,14 @@ interface EtapaDadosAssociadoProps {
   // Consultor responsável
   consultorId: string;
   setConsultorId: (id: string) => void;
+
+  // Indicação
+  isIndicacao: boolean;
+  setIsIndicacao: (v: boolean) => void;
+  indicadorId: string;
+  setIndicadorId: (id: string) => void;
+  indicadorNome: string;
+  setIndicadorNome: (nome: string) => void;
   
   // Navegação
   onNext: () => void;
@@ -34,6 +45,12 @@ const formatPhone = (value: string): string => {
   return `(${cleaned.slice(0, 2)}) ${cleaned.slice(2, 7)}-${cleaned.slice(7, 11)}`;
 };
 
+function formatCPF(cpf: string): string {
+  const digits = cpf.replace(/\D/g, '');
+  if (digits.length !== 11) return cpf;
+  return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
+}
+
 export function EtapaDadosAssociado({
   nome,
   setNome,
@@ -45,13 +62,40 @@ export function EtapaDadosAssociado({
   setTelefone2,
   consultorId,
   setConsultorId,
+  isIndicacao,
+  setIsIndicacao,
+  indicadorId,
+  setIndicadorId,
+  indicadorNome,
+  setIndicadorNome,
   onNext,
 }: EtapaDadosAssociadoProps) {
   const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedores();
+  const [buscaIndicador, setBuscaIndicador] = useState('');
+  const { data: resultadosBusca = [], isLoading: isSearching } = useAssociadoSearch(buscaIndicador);
   
   // Pode avançar se Nome, Telefone e Consultor estão preenchidos
   const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
-  const canProceed = nome.trim() !== '' && telefoneValido && consultorId !== '';
+  const canProceed = nome.trim() !== '' && telefoneValido && consultorId !== '' && (!isIndicacao || indicadorId !== '');
+
+  const handleSelectIndicador = (associado: AssociadoSearchResult) => {
+    setIndicadorId(associado.id);
+    setIndicadorNome(associado.nome);
+    setBuscaIndicador('');
+  };
+
+  const handleClearIndicador = () => {
+    setIndicadorId('');
+    setIndicadorNome('');
+    setBuscaIndicador('');
+  };
+
+  const handleToggleIndicacao = (checked: boolean) => {
+    setIsIndicacao(checked);
+    if (!checked) {
+      handleClearIndicador();
+    }
+  };
 
   return (
     <Card className="border-border bg-card">
@@ -153,6 +197,86 @@ export function EtapaDadosAssociado({
               )}
             </SelectContent>
           </Select>
+        </div>
+
+        <Separator />
+
+        {/* Indicação */}
+        <div className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="flex items-center gap-2">
+              <UserPlus className="h-4 w-4 text-muted-foreground" />
+              <Label htmlFor="indicacao-switch" className="cursor-pointer">
+                Este cliente foi indicado por um associado?
+              </Label>
+            </div>
+            <Switch
+              id="indicacao-switch"
+              checked={isIndicacao}
+              onCheckedChange={handleToggleIndicacao}
+            />
+          </div>
+
+          {isIndicacao && (
+            <div className="space-y-2 pl-6 border-l-2 border-primary/20">
+              <Label>
+                Associado indicador <span className="text-destructive">*</span>
+              </Label>
+
+              {indicadorId ? (
+                <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                  <User className="h-4 w-4 text-primary shrink-0" />
+                  <span className="font-medium text-sm flex-1">{indicadorNome}</span>
+                  <button
+                    type="button"
+                    onClick={handleClearIndicador}
+                    className="p-1 rounded hover:bg-muted transition-colors"
+                  >
+                    <X className="h-4 w-4 text-muted-foreground" />
+                  </button>
+                </div>
+              ) : (
+                <div className="relative">
+                  <Input
+                    value={buscaIndicador}
+                    onChange={(e) => setBuscaIndicador(e.target.value)}
+                    placeholder="Buscar por nome, telefone ou CPF..."
+                  />
+                  {buscaIndicador.length >= 2 && (
+                    <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-60 overflow-auto">
+                      {isSearching ? (
+                        <div className="p-3 text-sm text-muted-foreground text-center">
+                          Buscando...
+                        </div>
+                      ) : resultadosBusca.length === 0 ? (
+                        <div className="p-3 text-sm text-muted-foreground text-center">
+                          Nenhum associado encontrado
+                        </div>
+                      ) : (
+                        resultadosBusca.map((assoc) => (
+                          <button
+                            key={assoc.id}
+                            type="button"
+                            onClick={() => handleSelectIndicador(assoc)}
+                            className="w-full text-left px-3 py-2 hover:bg-accent transition-colors flex items-center gap-3"
+                          >
+                            <User className="h-4 w-4 text-muted-foreground shrink-0" />
+                            <div className="flex flex-col min-w-0">
+                              <span className="text-sm font-medium truncate">{assoc.nome}</span>
+                              <span className="text-xs text-muted-foreground">
+                                CPF: {formatCPF(assoc.cpf)}
+                                {assoc.telefone && ` • Tel: ${assoc.telefone}`}
+                              </span>
+                            </div>
+                          </button>
+                        ))
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
         </div>
 
         {/* Botão Avançar */}

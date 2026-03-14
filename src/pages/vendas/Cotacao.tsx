@@ -52,6 +52,11 @@ export default function CotacaoPage() {
   const [telefone1, setTelefone1] = useState('');
   const [telefone2, setTelefone2] = useState('');
   const [consultorId, setConsultorId] = useState('');
+  
+  // Indicação
+  const [isIndicacao, setIsIndicacao] = useState(false);
+  const [indicadorId, setIndicadorId] = useState('');
+  const [indicadorNome, setIndicadorNome] = useState('');
 
   // ============================================
   // ETAPA 2 - IDENTIFICAÇÃO DO VEÍCULO
