@@ -186,13 +186,22 @@ serve(async (req) => {
     templateData.configRastreador = configRastreador;
 
     // ============= BUSCAR TEMPLATE DO BANCO =============
-    const { data: templateDB, error: templateError } = await supabase
+    const { data: templatesDB, error: templateError } = await supabase
       .from("documento_templates")
       .select("id, codigo, nome, conteudo, config_layout")
       .eq("is_default_autentique", true)
       .eq("ativo", true)
-      .maybeSingle();
+      .order("updated_at", { ascending: false })
+      .limit(2);
 
+    if (templateError) {
+      console.warn("[autentique-create-by-token] Erro ao buscar template:", templateError.message);
+    }
+    if (templatesDB && templatesDB.length > 1) {
+      console.warn(`[autentique-create-by-token] ⚠️ ${templatesDB.length} templates com is_default_autentique=true! Usando o mais recente: ${templatesDB[0].codigo}`);
+    }
+
+    const templateDB = templatesDB?.[0] || null;
     const usandoTemplateBanco = !templateError && templateDB?.conteudo;
 
     // ============= GERAR HTML DO TERMO DE AFILIAÇÃO =============

@@ -201,13 +201,22 @@ serve(async (req) => {
     }
 
     // ============= BUSCAR TEMPLATE DO BANCO DE DADOS =============
-    const { data: templateDB, error: templateError } = await supabase
+    const { data: templatesDB, error: templateError } = await supabase
       .from("documento_templates")
       .select("id, codigo, nome, conteudo, config_layout")
       .eq("is_default_autentique", true)
       .eq("ativo", true)
-      .single();
+      .order("updated_at", { ascending: false })
+      .limit(2);
 
+    if (templateError) {
+      console.warn("[autentique-create] Erro ao buscar template:", templateError.message);
+    }
+    if (templatesDB && templatesDB.length > 1) {
+      console.warn(`[autentique-create] ⚠️ ${templatesDB.length} templates com is_default_autentique=true! Usando o mais recente: ${templatesDB[0].codigo}`);
+    }
+
+    const templateDB = templatesDB?.[0] || null;
     const usandoTemplateBanco = !templateError && templateDB?.conteudo;
     
     if (usandoTemplateBanco) {
