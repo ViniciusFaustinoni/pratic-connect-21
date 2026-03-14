@@ -81,6 +81,7 @@ export function PlanFormModal({
 }: PlanFormModalProps) {
   const { data: productLines } = useProductLines();
   const { data: benefits } = useBenefits();
+  const { data: regioes } = useRegioes();
   const createPlan = useCreatePlan();
   const updatePlan = useUpdatePlan();
   const updateExclusions = useUpdateBenefitExclusions();
