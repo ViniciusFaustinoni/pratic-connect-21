@@ -3,15 +3,17 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plug, MessageSquare, CreditCard, MapPin, FileSignature, Zap, Mail,
   Search, Building2, CheckCircle, XCircle, Key, Inbox, ArrowRight,
-  Loader2, Settings, ExternalLink,
+  Loader2, Settings, ExternalLink, HeartPulse,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
 import { useIntegracoesStatus } from '@/hooks/useIntegracoesStatus';
 import { useTodasIntegracoesCredenciais, IntegracaoTipo } from '@/hooks/useIntegracaoCredenciais';
 import { useApiKeys } from '@/hooks/useApiKeys';
 import { useApiLeadsConfig } from '@/hooks/useApiLeadsConfig';
+import { useAllLatestHealthChecks } from '@/hooks/useIntegracaoHealthCheck';
 import { ConfigurarIntegracaoSheet } from '@/components/integracoes/ConfigurarIntegracaoSheet';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -45,6 +47,7 @@ interface StatusContext {
   credenciais: any[];
   apiKeysCount: number;
   leadsAtivas: number;
+  healthChecks: Record<string, any>;
 }
 
 // ── Data ──────────────────────────────────────────────
@@ -260,6 +263,15 @@ function IntegracaoCardUI({
   const extra = card.extraInfo?.(ctx);
   const isLoading = ctx.integracoes.isLoading;
 
+  // Health check data
+  const hc = ctx.healthChecks[card.id];
+  const healthLabel = hc
+    ? (hc.conexao_ok ? 'Online' : 'Offline')
+    : null;
+  const healthTime = hc?.created_at
+    ? formatDistanceToNow(new Date(hc.created_at), { addSuffix: true, locale: ptBR })
+    : null;
+
   const handleClick = () => {
     if (card.href) {
       navigate(card.href);
@@ -308,6 +320,23 @@ function IntegracaoCardUI({
                   {card.sempreAtivo ? 'Ativo' : ativo ? 'Conectado' : 'Pendente'}
                 </Badge>
               )}
+              {/* Health check indicator */}
+              {hc && (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <div className={cn(
+                        "h-2 w-2 rounded-full flex-shrink-0",
+                        hc.conexao_ok ? "bg-green-500" : "bg-destructive"
+                      )} />
+                    </TooltipTrigger>
+                    <TooltipContent side="top" className="text-xs">
+                      <p>{healthLabel} — {healthTime}</p>
+                      {hc.erro_mensagem && <p className="text-destructive">{hc.erro_mensagem}</p>}
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
             </div>
             <p className="text-sm text-muted-foreground mt-0.5 line-clamp-1">{card.descricao}</p>
             {(extra || ultimoTeste) && (
@@ -334,6 +363,7 @@ export default function Integracoes() {
   const { data: credenciais, refetch: refetchCredenciais } = useTodasIntegracoesCredenciais();
   const { data: apiKeys } = useApiKeys();
   const { data: leadsConfig } = useApiLeadsConfig();
+  const { data: healthChecks } = useAllLatestHealthChecks();
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedTipo, setSelectedTipo] = useState<IntegracaoTipo>('hinova');
@@ -345,6 +375,7 @@ export default function Integracoes() {
     credenciais: credenciais || [],
     apiKeysCount: apiKeys?.filter(k => k.ativa).length || 0,
     leadsAtivas: leadsConfig?.filter(l => l.ativo).length || 0,
+    healthChecks: healthChecks || {},
   };
 
   const handleConfigurar = useCallback((card: IntegracaoCard) => {

@@ -1,117 +1,90 @@
 
 
-# Health Check Universal para Todas as Integrações
+## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
-## Visão Geral
+### Causas Raiz Identificadas
+1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
+2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
+3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-Criar um sistema genérico de health check que monitora automaticamente **todas** as integrações 3x ao dia, armazena o histórico, e disponibiliza um painel reutilizável em cada sub-página de integração. Novas integrações adicionadas no futuro precisarão apenas de uma entrada na configuração.
+### Correções Aplicadas
 
-## Arquitetura
+1. **`sga-hinova-sync/index.ts`**:
+   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
+   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
 
-```text
-┌─────────────────────────────────────┐
-│  cron-integracoes-health-check      │  ← 3x/dia (8h, 13h, 18h)
-│  Testa TODAS as integrações:        │
-│  - ASAAS (API key test)             │
-│  - WhatsApp (instância status)      │
-│  - Autentique (API key test)        │
-│  - SGA Hinova (login test)          │
-│  - Softruck (auth test)             │
-│  - Rede Veículos (auth test)        │
-│  - Email/Resend (API key test)      │
-│  - OpenAI (API key test)            │
-│  Grava resultado por integração     │
-│  Notifica admins se falhar          │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│  integracoes_health_checks          │
-│  - integracao (enum/text)           │
-│  - conexao_ok (bool)               │
-│  - tempo_resposta_ms (int)          │
-│  - detalhes (jsonb)                 │
-│  - erro_mensagem (text)             │
-│  - created_at                       │
-└──────────────┬──────────────────────┘
-               │
-               ▼
-┌─────────────────────────────────────┐
-│  <IntegracaoHealthPanel />          │  ← Componente reutilizável
-│  - Status atual (Online/Offline)    │
-│  - Botão "Testar agora"            │
-│  - Histórico de health checks      │
-│  - Alertas ativos                   │
-│  Usado em cada sub-página           │
-└─────────────────────────────────────┘
-```
+2. **`cron-sga-retry/index.ts`**:
+   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
 
-## O que será criado/modificado
+---
 
-### 1. Tabela `integracoes_health_checks` (nova, genérica)
+## Painel de Monitoramento SGA Hinova — ✅ Implementado
 
-Substitui a tabela `sga_health_checks` (que fica restrita ao SGA). Campos:
-- `id`, `created_at`
-- `integracao` (text): 'asaas', 'whatsapp', 'autentique', 'hinova', 'softruck', 'rede_veiculos', 'email', 'openai'
-- `conexao_ok` (bool)
-- `tempo_resposta_ms` (int)
-- `detalhes` (jsonb) — dados específicos por integração (ex: fila_pendentes para SGA, instancia_status para WhatsApp)
-- `erro_mensagem` (text)
+### O que foi criado
 
-Migra os dados existentes de `sga_health_checks` para a nova tabela.
+1. **Página `/configuracoes/integracoes/sga-hinova`** com:
+   - Status de conexão com API Hinova (teste em tempo real)
+   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
+   - Logs recentes dos últimos 50 registros
+   - Veículos pendentes (ativos não sincronizados) com envio individual
+   - Histórico de health checks
 
-### 2. Edge Function `cron-integracoes-health-check` (nova)
+2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
 
-Substitui `cron-sga-health-check`. Testa cada integração:
+3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
 
-| Integração | Como testa |
-|---|---|
-| ASAAS | Verifica se `ASAAS_API_KEY` existe e faz GET na API de status |
-| WhatsApp | Verifica `EVOLUTION_API_KEY` + consulta `whatsapp_instancias` status |
-| Autentique | Verifica se `AUTENTIQUE_API_KEY` existe |
-| SGA Hinova | Login na API (já existente) + conta fila/falhas |
-| Softruck | Verifica credenciais no banco + testa auth |
-| Rede Veículos | Verifica credenciais no banco + testa auth |
-| Email | Verifica se `RESEND_API_KEY` existe |
-| OpenAI | Verifica se `OPENAI_API_KEY` existe |
+4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
 
-Grava um registro por integração. Notifica admins se qualquer uma falhar.
+---
 
-### 3. Componente `<IntegracaoHealthPanel />` (novo, reutilizável)
+## Health Check Universal para Todas as Integrações — ✅ Implementado
 
-Props: `integracao: string` (o slug). Exibe:
-- Card de status atual (Online/Offline/Não testado)
-- Tempo de resposta
-- Botão "Testar agora" (invoca a edge function passando `integracao` específica)
-- Tabela de histórico dos últimos 20 health checks
-- Detalhes extras via `detalhes` jsonb
+### O que foi criado
 
-### 4. Hook `useIntegracaoHealthCheck(integracao: string)` (novo, genérico)
+1. **Tabela `integracoes_health_checks`** (genérica):
+   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
+   - Dados existentes do SGA migrados automaticamente
+   - RLS: leitura para autenticados, escrita para service_role
 
-Substitui os dados de health do `useSGAHealthCheck` (que mantém as funções de fila/queue). Consulta `integracoes_health_checks` filtrado por integração.
+2. **Edge Function `cron-integracoes-health-check`**:
+   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
+   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
+   - Notifica admins (role `diretor`) se qualquer integração falhar
+   - Grava resultado por integração na tabela genérica
 
-### 5. Integrar o painel em cada sub-página
+3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
+   - Props: `integracao` (slug) e `titulo` (opcional)
+   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
+   - Botão "Testar agora" invoca a edge function para a integração específica
 
-| Página | Alteração |
-|---|---|
-| `IntegracaoSGAHinova.tsx` | Substituir cards de conexão pelo `<IntegracaoHealthPanel integracao="hinova" />` |
-| `IntegracaoWhatsApp.tsx` | Adicionar tab "Health Check" com `<IntegracaoHealthPanel integracao="whatsapp" />` |
-| `Integracoes.tsx` (cards sem sub-página) | Adicionar tooltip/indicador do último health check no card |
+4. **Hook `useIntegracaoHealthCheck(integracao)`**:
+   - Busca histórico filtrado por integração
+   - Mutation `testNow` para teste manual
+   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
 
-### 6. Atualizar cron job
+5. **Integração nas páginas**:
+   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
+   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
+   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
 
-Substituir o cron `sga-health-check-3x-dia` pelo novo `integracoes-health-check-3x-dia` que chama a nova edge function.
+6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
+   ```sql
+   select cron.schedule(
+     'integracoes-health-check-3x-dia',
+     '0 8,13,18 * * *',
+     $$ select net.http_post(
+       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
+       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
+       body:='{}'::jsonb
+     ) as request_id; $$
+   );
+   ```
 
-## Arquivos
-
-| Arquivo | Ação |
-|---|---|
-| Migration SQL | **Criar** tabela `integracoes_health_checks`, migrar dados |
-| `supabase/functions/cron-integracoes-health-check/index.ts` | **Criar** — testa todas as integrações |
-| `src/components/integracoes/IntegracaoHealthPanel.tsx` | **Criar** — componente reutilizável |
-| `src/hooks/useIntegracaoHealthCheck.ts` | **Criar** — hook genérico |
-| `src/pages/configuracoes/IntegracaoSGAHinova.tsx` | **Modificar** — usar componente genérico |
-| `src/pages/configuracoes/IntegracaoWhatsApp.tsx` | **Modificar** — adicionar tab Health |
-| `src/pages/configuracoes/Integracoes.tsx` | **Modificar** — mostrar último health check nos cards |
-| `supabase/config.toml` | **Modificar** — adicionar nova function |
-
+### Arquivos criados/modificados
+- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
+- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
+- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
+- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
+- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
+- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
+- `supabase/config.toml` — verify_jwt para nova function

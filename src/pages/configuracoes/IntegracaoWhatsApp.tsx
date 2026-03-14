@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { ArrowLeft, MessageCircle, Wifi, Bot, FileText, Settings, FlaskConical } from 'lucide-react';
+import { ArrowLeft, MessageCircle, Wifi, Bot, FileText, Settings, FlaskConical, HeartPulse } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Separator } from '@/components/ui/separator';
@@ -12,6 +12,7 @@ import { WhatsAppStats } from '@/components/integracoes/WhatsAppStats';
 import { WhatsAppMetaTemplates } from '@/components/integracoes/WhatsAppMetaTemplates';
 import { WhatsAppConversasPainel } from '@/components/integracoes/WhatsAppConversasPainel';
 import { WhatsAppTestChat } from '@/components/whatsapp/WhatsAppTestChat';
+import { IntegracaoHealthPanel } from '@/components/integracoes/IntegracaoHealthPanel';
 
 export default function IntegracaoWhatsApp() {
   const navigate = useNavigate();
@@ -43,7 +44,7 @@ export default function IntegracaoWhatsApp() {
 
       {/* Tabs organizadas */}
       <Tabs defaultValue="conexao" className="space-y-6">
-        <TabsList className="grid w-full grid-cols-4 lg:w-auto lg:inline-grid">
+        <TabsList className="grid w-full grid-cols-5 lg:w-auto lg:inline-grid">
           <TabsTrigger value="conexao" className="gap-2">
             <Wifi className="h-4 w-4" />
             <span className="hidden sm:inline">Conexão</span>
@@ -59,6 +60,10 @@ export default function IntegracaoWhatsApp() {
           <TabsTrigger value="testes" className="gap-2">
             <FlaskConical className="h-4 w-4" />
             <span className="hidden sm:inline">Testes</span>
+          </TabsTrigger>
+          <TabsTrigger value="health" className="gap-2">
+            <HeartPulse className="h-4 w-4" />
+            <span className="hidden sm:inline">Health</span>
           </TabsTrigger>
         </TabsList>
 
@@ -97,6 +102,11 @@ export default function IntegracaoWhatsApp() {
         {/* ── Tab Testes ── */}
         <TabsContent value="testes" className="space-y-6">
           <WhatsAppTestChat />
+        </TabsContent>
+
+        {/* ── Tab Health Check ── */}
+        <TabsContent value="health" className="space-y-6">
+          <IntegracaoHealthPanel integracao="whatsapp" titulo="Conexão WhatsApp" />
         </TabsContent>
       </Tabs>
     </div>

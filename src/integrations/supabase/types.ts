@@ -13493,6 +13493,36 @@ export type Database = {
           },
         ]
       }
+      integracoes_health_checks: {
+        Row: {
+          conexao_ok: boolean
+          created_at: string
+          detalhes: Json | null
+          erro_mensagem: string | null
+          id: string
+          integracao: string
+          tempo_resposta_ms: number | null
+        }
+        Insert: {
+          conexao_ok?: boolean
+          created_at?: string
+          detalhes?: Json | null
+          erro_mensagem?: string | null
+          id?: string
+          integracao: string
+          tempo_resposta_ms?: number | null
+        }
+        Update: {
+          conexao_ok?: boolean
+          created_at?: string
+          detalhes?: Json | null
+          erro_mensagem?: string | null
+          id?: string
+          integracao?: string
+          tempo_resposta_ms?: number | null
+        }
+        Relationships: []
+      }
       lancamentos_contabeis: {
         Row: {
           complemento: string | null
