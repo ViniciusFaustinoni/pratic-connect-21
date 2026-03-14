@@ -258,6 +258,13 @@ export function PlanFormModal({
     }
   }, [currentPrecoMap]);
 
+  // Sync selectedRegioes from DB when editing
+  useEffect(() => {
+    if (currentRegioes) {
+      setSelectedRegioes(currentRegioes);
+    }
+  }, [currentRegioes]);
+
   // Sync cotasCategorias from DB when editing
   useEffect(() => {
     if (existingCotasCat && existingCotasCat.length > 0) {
