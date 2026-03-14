@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import {
   AlertDialog,
@@ -51,6 +51,11 @@ export function BotaoAtivarSGA({
   const [dialogOpen, setDialogOpen] = useState(false);
   const checklist = useChecklistSGA(veiculoId, associadoId);
 
+  // Sync local state when parent prop changes (e.g. from polling)
+  useEffect(() => {
+    setStatus(statusAtual);
+  }, [statusAtual]);
+
   const handleAtivar = async () => {
     setStatus('sincronizando');
     setDialogOpen(false);
@@ -63,11 +68,19 @@ export function BotaoAtivarSGA({
       if (error) throw error;
 
       if (data.success) {
-        setStatus('ativado_sga');
-        toast.success('Associado ativado com sucesso no SGA Hinova!', {
-          description: `Código Hinova: ${data.data.codigo_veiculo_hinova}`,
-        });
-        onSuccess?.();
+        if (data.status === 'processing') {
+          // Async processing started (202) - stay in sincronizando state
+          toast.info('Sincronização iniciada!', {
+            description: 'O processo está sendo realizado em segundo plano. Aguarde alguns segundos.',
+          });
+          // Status stays 'sincronizando' - parent polling will update via statusAtual prop
+        } else {
+          setStatus('ativado_sga');
+          toast.success('Associado ativado com sucesso no SGA Hinova!', {
+            description: `Código Hinova: ${data.data?.codigo_veiculo_hinova}`,
+          });
+          onSuccess?.();
+        }
       } else {
         throw new Error(data.error || 'Erro desconhecido na sincronização');
       }
