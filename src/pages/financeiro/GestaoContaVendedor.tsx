@@ -46,10 +46,10 @@ export default function GestaoContaVendedor() {
       const { data } = await supabase
         .from('profiles')
         .select('id, nome')
-        .in('perfil_acesso', ['vendedor_externo', 'vendedor_clt'])
+        .in('perfil_acesso', ['vendedor_externo', 'vendedor_clt'] as any[])
         .eq('ativo', true)
         .order('nome');
-      return data || [];
+      return (data || []) as { id: string; nome: string }[];
     },
   });
 
