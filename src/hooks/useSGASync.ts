@@ -46,7 +46,7 @@ export function useSGASync({
 }: UseSGASyncOptions) {
   const queryClient = useQueryClient();
 
-  // Query para buscar dados do veículo
+  // Query para buscar dados do veículo - polls every 3s when sincronizando
   const veiculoQuery = useQuery({
     queryKey: ['veiculo-sga', veiculoId],
     queryFn: async (): Promise<VeiculoSGAData | null> => {
@@ -69,6 +69,12 @@ export function useSGASync({
       return data;
     },
     enabled: !!veiculoId,
+    refetchInterval: (query) => {
+      const data = query.state.data;
+      // Poll every 3s while sync is in progress
+      if (data?.status_sga === 'sincronizando') return 3000;
+      return false;
+    },
   });
 
   // Query para buscar logs
@@ -88,7 +94,7 @@ export function useSGASync({
     enabled: !!veiculoId,
   });
 
-  // Mutation para sincronizar
+  // Mutation para sincronizar (agora retorna 202 - async)
   const syncMutation = useMutation({
     mutationFn: async (): Promise<SyncResult> => {
       const { data, error } = await supabase.functions.invoke('sga-hinova-sync', {
@@ -101,6 +107,11 @@ export function useSGASync({
       if (error) throw error;
       if (!data.success) throw new Error(data.error || 'Erro na sincronização');
       
+      // Async processing started (202) - return partial result
+      if (data.status === 'processing') {
+        return { success: true } as SyncResult;
+      }
+
       return data.data as SyncResult;
     },
     onSuccess: (data) => {
