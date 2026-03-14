@@ -350,6 +350,12 @@ export default function CotacaoPage() {
             setTelefone2={setTelefone2}
             consultorId={consultorId}
             setConsultorId={setConsultorId}
+            isIndicacao={isIndicacao}
+            setIsIndicacao={setIsIndicacao}
+            indicadorId={indicadorId}
+            setIndicadorId={setIndicadorId}
+            indicadorNome={indicadorNome}
+            setIndicadorNome={setIndicadorNome}
             onNext={handleEtapa1Next}
           />
         )}
