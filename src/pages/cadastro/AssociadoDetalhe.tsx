@@ -801,11 +801,6 @@ export default function AssociadoDetalhe() {
               </CardContent>
             </Card>
 
-            <div className="flex flex-wrap gap-2">
-              <Button size="sm" variant="outline"><Receipt className="h-3.5 w-3.5 mr-1.5" /> 2ª Via</Button>
-              <Button size="sm" variant="outline"><FileText className="h-3.5 w-3.5 mr-1.5" /> Extrato</Button>
-              <Button size="sm" variant="outline"><CreditCard className="h-3.5 w-3.5 mr-1.5" /> Alterar Pagamento</Button>
-            </div>
           </div>
         )}
 
