@@ -88,6 +88,7 @@ export function useTarefaAtual() {
         const assoc = fallbackData.associado as any;
         const veic = fallbackData.veiculo as any;
         const rast = fallbackData.rastreador as any;
+        const rastSubstituto = (fallbackData as any).rastreador_substituto as any;
         tarefa = {
           ...fallbackData,
           associado_nome: assoc?.nome || 'Cliente',
@@ -97,7 +98,7 @@ export function useTarefaAtual() {
           marca: veic?.marca || '',
           modelo: veic?.modelo || '',
           cor: veic?.cor,
-          imei_rastreador: rast?.imei,
+          imei_rastreador: rast?.imei || rastSubstituto?.imei,
         };
         console.log('[useTarefaAtual] Tarefa recuperada via fallback:', tarefa.id);
       } else {
