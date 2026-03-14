@@ -28,6 +28,7 @@ export function WhatsAppTestChat() {
   const [telefoneEditavel, setTelefoneEditavel] = useState('');
   const [carregandoConfig, setCarregandoConfig] = useState(true);
   const [metaAtiva, setMetaAtiva] = useState(false);
+  const [senderNumber, setSenderNumber] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
@@ -49,6 +50,19 @@ export function WhatsAppTestChat() {
         // Número real da IA no WhatsApp (fixo)
         setTelefoneDestino('5521969379982');
         setTelefoneEditavel('5521969379982');
+
+        // Buscar número conectado na Evolution (sender/associado de teste)
+        try {
+          const { data: senderData } = await supabase.functions.invoke('whatsapp-get-sender', {
+            body: {},
+          });
+          if (senderData?.sender) {
+            setSenderNumber(senderData.sender);
+            console.log('[TestChat] Sender Evolution:', senderData.sender);
+          }
+        } catch (senderErr) {
+          console.warn('[TestChat] Não foi possível obter sender:', senderErr);
+        }
       } catch (err) {
         console.error('[TestChat] Erro ao carregar config Meta:', err);
         setTelefoneDestino('5521969379982');
@@ -69,10 +83,18 @@ export function WhatsAppTestChat() {
       const telefoneLimpo = telefone;
       const telefoneComDDI = telefoneLimpo.startsWith('55') ? telefoneLimpo : `55${telefoneLimpo}`;
 
+      // Buscar mensagens do número destino E do sender (Evolution)
+      // A IA responde ao sender, não ao destino
+      let orFilter = `telefone.eq.${telefoneComDDI},telefone.eq.${telefoneLimpo}`;
+      if (senderNumber) {
+        const senderComDDI = senderNumber.startsWith('55') ? senderNumber : `55${senderNumber}`;
+        orFilter += `,telefone.eq.${senderNumber},telefone.eq.${senderComDDI}`;
+      }
+
       const { data, error } = await supabase
         .from('whatsapp_mensagens')
-        .select('id, mensagem, direcao, status, created_at')
-        .or(`telefone.eq.${telefoneComDDI},telefone.eq.${telefoneLimpo}`)
+        .select('id, mensagem, direcao, status, created_at, telefone')
+        .or(orFilter)
         .order('created_at', { ascending: true })
         .limit(200);
 
@@ -88,12 +110,12 @@ export function WhatsAppTestChat() {
     };
 
     buscarMensagens();
-    pollingRef.current = setInterval(buscarMensagens, 5000);
+    pollingRef.current = setInterval(buscarMensagens, 3000);
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [telefoneDestino]);
+  }, [telefoneDestino, senderNumber]);
 
   // Auto-scroll
   useEffect(() => {
@@ -136,7 +158,37 @@ export function WhatsAppTestChat() {
         m.id === msgLocal.id ? { ...m, status: 'enviada' } : m
       ));
 
-      toast.success('Mensagem enviada via Evolution API! Aguarde a resposta da IA...');
+      // Usar o número do sender (Evolution) já carregado para simular entrada do associado
+      // O webhook da Meta não dispara para mensagens da Evolution, então invocamos diretamente
+
+      if (senderNumber) {
+        console.log(`[TestChat] Simulando entrada da IA com sender: ${senderNumber}`);
+        
+        // Fire-and-forget: invocar webhook simulando mensagem de entrada do associado
+        supabase.functions.invoke('whatsapp-webhook', {
+          body: {
+            event: 'messages.upsert',
+            sender: `${senderNumber}@s.whatsapp.net`,
+            _meta_delegate: true,
+            data: {
+              key: {
+                remoteJid: `${senderNumber}@s.whatsapp.net`,
+                fromMe: false,
+                id: `test_${Date.now()}`,
+              },
+              message: { conversation: texto },
+            },
+          },
+        }).then((res) => {
+          console.log('[TestChat] Delegação IA resultado:', res.data);
+        }).catch((err) => {
+          console.error('[TestChat] Erro na delegação IA:', err);
+        });
+
+        toast.success('Mensagem enviada! IA processando...');
+      } else {
+        toast.success('Mensagem enviada via Evolution! Aguarde resposta da IA...');
+      }
     } catch (err: any) {
       toast.error(`Erro ao enviar: ${err.message}`);
       setMensagens(prev => prev.map(m =>
