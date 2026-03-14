@@ -828,6 +828,50 @@ function avaliarRegraEdge(
     case 'beneficio_carencia_zero':
       return beneficios.some((c: string) => c.includes('CARENCIA_ZERO'));
 
+    // ===== REGRAS POR SINISTRO/EVENTO =====
+
+    case 'evento_sub_rogacao':
+      return !!contexto?.sinistro?.tipo;
+
+    case 'evento_aprovacao_conserto':
+      return contexto?.sinistro?.reparo_aprovado === true;
+
+    case 'evento_incendio':
+      return contexto?.sinistro?.tipo?.toLowerCase().includes('incêndio') === true && contexto?.sinistro?.com_bombeiros === false;
+
+    // ===== REGRAS POR GRUPO/CATEGORIA ESPECIAL =====
+
+    case 'grupo_raridades_especial': {
+      const grupo = (veiculo.grupo || '').toLowerCase();
+      return grupo.includes('raridade') || grupo.includes('especial');
+    }
+
+    case 'categoria_depreciacao': {
+      const cat = (veiculo.categoria_veiculo || veiculo.procedencia || '').toLowerCase();
+      return cat.includes('leilao') || cat.includes('leilão') || cat.includes('chassi_remarcado') || cat.includes('ex_taxi') || cat.includes('placa_vermelha') || veiculo.leilao === true;
+    }
+
+    // ===== GESTÃO DE EQUIPAMENTO =====
+
+    case 'rastreador_terceiros':
+      return veiculo.rastreador_terceiros === true;
+
+    // ===== MANUTENÇÃO/ATUALIZAÇÃO =====
+
+    case 'opcao_atualizacao_fipe':
+      return true;
+
+    case 'vistoria_reativacao':
+      return contexto?.contrato_extra?.em_reativacao === true || (contexto?.contrato_extra?.inadimplencia_dias || 0) > 5;
+
+    // ===== PROPRIEDADE TERCEIRA =====
+
+    case 'anuencia_proprietario': {
+      const prop = (veiculo.proprietario_nome || '').trim().toLowerCase();
+      const assoc = (veiculo.associado_nome || '').trim().toLowerCase();
+      return prop !== '' && assoc !== '' && prop !== assoc;
+    }
+
     default:
       return false;
   }
