@@ -112,6 +112,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
 
   const { profile, isVendedor } = useAuth();
+  const { isVendedorExterno } = usePermissions();
   const usuarioEhVendedor = isVendedor();
 
   const { data: leads } = useAllLeads();
