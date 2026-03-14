@@ -1806,7 +1806,7 @@ async function callAI(messages: any[], systemPrompt: string, useTools: boolean =
       { role: "system", content: systemPrompt },
       ...messages,
     ],
-    max_tokens: 1000,
+    max_tokens: 4096,
   };
 
   if (useTools) {
