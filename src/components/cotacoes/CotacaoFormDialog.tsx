@@ -960,16 +960,25 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return;
     }
 
-    if (data.valor_adesao <= 0) {
-      toast.error('O valor de adesão deve ser maior que zero!');
+    // Vendedor externo: validar cenário obrigatório
+    if (isVendedorExterno && !cenarioExterno) {
+      toast.error('Selecione o cenário de adesão e instalação antes de continuar.');
       return;
     }
-    
-    // Validar valor mínimo de adesão (R$ 50,00) para evitar erros de digitação
-    const VALOR_ADESAO_MINIMO = 50;
-    if (data.valor_adesao < VALOR_ADESAO_MINIMO) {
-      toast.error(`O valor de adesão (${formatCurrency(data.valor_adesao)}) está muito baixo. O mínimo é ${formatCurrency(VALOR_ADESAO_MINIMO)}.`);
-      return;
+
+    // Validação de adesão: pular para externo com cenário isento
+    if (!isCenarioIsento) {
+      if (data.valor_adesao <= 0) {
+        toast.error('O valor de adesão deve ser maior que zero!');
+        return;
+      }
+      
+      // Validar valor mínimo de adesão (R$ 50,00) para evitar erros de digitação
+      const VALOR_ADESAO_MINIMO = 50;
+      if (data.valor_adesao < VALOR_ADESAO_MINIMO) {
+        toast.error(`O valor de adesão (${formatCurrency(data.valor_adesao)}) está muito baixo. O mínimo é ${formatCurrency(VALOR_ADESAO_MINIMO)}.`);
+        return;
+      }
     }
     
     // Alertar se valor estiver muito diferente do plano selecionado
