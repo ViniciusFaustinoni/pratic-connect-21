@@ -21254,6 +21254,39 @@ export type Database = {
           },
         ]
       }
+      sga_health_checks: {
+        Row: {
+          conexao_ok: boolean
+          created_at: string | null
+          erro_mensagem: string | null
+          fila_falhas: number | null
+          fila_pendentes: number | null
+          id: string
+          tempo_resposta_ms: number | null
+          veiculos_nao_sincronizados: number | null
+        }
+        Insert: {
+          conexao_ok: boolean
+          created_at?: string | null
+          erro_mensagem?: string | null
+          fila_falhas?: number | null
+          fila_pendentes?: number | null
+          id?: string
+          tempo_resposta_ms?: number | null
+          veiculos_nao_sincronizados?: number | null
+        }
+        Update: {
+          conexao_ok?: boolean
+          created_at?: string | null
+          erro_mensagem?: string | null
+          fila_falhas?: number | null
+          fila_pendentes?: number | null
+          id?: string
+          tempo_resposta_ms?: number | null
+          veiculos_nao_sincronizados?: number | null
+        }
+        Relationships: []
+      }
       sga_sync_logs: {
         Row: {
           action: string

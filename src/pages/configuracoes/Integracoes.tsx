@@ -127,7 +127,7 @@ const categorias: Categoria[] = [
         nome: 'SGA Hinova',
         descricao: 'Sistema de gestão de associados',
         icon: Building2,
-        integracaoTipo: 'hinova',
+        href: '/configuracoes/integracoes/sga-hinova',
         statusKey: 'hinova',
       },
     ],

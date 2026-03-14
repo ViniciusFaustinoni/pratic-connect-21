@@ -135,5 +135,8 @@ verify_jwt = false
 [functions.processar-fila-ia]
 verify_jwt = false
 
+[functions.cron-sga-health-check]
+verify_jwt = false
+
 [functions.cron-app-apolice]
 verify_jwt = false
