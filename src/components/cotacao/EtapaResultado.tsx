@@ -79,6 +79,7 @@ export function EtapaResultado({
   planosSelecionados,
   onTogglePlano,
   valorAdesao,
+  isCenarioIsento,
   onValorAdesaoChange,
   onNovaCotacao,
   onGerarPDF,
