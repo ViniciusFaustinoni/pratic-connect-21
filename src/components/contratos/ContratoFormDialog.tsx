@@ -193,7 +193,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
   // Abre o popup de confirmação de adesão
   const onSubmit = (data: FormData) => {
     // Validação extra (redundante mas segura)
-    if (data.valor_adesao <= 0) {
+    if (!isVendedorExterno && data.valor_adesao <= 0) {
       toast.error('A taxa de filiação deve ser maior que zero!');
       return;
     }
