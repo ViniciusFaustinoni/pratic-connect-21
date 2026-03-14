@@ -173,7 +173,7 @@ export const cotacaoSchema = z.object({
   valor_cota: z.number().min(0),
   taxa_administrativa: z.number().min(0),
   valor_rastreamento: z.number().min(0),
-  valor_adesao: z.number().min(1, 'A taxa de filiação é obrigatória e deve ser maior que zero'),
+  valor_adesao: z.number().min(0, 'A taxa de filiação não pode ser negativa'),
   valor_total_mensal: z.number().min(0),
   valor_assistencia: z.number().min(0).optional(),
   validade_dias: z.number().min(1).max(30).default(7),
