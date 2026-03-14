@@ -776,12 +776,8 @@ serve(async (req) => {
         
         const tentativas = [
           { label: 'GET buscar/cpf limpo', url: `${hinovaApiUrl}/associado/buscar/${cpfLimpo}/cpf`, method: 'GET' as const },
-          { label: 'GET buscar/cpf formatado', url: `${hinovaApiUrl}/associado/buscar/${encodeURIComponent(cpfFormatado)}/cpf`, method: 'GET' as const },
-          { label: 'GET consultar/cpf', url: `${hinovaApiUrl}/associado/consultar/cpf/${cpfLimpo}`, method: 'GET' as const },
-          { label: 'GET associado/cpf', url: `${hinovaApiUrl}/associado/${cpfLimpo}`, method: 'GET' as const },
           { label: 'POST consultar', url: `${hinovaApiUrl}/associado/consultar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpo }) },
           { label: 'POST buscar', url: `${hinovaApiUrl}/associado/buscar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpo }) },
-          { label: 'POST pesquisar', url: `${hinovaApiUrl}/associado/pesquisar`, method: 'POST' as const, body: JSON.stringify({ cpf: cpfLimpo }) },
         ];
 
         for (const tentativa of tentativas) {
