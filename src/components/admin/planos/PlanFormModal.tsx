@@ -175,6 +175,7 @@ export function PlanFormModal({
   const [selectedBenefits, setSelectedBenefits] = useState<PlanBenefitInput[]>([]);
   const [pendingExclusions, setPendingExclusions] = useState<Map<string, string[]>>(new Map());
   const [cotasCategorias, setCotasCategorias] = useState<CotaCategoria[]>([]);
+  const [selectedRegioes, setSelectedRegioes] = useState<string[]>([]);
 
   // Callback for exclusion changes from BenefitsSelector
   const handleExclusionsChange = useCallback((exclusions: Map<string, string[]>) => {
