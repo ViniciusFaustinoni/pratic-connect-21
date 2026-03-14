@@ -10,7 +10,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Car, DollarSign, ExternalLink, GripVertical, GlassWater, Shield, MapPin, Smartphone, Wrench, Fuel, Clock, Truck, ShieldCheck, Ambulance } from 'lucide-react';
+import { ArrowLeft, Car, DollarSign, ExternalLink, GripVertical, GlassWater, Shield, MapPin, Smartphone, Wrench, Fuel, Clock, Truck, ShieldCheck, FileText, Hammer, Flame, Star, Tag, Radio, RefreshCw, Eye, UserCheck } from 'lucide-react';
 import { formatCurrency } from '@/types/termo-filiacao';
 import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
