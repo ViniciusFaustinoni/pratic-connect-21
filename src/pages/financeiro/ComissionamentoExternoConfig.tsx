@@ -32,7 +32,7 @@ function TooltipInfo({ text }: { text: string }) {
 
 export default function ComissionamentoExternoConfig() {
   const { configs, isLoading, getValue, save, isSaving } = useComissaoExternaConfig();
-  const { isDiretor, isDesenvolvedor, isAdminFinanceiro } = usePermissions();
+  const { isDiretor, isDesenvolvedor } = usePermissions();
 
   // Section 1 state
   const [pctAdesao, setPctAdesao] = useState('');
@@ -62,8 +62,32 @@ export default function ComissionamentoExternoConfig() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [configs]);
 
-  // Access control
-  if (!isDiretor && !isDesenvolvedor && !isAdminFinanceiro) {
+  // Dynamic values (computed before any early returns)
+  const volanteDynamic = useMemo(() => {
+    const v = parseFloat(valorVolante) || 0;
+    return formatarMoeda(v);
+  }, [valorVolante]);
+
+  const simulacao = useMemo(() => {
+    const val = parseFloat(valorRecorrente) || 0;
+    const parcelas = parseInt(parcelasRecorrente) || 0;
+    const mensalidadeRef = 200;
+    if (val <= 0 || parcelas <= 0) return null;
+
+    let valorMensal: number;
+    let descricao: string;
+    if (tipoRecorrente === 'fixo') {
+      valorMensal = val;
+      descricao = formatarMoeda(val);
+    } else {
+      valorMensal = (val / 100) * mensalidadeRef;
+      descricao = `${val}% = ${formatarMoeda(valorMensal)}`;
+    }
+    return { valorMensal, descricao, parcelas, total: valorMensal * parcelas, mensalidadeRef };
+  }, [tipoRecorrente, valorRecorrente, parcelasRecorrente]);
+
+  // Access control — after all hooks
+  if (!isDiretor && !isDesenvolvedor) {
     return <Navigate to="/dashboard" replace />;
   }
 
@@ -71,7 +95,7 @@ export default function ComissionamentoExternoConfig() {
     return <div className="flex items-center justify-center py-12 text-muted-foreground">Carregando configurações...</div>;
   }
 
-  // ---- SECTION 1: Comissão de Adesão ----
+  // ---- SECTION HANDLERS ----
   const handleSaveSection1 = () => {
     setSec1Error('');
     const pct = parseFloat(pctAdesao);
@@ -89,7 +113,6 @@ export default function ComissionamentoExternoConfig() {
     ]);
   };
 
-  // ---- SECTION 2: Custo Volante ----
   const handleSaveSection2 = () => {
     setSec2Error('');
     const val = parseFloat(valorVolante);
@@ -100,12 +123,6 @@ export default function ComissionamentoExternoConfig() {
     save([{ chave: 'comissao_ext_valor_volante', valor: String(val) }]);
   };
 
-  const volanteDynamic = useMemo(() => {
-    const v = parseFloat(valorVolante) || 0;
-    return formatarMoeda(v);
-  }, [valorVolante]);
-
-  // ---- SECTION 3: Comissão Recorrente ----
   const handleSaveSection3 = () => {
     setSec3Error('');
     const val = parseFloat(valorRecorrente);
@@ -125,33 +142,6 @@ export default function ComissionamentoExternoConfig() {
     ]);
   };
 
-  const simulacao = useMemo(() => {
-    const val = parseFloat(valorRecorrente) || 0;
-    const parcelas = parseInt(parcelasRecorrente) || 0;
-    const mensalidadeRef = 200;
-
-    if (val <= 0 || parcelas <= 0) return null;
-
-    let valorMensal: number;
-    let descricao: string;
-
-    if (tipoRecorrente === 'fixo') {
-      valorMensal = val;
-      descricao = formatarMoeda(val);
-    } else {
-      valorMensal = (val / 100) * mensalidadeRef;
-      descricao = `${val}% = ${formatarMoeda(valorMensal)}`;
-    }
-
-    return {
-      valorMensal,
-      descricao,
-      parcelas,
-      total: valorMensal * parcelas,
-      mensalidadeRef,
-    };
-  }, [tipoRecorrente, valorRecorrente, parcelasRecorrente]);
-
   return (
     <div className="space-y-6">
       <div>
@@ -164,8 +154,8 @@ export default function ComissionamentoExternoConfig() {
         </p>
       </div>
 
-      <Alert variant="default" className="border-amber-500/50 bg-amber-500/10">
-        <AlertTriangle className="h-4 w-4 text-amber-500" />
+      <Alert variant="default" className="border-amber-500/30 bg-amber-500/5">
+        <AlertTriangle className="h-4 w-4 !text-amber-500" />
         <AlertDescription className="text-sm">
           Alterações nestas configurações se aplicam apenas a novas vendas a partir do momento do salvamento.
           Comissões já geradas não são alteradas retroativamente.

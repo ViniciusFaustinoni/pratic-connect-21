@@ -46,7 +46,7 @@ export function useComissaoExternaConfig() {
       for (const { chave, valor } of updates) {
         const oldValue = configs?.[chave] || DEFAULTS[chave] || '';
 
-        // Try update first; if no rows matched, do insert
+        // Try update first
         const { data: updated, error: updateError } = await supabase
           .from('configuracoes')
           .update({ valor, updated_at: new Date().toISOString(), updated_by: profile?.id || null })
@@ -57,11 +57,17 @@ export function useComissaoExternaConfig() {
         if (!updated || updated.length === 0) {
           const { error: insertError } = await supabase
             .from('configuracoes')
-            .insert({ chave, valor, descricao: `Comissão externa: ${chave}` });
+            .insert({
+              chave,
+              valor,
+              categoria: 'comissao_externa',
+              tipo: 'texto',
+              descricao: `Comissão externa: ${chave}`,
+            });
           if (insertError) throw insertError;
         }
 
-        // History
+        // History via REST (table not fully typed)
         const session = (await supabase.auth.getSession()).data.session;
         await fetch(
           `${import.meta.env.VITE_SUPABASE_URL}/rest/v1/configuracoes_historico`,
