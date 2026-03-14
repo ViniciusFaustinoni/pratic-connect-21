@@ -2126,7 +2126,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                             )}
                           />
                         </div>
-                        {valorAdesao <= 0 && (
+                        {valorAdesao <= 0 && !isCenarioIsento && (
                           <p className="text-xs text-destructive flex items-center gap-1">
                             <AlertCircle className="h-3 w-3" />
                             A taxa de filiação não pode ser zero
