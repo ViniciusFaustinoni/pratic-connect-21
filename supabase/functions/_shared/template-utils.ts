@@ -93,7 +93,7 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'plano.tipo': dados.plano.tipo || dados.plano.linha || 'Normal',
     'plano.linha': dados.plano.linha || '—',
     'plano.coberturas': (dados.plano.coberturas || []).join(', ') || 'Roubo e Furto, Assistência 24 horas',
-    'plano.descricao': (dados.plano.coberturas || []).join(', ') || 'Proteção veicular completa',
+    
     'plano.valor_base': formatCurrency(dados.contrato.valor_mensal),
     'plano.cobertura_fipe': `${dados.plano.cobertura_fipe || 100}%`,
     'plano.cota_participacao': `${dados.plano.cota_participacao || 6}%`,
@@ -150,15 +150,25 @@ export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData)
     );
   }
   
-  // Remover bloco "Serviços:" — captura em qualquer contexto HTML (p, div, td, li, tr, span)
-  // 1) Blocos com tag container (p, div, td, li, tr)
+  // Remover bloco "Serviços:" — todas as variantes possíveis
+  // 1) Container HTML com ç literal
   resultado = resultado.replace(
     /<(p|div|td|li|tr)[^>]*>[\s\S]*?Servi[çc]os\s*:[\s\S]*?<\/\1>/gi,
     ''
   );
-  // 2) Formato inline residual (sem tag container)
+  // 2) Container HTML com &ccedil; entity
   resultado = resultado.replace(
-    /Servi[çc]os\s*:\s*[^\n<]*/gi,
+    /<(p|div|td|li|tr)[^>]*>[\s\S]*?Servi&ccedil;os\s*:[\s\S]*?<\/\1>/gi,
+    ''
+  );
+  // 3) Variable chip residual com plano.descricao
+  resultado = resultado.replace(
+    /<span[^>]*data-variable="[^"]*plano\.descricao[^"]*"[^>]*>[^<]*<\/span>/gi,
+    ''
+  );
+  // 4) Inline residual (todas as formas de ç)
+  resultado = resultado.replace(
+    /Servi([çc]|&ccedil;)os\s*:\s*[^\n<]*/gi,
     ''
   );
 
