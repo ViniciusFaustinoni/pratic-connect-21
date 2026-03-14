@@ -10,7 +10,12 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
 import { formatarMoeda } from '@/utils/format';
 import { format } from 'date-fns';
-import { DollarSign, TrendingUp, Clock, FileDown } from 'lucide-react';
+import { ptBR } from 'date-fns/locale';
+import { DollarSign, TrendingUp, Clock, FileDown, Loader2 } from 'lucide-react';
+import { jsPDF } from 'jspdf';
+import autoTable from 'jspdf-autotable';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 const STATUS_LABELS: Record<string, string> = {
   pendente: 'Pendente',
@@ -37,6 +42,7 @@ export default function ContaCorrenteVendedor() {
   const [tipo, setTipo] = useState<'credito' | 'debito' | ''>('');
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
+  const [exportando, setExportando] = useState(false);
 
   const vendedorId = profile?.id || '';
   const { lancamentos, totalLancamentos, isLoadingLancamentos, saldo, isLoadingSaldo } = useContaCorrenteVendedor({
@@ -44,6 +50,106 @@ export default function ContaCorrenteVendedor() {
   });
 
   const totalPages = Math.ceil(totalLancamentos / 15);
+
+  const handleExportarPDF = async () => {
+    if (!vendedorId) return;
+    setExportando(true);
+    try {
+      // Fetch ALL lancamentos matching current filters (no pagination)
+      let query = supabase
+        .from('cc_vendedor_lancamentos')
+        .select('*')
+        .eq('vendedor_id', vendedorId)
+        .order('data_lancamento', { ascending: true });
+
+      if (dataInicio) query = query.gte('data_lancamento', dataInicio);
+      if (dataFim) query = query.lte('data_lancamento', dataFim);
+      if (tipo) query = query.eq('tipo', tipo);
+      if (status) query = query.eq('status', status);
+
+      const { data, error } = await query;
+      if (error) throw error;
+      const todos = (data || []) as any[];
+
+      if (todos.length === 0) {
+        toast.info('Nenhum lançamento para exportar com os filtros atuais.');
+        setExportando(false);
+        return;
+      }
+
+      const doc = new jsPDF();
+      const pageWidth = doc.internal.pageSize.getWidth();
+      const nomeVendedor = profile?.nome || 'Vendedor';
+
+      // Header
+      doc.setFontSize(14);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`Extrato — ${nomeVendedor}`, pageWidth / 2, 18, { align: 'center' });
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+
+      const periodoTexto = dataInicio || dataFim
+        ? `Período: ${dataInicio ? format(new Date(dataInicio), 'dd/MM/yyyy') : '—'} a ${dataFim ? format(new Date(dataFim), 'dd/MM/yyyy') : '—'}`
+        : 'Período: Todos';
+      doc.text(periodoTexto, pageWidth / 2, 25, { align: 'center' });
+      doc.text(`Gerado em: ${format(new Date(), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}`, pageWidth / 2, 30, { align: 'center' });
+
+      // Summary cards
+      autoTable(doc, {
+        startY: 36,
+        head: [['Indicador', 'Valor']],
+        body: [
+          ['Saldo Atual', formatarMoeda(saldo.saldo_atual)],
+          ['A Receber Este Mês', formatarMoeda(saldo.a_receber_mes)],
+          ['Antecipações em Aberto', formatarMoeda(saldo.antecipacoes_abertas)],
+        ],
+        styles: { fontSize: 9, cellPadding: 3 },
+        headStyles: { fillColor: [59, 130, 246] },
+        columnStyles: { 1: { halign: 'right', fontStyle: 'bold' } },
+        margin: { left: 14, right: 14 },
+        theme: 'grid',
+      });
+
+      let y = (doc as any).lastAutoTable.finalY + 8;
+
+      // Lancamentos table
+      const tableData = todos.map((l: any) => [
+        format(new Date(l.data_lancamento), 'dd/MM/yyyy'),
+        l.descricao?.substring(0, 45) || '',
+        l.tipo === 'credito' ? 'Crédito' : 'Débito',
+        formatarMoeda(l.valor_bruto),
+        l.valor_abatimento > 0 ? formatarMoeda(l.valor_abatimento) : '—',
+        formatarMoeda(l.valor_liquido),
+        STATUS_LABELS[l.status] || l.status,
+        l.saldo_apos != null ? formatarMoeda(l.saldo_apos) : '—',
+      ]);
+
+      autoTable(doc, {
+        startY: y,
+        head: [['Data', 'Descrição', 'Tipo', 'Bruto', 'Abat.', 'Líquido', 'Status', 'Saldo']],
+        body: tableData,
+        styles: { fontSize: 7, cellPadding: 1.5 },
+        headStyles: { fillColor: [59, 130, 246] },
+        margin: { left: 14, right: 14 },
+      });
+
+      // Footer
+      const pageCount = doc.getNumberOfPages();
+      for (let i = 1; i <= pageCount; i++) {
+        doc.setPage(i);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text(`Página ${i} de ${pageCount}`, pageWidth - 14, doc.internal.pageSize.getHeight() - 10, { align: 'right' });
+      }
+
+      doc.save(`extrato-${nomeVendedor.replace(/\s/g, '_')}.pdf`);
+      toast.success('Extrato exportado com sucesso!');
+    } catch (e) {
+      toast.error('Erro ao exportar: ' + (e as Error).message);
+    } finally {
+      setExportando(false);
+    }
+  };
 
   return (
     <div className="space-y-6">
@@ -128,8 +234,9 @@ export default function ContaCorrenteVendedor() {
                 </SelectContent>
               </Select>
             </div>
-            <Button variant="outline" size="sm" disabled>
-              <FileDown className="h-4 w-4 mr-1" /> Exportar PDF
+            <Button variant="outline" size="sm" onClick={handleExportarPDF} disabled={exportando || isLoadingLancamentos}>
+              {exportando ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileDown className="h-4 w-4 mr-1" />}
+              Exportar PDF
             </Button>
           </div>
         </CardContent>
