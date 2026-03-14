@@ -517,6 +517,52 @@ serve(async (req) => {
       try {
 
     // ========================================
+    // GUARD: Detectar loops infinitos (CPF duplicado sem recovery)
+    // ========================================
+    try {
+      const { data: recentFailures } = await supabase
+        .from('sga_sync_logs')
+        .select('error_message, created_at')
+        .eq('veiculo_id', veiculo_id)
+        .eq('associado_id', associado_id)
+        .eq('action', 'cadastrar_associado')
+        .eq('status', 'error')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (recentFailures && recentFailures.length >= 3) {
+        const cpfDuplicateErrors = recentFailures.filter(f => 
+          f.error_message?.toLowerCase().includes('cpf') ||
+          f.error_message?.toLowerCase().includes('não aceitável') ||
+          f.error_message?.toLowerCase().includes('not acceptable')
+        );
+        
+        if (cpfDuplicateErrors.length >= 3) {
+          console.log(`[SGA Sync] ⛔ Loop infinito detectado: ${cpfDuplicateErrors.length} falhas consecutivas de CPF duplicado para veiculo=${veiculo_id}`);
+          await logSync(veiculo_id, associado_id, 'loop_detection', 'error', 
+            { consecutive_failures: cpfDuplicateErrors.length }, null, 
+            'Loop infinito detectado: CPF duplicado sem recovery possível. Marcado como falha permanente.');
+          
+          // Marcar como falha permanente na fila
+          await supabase
+            .from('sga_sync_queue')
+            .update({ 
+              status: 'falha_permanente', 
+              erro_ultimo: 'Loop infinito: CPF duplicado no Hinova sem possibilidade de recovery automático',
+              ultima_tentativa_em: new Date().toISOString()
+            })
+            .eq('veiculo_id', veiculo_id)
+            .eq('associado_id', associado_id);
+          
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+          return;
+        }
+      }
+    } catch (e) {
+      console.log('[SGA Sync] Erro no guard de loop:', e);
+    }
+
+    // ========================================
     // PASSO 1: Buscar dados do associado
     // ========================================
     const { data: associado, error: associadoError } = await supabase
