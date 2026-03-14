@@ -56,7 +56,7 @@ serve(async (req) => {
           whatsapp,
           email
         ),
-        veiculo:veiculos(
+        veiculo:veiculos!servicos_veiculo_id_fkey(
           id,
           placa,
           marca,
