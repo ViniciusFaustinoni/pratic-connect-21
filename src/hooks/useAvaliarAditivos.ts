@@ -13,6 +13,22 @@ export interface VeiculoParaAvaliacao {
   tipo?: 'carro' | 'moto';
   tipoUso?: string;
   instalacaoMesmoDia?: boolean;
+  grupo?: string;
+  categoriaVeiculo?: string; // 'leilao' | 'chassi_remarcado' | 'ex_taxi' | 'placa_vermelha'
+  rastreadorTerceiros?: boolean;
+  proprietarioNome?: string;
+  associadoNome?: string;
+}
+
+export interface ContratoParaAvaliacao {
+  emReativacao?: boolean;
+  inadimplenciaDias?: number;
+}
+
+export interface SinistroParaAvaliacao {
+  tipoEvento?: string;
+  comBombeiros?: boolean;
+  reparoAprovado?: boolean;
 }
 
 export interface BeneficiosContratados {
