@@ -103,6 +103,11 @@ export default function IntegracaoWhatsApp() {
         <TabsContent value="testes" className="space-y-6">
           <WhatsAppTestChat />
         </TabsContent>
+
+        {/* ── Tab Health Check ── */}
+        <TabsContent value="health" className="space-y-6">
+          <IntegracaoHealthPanel integracao="whatsapp" titulo="Conexão WhatsApp" />
+        </TabsContent>
       </Tabs>
     </div>
   );

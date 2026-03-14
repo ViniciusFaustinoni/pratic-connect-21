@@ -371,52 +371,9 @@ export default function IntegracaoSGAHinova() {
           </Card>
         </TabsContent>
 
-        {/* Health Checks History Tab */}
+        {/* Health Check Tab — Generic Panel */}
         <TabsContent value="health">
-          <Card>
-            <Table>
-              <TableHeader>
-                <TableRow>
-                  <TableHead>Data</TableHead>
-                  <TableHead>Conexão</TableHead>
-                  <TableHead>Tempo</TableHead>
-                  <TableHead>Pendentes</TableHead>
-                  <TableHead>Falhas</TableHead>
-                  <TableHead>Veículos Não Sync</TableHead>
-                  <TableHead>Erro</TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {healthChecks.length === 0 ? (
-                  <TableRow>
-                    <TableCell colSpan={7} className="text-center text-muted-foreground py-8">
-                      Nenhum health check registrado
-                    </TableCell>
-                  </TableRow>
-                ) : healthChecks.map(hc => (
-                  <TableRow key={hc.id}>
-                    <TableCell className="text-xs text-muted-foreground whitespace-nowrap">
-                      {formatDateFull(hc.created_at)}
-                    </TableCell>
-                    <TableCell>
-                      {hc.conexao_ok ? (
-                        <CheckCircle className="h-4 w-4 text-green-500" />
-                      ) : (
-                        <XCircle className="h-4 w-4 text-destructive" />
-                      )}
-                    </TableCell>
-                    <TableCell className="text-sm">{hc.tempo_resposta_ms ? `${hc.tempo_resposta_ms}ms` : '—'}</TableCell>
-                    <TableCell className="text-sm">{hc.fila_pendentes}</TableCell>
-                    <TableCell className="text-sm">{hc.fila_falhas}</TableCell>
-                    <TableCell className="text-sm">{hc.veiculos_nao_sincronizados}</TableCell>
-                    <TableCell className="max-w-[200px] truncate text-xs text-muted-foreground">
-                      {hc.erro_mensagem || '—'}
-                    </TableCell>
-                  </TableRow>
-                ))}
-              </TableBody>
-            </Table>
-          </Card>
+          <IntegracaoHealthPanel integracao="hinova" titulo="Conexão API Hinova" />
         </TabsContent>
       </Tabs>
 
