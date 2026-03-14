@@ -50,6 +50,19 @@ export function WhatsAppTestChat() {
         // Número real da IA no WhatsApp (fixo)
         setTelefoneDestino('5521969379982');
         setTelefoneEditavel('5521969379982');
+
+        // Buscar número conectado na Evolution (sender/associado de teste)
+        try {
+          const { data: senderData } = await supabase.functions.invoke('whatsapp-get-sender', {
+            body: {},
+          });
+          if (senderData?.sender) {
+            setSenderNumber(senderData.sender);
+            console.log('[TestChat] Sender Evolution:', senderData.sender);
+          }
+        } catch (senderErr) {
+          console.warn('[TestChat] Não foi possível obter sender:', senderErr);
+        }
       } catch (err) {
         console.error('[TestChat] Erro ao carregar config Meta:', err);
         setTelefoneDestino('5521969379982');
