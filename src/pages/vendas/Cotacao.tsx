@@ -52,6 +52,11 @@ export default function CotacaoPage() {
   const [telefone1, setTelefone1] = useState('');
   const [telefone2, setTelefone2] = useState('');
   const [consultorId, setConsultorId] = useState('');
+  
+  // Indicação
+  const [isIndicacao, setIsIndicacao] = useState(false);
+  const [indicadorId, setIndicadorId] = useState('');
+  const [indicadorNome, setIndicadorNome] = useState('');
 
   // ============================================
   // ETAPA 2 - IDENTIFICAÇÃO DO VEÍCULO
@@ -194,6 +199,9 @@ export default function CotacaoPage() {
     setTelefone1('');
     setTelefone2('');
     setConsultorId('');
+    setIsIndicacao(false);
+    setIndicadorId('');
+    setIndicadorNome('');
     // Reset Etapa 2
     setPlaca('');
     setVeiculoEncontrado(null);
@@ -291,11 +299,15 @@ export default function CotacaoPage() {
       consultor_id: consultorId,
       regiao: regiao,
       modalidade: modalidade,
+      indicacao: isIndicacao ? {
+        indicador_id: indicadorId,
+        indicador_nome: indicadorNome,
+      } : null,
     };
     
     toast.success('Redirecionando para cadastro de contrato...');
     navigate('/vendas/contratos', { state: { fromCotacao: true, dadosCotacao } });
-  }, [planosSelecionados, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, nomeAssociado, emailAssociado, telefone1, telefone2, leadId, consultorId, regiao, modalidade, valorAdesaoCustomizado]);
+  }, [planosSelecionados, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, nomeAssociado, emailAssociado, telefone1, telefone2, leadId, consultorId, regiao, modalidade, valorAdesaoCustomizado, isIndicacao, indicadorId, indicadorNome]);
 
   // Click no stepper
   const handleStepClick = useCallback((step: number) => {
@@ -342,6 +354,12 @@ export default function CotacaoPage() {
             setTelefone2={setTelefone2}
             consultorId={consultorId}
             setConsultorId={setConsultorId}
+            isIndicacao={isIndicacao}
+            setIsIndicacao={setIsIndicacao}
+            indicadorId={indicadorId}
+            setIndicadorId={setIndicadorId}
+            indicadorNome={indicadorNome}
+            setIndicadorNome={setIndicadorNome}
             onNext={handleEtapa1Next}
           />
         )}
