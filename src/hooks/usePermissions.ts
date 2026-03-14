@@ -96,7 +96,7 @@ export interface CotacaoPermissions {
  * Exclusivity flags (isXxxOnly) são computadas a partir da combinação de roles.
  */
 export function usePermissions() {
-  const { profile, roles, hasRole, isGerencia, isVendedor, isFuncionario, user } = useAuth();
+  const { profile, roles, hasRole, isGerencia, isVendedor, isFuncionario, user, loading: isAuthLoading } = useAuth();
   const { getPermissionsForRoles, isOnlyOperational, getOperationalRedirectPath, isRoleOperational, isLoading: isRolesConfigLoading } = useAppRoles();
 
   // ============================================
