@@ -525,9 +525,9 @@ export function EtapaAssinaturaContrato({
               <span className="text-muted-foreground">Signatário:</span>
               <span className="font-medium">{clienteNome}</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
+             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Email:</span>
-              <span className="font-medium">{clienteEmail}</span>
+              <span className="font-medium">{emailEfetivo}</span>
             </div>
           </div>
 
