@@ -271,7 +271,7 @@ export default function CotacaoPage() {
     // Usa o primeiro plano selecionado para o contrato
     const planoParaContrato = planosSelecionados[0];
     const valorAdesaoFinal = valorAdesaoCustomizado ?? planoParaContrato.valorAdesao ?? 0;
-    if (valorAdesaoFinal <= 0) {
+    if (valorAdesaoFinal <= 0 && !isVendedorExterno) {
       toast.error('A taxa de filiação deve ser maior que zero');
       return;
     }

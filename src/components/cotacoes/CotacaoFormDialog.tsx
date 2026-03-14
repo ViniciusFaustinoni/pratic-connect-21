@@ -2165,7 +2165,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             <div className="flex items-center justify-end pt-2 border-t">
               <Button 
                 type="submit" 
-                disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || valorAdesao <= 0 || !dadosAssociadoValidos}
+                disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || (valorAdesao <= 0 && !isCenarioIsento) || !dadosAssociadoValidos}
               >
                 {(createCotacao.isPending || updateCotacao.isPending) ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />

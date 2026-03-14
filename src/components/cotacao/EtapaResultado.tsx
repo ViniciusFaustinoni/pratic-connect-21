@@ -288,7 +288,7 @@ export function EtapaResultado({
             
             <Button
               onClick={onIniciarCadastro}
-              disabled={!temPlanosSelecionados || (valorAdesao !== undefined && valorAdesao !== null && valorAdesao <= 0)}
+              disabled={!temPlanosSelecionados || (valorAdesao !== undefined && valorAdesao !== null && valorAdesao <= 0 && !isCenarioIsento)}
               className="sm:min-w-[160px]"
             >
               <UserPlus className="mr-2 h-4 w-4" />
