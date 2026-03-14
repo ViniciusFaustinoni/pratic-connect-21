@@ -27114,6 +27114,10 @@ export type Database = {
         }
         Returns: string
       }
+      map_to_status_servico: {
+        Args: { p_status: string }
+        Returns: Database["public"]["Enums"]["status_servico"]
+      }
       map_vistoria_tipo_to_servico: {
         Args: { p_tipo: string }
         Returns: Database["public"]["Enums"]["tipo_servico"]
