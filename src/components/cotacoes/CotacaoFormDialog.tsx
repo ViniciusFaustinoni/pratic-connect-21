@@ -1036,6 +1036,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         dia_vencimento: diaVencimento,
         // Região selecionada
         regiao: regiaoSelecionada || null,
+        // Tipo de instalação (somente vendedor externo)
+        ...(isVendedorExterno && cenarioExterno ? {
+          tipo_instalacao: cenarioExterno.includes('rota') ? 'rota' as const : 'base' as const,
+        } : {}),
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
           planos_comparacao: planosSelecionados.map(p => ({
