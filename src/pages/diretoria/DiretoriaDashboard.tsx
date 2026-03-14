@@ -316,24 +316,114 @@ export default function DiretoriaDashboard() {
                 headStyles: { fillColor: [59, 130, 246] },
               });
               
-              // Evolução mensal se houver dados
+              // Helper para pegar Y final da última tabela
+              const getY = () => (doc as any).lastAutoTable?.finalY || 90;
+
+              // Evolução mensal
               if (evolucao && evolucao.length > 0) {
-                const finalY = (doc as any).lastAutoTable?.finalY || 90;
                 doc.setFontSize(12);
                 doc.setTextColor(0);
-                doc.text('Evolução Mensal', 14, finalY + 15);
-                
+                doc.text('Evolução Mensal', 14, getY() + 15);
                 autoTable(doc, {
-                  startY: finalY + 20,
+                  startY: getY() + 20,
                   head: [['Período', 'Receita', 'Sinistros', 'Resultado']],
-                  body: evolucao.map(e => [
-                    e.periodo,
-                    formatCurrency(e.receita),
-                    formatCurrency(e.sinistros),
-                    formatCurrency(e.resultado)
-                  ]),
+                  body: evolucao.map(e => [e.periodo, formatCurrency(e.receita), formatCurrency(e.sinistros), formatCurrency(e.resultado)]),
                   theme: 'striped',
                   headStyles: { fillColor: [59, 130, 246] },
+                });
+              }
+
+              // Indicadores Operacionais
+              if (operacionais) {
+                doc.setFontSize(12);
+                doc.setTextColor(0);
+                doc.text('Indicadores Operacionais', 14, getY() + 15);
+                autoTable(doc, {
+                  startY: getY() + 20,
+                  head: [['Indicador', 'Quantidade']],
+                  body: [
+                    ['Instalações Concluídas', operacionais.instalacoes.toString()],
+                    ['Chamados Assistência', operacionais.assistencias.toString()],
+                  ],
+                  theme: 'striped',
+                  headStyles: { fillColor: [34, 197, 94] },
+                });
+              }
+
+              // Distribuição por Plano
+              if (distribuicao && distribuicao.length > 0) {
+                doc.setFontSize(12);
+                doc.setTextColor(0);
+                doc.text('Distribuição por Plano', 14, getY() + 15);
+                autoTable(doc, {
+                  startY: getY() + 20,
+                  head: [['Plano', 'Associados']],
+                  body: distribuicao.map(d => [d.nome, d.value.toString()]),
+                  theme: 'striped',
+                  headStyles: { fillColor: [139, 92, 246] },
+                });
+              }
+
+              // Rateio Atual
+              if (rateioAtual) {
+                doc.setFontSize(12);
+                doc.setTextColor(0);
+                doc.text('Rateio Atual', 14, getY() + 15);
+                autoTable(doc, {
+                  startY: getY() + 20,
+                  head: [['Campo', 'Valor']],
+                  body: [
+                    ['Status', (rateioAtual as any).status || '-'],
+                    ['Valor da Cota', formatCurrency((rateioAtual as any).valor_cota || 0)],
+                    ['Total Associados', ((rateioAtual as any).total_associados || 0).toString()],
+                    ['Receita Bruta', formatCurrency((rateioAtual as any).receita_bruta || 0)],
+                    ['Despesas Sinistros', formatCurrency((rateioAtual as any).despesas_sinistros || 0)],
+                  ],
+                  theme: 'striped',
+                  headStyles: { fillColor: [245, 158, 11] },
+                });
+              }
+
+              // Métricas de Tempo
+              if (metricasTempo) {
+                doc.setFontSize(12);
+                doc.setTextColor(0);
+                doc.text('Métricas de Tempo', 14, getY() + 15);
+                const metricsBody: string[][] = [
+                  ['Tempo Médio Trânsito', metricasTempo.tempoMedioTransitoFormatado],
+                  ['Tempo Médio Execução', metricasTempo.tempoMedioExecucaoFormatado],
+                  ['Total Tarefas Analisadas', metricasTempo.totalTarefasAnalisadas.toString()],
+                ];
+                if (metricasTempo.porProfissional.length > 0) {
+                  metricsBody.push(['', '']);
+                  metricsBody.push(['--- Por Profissional ---', '']);
+                  metricasTempo.porProfissional.forEach(p => {
+                    metricsBody.push([p.nome, `Trânsito: ${Math.round(p.tempoMedioTransitoMin)}min | Execução: ${Math.round(p.tempoMedioExecucaoMin)}min | Tarefas: ${p.totalTarefas}`]);
+                  });
+                }
+                autoTable(doc, {
+                  startY: getY() + 20,
+                  head: [['Métrica', 'Valor']],
+                  body: metricsBody,
+                  theme: 'striped',
+                  headStyles: { fillColor: [6, 182, 212] },
+                });
+              }
+
+              // Rastreadores por Portador
+              if (rastreadoresPortador && rastreadoresPortador.porPortador.length > 0) {
+                doc.setFontSize(12);
+                doc.setTextColor(0);
+                doc.text('Rastreadores por Portador', 14, getY() + 15);
+                const rastBody: string[][] = rastreadoresPortador.porPortador.map(p => [p.nome, p.quantidade.toString()]);
+                rastBody.push(['Sem Portador', rastreadoresPortador.semPortador.toString()]);
+                rastBody.push(['Total em Porte', rastreadoresPortador.totalEmPorte.toString()]);
+                autoTable(doc, {
+                  startY: getY() + 20,
+                  head: [['Portador', 'Quantidade']],
+                  body: rastBody,
+                  theme: 'striped',
+                  headStyles: { fillColor: [236, 72, 153] },
                 });
               }
               
