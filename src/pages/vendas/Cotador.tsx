@@ -62,6 +62,7 @@ import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/use
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { PlacaBlacklistModal } from '@/components/cotacoes/PlacaBlacklistModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // ============================================
 // INTERFACES
