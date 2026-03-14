@@ -1,13 +1,42 @@
 
 
-## Exibição Progressiva de Planos + Campo de Região — ✅ Implementado
+# Corrigir persistência de endereço no agendamento de vistoria completa
 
-### Alterações realizadas
+## Problema
 
-1. **Removidos 5 resets desnecessários** de `setCotacaoCalculada(false)` em `Cotador.tsx` — mantido apenas no `limparTudo`
-2. **Adicionado `useEffect` auto-display** — seta `cotacaoCalculada = true` quando `valorFipe > 0` e `planosDB` tem resultados
-3. **Adicionado campo Região** (RJ, Lagos, SP) no formulário, antes de "Uso para aplicativo"
-4. **Substituído hardcode `regiao: 'rj'`** por estado `regiao` no `parametrosPlanos`
-5. **Auto-atualização de tab** — quando lista de planos muda, tab selecionada é revalidada
-6. **`regiao` incluída** no payload de salvar cotação (`CriarCotacaoPayload` + `useCotacao.ts`)
-7. **`regiao` resetada** no `limparTudo` para `'rj'`
+Na linha 847 de `CotacaoContratacao.tsx`, o componente `AgendamentoVistoriaCompleta` é renderizado **sem a prop `enderecoInicial`**. Os dados de endereço do cliente existem na cotação (`cliente_cep`, `cliente_logradouro`, etc.) e já são passados corretamente em outro ponto do fluxo (linha 546), mas não nesta instância.
+
+## Correção
+
+### 1. Passar `enderecoInicial` ao `AgendamentoVistoriaCompleta` (CotacaoContratacao.tsx ~linha 847)
+
+Adicionar a prop `enderecoInicial` com os dados de endereço da cotação, igual ao padrão já usado na Etapa 3:
+
+```tsx
+<AgendamentoVistoriaCompleta
+  cotacaoId={cotacao.id}
+  tipoVistoria="autovistoria"
+  ...props existentes...
+  enderecoInicial={{
+    cep: cotacao.cliente_cep || '',
+    logradouro: cotacao.cliente_logradouro || '',
+    numero: cotacao.cliente_numero || '',
+    complemento: cotacao.cliente_complemento || '',
+    bairro: cotacao.cliente_bairro || '',
+    cidade: cotacao.cliente_cidade || '',
+    estado: cotacao.cliente_uf || '',
+  }}
+  onConfirmar={...}
+/>
+```
+
+### 2. Verificar que `AgendamentoVistoriaCompleta` repassa `enderecoInicial` ao `AgendamentoVistoria`
+
+O componente já aceita e repassa a prop — confirmado no código existente (linha 76 de `AgendamentoVistoriaCompleta.tsx` e linha 67-75 de `AgendamentoVistoria.tsx`).
+
+## Arquivos alterados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/public/CotacaoContratacao.tsx` | Adicionar prop `enderecoInicial` na instância do `AgendamentoVistoriaCompleta` |
+
