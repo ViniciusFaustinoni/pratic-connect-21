@@ -750,7 +750,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       if (cotacaoParaEditar.valor_adicional) {
         form.setValue('valor_adicional', cotacaoParaEditar.valor_adicional);
       }
-      if (cotacaoParaEditar.valor_adesao) {
+      if (cotacaoParaEditar.valor_adesao !== null && cotacaoParaEditar.valor_adesao !== undefined) {
         form.setValue('valor_adesao', cotacaoParaEditar.valor_adesao);
       }
       if (cotacaoParaEditar.validade_dias) {
