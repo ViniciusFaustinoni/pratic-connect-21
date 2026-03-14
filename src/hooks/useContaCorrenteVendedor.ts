@@ -79,8 +79,8 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
 
       if (dataInicio) query = query.gte('data_lancamento', dataInicio);
       if (dataFim) query = query.lte('data_lancamento', dataFim);
-      if (tipo) query = query.eq('tipo', tipo);
-      if (status) query = query.eq('status', status);
+      if (tipo) query = query.eq('tipo', tipo as any);
+      if (status) query = query.eq('status', status as any);
 
       const { data, error, count } = await query;
       if (error) throw error;
