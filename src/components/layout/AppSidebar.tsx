@@ -279,6 +279,7 @@ const menuConfig: {
         { title: 'Extrato', url: '/financeiro/extrato', icon: List },
         { title: 'Extratos Bancários', url: '/financeiro/extratos-bancarios', icon: FileText },
         { title: 'Contas Bancárias', url: '/financeiro/contas-bancarias', icon: Building2 },
+        { title: 'Comissionamento Externo', url: '/financeiro/configuracoes/comissionamento-externo', icon: DollarSign },
       ],
     },
     {
