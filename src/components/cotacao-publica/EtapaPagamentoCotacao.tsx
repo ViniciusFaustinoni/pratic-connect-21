@@ -66,6 +66,8 @@ export function EtapaPagamentoCotacao({
   const [verificando, setVerificando] = useState(false);
   const [copiado, setCopiado] = useState(false);
   const [formaPagamento, setFormaPagamento] = useState<FormaPagamento>('PIX');
+  const [adesaoZerada, setAdesaoZerada] = useState(false);
+  const [msgAdesaoZerada, setMsgAdesaoZerada] = useState<string>('');
 
   // 1. Gerar contrato ao montar
   const gerarContrato = useCallback(async () => {
