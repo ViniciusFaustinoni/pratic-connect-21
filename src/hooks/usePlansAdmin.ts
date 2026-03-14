@@ -314,10 +314,10 @@ export function useDuplicatePlan() {
 
   return useMutation({
     mutationFn: async (id: string) => {
-      // Get original plan with benefits
+      // Get original plan with benefits and regions
       const { data: original, error: fetchError } = await supabase
         .from('planos')
-        .select('*, planos_beneficios(*)')
+        .select('*, planos_beneficios(*), planos_regioes(regiao_id)')
         .eq('id', id)
         .single();
 
