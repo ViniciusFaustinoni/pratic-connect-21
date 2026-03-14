@@ -388,6 +388,144 @@ serve(async (req) => {
 
     console.log('[CriarInstalacaoPosPagamento] Instalação criada com sucesso:', novaInstalacao.id);
 
+    // 6.1 GERAR LANÇAMENTOS CC VENDEDOR EXTERNO (se aplicável)
+    try {
+      // Buscar vendedor_id e tipo_instalacao da cotação
+      const { data: cotacaoVendedor } = await supabase
+        .from('cotacoes')
+        .select('vendedor_id, tipo_instalacao, valor_adesao')
+        .eq('id', cotacaoId)
+        .single();
+
+      if (cotacaoVendedor?.vendedor_id) {
+        // Verificar se o vendedor é externo (tem perfil vendedor_externo)
+        const { data: perfilVendedor } = await supabase
+          .from('user_roles')
+          .select('role')
+          .eq('user_id', cotacaoVendedor.vendedor_id)
+          .eq('role', 'vendedor_externo')
+          .maybeSingle();
+
+        if (perfilVendedor) {
+          console.log('[CriarInstalacaoPosPagamento] Vendedor externo detectado, gerando lançamentos CC...');
+          
+          // Verificar se já existem lançamentos para este contrato (evitar duplicatas)
+          const { data: lancExistente } = await supabase
+            .from('cc_vendedor_lancamentos')
+            .select('id')
+            .eq('contrato_id', contrato.id)
+            .eq('vendedor_id', cotacaoVendedor.vendedor_id)
+            .limit(1);
+
+          if (lancExistente && lancExistente.length > 0) {
+            console.log('[CriarInstalacaoPosPagamento] Lançamentos CC já existem, pulando...');
+          } else {
+            // Buscar configurações de comissão
+            const { data: configs } = await supabase
+              .from('configuracoes')
+              .select('chave, valor')
+              .in('chave', [
+                'comissao_ext_pct_adesao',
+                'comissao_ext_valor_volante',
+                'comissao_ext_tipo_recorrente',
+                'comissao_ext_valor_recorrente',
+                'comissao_ext_parcelas_recorrente',
+              ]);
+
+            const configMap: Record<string, string> = {
+              comissao_ext_pct_adesao: '100',
+              comissao_ext_valor_volante: '50',
+              comissao_ext_tipo_recorrente: 'percentual',
+              comissao_ext_valor_recorrente: '0',
+              comissao_ext_parcelas_recorrente: '6',
+            };
+            configs?.forEach(c => { if (c.valor) configMap[c.chave] = c.valor; });
+
+            const pctAdesao = Number(configMap.comissao_ext_pct_adesao) / 100;
+            const valorVolante = Number(configMap.comissao_ext_valor_volante);
+            const tipoRecorrente = configMap.comissao_ext_tipo_recorrente;
+            const valorRecorrente = Number(configMap.comissao_ext_valor_recorrente);
+            const parcelasRecorrente = Number(configMap.comissao_ext_parcelas_recorrente);
+
+            const valorAdesao = cotacaoVendedor.valor_adesao || 0;
+            const tipoInstalacao = cotacaoVendedor.tipo_instalacao || 'base';
+            const cobrou = valorAdesao > 0;
+            const volante = tipoInstalacao === 'volante' || tipoInstalacao === 'rota';
+            const hoje = new Date().toISOString().slice(0, 10);
+
+            // Buscar nome do associado
+            const { data: assocData } = await supabase
+              .from('associados')
+              .select('nome')
+              .eq('id', contrato.associado_id)
+              .single();
+            const nomeAssociado = assocData?.nome || 'Associado';
+
+            // Cenário 3: nenhum lançamento
+            if (!cobrou && !volante) {
+              console.log('[CriarInstalacaoPosPagamento] Cenário isenta+base: nenhum lançamento CC');
+            } else {
+              const inserts: any[] = [];
+
+              // Crédito adesão (cenários 1 e 4)
+              if (cobrou) {
+                const comissaoAdesao = valorAdesao * pctAdesao;
+                inserts.push({
+                  vendedor_id: cotacaoVendedor.vendedor_id,
+                  associado_id: contrato.associado_id,
+                  contrato_id: contrato.id,
+                  tipo: 'credito', categoria: 'adesao',
+                  descricao: `Comissão de adesão — ${nomeAssociado} — R$ ${comissaoAdesao.toFixed(2)}`,
+                  valor_bruto: comissaoAdesao, valor_abatimento: 0, valor_liquido: comissaoAdesao,
+                  status: 'a_pagar', data_lancamento: hoje,
+                });
+              }
+
+              // Débito volante (cenários 1 e 2)
+              if (volante) {
+                inserts.push({
+                  vendedor_id: cotacaoVendedor.vendedor_id,
+                  associado_id: contrato.associado_id,
+                  contrato_id: contrato.id,
+                  tipo: 'debito', categoria: 'volante',
+                  descricao: `Débito instalação volante — ${nomeAssociado} — R$ ${valorVolante.toFixed(2)}`,
+                  valor_bruto: valorVolante, valor_abatimento: 0, valor_liquido: valorVolante,
+                  status: cobrou ? 'a_pagar' : 'pendente',
+                  data_lancamento: hoje,
+                });
+              }
+
+              // Parcelas recorrentes (cenários 1, 2, 4)
+              for (let i = 1; i <= parcelasRecorrente; i++) {
+                const valorBruto = tipoRecorrente === 'fixo' ? valorRecorrente : 0;
+                inserts.push({
+                  vendedor_id: cotacaoVendedor.vendedor_id,
+                  associado_id: contrato.associado_id,
+                  contrato_id: contrato.id,
+                  tipo: 'credito', categoria: 'recorrente',
+                  descricao: `Comissão recorrente parcela ${i}/${parcelasRecorrente} — ${nomeAssociado}`,
+                  valor_bruto: valorBruto, valor_abatimento: 0, valor_liquido: valorBruto,
+                  parcela_numero: i, parcela_total: parcelasRecorrente,
+                  status: 'pendente',
+                  data_lancamento: hoje,
+                });
+              }
+
+              const { error: ccError } = await supabase.from('cc_vendedor_lancamentos').insert(inserts);
+              if (ccError) {
+                console.error('[CriarInstalacaoPosPagamento] Erro ao gerar lançamentos CC:', ccError);
+              } else {
+                console.log(`[CriarInstalacaoPosPagamento] ✓ ${inserts.length} lançamentos CC gerados para vendedor ${cotacaoVendedor.vendedor_id}`);
+              }
+            }
+          }
+        }
+      }
+    } catch (ccErr) {
+      console.error('[CriarInstalacaoPosPagamento] Erro ao processar CC vendedor externo:', ccErr);
+      // Não falhar a criação da instalação por causa de CC
+    }
+
     // 7. DISPARAR ATRIBUIÇÃO AUTOMÁTICA IMEDIATA
     try {
       await fetch(`${supabaseUrl}/functions/v1/cron-atribuir-tarefas`, {
