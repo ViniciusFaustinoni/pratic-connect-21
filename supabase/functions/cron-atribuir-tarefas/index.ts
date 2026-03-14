@@ -293,14 +293,17 @@ serve(async (req) => {
                 const lon = parseFloat(geoData[0].lon);
                 
                 // Atualizar coordenadas no banco
-                await supabase.from('servicos').update({ latitude: lat, longitude: lon }).eq('id', svc.id);
+                const { error: svcUpdateErr } = await supabase.from('servicos').update({ latitude: lat, longitude: lon }).eq('id', svc.id);
+                if (svcUpdateErr) console.error(`[cron-atribuir-tarefas] Erro ao atualizar coords servicos ${svc.id}:`, svcUpdateErr.message);
                 
-                // Atualizar também na tabela de origem
+                // Atualizar também na tabela de origem com nomes corretos de coluna
                 if (svc.instalacao_origem_id) {
-                  await supabase.from('instalacoes').update({ latitude: lat, longitude: lon }).eq('id', svc.instalacao_origem_id);
+                  const { error: instErr } = await supabase.from('instalacoes').update({ endereco_latitude: lat, endereco_longitude: lon }).eq('id', svc.instalacao_origem_id);
+                  if (instErr) console.error(`[cron-atribuir-tarefas] Erro ao atualizar coords instalacoes ${svc.instalacao_origem_id}:`, instErr.message);
                 }
                 if (svc.vistoria_origem_id) {
-                  await supabase.from('vistorias').update({ endereco_latitude: lat, endereco_longitude: lon }).eq('id', svc.vistoria_origem_id);
+                  const { error: vistErr } = await supabase.from('vistorias').update({ endereco_latitude: lat, endereco_longitude: lon }).eq('id', svc.vistoria_origem_id);
+                  if (vistErr) console.error(`[cron-atribuir-tarefas] Erro ao atualizar coords vistorias ${svc.vistoria_origem_id}:`, vistErr.message);
                 }
                 
                 console.log(`[cron-atribuir-tarefas] 📍 Geocodificado on-the-fly: ${svc.id} -> (${lat}, ${lon})`);
