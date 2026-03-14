@@ -290,8 +290,9 @@ export function EscolhaPlano({
                     </Badge>
                   </div>
 
-                  {/* Preço - Destaque Grande */}
-                  <div className="mb-4 text-center">
+                  {/* Preço - Valor mensal */}
+                  <div className="mb-2 text-center">
+                    <p className="text-xs text-muted-foreground uppercase tracking-wide mb-1">Valor mensal</p>
                     <div className="flex items-baseline justify-center gap-1 flex-wrap">
                       <span className={cn(
                         'text-4xl font-bold tracking-tight',
@@ -301,12 +302,16 @@ export function EscolhaPlano({
                       </span>
                       <span className="text-muted-foreground text-base">/mês</span>
                     </div>
-                    {plano.valorAdesao && plano.valorAdesao > 0 && (
-                      <p className="text-sm text-muted-foreground mt-1">
-                        + {formatarMoeda(plano.valorAdesao)} de adesão
-                      </p>
-                    )}
                   </div>
+                  {/* Taxa de adesão */}
+                  {plano.valorAdesao != null && plano.valorAdesao > 0 && (
+                    <div className="mb-4 text-center">
+                      <p className="text-xs text-muted-foreground uppercase tracking-wide mb-0.5">Taxa de adesão</p>
+                      <p className="text-base font-semibold text-foreground">
+                        {formatarMoeda(plano.valorAdesao)}
+                      </p>
+                    </div>
+                  )}
 
                   {/* Descrição curta */}
                   <p className="text-sm text-muted-foreground mb-6 text-center">
