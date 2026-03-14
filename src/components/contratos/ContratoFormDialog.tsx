@@ -648,7 +648,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
               </Button>
               <Button 
                 type="submit" 
-                disabled={isSubmitting || form.watch('valor_adesao') <= 0}
+                disabled={isSubmitting || (!isVendedorExterno && form.watch('valor_adesao') <= 0)}
               >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Criar Rascunho
