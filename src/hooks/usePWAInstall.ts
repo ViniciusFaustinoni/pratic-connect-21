@@ -12,6 +12,7 @@ interface PWAInstallState {
   canInstall: boolean;
   isIOS: boolean;
   isAndroid: boolean;
+  isWebView: boolean;
   isSafari: boolean;
   isChrome: boolean;
   promptInstall: () => Promise<boolean>;
