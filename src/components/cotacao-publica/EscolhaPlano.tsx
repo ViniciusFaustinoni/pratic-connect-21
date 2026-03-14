@@ -166,7 +166,7 @@ export function EscolhaPlano({
             </Badge>
             <div className="space-y-3 mt-2">
               <div>
-                <p className="text-xs text-muted-foreground uppercase tracking-wide">Valor mensal</p>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Valor médio mensal</p>
                 <div className="text-3xl font-bold text-foreground">
                   {formatarMoeda(planoSelecionado.valorMensal)}
                   <span className="text-sm font-normal text-muted-foreground">/mês</span>
