@@ -243,7 +243,10 @@ serve(async (req) => {
       contratoHTML = generateTermoAfiliacao(templateData);
       
       // Injetar aditivos dinâmicos antes do </body>
-      const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData);
+      const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData, {
+        beneficios_codigos: extrairCodigosBeneficios(contrato),
+        configRastreador: templateData.configRastreador,
+      });
       if (aditivosHTML) {
         contratoHTML = contratoHTML.replace('</body>', `${aditivosHTML}</body>`);
       }
