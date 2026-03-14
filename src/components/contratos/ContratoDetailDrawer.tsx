@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   FileText, CheckCircle, XCircle, Clock, Send, Pause, 
   ExternalLink, Phone, Mail, MapPin, Car, User, Link,
