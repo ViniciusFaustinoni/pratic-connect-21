@@ -1223,13 +1223,7 @@ serve(async (req) => {
         await logSync(veiculo_id, associado_id, 'validar_veiculo', 'error', null, null, `${label} não informado`);
         await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
         await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', `${label} não informado`, codigoAssociadoHinova);
-        return new Response(
-          JSON.stringify({ 
-            success: false, error: msg,
-            step: 'validacao_veiculo', campo_faltante: campo
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return;
       }
     }
 
