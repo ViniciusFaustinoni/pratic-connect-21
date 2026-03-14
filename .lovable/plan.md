@@ -1,34 +1,45 @@
 
 
-# Fix: Proposta só deve aparecer para analista de cadastro após instalação concluída
+# Fix: Enviar notificação "Proteção 360º Ativada" após aprovação do analista
 
 ## Problema
-A query `usePropostasPendentes` (linha 480-525) inclui propostas na fila do analista de cadastro quando:
-1. Instalação concluída ✅ (correto)
-2. **Autovistoria com fotos** ❌ (incorreto — aparece durante vistoria de instalação)
-3. **Vistoria na base realizada** ❌ (incorreto — aparece antes da instalação)
+Quando o analista de cadastro aprova a proposta (após instalação já concluída), o fluxo em `usePropostasPendentes.ts`:
+1. Ativa `cobertura_total: true` no veículo ✅
+2. Chama `ativar-associado` → envia mensagem de boas-vindas ✅
+3. **Não envia a notificação `cobertura_total_ativada`** ❌
 
-Ou seja, quando o vistoriador/instalador realiza a vistoria e envia fotos, o associado já aparece para o analista aprovar, mesmo sem a instalação ter sido concluída.
+O associado recebe apenas o "Bem-vindo à PRATIC!" mas nunca recebe o "🛡️ Proteção 360º Ativada!".
 
 ## Solução
-Simplificar o filtro: a proposta **só aparece** para o analista de cadastro quando `instalacaoInfo` existe (instalação concluída). As vistorias e autovistorias continuam sendo carregadas para exibição, mas não devem ser critério suficiente para incluir a proposta na fila.
+Adicionar o disparo de `cobertura_total_ativada` no fluxo de aprovação do analista, logo após a linha 1508 (onde loga "Cobertura total ativada"), buscando os dados do veículo (placa, marca, modelo) e invocando `notificar-cliente`.
 
 ## Alteração
 
-**Arquivo:** `src/hooks/usePropostasPendentes.ts` (linhas ~480-525)
+**Arquivo:** `src/hooks/usePropostasPendentes.ts` (~linha 1508)
 
-Substituir a lógica de filtro:
+Após `console.log('[useAprovarProposta] Cobertura total ativada...')`, adicionar:
+
 ```typescript
-// ANTES (errado):
-if (!instalacaoInfo && !temAutovistoria && !temVistoriaBaseRealizada) {
-  return null;
-}
+// Notificar associado sobre Proteção 360º
+const { data: veiculoInfo } = await supabase
+  .from('veiculos')
+  .select('placa, marca, modelo')
+  .eq('id', veiculoId)
+  .single();
 
-// DEPOIS (correto):
-if (!instalacaoInfo) {
-  return null;
-}
+supabase.functions.invoke('notificar-cliente', {
+  body: {
+    tipo: 'cobertura_total_ativada',
+    associado_id: associadoId,
+    dados: {
+      placa: veiculoInfo?.placa || '',
+      marca: veiculoInfo?.marca || '',
+      modelo: veiculoInfo?.modelo || '',
+    },
+  },
+}).catch(err => console.warn('[useAprovarProposta] Erro ao notificar cobertura 360 (não crítico):', err));
 ```
 
-A busca de `vistoriaBaseInfo` e `temAutovistoria` permanece para exibição no painel de análise, mas deixa de ser condição de inclusão na fila.
+## Arquivo a modificar
+1. `src/hooks/usePropostasPendentes.ts` — Adicionar disparo de `cobertura_total_ativada` no bloco `jaTemInstalacaoConcluida`
 
