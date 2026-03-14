@@ -955,16 +955,7 @@ serve(async (req) => {
         if (isTokenBearerError && tokenUsuario) {
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
           await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'Token Bearer expirado');
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Token Bearer da API Hinova inválido ou expirado.',
-              step: 'associado',
-              action_required: 'update_bearer_token',
-              details: associadoData
-            }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          return;
         }
 
         // CPF duplicado
