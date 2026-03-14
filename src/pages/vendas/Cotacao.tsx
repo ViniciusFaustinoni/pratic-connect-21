@@ -199,6 +199,9 @@ export default function CotacaoPage() {
     setTelefone1('');
     setTelefone2('');
     setConsultorId('');
+    setIsIndicacao(false);
+    setIndicadorId('');
+    setIndicadorNome('');
     // Reset Etapa 2
     setPlaca('');
     setVeiculoEncontrado(null);
