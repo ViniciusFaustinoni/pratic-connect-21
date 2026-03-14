@@ -905,11 +905,12 @@ export function useVistoriaCompletaPorServico(servicoId: string | null) {
           .maybeSingle();
 
         if (vistoriaInstalacao) {
-          // Atualizar serviço com vistoria_origem_id
-          await supabase
+          // Atualizar serviço com vistoria_origem_id (com checagem de erro)
+          const { error: updateErr } = await supabase
             .from('servicos')
             .update({ vistoria_origem_id: vistoriaInstalacao.id })
             .eq('id', servicoId);
+          if (updateErr) console.error('[useVistoriaCompletaPorServico] Erro ao vincular vistoria_origem_id:', updateErr);
           return vistoriaInstalacao;
         }
       }
