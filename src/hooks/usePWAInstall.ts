@@ -159,6 +159,7 @@ export function usePWAInstall(): PWAInstallState {
     canInstall,
     isIOS,
     isAndroid,
+    isWebView,
     isSafari,
     isChrome,
     promptInstall,
