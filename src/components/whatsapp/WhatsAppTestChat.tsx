@@ -119,6 +119,13 @@ export function WhatsAppTestChat() {
       setMensagens(prev => [...prev, msgLocal]);
       setMensagem('');
 
+      // Buscar o número da instância Evolution (sender) para usar no payload sintético
+      const { data: instanciaData } = await supabase
+        .from('whatsapp_instancias')
+        .select('instance_name, api_url')
+        .limit(1)
+        .maybeSingle();
+
       // Enviar mensagem REAL via Evolution API (forçando Evolution mesmo com Meta ativa)
       const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
         body: {
@@ -136,7 +143,52 @@ export function WhatsAppTestChat() {
         m.id === msgLocal.id ? { ...m, status: 'enviada' } : m
       ));
 
-      toast.success('Mensagem enviada via Evolution API! Aguarde a resposta da IA...');
+      // Buscar número da Evolution (o sender) para simular entrada como associado
+      // O número da Evolution é o que está cadastrado como associado para testes
+      let senderNumber = '';
+      try {
+        const { data: statusData } = await supabase.functions.invoke('whatsapp-status', {
+          body: {},
+        });
+        senderNumber = statusData?.ownerJid?.replace('@s.whatsapp.net', '').replace(/\D/g, '') || '';
+      } catch {
+        // fallback: tentar pegar do log de envio
+      }
+
+      if (!senderNumber) {
+        // Fallback: usar o número da Evolution dos logs de envio
+        senderNumber = data?.sender?.replace('@s.whatsapp.net', '').replace(/\D/g, '') || '';
+      }
+
+      if (senderNumber) {
+        // Invocar diretamente o whatsapp-webhook com payload sintético _meta_delegate
+        // Isso simula o que o whatsapp-meta-webhook faria quando a Meta recebe a mensagem
+        console.log(`[TestChat] Simulando entrada da IA com sender: ${senderNumber}`);
+        
+        supabase.functions.invoke('whatsapp-webhook', {
+          body: {
+            event: 'messages.upsert',
+            sender: `${senderNumber}@s.whatsapp.net`,
+            _meta_delegate: true,
+            data: {
+              key: {
+                remoteJid: `${senderNumber}@s.whatsapp.net`,
+                fromMe: false,
+                id: `test_${Date.now()}`,
+              },
+              message: { conversation: texto },
+            },
+          },
+        }).then((res) => {
+          console.log('[TestChat] Delegação IA resultado:', res.data);
+        }).catch((err) => {
+          console.error('[TestChat] Erro na delegação IA:', err);
+        });
+
+        toast.success('Mensagem enviada! IA processando...');
+      } else {
+        toast.success('Mensagem enviada via Evolution API! Aguarde a resposta da IA...');
+      }
     } catch (err: any) {
       toast.error(`Erro ao enviar: ${err.message}`);
       setMensagens(prev => prev.map(m =>
