@@ -28,7 +28,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/vendas/distribuicao': { label: 'Distribuição' },
   
   // Cadastro
-  '/cadastro': { label: 'Cadastro' },
+  '/cadastro': { label: 'Cadastro' }, // No direct route — redirects handled in breadcrumb
   '/cadastro/associados': { label: 'Associados' },
   '/cadastro/veiculos': { label: 'Veículos' },
   '/cadastro/documentos': { label: 'Documentos' },
