@@ -744,6 +744,24 @@ interface TermoAditivo {
   ordem: number;
 }
 
+/**
+ * Extrai códigos de benefícios adicionais contratados do templateData/contrato.
+ * Procura em adicionais_selecionados (array de objetos com codigo) ou beneficios_codigos.
+ */
+export function extrairCodigosBeneficios(dados: any): string[] {
+  // Se já tem array de códigos direto
+  if (Array.isArray(dados?.beneficios_codigos)) return dados.beneficios_codigos;
+  
+  // Extrair de adicionais_selecionados (formato cotação/contrato)
+  const adicionais = dados?.adicionais_selecionados || dados?.contrato?.adicionais_selecionados || [];
+  if (Array.isArray(adicionais)) {
+    return adicionais
+      .map((a: any) => typeof a === 'string' ? a : (a?.codigo || a?.id || ''))
+      .filter(Boolean);
+  }
+  return [];
+}
+
 function avaliarRegraEdge(
   regra: RegraAditivo,
   veiculo: any,
