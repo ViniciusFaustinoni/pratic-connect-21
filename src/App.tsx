@@ -509,6 +509,7 @@ const App = () => (
               <Route path="/financeiro/extratos/:id" element={<ExtratoDetalhe />} />
               <Route path="/financeiro/contas-bancarias" element={<ContasBancarias />} />
               <Route path="/financeiro/extrato-associado" element={<ExtratoAssociado />} />
+              <Route path="/financeiro/configuracoes/comissionamento-externo" element={<ComissionamentoExternoConfig />} />
               
               {/* Cobrança */}
               <Route path="/cobranca" element={<CobrancaDashboard />} />
