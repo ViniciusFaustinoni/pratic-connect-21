@@ -580,18 +580,25 @@ export function AgendamentoVistoria({
                 )}
 
                 {/* Botão Continuar */}
-                {formularioValido() && (
+                {(dataSelecionada && periodoSelecionado && endereco.logradouro) && (
                   <motion.div
                     initial={{ opacity: 0 }}
                     animate={{ opacity: 1 }}
+                    className="space-y-2"
                   >
                     <Button
                       className="w-full"
                       size="lg"
                       onClick={() => setMostrarResumo(true)}
+                      disabled={!formularioValido()}
                     >
                       Revisar agendamento
                     </Button>
+                    {!formularioValido() && (
+                      <p className="text-xs text-center text-muted-foreground">
+                        Preencha todos os campos obrigatórios para continuar
+                      </p>
+                    )}
                   </motion.div>
                 )}
               </motion.div>
