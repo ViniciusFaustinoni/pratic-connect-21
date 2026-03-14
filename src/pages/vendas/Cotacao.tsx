@@ -39,6 +39,7 @@ import { estimarValorFipe } from '@/utils/fipe';
 
 export default function CotacaoPage() {
   const navigate = useNavigate();
+  const { isVendedorExterno } = usePermissions();
   
   // Estado da etapa atual
   const [etapaAtual, setEtapaAtual] = useState(1);
