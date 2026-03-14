@@ -88,8 +88,12 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
   // 3. Sanitizar blocos de assinatura manual que possam existir no template
   conteudoHTML = sanitizeSignatureBlocks(conteudoHTML);
   
-  // 4. Buscar e gerar aditivos dinâmicos
-  const aditivosHTML = await buscarEGerarAditivos(supabase, dados.veiculo, dados);
+  // 4. Buscar e gerar aditivos dinâmicos (com contexto de benefícios)
+  const adicionaisCodigos = extrairCodigosBeneficios(dados);
+  const aditivosHTML = await buscarEGerarAditivos(supabase, dados.veiculo, dados, {
+    beneficios_codigos: adicionaisCodigos,
+    configRastreador: dados.configRastreador,
+  });
   
   // Injetar seção de rastreador se obrigatório (não coberta pelos aditivos do banco)
   const rastreadorResult = exigeRastreador(dados.veiculo, dados.configRastreador);
