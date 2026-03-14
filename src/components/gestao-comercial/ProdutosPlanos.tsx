@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Package, Plus, Users, DollarSign, Shield, ChevronRight, Edit, Copy, Trash2, MoreVertical, Star, Gift } from 'lucide-react';
+import { Package, Plus, Users, DollarSign, Shield, ChevronRight, Edit, Copy, Trash2, MoreVertical, Star, Gift, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
