@@ -373,8 +373,11 @@ export default function CotadorPage() {
       if (!cotacaoCalculada) {
         setCotacaoCalculada(true);
         setPlanoSelecionadoTab(planosDB.find(p => p.destaque)?.id || planosDB[1]?.id || planosDB[0]?.id || '');
-        // Inicializar adesão com 1% FIPE (mínimo R$ 100)
-        setValorAdesaoCustom(Math.max(100, Math.round(valorFipe * 0.01 * 100) / 100));
+        // Inicializar adesão com 1% FIPE (mínimo R$ 100) — exceto se vendedor externo escolheu cenário isento
+        const cenarioZeraAdesao = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
+        if (!cenarioZeraAdesao) {
+          setValorAdesaoCustom(Math.max(100, Math.round(valorFipe * 0.01 * 100) / 100));
+        }
       }
     }
   }, [valorFipe, planosDB]);
