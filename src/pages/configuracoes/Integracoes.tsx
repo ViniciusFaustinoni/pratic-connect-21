@@ -337,6 +337,7 @@ export default function Integracoes() {
   const { data: credenciais, refetch: refetchCredenciais } = useTodasIntegracoesCredenciais();
   const { data: apiKeys } = useApiKeys();
   const { data: leadsConfig } = useApiLeadsConfig();
+  const { data: healthChecks } = useAllLatestHealthChecks();
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [selectedTipo, setSelectedTipo] = useState<IntegracaoTipo>('hinova');
