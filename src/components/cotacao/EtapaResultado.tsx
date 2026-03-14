@@ -53,6 +53,7 @@ interface EtapaResultadoProps {
   onGerarPDF: () => void;
   onIniciarCadastro: () => void;
   isLoading?: boolean;
+  isCenarioIsento?: boolean;
 }
 
 const formatCurrency = (value: number) => {
