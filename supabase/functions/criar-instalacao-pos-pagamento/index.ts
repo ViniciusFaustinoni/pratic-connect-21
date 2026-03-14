@@ -8,6 +8,7 @@ const corsHeaders = {
 
 interface CriarInstalacaoRequest {
   cotacaoId: string;
+  skipPaymentCheck?: boolean;
 }
 
 serve(async (req) => {
