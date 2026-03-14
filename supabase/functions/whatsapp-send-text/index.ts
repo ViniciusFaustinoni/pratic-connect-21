@@ -372,9 +372,9 @@ serve(async (req) => {
       .limit(1)
       .maybeSingle();
 
-    const provedorAtivo = metaConfig?.ativo === true ? 'meta_oficial' : 'evolution';
+    const provedorAtivo = force_provider || (metaConfig?.ativo === true ? 'meta_oficial' : 'evolution');
 
-    console.log(`[whatsapp-send-text] Provedor ativo: ${provedorAtivo}`);
+    console.log(`[whatsapp-send-text] Provedor ativo: ${provedorAtivo}${force_provider ? ' (forçado)' : ''}`);
 
     if (provedorAtivo === 'meta_oficial') {
       const result = await enviarViaMeta(supabase, telefoneFormatado, mensagem, template_name, template_params, allow_text, template_button_params);
