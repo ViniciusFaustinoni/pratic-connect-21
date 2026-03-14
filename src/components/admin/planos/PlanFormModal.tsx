@@ -340,6 +340,7 @@ export function PlanFormModal({
       benefits: selectedBenefits,
       linha_slug: formData.linha_slug || null,
       categorias_veiculo: formData.categorias_veiculo.length > 0 ? formData.categorias_veiculo.join(',') : null,
+      regioes: selectedRegioes,
     };
 
     try {
