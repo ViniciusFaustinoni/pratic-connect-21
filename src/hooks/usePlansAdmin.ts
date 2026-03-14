@@ -358,6 +358,15 @@ export function useDuplicatePlan() {
         await supabase.from('planos_beneficios').insert(newBenefits);
       }
 
+      // Duplicate region links
+      if (planos_regioes && (planos_regioes as any[]).length > 0) {
+        const newRegioes = (planos_regioes as any[]).map((pr: any) => ({
+          plano_id: createdPlan.id,
+          regiao_id: pr.regiao_id,
+        }));
+        await supabase.from('planos_regioes').insert(newRegioes);
+      }
+
       return createdPlan;
     },
     onSuccess: () => {
