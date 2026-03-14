@@ -10,16 +10,28 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ArrowLeft, Car, DollarSign, ExternalLink, GripVertical, GlassWater, Shield } from 'lucide-react';
+import { ArrowLeft, Car, DollarSign, ExternalLink, GripVertical, GlassWater, Shield, MapPin, Smartphone, Wrench, Fuel, Clock, Truck, ShieldCheck, Ambulance } from 'lucide-react';
 import { formatCurrency } from '@/types/termo-filiacao';
 import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
 
 const TIPOS_REGRA = [
-  { tipo: 'veiculo_0km' as const, label: 'Veículo 0KM', desc: 'Identificado automaticamente via CRLV (sem placa ou procedência "Novo")', icon: Car },
-  { tipo: 'fipe_acima_de' as const, label: 'Valor FIPE acima do limite', desc: 'Valor configurável nas configurações do diretor', icon: DollarSign },
-  { tipo: 'evento_vidros' as const, label: 'Evento Vidros e Faróis', desc: 'Anexado automaticamente quando o evento/sinistro for do tipo vidros e faróis', icon: GlassWater },
-  { tipo: 'veiculo_blindado' as const, label: 'Veículo Blindado', desc: 'Detectado automaticamente via OCR do CRLV (campo observações)', icon: Shield },
+  // --- Regras por característica do veículo ---
+  { tipo: 'veiculo_0km' as const, label: 'Veículo 0KM', desc: 'Identificado automaticamente via CRLV (sem placa ou procedência "Novo")', icon: Car, grupo: 'veiculo' },
+  { tipo: 'fipe_acima_de' as const, label: 'Valor FIPE acima do limite', desc: 'Valor configurável nas configurações do diretor', icon: DollarSign, grupo: 'veiculo' },
+  { tipo: 'veiculo_blindado' as const, label: 'Veículo Blindado', desc: 'Detectado automaticamente via OCR do CRLV (campo observações)', icon: Shield, grupo: 'veiculo' },
+  { tipo: 'rastreador_obrigatorio' as const, label: 'Rastreador Obrigatório', desc: 'Passeio FIPE ≥ R$ 30k, moto FIPE ≥ R$ 9k ou diesel — limites configuráveis', icon: MapPin, grupo: 'veiculo' },
+  { tipo: 'rastreador_movel' as const, label: 'Rastreador Móvel (provisório)', desc: 'Quando a instalação do rastreador fixo não será feita no mesmo dia', icon: Truck, grupo: 'veiculo' },
+  { tipo: 'veiculo_aplicativo' as const, label: 'Veículo de Aplicativo', desc: 'Uso marcado como Táxi/Uber/Aplicativo — rateio e cota diferenciados', icon: Smartphone, grupo: 'veiculo' },
+  // --- Regras por benefício contratado ---
+  { tipo: 'beneficio_vidros' as const, label: 'Proteção Vidros e Faróis', desc: 'Consultor marcou o benefício na proposta (carência 120 dias, 40/60%)', icon: GlassWater, grupo: 'beneficio' },
+  { tipo: 'beneficio_kit_gas' as const, label: 'Proteção Kit Gás', desc: 'Consultor marcou o benefício na proposta (reembolso R$ 1.500 em caso de roubo/furto sem recuperação)', icon: Fuel, grupo: 'beneficio' },
+  { tipo: 'beneficio_danos_terceiros' as const, label: 'Danos a Terceiros', desc: 'Consultor selecionou faixa (R$ 15k / 40k / 70k / 100k)', icon: ShieldCheck, grupo: 'beneficio' },
+  { tipo: 'beneficio_carro_reserva' as const, label: 'Carro Reserva', desc: 'Consultor selecionou duração (7, 15 ou 30 dias — reembolso até R$ 2.200)', icon: Car, grupo: 'beneficio' },
+  { tipo: 'beneficio_reboque_excedente' as const, label: 'Reboque Excedente', desc: 'Consultor marcou benefício (2 acionamentos extras/ano, mín. 6 meses entre eles)', icon: Wrench, grupo: 'beneficio' },
+  { tipo: 'beneficio_carencia_zero' as const, label: 'Carência Zero', desc: 'Consultor marcou e pagamento confirmado — isenta período de espera', icon: Clock, grupo: 'beneficio' },
+  // --- Regra por evento ---
+  { tipo: 'evento_vidros' as const, label: 'Evento Vidros e Faróis', desc: 'Anexado automaticamente quando o sinistro for do tipo vidros e faróis', icon: GlassWater, grupo: 'evento' },
 ];
 
 export default function AditivoForm() {
