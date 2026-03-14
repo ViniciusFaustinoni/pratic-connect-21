@@ -62,6 +62,7 @@ import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/use
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { PlacaBlacklistModal } from '@/components/cotacoes/PlacaBlacklistModal';
 import { useAuth } from '@/contexts/AuthContext';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // ============================================
 // INTERFACES
@@ -251,6 +252,10 @@ export default function CotadorPage() {
   // Valor de adesão customizado pelo consultor
   const [valorAdesaoCustom, setValorAdesaoCustom] = useState<number | null>(null);
 
+  // Cenário de adesão para vendedor externo
+  const [cenarioExterno, setCenarioExterno] = useState<string | null>(null);
+  const [tipoInstalacao, setTipoInstalacao] = useState<'rota' | 'base' | null>(null);
+
   // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
   const [buscaLead, setBuscaLead] = useState('');
@@ -288,6 +293,7 @@ export default function CotadorPage() {
   
   // Auth para obter profile do usuário atual
   const { profile } = useAuth();
+  const { isVendedorExterno } = usePermissions();
 
   // Hooks Supabase
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
@@ -629,9 +635,10 @@ export default function CotadorPage() {
     setCotacaoCalculada(true);
     setPlanoSelecionadoTab(planosDB?.find(p => p.destaque)?.id || planosDB?.[1]?.id || planosDB?.[0]?.id || '');
     setPlanoFinalSelecionado(null);
-    // Inicializar adesão com 1% FIPE (mínimo R$ 100)
+    // Inicializar adesão com 1% FIPE (mínimo R$ 100) — exceto se vendedor externo já escolheu cenário com adesão zerada
     const fipeAtual = valorFipe || (marca && ano ? estimarValorFipe(marca, parseInt(ano)) : 0);
-    if (fipeAtual > 0) {
+    const cenarioZeraAdesao = cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base';
+    if (fipeAtual > 0 && !cenarioZeraAdesao) {
       setValorAdesaoCustom(Math.max(100, Math.round(fipeAtual * 0.01 * 100) / 100));
     }
     setIsCalculando(false);
@@ -664,7 +671,8 @@ export default function CotadorPage() {
         categoria_veiculo: categoriaVeiculo || undefined,
         nome_solicitante: leadSelecionado?.nome || nomeAssociado || null,
         veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
-        valor_adesao: valorAdesaoCustom || undefined,
+        valor_adesao: valorAdesaoCustom ?? undefined,
+        tipo_instalacao: tipoInstalacao || undefined,
       });
 
       setCotacaoSalva(cotacaoData);
@@ -1238,6 +1246,93 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                 </p>
               )}
             </div>
+
+            {/* Cenário de Adesão para Vendedor Externo */}
+            {isVendedorExterno && (
+              <div className="border-t pt-4 mt-4">
+                <div className="flex items-center gap-2 mb-3">
+                  <AlertCircle className="h-4 w-4 text-primary" />
+                  <Label className="font-semibold">Cenário de Adesão / Instalação</Label>
+                </div>
+                <p className="text-xs text-muted-foreground mb-3">
+                  Selecione o cenário que se aplica a esta cotação
+                </p>
+                <RadioGroup
+                  value={cenarioExterno || ''}
+                  onValueChange={(v) => {
+                    setCenarioExterno(v);
+                    switch (v) {
+                      case 'cobra_rota':
+                        setTipoInstalacao('rota');
+                        // Mantém adesão editável (valor sugerido)
+                        break;
+                      case 'isenta_rota':
+                        setTipoInstalacao('rota');
+                        setValorAdesaoCustom(0);
+                        break;
+                      case 'isenta_base':
+                        setTipoInstalacao('base');
+                        setValorAdesaoCustom(0);
+                        break;
+                      case 'cobra_base':
+                        setTipoInstalacao('base');
+                        // Mantém adesão editável (valor sugerido)
+                        break;
+                    }
+                  }}
+                  className="grid grid-cols-1 gap-3"
+                >
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                      cenarioExterno === 'cobra_rota' ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <RadioGroupItem value="cobra_rota" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Cobrar adesão + Instalação na rota</p>
+                      <p className="text-xs text-muted-foreground">R$ 50 descontado da adesão para cobrir a rota. Sem desconto no recorrente.</p>
+                    </div>
+                  </label>
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                      cenarioExterno === 'isenta_rota' ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <RadioGroupItem value="isenta_rota" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Isentar adesão + Instalação na rota</p>
+                      <p className="text-xs text-muted-foreground">Adesão zerada. Desconto de rota abatido do recorrente do consultor.</p>
+                    </div>
+                  </label>
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                      cenarioExterno === 'isenta_base' ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <RadioGroupItem value="isenta_base" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Isentar adesão + Instalação na base</p>
+                      <p className="text-xs text-muted-foreground">Sem adesão, sem cobrança. Zero a zero.</p>
+                    </div>
+                  </label>
+                  <label
+                    className={cn(
+                      "flex items-start gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                      cenarioExterno === 'cobra_base' ? "border-primary bg-primary/5" : "border-border hover:border-muted-foreground/50"
+                    )}
+                  >
+                    <RadioGroupItem value="cobra_base" className="mt-0.5" />
+                    <div>
+                      <p className="font-medium text-sm">Cobrar adesão + Instalação na base</p>
+                      <p className="text-xs text-muted-foreground">Adesão integral para o consultor. Nada para a empresa.</p>
+                    </div>
+                  </label>
+                </RadioGroup>
+              </div>
+            )}
 
             {/* Botão Calcular */}
             <Button

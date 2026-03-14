@@ -1,0 +1,1 @@
+ALTER TABLE public.cotacoes ADD COLUMN IF NOT EXISTS tipo_instalacao text CHECK (tipo_instalacao IN ('rota', 'base'));

@@ -173,7 +173,7 @@ export const cotacaoSchema = z.object({
   valor_cota: z.number().min(0),
   taxa_administrativa: z.number().min(0),
   valor_rastreamento: z.number().min(0),
-  valor_adesao: z.number().min(1, 'A taxa de filiação é obrigatória e deve ser maior que zero'),
+  valor_adesao: z.number().min(0, 'A taxa de filiação não pode ser negativa'),
   valor_total_mensal: z.number().min(0),
   valor_assistencia: z.number().min(0).optional(),
   validade_dias: z.number().min(1).max(30).default(7),
@@ -196,7 +196,7 @@ export const cotacaoSchema = z.object({
 export const contratoSchema = z.object({
   cotacao_id: z.string().uuid().optional().nullable(),
   plano_id: z.string().uuid('Selecione um plano'),
-  valor_adesao: z.number().min(1, 'A taxa de filiação é obrigatória e deve ser maior que zero'),
+  valor_adesao: z.number().min(0, 'A taxa de filiação não pode ser negativa'),
   valor_mensal: z.number().min(0),
   data_inicio: z.string(),
 });

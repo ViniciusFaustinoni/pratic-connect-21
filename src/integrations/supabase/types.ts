@@ -8440,6 +8440,7 @@ export type Database = {
           taxa_administrativa: number
           telefone1_solicitante: string | null
           telefone2_solicitante: string | null
+          tipo_instalacao: string | null
           tipo_vistoria: string | null
           token_publico: string | null
           updated_at: string
@@ -8557,6 +8558,7 @@ export type Database = {
           taxa_administrativa?: number
           telefone1_solicitante?: string | null
           telefone2_solicitante?: string | null
+          tipo_instalacao?: string | null
           tipo_vistoria?: string | null
           token_publico?: string | null
           updated_at?: string
@@ -8674,6 +8676,7 @@ export type Database = {
           taxa_administrativa?: number
           telefone1_solicitante?: string | null
           telefone2_solicitante?: string | null
+          tipo_instalacao?: string | null
           tipo_vistoria?: string | null
           token_publico?: string | null
           updated_at?: string

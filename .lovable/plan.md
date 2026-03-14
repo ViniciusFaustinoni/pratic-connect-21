@@ -1,70 +1,90 @@
 
 
-# Regra de Adesão diferenciada para Vendedor Externo
+## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
-## Análise do estado atual
+### Causas Raiz Identificadas
+1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
+2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
+3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-O sistema já possui infraestrutura parcial para os 4 cenários:
-- `EtapaPagamentoCotacao.tsx` já trata adesão zerada (pula ASAAS, exibe mensagem, gera contrato)
-- `useComissaoExternaConfig.ts` já armazena configs de comissão externa (% adesão, valor volante, recorrente)
-- O campo `valorAdesaoCustom` no Cotador já é editável livremente
+### Correções Aplicadas
 
-**Bloqueios atuais que impedem o fluxo externo:**
-1. Validações em `validations/index.ts` (linha 176/199) e `ContratoFormDialog.tsx` (linha 68) exigem `valor_adesao >= 1` — impossível zerar
-2. O Cotador não distingue vendedor CLT de externo — não apresenta os 4 cenários
-3. Não há campo na cotação para registrar "tipo de instalação" (rota vs base), essencial para o cálculo de comissão
+1. **`sga-hinova-sync/index.ts`**:
+   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
+   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
 
-## Plano de implementação
+2. **`cron-sga-retry/index.ts`**:
+   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
 
-### 1. Permitir adesão zero para vendedor externo (validações)
+---
 
-- `src/lib/validations/index.ts`: relaxar `valor_adesao` de `.min(1)` para `.min(0)` nos schemas `cotacaoSchema` e `contratoSchema`
-- `src/components/contratos/ContratoFormDialog.tsx`: mesma mudança no schema local
-- A lógica de "adesão obrigatória" passa a ser controlada pelo contexto do vendedor, não pela validação global
+## Painel de Monitoramento SGA Hinova — ✅ Implementado
 
-### 2. Adicionar seleção de cenário no Cotador para vendedor externo
+### O que foi criado
 
-Em `src/pages/vendas/Cotador.tsx`:
-- Importar `usePermissions` e checar `isVendedorExterno`
-- Quando externo, exibir um seletor com os 4 cenários (RadioGroup):
-  - "Cobrar adesão + Instalação rota" → mantém adesão editável, marca `tipo_instalacao = 'rota'`
-  - "Isentar adesão + Instalação rota" → força adesão = 0, marca `tipo_instalacao = 'rota'`
-  - "Isentar adesão + Instalação base" → força adesão = 0, marca `tipo_instalacao = 'base'`
-  - "Cobrar adesão + Instalação base" → mantém adesão editável, marca `tipo_instalacao = 'base'`
-- Ao selecionar cenário, atualizar `valorAdesaoCustom` e um novo state `tipoInstalacao`
+1. **Página `/configuracoes/integracoes/sga-hinova`** com:
+   - Status de conexão com API Hinova (teste em tempo real)
+   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
+   - Logs recentes dos últimos 50 registros
+   - Veículos pendentes (ativos não sincronizados) com envio individual
+   - Histórico de health checks
 
-### 3. Persistir tipo de instalação na cotação
+2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
 
-- `src/types/cotacao.ts` (`CriarCotacaoPayload`): adicionar campo `tipo_instalacao?: 'rota' | 'base'`
-- `src/hooks/useCotacao.ts` (`useCriarCotacao`): propagar `tipo_instalacao` para o insert na tabela `cotacoes`
-- A tabela `cotacoes` no banco já precisa do campo — será adicionada via migration
+3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
 
-### 4. Migration SQL
+4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
 
-```sql
-ALTER TABLE public.cotacoes 
-  ADD COLUMN IF NOT EXISTS tipo_instalacao text 
-  CHECK (tipo_instalacao IN ('rota', 'base'));
-```
+---
 
-### 5. Fluxo público já funcional
+## Health Check Universal para Todas as Integrações — ✅ Implementado
 
-`EtapaPagamentoCotacao.tsx` já lida com `valorAdesao <= 0` corretamente (pula ASAAS, exibe mensagem, gera contrato). Nenhuma alteração necessária nesse componente.
+### O que foi criado
 
-### O que NÃO muda
+1. **Tabela `integracoes_health_checks`** (genérica):
+   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
+   - Dados existentes do SGA migrados automaticamente
+   - RLS: leitura para autenticados, escrita para service_role
 
-- Lógica de precificação (planos, faixas, adicional app) permanece intacta
-- Fluxo do vendedor CLT permanece idêntico (sem seletor de cenário, adesão livre >= sugerido)
-- Configurações de comissão externa (`useComissaoExternaConfig`) continuam funcionando — o `tipo_instalacao` salvo na cotação será consumido futuramente pelo motor de comissões para aplicar os débitos/créditos corretos
+2. **Edge Function `cron-integracoes-health-check`**:
+   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
+   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
+   - Notifica admins (role `diretor`) se qualquer integração falhar
+   - Grava resultado por integração na tabela genérica
 
-### Resumo de arquivos alterados
+3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
+   - Props: `integracao` (slug) e `titulo` (opcional)
+   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
+   - Botão "Testar agora" invoca a edge function para a integração específica
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/pages/vendas/Cotador.tsx` | Seletor de cenário para externo |
-| `src/types/cotacao.ts` | Campo `tipo_instalacao` no payload |
-| `src/hooks/useCotacao.ts` | Propagar campo no insert |
-| `src/lib/validations/index.ts` | `min(0)` nos schemas |
-| `src/components/contratos/ContratoFormDialog.tsx` | `min(0)` no schema |
-| Migration SQL | Coluna `tipo_instalacao` em `cotacoes` |
+4. **Hook `useIntegracaoHealthCheck(integracao)`**:
+   - Busca histórico filtrado por integração
+   - Mutation `testNow` para teste manual
+   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
 
+5. **Integração nas páginas**:
+   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
+   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
+   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
+
+6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
+   ```sql
+   select cron.schedule(
+     'integracoes-health-check-3x-dia',
+     '0 8,13,18 * * *',
+     $$ select net.http_post(
+       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
+       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
+       body:='{}'::jsonb
+     ) as request_id; $$
+   );
+   ```
+
+### Arquivos criados/modificados
+- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
+- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
+- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
+- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
+- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
+- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
+- `supabase/config.toml` — verify_jwt para nova function
