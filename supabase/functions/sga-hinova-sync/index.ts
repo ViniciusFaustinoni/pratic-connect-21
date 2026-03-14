@@ -1184,19 +1184,7 @@ serve(async (req) => {
           } else {
             await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
             await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'CPF duplicado - não foi possível recuperar código');
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: 'CPF já cadastrado no Hinova mas não foi possível recuperar o código automaticamente.',
-                step: 'associado',
-                action_required: 'preencher_codigo_hinova_manual',
-                details: {
-                  cadastro: associadoData,
-                  instrucoes: 'Preencha associados.codigo_hinova manualmente para este CPF e reprocessar a fila.'
-                }
-              }),
-              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            return;
           }
         } else {
           // Erro genérico
