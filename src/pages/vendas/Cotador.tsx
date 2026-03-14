@@ -293,6 +293,7 @@ export default function CotadorPage() {
   
   // Auth para obter profile do usuário atual
   const { profile } = useAuth();
+  const { isVendedorExterno } = usePermissions();
 
   // Hooks Supabase
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
