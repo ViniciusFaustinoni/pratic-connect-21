@@ -19,7 +19,7 @@ interface EtapaAssinaturaContratoProps {
   readOnly?: boolean;
 }
 
-type EtapaInterna = 'verificando' | 'gerando_contrato' | 'enviando_autentique' | 'aguardando_assinatura' | 'assinado' | 'erro';
+type EtapaInterna = 'coletar_email' | 'verificando' | 'gerando_contrato' | 'enviando_autentique' | 'aguardando_assinatura' | 'assinado' | 'erro';
 
 interface ContratoInfo {
   id: string;
