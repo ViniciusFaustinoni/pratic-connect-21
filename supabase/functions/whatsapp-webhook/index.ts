@@ -3362,67 +3362,121 @@ Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato c
       { role: "user", content: mensagemTexto },
     ];
 
-    // Loop de tool calls
-    let aiResponse = await callAI(messages, WHATSAPP_SYSTEM_PROMPT + "\n\n" + context);
-    let assistantMessage = aiResponse.choices?.[0]?.message;
-    let iterations = 0;
-    const maxIterations = 5;
+    // Loop de tool calls com proteção total
+    let respostaFinal = "Desculpe, não consegui processar sua mensagem. Tente novamente em alguns instantes. 🙏";
+    
+    try {
+      let aiResponse = await callAI(messages, WHATSAPP_SYSTEM_PROMPT + "\n\n" + context);
+      let assistantMessage = aiResponse.choices?.[0]?.message;
+      let iterations = 0;
+      const maxIterations = 4;
 
-    while (assistantMessage?.tool_calls && iterations < maxIterations) {
-      iterations++;
-      const toolResults = [];
+      while (assistantMessage?.tool_calls && iterations < maxIterations) {
+        iterations++;
+        const toolResults = [];
 
-      for (const toolCall of assistantMessage.tool_calls) {
-        const toolName = toolCall.function.name;
-        const toolArgs = JSON.parse(toolCall.function.arguments || "{}");
-        const result = await executeTool(supabase, associado.id, toolName, toolArgs, telefone, instancia);
-        toolResults.push({
-          tool_call_id: toolCall.id,
-          role: "tool",
-          content: result,
-        });
+        for (const toolCall of assistantMessage.tool_calls) {
+          const toolName = toolCall.function.name;
+          let toolArgs: any = {};
+          try {
+            toolArgs = JSON.parse(toolCall.function.arguments || "{}");
+          } catch (parseErr) {
+            console.error(`[whatsapp-webhook] Erro parse args tool ${toolName}:`, parseErr);
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              role: "tool",
+              content: JSON.stringify({ error: "Argumentos inválidos" }),
+            });
+            continue;
+          }
+          try {
+            const result = await executeTool(supabase, associado.id, toolName, toolArgs, telefone, instancia);
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              role: "tool",
+              content: result,
+            });
+          } catch (toolErr: any) {
+            console.error(`[whatsapp-webhook] Erro executando tool ${toolName}:`, toolErr);
+            toolResults.push({
+              tool_call_id: toolCall.id,
+              role: "tool",
+              content: JSON.stringify({ error: toolErr?.message || "Erro interno na ferramenta" }),
+            });
+          }
+        }
+
+        // Continuar conversa com resultados das tools
+        aiResponse = await callAI(
+          [
+            ...messages,
+            assistantMessage,
+            ...toolResults,
+          ],
+          WHATSAPP_SYSTEM_PROMPT + "\n\n" + context
+        );
+        assistantMessage = aiResponse.choices?.[0]?.message;
       }
 
-      // Continuar conversa com resultados das tools
-      aiResponse = await callAI(
-        [
-          ...messages,
-          assistantMessage,
-          ...toolResults,
-        ],
-        WHATSAPP_SYSTEM_PROMPT + "\n\n" + context
-      );
-      assistantMessage = aiResponse.choices?.[0]?.message;
+      // Extrair resposta final
+      respostaFinal = assistantMessage?.content || "Desculpe, não consegui processar sua mensagem. Tente novamente.";
+    } catch (aiErr: any) {
+      console.error(`[whatsapp-webhook] ERRO PIPELINE IA para ${telefone}:`, aiErr);
+      respostaFinal = "Desculpe, estou com dificuldades técnicas no momento. Por favor, tente novamente em alguns instantes ou entre em contato com nossa central. 🙏";
+      // Log erro IA
+      try {
+        await supabase.from("whatsapp_logs").insert({
+          instancia_id: instancia.id,
+          tipo: "erro_pipeline_ia",
+          evento: "ai_failed",
+          erro: aiErr?.message || "Erro desconhecido na IA",
+          payload: { telefone, is_meta: isMetaDelegate },
+        });
+      } catch (_) { /* ignore */ }
     }
-
-    // Extrair resposta final
-    const respostaFinal = assistantMessage?.content || "Desculpe, não consegui processar sua mensagem. Tente novamente.";
 
     // Salvar e enviar resposta - capturar messageId para tracking de status
     await saveMessage(supabase, associado.id, "assistant", respostaFinal);
 
-    // Try/catch robusto no envio para evitar perda silenciosa em timeout
+    // Envio com retry automático
     let sendResult: { ok: boolean; messageId?: string } = { ok: false };
+    const sendFn = () => isMetaDelegate
+      ? sendWhatsAppViaProxy(telefone, respostaFinal)
+      : sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, respostaFinal);
+
     try {
-      sendResult = isMetaDelegate
-        ? await sendWhatsAppViaProxy(telefone, respostaFinal)
-        : await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, respostaFinal);
-      await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", sendResult.messageId);
-      console.log(`[whatsapp-webhook] Resposta enviada para ${telefone}`);
+      sendResult = await sendFn();
+      if (!sendResult.ok) {
+        console.warn(`[whatsapp-webhook] Envio falhou (ok=false), retry #1 para ${telefone}`);
+        await new Promise(r => setTimeout(r, 2000));
+        sendResult = await sendFn();
+      }
     } catch (sendErr: any) {
-      console.error(`[whatsapp-webhook] FALHA ao enviar resposta para ${telefone}:`, sendErr);
-      // Salvar log de erro para rastreabilidade
+      console.error(`[whatsapp-webhook] FALHA envio tentativa 1 para ${telefone}:`, sendErr);
       try {
-        await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", undefined);
+        await new Promise(r => setTimeout(r, 2000));
+        sendResult = await sendFn();
+      } catch (retryErr: any) {
+        console.error(`[whatsapp-webhook] FALHA envio retry para ${telefone}:`, retryErr);
+      }
+    }
+
+    // Log resultado
+    try {
+      await saveWhatsAppLog(supabase, instancia.id, telefone, respostaFinal, "saida", sendResult.messageId);
+      if (sendResult.ok) {
+        console.log(`[whatsapp-webhook] ✓ Resposta enviada para ${telefone}`);
+      } else {
+        console.error(`[whatsapp-webhook] ✗ FALHA DEFINITIVA envio para ${telefone}`);
         await supabase.from("whatsapp_logs").insert({
           instancia_id: instancia.id,
           tipo: "erro_envio_ia",
-          evento: "send_failed",
-          erro: sendErr?.message || "Timeout ou erro no envio",
+          evento: "send_failed_final",
+          erro: "Todas as tentativas de envio falharam",
           payload: { telefone, resposta_length: respostaFinal.length, is_meta: isMetaDelegate },
         });
-      } catch (_) { /* ignore log failure */ }
-    }
+      }
+    } catch (_) { /* ignore log failure */ }
 
     return new Response(JSON.stringify({ ok: true }), { headers: corsHeaders });
   } catch (error: any) {
