@@ -2,8 +2,25 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
+export type TipoRegraAditivo =
+  | 'veiculo_0km'
+  | 'fipe_acima_de'
+  | 'evento_vidros'
+  | 'veiculo_blindado'
+  // Regras por característica do veículo
+  | 'rastreador_obrigatorio'
+  | 'rastreador_movel'
+  | 'veiculo_aplicativo'
+  // Regras por benefício contratado
+  | 'beneficio_vidros'
+  | 'beneficio_kit_gas'
+  | 'beneficio_danos_terceiros'
+  | 'beneficio_carro_reserva'
+  | 'beneficio_reboque_excedente'
+  | 'beneficio_carencia_zero';
+
 export interface RegraAditivo {
-  tipo: 'veiculo_0km' | 'fipe_acima_de' | 'evento_vidros' | 'veiculo_blindado';
+  tipo: TipoRegraAditivo;
   ativo: boolean;
   valor_config?: string;
 }
