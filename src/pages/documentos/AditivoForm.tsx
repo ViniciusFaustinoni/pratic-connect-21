@@ -234,54 +234,10 @@ export default function AditivoForm() {
             </p>
 
             {/* Grupo: Veículo */}
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Por Característica do Veículo</p>
-              {TIPOS_REGRA.filter(t => t.grupo === 'veiculo').map(({ tipo, label, desc, icon: Icon }) => (
-                <div key={tipo} className="flex items-start gap-3 p-3 rounded-lg border">
-                  <Checkbox
-                    checked={regras[tipo]}
-                    onCheckedChange={(checked) => setRegras(prev => ({ ...prev, [tipo]: !!checked }))}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">{label}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{desc}</p>
-                    {tipo === 'fipe_acima_de' && fipeLimite && (
-                      <div className="flex items-center gap-2 mt-2">
-                        <span className="text-xs">Valor atual: <strong>{formatCurrency(fipeLimite)}</strong></span>
-                        <Button variant="link" size="sm" className="h-auto p-0 text-xs" asChild>
-                          <a href="/diretoria/configuracoes" target="_blank">
-                            Editar <ExternalLink className="h-3 w-3 ml-1" />
-                          </a>
-                        </Button>
-                      </div>
-                    )}
-                  </div>
-                </div>
-              ))}
-            </div>
+            {renderGrupoRegras('veiculo', 'Por Característica do Veículo')}
 
             {/* Grupo: Benefício */}
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Por Benefício Contratado</p>
-              {TIPOS_REGRA.filter(t => t.grupo === 'beneficio').map(({ tipo, label, desc, icon: Icon }) => (
-                <div key={tipo} className="flex items-start gap-3 p-3 rounded-lg border">
-                  <Checkbox
-                    checked={regras[tipo]}
-                    onCheckedChange={(checked) => setRegras(prev => ({ ...prev, [tipo]: !!checked }))}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">{label}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {renderGrupoRegras('beneficio', 'Por Benefício Contratado')}
 
             {/* Grupo: Evento/Sinistro */}
             {renderGrupoRegras('evento', 'Por Procedimento de Sinistro/Evento')}
