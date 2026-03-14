@@ -390,24 +390,48 @@ export default function AppRastreamento() {
           </div>
         )}
 
-        {/* Sem Comunicação Prolongada Overlay */}
+        {/* Sem Comunicação Prolongada - Banner ou Overlay */}
         {!aguardandoPrimeiraPosicao && horasSemCom !== null && horasSemCom >= 4 && (
-          <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
-              <WifiOff className="h-8 w-8 text-destructive" />
+          hasValidPosition ? (
+            /* Banner não-bloqueante quando há posição válida */
+            <div className="absolute top-2 left-2 right-2 z-[1000] bg-destructive/90 backdrop-blur-sm text-destructive-foreground rounded-lg p-3 shadow-lg">
+              <div className="flex items-center gap-2">
+                <WifiOff className="h-4 w-4 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">Sem comunicação há {horasSemCom}h</p>
+                  <p className="text-xs opacity-80">Última posição: {tempoDesdeAtualizacao}</p>
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="secondary" 
+                  onClick={handleRefresh} 
+                  disabled={isRefreshing}
+                  className="flex-shrink-0 h-7 text-xs"
+                >
+                  <RefreshCw className={cn("h-3 w-3 mr-1", isRefreshing && "animate-spin")} />
+                  Reconectar
+                </Button>
+              </div>
             </div>
-            <h3 className="mt-4 text-lg font-semibold">Sem comunicação</h3>
-            <p className="mt-1 text-sm text-muted-foreground text-center px-8">
-              O rastreador não comunica há {horasSemCom}h. Verifique o dispositivo.
-            </p>
-            <p className="mt-2 text-xs text-muted-foreground">
-              Última posição: {tempoDesdeAtualizacao}
-            </p>
-            <Button className="mt-4" onClick={handleRefresh} disabled={isRefreshing}>
-              <RefreshCw className={cn("h-4 w-4 mr-2", isRefreshing && "animate-spin")} />
-              Tentar reconectar
-            </Button>
-          </div>
+          ) : (
+            /* Overlay full-screen quando NÃO há posição válida */
+            <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-destructive/10">
+                <WifiOff className="h-8 w-8 text-destructive" />
+              </div>
+              <h3 className="mt-4 text-lg font-semibold">Sem comunicação</h3>
+              <p className="mt-1 text-sm text-muted-foreground text-center px-8">
+                O rastreador não comunica há {horasSemCom}h. Verifique o dispositivo.
+              </p>
+              <p className="mt-2 text-xs text-muted-foreground">
+                Última posição: {tempoDesdeAtualizacao}
+              </p>
+              <Button className="mt-4" onClick={handleRefresh} disabled={isRefreshing}>
+                <RefreshCw className={cn("h-4 w-4 mr-2", isRefreshing && "animate-spin")} />
+                Tentar reconectar
+              </Button>
+            </div>
+          )
         )}
 
         {/* Offline Overlay (curto período) */}

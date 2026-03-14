@@ -1,9 +1,10 @@
 import { useState, useEffect } from 'react';
-import { X, Download, Smartphone } from 'lucide-react';
+import { X, Download, Smartphone, ExternalLink, Copy, Check } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { usePWAInstall } from '@/hooks/usePWAInstall';
 import { IOSInstallGuide } from './IOSInstallGuide';
 import { cn } from '@/lib/utils';
+import { useToast } from '@/hooks/use-toast';
 
 interface PWAInstallPromptProps {
   className?: string;
@@ -15,17 +16,19 @@ export function PWAInstallPrompt({ className, variant = 'banner' }: PWAInstallPr
     isInstallable,
     isInstalled,
     isIOS,
+    isWebView,
     promptInstall,
     dismissPrompt,
     showIOSInstructions,
     setShowIOSInstructions,
   } = usePWAInstall();
 
+  const { toast } = useToast();
   const [isVisible, setIsVisible] = useState(false);
   const [isAnimatingOut, setIsAnimatingOut] = useState(false);
+  const [copied, setCopied] = useState(false);
 
   useEffect(() => {
-    // Mostrar após um pequeno delay para melhor UX
     if (isInstallable && !isInstalled) {
       const timer = setTimeout(() => setIsVisible(true), 2000);
       return () => clearTimeout(timer);
@@ -34,6 +37,10 @@ export function PWAInstallPrompt({ className, variant = 'banner' }: PWAInstallPr
   }, [isInstallable, isInstalled]);
 
   const handleInstall = async () => {
+    if (isWebView) {
+      await handleCopyUrl();
+      return;
+    }
     if (isIOS) {
       setShowIOSInstructions(true);
     } else {
@@ -41,6 +48,33 @@ export function PWAInstallPrompt({ className, variant = 'banner' }: PWAInstallPr
       if (installed) {
         handleDismiss();
       }
+    }
+  };
+
+  const handleCopyUrl = async () => {
+    try {
+      const url = window.location.origin;
+      await navigator.clipboard.writeText(url);
+      setCopied(true);
+      toast({
+        title: 'Link copiado!',
+        description: 'Abra o Chrome ou Safari e cole o link para instalar o app.',
+      });
+      setTimeout(() => setCopied(false), 3000);
+    } catch {
+      // Fallback
+      const textArea = document.createElement('textarea');
+      textArea.value = window.location.origin;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      setCopied(true);
+      toast({
+        title: 'Link copiado!',
+        description: 'Abra o Chrome ou Safari e cole o link para instalar o app.',
+      });
+      setTimeout(() => setCopied(false), 3000);
     }
   };
 
@@ -66,8 +100,8 @@ export function PWAInstallPrompt({ className, variant = 'banner' }: PWAInstallPr
             className
           )}
         >
-          <Download className="h-4 w-4" />
-          Instalar App
+          {isWebView ? <ExternalLink className="h-4 w-4" /> : <Download className="h-4 w-4" />}
+          {isWebView ? 'Abrir no navegador' : 'Instalar App'}
         </button>
         <IOSInstallGuide 
           open={showIOSInstructions} 
@@ -91,15 +125,22 @@ export function PWAInstallPrompt({ className, variant = 'banner' }: PWAInstallPr
         <div className="p-4">
           <div className="flex items-start gap-3">
             <div className="flex-shrink-0 p-2 bg-primary/10 rounded-lg">
-              <Smartphone className="h-6 w-6 text-primary" />
+              {isWebView ? (
+                <ExternalLink className="h-6 w-6 text-primary" />
+              ) : (
+                <Smartphone className="h-6 w-6 text-primary" />
+              )}
             </div>
             
             <div className="flex-1 min-w-0">
               <h3 className="font-semibold text-foreground">
-                Instale o App PRATIC
+                {isWebView ? 'Abra no navegador' : 'Instale o App PRATIC'}
               </h3>
               <p className="text-sm text-muted-foreground mt-0.5">
-                Acesse mais rápido direto da sua tela inicial
+                {isWebView 
+                  ? 'Para instalar o app, abra este link no Chrome ou Safari'
+                  : 'Acesse mais rápido direto da sua tela inicial'
+                }
               </p>
             </div>
 
@@ -118,8 +159,17 @@ export function PWAInstallPrompt({ className, variant = 'banner' }: PWAInstallPr
               className="flex-1"
               size="sm"
             >
-              <Download className="h-4 w-4 mr-2" />
-              {isIOS ? 'Como instalar' : 'Instalar'}
+              {isWebView ? (
+                <>
+                  {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+                  {copied ? 'Link copiado!' : 'Copiar link'}
+                </>
+              ) : (
+                <>
+                  <Download className="h-4 w-4 mr-2" />
+                  {isIOS ? 'Como instalar' : 'Instalar'}
+                </>
+              )}
             </Button>
             <Button
               onClick={handleDismiss}

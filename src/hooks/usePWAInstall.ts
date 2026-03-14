@@ -12,6 +12,7 @@ interface PWAInstallState {
   canInstall: boolean;
   isIOS: boolean;
   isAndroid: boolean;
+  isWebView: boolean;
   isSafari: boolean;
   isChrome: boolean;
   promptInstall: () => Promise<boolean>;
@@ -38,6 +39,10 @@ export function usePWAInstall(): PWAInstallState {
   const isAndroid = /Android/.test(userAgent);
   const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent);
   const isChrome = /Chrome/.test(userAgent) && !/Edge/.test(userAgent);
+  
+  // Detectar WebView (WhatsApp, Instagram, Facebook, etc.)
+  const isWebView = /FBAN|FBAV|Instagram|WhatsApp|wv|WebView/i.test(userAgent) 
+    || (isAndroid && /Version\/[\d.]+/.test(userAgent) && /Chrome\/[\d.]+/.test(userAgent) && !/SamsungBrowser/.test(userAgent) && (window as any).navigator?.standalone === undefined && !window.matchMedia('(display-mode: standalone)').matches && /; wv\)/.test(userAgent));
 
   // Verificar se está instalado como PWA
   useEffect(() => {
@@ -132,6 +137,11 @@ export function usePWAInstall(): PWAInstallState {
       return true;
     }
 
+    // WebView: sempre pode mostrar banner orientando abrir no navegador
+    if (isWebView) {
+      return true;
+    }
+
     // Outros navegadores com suporte a PWA
     return !!deferredPrompt;
   })();
@@ -140,6 +150,7 @@ export function usePWAInstall(): PWAInstallState {
   const canInstall = (() => {
     if (isInstalled) return false;
     if (isIOS) return true;
+    if (isWebView) return true;
     return !!deferredPrompt;
   })();
 
@@ -149,6 +160,7 @@ export function usePWAInstall(): PWAInstallState {
     canInstall,
     isIOS,
     isAndroid,
+    isWebView,
     isSafari,
     isChrome,
     promptInstall,
