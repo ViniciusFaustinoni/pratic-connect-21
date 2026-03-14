@@ -317,9 +317,11 @@ serve(async (req) => {
                   if (fbData.length > 0) {
                     const lat = parseFloat(fbData[0].lat);
                     const lon = parseFloat(fbData[0].lon);
-                    await supabase.from('servicos').update({ latitude: lat, longitude: lon }).eq('id', svc.id);
+                    const { error: svcFbErr } = await supabase.from('servicos').update({ latitude: lat, longitude: lon }).eq('id', svc.id);
+                    if (svcFbErr) console.error(`[cron-atribuir-tarefas] Erro ao atualizar coords (fb) servicos ${svc.id}:`, svcFbErr.message);
                     if (svc.instalacao_origem_id) {
-                      await supabase.from('instalacoes').update({ latitude: lat, longitude: lon }).eq('id', svc.instalacao_origem_id);
+                      const { error: instFbErr } = await supabase.from('instalacoes').update({ endereco_latitude: lat, endereco_longitude: lon }).eq('id', svc.instalacao_origem_id);
+                      if (instFbErr) console.error(`[cron-atribuir-tarefas] Erro ao atualizar coords (fb) instalacoes ${svc.instalacao_origem_id}:`, instFbErr.message);
                     }
                     console.log(`[cron-atribuir-tarefas] 📍 Geocodificado (fallback bairro): ${svc.id} -> (${lat}, ${lon})`);
                     svc.latitude = lat;

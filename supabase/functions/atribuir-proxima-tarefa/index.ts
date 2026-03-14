@@ -477,6 +477,94 @@ serve(async (req) => {
 
     console.log(`[atribuir-proxima-tarefa] ${servicosDisponiveis.length} serviços disponíveis no total`);
 
+    // ========== GEOCODIFICAÇÃO ON-THE-FLY para serviços sem coordenadas ==========
+    const servicosSemCoords = servicosDisponiveis.filter(s => !s.latitude || !s.longitude);
+    if (servicosSemCoords.length > 0) {
+      console.log(`[atribuir-proxima-tarefa] 📍 ${servicosSemCoords.length} serviço(s) sem coordenadas - tentando geocodificar on-the-fly...`);
+      
+      for (const svc of servicosSemCoords) {
+        try {
+          const partes = [svc.logradouro, svc.numero, svc.bairro, svc.cidade, svc.uf, 'Brasil'].filter(Boolean);
+          if (partes.length < 3) {
+            console.log(`[atribuir-proxima-tarefa] Dados insuficientes para geocodificar serviço ${svc.id}`);
+            continue;
+          }
+          const query = partes.join(', ');
+          const url = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=br&limit=1`;
+          
+          const geoResp = await fetch(url, {
+            headers: { 'User-Agent': 'PraticConnect/1.0', 'Accept-Language': 'pt-BR' }
+          });
+          
+          let geocoded = false;
+          if (geoResp.ok) {
+            const geoData = await geoResp.json();
+            if (geoData.length > 0) {
+              const lat = parseFloat(geoData[0].lat);
+              const lon = parseFloat(geoData[0].lon);
+              svc.latitude = lat;
+              svc.longitude = lon;
+              geocoded = true;
+              
+              // Persistir coordenadas
+              await supabase.from('servicos').update({ latitude: lat, longitude: lon }).eq('id', svc.id);
+              
+              // Buscar origem para persistir lá também
+              const { data: svcOrigem } = await supabase
+                .from('servicos')
+                .select('instalacao_origem_id, vistoria_origem_id')
+                .eq('id', svc.id)
+                .single();
+              
+              if (svcOrigem?.instalacao_origem_id) {
+                await supabase.from('instalacoes').update({ endereco_latitude: lat, endereco_longitude: lon }).eq('id', svcOrigem.instalacao_origem_id);
+              }
+              if (svcOrigem?.vistoria_origem_id) {
+                await supabase.from('vistorias').update({ endereco_latitude: lat, endereco_longitude: lon }).eq('id', svcOrigem.vistoria_origem_id);
+              }
+              
+              console.log(`[atribuir-proxima-tarefa] 📍 Geocodificado on-the-fly: ${svc.id} -> (${lat}, ${lon})`);
+            }
+          } else if (geoResp.status === 429) {
+            console.warn(`[atribuir-proxima-tarefa] ⚠️ Rate limited (429) ao geocodificar ${svc.id}`);
+          }
+          
+          // Fallback: bairro + cidade
+          if (!geocoded && svc.bairro && svc.cidade) {
+            const fbQuery = `${svc.bairro}, ${svc.cidade}, ${svc.uf || ''}, Brasil`;
+            const fbUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(fbQuery)}&countrycodes=br&limit=1`;
+            const fbResp = await fetch(fbUrl, { headers: { 'User-Agent': 'PraticConnect/1.0' } });
+            if (fbResp.ok) {
+              const fbData = await fbResp.json();
+              if (fbData.length > 0) {
+                const lat = parseFloat(fbData[0].lat);
+                const lon = parseFloat(fbData[0].lon);
+                svc.latitude = lat;
+                svc.longitude = lon;
+                await supabase.from('servicos').update({ latitude: lat, longitude: lon }).eq('id', svc.id);
+                
+                const { data: svcOrigem } = await supabase
+                  .from('servicos')
+                  .select('instalacao_origem_id, vistoria_origem_id')
+                  .eq('id', svc.id)
+                  .single();
+                if (svcOrigem?.instalacao_origem_id) {
+                  await supabase.from('instalacoes').update({ endereco_latitude: lat, endereco_longitude: lon }).eq('id', svcOrigem.instalacao_origem_id);
+                }
+                
+                console.log(`[atribuir-proxima-tarefa] 📍 Geocodificado (fallback bairro): ${svc.id} -> (${lat}, ${lon})`);
+              }
+            }
+          }
+          
+          // Rate limit Nominatim
+          await new Promise(r => setTimeout(r, 1100));
+        } catch (geoErr) {
+          console.error(`[atribuir-proxima-tarefa] Erro geocodificando ${svc.id}:`, geoErr);
+        }
+      }
+    }
+
     // NOVO: Filtrar serviços que ainda não podem ser atribuídos (horário futuro)
     const agora = new Date();
     const servicosFiltradosPorHorario = servicosDisponiveis.filter(s => 
