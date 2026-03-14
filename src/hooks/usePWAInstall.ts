@@ -38,6 +38,10 @@ export function usePWAInstall(): PWAInstallState {
   const isAndroid = /Android/.test(userAgent);
   const isSafari = /Safari/.test(userAgent) && !/Chrome/.test(userAgent);
   const isChrome = /Chrome/.test(userAgent) && !/Edge/.test(userAgent);
+  
+  // Detectar WebView (WhatsApp, Instagram, Facebook, etc.)
+  const isWebView = /FBAN|FBAV|Instagram|WhatsApp|wv|WebView/i.test(userAgent) 
+    || (isAndroid && /Version\/[\d.]+/.test(userAgent) && /Chrome\/[\d.]+/.test(userAgent) && !/SamsungBrowser/.test(userAgent) && (window as any).navigator?.standalone === undefined && !window.matchMedia('(display-mode: standalone)').matches && /; wv\)/.test(userAgent));
 
   // Verificar se está instalado como PWA
   useEffect(() => {
