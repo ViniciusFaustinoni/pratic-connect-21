@@ -205,7 +205,10 @@ serve(async (req) => {
       let conteudoHTML = markdownParaHTML(conteudoPreenchido);
       // Sanitizar blocos de assinatura manual que possam existir no template
       conteudoHTML = sanitizeSignatureBlocks(conteudoHTML);
-      const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData);
+      const aditivosHTML = await buscarEGerarAditivos(supabase, templateData.veiculo, templateData, {
+        beneficios_codigos: extrairCodigosBeneficios(contrato),
+        configRastreador: templateData.configRastreador,
+      });
 
       // Injetar seção de rastreador se obrigatório (não coberta pelos aditivos do banco)
       const rastreadorResult = exigeRastreador(templateData.veiculo, templateData.configRastreador);
