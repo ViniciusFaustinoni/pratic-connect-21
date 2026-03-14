@@ -83,10 +83,18 @@ export function WhatsAppTestChat() {
       const telefoneLimpo = telefone;
       const telefoneComDDI = telefoneLimpo.startsWith('55') ? telefoneLimpo : `55${telefoneLimpo}`;
 
+      // Buscar mensagens do número destino E do sender (Evolution)
+      // A IA responde ao sender, não ao destino
+      let orFilter = `telefone.eq.${telefoneComDDI},telefone.eq.${telefoneLimpo}`;
+      if (senderNumber) {
+        const senderComDDI = senderNumber.startsWith('55') ? senderNumber : `55${senderNumber}`;
+        orFilter += `,telefone.eq.${senderNumber},telefone.eq.${senderComDDI}`;
+      }
+
       const { data, error } = await supabase
         .from('whatsapp_mensagens')
-        .select('id, mensagem, direcao, status, created_at')
-        .or(`telefone.eq.${telefoneComDDI},telefone.eq.${telefoneLimpo}`)
+        .select('id, mensagem, direcao, status, created_at, telefone')
+        .or(orFilter)
         .order('created_at', { ascending: true })
         .limit(200);
 
@@ -102,12 +110,12 @@ export function WhatsAppTestChat() {
     };
 
     buscarMensagens();
-    pollingRef.current = setInterval(buscarMensagens, 5000);
+    pollingRef.current = setInterval(buscarMensagens, 3000);
 
     return () => {
       if (pollingRef.current) clearInterval(pollingRef.current);
     };
-  }, [telefoneDestino]);
+  }, [telefoneDestino, senderNumber]);
 
   // Auto-scroll
   useEffect(() => {
