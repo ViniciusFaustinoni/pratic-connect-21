@@ -1,4 +1,5 @@
 import { useState, useCallback, useMemo } from 'react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { CotacaoStepper } from '@/components/cotacao/CotacaoStepper';
