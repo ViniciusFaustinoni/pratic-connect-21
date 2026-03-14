@@ -181,7 +181,8 @@ export function usePlans(productLineSlug?: string) {
           planos_beneficios (
             *,
             benefits:benefit_id (*)
-          )
+          ),
+          planos_regioes (regiao_id)
         `)
         .eq('ativo', true)
         .eq('visivel_gestao', true)

@@ -624,6 +624,34 @@ export function PlanFormModal({
                       </div>
                     </div>
 
+                    {/* Regiões */}
+                    <div className="space-y-2">
+                      <Label>Regiões Disponíveis</Label>
+                      <div className="grid grid-cols-2 gap-2">
+                        {regioes?.filter(r => r.ativa).map((regiao) => (
+                          <div key={regiao.id} className="flex items-center gap-2">
+                            <Checkbox
+                              id={`regiao-${regiao.id}`}
+                              checked={selectedRegioes.includes(regiao.id)}
+                              onCheckedChange={(checked) => {
+                                setSelectedRegioes(prev =>
+                                  checked
+                                    ? [...prev, regiao.id]
+                                    : prev.filter(id => id !== regiao.id)
+                                );
+                              }}
+                            />
+                            <Label htmlFor={`regiao-${regiao.id}`} className="text-sm font-normal cursor-pointer">
+                              {regiao.nome}
+                            </Label>
+                          </div>
+                        ))}
+                      </div>
+                      <p className="text-xs text-muted-foreground">
+                        Selecione em quais regiões este plano está disponível
+                      </p>
+                    </div>
+
                     <div className="flex items-center gap-4">
                       <div className="flex items-center gap-2">
                         <Switch
