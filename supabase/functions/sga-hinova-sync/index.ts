@@ -517,6 +517,52 @@ serve(async (req) => {
       try {
 
     // ========================================
+    // GUARD: Detectar loops infinitos (CPF duplicado sem recovery)
+    // ========================================
+    try {
+      const { data: recentFailures } = await supabase
+        .from('sga_sync_logs')
+        .select('error_message, created_at')
+        .eq('veiculo_id', veiculo_id)
+        .eq('associado_id', associado_id)
+        .eq('action', 'cadastrar_associado')
+        .eq('status', 'error')
+        .order('created_at', { ascending: false })
+        .limit(5);
+
+      if (recentFailures && recentFailures.length >= 3) {
+        const cpfDuplicateErrors = recentFailures.filter(f => 
+          f.error_message?.toLowerCase().includes('cpf') ||
+          f.error_message?.toLowerCase().includes('não aceitável') ||
+          f.error_message?.toLowerCase().includes('not acceptable')
+        );
+        
+        if (cpfDuplicateErrors.length >= 3) {
+          console.log(`[SGA Sync] ⛔ Loop infinito detectado: ${cpfDuplicateErrors.length} falhas consecutivas de CPF duplicado para veiculo=${veiculo_id}`);
+          await logSync(veiculo_id, associado_id, 'loop_detection', 'error', 
+            { consecutive_failures: cpfDuplicateErrors.length }, null, 
+            'Loop infinito detectado: CPF duplicado sem recovery possível. Marcado como falha permanente.');
+          
+          // Marcar como falha permanente na fila
+          await supabase
+            .from('sga_sync_queue')
+            .update({ 
+              status: 'falha_permanente', 
+              erro_ultimo: 'Loop infinito: CPF duplicado no Hinova sem possibilidade de recovery automático',
+              ultima_tentativa_em: new Date().toISOString()
+            })
+            .eq('veiculo_id', veiculo_id)
+            .eq('associado_id', associado_id);
+          
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+          return;
+        }
+      }
+    } catch (e) {
+      console.log('[SGA Sync] Erro no guard de loop:', e);
+    }
+
+    // ========================================
     // PASSO 1: Buscar dados do associado
     // ========================================
     const { data: associado, error: associadoError } = await supabase
@@ -529,10 +575,7 @@ serve(async (req) => {
       await logSync(veiculo_id, associado_id, 'buscar_associado', 'error', null, null, 'Associado não encontrado');
       await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
       await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'Associado não encontrado no banco');
-      return new Response(
-        JSON.stringify({ success: false, error: 'Associado não encontrado', step: 'associado' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return;
     }
 
     // ========================================
@@ -548,10 +591,7 @@ serve(async (req) => {
       await logSync(veiculo_id, associado_id, 'buscar_veiculo', 'error', null, null, 'Veículo não encontrado');
       await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
       await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'Veículo não encontrado no banco');
-      return new Response(
-        JSON.stringify({ success: false, error: 'Veículo não encontrado', step: 'veiculo' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return;
     }
 
     // ========================================
@@ -710,15 +750,7 @@ serve(async (req) => {
     if (!authResponse.ok || !authData.token_usuario) {
       await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
       await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', `Falha na autenticação: ${authData.mensagem}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Falha na autenticação Hinova: ${authData.mensagem}`,
-          step: 'autenticar',
-          details: authData
-        }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return;
     }
 
     const tokenUsuario = authData.token_usuario;
@@ -840,17 +872,7 @@ serve(async (req) => {
 
                     await markQueueCompleted(supabase, veiculo_id, associado_id);
 
-                    return new Response(
-                      JSON.stringify({
-                        success: true,
-                        data: {
-                          codigo_associado_hinova: codigoAssociadoHinova,
-                          codigo_veiculo_hinova: parseInt(veiculoExistente.codigo_veiculo),
-                          recuperado_via: tentativa.label
-                        }
-                      }),
-                      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                    );
+                    return;
                   }
                 }
                 
@@ -933,16 +955,7 @@ serve(async (req) => {
         if (isTokenBearerError && tokenUsuario) {
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
           await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'Token Bearer expirado');
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Token Bearer da API Hinova inválido ou expirado.',
-              step: 'associado',
-              action_required: 'update_bearer_token',
-              details: associadoData
-            }),
-            { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          return;
         }
 
         // CPF duplicado
@@ -1171,33 +1184,13 @@ serve(async (req) => {
           } else {
             await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
             await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'CPF duplicado - não foi possível recuperar código');
-            return new Response(
-              JSON.stringify({
-                success: false,
-                error: 'CPF já cadastrado no Hinova mas não foi possível recuperar o código automaticamente.',
-                step: 'associado',
-                action_required: 'preencher_codigo_hinova_manual',
-                details: {
-                  cadastro: associadoData,
-                  instrucoes: 'Preencha associados.codigo_hinova manualmente para este CPF e reprocessar a fila.'
-                }
-              }),
-              { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-            );
+            return;
           }
         } else {
           // Erro genérico
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
           await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', `Falha cadastro: ${associadoData.mensagem}`);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: `Falha ao cadastrar associado: ${associadoData.mensagem}`,
-              step: 'associado',
-              details: associadoData
-            }),
-            { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          return;
         }
       } else {
         codigoAssociadoHinova = associadoData.codigo_associado;
@@ -1230,13 +1223,7 @@ serve(async (req) => {
         await logSync(veiculo_id, associado_id, 'validar_veiculo', 'error', null, null, `${label} não informado`);
         await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
         await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', `${label} não informado`, codigoAssociadoHinova);
-        return new Response(
-          JSON.stringify({ 
-            success: false, error: msg,
-            step: 'validacao_veiculo', campo_faltante: campo
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return;
       }
     }
 
@@ -1408,16 +1395,7 @@ serve(async (req) => {
           
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
           await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', 'Placa duplicada - código não recuperado', codigoAssociadoHinova);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: 'Placa já cadastrada no Hinova. Código não recuperado automaticamente.',
-              step: 'veiculo',
-              codigo_associado_hinova: codigoAssociadoHinova,
-              details: veiculoData
-            }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          return;
         }
       } else {
         // Verificar se o erro indica que o codigo_associado é inválido no Hinova
@@ -1449,16 +1427,7 @@ serve(async (req) => {
             veiculoData, 'Código associado inválido no Hinova');
 
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: `Código associado ${codigoAssociadoHinova} inválido no Hinova. Será recadastrado na próxima tentativa.`,
-              step: 'veiculo',
-              details: veiculoData,
-              action: 'codigo_associado_invalidado'
-            }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          return;
         }
 
         // Erro genérico no veículo - preservar estado parcial do associado
@@ -1471,15 +1440,7 @@ serve(async (req) => {
         }
         await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
         await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', `Falha cadastro veículo: ${veiculoData.mensagem}`, codigoAssociadoHinova);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: `Falha ao cadastrar veículo: ${veiculoData.mensagem}`,
-            step: 'veiculo',
-            details: veiculoData
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return;
       }
     }
 

@@ -50,6 +50,31 @@ serve(async (req) => {
 
     for (const item of pendentes) {
       processados++;
+
+      // Detectar loops: se o mesmo erro se repete 3+ vezes consecutivas, marcar como falha permanente
+      if (item.tentativas >= 3 && item.erro_ultimo) {
+        const erroLower = (item.erro_ultimo || '').toLowerCase();
+        const isLoopPattern = 
+          (erroLower.includes('cpf') && (erroLower.includes('duplicado') || erroLower.includes('recuperar'))) ||
+          erroLower.includes('loop infinito') ||
+          erroLower.includes('não aceitável') ||
+          erroLower.includes('not acceptable');
+
+        if (isLoopPattern && item.tentativas >= 5) {
+          console.log(`[Cron SGA Retry] ⛔ Loop detectado para veiculo=${item.veiculo_id}: "${item.erro_ultimo}" (${item.tentativas} tentativas). Marcando como falha permanente.`);
+          await supabase
+            .from('sga_sync_queue')
+            .update({
+              status: 'falha_permanente',
+              ultima_tentativa_em: new Date().toISOString(),
+              erro_ultimo: `Loop permanente detectado após ${item.tentativas} tentativas: ${item.erro_ultimo}`,
+            })
+            .eq('id', item.id);
+          falha++;
+          continue;
+        }
+      }
+
       console.log(`[Cron SGA Retry] Processando ${processados}/${pendentes.length}: veiculo=${item.veiculo_id}, etapa=${item.etapa_parou}, tentativa=${item.tentativas + 1}`);
 
       // Marcar como processando
