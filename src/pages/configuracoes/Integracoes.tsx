@@ -349,6 +349,7 @@ export default function Integracoes() {
     credenciais: credenciais || [],
     apiKeysCount: apiKeys?.filter(k => k.ativa).length || 0,
     leadsAtivas: leadsConfig?.filter(l => l.ativo).length || 0,
+    healthChecks: healthChecks || {},
   };
 
   const handleConfigurar = useCallback((card: IntegracaoCard) => {
