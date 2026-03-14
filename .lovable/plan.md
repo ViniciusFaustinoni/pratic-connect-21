@@ -1,5 +1,3 @@
-
-
 ## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
 ### Causas Raiz Identificadas
@@ -88,3 +86,22 @@
 - `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
 - `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
 - `supabase/config.toml` — verify_jwt para nova function
+
+---
+
+## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
+
+### Causas Raiz
+1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
+2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
+3. Triggers de sync sobrescreviam coordenadas válidas com `null`
+
+### Correções Aplicadas
+
+1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
+
+2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
+
+3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
+
+4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
