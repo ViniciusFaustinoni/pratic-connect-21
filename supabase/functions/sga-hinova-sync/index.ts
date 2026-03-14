@@ -1427,16 +1427,7 @@ serve(async (req) => {
             veiculoData, 'Código associado inválido no Hinova');
 
           await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-          return new Response(
-            JSON.stringify({ 
-              success: false, 
-              error: `Código associado ${codigoAssociadoHinova} inválido no Hinova. Será recadastrado na próxima tentativa.`,
-              step: 'veiculo',
-              details: veiculoData,
-              action: 'codigo_associado_invalidado'
-            }),
-            { status: 409, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-          );
+          return;
         }
 
         // Erro genérico no veículo - preservar estado parcial do associado
