@@ -485,15 +485,6 @@ export default function Associados() {
             </div>
           </div>
           <div className="flex gap-2">
-            <Button variant="outline" size="sm" onClick={() => setFiltersSheetOpen(true)}>
-              <SlidersHorizontal className="mr-2 h-4 w-4" />
-              Filtros Avançados
-              {activeFilterCount > 0 && (
-                <Badge className="ml-1.5 h-5 w-5 rounded-full p-0 text-[10px] flex items-center justify-center bg-primary text-primary-foreground">
-                  {activeFilterCount}
-                </Badge>
-              )}
-            </Button>
             <DropdownMenu>
               <DropdownMenuTrigger asChild>
                 <Button variant="outline" size="sm">
