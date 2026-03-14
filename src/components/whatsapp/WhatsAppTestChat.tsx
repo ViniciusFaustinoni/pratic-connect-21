@@ -175,11 +175,11 @@ export function WhatsAppTestChat() {
   return (
     <div className="space-y-4">
       {/* Aviso */}
-      <Alert className="border-amber-500/30 bg-amber-500/5">
-        <FlaskConical className="h-4 w-4 text-amber-600" />
+      <Alert className="border-green-500/30 bg-green-500/5">
+        <FlaskConical className="h-4 w-4 text-green-600" />
         <AlertDescription className="text-sm">
-          <strong>Modo Teste</strong> — Simula uma mensagem de entrada no webhook da Meta, acionando o fluxo completo:
-          Mensagem → Webhook → IA → Resposta. A resposta da IA aparecerá no chat abaixo.
+          <strong>Modo Teste Real</strong> — Envia mensagens reais via Evolution API para o número da Meta.
+          O fluxo completo é executado: Mensagem WhatsApp → Webhook Meta → IA (Maya) → Resposta.
         </AlertDescription>
       </Alert>
 
