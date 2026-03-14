@@ -111,8 +111,8 @@ serve(async (req) => {
       });
     }
 
-    // 3. Verificar se pagamento foi realizado
-    if (!contrato.adesao_paga) {
+    // 3. Verificar se pagamento foi realizado (pular se skipPaymentCheck)
+    if (!contrato.adesao_paga && !skipPaymentCheck) {
       console.log('[CriarInstalacaoPosPagamento] Pagamento ainda não confirmado');
       return new Response(JSON.stringify({ 
         success: false, 
@@ -122,6 +122,9 @@ serve(async (req) => {
         status: 400,
         headers: { ...corsHeaders, 'Content-Type': 'application/json' }
       });
+    }
+    if (skipPaymentCheck) {
+      console.log('[CriarInstalacaoPosPagamento] skipPaymentCheck=true, pulando verificação de adesao_paga');
     }
 
     // 3.1 CORREÇÃO: Garantir que veiculo_id existe, buscar pela placa se necessário
