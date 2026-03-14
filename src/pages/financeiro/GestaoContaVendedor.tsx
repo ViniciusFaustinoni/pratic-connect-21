@@ -43,12 +43,12 @@ export default function GestaoContaVendedor() {
   const { data: vendedores } = useQuery({
     queryKey: ['vendedores-externos'],
     queryFn: async () => {
-      const { data } = await (supabase
+      const query = supabase
         .from('profiles')
         .select('id, nome')
-        .in('perfil_acesso', ['vendedor_externo', 'vendedor_clt'] as any) as any)
         .eq('ativo', true)
-        .order('nome');
+        .order('nome') as any;
+      const { data } = await query.in('perfil_acesso', ['vendedor_externo', 'vendedor_clt']);
       return (data || []) as { id: string; nome: string }[];
     },
   });
