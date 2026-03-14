@@ -96,6 +96,9 @@ verify_jwt = false
 [functions.criar-instalacao-pos-pagamento]
 verify_jwt = false
 
+[functions.autentique-download]
+verify_jwt = false
+
 [functions.autentique-create]
 verify_jwt = false
 
