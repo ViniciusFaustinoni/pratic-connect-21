@@ -1440,15 +1440,7 @@ serve(async (req) => {
         }
         await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
         await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', `Falha cadastro veículo: ${veiculoData.mensagem}`, codigoAssociadoHinova);
-        return new Response(
-          JSON.stringify({ 
-            success: false, 
-            error: `Falha ao cadastrar veículo: ${veiculoData.mensagem}`,
-            step: 'veiculo',
-            details: veiculoData
-          }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
+        return;
       }
     }
 
