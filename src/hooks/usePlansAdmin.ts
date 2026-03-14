@@ -39,6 +39,7 @@ export interface PlanInput {
   benefits?: PlanBenefitInput[];
   linha_slug?: string | null;
   categorias_veiculo?: string | null;
+  regioes?: string[];
 }
 
 // ==================== PLAN MUTATIONS ====================
