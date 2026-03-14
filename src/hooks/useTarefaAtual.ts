@@ -67,7 +67,8 @@ export function useTarefaAtual() {
             latitude, longitude,
             associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
             veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo, cor),
-            rastreador:rastreadores(imei)
+            rastreador:rastreadores!servicos_rastreador_id_fkey(imei),
+            rastreador_substituto:rastreadores!servicos_rastreador_substituto_id_fkey(imei)
           `)
           .eq('profissional_id', profissionalId)
           .in('status', ['em_andamento', 'em_analise', 'em_rota', 'agendada'])
@@ -87,6 +88,7 @@ export function useTarefaAtual() {
         const assoc = fallbackData.associado as any;
         const veic = fallbackData.veiculo as any;
         const rast = fallbackData.rastreador as any;
+        const rastSubstituto = (fallbackData as any).rastreador_substituto as any;
         tarefa = {
           ...fallbackData,
           associado_nome: assoc?.nome || 'Cliente',
@@ -96,7 +98,7 @@ export function useTarefaAtual() {
           marca: veic?.marca || '',
           modelo: veic?.modelo || '',
           cor: veic?.cor,
-          imei_rastreador: rast?.imei,
+          imei_rastreador: rast?.imei || rastSubstituto?.imei,
         };
         console.log('[useTarefaAtual] Tarefa recuperada via fallback:', tarefa.id);
       } else {
