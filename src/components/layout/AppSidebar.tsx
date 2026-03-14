@@ -845,21 +845,40 @@ export function AppSidebar() {
       {!collapsed && (
         <SidebarFooter className="p-3 border-t border-border">
           {(!showConfigModule || permissions.isPerfilLimitado) ? (
-            <NavLink 
-              to="/perfil" 
-              onClick={handleNavigation}
-              className={cn(
-                "flex items-center gap-3 rounded-lg p-3 transition-colors",
-                "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
-                isActive('/perfil') && "bg-sidebar-primary text-sidebar-primary-foreground"
+            <div className="space-y-1">
+              <NavLink 
+                to="/perfil" 
+                onClick={handleNavigation}
+                className={cn(
+                  "flex items-center gap-3 rounded-lg p-3 transition-colors",
+                  "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
+                  isActive('/perfil') && "bg-sidebar-primary text-sidebar-primary-foreground"
+                )}
+              >
+                <User 
+                  className="h-5 w-5" 
+                  style={{ color: isActive('/perfil') ? 'inherit' : MENU_COLORS.configuracoes }}
+                />
+                <span className="text-sm font-medium">Perfil</span>
+              </NavLink>
+              {(permissions.isVendedorOnly || permissions.isPerfilLimitado) && (
+                <NavLink 
+                  to="/perfil/conta-corrente" 
+                  onClick={handleNavigation}
+                  className={cn(
+                    "flex items-center gap-3 rounded-lg p-3 transition-colors",
+                    "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50",
+                    isActive('/perfil/conta-corrente') && "bg-sidebar-primary text-sidebar-primary-foreground"
+                  )}
+                >
+                  <DollarSign 
+                    className="h-5 w-5" 
+                    style={{ color: isActive('/perfil/conta-corrente') ? 'inherit' : MENU_COLORS.financeiro }}
+                  />
+                  <span className="text-sm font-medium">Conta Corrente</span>
+                </NavLink>
               )}
-            >
-              <User 
-                className="h-5 w-5" 
-                style={{ color: isActive('/perfil') ? 'inherit' : MENU_COLORS.configuracoes }}
-              />
-              <span className="text-sm font-medium">Perfil</span>
-            </NavLink>
+            </div>
           ) : (
             <NavLink 
               to="/configuracoes" 
