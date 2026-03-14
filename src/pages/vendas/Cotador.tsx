@@ -635,9 +635,10 @@ export default function CotadorPage() {
     setCotacaoCalculada(true);
     setPlanoSelecionadoTab(planosDB?.find(p => p.destaque)?.id || planosDB?.[1]?.id || planosDB?.[0]?.id || '');
     setPlanoFinalSelecionado(null);
-    // Inicializar adesão com 1% FIPE (mínimo R$ 100)
+    // Inicializar adesão com 1% FIPE (mínimo R$ 100) — exceto se vendedor externo já escolheu cenário com adesão zerada
     const fipeAtual = valorFipe || (marca && ano ? estimarValorFipe(marca, parseInt(ano)) : 0);
-    if (fipeAtual > 0) {
+    const cenarioZeraAdesao = cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base';
+    if (fipeAtual > 0 && !cenarioZeraAdesao) {
       setValorAdesaoCustom(Math.max(100, Math.round(fipeAtual * 0.01 * 100) / 100));
     }
     setIsCalculando(false);
