@@ -2774,6 +2774,21 @@ serve(async (req) => {
     if (isMetaDelegate) {
       console.log("[whatsapp-webhook] Delegação Meta detectada");
     }
+
+    // Se o provedor Meta está ativo e NÃO é uma delegação Meta, ignorar
+    // (Evolution conectada mas não deve processar IA automaticamente)
+    if (!isMetaDelegate) {
+      const { data: metaConfig } = await supabase
+        .from("whatsapp_meta_config")
+        .select("ativo")
+        .limit(1)
+        .maybeSingle();
+
+      if (metaConfig?.ativo === true) {
+        console.log("[whatsapp-webhook] Provedor Meta ativo — ignorando mensagem da Evolution (IA desativada para Evolution)");
+        return new Response(JSON.stringify({ ok: true, ignored: "meta_ativo_evolution_desativada" }), { headers: corsHeaders });
+      }
+    }
     if (!data?.key || data.key.fromMe) {
       return new Response(JSON.stringify({ ok: true, ignored: "própria mensagem" }), { headers: corsHeaders });
     }
