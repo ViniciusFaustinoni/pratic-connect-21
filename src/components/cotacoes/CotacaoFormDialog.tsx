@@ -2117,7 +2117,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                     onChange={(val) => { adesaoEditadaManualmente.current = true; field.onChange(val); }}
                                     className={cn(
                                       "w-28 h-7 text-center font-medium",
-                                      field.value <= 0 && "border-destructive bg-destructive/5"
+                                      field.value <= 0 && !isCenarioIsento && "border-destructive bg-destructive/5"
                                     )}
                                     placeholder="R$ 0,00"
                                   />
