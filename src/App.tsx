@@ -162,6 +162,7 @@ import ExtratoAssociado from "./pages/financeiro/ExtratoAssociado";
 import ComissionamentoExternoConfig from "./pages/financeiro/ComissionamentoExternoConfig";
 import ContaCorrenteVendedor from "./pages/financeiro/ContaCorrenteVendedor";
 import GestaoContaVendedor from "./pages/financeiro/GestaoContaVendedor";
+import DashboardVendaExterna from "./pages/financeiro/DashboardVendaExterna";
 
 // Contabilidade
 import ContabilidadeDashboard from "./pages/contabilidade/ContabilidadeDashboard";
