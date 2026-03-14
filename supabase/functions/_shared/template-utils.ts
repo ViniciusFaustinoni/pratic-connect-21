@@ -150,14 +150,15 @@ export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData)
     );
   }
   
-  // Remover bloco "Serviços:" — captura qualquer conteúdo após "Serviços:"
+  // Remover bloco "Serviços:" — captura em qualquer contexto HTML (p, div, td, li, tr, span)
+  // 1) Blocos com tag container (p, div, td, li, tr)
   resultado = resultado.replace(
-    /<p[^>]*>\s*(<strong>)?\s*Serviços\s*:?\s*(<\/strong>)?\s*[^<]*<\/p>/gi,
+    /<(p|div|td|li|tr)[^>]*>[\s\S]*?Servi[çc]os\s*:[\s\S]*?<\/\1>/gi,
     ''
   );
-  // Formato inline
+  // 2) Formato inline residual (sem tag container)
   resultado = resultado.replace(
-    /Serviços\s*:\s*[^\n<]*/gi,
+    /Servi[çc]os\s*:\s*[^\n<]*/gi,
     ''
   );
 
