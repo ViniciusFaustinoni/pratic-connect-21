@@ -121,6 +121,17 @@ export function useCreatePlan() {
         if (benefitsError) throw benefitsError;
       }
 
+      // Create region links
+      if (regioes && regioes.length > 0) {
+        const { error: regioesError } = await supabase
+          .from('planos_regioes')
+          .insert(regioes.map(regiaoId => ({
+            plano_id: plan.id,
+            regiao_id: regiaoId,
+          })));
+        if (regioesError) throw regioesError;
+      }
+
       return plan;
     },
     onSuccess: () => {
