@@ -247,6 +247,7 @@ export function PlanFormModal({
         categorias_veiculo: [],
       });
       setSelectedBenefits([]);
+      setSelectedRegioes([]);
     }
   }, [plan, defaultProductLineId]);
 
