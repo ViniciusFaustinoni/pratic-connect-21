@@ -37,13 +37,18 @@ export function EtapaAssinaturaContrato({
   onContratoAssinado,
   readOnly = false,
 }: EtapaAssinaturaContratoProps) {
-  const [etapaInterna, setEtapaInterna] = useState<EtapaInterna>('verificando');
+  const [etapaInterna, setEtapaInterna] = useState<EtapaInterna>(
+    !clienteEmail ? 'coletar_email' : 'verificando'
+  );
   const [contrato, setContrato] = useState<ContratoInfo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [verificando, setVerificando] = useState(false);
+  const [emailLocal, setEmailLocal] = useState(clienteEmail || '');
+  const [emailEfetivo, setEmailEfetivo] = useState(clienteEmail || '');
+  const [salvandoEmail, setSalvandoEmail] = useState(false);
 
   // Flag para evitar chamadas duplicadas em re-render
-  const [inicializado, setInicializado] = useState(false);
+  const [inicializado, setInicializado] = useState(!clienteEmail ? true : false);
 
   // 1. Verificar/gerar contrato
   const verificarOuGerarContrato = useCallback(async () => {
