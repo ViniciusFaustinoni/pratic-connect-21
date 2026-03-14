@@ -21,6 +21,7 @@ import {
   hasSignatureArea,
   sanitizeSignatureBlocks,
   exigeRastreador,
+  extrairCodigosBeneficios,
 } from "../_shared/template-utils.ts";
 
 const corsHeaders = {
