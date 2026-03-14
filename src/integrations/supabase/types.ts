@@ -4595,6 +4595,191 @@ export type Database = {
           },
         ]
       }
+      cc_vendedor_lancamentos: {
+        Row: {
+          associado_id: string | null
+          categoria: string
+          contrato_id: string | null
+          created_at: string | null
+          data_lancamento: string
+          data_pagamento: string | null
+          debito_volante_ref_id: string | null
+          descricao: string
+          id: string
+          observacao_pagamento: string | null
+          pago_por: string | null
+          parcela_numero: number | null
+          parcela_total: number | null
+          saldo_apos: number | null
+          status: Database["public"]["Enums"]["cc_status_lancamento"]
+          tipo: Database["public"]["Enums"]["cc_tipo_lancamento"]
+          updated_at: string | null
+          valor_abatimento: number
+          valor_bruto: number
+          valor_liquido: number
+          vendedor_id: string
+        }
+        Insert: {
+          associado_id?: string | null
+          categoria: string
+          contrato_id?: string | null
+          created_at?: string | null
+          data_lancamento?: string
+          data_pagamento?: string | null
+          debito_volante_ref_id?: string | null
+          descricao: string
+          id?: string
+          observacao_pagamento?: string | null
+          pago_por?: string | null
+          parcela_numero?: number | null
+          parcela_total?: number | null
+          saldo_apos?: number | null
+          status?: Database["public"]["Enums"]["cc_status_lancamento"]
+          tipo: Database["public"]["Enums"]["cc_tipo_lancamento"]
+          updated_at?: string | null
+          valor_abatimento?: number
+          valor_bruto?: number
+          valor_liquido?: number
+          vendedor_id: string
+        }
+        Update: {
+          associado_id?: string | null
+          categoria?: string
+          contrato_id?: string | null
+          created_at?: string | null
+          data_lancamento?: string
+          data_pagamento?: string | null
+          debito_volante_ref_id?: string | null
+          descricao?: string
+          id?: string
+          observacao_pagamento?: string | null
+          pago_por?: string | null
+          parcela_numero?: number | null
+          parcela_total?: number | null
+          saldo_apos?: number | null
+          status?: Database["public"]["Enums"]["cc_status_lancamento"]
+          tipo?: Database["public"]["Enums"]["cc_tipo_lancamento"]
+          updated_at?: string | null
+          valor_abatimento?: number
+          valor_bruto?: number
+          valor_liquido?: number
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_debito_volante_ref_id_fkey"
+            columns: ["debito_volante_ref_id"]
+            isOneToOne: false
+            referencedRelation: "cc_vendedor_lancamentos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_pago_por_fkey"
+            columns: ["pago_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_pago_por_fkey"
+            columns: ["pago_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_pago_por_fkey"
+            columns: ["pago_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       centros_custo: {
         Row: {
           ativo: boolean | null
@@ -26256,6 +26441,37 @@ export type Database = {
         }
         Relationships: []
       }
+      vw_cc_vendedor_saldo: {
+        Row: {
+          a_receber_mes: number | null
+          antecipacoes_abertas: number | null
+          saldo_atual: number | null
+          vendedor_id: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "cc_vendedor_lancamentos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       vw_cpfs_duplicados: {
         Row: {
           cpf: string | null
@@ -26766,6 +26982,7 @@ export type Database = {
         Args: never
         Returns: Database["public"]["Enums"]["tipo_usuario"]
       }
+      get_profile_id_for_auth: { Args: { auth_uid: string }; Returns: string }
       get_proximo_vendedor_distribuicao: { Args: never; Returns: string }
       get_ultimas_posicoes: {
         Args: never
@@ -26871,6 +27088,14 @@ export type Database = {
         | "analista_eventos"
         | "advogado"
         | "sindicante"
+      cc_status_lancamento:
+        | "pendente"
+        | "a_pagar"
+        | "pago"
+        | "antecipado"
+        | "cancelado"
+        | "em_abatimento"
+      cc_tipo_lancamento: "credito" | "debito"
       etapa_lead:
         | "novo"
         | "contato_inicial"
@@ -27274,6 +27499,15 @@ export const Constants = {
         "advogado",
         "sindicante",
       ],
+      cc_status_lancamento: [
+        "pendente",
+        "a_pagar",
+        "pago",
+        "antecipado",
+        "cancelado",
+        "em_abatimento",
+      ],
+      cc_tipo_lancamento: ["credito", "debito"],
       etapa_lead: [
         "novo",
         "contato_inicial",
