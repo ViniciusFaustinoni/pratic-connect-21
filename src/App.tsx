@@ -123,6 +123,7 @@ import Integracoes from "./pages/configuracoes/Integracoes";
 import IntegracaoWhatsApp from "./pages/configuracoes/IntegracaoWhatsApp";
 import IntegracaoApiKeys from "./pages/configuracoes/IntegracaoApiKeys";
 import IntegracaoFontesLeads from "./pages/configuracoes/IntegracaoFontesLeads";
+import IntegracaoSGAHinova from "./pages/configuracoes/IntegracaoSGAHinova";
 import Sistema from "./pages/configuracoes/Sistema";
 import Logs from "./pages/configuracoes/Logs";
 import RateioConfig from "./pages/configuracoes/RateioConfig";
