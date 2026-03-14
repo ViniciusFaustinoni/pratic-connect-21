@@ -161,7 +161,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
   const { user, profile } = useAuth();
-  const { userId, isDiretor, isGerente, isSupervisor } = usePermissions();
+  const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno } = usePermissions();
+  
+  // Estado do cenário de adesão para vendedor externo
+  type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
+  const [cenarioExterno, setCenarioExterno] = useState<CenarioExterno | null>(null);
+  const isCenarioIsento = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
   
   // Hook para verificar placa duplicada
   const verificarPlacaDuplicada = useVerificarPlacaDuplicada();
