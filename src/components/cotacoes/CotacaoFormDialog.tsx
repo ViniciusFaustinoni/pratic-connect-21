@@ -161,7 +161,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { getMarcas, getModelos, getAnos, getPreco, getByPlaca, buscarPorNome, loading: fipeLoading } = useFipe();
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
   const { user, profile } = useAuth();
-  const { userId, isDiretor, isGerente, isSupervisor } = usePermissions();
+  const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno } = usePermissions();
+  
+  // Estado do cenário de adesão para vendedor externo
+  type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
+  const [cenarioExterno, setCenarioExterno] = useState<CenarioExterno | null>(null);
+  const isCenarioIsento = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
   
   // Hook para verificar placa duplicada
   const verificarPlacaDuplicada = useVerificarPlacaDuplicada();
@@ -276,13 +281,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   
   // Auto-calcular adesão como 1% FIPE (mínimo R$ 100)
   useEffect(() => {
+    // Vendedor externo com cenário isento: não sobrescrever adesão zerada
+    if (isCenarioIsento) return;
     if (valorFipe && valorFipe > 0 && !adesaoEditadaManualmente.current) {
       const MINIMO_ADESAO = 100;
       const adesaoCalculada = Math.max(valorFipe * 0.01, MINIMO_ADESAO);
       const adesaoArredondada = Math.round(adesaoCalculada * 100) / 100;
       form.setValue('valor_adesao', adesaoArredondada);
     }
-  }, [valorFipe, form]);
+  }, [valorFipe, form, isCenarioIsento]);
   
   // Extrair ano numérico para o hook de planos
   const anoTexto = useMemo(() => {
@@ -674,7 +681,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       if (cotacaoBase.valor_adicional) {
         form.setValue('valor_adicional', cotacaoBase.valor_adicional);
       }
-      if (cotacaoBase.valor_adesao) {
+      if (cotacaoBase.valor_adesao !== null && cotacaoBase.valor_adesao !== undefined) {
         form.setValue('valor_adesao', cotacaoBase.valor_adesao);
       }
       if (cotacaoBase.validade_dias) {
@@ -743,7 +750,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       if (cotacaoParaEditar.valor_adicional) {
         form.setValue('valor_adicional', cotacaoParaEditar.valor_adicional);
       }
-      if (cotacaoParaEditar.valor_adesao) {
+      if (cotacaoParaEditar.valor_adesao !== null && cotacaoParaEditar.valor_adesao !== undefined) {
         form.setValue('valor_adesao', cotacaoParaEditar.valor_adesao);
       }
       if (cotacaoParaEditar.validade_dias) {
@@ -953,16 +960,25 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return;
     }
 
-    if (data.valor_adesao <= 0) {
-      toast.error('O valor de adesão deve ser maior que zero!');
+    // Vendedor externo: validar cenário obrigatório
+    if (isVendedorExterno && !cenarioExterno) {
+      toast.error('Selecione o cenário de adesão e instalação antes de continuar.');
       return;
     }
-    
-    // Validar valor mínimo de adesão (R$ 50,00) para evitar erros de digitação
-    const VALOR_ADESAO_MINIMO = 50;
-    if (data.valor_adesao < VALOR_ADESAO_MINIMO) {
-      toast.error(`O valor de adesão (${formatCurrency(data.valor_adesao)}) está muito baixo. O mínimo é ${formatCurrency(VALOR_ADESAO_MINIMO)}.`);
-      return;
+
+    // Validação de adesão: pular para externo com cenário isento
+    if (!isCenarioIsento) {
+      if (data.valor_adesao <= 0) {
+        toast.error('O valor de adesão deve ser maior que zero!');
+        return;
+      }
+      
+      // Validar valor mínimo de adesão (R$ 50,00) para evitar erros de digitação
+      const VALOR_ADESAO_MINIMO = 50;
+      if (data.valor_adesao < VALOR_ADESAO_MINIMO) {
+        toast.error(`O valor de adesão (${formatCurrency(data.valor_adesao)}) está muito baixo. O mínimo é ${formatCurrency(VALOR_ADESAO_MINIMO)}.`);
+        return;
+      }
     }
     
     // Alertar se valor estiver muito diferente do plano selecionado
@@ -1020,6 +1036,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         dia_vencimento: diaVencimento,
         // Região selecionada
         regiao: regiaoSelecionada || null,
+        // Tipo de instalação (somente vendedor externo)
+        ...(isVendedorExterno && cenarioExterno ? {
+          tipo_instalacao: cenarioExterno.includes('rota') ? 'rota' as const : 'base' as const,
+        } : {}),
         // Planos para comparação (múltiplos planos selecionados)
         dados_extras: {
           planos_comparacao: planosSelecionados.map(p => ({
@@ -1105,6 +1125,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setDiaVencimento(null);
       setSolicitarFipeMenor(false);
       setJustificativaFipeMenor('');
+      setCenarioExterno(null);
 
       setShowConfirmDialog(false);
       onOpenChange(false);
@@ -1588,7 +1609,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
             {/* BLOCO 2.5: TAXA DE FILIAÇÃO */}
             <div>
-              <Label className="text-sm font-semibold">Taxa de Filiação *</Label>
+              <Label className="text-sm font-semibold">Taxa de Filiação {!isCenarioIsento && '*'}</Label>
               <FormField
                 control={form.control}
                 name="valor_adesao"
@@ -1602,16 +1623,72 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           adesaoEditadaManualmente.current = true;
                         }}
                         placeholder="R$ 0,00"
+                        disabled={isCenarioIsento}
                       />
                     </FormControl>
                     <FormMessage />
                   </FormItem>
                 )}
               />
-              <p className="text-xs text-muted-foreground mt-1">
-                Valor sugerido: 1% da FIPE (mín. R$ 100). Altere conforme necessário.
-              </p>
+              {isCenarioIsento ? (
+                <p className="text-xs text-green-600 mt-1 font-medium">
+                  Adesão isenta conforme cenário selecionado.
+                </p>
+              ) : (
+                <p className="text-xs text-muted-foreground mt-1">
+                  Valor sugerido: 1% da FIPE (mín. R$ 100). Altere conforme necessário.
+                </p>
+              )}
             </div>
+
+            {/* BLOCO 2.6: CENÁRIO VENDEDOR EXTERNO */}
+            {isVendedorExterno && (
+              <div className="space-y-2">
+                <Label className="text-sm font-semibold">Cenário de Adesão e Instalação *</Label>
+                <div className="grid grid-cols-2 gap-2">
+                  {([
+                    { value: 'cobra_rota' as CenarioExterno, label: 'Cobra Adesão + Rota', desc: 'Cliente paga adesão, instalação em rota' },
+                    { value: 'cobra_base' as CenarioExterno, label: 'Cobra Adesão + Base', desc: 'Cliente paga adesão, instalação na base' },
+                    { value: 'isenta_rota' as CenarioExterno, label: 'Isenta Adesão + Rota', desc: 'Sem adesão, instalação em rota' },
+                    { value: 'isenta_base' as CenarioExterno, label: 'Isenta Adesão + Base', desc: 'Sem adesão, instalação na base' },
+                  ]).map((cenario) => (
+                    <button
+                      key={cenario.value}
+                      type="button"
+                      onClick={() => {
+                        setCenarioExterno(cenario.value);
+                        if (cenario.value.startsWith('isenta')) {
+                          form.setValue('valor_adesao', 0);
+                          adesaoEditadaManualmente.current = true;
+                        } else if (cenarioExterno?.startsWith('isenta')) {
+                          // Voltando de isento para cobra: recalcular adesão
+                          adesaoEditadaManualmente.current = false;
+                          if (valorFipe && valorFipe > 0) {
+                            const adesaoCalculada = Math.max(valorFipe * 0.01, 100);
+                            form.setValue('valor_adesao', Math.round(adesaoCalculada * 100) / 100);
+                          }
+                        }
+                      }}
+                      className={cn(
+                        'p-3 rounded-lg border text-left transition-all text-sm',
+                        cenarioExterno === cenario.value
+                          ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                          : 'border-border hover:border-primary/50'
+                      )}
+                    >
+                      <span className="font-medium block">{cenario.label}</span>
+                      <span className="text-xs text-muted-foreground">{cenario.desc}</span>
+                    </button>
+                  ))}
+                </div>
+                {!cenarioExterno && (
+                  <p className="text-xs text-destructive flex items-center gap-1">
+                    <AlertCircle className="h-3 w-3" />
+                    Selecione um cenário para continuar
+                  </p>
+                )}
+              </div>
+            )}
 
             <Separator />
 
