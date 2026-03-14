@@ -766,7 +766,7 @@ function avaliarRegraEdge(
   regra: RegraAditivo,
   veiculo: any,
   fipeLimite: number,
-  contexto?: { tipo_evento?: string; beneficios_codigos?: string[]; configRastreador?: { fipeMinCarro: number; fipeMinMoto: number } }
+  contexto?: { tipo_evento?: string; beneficios_codigos?: string[]; configRastreador?: { fipeMinCarro: number; fipeMinMoto: number }; sinistro?: { tipo?: string; com_bombeiros?: boolean; reparo_aprovado?: boolean }; contrato_extra?: { em_reativacao?: boolean; inadimplencia_dias?: number } }
 ): boolean {
   if (!regra.ativo) return false;
 
