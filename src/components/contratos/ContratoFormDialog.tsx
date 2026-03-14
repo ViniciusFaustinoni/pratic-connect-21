@@ -1,4 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { useAuth } from '@/contexts/AuthContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -111,6 +112,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
   const [pendingFormData, setPendingFormData] = useState<FormData | null>(null);
 
   const { profile, isVendedor } = useAuth();
+  const { isVendedorExterno } = usePermissions();
   const usuarioEhVendedor = isVendedor();
 
   const { data: leads } = useAllLeads();
@@ -191,7 +193,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
   // Abre o popup de confirmação de adesão
   const onSubmit = (data: FormData) => {
     // Validação extra (redundante mas segura)
-    if (data.valor_adesao <= 0) {
+    if (!isVendedorExterno && data.valor_adesao <= 0) {
       toast.error('A taxa de filiação deve ser maior que zero!');
       return;
     }
@@ -646,7 +648,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
               </Button>
               <Button 
                 type="submit" 
-                disabled={isSubmitting || form.watch('valor_adesao') <= 0}
+                disabled={isSubmitting || (!isVendedorExterno && form.watch('valor_adesao') <= 0)}
               >
                 {isSubmitting && <Loader2 className="mr-2 h-4 w-4 animate-spin" />}
                 Criar Rascunho
