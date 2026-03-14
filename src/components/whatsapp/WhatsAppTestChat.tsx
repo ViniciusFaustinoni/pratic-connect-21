@@ -28,6 +28,7 @@ export function WhatsAppTestChat() {
   const [telefoneEditavel, setTelefoneEditavel] = useState('');
   const [carregandoConfig, setCarregandoConfig] = useState(true);
   const [metaAtiva, setMetaAtiva] = useState(false);
+  const [senderNumber, setSenderNumber] = useState('');
   const scrollRef = useRef<HTMLDivElement>(null);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
