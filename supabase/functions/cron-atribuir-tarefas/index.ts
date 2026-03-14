@@ -590,7 +590,7 @@ serve(async (req) => {
                     `📍 Endereço: ${enderecoCompleto}\n` +
                     `${servico.is_encaixe ? '⚡ ENCAIXE' : ''}`;
 
-                  await supabase.functions.invoke('enviar-whatsapp', {
+                  await supabase.functions.invoke('whatsapp-send-text', {
                     body: {
                       telefone: profProfile.telefone,
                       mensagem: msgInstalador,
