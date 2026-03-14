@@ -489,6 +489,7 @@ export function useCriarCotacao() {
         categoria: payload.categoria_veiculo,
         regiao: payload.regiao || null,
         nome_solicitante: payload.nome_solicitante || null,
+        tipo_instalacao: payload.tipo_instalacao || null,
       };
 
       const { data, error } = await supabase

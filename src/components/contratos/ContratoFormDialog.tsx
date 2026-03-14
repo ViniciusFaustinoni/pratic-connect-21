@@ -65,7 +65,7 @@ import { cn } from '@/lib/utils';
 const formSchema = z.object({
   lead_id: z.string().optional().nullable(),
   plano_id: z.string().min(1, 'Selecione um plano'),
-  valor_adesao: z.number().min(1, 'A taxa de filiação é obrigatória e deve ser maior que zero'),
+  valor_adesao: z.number().min(0, 'A taxa de filiação não pode ser negativa'),
   valor_adicional: z.number().min(0, 'Informe o valor adicional').optional(),
   dia_vencimento: z.number().min(1).max(28).optional(),
   vendedor_id: z.string().optional().nullable(),

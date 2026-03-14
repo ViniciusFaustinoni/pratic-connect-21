@@ -181,4 +181,5 @@ export interface CriarCotacaoPayload {
   categoria_veiculo?: string;
   nome_solicitante?: string | null;
   valor_adesao?: number;
+  tipo_instalacao?: 'rota' | 'base';
 }
