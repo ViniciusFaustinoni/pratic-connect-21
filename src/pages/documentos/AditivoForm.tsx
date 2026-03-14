@@ -73,12 +73,8 @@ export default function AditivoForm() {
       setConteudoHtml(aditivo.conteudo_html || '');
       setAtivo(aditivo.ativo);
       setOrdem(aditivo.ordem);
-      const regrasMap: Record<string, boolean> = {
-        veiculo_0km: false,
-        fipe_acima_de: false,
-        evento_vidros: false,
-        veiculo_blindado: false,
-      };
+      const regrasMap: Record<string, boolean> = {};
+      TIPOS_REGRA.forEach(t => { regrasMap[t.tipo] = false; });
       (aditivo.regras || []).forEach((r: RegraAditivo) => {
         regrasMap[r.tipo] = r.ativo;
       });
