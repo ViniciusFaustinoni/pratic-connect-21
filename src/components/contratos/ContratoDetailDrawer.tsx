@@ -561,8 +561,12 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                             className="w-full"
                             onClick={async () => {
                               try {
-                                const res = await fetch(autentiqueStatus.document.signedFileUrl);
-                                const blob = await res.blob();
+                                toast.info('Baixando documento...');
+                                const { data, error } = await supabase.functions.invoke('autentique-download', {
+                                  body: { documentId: contrato.autentique_documento_id },
+                                });
+                                if (error) throw error;
+                                const blob = new Blob([data], { type: 'application/pdf' });
                                 const url = URL.createObjectURL(blob);
                                 const a = document.createElement('a');
                                 a.href = url;
