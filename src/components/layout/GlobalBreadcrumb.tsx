@@ -351,6 +351,23 @@ interface BreadcrumbItemProps {
   previousPath: string;
 }
 
+// Rotas que são apenas categorias (sem página própria) — redirecionar para primeiro filho
+const CATEGORY_REDIRECTS: Record<string, string> = {
+  '/cadastro': '/cadastro/associados',
+  '/vendas': '/vendas/dashboard',
+  '/eventos': '/eventos/dashboard',
+  '/assistencia': '/assistencia/dashboard',
+  '/financeiro': '/financeiro/dashboard',
+  '/cobranca': '/cobranca/dashboard',
+  '/contabilidade': '/contabilidade/dashboard',
+  '/juridico': '/juridico/dashboard',
+  '/rh': '/rh/dashboard',
+  '/monitoramento': '/monitoramento/instalacoes',
+  '/marketing': '/marketing/dashboard',
+  '/diretoria': '/diretoria/dashboard',
+  '/oficinas': '/oficinas/lista',
+};
+
 function BreadcrumbItem({ path, segment, isLast, previousPath }: BreadcrumbItemProps) {
   const isId = isUUID(segment);
   const { data: entityName, isLoading } = useEntityName(previousPath, isId ? segment : null);
@@ -372,6 +389,8 @@ function BreadcrumbItem({ path, segment, isLast, previousPath }: BreadcrumbItemP
     label = ROUTE_CONFIG[path]?.label || segment.charAt(0).toUpperCase() + segment.slice(1);
   }
 
+  const linkTo = CATEGORY_REDIRECTS[path] || path;
+
   return (
     <div className="flex items-center gap-1">
       <ChevronRight className="h-4 w-4 text-muted-foreground flex-shrink-0" />
@@ -379,7 +398,7 @@ function BreadcrumbItem({ path, segment, isLast, previousPath }: BreadcrumbItemP
         <span className="font-medium text-foreground truncate max-w-[200px]">{label}</span>
       ) : (
         <Link
-          to={path}
+          to={linkTo}
           className="text-muted-foreground transition-colors hover:text-foreground truncate max-w-[150px]"
         >
           {label}
