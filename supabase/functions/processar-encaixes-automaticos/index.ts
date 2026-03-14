@@ -354,7 +354,12 @@ serve(async (req) => {
         .single();
 
       if (updateError || !atualizado) {
-        console.log(`[processar-encaixes-automaticos] Encaixe ${encaixe.id} já foi atribuído por outro processo`);
+        console.error(`[processar-encaixes-automaticos] Falha ao atribuir encaixe ${encaixe.id}:`, {
+          code: updateError?.code,
+          message: updateError?.message,
+          details: updateError?.details,
+          hint: updateError?.hint,
+        });
         continue;
       }
 
