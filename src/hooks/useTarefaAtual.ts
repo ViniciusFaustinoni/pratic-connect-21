@@ -67,7 +67,8 @@ export function useTarefaAtual() {
             latitude, longitude,
             associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
             veiculo:veiculos!servicos_veiculo_id_fkey(placa, marca, modelo, cor),
-            rastreador:rastreadores(imei)
+            rastreador:rastreadores!servicos_rastreador_id_fkey(imei),
+            rastreador_substituto:rastreadores!servicos_rastreador_substituto_id_fkey(imei)
           `)
           .eq('profissional_id', profissionalId)
           .in('status', ['em_andamento', 'em_analise', 'em_rota', 'agendada'])
