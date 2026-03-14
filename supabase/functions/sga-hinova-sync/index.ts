@@ -872,17 +872,7 @@ serve(async (req) => {
 
                     await markQueueCompleted(supabase, veiculo_id, associado_id);
 
-                    return new Response(
-                      JSON.stringify({
-                        success: true,
-                        data: {
-                          codigo_associado_hinova: codigoAssociadoHinova,
-                          codigo_veiculo_hinova: parseInt(veiculoExistente.codigo_veiculo),
-                          recuperado_via: tentativa.label
-                        }
-                      }),
-                      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-                    );
+                    return;
                   }
                 }
                 
