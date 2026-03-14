@@ -750,15 +750,7 @@ serve(async (req) => {
     if (!authResponse.ok || !authData.token_usuario) {
       await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
       await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', `Falha na autenticação: ${authData.mensagem}`);
-      return new Response(
-        JSON.stringify({ 
-          success: false, 
-          error: `Falha na autenticação Hinova: ${authData.mensagem}`,
-          step: 'autenticar',
-          details: authData
-        }),
-        { status: 401, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return;
     }
 
     const tokenUsuario = authData.token_usuario;
