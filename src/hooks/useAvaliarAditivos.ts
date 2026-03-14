@@ -41,6 +41,8 @@ function avaliarRegra(
   fipeLimite: number,
   configRastreador?: { fipeMinCarro: number; fipeMinMoto: number },
   beneficios?: BeneficiosContratados,
+  contrato?: ContratoParaAvaliacao,
+  sinistro?: SinistroParaAvaliacao,
 ): boolean {
   if (!regra.ativo) return false;
 
