@@ -1,0 +1,17 @@
+
+-- Ensure extensions are enabled
+CREATE EXTENSION IF NOT EXISTS pg_cron SCHEMA pg_catalog;
+CREATE EXTENSION IF NOT EXISTS pg_net SCHEMA extensions;
+
+-- Schedule cron job every minute
+SELECT cron.schedule(
+  'processar-fila-ia-cron',
+  '* * * * *',
+  $$
+  SELECT net.http_post(
+    url := 'https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/processar-fila-ia',
+    headers := '{"Content-Type": "application/json", "Authorization": "Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
+    body := '{"trigger": "cron"}'::jsonb
+  ) AS request_id;
+  $$
+);
