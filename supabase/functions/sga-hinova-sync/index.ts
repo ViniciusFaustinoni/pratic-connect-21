@@ -575,10 +575,7 @@ serve(async (req) => {
       await logSync(veiculo_id, associado_id, 'buscar_associado', 'error', null, null, 'Associado não encontrado');
       await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
       await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'Associado não encontrado no banco');
-      return new Response(
-        JSON.stringify({ success: false, error: 'Associado não encontrado', step: 'associado' }),
-        { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
+      return;
     }
 
     // ========================================
