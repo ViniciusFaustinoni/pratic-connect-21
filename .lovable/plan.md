@@ -1,39 +1,13 @@
 
 
-# Solicitar Email Antes do Envio para Autentique
+## Exibição Progressiva de Planos + Campo de Região — ✅ Implementado
 
-## Problema
-Na cotação rápida, o email é opcional. Porém, o Autentique **exige** email do signatário para enviar o link de assinatura. Se `email_solicitante` estiver vazio, o fluxo falha silenciosamente.
+### Alterações realizadas
 
-## Solução
-Adicionar uma sub-etapa de coleta de email dentro de `EtapaAssinaturaContrato` quando `clienteEmail` estiver vazio. O email informado será salvo na cotação antes de prosseguir com a geração do contrato.
-
-## Alterações
-
-### `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`
-- Adicionar estado `emailLocal` e sub-etapa `'coletar_email'`
-- No `useEffect` de inicialização: se `clienteEmail` estiver vazio, mostrar formulário de email em vez de iniciar o fluxo
-- Formulário simples: campo de email com validação + botão "Continuar"
-- Ao submeter: salvar email na `cotacoes` (`email_solicitante`) via `publicSupabase` e prosseguir com o fluxo normal
-- O email coletado será usado em todo o restante do componente (exibição do signatário, envio ao Autentique)
-
-### Fluxo atualizado
-```text
-EtapaAssinaturaContrato monta
-       │
-       ├─ clienteEmail preenchido? → fluxo normal (verificar/gerar contrato)
-       │
-       └─ clienteEmail vazio? → tela "Informe seu email"
-              │
-              ├─ Usuário digita email válido
-              ├─ Salva em cotacoes.email_solicitante
-              └─ Inicia fluxo normal com email preenchido
-```
-
-### UI do formulário de email
-- Card com ícone de `Mail`
-- Título: "Email necessário para assinatura"
-- Descrição: "Para enviar o contrato digital, precisamos do seu email"
-- Input de email com validação básica (regex)
-- Botão "Continuar para assinatura"
-
+1. **Removidos 5 resets desnecessários** de `setCotacaoCalculada(false)` em `Cotador.tsx` — mantido apenas no `limparTudo`
+2. **Adicionado `useEffect` auto-display** — seta `cotacaoCalculada = true` quando `valorFipe > 0` e `planosDB` tem resultados
+3. **Adicionado campo Região** (RJ, Lagos, SP) no formulário, antes de "Uso para aplicativo"
+4. **Substituído hardcode `regiao: 'rj'`** por estado `regiao` no `parametrosPlanos`
+5. **Auto-atualização de tab** — quando lista de planos muda, tab selecionada é revalidada
+6. **`regiao` incluída** no payload de salvar cotação (`CriarCotacaoPayload` + `useCotacao.ts`)
+7. **`regiao` resetada** no `limparTudo` para `'rj'`

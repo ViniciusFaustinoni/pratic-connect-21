@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FileSignature, Loader2, AlertCircle, ExternalLink, RefreshCw, CheckCircle2, Shield, Clock, Mail, MousePointer, PenTool, ArrowRight } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
@@ -18,7 +19,7 @@ interface EtapaAssinaturaContratoProps {
   readOnly?: boolean;
 }
 
-type EtapaInterna = 'verificando' | 'gerando_contrato' | 'enviando_autentique' | 'aguardando_assinatura' | 'assinado' | 'erro';
+type EtapaInterna = 'coletar_email' | 'verificando' | 'gerando_contrato' | 'enviando_autentique' | 'aguardando_assinatura' | 'assinado' | 'erro';
 
 interface ContratoInfo {
   id: string;
@@ -36,13 +37,18 @@ export function EtapaAssinaturaContrato({
   onContratoAssinado,
   readOnly = false,
 }: EtapaAssinaturaContratoProps) {
-  const [etapaInterna, setEtapaInterna] = useState<EtapaInterna>('verificando');
+  const [etapaInterna, setEtapaInterna] = useState<EtapaInterna>(
+    !clienteEmail ? 'coletar_email' : 'verificando'
+  );
   const [contrato, setContrato] = useState<ContratoInfo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [verificando, setVerificando] = useState(false);
+  const [emailLocal, setEmailLocal] = useState(clienteEmail || '');
+  const [emailEfetivo, setEmailEfetivo] = useState(clienteEmail || '');
+  const [salvandoEmail, setSalvandoEmail] = useState(false);
 
   // Flag para evitar chamadas duplicadas em re-render
-  const [inicializado, setInicializado] = useState(false);
+  const [inicializado, setInicializado] = useState(!clienteEmail ? true : false);
 
   // 1. Verificar/gerar contrato
   const verificarOuGerarContrato = useCallback(async () => {
@@ -344,6 +350,74 @@ export function EtapaAssinaturaContrato({
     verificarOuGerarContrato();
   };
 
+  // Salvar email coletado e iniciar fluxo
+  const handleSalvarEmail = async () => {
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(emailLocal)) {
+      toast.error('Informe um email válido');
+      return;
+    }
+    try {
+      setSalvandoEmail(true);
+      await publicSupabase
+        .from('cotacoes')
+        .update({ email_solicitante: emailLocal })
+        .eq('id', cotacaoId)
+        .eq('token_publico', tokenPublico);
+      setEmailEfetivo(emailLocal);
+      setEtapaInterna('verificando');
+      verificarOuGerarContrato();
+    } catch (e: any) {
+      toast.error('Erro ao salvar email');
+    } finally {
+      setSalvandoEmail(false);
+    }
+  };
+
+  // Tela de coleta de email
+  if (etapaInterna === 'coletar_email') {
+    return (
+      <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
+        <CardContent className="py-12 text-center space-y-6">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-6"
+          >
+            <div className="w-16 h-16 mx-auto rounded-full bg-primary/10 flex items-center justify-center">
+              <Mail className="h-8 w-8 text-primary" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Email necessário para assinatura</h3>
+              <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                Para enviar o contrato digital, precisamos do seu email.
+              </p>
+            </div>
+            <div className="max-w-sm mx-auto space-y-3">
+              <Input
+                type="email"
+                placeholder="seu@email.com"
+                value={emailLocal}
+                onChange={(e) => setEmailLocal(e.target.value)}
+                onKeyDown={(e) => e.key === 'Enter' && handleSalvarEmail()}
+                className="text-center"
+              />
+              <Button
+                onClick={handleSalvarEmail}
+                disabled={salvandoEmail || !emailLocal}
+                className="w-full gap-2"
+              >
+                {salvandoEmail ? <Loader2 className="h-4 w-4 animate-spin" /> : <ArrowRight className="h-4 w-4" />}
+                Continuar para assinatura
+              </Button>
+            </div>
+          </motion.div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Estados de carregamento
   if (etapaInterna === 'verificando' || etapaInterna === 'gerando_contrato' || etapaInterna === 'enviando_autentique') {
     return (
@@ -451,9 +525,9 @@ export function EtapaAssinaturaContrato({
               <span className="text-muted-foreground">Signatário:</span>
               <span className="font-medium">{clienteNome}</span>
             </div>
-            <div className="flex items-center justify-between text-sm">
+             <div className="flex items-center justify-between text-sm">
               <span className="text-muted-foreground">Email:</span>
-              <span className="font-medium">{clienteEmail}</span>
+              <span className="font-medium">{emailEfetivo}</span>
             </div>
           </div>
 
