@@ -1,20 +1,13 @@
 
 
-# Remover foto duplicada "Local de Instalação do Rastreador" da grade de fotos
+## Exibição Progressiva de Planos + Campo de Região — ✅ Implementado
 
-## Problema
-Durante a vistoria de instalação, a foto "Local de Instalação do Rastreador" aparece **duas vezes**:
-1. Na grade de fotos da vistoria (categoria "Instalação") — primeira tela
-2. Na seção dedicada "Local de Instalação do Rastreador" com select de local + descrição + foto — segunda tela
+### Alterações realizadas
 
-A seção dedicada (item 2) é mais completa e é a correta. A foto na grade (item 1) deve ser removida.
-
-## Solução
-Alterar a lógica de `agruparFotosFiltradas` no `InstaladorChecklist.tsx` para **nunca incluir** a categoria `instalacao` na grade de fotos, já que essa informação é capturada separadamente na seção dedicada do checklist.
-
-### Alteração em `src/pages/instalador/InstaladorChecklist.tsx`
-- Linha ~247: Mudar `agruparFotosFiltradas(tipoVeiculo, veiculoPrecisaRastreador)` para `agruparFotosFiltradas(tipoVeiculo, false)` — isso exclui a categoria `instalacao` da grade de fotos
-- A seção dedicada de local de instalação (linha ~1719) permanece inalterada
-
-Isso garante que a foto do local do rastreador seja pedida apenas uma vez, na seção dedicada com select + descrição + foto.
-
+1. **Removidos 5 resets desnecessários** de `setCotacaoCalculada(false)` em `Cotador.tsx` — mantido apenas no `limparTudo`
+2. **Adicionado `useEffect` auto-display** — seta `cotacaoCalculada = true` quando `valorFipe > 0` e `planosDB` tem resultados
+3. **Adicionado campo Região** (RJ, Lagos, SP) no formulário, antes de "Uso para aplicativo"
+4. **Substituído hardcode `regiao: 'rj'`** por estado `regiao` no `parametrosPlanos`
+5. **Auto-atualização de tab** — quando lista de planos muda, tab selecionada é revalidada
+6. **`regiao` incluída** no payload de salvar cotação (`CriarCotacaoPayload` + `useCotacao.ts`)
+7. **`regiao` resetada** no `limparTudo` para `'rj'`

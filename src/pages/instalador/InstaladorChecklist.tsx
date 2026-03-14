@@ -244,7 +244,7 @@ export default function InstaladorChecklist() {
   
   // Usar categorias filtradas se não precisa de rastreador
   const categoriasComFotos = useMemo(() => {
-    return agruparFotosFiltradas(tipoVeiculo, veiculoPrecisaRastreador);
+    return agruparFotosFiltradas(tipoVeiculo, false);
   }, [tipoVeiculo, veiculoPrecisaRastreador]);
 
   // Carregar checklist, quilometragem e etapa salvos
