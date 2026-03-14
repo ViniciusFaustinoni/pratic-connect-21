@@ -164,15 +164,23 @@ export function EscolhaPlano({
             >
               {getNivelLabel(planoSelecionado.nivel)}
             </Badge>
-            <div className="text-3xl font-bold text-foreground mb-1">
-              {formatarMoeda(planoSelecionado.valorMensal)}
-              <span className="text-sm font-normal text-muted-foreground">/mês</span>
+            <div className="space-y-3 mt-2">
+              <div>
+                <p className="text-xs text-muted-foreground uppercase tracking-wide">Valor mensal</p>
+                <div className="text-3xl font-bold text-foreground">
+                  {formatarMoeda(planoSelecionado.valorMensal)}
+                  <span className="text-sm font-normal text-muted-foreground">/mês</span>
+                </div>
+              </div>
+              {planoSelecionado.valorAdesao != null && planoSelecionado.valorAdesao > 0 && (
+                <div>
+                  <p className="text-xs text-muted-foreground uppercase tracking-wide">Taxa de adesão</p>
+                  <p className="text-lg font-semibold text-foreground">
+                    {formatarMoeda(planoSelecionado.valorAdesao)}
+                  </p>
+                </div>
+              )}
             </div>
-            {planoSelecionado.valorAdesao && planoSelecionado.valorAdesao > 0 && (
-              <p className="text-sm text-muted-foreground">
-                + {formatarMoeda(planoSelecionado.valorAdesao)} de adesão
-              </p>
-            )}
           </CardContent>
         </Card>
       </motion.div>
