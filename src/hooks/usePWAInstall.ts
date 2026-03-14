@@ -149,6 +149,7 @@ export function usePWAInstall(): PWAInstallState {
   const canInstall = (() => {
     if (isInstalled) return false;
     if (isIOS) return true;
+    if (isWebView) return true;
     return !!deferredPrompt;
   })();
 
