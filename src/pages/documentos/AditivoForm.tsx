@@ -30,8 +30,21 @@ const TIPOS_REGRA = [
   { tipo: 'beneficio_carro_reserva' as const, label: 'Carro Reserva', desc: 'Consultor selecionou duração (7, 15 ou 30 dias — reembolso até R$ 2.200)', icon: Car, grupo: 'beneficio' },
   { tipo: 'beneficio_reboque_excedente' as const, label: 'Reboque Excedente', desc: 'Consultor marcou benefício (2 acionamentos extras/ano, mín. 6 meses entre eles)', icon: Wrench, grupo: 'beneficio' },
   { tipo: 'beneficio_carencia_zero' as const, label: 'Carência Zero', desc: 'Consultor marcou e pagamento confirmado — isenta período de espera', icon: Clock, grupo: 'beneficio' },
-  // --- Regra por evento ---
+  // --- Regras por sinistro/evento ---
   { tipo: 'evento_vidros' as const, label: 'Evento Vidros e Faróis', desc: 'Anexado automaticamente quando o sinistro for do tipo vidros e faróis', icon: GlassWater, grupo: 'evento' },
+  { tipo: 'evento_sub_rogacao' as const, label: 'Sub-Rogação de Direitos', desc: 'Obrigatório em acionamento PSM — transfere à ABP direitos de cobrança contra terceiros', icon: FileText, grupo: 'evento' },
+  { tipo: 'evento_aprovacao_conserto' as const, label: 'Aprovação de Conserto (Test Drive)', desc: 'Assinado na entrega do veículo reparado — confirma aprovação do serviço', icon: Hammer, grupo: 'evento' },
+  { tipo: 'evento_incendio' as const, label: 'Declaração de Incêndio', desc: 'Incêndio sem atuação do Corpo de Bombeiros — declaração de próprio punho com firma reconhecida', icon: Flame, grupo: 'evento' },
+  // --- Regras por grupo/categoria especial ---
+  { tipo: 'grupo_raridades_especial' as const, label: 'Grupo Raridades / Especial', desc: 'Proteção restrita a roubo, furto, assistência 24h e rastreador — sem colisão, incêndio ou terceiros', icon: Star, grupo: 'grupo' },
+  { tipo: 'categoria_depreciacao' as const, label: 'Depreciação (Leilão/Chassi/Ex-Táxi)', desc: 'Veículos de leilão, chassi remarcado ou ex-táxi — depreciação fixa de 25-30% sobre FIPE', icon: Tag, grupo: 'grupo' },
+  // --- Regras por gestão de equipamento ---
+  { tipo: 'rastreador_terceiros' as const, label: 'Rastreador de Terceiros', desc: 'Associado utiliza rastreador próprio não homologado — exige prova de funcionamento', icon: Radio, grupo: 'equipamento' },
+  // --- Regras por manutenção/atualização ---
+  { tipo: 'opcao_atualizacao_fipe' as const, label: 'Opção Atualização FIPE', desc: 'Formaliza se o associado deseja atualizar contribuição mensal conforme oscilação FIPE', icon: RefreshCw, grupo: 'manutencao' },
+  { tipo: 'vistoria_reativacao' as const, label: 'Vistoria de Reativação', desc: 'Associados com atraso > 5 dias — proteção suspensa, reativação depende de nova vistoria', icon: Eye, grupo: 'manutencao' },
+  // --- Regras por propriedade terceira ---
+  { tipo: 'anuencia_proprietario' as const, label: 'Anuência do Proprietário Legal', desc: 'Veículo em nome de terceiro — proprietário legal deve assinar para indenização integral', icon: UserCheck, grupo: 'propriedade' },
 ];
 
 export default function AditivoForm() {
