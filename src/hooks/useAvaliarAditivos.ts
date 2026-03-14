@@ -199,7 +199,7 @@ export function useAvaliarAditivos(
 
     return aditivos.map((aditivo) => {
       const regras = (aditivo.regras || []) as RegraAditivo[];
-      const regrasBatem = regras.some(r => avaliarRegra(r, veiculo, fipeLimite, configRastreador, beneficios));
+      const regrasBatem = regras.some(r => avaliarRegra(r, veiculo, fipeLimite, configRastreador, beneficios, contrato, sinistro));
       return {
         aditivo,
         autoSelecionado: regrasBatem,

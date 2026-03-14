@@ -248,25 +248,20 @@ export default function AditivoForm() {
               ))}
             </div>
 
-            {/* Grupo: Evento */}
-            <div className="space-y-2">
-              <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wider">Por Tipo de Evento/Sinistro</p>
-              {TIPOS_REGRA.filter(t => t.grupo === 'evento').map(({ tipo, label, desc, icon: Icon }) => (
-                <div key={tipo} className="flex items-start gap-3 p-3 rounded-lg border">
-                  <Checkbox
-                    checked={regras[tipo]}
-                    onCheckedChange={(checked) => setRegras(prev => ({ ...prev, [tipo]: !!checked }))}
-                  />
-                  <div className="flex-1">
-                    <div className="flex items-center gap-2">
-                      <Icon className="h-4 w-4 text-muted-foreground" />
-                      <span className="font-medium text-sm">{label}</span>
-                    </div>
-                    <p className="text-xs text-muted-foreground mt-1">{desc}</p>
-                  </div>
-                </div>
-              ))}
-            </div>
+            {/* Grupo: Evento/Sinistro */}
+            {renderGrupoRegras('evento', 'Por Procedimento de Sinistro/Evento')}
+
+            {/* Grupo: Grupos Especiais */}
+            {renderGrupoRegras('grupo', 'Por Características e Grupos Especiais')}
+
+            {/* Grupo: Gestão de Equipamento */}
+            {renderGrupoRegras('equipamento', 'Por Gestão do Equipamento')}
+
+            {/* Grupo: Manutenção */}
+            {renderGrupoRegras('manutencao', 'Por Atualização e Manutenção')}
+
+            {/* Grupo: Propriedade */}
+            {renderGrupoRegras('propriedade', 'Por Propriedade Terceira')}
           </CardContent>
         </Card>
 
