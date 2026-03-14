@@ -373,8 +373,11 @@ export default function CotadorPage() {
       if (!cotacaoCalculada) {
         setCotacaoCalculada(true);
         setPlanoSelecionadoTab(planosDB.find(p => p.destaque)?.id || planosDB[1]?.id || planosDB[0]?.id || '');
-        // Inicializar adesão com 1% FIPE (mínimo R$ 100)
-        setValorAdesaoCustom(Math.max(100, Math.round(valorFipe * 0.01 * 100) / 100));
+        // Inicializar adesão com 1% FIPE (mínimo R$ 100) — exceto se vendedor externo escolheu cenário isento
+        const cenarioZeraAdesao = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
+        if (!cenarioZeraAdesao) {
+          setValorAdesaoCustom(Math.max(100, Math.round(valorFipe * 0.01 * 100) / 100));
+        }
       }
     }
   }, [valorFipe, planosDB]);
@@ -653,6 +656,12 @@ export default function CotadorPage() {
 
   const handleSalvarEEnviarWhatsApp = async () => {
     if (!planoFinalSelecionado || !valorFipe) return;
+
+    // Vendedor externo DEVE selecionar um cenário antes de salvar
+    if (isVendedorExterno && !cenarioExterno) {
+      toast.error('Selecione o cenário de adesão/instalação antes de salvar.');
+      return;
+    }
     
     setSalvandoCotacao(true);
     
@@ -1585,6 +1594,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     value={valorAdesaoCustom ?? ''}
                     onChange={(e) => setValorAdesaoCustom(parseFloat(e.target.value) || 0)}
                     className="text-center font-bold text-lg h-10"
+                    disabled={isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base')}
                   />
                 </div>
                 <div>

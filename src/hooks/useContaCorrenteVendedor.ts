@@ -52,7 +52,7 @@ interface DadosAtivacao {
   associado_id: string;
   contrato_id: string;
   valor_adesao: number;
-  tipo_instalacao: 'base' | 'volante';
+  tipo_instalacao: 'base' | 'volante' | 'rota';
   nome_associado: string;
 }
 
@@ -138,7 +138,8 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
 
       const inserts: any[] = [];
       const cobrou = valor_adesao > 0;
-      const volante = tipo_instalacao === 'volante';
+      // Normalizar: cotação salva 'rota', mas comissão usa 'volante'
+      const volante = tipo_instalacao === 'volante' || tipo_instalacao === 'rota';
 
       // Cenário 3: nenhum lançamento
       if (!cobrou && !volante) return;
