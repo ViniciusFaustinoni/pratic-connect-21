@@ -126,3 +126,30 @@ Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
 3. Busca configurações de comissão da tabela `configuracoes`
 4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
 5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
+
+---
+
+## Fluxo Completo Vendedor Externo — Autovistoria até Ativação 360 — ✅ Implementado
+
+### Gaps Corrigidos
+
+| Gap | Arquivo | Correção |
+|-----|---------|----------|
+| Propostas de autovistoria não apareciam no cadastro | `usePropostasPendentes.ts` L523 | Filtro agora permite propostas com `temAutovistoria` ou `temVistoriaBaseRealizada` mesmo sem instalação |
+| Race condition na isenção de adesão | `EtapaPagamentoCotacao.tsx` L245 | Passa `skipPaymentCheck: true` no body da Edge Function |
+| Edge Function falhava para autovistoria sem data | `criar-instalacao-pos-pagamento/index.ts` | Autovistoria sem data: pula instalação, mas gera lançamentos CC normalmente |
+| Aprovação ignorava preferências de agendamento | `usePropostasPendentes.ts` L1538-1590 | Busca `vistoria_completa_*` da cotação para criar instalação com dados do cliente |
+
+### Fluxo Corrigido
+
+```text
+Vendedor externo cria cotação (4 cenários)
+  → Cliente abre link → Plano → Docs → Assinatura → Vistoria → Pagamento/Isenção
+    → Edge Function gera lançamentos CC (mesmo sem data de instalação)
+    → Etapa 5: Cliente preenche preferência de agendamento
+    → Tela "Em Análise Cadastral"
+    → Proposta aparece no cadastro (filtro corrigido)
+    → Analista aprova → cobertura_roubo_furto = true
+    → Instalação criada COM dados de preferência do cliente
+    → Atribuição automática → Instalação → Proteção 360°
+```
