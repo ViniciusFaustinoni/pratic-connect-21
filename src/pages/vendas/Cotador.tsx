@@ -656,6 +656,12 @@ export default function CotadorPage() {
 
   const handleSalvarEEnviarWhatsApp = async () => {
     if (!planoFinalSelecionado || !valorFipe) return;
+
+    // Vendedor externo DEVE selecionar um cenário antes de salvar
+    if (isVendedorExterno && !cenarioExterno) {
+      toast.error('Selecione o cenário de adesão/instalação antes de salvar.');
+      return;
+    }
     
     setSalvandoCotacao(true);
     
