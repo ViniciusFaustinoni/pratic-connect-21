@@ -33,16 +33,30 @@ async function geocodeNominatim(endereco: string): Promise<GeocodeResult> {
     
     console.log(`[Geocode] Buscando: ${endereco}`);
     
-    const response = await fetch(url, {
+    let response = await fetch(url, {
       headers: { 
         'User-Agent': 'PraticConnect/1.0 (Sistema de Gestão de Proteção Veicular)',
         'Accept-Language': 'pt-BR,pt;q=0.9'
       }
     });
     
+    // Retry on 429 (rate limit) — respect Retry-After header
+    if (response.status === 429) {
+      const retryAfter = parseInt(response.headers.get('Retry-After') || '2', 10);
+      const waitMs = Math.min(retryAfter * 1000, 5000);
+      console.warn(`[Geocode] Rate limited (429). Retrying after ${waitMs}ms...`);
+      await new Promise(r => setTimeout(r, waitMs));
+      response = await fetch(url, {
+        headers: { 
+          'User-Agent': 'PraticConnect/1.0 (Sistema de Gestão de Proteção Veicular)',
+          'Accept-Language': 'pt-BR,pt;q=0.9'
+        }
+      });
+    }
+    
     if (!response.ok) {
       console.error(`[Geocode] Nominatim retornou status: ${response.status}`);
-      return { latitude: null, longitude: null, success: false, source: 'nominatim' };
+      return { latitude: null, longitude: null, success: false, source: 'nominatim', reason: response.status === 429 ? 'rate_limited' : 'http_error' };
     }
     
     const data = await response.json();
