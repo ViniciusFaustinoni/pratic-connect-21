@@ -136,6 +136,11 @@ export function usePWAInstall(): PWAInstallState {
       return true;
     }
 
+    // WebView: sempre pode mostrar banner orientando abrir no navegador
+    if (isWebView) {
+      return true;
+    }
+
     // Outros navegadores com suporte a PWA
     return !!deferredPrompt;
   })();
