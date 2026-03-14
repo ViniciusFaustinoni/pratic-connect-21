@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { FileSignature, Loader2, AlertCircle, ExternalLink, RefreshCw, CheckCircle2, Shield, Clock, Mail, MousePointer, PenTool, ArrowRight } from 'lucide-react';
+import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
