@@ -512,6 +512,10 @@ serve(async (req) => {
       .update({ status_sga: 'sincronizando' })
       .eq('id', veiculo_id);
 
+    // Heavy sync runs in background via EdgeRuntime.waitUntil
+    const doBackgroundSync = async () => {
+      try {
+
     // ========================================
     // PASSO 1: Buscar dados do associado
     // ========================================
