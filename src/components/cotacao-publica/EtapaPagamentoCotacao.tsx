@@ -460,6 +460,55 @@ export function EtapaPagamentoCotacao({
     );
   };
 
+  // ===== UI: Adesão Zerada (celebratória) =====
+  if (adesaoZerada) {
+    return (
+      <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
+        <CardContent className="py-12 text-center">
+          <motion.div
+            initial={{ scale: 0.6, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ type: 'spring', stiffness: 200, damping: 15 }}
+            className="space-y-6"
+          >
+            <div className="w-24 h-24 mx-auto rounded-full bg-success/10 flex items-center justify-center">
+              <PartyPopper className="h-12 w-12 text-success" />
+            </div>
+
+            <div className="space-y-2">
+              <h3 className="text-2xl font-bold text-foreground">Adesão Isenta!</h3>
+              <p className="text-muted-foreground max-w-md mx-auto text-base leading-relaxed">
+                {msgAdesaoZerada}
+              </p>
+            </div>
+
+            <InstalacaoAgendadaInfo />
+
+            <div className="pt-4 space-y-4">
+              <Button
+                size="lg"
+                className="gap-2"
+                onClick={() => window.location.href = '/login'}
+              >
+                <ExternalLink className="h-4 w-4" />
+                Ir para o aplicativo
+              </Button>
+
+              <div className="flex items-center justify-center">
+                <img
+                  src="/pratic-logo.png"
+                  alt="Praticcar"
+                  className="h-8 opacity-60"
+                  onError={(e) => { (e.target as HTMLImageElement).style.display = 'none'; }}
+                />
+              </div>
+            </div>
+          </motion.div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   // Modo read-only: mostrar pagamento confirmado
   if (readOnly) {
     return (
