@@ -301,6 +301,57 @@ serve(async (req) => {
 
     console.log(`Trajeto Softruck: ${trajeto.length} pontos, ${paradas.length} paradas`);
 
+    // Fallback para dados locais se API retornou vazio
+    if (trajeto.length === 0) {
+      console.log('[rastreador-historico] API retornou 0 pontos, tentando fallback local...');
+      
+      let query = supabase
+        .from('rastreador_posicoes')
+        .select('*')
+        .eq('rastreador_id', rastreador_id)
+        .order('data_posicao', { ascending: true });
+
+      if (data_inicio) {
+        query = query.gte('data_posicao', data_inicio);
+      }
+      if (data_fim) {
+        query = query.lte('data_posicao', data_fim);
+      }
+
+      const { data: historico } = await query.limit(1000);
+
+      if (historico && historico.length > 0) {
+        const trajetoLocal: TrajetoPonto[] = historico.map((p: any) => ({
+          latitude: Number(p.latitude),
+          longitude: Number(p.longitude),
+          velocidade: p.velocidade || 0,
+          ignicao: p.ignicao || false,
+          data_posicao: p.data_posicao,
+          endereco: p.endereco,
+        }));
+
+        const paradasLocal = identificarParadas(trajetoLocal);
+
+        console.log(`[rastreador-historico] Fallback local: ${trajetoLocal.length} pontos, ${paradasLocal.length} paradas`);
+
+        return new Response(
+          JSON.stringify({
+            success: true,
+            fonte: 'local',
+            mensagem: 'API não retornou dados para o período. Exibindo posições coletadas localmente.',
+            trajeto: trajetoLocal,
+            paradas: paradasLocal,
+            periodo: { inicio, fim },
+            total: trajetoLocal.length,
+            total_paradas: paradasLocal.length,
+          }),
+          { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+
+      console.log('[rastreador-historico] Fallback local também vazio');
+    }
+
     return new Response(
       JSON.stringify({
         success: true,
