@@ -50,6 +50,7 @@ import { toast } from 'sonner';
 const statusOptions = [
   { value: 'todos', label: 'Todos os status' },
   { value: 'aberto', label: 'Aberto' },
+  { value: 'aguardando_aceites', label: 'Aguardando Aceites' },
   { value: 'aguardando_prestador', label: 'Aguardando Prestador' },
   { value: 'prestador_a_caminho', label: 'A Caminho' },
   { value: 'em_atendimento', label: 'Em Atendimento' },
