@@ -416,7 +416,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       let cotaPercentual = cotaBase;
       let cotaMinimaFinal = cotaMinima;
 
-      if (categoria === 'aplicativo') {
+      // Usar cota de desagio para uso aplicativo (baseado no parâmetro usoApp, não na categoria)
+      if (params.usoApp) {
         cotaPercentual = Number(plano.cota_desagio) || cotaDesagioDefault;
         cotaMinimaFinal = Number(plano.cota_minima_desagio) || cotaMinimaDesagioDefault;
       }

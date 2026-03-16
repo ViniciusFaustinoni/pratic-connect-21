@@ -118,7 +118,7 @@ export default function CotacaoPage() {
     valorFipe: valorFipe || 0,
     regiao: regiao || 'rio_de_janeiro',
     combustivel: combustivel || 'gasolina',
-    categoria: categoria || modalidade,
+    categoria: categoria || undefined,
     anoVeiculo: ano ? parseInt(ano) : undefined,
     tipoVeiculo: tipoVeiculoDetectado,
     usoApp: modalidade === 'aplicativo',
