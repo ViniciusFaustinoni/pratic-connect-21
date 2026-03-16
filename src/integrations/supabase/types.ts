@@ -17547,6 +17547,94 @@ export type Database = {
           },
         ]
       }
+      pontuacao_eventos: {
+        Row: {
+          conta_ranking: boolean
+          contrato_id: string | null
+          created_at: string
+          estornado: boolean
+          estorno_id: string | null
+          id: string
+          mes_referencia: string
+          pontos: number
+          referencia_id: string | null
+          referencia_tipo: string | null
+          tipo_operacao: string
+          vendedor_id: string
+        }
+        Insert: {
+          conta_ranking?: boolean
+          contrato_id?: string | null
+          created_at?: string
+          estornado?: boolean
+          estorno_id?: string | null
+          id?: string
+          mes_referencia?: string
+          pontos: number
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          tipo_operacao: string
+          vendedor_id: string
+        }
+        Update: {
+          conta_ranking?: boolean
+          contrato_id?: string | null
+          created_at?: string
+          estornado?: boolean
+          estorno_id?: string | null
+          id?: string
+          mes_referencia?: string
+          pontos?: number
+          referencia_id?: string | null
+          referencia_tipo?: string | null
+          tipo_operacao?: string
+          vendedor_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "pontuacao_eventos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pontuacao_eventos_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "pontuacao_eventos_estorno_id_fkey"
+            columns: ["estorno_id"]
+            isOneToOne: false
+            referencedRelation: "pontuacao_eventos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pontuacao_eventos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "pontuacao_eventos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "pontuacao_eventos_vendedor_id_fkey"
+            columns: ["vendedor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
       prestadores_assistencia: {
         Row: {
           agencia: string | null
