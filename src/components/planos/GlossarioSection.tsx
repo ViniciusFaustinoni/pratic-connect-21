@@ -243,7 +243,7 @@ export function TabelaCotasTaxas() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cotasTaxas.map((cota, index) => (
+              {cotasExibicao.map((cota, index) => (
                 <TableRow 
                   key={index}
                   className={index % 2 === 0 ? 'bg-background' : 'bg-muted/30'}
