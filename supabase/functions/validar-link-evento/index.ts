@@ -118,10 +118,10 @@ serve(async (req) => {
       // Calcular valor correto dinamicamente
       let valorCotaCalculado = sinistro.valor_cota_participacao;
       if (veiculo?.valor_fipe && percentual > 0) {
-        valorCotaCalculado = Math.max(
-          veiculo.valor_fipe * percentual / 100,
-          cotaMinima
-        );
+        // cota_minima = 0 → sem mínimo
+        valorCotaCalculado = cotaMinima === 0
+          ? veiculo.valor_fipe * percentual / 100
+          : Math.max(veiculo.valor_fipe * percentual / 100, cotaMinima);
 
         // Atualizar no banco se diferente
         if (valorCotaCalculado !== sinistro.valor_cota_participacao) {
