@@ -87,7 +87,7 @@ export function FotosReboquistaUploadModal({ open, onClose, chamadoId }: Props) 
                 <input
                   type="file"
                   multiple
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
                   className="hidden"
                   onChange={(e) => handleFiles(e.target.files)}
                 />
