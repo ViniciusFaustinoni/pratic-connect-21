@@ -5,10 +5,8 @@ import {
   ArrowRight,
   CheckCircle,
   XCircle,
-  FileText,
   Clock,
   RefreshCw,
-  ShieldCheck,
   Car,
   DollarSign,
 } from 'lucide-react';
