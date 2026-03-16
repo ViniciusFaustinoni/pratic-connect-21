@@ -6,9 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Badge } from '@/components/ui/badge';
-import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Zap, Info, Fuel } from 'lucide-react';
+import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Fuel } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
-import { useProductLines } from '@/hooks/usePlans';
 import { formatarMoeda } from '@/utils/format';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
 import type { ConfigAdicionalApp } from '@/utils/precoApp';
@@ -25,6 +24,7 @@ interface ResultadoPlano {
   valorDesagio: number | null;
   adicionalMensal: number;
   descontoPercentual: number;
+  sortPriority: number;
 }
 
 interface ResultadoCalc {
@@ -46,7 +46,7 @@ interface VeiculoPlaca {
 }
 
 type TipoUso = 'particular' | 'aplicativo';
-type TipoVeiculo = 'carro' | 'moto' | 'eletrico';
+type TipoVeiculo = 'carro' | 'moto';
 
 const REGIOES = [
   { value: 'rj', label: 'Rio de Janeiro' },
@@ -57,7 +57,6 @@ const REGIOES = [
 const TIPO_VEICULO_LABELS: Record<TipoVeiculo, string> = {
   carro: 'Carro',
   moto: 'Moto',
-  eletrico: 'Elétrico',
 };
 
 function useAdicionalApp() {
@@ -115,25 +114,29 @@ function useConfigAdicionalAppCalc(tabelas: any[] | undefined) {
   }), [regioesRaw, productLinesData, tabelas]);
 }
 
-/** Fetch planos + plano_preco_map for calculator */
+/** Fetch planos + plano_preco_map + product_lines for calculator */
 function usePlanosComPrecoMap() {
   return useQuery({
-    queryKey: ['calculadora-planos-preco-map'],
+    queryKey: ['calculadora-planos-preco-map-v2'],
     queryFn: async () => {
-      const [planosRes, mapRes] = await Promise.all([
+      const [planosRes, mapRes, plRes] = await Promise.all([
         supabase
           .from('planos')
-          .select('id, nome, slug, adicional_mensal, desconto_percentual, visivel_gestao, ativo, categoria, fipe_minima, fipe_maxima')
+          .select('id, nome, slug, adicional_mensal, desconto_percentual, visivel_gestao, ativo, categoria, fipe_minima, fipe_maxima, tipo_uso, ano_minimo, ano_minimo_veiculo, ano_fabricacao_minimo')
           .eq('ativo', true)
           .eq('visivel_gestao', true)
           .order('ordem', { ascending: true }),
         supabase
           .from('plano_preco_map')
           .select('plano_id, linha_slug, tipo_uso'),
+        supabase
+          .from('product_lines')
+          .select('slug, vehicle_type, requires_recent_year, blocked_categories, supports_app, sort_priority'),
       ]);
       return {
         planos: planosRes.data || [],
         mappings: mapRes.data || [],
+        productLines: plRes.data || [],
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -142,10 +145,6 @@ function usePlanosComPrecoMap() {
 
 /** Detect vehicle type from plate-lookup response */
 function detectarTipoFromPlaca(dados: VeiculoPlaca): TipoVeiculo {
-  const combustivel = (dados.combustivel || '').toLowerCase();
-  if (combustivel.includes('eletric') || combustivel.includes('elétric')) {
-    return 'eletrico';
-  }
   const tipoDetectado = detectarTipoVeiculo(undefined, dados.modelo, dados.marca);
   return tipoDetectado === 'moto' ? 'moto' : 'carro';
 }
@@ -156,6 +155,7 @@ export function CalculadoraPreco() {
   const [tipoVeiculo, setTipoVeiculo] = useState<TipoVeiculo>('carro');
   const [regiao, setRegiao] = useState<string>('rj');
   const [combustivelManual, setCombustivelManual] = useState<'gasolina' | 'diesel'>('gasolina');
+  const [anoVeiculo, setAnoVeiculo] = useState<string>('');
   const [resultado, setResultado] = useState<ResultadoCalc | null>(null);
   const [semResultado, setSemResultado] = useState(false);
 
@@ -167,32 +167,34 @@ export function CalculadoraPreco() {
 
   const { data: tabelas } = useTabelasPreco();
   const { data: adicionalApp = 35.90 } = useAdicionalApp();
-  const { data: productLines = [] } = useProductLines();
   const { data: planosData } = usePlanosComPrecoMap();
   const configApp = useConfigAdicionalAppCalc(tabelas);
 
-  // Map linha_slug → vehicle_type from product_lines
-  const linhaVehicleType = useMemo(() => {
-    const map: Record<string, string | null> = {};
-    for (const pl of productLines) {
-      if (pl.slug) map[pl.slug] = pl.vehicle_type;
+  // Build product_lines lookup maps
+  const plMaps = useMemo(() => {
+    const pls = planosData?.productLines || [];
+    const vehicleType: Record<string, string | null> = {};
+    const requiresRecent: Record<string, boolean> = {};
+    const blockedCats: Record<string, string[]> = {};
+    const supportsApp: Record<string, boolean> = {};
+    const sortPriority: Record<string, number> = {};
+    for (const pl of pls) {
+      if (!pl.slug) continue;
+      vehicleType[pl.slug] = pl.vehicle_type;
+      requiresRecent[pl.slug] = pl.requires_recent_year === true;
+      blockedCats[pl.slug] = Array.isArray(pl.blocked_categories) ? (pl.blocked_categories as string[]) : [];
+      supportsApp[pl.slug] = pl.supports_app === true;
+      sortPriority[pl.slug] = typeof pl.sort_priority === 'number' ? pl.sort_priority : 99;
     }
-    return map;
-  }, [productLines]);
+    return { vehicleType, requiresRecent, blockedCats, supportsApp, sortPriority };
+  }, [planosData?.productLines]);
 
   /** Check if a linha_slug matches the selected vehicle type */
   const linhaMatchesTipo = (linhaSlug: string): boolean => {
-    const vt = linhaVehicleType[linhaSlug];
-
-    switch (tipoVeiculo) {
-      case 'moto':
-        return vt === 'motorcycle';
-      case 'eletrico':
-        return linhaSlug === 'eletrico';
-      case 'carro':
-      default:
-        return vt !== 'motorcycle' && linhaSlug !== 'eletrico';
-    }
+    const vt = plMaps.vehicleType[linhaSlug];
+    if (tipoVeiculo === 'moto') return vt === 'motorcycle';
+    // carro: anything that's not motorcycle
+    return vt !== 'motorcycle';
   };
 
   const consultarPlaca = async () => {
@@ -227,6 +229,14 @@ export function CalculadoraPreco() {
       const tipo = detectarTipoFromPlaca(v);
       setTipoVeiculo(tipo);
 
+      // Auto-fill ano
+      if (v.ano) {
+        const anoNum = parseInt(String(v.ano).replace(/\D.*$/, ''), 10);
+        if (anoNum > 1900 && anoNum < 2100) {
+          setAnoVeiculo(String(anoNum));
+        }
+      }
+
       // Store combustivel for filtering
       setCombustivelDetectado(v.combustivel || null);
     } catch (err: any) {
@@ -251,27 +261,52 @@ export function CalculadoraPreco() {
     }
 
     const { planos, mappings } = planosData;
+    const anoAtual = new Date().getFullYear();
+    const anoNum = anoVeiculo ? parseInt(anoVeiculo, 10) : null;
 
-    // Determine combustivel for pricing: detected from plate or manual selector, default gasolina
+    // Determine combustivel for pricing
     const combustivelPricing = combustivelDetectado
       ? normalizarCombustivelParaPricing(combustivelDetectado)
-      : combustivelManual; // defaults to 'gasolina'
+      : combustivelManual;
 
     const resultadosPlano: ResultadoPlano[] = [];
 
     for (const plano of planos) {
+      // --- FILTER: exclude internal "aplicativo" variants ---
+      const catLower = (plano.categoria || '').toLowerCase();
+      const tipoUsoPlano = (plano.tipo_uso || '').toLowerCase();
+      if (catLower === 'aplicativo' || tipoUsoPlano === 'aplicativo') continue;
+
       // Find mapping for this plan
       const mapping = mappings.find(m => m.plano_id === plano.id);
       if (!mapping?.linha_slug) continue;
 
       const linhaSlug = mapping.linha_slug;
 
-      // Filter by vehicle type
+      // --- FILTER: vehicle type ---
       if (!linhaMatchesTipo(linhaSlug)) continue;
 
-      // Check FIPE limits on the plan itself
+      // --- FILTER: supports_app (when user selected aplicativo) ---
+      if (tipoUso === 'aplicativo' && !plMaps.supportsApp[linhaSlug]) continue;
+
+      // --- FILTER: FIPE limits on the plan itself ---
       if (plano.fipe_minima && valor < Number(plano.fipe_minima)) continue;
       if (plano.fipe_maxima && valor > Number(plano.fipe_maxima)) continue;
+
+      // --- FILTER: ano mínimo do plano ---
+      if (anoNum) {
+        const anoMinPlano = Number(plano.ano_minimo || plano.ano_minimo_veiculo || plano.ano_fabricacao_minimo || 0);
+        if (anoMinPlano > 0 && anoNum < anoMinPlano) continue;
+      }
+
+      // --- FILTER: requires_recent_year da product_line ---
+      if (plMaps.requiresRecent[linhaSlug] && anoNum) {
+        if (anoNum < anoAtual - 1) continue;
+      }
+
+      // --- FILTER: blocked_categories ---
+      const blocked = plMaps.blockedCats[linhaSlug] || [];
+      if (blocked.length > 0 && catLower && blocked.some(b => b.toLowerCase() === catLower)) continue;
 
       // Determine tipo_uso for table lookup
       const isMotoLine = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
@@ -285,13 +320,10 @@ export function CalculadoraPreco() {
         if (tipoUsoPricing !== expectedTipoUso) continue;
       }
 
-      // For eletrico: ignore region
-      const regiaoQuery = tipoVeiculo === 'eletrico' ? undefined : regiao;
-
       // Find matching price row
       const faixa = tabelas.find(t => {
         if (t.linha_slug !== linhaSlug) return false;
-        if (regiaoQuery && t.regiao !== regiaoQuery) return false;
+        if (t.regiao !== regiao) return false;
         if (t.tipo_uso !== tipoUsoPricing) return false;
         if (valor < Number(t.fipe_min) || valor > Number(t.fipe_max)) return false;
         if (combustivelPricing && t.combustivel_tipo && t.combustivel_tipo !== combustivelPricing) return false;
@@ -324,6 +356,7 @@ export function CalculadoraPreco() {
         valorDesagio: faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null,
         adicionalMensal,
         descontoPercentual: descontoPerc,
+        sortPriority: plMaps.sortPriority[linhaSlug] ?? 99,
       });
     }
 
@@ -333,14 +366,17 @@ export function CalculadoraPreco() {
       return;
     }
 
-    // Sort by price ascending
-    resultadosPlano.sort((a, b) => a.valorMensal - b.valorMensal);
+    // Sort by product_line sort_priority, then by price
+    resultadosPlano.sort((a, b) => {
+      if (a.sortPriority !== b.sortPriority) return a.sortPriority - b.sortPriority;
+      return a.valorMensal - b.valorMensal;
+    });
 
     // Faixa description from first result
     const primeiroMapping = mappings.find(m => m.plano_id === resultadosPlano[0].key);
     const primeiraFaixa = primeiroMapping ? tabelas.find(t =>
       t.linha_slug === primeiroMapping.linha_slug &&
-      (tipoVeiculo === 'eletrico' || t.regiao === regiao) &&
+      t.regiao === regiao &&
       valor >= Number(t.fipe_min) &&
       valor <= Number(t.fipe_max)
     ) : undefined;
@@ -351,7 +387,7 @@ export function CalculadoraPreco() {
         ? `${formatarMoeda(Number(primeiraFaixa.fipe_min))} - ${formatarMoeda(Number(primeiraFaixa.fipe_max))}`
         : '',
       valorFipeInformado: valor,
-      regiaoLabel: tipoVeiculo === 'eletrico' ? 'Nacional' : (REGIOES.find(r => r.value === regiao)?.label || regiao),
+      regiaoLabel: REGIOES.find(r => r.value === regiao)?.label || regiao,
       tipoUsoLabel: tipoUso === 'aplicativo' ? 'Aplicativo / Trabalho' : 'Particular',
       tipoVeiculoLabel: TIPO_VEICULO_LABELS[tipoVeiculo],
     });
@@ -370,6 +406,7 @@ export function CalculadoraPreco() {
     setTipoVeiculo('carro');
     setRegiao('rj');
     setCombustivelManual('gasolina');
+    setAnoVeiculo('');
     setResultado(null);
     setSemResultado(false);
     setPlaca('');
@@ -455,6 +492,24 @@ export function CalculadoraPreco() {
             />
           </div>
 
+          {/* Ano do Veículo */}
+          <div className="space-y-2">
+            <Label htmlFor="anoVeiculo">
+              Ano do Veículo <span className="text-xs text-muted-foreground">(opcional)</span>
+            </Label>
+            <Input
+              id="anoVeiculo"
+              placeholder="Ex: 2020"
+              value={anoVeiculo}
+              onChange={(e) => {
+                const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                setAnoVeiculo(v);
+              }}
+              maxLength={4}
+              inputMode="numeric"
+            />
+          </div>
+
           {/* Tipo de Veículo */}
           <div className="space-y-2">
             <Label>Tipo de Veículo</Label>
@@ -472,36 +527,23 @@ export function CalculadoraPreco() {
                 <Bike className="h-4 w-4" />
                 Moto
               </ToggleGroupItem>
-              <ToggleGroupItem value="eletrico" aria-label="Elétrico" className="flex-1 gap-1.5">
-                <Zap className="h-4 w-4" />
-                Elétrico
-              </ToggleGroupItem>
             </ToggleGroup>
           </div>
 
-          {/* Região — hidden for Elétrico (national) */}
-          {tipoVeiculo !== 'eletrico' && (
-            <div className="space-y-2">
-              <Label>Região</Label>
-              <Select value={regiao} onValueChange={setRegiao}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione a região" />
-                </SelectTrigger>
-                <SelectContent>
-                  {REGIOES.map(r => (
-                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-            </div>
-          )}
-
-          {tipoVeiculo === 'eletrico' && (
-            <div className="flex items-center gap-2 text-xs text-muted-foreground px-1">
-              <Info className="h-3.5 w-3.5 shrink-0" />
-              Veículos elétricos possuem precificação nacional (mesma para todas as regiões).
-            </div>
-          )}
+          {/* Região */}
+          <div className="space-y-2">
+            <Label>Região</Label>
+            <Select value={regiao} onValueChange={setRegiao}>
+              <SelectTrigger>
+                <SelectValue placeholder="Selecione a região" />
+              </SelectTrigger>
+              <SelectContent>
+                {REGIOES.map(r => (
+                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
 
           {/* Combustível selector — only for cars without plate */}
           {tipoVeiculo === 'carro' && !combustivelDetectado && (
