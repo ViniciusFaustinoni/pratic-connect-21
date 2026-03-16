@@ -48,8 +48,7 @@ export function useVerificarPlacaDuplicada() {
           numero,
           vendedor_id,
           created_at,
-          status,
-          vendedor:profiles!cotacoes_vendedor_id_fkey(id, nome)
+          status
         `)
         .eq('veiculo_placa', placaNormalizada)
         .in('status', ['rascunho', 'enviada', 'aceita'])
@@ -67,15 +66,23 @@ export function useVerificarPlacaDuplicada() {
       }
       
       const cotacao = data[0];
-      // O join pode retornar array, então pegamos o primeiro elemento
-      const vendedorArray = cotacao.vendedor as unknown as Array<{ id: string; nome: string }> | null;
-      const vendedor = vendedorArray?.[0] || null;
+      
+      // Buscar nome do vendedor separadamente
+      let vendedorNome = 'Vendedor não identificado';
+      if (cotacao.vendedor_id) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('nome')
+          .eq('id', cotacao.vendedor_id)
+          .maybeSingle();
+        if (profile?.nome) vendedorNome = profile.nome;
+      }
       
       return {
         cotacaoId: cotacao.id,
         numero: cotacao.numero || '',
         vendedorId: cotacao.vendedor_id || '',
-        vendedorNome: vendedor?.nome || 'Vendedor não identificado',
+        vendedorNome,
         createdAt: cotacao.created_at,
         status: cotacao.status || '',
       };
