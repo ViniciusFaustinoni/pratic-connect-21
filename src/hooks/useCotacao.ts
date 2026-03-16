@@ -557,6 +557,7 @@ export function useCriarCotacao() {
       toast.success(`Cotação ${data.numero} criada com sucesso!`);
 
       return {
+        ...data,
         cotacao: data,
         valores: resultado.valores,
         plano: resultado.plano,
