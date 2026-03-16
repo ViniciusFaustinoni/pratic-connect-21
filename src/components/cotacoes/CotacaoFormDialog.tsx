@@ -197,7 +197,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [showPlacaDuplicadaModal, setShowPlacaDuplicadaModal] = useState(false);
 
   // Estados para seleção FIPE manual
-  const [marcas, setMarcas] = useState<FipeMarca[]>([]);
+  type FipeMarcaComTipo = FipeMarca & { tipoFipe: 'carros' | 'motos' };
+  const [marcas, setMarcas] = useState<FipeMarcaComTipo[]>([]);
+  const [tipoFipeSelecionado, setTipoFipeSelecionado] = useState<'carros' | 'motos'>('carros');
   const [modelos, setModelos] = useState<FipeModelo[]>([]);
   const [anos, setAnos] = useState<FipeAno[]>([]);
   const [marcaSelecionada, setMarcaSelecionada] = useState('');
@@ -302,19 +304,27 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return anoTexto ? parseInt(anoTexto.split(' ')[0]) : undefined;
   }, [anoTexto]);
 
+  // Helper to extract marca name from composite key
+  const getMarcaNomeFromCodigo = useCallback((compositeKey: string) => {
+    if (!compositeKey) return '';
+    const codigo = compositeKey.includes(':') ? compositeKey.split(':')[1] : compositeKey;
+    const marca = marcas.find(m => m.codigo === codigo);
+    return marca?.nome || '';
+  }, [marcas]);
+
   // Detectar tipo de veículo automaticamente (moto vs carro)
   const tipoVeiculoDetectado = useMemo(() => {
-    const marca = veiculoEncontrado?.vehicleData?.marca || marcaSelecionada || '';
+    const marca = veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
     const modelo = veiculoEncontrado?.vehicleData?.modelo || '';
     if (!marca && !modelo) return 'carro' as const;
     const tipo = detectarTipoVeiculo(undefined, modelo, marca);
     return tipo === 'moto' ? 'moto' as const : 'carro' as const;
-  }, [veiculoEncontrado, marcaSelecionada]);
+  }, [veiculoEncontrado, marcaSelecionada, getMarcaNomeFromCodigo]);
 
   // Resolver marca/modelo para elegibilidade
   const marcaResolvida = useMemo(() => {
-    return veiculoEncontrado?.vehicleData?.marca || marcaSelecionada || '';
-  }, [veiculoEncontrado, marcaSelecionada]);
+    return veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
+  }, [veiculoEncontrado, marcaSelecionada, marcas]);
 
   const modeloResolvido = useMemo(() => {
     return veiculoEncontrado?.vehicleData?.modelo || '';
@@ -442,8 +452,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             getMarcas('carros'),
             getMarcas('motos'),
           ]);
-          const data = [...dataCarros, ...dataMotos];
-          setMarcas(data);
+          const marcasCarros = dataCarros.map(m => ({ ...m, tipoFipe: 'carros' as const }));
+          const marcasMotos = dataMotos.map(m => ({ ...m, tipoFipe: 'motos' as const }));
+          setMarcas([...marcasCarros, ...marcasMotos]);
         } catch (error) {
           console.error('Erro ao carregar marcas:', error);
         } finally {
@@ -457,11 +468,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Auto-buscar FIPE quando marca, modelo e ano estiverem selecionados
   useEffect(() => {
     if (marcaSelecionada && modeloSelecionado && anoSelecionado) {
+      const codigoMarca = marcaSelecionada.includes(':') ? marcaSelecionada.split(':')[1] : marcaSelecionada;
       const buscarFipeAutomatico = async () => {
         setBuscandoFipe(true);
         try {
-          const tipoFipe = tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros';
-          const resultado = await getPreco(marcaSelecionada, modeloSelecionado, anoSelecionado, tipoFipe);
+          const resultado = await getPreco(codigoMarca, modeloSelecionado, anoSelecionado, tipoFipeSelecionado);
           if (resultado && resultado.valorNumerico) {
             form.setValue('valor_fipe', resultado.valorNumerico);
             toast.success(`Valor FIPE: ${resultado.valor}`);
@@ -474,7 +485,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       };
       buscarFipeAutomatico();
     }
-  }, [marcaSelecionada, modeloSelecionado, anoSelecionado, getPreco, form]);
+  }, [marcaSelecionada, modeloSelecionado, anoSelecionado, getPreco, form, tipoFipeSelecionado]);
 
   // Handler para mudança de marca
   const handleMarcaChange = async (value: string) => {
@@ -485,11 +496,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     setAnos([]);
     form.setValue('valor_fipe', 0);
 
-    if (value) {
+    // Parse composite key "tipo:codigo"
+    const [tipoPart, codigoPart] = value.split(':');
+    const tipo = (tipoPart === 'motos' ? 'motos' : 'carros') as 'carros' | 'motos';
+    setTipoFipeSelecionado(tipo);
+    const codigoMarca = codigoPart || value;
+
+    if (codigoMarca) {
       setLoadingModelos(true);
       try {
-        const tipoFipe = tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros';
-        const data = await getModelos(value, tipoFipe);
+        const data = await getModelos(codigoMarca, tipo);
         setModelos(data);
       } catch (error) {
         console.error('Erro ao carregar modelos:', error);
@@ -506,10 +522,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     setAnos([]);
     form.setValue('valor_fipe', 0);
 
-    if (marcaSelecionada && value) {
+    const codigoMarca = marcaSelecionada.includes(':') ? marcaSelecionada.split(':')[1] : marcaSelecionada;
+    if (codigoMarca && value) {
       setLoadingAnos(true);
       try {
-        const data = await getAnos(marcaSelecionada, value, 'carros');
+        const data = await getAnos(codigoMarca, value, tipoFipeSelecionado);
         setAnos(data);
       } catch (error) {
         console.error('Erro ao carregar anos:', error);
@@ -866,7 +883,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Get marca/modelo names for display
   const getMarcaNome = () => {
     if (veiculoEncontrado?.vehicleData?.marca) return veiculoEncontrado.vehicleData.marca;
-    const marca = marcas.find(m => m.codigo === marcaSelecionada);
+    const codigoMarca = marcaSelecionada.includes(':') ? marcaSelecionada.split(':')[1] : marcaSelecionada;
+    const marca = marcas.find(m => m.codigo === codigoMarca);
     return marca?.nome || '';
   };
 
@@ -1489,7 +1507,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     <div className="space-y-1">
                       <Label className="text-xs">Marca</Label>
                       <SearchableSelect
-                        options={marcas.map((m) => ({ value: m.codigo, label: m.nome }))}
+                        options={marcas.map((m) => {
+                          // Check if brand name exists in both carros and motos
+                          const hasDuplicate = marcas.some(other => other.nome === m.nome && other.tipoFipe !== m.tipoFipe);
+                          const label = hasDuplicate ? `${m.nome} (${m.tipoFipe === 'motos' ? 'Moto' : 'Carro'})` : m.nome;
+                          return { value: `${m.tipoFipe}:${m.codigo}`, label };
+                        })}
                         value={marcaSelecionada}
                         onValueChange={handleMarcaChange}
                         placeholder="Marca"
