@@ -229,20 +229,32 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
     const regra = regrasOrdenadas.find(r => {
       // Double-check de marca: normaliza ambos os lados via aliases
-      const marcaMatch = normalizarMarcaElegibilidade(r.marca) === marcaNormAPI;
+      const marcaNormBanco = normalizarMarcaElegibilidade(r.marca);
+      const marcaMatch = marcaNormBanco === marcaNormAPI
+        || r.marca.trim().toUpperCase() === veiculo.marca.trim().toUpperCase();
       
+      // Normalizar modelo removendo qualificadores entre parênteses
+      const modeloBanco = normalizarModeloElegibilidade(r.modelo);
+      const modeloAPIClean = normalizarModeloElegibilidade(veiculo.modelo);
+
+      // Wildcard: "TODOS OS MODELOS" aceita qualquer modelo
+      if (modeloBanco.startsWith('TODOS') && marcaMatch) return true;
+
       // Matching de modelo com 3 níveis de fallback
-      const modeloBanco = r.modelo.trim().toUpperCase();
-      const prefixMatch = modeloAPI.startsWith(modeloBanco) 
-        || modeloBanco.startsWith(modeloAPI);
-      const containsMatch = modeloAPI.includes(modeloBanco) 
-        || modeloBanco.includes(modeloAPI);
-      const modeloMatch = prefixMatch || containsMatch;
+      const prefixMatch = modeloAPIClean.startsWith(modeloBanco) 
+        || modeloBanco.startsWith(modeloAPIClean);
+      const containsMatch = modeloAPIClean.includes(modeloBanco) 
+        || modeloBanco.includes(modeloAPIClean);
+      const baseBanco = modeloBanco.split(' ')[0];
+      const baseMatch = baseBanco.length >= 2 && (
+        modeloAPIClean.startsWith(baseBanco + ' ') || modeloAPIClean === baseBanco
+      );
+      const modeloMatch = prefixMatch || containsMatch || baseMatch;
       
       const anoMatch = veiculo.ano >= r.ano_min &&
                        (r.ano_max === null || veiculo.ano <= r.ano_max);
       const combustivelMatch = r.combustivel === 'qualquer' ||
-                               r.combustivel === combustivelNorm;
+                                r.combustivel === combustivelNorm;
       return marcaMatch && modeloMatch && anoMatch && combustivelMatch;
     });
 
