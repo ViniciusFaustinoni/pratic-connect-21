@@ -44,6 +44,7 @@ import {
 } from '@/components/ui/table';
 import { NovoChamadoModal } from '@/components/assistencia/NovoChamadoModal';
 import { ConfirmacaoExclusaoChamadoDialog } from '@/components/assistencia/ConfirmacaoExclusaoChamadoDialog';
+import { BadgeDespachoStatus } from '@/components/assistencia/BadgeDespachoStatus';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 
