@@ -514,7 +514,7 @@ serve(async (req) => {
 
     // Heavy sync runs in background via EdgeRuntime.waitUntil
     const doBackgroundSync = async () => {
-      // Capture IDs explicitly to prevent stale closures in EdgeRuntime.waitUntil
+      // ⚡ Capture IDs explicitly to prevent stale closures in EdgeRuntime.waitUntil
       const _vid = veiculo_id;
       const _aid = associado_id;
       try {
@@ -526,8 +526,8 @@ serve(async (req) => {
       const { data: recentFailures } = await supabase
         .from('sga_sync_logs')
         .select('error_message, created_at')
-        .eq('veiculo_id', veiculo_id)
-        .eq('associado_id', associado_id)
+        .eq('veiculo_id', _vid)
+        .eq('associado_id', _aid)
         .eq('action', 'cadastrar_associado')
         .eq('status', 'error')
         .order('created_at', { ascending: false })
@@ -541,8 +541,8 @@ serve(async (req) => {
         );
         
         if (cpfDuplicateErrors.length >= 3) {
-          console.log(`[SGA Sync] ⛔ Loop infinito detectado: ${cpfDuplicateErrors.length} falhas consecutivas de CPF duplicado para veiculo=${veiculo_id}`);
-          await logSync(veiculo_id, associado_id, 'loop_detection', 'error', 
+          console.log(`[SGA Sync] ⛔ Loop infinito detectado: ${cpfDuplicateErrors.length} falhas consecutivas de CPF duplicado para veiculo=${_vid}`);
+          await logSync(_vid, _aid, 'loop_detection', 'error', 
             { consecutive_failures: cpfDuplicateErrors.length }, null, 
             'Loop infinito detectado: CPF duplicado sem recovery possível. Marcado como falha permanente.');
           
@@ -554,10 +554,10 @@ serve(async (req) => {
               erro_ultimo: 'Loop infinito: CPF duplicado no Hinova sem possibilidade de recovery automático',
               ultima_tentativa_em: new Date().toISOString()
             })
-            .eq('veiculo_id', veiculo_id)
-            .eq('associado_id', associado_id);
+            .eq('veiculo_id', _vid)
+            .eq('associado_id', _aid);
           
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
           return;
         }
       }
@@ -571,13 +571,13 @@ serve(async (req) => {
     const { data: associado, error: associadoError } = await supabase
       .from('associados')
       .select('*')
-      .eq('id', associado_id)
+      .eq('id', _aid)
       .single();
 
     if (associadoError || !associado) {
-      await logSync(veiculo_id, associado_id, 'buscar_associado', 'error', null, null, 'Associado não encontrado');
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-      await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'Associado não encontrado no banco');
+      await logSync(_vid, _aid, 'buscar_associado', 'error', null, null, 'Associado não encontrado');
+      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+      await upsertSyncQueue(supabase, _vid, _aid, 'associado', 'Associado não encontrado no banco');
       return;
     }
 
@@ -587,13 +587,13 @@ serve(async (req) => {
     const { data: veiculo, error: veiculoError } = await supabase
       .from('veiculos')
       .select('*')
-      .eq('id', veiculo_id)
+      .eq('id', _vid)
       .single();
 
     if (veiculoError || !veiculo) {
-      await logSync(veiculo_id, associado_id, 'buscar_veiculo', 'error', null, null, 'Veículo não encontrado');
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-      await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'Veículo não encontrado no banco');
+      await logSync(_vid, _aid, 'buscar_veiculo', 'error', null, null, 'Veículo não encontrado');
+      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+      await upsertSyncQueue(supabase, _vid, _aid, 'associado', 'Veículo não encontrado no banco');
       return;
     }
 
@@ -675,24 +675,24 @@ serve(async (req) => {
     const { data: contratoByVeiculo } = await supabase
       .from('contratos')
       .select('vendedor_id, veiculo_categoria')
-      .eq('veiculo_id', veiculo_id)
+      .eq('veiculo_id', _vid)
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();
     
     if (contratoByVeiculo) {
       contrato = contratoByVeiculo;
-      console.log(`[SGA Sync] Contrato encontrado por veiculo_id: ${veiculo_id}`);
+      console.log(`[SGA Sync] Contrato encontrado por veiculo_id: ${_vid}`);
     } else {
       const { data: contratoByAssociado } = await supabase
         .from('contratos')
         .select('vendedor_id, veiculo_categoria')
-        .eq('associado_id', associado_id)
+        .eq('associado_id', _aid)
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
       contrato = contratoByAssociado;
-      console.log(`[SGA Sync] Contrato fallback por associado_id: ${associado_id}`);
+      console.log(`[SGA Sync] Contrato fallback por associado_id: ${_aid}`);
     }
     
     if (contrato?.vendedor_id) {
@@ -747,12 +747,12 @@ serve(async (req) => {
 
     const authData: HinovaAuthResponse = await safeJsonParse<HinovaAuthResponse>(authResponse, 'autenticar');
     
-    await logSync(veiculo_id, associado_id, 'autenticar', authResponse.ok ? 'success' : 'error', 
+    await logSync(_vid, _aid, 'autenticar', authResponse.ok ? 'success' : 'error', 
       { usuario: hinovaUsuario }, authData, authResponse.ok ? null : authData.mensagem);
 
     if (!authResponse.ok || !authData.token_usuario) {
-      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-      await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', `Falha na autenticação: ${authData.mensagem}`);
+      await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+      await upsertSyncQueue(supabase, _vid, _aid, 'associado', `Falha na autenticação: ${authData.mensagem}`);
       return;
     }
 
@@ -776,7 +776,7 @@ serve(async (req) => {
         const { data: logOrigem } = await supabase
           .from('sga_sync_logs')
           .select('request_payload')
-          .eq('associado_id', associado_id)
+          .eq('associado_id', _aid)
           .in('action', ['cadastrar_associado', 'busca_backup_cpf'])
           .eq('status', 'success')
           .not('request_payload', 'is', null)
@@ -788,12 +788,12 @@ serve(async (req) => {
           const codigoContaOrigem = Number((logOrigem.request_payload as any)?.codigo_conta);
           if (Number.isFinite(codigoContaOrigem) && codigoContaOrigem !== codigoContaResolvido) {
             console.log(`[SGA Sync] codigo_hinova ${codigoAssociadoHinova} pertence ao codigo_conta ${codigoContaOrigem}, mas atual é ${codigoContaResolvido}. Descartando.`);
-            await logSync(veiculo_id, associado_id, 'invalidar_codigo_conta_incompativel', 'info',
+            await logSync(_vid, _aid, 'invalidar_codigo_conta_incompativel', 'info',
               { codigo_hinova: codigoAssociadoHinova, codigo_conta_origem: codigoContaOrigem, codigo_conta_atual: codigoContaResolvido },
               null, 'codigo_conta incompatível');
             codigoAssociadoHinova = null;
             // Limpar no banco para não reutilizar
-            await supabase.from('associados').update({ codigo_hinova: null, sincronizado_hinova: false }).eq('id', associado_id);
+            await supabase.from('associados').update({ codigo_hinova: null, sincronizado_hinova: false }).eq('id', _aid);
           }
         }
       } catch (e) {
@@ -830,7 +830,7 @@ serve(async (req) => {
             console.log(`[SGA Sync] ${tentativa.label} - Status: ${buscaResp.status}, CT: ${contentType}, Body: ${buscaText.substring(0, 500)}`);
             
             // Gravar diagnóstico em sga_sync_logs para cada tentativa
-            await logSync(veiculo_id, associado_id, 'busca_cpf_diagnostico', 
+            await logSync(_vid, _aid, 'busca_cpf_diagnostico', 
               buscaResp.ok ? 'success' : 'info',
               { metodo: tentativa.label, url: tentativa.url },
               { status: buscaResp.status, content_type: contentType, body_preview: buscaText.substring(0, 500) },
@@ -852,9 +852,9 @@ serve(async (req) => {
                   codigo_hinova: codigoAssociadoHinova,
                   sincronizado_hinova: true,
                   sincronizado_hinova_em: new Date().toISOString()
-                }).eq('id', associado_id);
+                }).eq('id', _aid);
 
-                await logSync(veiculo_id, associado_id, 'busca_backup_cpf', 'success', 
+                await logSync(_vid, _aid, 'busca_backup_cpf', 'success', 
                   { cpf: '***', metodo: tentativa.label }, { codigo_associado: codigoAssociadoHinova }, null);
 
                 // Check if vehicle already linked
@@ -871,9 +871,9 @@ serve(async (req) => {
                       sincronizado_hinova: true,
                       sincronizado_hinova_em: new Date().toISOString(),
                       status_sga: 'ativado_sga'
-                    }).eq('id', veiculo_id);
+                    }).eq('id', _vid);
 
-                    await markQueueCompleted(supabase, veiculo_id, associado_id);
+                    await markQueueCompleted(supabase, _vid, _aid);
 
                     return;
                   }
@@ -886,7 +886,7 @@ serve(async (req) => {
             }
           } catch (e) {
             console.log(`[SGA Sync] ${tentativa.label} falhou:`, e);
-            await logSync(veiculo_id, associado_id, 'busca_cpf_diagnostico', 'error',
+            await logSync(_vid, _aid, 'busca_cpf_diagnostico', 'error',
               { metodo: tentativa.label }, null, e instanceof Error ? e.message : 'Erro de rede');
           }
         }
@@ -940,7 +940,7 @@ serve(async (req) => {
 
       const associadoData: HinovaAssociadoResponse = await safeJsonParse<HinovaAssociadoResponse>(associadoResponse, 'cadastrar_associado');
       
-      await logSync(veiculo_id, associado_id, 'cadastrar_associado', associadoResponse.ok ? 'success' : 'error',
+      await logSync(_vid, _aid, 'cadastrar_associado', associadoResponse.ok ? 'success' : 'error',
         { ...associadoPayload, cpf: '***' }, associadoData, associadoResponse.ok ? null : associadoData.mensagem);
 
       if (!associadoResponse.ok) {
@@ -956,8 +956,8 @@ serve(async (req) => {
            ));
 
         if (isTokenBearerError && tokenUsuario) {
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-          await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'Token Bearer expirado');
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+          await upsertSyncQueue(supabase, _vid, _aid, 'associado', 'Token Bearer expirado');
           return;
         }
 
@@ -984,7 +984,7 @@ serve(async (req) => {
             const { data: logsInvalidados } = await supabase
               .from('sga_sync_logs')
               .select('request_payload')
-              .eq('associado_id', associado_id)
+              .eq('associado_id', _aid)
               .eq('action', 'invalidar_codigo_associado')
               .order('created_at', { ascending: false })
               .limit(50);
@@ -1008,7 +1008,7 @@ serve(async (req) => {
               const { data: logAnterior } = await supabase
                 .from('sga_sync_logs')
                 .select('response_payload')
-                .eq('associado_id', associado_id)
+                .eq('associado_id', _aid)
                 .eq('action', 'cadastrar_associado')
                 .eq('status', 'success')
                 .not('response_payload', 'is', null)
@@ -1081,8 +1081,8 @@ serve(async (req) => {
                     codigoExistente = codigo;
                     console.log(`[SGA Sync] Código recuperado via logs de identidade: ${codigoExistente}`);
                     await logSync(
-                      veiculo_id,
-                      associado_id,
+                      _vid,
+                      _aid,
                       'recovery_cpf_diagnostico',
                       'success',
                       { metodo: 'logs_identidade', created_at_origem: log.created_at },
@@ -1123,8 +1123,8 @@ serve(async (req) => {
                 console.log(`[SGA Sync] ${t.label} - Status: ${resp.status}, CT: ${ct}, Body: ${text.substring(0, 500)}`);
 
                 await logSync(
-                  veiculo_id,
-                  associado_id,
+                  _vid,
+                  _aid,
                   'recovery_cpf_diagnostico',
                   resp.ok ? 'success' : 'info',
                   { metodo: t.label, url: t.url },
@@ -1145,8 +1145,8 @@ serve(async (req) => {
               } catch (e) {
                 console.log(`[SGA Sync] ${t.label} falhou:`, e);
                 await logSync(
-                  veiculo_id,
-                  associado_id,
+                  _vid,
+                  _aid,
                   'recovery_cpf_diagnostico',
                   'error',
                   { metodo: t.label },
@@ -1180,19 +1180,31 @@ serve(async (req) => {
               codigo_hinova: codigoExistente,
               sincronizado_hinova: true,
               sincronizado_hinova_em: new Date().toISOString()
-            }).eq('id', associado_id);
+            }).eq('id', _aid);
 
             codigoAssociadoHinova = codigoExistente;
             console.log(`[SGA Sync] Código existente recuperado: ${codigoAssociadoHinova}`);
           } else {
-            await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-            await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 'CPF duplicado - não foi possível recuperar código');
+            // ⛔ CPF duplicado mas NENHUMA estratégia encontrou código → falha permanente
+            console.log('[SGA Sync] ⛔ CPF duplicado sem recovery possível - marcando como falha permanente');
+            await supabase
+              .from('sga_sync_queue')
+              .update({ 
+                status: 'falha_permanente', 
+                erro_ultimo: 'CPF duplicado no Hinova mas nenhuma estratégia de recovery encontrou código válido. Requer intervenção manual.',
+                ultima_tentativa_em: new Date().toISOString()
+              })
+              .eq('veiculo_id', _vid)
+              .eq('associado_id', _aid);
+            await logSync(_vid, _aid, 'cpf_duplicado_sem_recovery', 'error', null, null, 
+              'CPF duplicado no Hinova sem recovery. Marcado como falha permanente.');
+            await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
             return;
           }
         } else {
           // Erro genérico
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-          await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', `Falha cadastro: ${associadoData.mensagem}`);
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+          await upsertSyncQueue(supabase, _vid, _aid, 'associado', `Falha cadastro: ${associadoData.mensagem}`);
           return;
         }
       } else {
@@ -1203,7 +1215,7 @@ serve(async (req) => {
           codigo_hinova: codigoAssociadoHinova,
           sincronizado_hinova: true,
           sincronizado_hinova_em: new Date().toISOString()
-        }).eq('id', associado_id);
+        }).eq('id', _aid);
       }
     } else {
       console.log(`[SGA Sync] Associado já sincronizado - Código: ${codigoAssociadoHinova}`);
@@ -1223,9 +1235,9 @@ serve(async (req) => {
     for (const { campo, valor, label } of camposObrigatorios) {
       if (!valor || valor.trim() === '') {
         const msg = `${label} é obrigatório para sincronização com SGA.`;
-        await logSync(veiculo_id, associado_id, 'validar_veiculo', 'error', null, null, `${label} não informado`);
-        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-        await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', `${label} não informado`, codigoAssociadoHinova);
+        await logSync(_vid, _aid, 'validar_veiculo', 'error', null, null, `${label} não informado`);
+        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+        await upsertSyncQueue(supabase, _vid, _aid, 'veiculo', `${label} não informado`, codigoAssociadoHinova);
         return;
       }
     }
@@ -1265,7 +1277,7 @@ serve(async (req) => {
 
     const veiculoData: HinovaVeiculoResponse = await safeJsonParse<HinovaVeiculoResponse>(veiculoResponse, 'cadastrar_veiculo');
     
-    await logSync(veiculo_id, associado_id, 'cadastrar_veiculo', veiculoResponse.ok ? 'success' : 'error',
+    await logSync(_vid, _aid, 'cadastrar_veiculo', veiculoResponse.ok ? 'success' : 'error',
       veiculoPayload, veiculoData, veiculoResponse.ok ? null : veiculoData.mensagem);
 
     let codigoVeiculoHinova = veiculoData.codigo_veiculo;
@@ -1349,7 +1361,7 @@ serve(async (req) => {
             const { data: logAnterior } = await supabase
               .from('sga_sync_logs')
               .select('response_payload')
-              .eq('veiculo_id', veiculo_id)
+              .eq('veiculo_id', _vid)
               .eq('action', 'cadastrar_veiculo')
               .eq('status', 'success')
               .not('response_payload', 'is', null)
@@ -1393,11 +1405,11 @@ serve(async (req) => {
               codigo_hinova: codigoAssociadoHinova,
               sincronizado_hinova: true,
               sincronizado_hinova_em: new Date().toISOString()
-            }).eq('id', associado_id);
+            }).eq('id', _aid);
           }
           
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-          await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', 'Placa duplicada - código não recuperado', codigoAssociadoHinova);
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+          await upsertSyncQueue(supabase, _vid, _aid, 'veiculo', 'Placa duplicada - código não recuperado', codigoAssociadoHinova);
           return;
         }
       } else {
@@ -1419,17 +1431,17 @@ serve(async (req) => {
             codigo_hinova: null,
             sincronizado_hinova: false,
             sincronizado_hinova_em: null
-          }).eq('id', associado_id);
+          }).eq('id', _aid);
 
           // Resetar fila para recomeçar do associado
-          await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado', 
+          await upsertSyncQueue(supabase, _vid, _aid, 'associado', 
             `codigo_associado ${codigoAssociadoHinova} inválido no Hinova - resetando para recadastro`, null);
 
-          await logSync(veiculo_id, associado_id, 'invalidar_codigo_associado', 'info',
+          await logSync(_vid, _aid, 'invalidar_codigo_associado', 'info',
             { codigo_invalidado: codigoAssociadoHinova, motivo: allErrors.substring(0, 300) },
             veiculoData, 'Código associado inválido no Hinova');
 
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
           return;
         }
 
@@ -1439,10 +1451,10 @@ serve(async (req) => {
             codigo_hinova: codigoAssociadoHinova,
             sincronizado_hinova: true,
             sincronizado_hinova_em: new Date().toISOString()
-          }).eq('id', associado_id);
+          }).eq('id', _aid);
         }
-        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-        await upsertSyncQueue(supabase, veiculo_id, associado_id, 'veiculo', `Falha cadastro veículo: ${veiculoData.mensagem}`, codigoAssociadoHinova);
+        await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+        await upsertSyncQueue(supabase, _vid, _aid, 'veiculo', `Falha cadastro veículo: ${veiculoData.mensagem}`, codigoAssociadoHinova);
         return;
       }
     }
@@ -1455,7 +1467,7 @@ serve(async (req) => {
       sincronizado_hinova: true,
       sincronizado_hinova_em: new Date().toISOString(),
       status_sga: 'ativado_sga'
-    }).eq('id', veiculo_id);
+    }).eq('id', _vid);
 
     // ========================================
     // PASSO 7: Buscar e enviar fotos
@@ -1466,7 +1478,7 @@ serve(async (req) => {
     const { data: documentos } = await supabase
       .from('documentos')
       .select('*')
-      .or(`associado_id.eq.${associado_id},veiculo_id.eq.${veiculo_id}`)
+      .or(`associado_id.eq.${_aid},veiculo_id.eq.${_vid}`)
       .eq('status', 'aprovado');
 
     if (documentos && documentos.length > 0 && codigoVeiculoHinova) {
@@ -1502,7 +1514,7 @@ serve(async (req) => {
 
           const fotosData = await safeJsonParse<any>(fotosResponse, 'enviar_fotos');
           
-          await logSync(veiculo_id, associado_id, 'enviar_fotos', fotosResponse.ok ? 'success' : 'error',
+          await logSync(_vid, _aid, 'enviar_fotos', fotosResponse.ok ? 'success' : 'error',
             { codigo_veiculo: codigoVeiculoHinova, qtd_fotos: fotos.length }, fotosData, 
             fotosResponse.ok ? null : fotosData.mensagem);
 
@@ -1520,16 +1532,16 @@ serve(async (req) => {
 
     // Se houve erro nas fotos, gravar na fila para reenvio
     if (fotosComErro.length > 0 && fotosEnviadas === 0) {
-      await upsertSyncQueue(supabase, veiculo_id, associado_id, 'fotos', 
+      await upsertSyncQueue(supabase, _vid, _aid, 'fotos', 
         `Erro ao enviar ${fotosComErro.length} fotos`, codigoAssociadoHinova, codigoVeiculoHinova);
     } else {
       // Tudo OK - marcar fila como concluída
-      await markQueueCompleted(supabase, veiculo_id, associado_id);
+      await markQueueCompleted(supabase, _vid, _aid);
     }
 
     console.log(`[SGA Sync] Sincronização concluída! Fotos: ${fotosEnviadas}, Erros: ${fotosComErro.length}`);
 
-    await logSync(veiculo_id, associado_id, 'sync_completo', 'success', null, {
+    await logSync(_vid, _aid, 'sync_completo', 'success', null, {
       codigo_associado_hinova: codigoAssociadoHinova,
       codigo_veiculo_hinova: codigoVeiculoHinova,
       fotos_enviadas: fotosEnviadas,
@@ -1541,10 +1553,10 @@ serve(async (req) => {
       } catch (bgError) {
         console.error('[SGA Sync] Erro no background sync:', bgError);
         try {
-          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', veiculo_id);
-          await upsertSyncQueue(supabase, veiculo_id, associado_id, 'associado',
+          await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
+          await upsertSyncQueue(supabase, _vid, _aid, 'associado',
             bgError instanceof Error ? bgError.message : 'Erro inesperado no background');
-          await logSync(veiculo_id, associado_id, 'sync_background_error', 'error', null, null,
+          await logSync(_vid, _aid, 'sync_background_error', 'error', null, null,
             bgError instanceof Error ? bgError.message : 'Erro inesperado');
         } catch (_) {}
       }
