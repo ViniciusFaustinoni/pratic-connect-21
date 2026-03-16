@@ -8,7 +8,7 @@ import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
 import { EtapaCriteriosCotacao } from '@/components/cotacao/EtapaCriteriosCotacao';
 import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
-import { AlertaElegibilidadeNegada } from '@/components/cotacao/AlertaElegibilidadeNegada';
+
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 
 // ============================================
