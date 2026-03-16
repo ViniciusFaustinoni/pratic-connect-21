@@ -1,4 +1,5 @@
 import { useState, ChangeEvent } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -89,6 +90,7 @@ interface FotoItem {
 
 export default function AppSinistroNovo() {
   const navigate = useNavigate();
+  const { data: prazoCotacao = 24 } = useConfiguracaoNumero('prazo_cotacao_fornecedor_horas', 24);
 
   // Navegação do wizard
   const [etapa, setEtapa] = useState(1);
@@ -755,7 +757,7 @@ export default function AppSinistroNovo() {
           </div>
 
           <p className="text-sm text-gray-600 mt-4">
-            Nossa equipe irá analisar e entrar em contato em até 24 horas úteis.
+            Nossa equipe irá analisar e entrar em contato em até {prazoCotacao} horas úteis.
           </p>
 
           <Button onClick={() => navigate('/app/sinistros')} className="w-full mt-4">

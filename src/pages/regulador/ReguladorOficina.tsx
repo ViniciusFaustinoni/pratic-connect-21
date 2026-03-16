@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { CardOrcamentoReparo } from '@/components/orcamento/CardOrcamentoReparo';
 import { useVeiculosOficina, useOficinasDisponiveis, type VeiculoOficina } from '@/hooks/useVeiculosOficina';
 import { OrcamentoPDFImport, type DadosExtraidos } from '@/components/regulador/OrcamentoPDFImport';
@@ -62,10 +63,10 @@ function getTempoEmOficina(entrada: string | null, created: string): string {
   return `Há ${dias} dias`;
 }
 
-function getAlertaAtualizacao(updated: string): 'ok' | 'warning' | 'urgent' {
+function getAlertaAtualizacao(updated: string, prazoManutencao = 48): 'ok' | 'warning' | 'urgent' {
   const horas = differenceInHours(new Date(), new Date(updated));
-  if (horas > 48) return 'urgent';
-  if (horas > 24) return 'warning';
+  if (horas > prazoManutencao) return 'urgent';
+  if (horas > prazoManutencao / 2) return 'warning';
   return 'ok';
 }
 
@@ -102,6 +103,7 @@ function EtapasProgress({ etapas }: { etapas: any[] }) {
 export default function ReguladorOficina() {
   const { profile } = useAuth();
   const [search, setSearch] = useState('');
+  const { data: prazoManutencao = 48 } = useConfiguracaoNumero('prazo_manutencao_rastreador_horas', 48);
   const [statusFilter, setStatusFilter] = useState('todos');
   const [oficinaFilter, setOficinaFilter] = useState('todas');
   const [tempoFilter, setTempoFilter] = useState('todos');
@@ -513,7 +515,7 @@ export default function ReguladorOficina() {
       ) : (
         <div className="space-y-3">
           {veiculos.map((v) => {
-            const alerta = getAlertaAtualizacao(v.updated_at);
+            const alerta = getAlertaAtualizacao(v.updated_at, prazoManutencao);
             const statusInfo = STATUS_MAP[v.status] || { label: v.status, color: 'bg-gray-100 text-gray-800' };
             const atualizadoHoje = atualizacoesHoje.includes(v.id);
             return (

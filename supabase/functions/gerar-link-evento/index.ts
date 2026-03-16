@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -80,9 +81,10 @@ serve(async (req) => {
       .eq("sinistro_id", sinistro_id)
       .eq("status", "ativo");
 
-    // 4. Criar novo link (72h)
+    // 4. Criar novo link (prazo dinâmico)
+    const prazoLink = await getConfiguracaoNumero(supabaseAdmin, 'prazo_link_evento_horas', 72);
     const expiraEm = new Date();
-    expiraEm.setHours(expiraEm.getHours() + 72);
+    expiraEm.setHours(expiraEm.getHours() + prazoLink);
 
     const { data: link, error: linkError } = await supabaseAdmin
       .from("sinistro_evento_links")

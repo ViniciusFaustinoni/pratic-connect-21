@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +44,7 @@ export function SolicitarOrcamentoDialog({
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();
+  const { data: prazoCotacao = 24 } = useConfiguracaoNumero('prazo_cotacao_fornecedor_horas', 24);
 
   const { data: autoCenters = [], isLoading: loadingAC } = useAutoCenters({
     marca: veiculo?.marca || undefined,
@@ -82,7 +84,7 @@ export function SolicitarOrcamentoDialog({
     try {
       for (const acId of selecionados) {
         const prazo = new Date();
-        prazo.setHours(prazo.getHours() + 24);
+        prazo.setHours(prazo.getHours() + prazoCotacao);
 
         const { data: cotacao, error: cotError } = await supabase
           .from('evento_cotacoes_pecas')

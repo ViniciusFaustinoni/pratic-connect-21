@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -123,16 +124,19 @@ serve(async (req) => {
         usuario_nome: analistaNome,
       });
 
-      // 3. Invalidate active links
+      // 3. Read dynamic deadline
+      const prazoLink = await getConfiguracaoNumero(supabase, 'prazo_link_evento_horas', 72);
+
+      // 3b. Invalidate active links
       await supabase
         .from("sinistro_evento_links")
         .update({ status: "invalidado" })
         .eq("sinistro_id", sinistro_id)
         .eq("status", "ativo");
 
-      // 4. Generate new link (72h)
+      // 4. Generate new link (dynamic deadline)
       const expiraEm = new Date();
-      expiraEm.setHours(expiraEm.getHours() + 72);
+      expiraEm.setHours(expiraEm.getHours() + prazoLink);
 
       const { data: novoLink, error: linkError } = await supabase
         .from("sinistro_evento_links")
@@ -174,7 +178,7 @@ serve(async (req) => {
           await supabase.functions.invoke("whatsapp-send-text", {
             body: {
               phone: telefone,
-              message: `✅ *PRATIC - Evento Aprovado*\n\nOlá ${(sinistro as any)?.associado?.nome},\n\nSeu evento foi aprovado! 🎉\n\nAcesse o link abaixo para efetuar o pagamento da cota de coparticipação e assinar o Termo de Entrada:\n${linkUrl}\n\n⏰ Este link expira em 72 horas.`,
+              message: `✅ *PRATIC - Evento Aprovado*\n\nOlá ${(sinistro as any)?.associado?.nome},\n\nSeu evento foi aprovado! 🎉\n\nAcesse o link abaixo para efetuar o pagamento da cota de coparticipação e assinar o Termo de Entrada:\n${linkUrl}\n\n⏰ Este link expira em ${prazoLink} horas.`,
             },
           });
         }

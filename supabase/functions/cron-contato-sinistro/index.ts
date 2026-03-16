@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -32,6 +33,7 @@ serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+    const prazoLink = await getConfiguracaoNumero(supabase, 'prazo_link_evento_horas', 72);
 
     let enviados = 0;
     let erros = 0;
@@ -186,7 +188,7 @@ Já é possível dar entrada no conserto do veículo.
 Acesse o link abaixo para completar as etapas:
 ${siteUrl}/evento/${token}
 
-O link é válido por 72 horas.
+O link é válido por ${prazoLink} horas.
 Em caso de dúvidas, estamos à disposição!`;
 
           const telefone = associado.whatsapp || associado.telefone;

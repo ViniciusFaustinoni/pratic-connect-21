@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getConfiguracaoNumero } from '../_shared/config-helper.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -107,8 +108,9 @@ serve(async (req) => {
     }
 
     // 5. Gerar token único para criação de senha
+    const prazoAcesso = await getConfiguracaoNumero(supabase, 'prazo_link_primeiro_acesso_horas', 48);
     const token = crypto.randomUUID();
-    const expiraEm = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 horas
+    const expiraEm = new Date(Date.now() + prazoAcesso * 60 * 60 * 1000);
 
     // 6. Invalidar tokens anteriores do mesmo associado
     await supabase
@@ -144,7 +146,7 @@ serve(async (req) => {
           body: {
             telefone: whatsappNumero.replace(/\D/g, ''),
             tipo: 'text',
-            mensagem: `🎉 Olá, ${associado.nome.split(' ')[0]}!\n\nSeu veículo está protegido pela PRATIC!\n\nAcesse o App e crie sua senha:\n🔗 ${linkCriarSenha}\n\n⏰ Link válido por 48 horas.`,
+            mensagem: `🎉 Olá, ${associado.nome.split(' ')[0]}!\n\nSeu veículo está protegido pela PRATIC!\n\nAcesse o App e crie sua senha:\n🔗 ${linkCriarSenha}\n\n⏰ Link válido por ${prazoAcesso} horas.`,
             referencia_tipo: 'primeiro_acesso',
             referencia_id: associado.id
           }
@@ -164,7 +166,8 @@ serve(async (req) => {
             to: associado.email,
             data: {
               nome: associado.nome.split(' ')[0],
-              linkCriarSenha
+              linkCriarSenha,
+              prazoHoras: prazoAcesso
             }
           }
         });

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -255,7 +256,7 @@ async function vincularMidiaADocumentoPendente(
 }
 
 // System prompt adaptado para WhatsApp (mais conciso) - ALINHADO COM APP
-const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsApp.
+const buildWhatsappSystemPrompt = (prazoLinkEvento: number) => `Você é o Assistente Virtual PRATIC via WhatsApp.
 
 ## ACOLHIMENTO (MUITO IMPORTANTE!)
 - SEMPRE cumprimente pelo PRIMEIRO NOME do associado (fornecido no contexto)
@@ -330,7 +331,7 @@ Após registrar o sinistro com sucesso e o resultado conter "link_evento":
 2. Pergunte ao associado:
    "Quer dar entrada no processo do sinistro agora? Vou te enviar um link para você completar as etapas (auto vistoria, B.O., agendamento). Ou prefere que a gente retorne amanhã?"
 3. Se o associado disser AGORA / SIM / QUERO:
-   - Envie o link: "Aqui está o link: [link_evento]. Válido por 72h."
+   - Envie o link: "Aqui está o link: [link_evento]. Válido por ${prazoLinkEvento}h."
    - Explique brevemente as etapas: Auto Vistoria, B.O., Agendamento da vistoria presencial, Pagamento da coparticipação
 4. Se disser DEPOIS / AMANHÃ / NÃO AGORA:
    - Responda: "Sem problemas! Amanhã de manhã enviaremos o link para você dar continuidade."
@@ -3366,7 +3367,9 @@ Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato c
     let respostaFinal = "Desculpe, não consegui processar sua mensagem. Tente novamente em alguns instantes. 🙏";
     
     try {
-      let aiResponse = await callAI(messages, WHATSAPP_SYSTEM_PROMPT + "\n\n" + context);
+      const prazoLinkEvento = await getConfiguracaoNumero(supabase, 'prazo_link_evento_horas', 72);
+      const whatsappPrompt = buildWhatsappSystemPrompt(prazoLinkEvento);
+      let aiResponse = await callAI(messages, whatsappPrompt + "\n\n" + context);
       let assistantMessage = aiResponse.choices?.[0]?.message;
       let iterations = 0;
       const maxIterations = 4;
@@ -3413,7 +3416,7 @@ Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato c
             assistantMessage,
             ...toolResults,
           ],
-          WHATSAPP_SYSTEM_PROMPT + "\n\n" + context
+          whatsappPrompt + "\n\n" + context
         );
         assistantMessage = aiResponse.choices?.[0]?.message;
       }

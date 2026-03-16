@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -26,9 +27,10 @@ serve(async (req) => {
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // 1. Criar link expirável (72h)
+    // 1. Criar link expirável (prazo dinâmico)
+    const prazoLink = await getConfiguracaoNumero(supabase, 'prazo_link_evento_horas', 72);
     const expiraEm = new Date();
-    expiraEm.setHours(expiraEm.getHours() + 72);
+    expiraEm.setHours(expiraEm.getHours() + prazoLink);
 
     const { data: link, error: linkError } = await supabase
       .from("sinistro_evento_links")

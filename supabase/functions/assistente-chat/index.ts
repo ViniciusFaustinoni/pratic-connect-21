@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 // Mapa de estados brasileiros → sigla UF
 const ESTADOS_MAP_CHAT: Record<string, string> = {
@@ -27,7 +28,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC, um chatbot inteligente e amigável da associação de proteção veicular PRATIC.
+const buildSystemPrompt = (prazoLinkEvento: number) => `Você é o Assistente Virtual PRATIC, um chatbot inteligente e amigável da associação de proteção veicular PRATIC.
 
 ## Sua Personalidade
 - Seja cordial, profissional e empático
@@ -156,7 +157,7 @@ Após criar o sinistro de colisão com sucesso:
    - **Etapa 1** — Enviar no mínimo 5 fotos do veículo danificado (diferentes ângulos)
    - **Etapa 2** — Enviar o Boletim de Ocorrência (foto ou PDF) e o número do B.O.
    - **Etapa 3** — Enviar um relato escrito ou em áudio sobre o ocorrido
-3. Diga: "Você receberá um link para enviar essas informações. O link é válido por 72 horas."
+3. Diga: "Você receberá um link para enviar essas informações. O link é válido por ${prazoLinkEvento} horas."
 4. Conclua: "Após o envio, um regulador será agendado para vistoria em até 3 dias úteis."
 5. Inclua EXATAMENTE este marcador na sua resposta: [LINK_AUTO_VISTORIA]
 6. Se necessita_reboque = true E já criou o chamado de assistência, informe o protocolo do guincho também.
@@ -1252,8 +1253,9 @@ ${assistenciasTexto}
     console.log(`[assistente-chat] Contexto: ${veiculos.length} veículos, ${boletosPendentes.length} boletos pendentes`);
 
     // Build messages array with FULL context
+    const prazoLinkEvento = await getConfiguracaoNumero(supabase, 'prazo_link_evento_horas', 72);
     const aiMessages = [
-      { role: "system", content: SYSTEM_PROMPT + "\n\n" + contextoAssociado },
+      { role: "system", content: buildSystemPrompt(prazoLinkEvento) + "\n\n" + contextoAssociado },
       ...conversationHistory.slice(-10), // Last 10 messages for context
       ...messages,
     ];

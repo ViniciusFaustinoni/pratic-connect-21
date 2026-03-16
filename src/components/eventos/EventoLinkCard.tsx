@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEventoLink } from '@/hooks/useEventoLink';
@@ -36,6 +37,7 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
   const { linkAtivo, isLoading, contato, gerarNovoLink } = useEventoLink(sinistroId);
   const [copied, setCopied] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const { data: prazoLinkEvento = 72 } = useConfiguracaoNumero('prazo_link_evento_horas', 72);
 
   if (isLoading) {
     return (
@@ -104,7 +106,7 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
       cotaTexto = `\n💰 *Cota de coparticipação:*\nSeu plano: ${planoNome} (${cotaPercentual}% da FIPE)\nValor FIPE do veículo: ${fmtBRL(valorFipe)}\nSua cota: *${fmtBRL(cotaValor)}*\n`;
     }
 
-    const mensagem = `Olá ${associadoNome || ''}! Somos da *ABP PraticCar* e estamos aqui para te ajudar nesse momento.\n\nSeu evento *${sinistroProtocolo || ''}* foi registrado e precisamos que você complete algumas etapas pelo link abaixo:\n\n${etapasTexto}\n\nAcesse aqui: ${linkUrl}\n${cotaTexto}\nO link é válido por *72 horas*.\n\nApós a conclusão, nossa equipe analisará seu caso.\n\nQualquer dúvida, estamos à disposição!\n\nABP PraticCar`;
+    const mensagem = `Olá ${associadoNome || ''}! Somos da *ABP PraticCar* e estamos aqui para te ajudar nesse momento.\n\nSeu evento *${sinistroProtocolo || ''}* foi registrado e precisamos que você complete algumas etapas pelo link abaixo:\n\n${etapasTexto}\n\nAcesse aqui: ${linkUrl}\n${cotaTexto}\nO link é válido por *${prazoLinkEvento} horas*.\n\nApós a conclusão, nossa equipe analisará seu caso.\n\nQualquer dúvida, estamos à disposição!\n\nABP PraticCar`;
 
     try {
       setEnviando(true);

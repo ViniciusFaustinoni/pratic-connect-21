@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -36,9 +37,11 @@ serve(async (req) => {
 
     console.log("[cron-lembrete-documentos] Iniciando verificação de documentos pendentes...");
 
-    // Buscar documentos pendentes há mais de 3 dias (com prazo de 7 dias)
-    const tresDiasAtras = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // Buscar documentos pendentes (prazo dinâmico)
+    const prazoDocs = await getConfiguracaoNumero(supabase, 'prazo_documento_upload_dias', 7);
+    const lembreteAposDias = Math.max(Math.floor(prazoDocs * 3 / 7), 1); // lembrete proporcional
+    const tresDiasAtras = new Date(Date.now() - lembreteAposDias * 24 * 60 * 60 * 1000);
+    const seteDiasAtras = new Date(Date.now() - prazoDocs * 24 * 60 * 60 * 1000);
 
     // Buscar documentos solicitados pendentes
     const { data: docsPendentes, error: docsError } = await supabase
@@ -92,7 +95,7 @@ serve(async (req) => {
 
       const associadoId = doc.associado_id;
       const createdAt = new Date(doc.created_at);
-      const prazoFinal = new Date(createdAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const prazoFinal = new Date(createdAt.getTime() + prazoDocs * 24 * 60 * 60 * 1000);
       const diasRestantes = Math.ceil((prazoFinal.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
       if (!docsAgrupados[associadoId]) {

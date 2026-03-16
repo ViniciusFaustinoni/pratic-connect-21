@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { FileText, Loader2, Camera, FileCheck, AlertCircle } from 'lucide-react';
 import {
@@ -56,6 +57,7 @@ export function SolicitarDocumentosSinistroDialog({
   const { user } = useAuth();
   const [documentosSelecionados, setDocumentosSelecionados] = useState<string[]>([]);
   const [observacoes, setObservacoes] = useState('');
+  const { data: prazoDocs = 7 } = useConfiguracaoNumero('prazo_documento_upload_dias', 7);
 
   // Buscar dados do associado para enviar WhatsApp
   const { data: associado } = useQuery({
@@ -98,7 +100,7 @@ export function SolicitarDocumentosSinistroDialog({
       // 2. Gerar token único para upload e atualizar status
       const uploadToken = crypto.randomUUID().substring(0, 12);
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // Expira em 7 dias
+      expiresAt.setDate(expiresAt.getDate() + prazoDocs);
 
       const { error: statusError } = await supabase
         .from('sinistros')

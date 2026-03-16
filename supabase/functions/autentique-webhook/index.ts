@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -636,9 +637,10 @@ serve(async (req) => {
                     });
                   }
 
-                  // 2. Criar cobrança PIX
+                  // 2. Criar cobrança PIX (prazo dinâmico)
+                  const prazoAdesao = await getConfiguracaoNumero(supabase, 'prazo_vencimento_adesao_dias', 3);
                   const dueDate = new Date();
-                  dueDate.setDate(dueDate.getDate() + 3); // Vencimento em 3 dias
+                  dueDate.setDate(dueDate.getDate() + prazoAdesao);
                   const dueDateStr = dueDate.toISOString().split('T')[0];
 
                   const cobranca = await asaasReq('/payments', 'POST', {

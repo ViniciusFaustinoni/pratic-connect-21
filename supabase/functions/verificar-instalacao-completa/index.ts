@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.39.3";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 /**
  * Edge Function: verificar-instalacao-completa
@@ -57,9 +58,10 @@ serve(async (req) => {
   try {
     console.log('[Verificar Instalação] Iniciando verificação de instalações pendentes...');
 
-    // Buscar rastreadores instalados sem comunicação (última 24h)
+    // Buscar rastreadores instalados sem comunicação (prazo dinâmico)
+    const prazoSemSinal = await getConfiguracaoNumero(supabase, 'prazo_rastreador_sem_sinal_horas', 4);
     const vinteQuatroHorasAtras = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const quatroHorasAtras = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+    const semSinalAtras = new Date(Date.now() - prazoSemSinal * 60 * 60 * 1000).toISOString();
 
     const { data: rastreadores, error } = await supabase
       .from('rastreadores')
@@ -132,9 +134,9 @@ serve(async (req) => {
           }
         }
 
-        // Se passou mais de 4h sem comunicação, gerar alerta
+        // Se passou mais de o prazo sem comunicação, gerar alerta
         const instaladoEm = new Date(rastreador.updated_at);
-        if (instaladoEm < new Date(quatroHorasAtras)) {
+        if (instaladoEm < new Date(semSinalAtras)) {
           console.log(`[Verificar Instalação] ${rastreador.imei} - gerando alerta (>4h sem comunicação)`);
 
           // Criar alerta
@@ -146,7 +148,7 @@ serve(async (req) => {
               tipo: 'sem_comunicacao',
               severidade: 'alta',
               titulo: 'Rastreador sem comunicação após instalação',
-              descricao: `O rastreador ${rastreador.imei} foi instalado há mais de 4 horas e ainda não comunicou. Verificar instalação física.`,
+              descricao: `O rastreador ${rastreador.imei} foi instalado há mais de ${prazoSemSinal} horas e ainda não comunicou. Verificar instalação física.`,
               status: 'aberto',
             });
 
