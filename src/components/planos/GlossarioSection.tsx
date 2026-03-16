@@ -15,6 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   useGlossario, 
   useRegrasImportantes, 
@@ -24,6 +26,43 @@ import {
 import { useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
 import { BookOpen, AlertTriangle, DollarSign, Loader2 } from 'lucide-react';
+
+// Hook para buscar cotas da tabela planos_cotas_categoria (fonte primária)
+function useCotasCategoriaTabela() {
+  return useQuery({
+    queryKey: ['planos_cotas_categoria_glossario'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos_cotas_categoria')
+        .select('categoria_veiculo, cota_percentual, cota_minima_valor')
+        .order('categoria_veiculo');
+      if (error) throw error;
+      // Agrupar por categoria (pegar valores únicos — todos os planos de mesma categoria têm mesmos valores)
+      const map = new Map<string, { percentual: number; minimo: number }>();
+      (data || []).forEach(row => {
+        if (!map.has(row.categoria_veiculo)) {
+          map.set(row.categoria_veiculo, {
+            percentual: Number(row.cota_percentual ?? 6),
+            minimo: Number(row.cota_minima_valor ?? 1200),
+          });
+        }
+      });
+      return map;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+const CATEGORIA_LABELS: Record<string, string> = {
+  passeio: 'Passeio',
+  aplicativo: 'Aplicativo (Uber, 99, etc)',
+  desagio: 'Com Deságio',
+  moto: 'Motocicletas',
+  diesel: 'Diesel',
+  especial_plus: 'Especial Plus',
+  lancamento: 'Lançamento',
+  eletrico: 'Elétricos',
+};
 
 export function GlossarioTermos() {
   const { data: glossario = [], isLoading } = useGlossario();
