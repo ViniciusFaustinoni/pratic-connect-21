@@ -100,7 +100,11 @@ export function FotosReboquistaUploadModal({ open, onClose, chamadoId }: Props) 
             <div className="grid grid-cols-4 gap-2">
               {previews.map((src, i) => (
                 <div key={i} className="relative group">
-                  <img src={src} alt="" className="w-full aspect-square object-cover rounded-md border" />
+                  {files[i]?.type.startsWith('video/') ? (
+                    <video src={src} className="w-full aspect-square object-cover rounded-md border" muted />
+                  ) : (
+                    <img src={src} alt="" className="w-full aspect-square object-cover rounded-md border" />
+                  )}
                   <button
                     onClick={() => removeFile(i)}
                     className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
