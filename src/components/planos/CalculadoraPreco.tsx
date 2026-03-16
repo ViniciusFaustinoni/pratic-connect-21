@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Badge } from '@/components/ui/badge';
-import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Zap, Info } from 'lucide-react';
+import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Zap, Info, Fuel } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useProductLines } from '@/hooks/usePlans';
 import { formatarMoeda } from '@/utils/format';
@@ -18,16 +18,17 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { maskPlaca } from '@/lib/validations';
 
-interface ResultadoLinha {
-  key: string; // unique key: linha_slug or linha_slug+tipo_uso
-  linha: string;
-  linhaLabel: string;
+interface ResultadoPlano {
+  key: string;
+  planoNome: string;
   valorMensal: number;
   valorDesagio: number | null;
+  adicionalMensal: number;
+  descontoPercentual: number;
 }
 
 interface ResultadoCalc {
-  linhas: ResultadoLinha[];
+  planos: ResultadoPlano[];
   faixaFipe: string;
   valorFipeInformado: number;
   regiaoLabel: string;
@@ -52,18 +53,6 @@ const REGIOES = [
   { value: 'lagos', label: 'Região dos Lagos' },
   { value: 'sp', label: 'São Paulo' },
 ] as const;
-
-const LINHA_LABELS: Record<string, string> = {
-  select: 'Select',
-  'select-one': 'Select One',
-  'select-premium': 'Select Premium',
-  lancamento: 'Lançamento',
-  especial: 'Especial',
-  'especial-plus': 'Especial Plus',
-  advanced: 'Advanced',
-  'advanced-plus': 'Advanced Plus',
-  eletrico: 'Elétrico',
-};
 
 const TIPO_VEICULO_LABELS: Record<TipoVeiculo, string> = {
   carro: 'Carro',
@@ -126,6 +115,31 @@ function useConfigAdicionalAppCalc(tabelas: any[] | undefined) {
   }), [regioesRaw, productLinesData, tabelas]);
 }
 
+/** Fetch planos + plano_preco_map for calculator */
+function usePlanosComPrecoMap() {
+  return useQuery({
+    queryKey: ['calculadora-planos-preco-map'],
+    queryFn: async () => {
+      const [planosRes, mapRes] = await Promise.all([
+        supabase
+          .from('planos')
+          .select('id, nome, slug, adicional_mensal, desconto_percentual, visivel_gestao, ativo, categoria, fipe_minima, fipe_maxima')
+          .eq('ativo', true)
+          .eq('visivel_gestao', true)
+          .order('ordem', { ascending: true }),
+        supabase
+          .from('plano_preco_map')
+          .select('plano_id, linha_slug, tipo_uso'),
+      ]);
+      return {
+        planos: planosRes.data || [],
+        mappings: mapRes.data || [],
+      };
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 /** Detect vehicle type from plate-lookup response */
 function detectarTipoFromPlaca(dados: VeiculoPlaca): TipoVeiculo {
   const combustivel = (dados.combustivel || '').toLowerCase();
@@ -141,6 +155,7 @@ export function CalculadoraPreco() {
   const [tipoUso, setTipoUso] = useState<TipoUso>('particular');
   const [tipoVeiculo, setTipoVeiculo] = useState<TipoVeiculo>('carro');
   const [regiao, setRegiao] = useState<string>('rj');
+  const [combustivelManual, setCombustivelManual] = useState<'gasolina' | 'diesel'>('gasolina');
   const [resultado, setResultado] = useState<ResultadoCalc | null>(null);
   const [semResultado, setSemResultado] = useState(false);
 
@@ -153,6 +168,7 @@ export function CalculadoraPreco() {
   const { data: tabelas } = useTabelasPreco();
   const { data: adicionalApp = 35.90 } = useAdicionalApp();
   const { data: productLines = [] } = useProductLines();
+  const { data: planosData } = usePlanosComPrecoMap();
   const configApp = useConfigAdicionalAppCalc(tabelas);
 
   // Map linha_slug → vehicle_type from product_lines
@@ -175,7 +191,6 @@ export function CalculadoraPreco() {
         return linhaSlug === 'eletrico';
       case 'carro':
       default:
-        // Cars: anything that's NOT motorcycle-only and NOT eletrico
         return vt !== 'motorcycle' && linhaSlug !== 'eletrico';
     }
   };
@@ -229,53 +244,51 @@ export function CalculadoraPreco() {
   const calcular = () => {
     const valor = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
 
-    if (!valor || !tabelas || tabelas.length === 0) {
+    if (!valor || !tabelas || tabelas.length === 0 || !planosData) {
       setResultado(null);
       setSemResultado(!!valor);
       return;
     }
 
-    // Get unique linha_slug + tipo_uso pairs for iteration
-    const pairsSet = new Set<string>();
-    const pairs: { linhaSlug: string; tipoUso: string }[] = [];
-    for (const t of tabelas) {
-      if (!t.linha_slug || !t.tipo_uso) continue;
-      const key = `${t.linha_slug}|${t.tipo_uso}`;
-      if (!pairsSet.has(key)) {
-        pairsSet.add(key);
-        pairs.push({ linhaSlug: t.linha_slug, tipoUso: t.tipo_uso });
-      }
-    }
+    const { planos, mappings } = planosData;
 
-    // Normalize combustivel for pricing filter
+    // Determine combustivel for pricing: detected from plate or manual selector, default gasolina
     const combustivelPricing = combustivelDetectado
       ? normalizarCombustivelParaPricing(combustivelDetectado)
-      : null;
+      : combustivelManual; // defaults to 'gasolina'
 
-    const linhas: ResultadoLinha[] = [];
+    const resultadosPlano: ResultadoPlano[] = [];
 
-    for (const pair of pairs) {
-      const { linhaSlug, tipoUso: tipoUsoDB } = pair;
+    for (const plano of planos) {
+      // Find mapping for this plan
+      const mapping = mappings.find(m => m.plano_id === plano.id);
+      if (!mapping?.linha_slug) continue;
+
+      const linhaSlug = mapping.linha_slug;
 
       // Filter by vehicle type
       if (!linhaMatchesTipo(linhaSlug)) continue;
 
-      // Determine which tipo_uso to use for this pair
-      const tipoUsoPricing = resolverTipoUsoQuery(linhaSlug, regiao, tipoUsoDB, configApp);
+      // Check FIPE limits on the plan itself
+      if (plano.fipe_minima && valor < Number(plano.fipe_minima)) continue;
+      if (plano.fipe_maxima && valor > Number(plano.fipe_maxima)) continue;
 
-      // Skip pairs that don't match user's selected tipo_uso (particular/aplicativo)
-      // For motos: tipo_uso in DB is not 'particular'/'aplicativo' — always show
-      const isMotoLine = tipoUsoDB !== 'particular' && tipoUsoDB !== 'aplicativo';
+      // Determine tipo_uso for table lookup
+      const isMotoLine = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
+      const tipoUsoPricing = isMotoLine
+        ? mapping.tipo_uso
+        : resolverTipoUsoQuery(linhaSlug, regiao, tipoUso, configApp);
+
+      // Skip car lines that don't match user's selected tipo_uso
       if (!isMotoLine) {
-        // For car lines: the resolved tipo_uso must match what user selected
         const expectedTipoUso = resolverTipoUsoQuery(linhaSlug, regiao, tipoUso, configApp);
         if (tipoUsoPricing !== expectedTipoUso) continue;
       }
 
-      // For eletrico: ignore region (national pricing)
+      // For eletrico: ignore region
       const regiaoQuery = tipoVeiculo === 'eletrico' ? undefined : regiao;
 
-      // Find matching row with optional combustivel filter
+      // Find matching price row
       const faixa = tabelas.find(t => {
         if (t.linha_slug !== linhaSlug) return false;
         if (regiaoQuery && t.regiao !== regiaoQuery) return false;
@@ -289,48 +302,51 @@ export function CalculadoraPreco() {
 
       let valorMensal = Number(faixa.valor_mensal);
 
-      // Apply app surcharge if needed (not for moto lines)
+      // Apply app surcharge if needed
       if (!isMotoLine && tipoUso === 'aplicativo') {
         valorMensal = resolverPrecoApp(linhaSlug, regiao, tipoUso, valorMensal, adicionalApp, configApp);
       }
 
-      // Build unique key and label
-      const resultKey = isMotoLine ? `${linhaSlug}|${tipoUsoDB}` : linhaSlug;
-      const label = isMotoLine
-        ? (LINHA_LABELS[tipoUsoDB] || LINHA_LABELS[linhaSlug] || linhaSlug)
-        : (LINHA_LABELS[linhaSlug] || linhaSlug);
+      // Apply adicional_mensal (Premium +30, Exclusive +60, etc.)
+      const adicionalMensal = Number(plano.adicional_mensal || 0);
+      valorMensal += adicionalMensal;
 
-      // Avoid duplicates
-      if (linhas.some(l => l.key === resultKey)) continue;
+      // Apply desconto_percentual (ex: 5% OFF)
+      const descontoPerc = Number(plano.desconto_percentual || 0);
+      if (descontoPerc > 0) {
+        valorMensal *= (1 - descontoPerc / 100);
+      }
 
-      linhas.push({
-        key: resultKey,
-        linha: linhaSlug,
-        linhaLabel: label,
+      resultadosPlano.push({
+        key: plano.id,
+        planoNome: plano.nome,
         valorMensal: Math.round(valorMensal * 100) / 100,
         valorDesagio: faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null,
+        adicionalMensal,
+        descontoPercentual: descontoPerc,
       });
     }
 
-    if (linhas.length === 0) {
+    if (resultadosPlano.length === 0) {
       setResultado(null);
       setSemResultado(true);
       return;
     }
 
     // Sort by price ascending
-    linhas.sort((a, b) => a.valorMensal - b.valorMensal);
+    resultadosPlano.sort((a, b) => a.valorMensal - b.valorMensal);
 
-    // Faixa description
-    const primeiraFaixa = tabelas.find(t =>
-      t.linha_slug === linhas[0].linha &&
+    // Faixa description from first result
+    const primeiroMapping = mappings.find(m => m.plano_id === resultadosPlano[0].key);
+    const primeiraFaixa = primeiroMapping ? tabelas.find(t =>
+      t.linha_slug === primeiroMapping.linha_slug &&
       (tipoVeiculo === 'eletrico' || t.regiao === regiao) &&
       valor >= Number(t.fipe_min) &&
       valor <= Number(t.fipe_max)
-    );
+    ) : undefined;
 
     setResultado({
-      linhas,
+      planos: resultadosPlano,
       faixaFipe: primeiraFaixa
         ? `${formatarMoeda(Number(primeiraFaixa.fipe_min))} - ${formatarMoeda(Number(primeiraFaixa.fipe_max))}`
         : '',
@@ -353,6 +369,7 @@ export function CalculadoraPreco() {
     setTipoUso('particular');
     setTipoVeiculo('carro');
     setRegiao('rj');
+    setCombustivelManual('gasolina');
     setResultado(null);
     setSemResultado(false);
     setPlaca('');
@@ -372,7 +389,7 @@ export function CalculadoraPreco() {
         <DialogHeader>
           <DialogTitle>Calculadora de Preço</DialogTitle>
           <DialogDescription>
-            Simule rapidamente a mensalidade por linha de produto
+            Simule rapidamente a mensalidade por plano
           </DialogDescription>
         </DialogHeader>
 
@@ -486,6 +503,29 @@ export function CalculadoraPreco() {
             </div>
           )}
 
+          {/* Combustível selector — only for cars without plate */}
+          {tipoVeiculo === 'carro' && !combustivelDetectado && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <Fuel className="h-3.5 w-3.5" />
+                Combustível
+              </Label>
+              <ToggleGroup
+                type="single"
+                value={combustivelManual}
+                onValueChange={(v) => v && setCombustivelManual(v as 'gasolina' | 'diesel')}
+                className="justify-start"
+              >
+                <ToggleGroupItem value="gasolina" aria-label="Gasolina/Flex" className="flex-1">
+                  Gasolina / Flex
+                </ToggleGroupItem>
+                <ToggleGroupItem value="diesel" aria-label="Diesel" className="flex-1">
+                  Diesel
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          )}
+
           {/* Tipo de Uso */}
           <div className="space-y-2">
             <Label>Tipo de Uso</Label>
@@ -540,22 +580,38 @@ export function CalculadoraPreco() {
                 </span>
               </div>
 
-              {/* Preços por linha */}
+              {/* Preços por plano */}
               <div className="space-y-2">
-                {resultado.linhas.map((linha) => (
+                {resultado.planos.map((plano) => (
                   <div
-                    key={linha.key}
+                    key={plano.key}
                     className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/10"
                   >
-                    <span className="text-sm font-medium">{linha.linhaLabel}</span>
+                    <div>
+                      <span className="text-sm font-medium">{plano.planoNome}</span>
+                      {(plano.adicionalMensal > 0 || plano.descontoPercentual > 0) && (
+                        <div className="flex gap-1 mt-0.5">
+                          {plano.adicionalMensal > 0 && (
+                            <Badge variant="outline" className="text-[10px] px-1 py-0">
+                              +{formatarMoeda(plano.adicionalMensal)}
+                            </Badge>
+                          )}
+                          {plano.descontoPercentual > 0 && (
+                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                              -{plano.descontoPercentual}%
+                            </Badge>
+                          )}
+                        </div>
+                      )}
+                    </div>
                     <div className="text-right">
                       <span className="text-lg font-bold text-primary">
-                        {formatarMoeda(linha.valorMensal)}
+                        {formatarMoeda(plano.valorMensal)}
                       </span>
                       <span className="text-xs text-muted-foreground">/mês</span>
-                      {linha.valorDesagio != null && (
+                      {plano.valorDesagio != null && (
                         <p className="text-xs text-muted-foreground">
-                          Deságio: {formatarMoeda(linha.valorDesagio)}
+                          Deságio: {formatarMoeda(plano.valorDesagio)}
                         </p>
                       )}
                     </div>
