@@ -82,7 +82,8 @@ export function FotosReboquistaUploadModal({ open, onClose, chamadoId }: Props) 
             <div className="mt-1">
               <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg p-6 cursor-pointer hover:border-primary transition-colors">
                 <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Clique para selecionar fotos</span>
+                <Video className="h-6 w-6 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Clique para selecionar fotos ou vídeos</span>
                 <input
                   type="file"
                   multiple
