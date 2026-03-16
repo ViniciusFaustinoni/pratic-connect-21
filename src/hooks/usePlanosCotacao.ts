@@ -477,11 +477,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       // Deságio para elegibilidade limitada (mesma lógica de app — cota maior)
       if (elegibilidadeStatus === 'limitado') {
-        cotaPercentual = Number(plano.cota_desagio) || cotaDesagioDefault;
-        cotaMinimaFinal = Number(plano.cota_minima_desagio) || cotaMinimaDesagioDefault;
+        cotaPercentual = plano.cota_desagio != null ? Number(plano.cota_desagio) : cotaDesagioDefault;
+        cotaMinimaFinal = plano.cota_minima_desagio != null ? Number(plano.cota_minima_desagio) : cotaMinimaDesagioDefault;
       }
 
-      const cotaString = `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
+      const cotaString = cotaMinimaFinal === 0
+        ? `${cotaPercentual}% (sem mínimo)`
+        : `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
 
       const coberturas = Array.isArray(plano.coberturas) ? plano.coberturas : [];
       const naoInclui: string[] = [];

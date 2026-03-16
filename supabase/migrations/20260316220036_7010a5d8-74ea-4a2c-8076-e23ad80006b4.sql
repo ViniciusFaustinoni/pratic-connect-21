@@ -1,0 +1,1 @@
+UPDATE planos SET cota_participacao = 10, cota_minima = 0, updated_at = NOW() WHERE slug = 'eletrico';

@@ -144,10 +144,10 @@ serve(async (req) => {
               planoNome = plano.nome;
               if (veiculo.uso_aplicativo && plano.cota_app_percent) {
                 percentual = Number(plano.cota_app_percent);
-                minimo = Number(plano.cota_app_min || 0);
+              minimo = Number(plano.cota_app_min ?? 0);
               } else {
-                percentual = Number(plano.cota_participacao || 0);
-                minimo = Number(plano.cota_minima || 0);
+                percentual = Number(plano.cota_participacao ?? 0);
+                minimo = Number(plano.cota_minima ?? 0);
               }
             }
           }

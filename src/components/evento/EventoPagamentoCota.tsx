@@ -170,7 +170,7 @@ export default function EventoPagamentoCota({ token, sinistro, associado, cota, 
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Cota mínima</span>
-              <span>R$ {cota.cota_minima.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+              <span>{cota.cota_minima === 0 ? 'Sem mínimo' : `R$ ${cota.cota_minima.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}`}</span>
             </div>
             <div className="border-t pt-2 flex justify-between font-bold text-base">
               <span>Valor da cota</span>
