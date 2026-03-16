@@ -148,9 +148,9 @@ serve(async (req) => {
 
     console.log(`[despacho-responder] Aceite registrado: prestador=${convite.prestador_id}, distancia=${distanciaArredondada}km, valor=R$${valorCalculado}, total_aceites=${totalAceites}`);
 
-    // Se atingiu 10 aceites, disparar atribuição imediata
-    if (totalAceites >= 10) {
-      console.log(`[despacho-responder] 10 aceites atingidos! Disparando atribuição imediata.`);
+    // Se atingiu 3 aceites, disparar atribuição imediata
+    if (totalAceites >= 3) {
+      console.log(`[despacho-responder] 3 aceites atingidos! Disparando atribuição imediata.`);
       const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
       const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
       
