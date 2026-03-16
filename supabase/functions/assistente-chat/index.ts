@@ -1254,7 +1254,8 @@ ${assistenciasTexto}
 
     // Build messages array with FULL context
     const aiMessages = [
-      { role: "system", content: SYSTEM_PROMPT + "\n\n" + contextoAssociado },
+      const prazoLinkEvento = await getConfiguracaoNumero(supabaseAdmin, 'prazo_link_evento_horas', 72);
+      { role: "system", content: buildSystemPrompt(prazoLinkEvento) + "\n\n" + contextoAssociado },
       ...conversationHistory.slice(-10), // Last 10 messages for context
       ...messages,
     ];
