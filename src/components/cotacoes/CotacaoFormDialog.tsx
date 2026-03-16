@@ -476,7 +476,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       };
       buscarFipeAutomatico();
     }
-  }, [marcaSelecionada, modeloSelecionado, anoSelecionado, getPreco, form]);
+  }, [marcaSelecionada, modeloSelecionado, anoSelecionado, getPreco, form, tipoFipeSelecionado]);
 
   // Handler para mudança de marca
   const handleMarcaChange = async (value: string) => {
