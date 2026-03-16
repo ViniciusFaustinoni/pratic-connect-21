@@ -92,7 +92,10 @@ type ModoEntrada = 'busca_placa' | 'manual';
 const MARCAS = [
   'Volkswagen', 'Chevrolet', 'Fiat', 'Ford', 'Hyundai', 
   'Toyota', 'Honda', 'Renault', 'Nissan', 'Jeep', 
-  'Peugeot', 'Citroën', 'Mitsubishi', 'Kia', 'BYD', 'Caoa Chery', 'RAM', 'Outras'
+  'Peugeot', 'Citroën', 'Mitsubishi', 'Kia', 'BYD', 'Caoa Chery', 'RAM',
+  // Motos
+  'Honda Motos', 'Yamaha', 'Suzuki', 'Kawasaki', 'BMW Motorrad', 'Dafra', 'Shineray', 'Haojue',
+  'Outras'
 ];
 
 const MODELOS_POR_MARCA: Record<string, string[]> = {
@@ -113,6 +116,15 @@ const MODELOS_POR_MARCA: Record<string, string[]> = {
   BYD: ['Dolphin', 'Seal', 'Song Plus', 'Yuan Plus', 'Han'],
   'Caoa Chery': ['Tiggo 5x', 'Tiggo 7', 'Tiggo 8', 'Arrizo 6'],
   RAM: ['Rampage', '1500', '2500', '3500'],
+  // Motos
+  'Honda Motos': ['CG 160', 'CG 125', 'Bros 160', 'Pop 110', 'Biz 125', 'PCX 160', 'CB 300', 'CB 500', 'XRE 190', 'XRE 300', 'Elite 125', 'ADV 150', 'Sahara 300'],
+  Yamaha: ['Factor 150', 'Fazer 250', 'MT-03', 'MT-07', 'Crosser 150', 'Lander 250', 'NMAX 160', 'XTZ 250', 'R3', 'Fluo 125', 'Neo 125'],
+  Suzuki: ['Intruder 125', 'GSX-S750', 'V-Strom 650', 'Burgman 125', 'DL 650'],
+  Kawasaki: ['Ninja 300', 'Ninja 400', 'Z400', 'Z900', 'Versys 650', 'Vulcan S'],
+  'BMW Motorrad': ['G 310 GS', 'G 310 R', 'F 850 GS', 'R 1250 GS', 'S 1000 RR'],
+  Dafra: ['Apache 200', 'NH 190', 'Zig 50'],
+  Shineray: ['Jet 50', 'Phoenix 50', 'Worker 150'],
+  Haojue: ['NK 150', 'DR 160', 'DK 150'],
   Outras: ['Outro modelo'],
 };
 

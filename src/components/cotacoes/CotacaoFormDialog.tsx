@@ -488,7 +488,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     if (value) {
       setLoadingModelos(true);
       try {
-        const data = await getModelos(value, 'carros');
+        const tipoFipe = tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros';
+        const data = await getModelos(value, tipoFipe);
         setModelos(data);
       } catch (error) {
         console.error('Erro ao carregar modelos:', error);
