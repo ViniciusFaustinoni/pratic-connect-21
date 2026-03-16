@@ -220,6 +220,7 @@ function InfoItem({
 export default function SinistroAnalise() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { data: prazoLinkEvento = 72 } = useConfiguracaoNumero('prazo_link_evento_horas', 72);
   const { isDiretor, isAnalistaEventos, isRegulador } = usePermissions();
 
   const [showAprovar, setShowAprovar] = useState(false);

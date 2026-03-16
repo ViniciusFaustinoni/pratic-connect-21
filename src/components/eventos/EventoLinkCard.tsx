@@ -37,6 +37,7 @@ export function EventoLinkCard({ sinistroId, sinistroProtocolo, associadoWhatsap
   const { linkAtivo, isLoading, contato, gerarNovoLink } = useEventoLink(sinistroId);
   const [copied, setCopied] = useState(false);
   const [enviando, setEnviando] = useState(false);
+  const { data: prazoLinkEvento = 72 } = useConfiguracaoNumero('prazo_link_evento_horas', 72);
 
   if (isLoading) {
     return (

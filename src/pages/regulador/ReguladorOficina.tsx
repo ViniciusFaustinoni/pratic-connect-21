@@ -103,6 +103,7 @@ function EtapasProgress({ etapas }: { etapas: any[] }) {
 export default function ReguladorOficina() {
   const { profile } = useAuth();
   const [search, setSearch] = useState('');
+  const { data: prazoManutencao = 48 } = useConfiguracaoNumero('prazo_manutencao_rastreador_horas', 48);
   const [statusFilter, setStatusFilter] = useState('todos');
   const [oficinaFilter, setOficinaFilter] = useState('todas');
   const [tempoFilter, setTempoFilter] = useState('todos');

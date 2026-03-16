@@ -57,6 +57,7 @@ export function SolicitarDocumentosSinistroDialog({
   const { user } = useAuth();
   const [documentosSelecionados, setDocumentosSelecionados] = useState<string[]>([]);
   const [observacoes, setObservacoes] = useState('');
+  const { data: prazoDocs = 7 } = useConfiguracaoNumero('prazo_documento_upload_dias', 7);
 
   // Buscar dados do associado para enviar WhatsApp
   const { data: associado } = useQuery({

@@ -44,6 +44,7 @@ export function SolicitarOrcamentoDialog({
   const [selecionados, setSelecionados] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
   const queryClient = useQueryClient();
+  const { data: prazoCotacao = 24 } = useConfiguracaoNumero('prazo_cotacao_fornecedor_horas', 24);
 
   const { data: autoCenters = [], isLoading: loadingAC } = useAutoCenters({
     marca: veiculo?.marca || undefined,
