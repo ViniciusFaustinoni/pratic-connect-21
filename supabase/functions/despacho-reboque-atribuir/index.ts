@@ -38,7 +38,7 @@ serve(async (req) => {
     }
 
     // Buscar aceites ordenados por valor (menor primeiro), desempate por data_aceite
-    const { data: aceites } = await supabase
+    const { data: todosAceites } = await supabase
       .from("despacho_reboque_convites")
       .select(`
         *,
@@ -49,9 +49,25 @@ serve(async (req) => {
       .order("valor_calculado", { ascending: true })
       .order("data_aceite", { ascending: true });
 
+    // Filtrar aceites que respeitam o valor_sugerido do prestador
+    const aceites = (todosAceites || []).filter((a) => {
+      // Se não tem valor_sugerido configurado, aceitar qualquer valor
+      if (!a.valor_sugerido && a.valor_sugerido !== 0) return true;
+      // Se valor_calculado <= valor_sugerido, aceitar
+      return (a.valor_calculado || 0) <= a.valor_sugerido;
+    });
+
+    const aceitesRejeitados = (todosAceites || []).length - aceites.length;
+    if (aceitesRejeitados > 0) {
+      console.log(`[despacho-atribuir] ${aceitesRejeitados} aceites rejeitados por ultrapassar valor_sugerido`);
+    }
+
     if (!aceites || aceites.length === 0) {
-      // Ninguém aceitou
-      console.log(`[despacho-atribuir] Nenhum aceite recebido`);
+      // Ninguém aceitou (ou todos ultrapassam valor_sugerido)
+      const motivo = (todosAceites || []).length > 0
+        ? `Nenhum aceite dentro do valor sugerido (${todosAceites!.length} aceites recebidos, todos acima do valor configurado).`
+        : `Nenhum reboquista aceitou o chamado em 10 minutos (ciclo ${despacho.ciclo}).`;
+      console.log(`[despacho-atribuir] ${motivo}`);
 
       await supabase
         .from("despacho_reboque")
