@@ -27,6 +27,7 @@ interface PrazoRessarcimentoProps {
   prazoSuspenso?: boolean;
   prazoSuspensoEm?: string | null;
   motivoSuspensao?: string | null;
+  prazoTotal?: number;
 }
 
 export function PrazoRessarcimento({ sinistroId, dataInicio, prazoSuspenso, prazoSuspensoEm, motivoSuspensao }: PrazoRessarcimentoProps) {
