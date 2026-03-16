@@ -100,8 +100,8 @@ serve(async (req) => {
     }
 
     const valorFipe = veiculo?.valor_fipe || 0;
-    let percentual = planoInfo?.cota_participacao || 0;
-    let cotaMinima = planoInfo?.cota_minima || 0;
+    let percentual = planoInfo?.cota_participacao ?? 0;
+    let cotaMinima = planoInfo?.cota_minima ?? 0;
 
     if (veiculo?.uso_aplicativo && planoInfo?.cota_app_percent) {
       percentual = planoInfo.cota_app_percent;

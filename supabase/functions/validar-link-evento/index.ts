@@ -90,8 +90,8 @@ serve(async (req) => {
 
         if (plano) {
           planoNome = plano.nome || "Plano";
-          percentual = plano.cota_participacao || 0;
-          cotaMinima = plano.cota_minima || 0;
+          percentual = plano.cota_participacao ?? 0;
+          cotaMinima = plano.cota_minima ?? 0;
 
           if (veiculo?.uso_aplicativo && plano.cota_app_percent) {
             percentual = plano.cota_app_percent;

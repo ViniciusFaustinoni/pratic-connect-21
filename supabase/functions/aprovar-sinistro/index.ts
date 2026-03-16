@@ -81,7 +81,7 @@ Deno.serve(async (req) => {
           ]);
 
           if (plano && veiculoFull?.valor_fipe) {
-            if (!plano.cota_participacao || !plano.cota_minima) {
+            if (plano.cota_participacao == null || plano.cota_minima == null) {
               console.warn('[aprovar-sinistro] ATENÇÃO: plano sem cota_participacao/cota_minima configurados. Verifique o cadastro do plano.');
             }
             // Buscar defaults do banco
@@ -90,8 +90,8 @@ Deno.serve(async (req) => {
             const cotaDefault = cfgCota ? parseFloat(cfgCota.valor) : 6;
             const minimoDefault = cfgMin ? parseFloat(cfgMin.valor) : 1200;
             
-            let percentual = plano.cota_participacao || cotaDefault;
-            let minimo = plano.cota_minima || minimoDefault;
+            let percentual = plano.cota_participacao ?? cotaDefault;
+            let minimo = plano.cota_minima ?? minimoDefault;
 
             if (veiculoFull.uso_aplicativo && plano.cota_app_percent) {
               percentual = plano.cota_app_percent;

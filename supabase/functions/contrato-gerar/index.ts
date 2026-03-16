@@ -607,9 +607,9 @@ serve(async (req) => {
             cotacao_token_publico: cotacao.token_publico || null,
             
             // Snapshot de cota/cobertura contextual (pode diferir do plano base para uso app)
-            cota_participacao: cotacao.cota_participacao || null,
-            cota_minima: cotacao.cota_minima || null,
-            cobertura_fipe: cotacao.cobertura_fipe || null,
+            cota_participacao: cotacao.cota_participacao ?? null,
+            cota_minima: cotacao.cota_minima ?? null,
+            cobertura_fipe: cotacao.cobertura_fipe ?? null,
             
             dia_vencimento: cotacao.dia_vencimento ? Math.min(Math.max(Number(cotacao.dia_vencimento), 1), 31) : 10,
             data_inicio: new Date().toISOString().split('T')[0],

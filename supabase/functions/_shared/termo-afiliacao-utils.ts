@@ -332,8 +332,8 @@ export function mapearDadosParaTemplate(
       linha: plano?.linha || "Normal",
       coberturas: plano?.coberturas || [],
       // Priorizar valores contextuais do contrato (ex: uso app tem cota diferente)
-      cota_participacao: contrato.cota_participacao || plano?.cota_participacao || 6,
-      cota_minima: contrato.cota_minima || plano?.cota_minima || 1200,
+      cota_participacao: contrato.cota_participacao ?? plano?.cota_participacao ?? 6,
+      cota_minima: contrato.cota_minima ?? plano?.cota_minima ?? 1200,
       cobertura_fipe: contrato.cobertura_fipe || plano?.cobertura_fipe || 100,
       carencia: plano?.carencia || "90 dias após instalação do rastreador",
     },
