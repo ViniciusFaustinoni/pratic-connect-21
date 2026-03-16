@@ -4,6 +4,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto, useCotaParticipacaoDefault, useCotaMinimaDefault, useCotaDesagioDefault, useCotaMinimaDesagioDefault, useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
+import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 import { 
   getCoberturasRemovidasDinamico, 
@@ -91,6 +92,21 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
   // Adicional app do banco
   const { data: adicionalApp = 35.90 } = useConfiguracaoNumero('adicional_app', 35.90);
+
+  // Buscar regiões com adicional app do banco
+  const { data: regioesComAdicionalRaw } = useQuery({
+    queryKey: ['configuracoes', 'regioes_com_adicional_app'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'regioes_com_adicional_app')
+        .maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; }
+      catch { return [] as string[]; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({
@@ -207,6 +223,26 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     return 'aprovado';
   }
 
+  // Montar ConfigAdicionalApp dinamicamente
+  const configApp = useMemo<ConfigAdicionalApp>(() => {
+    const linhasSupportsApp = (planosBanco || [])
+      .map((p: any) => p.product_lines?.slug?.toLowerCase())
+      .filter((slug: string | undefined): slug is string => !!slug && (planosBanco || []).some((p2: any) => p2.product_lines?.slug?.toLowerCase() === slug && p2.product_lines?.supports_app === true));
+    
+    const linhasComColunaApp = [...new Set(
+      (tabelasMensalidade || [])
+        .filter(t => t.tipo_uso === 'aplicativo')
+        .map(t => (t.linha_slug || '').toLowerCase())
+        .filter(Boolean)
+    )];
+
+    return {
+      regioesComAdicional: (regioesComAdicionalRaw || []).map(r => r.toLowerCase()),
+      linhasComColunaApp,
+      linhasSupportsApp: [...new Set(linhasSupportsApp)],
+    };
+  }, [planosBanco, tabelasMensalidade, regioesComAdicionalRaw]);
+
   const { planos, planosNegados } = useMemo<{ planos: PlanoCotacao[]; planosNegados: PlanoNegadoInfo[] }>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
 
@@ -260,7 +296,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Regra de ano recente usando campo do banco
       if (requiresRecentYear && anoVeiculoNum < anoAtual - 1) continue;
 
-      // Filtrar linhas que não suportam uso de aplicativo
+      // Filtrar linhas que não suportam uso de aplicativo (dinâmico via product_lines)
       if (params.usoApp && plProductLine?.supports_app === false) {
         continue;
       }
@@ -319,7 +355,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const tipoUsoOriginal = params.usoApp ? 'aplicativo' : (mapping?.tipo_uso || 'particular');
       // Resolver tipo_uso para query (regras de adicional app)
       const tipoUsoPricing = linhaSlug
-        ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal)
+        ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal, configApp)
         : tipoUsoOriginal;
 
       let valorMensal = 0;
@@ -345,7 +381,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       // Aplicar adicional app se necessário
       if (linhaSlug && tipoUsoOriginal === 'aplicativo') {
-        valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp);
+        valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp, configApp);
       }
 
       // Se não encontrou faixa de preço válida, ocultar o plano
@@ -453,7 +489,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     return { planos: sorted, planosNegados: negados };
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading, configApp]);
 
   return {
     planos,

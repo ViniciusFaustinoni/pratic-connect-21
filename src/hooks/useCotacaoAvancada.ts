@@ -4,6 +4,7 @@ import { toast } from 'sonner';
 import { Database } from '@/integrations/supabase/types';
 import { formatarMoeda } from '@/utils/format';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
+import type { ConfigAdicionalApp } from '@/utils/precoApp';
 
 // ============================================
 // TIPOS — agora dinâmicos, sem categorias fixas
@@ -84,8 +85,8 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
     queryFn: async () => {
       if (!valorFipe || valorFipe <= 0) return [];
 
-      // Buscar planos ativos, mapeamento, preços e config adicional_app em paralelo
-      const [planosRes, mapRes, mensalidadeRes, configRes, decomRes] = await Promise.all([
+      // Buscar planos ativos, mapeamento, preços, config e product_lines em paralelo
+      const [planosRes, mapRes, mensalidadeRes, configRes, decomRes, productLinesRes] = await Promise.all([
         supabase
           .from('planos')
           .select('id, codigo, nome, categoria, valor_adesao, descricao, adicional_mensal, desconto_percentual')
@@ -100,16 +101,40 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
           .eq('is_active', true),
         supabase
           .from('configuracoes')
-          .select('valor')
-          .eq('chave', 'adicional_app')
-          .maybeSingle(),
+          .select('chave, valor')
+          .in('chave', ['adicional_app', 'regioes_com_adicional_app']),
         supabase
           .from('configuracoes')
           .select('chave, valor')
           .in('chave', ['decomposicao_cota', 'decomposicao_admin', 'decomposicao_rastreamento', 'decomposicao_assistencia']),
+        supabase
+          .from('product_lines')
+          .select('slug, supports_app'),
       ]);
 
-      const adicionalApp = parseFloat(configRes.data?.valor || '35.90') || 35.90;
+      const configMap = Object.fromEntries((configRes.data || []).map(c => [c.chave, c.valor]));
+      const adicionalApp = parseFloat(configMap.adicional_app || '35.90') || 35.90;
+
+      // Montar ConfigAdicionalApp
+      let regioesComAdicional: string[] = [];
+      try { regioesComAdicional = JSON.parse(configMap.regioes_com_adicional_app || '[]'); }
+      catch { regioesComAdicional = []; }
+
+      const tabelasMensalidade = mensalidadeRes.data || [];
+      const productLines = productLinesRes.data || [];
+
+      const configApp: ConfigAdicionalApp = {
+        regioesComAdicional: regioesComAdicional.map(r => r.toLowerCase()),
+        linhasSupportsApp: productLines
+          .filter(pl => pl.supports_app === true)
+          .map(pl => (pl.slug || '').toLowerCase()),
+        linhasComColunaApp: [...new Set(
+          tabelasMensalidade
+            .filter(t => t.tipo_uso === 'aplicativo')
+            .map(t => (t.linha_slug || '').toLowerCase())
+            .filter(Boolean)
+        )],
+      };
 
       // Decomposição percentual do banco
       const decMap = Object.fromEntries((decomRes.data || []).map(d => [d.chave, parseFloat(d.valor || '0') || 0]));
@@ -125,7 +150,6 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
       if (!planos?.length) return [];
 
       const planoPrecoMap = mapRes.data || [];
-      const tabelasMensalidade = mensalidadeRes.data || [];
 
       const regiaoLower = regiao.toLowerCase();
       const combustivelLower = combustivel.toLowerCase();
@@ -144,7 +168,7 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
         if (!mapping) continue;
 
         // Resolver tipo_uso para query (regras de adicional app)
-        const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiaoLower, mapping.tipo_uso);
+        const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiaoLower, mapping.tipo_uso, configApp);
 
         // Buscar faixa de preço na nova tabela
         const faixa = tabelasMensalidade.find(t =>
@@ -159,7 +183,7 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
         if (!faixa) continue;
 
         // Aplicar adicional app se necessário
-        let valorMensal = resolverPrecoApp(mapping.linha_slug, regiaoLower, mapping.tipo_uso, Number(faixa.valor_mensal), adicionalApp);
+        let valorMensal = resolverPrecoApp(mapping.linha_slug, regiaoLower, mapping.tipo_uso, Number(faixa.valor_mensal), adicionalApp, configApp);
 
         // Aplicar adicional_mensal do plano (Premium +30, Exclusive +60)
         valorMensal += Number(plano.adicional_mensal || 0);

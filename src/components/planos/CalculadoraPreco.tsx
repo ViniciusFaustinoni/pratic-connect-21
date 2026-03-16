@@ -11,6 +11,7 @@ import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useProductLines } from '@/hooks/usePlans';
 import { formatarMoeda } from '@/utils/format';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
+import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { supabase } from '@/integrations/supabase/client';
@@ -84,6 +85,47 @@ function useAdicionalApp() {
   });
 }
 
+function useConfigAdicionalAppCalc(tabelas: any[] | undefined) {
+  const { data: regioesRaw } = useQuery({
+    queryKey: ['configuracoes', 'regioes_com_adicional_app'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'regioes_com_adicional_app')
+        .maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; }
+      catch { return [] as string[]; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: productLinesData } = useQuery({
+    queryKey: ['product_lines_supports_app'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('product_lines')
+        .select('slug, supports_app');
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  return useMemo<ConfigAdicionalApp>(() => ({
+    regioesComAdicional: (regioesRaw || []).map(r => r.toLowerCase()),
+    linhasSupportsApp: (productLinesData || [])
+      .filter(pl => pl.supports_app === true)
+      .map(pl => (pl.slug || '').toLowerCase()),
+    linhasComColunaApp: [...new Set(
+      (tabelas || [])
+        .filter((t: any) => t.tipo_uso === 'aplicativo')
+        .map((t: any) => (t.linha_slug || '').toLowerCase())
+        .filter(Boolean)
+    )],
+  }), [regioesRaw, productLinesData, tabelas]);
+}
+
 /** Detect vehicle type from plate-lookup response */
 function detectarTipoFromPlaca(dados: VeiculoPlaca): TipoVeiculo {
   const combustivel = (dados.combustivel || '').toLowerCase();
@@ -111,6 +153,7 @@ export function CalculadoraPreco() {
   const { data: tabelas } = useTabelasPreco();
   const { data: adicionalApp = 35.90 } = useAdicionalApp();
   const { data: productLines = [] } = useProductLines();
+  const configApp = useConfigAdicionalAppCalc(tabelas);
 
   // Map linha_slug → vehicle_type from product_lines
   const linhaVehicleType = useMemo(() => {
@@ -193,7 +236,6 @@ export function CalculadoraPreco() {
     }
 
     // Get unique linha_slug + tipo_uso pairs for iteration
-    // This is critical for motos where advanced has both 'advanced' and 'advanced-plus' tipo_uso
     const pairsSet = new Set<string>();
     const pairs: { linhaSlug: string; tipoUso: string }[] = [];
     for (const t of tabelas) {
@@ -219,16 +261,14 @@ export function CalculadoraPreco() {
       if (!linhaMatchesTipo(linhaSlug)) continue;
 
       // Determine which tipo_uso to use for this pair
-      // For motos: tipo_uso in DB is 'advanced' or 'advanced-plus' — use directly
-      // For cars: resolve via resolverTipoUsoQuery based on user selection
-      const tipoUsoPricing = resolverTipoUsoQuery(linhaSlug, regiao, tipoUsoDB);
+      const tipoUsoPricing = resolverTipoUsoQuery(linhaSlug, regiao, tipoUsoDB, configApp);
 
       // Skip pairs that don't match user's selected tipo_uso (particular/aplicativo)
-      // For motos (advanced/advanced-plus): always show both variants regardless of uso selection
-      const isMotoLine = tipoUsoDB === 'advanced' || tipoUsoDB === 'advanced-plus';
+      // For motos: tipo_uso in DB is not 'particular'/'aplicativo' — always show
+      const isMotoLine = tipoUsoDB !== 'particular' && tipoUsoDB !== 'aplicativo';
       if (!isMotoLine) {
         // For car lines: the resolved tipo_uso must match what user selected
-        const expectedTipoUso = resolverTipoUsoQuery(linhaSlug, regiao, tipoUso);
+        const expectedTipoUso = resolverTipoUsoQuery(linhaSlug, regiao, tipoUso, configApp);
         if (tipoUsoPricing !== expectedTipoUso) continue;
       }
 
@@ -251,7 +291,7 @@ export function CalculadoraPreco() {
 
       // Apply app surcharge if needed (not for moto lines)
       if (!isMotoLine && tipoUso === 'aplicativo') {
-        valorMensal = resolverPrecoApp(linhaSlug, regiao, tipoUso, valorMensal, adicionalApp);
+        valorMensal = resolverPrecoApp(linhaSlug, regiao, tipoUso, valorMensal, adicionalApp, configApp);
       }
 
       // Build unique key and label
@@ -306,7 +346,6 @@ export function CalculadoraPreco() {
     const raw = e.target.value.replace(/\D/g, '');
     const formatted = formatarMoeda(Number(raw) / 100);
     setValorFipe(formatted);
-    // Clear combustivel when manually editing value (plate data may be stale)
   };
 
   const limpar = () => {

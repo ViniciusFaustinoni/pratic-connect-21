@@ -9,6 +9,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
+import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import type {
   PlanoParaCotacao,
   CotacaoCompleta,
@@ -126,6 +127,53 @@ function useTabelasMensalidade() {
 }
 
 // ============================================
+// HOOK: CONFIG ADICIONAL APP (dinâmico do banco)
+// ============================================
+
+function useConfigAdicionalApp(tabelasMensalidade: FaixaMensalidade[] | undefined) {
+  const { data: regioesRaw } = useQuery({
+    queryKey: ['configuracoes', 'regioes_com_adicional_app'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'regioes_com_adicional_app')
+        .maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; }
+      catch { return [] as string[]; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const { data: productLines } = useQuery({
+    queryKey: ['product_lines_supports_app'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('product_lines')
+        .select('slug, supports_app');
+      if (error) throw error;
+      return data || [];
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const config: ConfigAdicionalApp = {
+    regioesComAdicional: (regioesRaw || []).map(r => r.toLowerCase()),
+    linhasSupportsApp: (productLines || [])
+      .filter(pl => pl.supports_app === true)
+      .map(pl => (pl.slug || '').toLowerCase()),
+    linhasComColunaApp: [...new Set(
+      (tabelasMensalidade || [])
+        .filter(t => t.tipo_uso === 'aplicativo')
+        .map(t => (t.linha_slug || '').toLowerCase())
+        .filter(Boolean)
+    )],
+  };
+
+  return config;
+}
+
+// ============================================
 // FUNÇÃO: ENCONTRAR FAIXA POR VALOR FIPE
 // ============================================
 
@@ -139,12 +187,13 @@ function encontrarFaixaMensalidade(
   adicionalApp: number = 0,
   adicionalMensal: number = 0,
   descontoPercentual: number = 0,
+  configApp: ConfigAdicionalApp,
 ): { valorMensal: number; valorDesagio: number | null } | null {
   const mapping = planoPrecoMap.find(m => m.plano_id === planoId);
   if (!mapping) return null;
 
   // Resolver tipo_uso para query (regras de adicional app)
-  const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiao, mapping.tipo_uso);
+  const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiao, mapping.tipo_uso, configApp);
 
   // For eletrico: ignore region (national pricing) and combustivel
   const isEletrico = mapping.linha_slug === 'eletrico';
@@ -163,7 +212,7 @@ function encontrarFaixaMensalidade(
   if (!faixa) return null;
 
   // Aplicar adicional app se necessário
-  let valorMensalFinal = resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp);
+  let valorMensalFinal = resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp, configApp);
 
   // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
   valorMensalFinal += adicionalMensal;
@@ -221,6 +270,7 @@ export function useCalcularCotacao() {
   const { data: tabelasMensalidade, isLoading: loadingMensalidade } = useTabelasMensalidade();
   const { data: adicionalApp = 35.90 } = useConfiguracaoNumero('adicional_app', 35.90);
   const { data: decomposicao } = useConfigDecomposicao();
+  const configApp = useConfigAdicionalApp(tabelasMensalidade);
 
   const calcular = (
     valorFipe: number,
@@ -270,6 +320,7 @@ export function useCalcularCotacao() {
         adicionalApp,
         plano.adicional_mensal || 0,
         plano.desconto_percentual || 0,
+        configApp,
       );
 
       if (!faixaResult) continue;
@@ -499,50 +550,18 @@ export function useCriarCotacao() {
         .single();
 
       if (error) throw error;
-      return data;
-    },
-    onSuccess: () => {
+
       queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
       queryClient.invalidateQueries({ queryKey: ['cotacoes-filtradas'] });
-      toast.success('Cotação criada com sucesso!');
-    },
-    onError: (error) => {
-      toast.error(`Erro ao criar cotação: ${error.message}`);
-    },
-  });
-}
 
-// ============================================
-// HOOK: ATUALIZAR STATUS COTAÇÃO
-// ============================================
+      toast.success(`Cotação ${data.numero} criada com sucesso!`);
 
-export function useAtualizarStatusCotacaoV2() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async ({
-      id,
-      status,
-    }: {
-      id: string;
-      status: StatusCotacaoExtended;
-    }) => {
-      const statusValido = status as StatusCotacaoDB;
-      
-      const { data, error } = await supabase
-        .from('cotacoes')
-        .update({ status: statusValido, updated_at: new Date().toISOString() })
-        .eq('id', id)
-        .select()
-        .single();
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (_, variables) => {
-      queryClient.invalidateQueries({ queryKey: ['cotacoes'] });
-      queryClient.invalidateQueries({ queryKey: ['cotacoes-filtradas'] });
-      queryClient.invalidateQueries({ queryKey: ['cotacao-detalhe', variables.id] });
+      return {
+        ...data,
+        cotacao: data,
+        valores: resultado.valores,
+        plano: resultado.plano,
+      };
     },
   });
 }
