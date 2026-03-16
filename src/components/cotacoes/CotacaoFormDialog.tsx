@@ -55,7 +55,7 @@ import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
-import { AlertaElegibilidadeNegada } from '@/components/cotacao/AlertaElegibilidadeNegada';
+
 import { useCriarSolicitacaoFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useTabelasPreco } from '@/hooks/usePlanos';
@@ -1708,16 +1708,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 </div>
               ) : valorFipe > 0 && planosCalculados.length > 0 ? (
                 <div className="space-y-3">
-                  {planosNegados.length > 0 && (
-                    <AlertaElegibilidadeNegada
-                      planosNegados={planosNegados.map(p => ({ ...p, solicitacaoStatus: null }))}
-                      marca={marcaResolvida}
-                      modelo={modeloResolvido}
-                      ano={anoNumerico || new Date().getFullYear()}
-                      combustivel={veiculoEncontrado?.vehicleData?.combustivel || 'flex'}
-                      placa={veiculoEncontrado?.extractedPlate}
-                    />
-                  )}
                   <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-3">
                   {planosCalculados.map((plano) => {
                     const indexSelecionado = planosSelecionados.findIndex(p => p.id === plano.id);

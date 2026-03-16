@@ -50,7 +50,7 @@ import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useAllLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useCriarCotacao } from '@/hooks/useCotacao';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
-import { AlertaElegibilidadeNegada } from '@/components/cotacao/AlertaElegibilidadeNegada';
+
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { useTemplateWhatsappCotacao } from '@/hooks/useConteudosSistema';
@@ -1390,17 +1390,6 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Alerta de planos negados por elegibilidade */}
-                {planosNegados.length > 0 && (
-                  <AlertaElegibilidadeNegada
-                    planosNegados={planosNegados.map(p => ({ ...p, solicitacaoStatus: null }))}
-                    marca={marca}
-                    modelo={modelo}
-                    ano={parseInt(ano) || new Date().getFullYear()}
-                    combustivel={veiculoEncontrado?.combustivel || 'flex'}
-                    placa={veiculoEncontrado?.placa || placaBusca}
-                  />
-                )}
                 {/* Tabs de planos */}
                 <div className="flex border-b">
                   {planos.map((plano) => (
