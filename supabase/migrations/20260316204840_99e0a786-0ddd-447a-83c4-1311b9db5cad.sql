@@ -1,0 +1,1 @@
+UPDATE product_lines SET supports_app = true WHERE slug = 'advanced';
