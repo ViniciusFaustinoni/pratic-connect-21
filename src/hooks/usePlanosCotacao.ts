@@ -303,8 +303,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
 
       // Filtrar por categorias bloqueadas no product_line
+      // Nota: 'aplicativo' NÃO é exceção — o bloqueio por categoria é independente do uso (app/passeio)
       const blockedCategories: string[] = plProductLine?.blocked_categories || [];
-      if (categoria && categoria !== 'nenhuma' && categoria !== 'aplicativo' 
+      if (categoria && categoria !== 'nenhuma' 
           && blockedCategories.length > 0 && blockedCategories.includes(categoria)) {
         continue;
       }
@@ -415,7 +416,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       let cotaPercentual = cotaBase;
       let cotaMinimaFinal = cotaMinima;
 
-      if (categoria === 'aplicativo') {
+      // Usar cota de desagio para uso aplicativo (baseado no parâmetro usoApp, não na categoria)
+      if (params.usoApp) {
         cotaPercentual = Number(plano.cota_desagio) || cotaDesagioDefault;
         cotaMinimaFinal = Number(plano.cota_minima_desagio) || cotaMinimaDesagioDefault;
       }
