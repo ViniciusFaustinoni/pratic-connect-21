@@ -204,20 +204,19 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     // Sem configuração = aceita tudo
     if (regrasDoPlano.length === 0) return 'aprovado';
 
-    // Remove versão/motorização — ex: "VOYAGE 1.6" → "VOYAGE", "ONIX PLUS 1.0" → "ONIX PLUS"
-    const normalizarModelo = (m: string) =>
-      m.trim().toUpperCase()
-        .replace(/\s+\d[\d.,]*\s*[A-Z]*$/, '')
-        .replace(/\s+[A-Z]*\d+[A-Z]*$/, '')
-        .trim();
-
     const marcaNorm = veiculo.marca.trim().toUpperCase();
-    const modeloNorm = normalizarModelo(veiculo.modelo);
+    const modeloAPI = veiculo.modelo.trim().toUpperCase();
     const combustivelNorm = veiculo.combustivel.trim().toLowerCase();
 
     const regra = regrasDoPlano.find(r => {
       const marcaMatch = r.marca.toUpperCase() === marcaNorm;
-      const modeloMatch = normalizarModelo(r.modelo) === modeloNorm;
+      
+      // Matching flexível por prefixo: "VOYAGE 1.6 MSI" startsWith "VOYAGE" = match
+      const modeloBanco = r.modelo.trim().toUpperCase();
+      const modeloMatch = modeloAPI.startsWith(modeloBanco) 
+        || modeloBanco.startsWith(modeloAPI)
+        || modeloAPI === modeloBanco;
+      
       const anoMatch = veiculo.ano >= r.ano_min &&
                        (r.ano_max === null || veiculo.ano <= r.ano_max);
       const combustivelMatch = r.combustivel === 'qualquer' ||
@@ -225,8 +224,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       return marcaMatch && modeloMatch && anoMatch && combustivelMatch;
     });
 
-    // Blocklist: modelo não encontrado = aceito por padrão
-    if (!regra) return 'aprovado';
+    // Whitelist: modelo não encontrado na lista = negado
+    if (!regra) return 'negado';
     if (regra.status === 'negado') return 'negado';
     if (regra.status === 'limitado') return 'limitado';
     return 'aprovado';
