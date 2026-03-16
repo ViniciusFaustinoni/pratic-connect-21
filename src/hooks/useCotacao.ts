@@ -212,7 +212,10 @@ function encontrarFaixaMensalidade(
   if (!faixa) return null;
 
   // Aplicar adicional app se necessário
-  let valorMensalFinal = resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp, configApp);
+  const isLinhaTipoUsoProprio = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
+  let valorMensalFinal = isLinhaTipoUsoProprio
+    ? faixa.valor_mensal
+    : resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp, configApp);
 
   // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
   valorMensalFinal += adicionalMensal;
