@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge, 
-  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, RefreshCw, AlertTriangle
+  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, RefreshCw, AlertTriangle,
+  Video
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExisten
 import { toast } from 'sonner';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { LocationCapture, Coordenadas } from './LocationCapture';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 interface AutovistoriaProps {
   contratoId: string;
@@ -42,6 +44,8 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
   const [coordenadas, setCoordenadas] = useState<Coordenadas | null>(null);
   const [chassiResultado, setChassiResultado] = useState<ChassiResultado | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Buscar autovistoria existente para reidratar fotos após refresh
@@ -79,7 +83,9 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const totalFotos = fotos.length;
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
   const progresso = (fotosCompletadas / totalFotos) * 100;
-  const todasEnviadas = fotosCompletadas === totalFotos;
+  const todasFotosEnviadas = fotosCompletadas === totalFotos;
+  const videoObrigatorio = tipoVeiculo === 'carro';
+  const todasEnviadas = todasFotosEnviadas && (!videoObrigatorio || !!videoUrl);
   
   const fotoAtual = fotos[indiceAtual];
   const isUltimaFoto = indiceAtual === totalFotos - 1;
@@ -254,6 +260,26 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     }
   };
 
+  const handleVideoCapture = async (file: File) => {
+    if (!vistoriaId) return;
+    setUploadingVideo(true);
+    try {
+      const result = await uploadFoto.mutateAsync({
+        vistoriaId,
+        fotoId: 'video_360',
+        file,
+        contratoId,
+      });
+      setVideoUrl(result.url);
+      toast.success('Vídeo 360° enviado com sucesso!');
+    } catch (error) {
+      console.error('[Autovistoria] Erro no upload do vídeo:', error);
+      toast.error('Erro ao enviar vídeo. Tente novamente.');
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
   const handleContinuar = () => {
     if (vistoriaId) {
       onComplete(vistoriaId);
@@ -272,7 +298,39 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     );
   }
 
-  // Se todas foram enviadas, mostrar tela de conclusão
+  // Se todas as fotos foram enviadas mas falta vídeo, mostrar etapa de vídeo
+  if (todasFotosEnviadas && videoObrigatorio && !videoUrl) {
+    return (
+      <Card className="max-w-lg mx-auto">
+        <CardContent className="pt-8 pb-8 space-y-6">
+          <div className="text-center space-y-4">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+              <Video className="h-10 w-10 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground">
+                Agora grave o Vídeo 360°
+              </h2>
+              <p className="text-muted-foreground mt-1">
+                Todas as {totalFotos} fotos foram enviadas! Agora grave um vídeo dando a volta completa no veículo (máx. 2 min).
+              </p>
+            </div>
+          </div>
+
+          <VideoCapture
+            onCapture={handleVideoCapture}
+            onReset={() => setVideoUrl(null)}
+            videoUrl={videoUrl || undefined}
+            uploading={uploadingVideo}
+            maxDuration={120}
+            label="Vídeo 360°"
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Se todas foram enviadas (fotos + vídeo), mostrar tela de conclusão
   if (todasEnviadas) {
     return (
       <Card className="max-w-lg mx-auto">
@@ -286,7 +344,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
                 Autovistoria Concluída!
               </h2>
               <p className="text-muted-foreground mt-1">
-                Todas as {totalFotos} fotos foram enviadas com sucesso.
+                Todas as {totalFotos} fotos{videoObrigatorio ? ' e o vídeo 360°' : ''} foram enviados com sucesso.
               </p>
             </div>
           </div>
