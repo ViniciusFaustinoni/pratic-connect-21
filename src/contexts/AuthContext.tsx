@@ -188,6 +188,14 @@ export function AuthProvider({ children }: AuthProviderProps) {
           return; // BLOQUEAR a troca silenciosa
         }
 
+        // Se é o mesmo usuário já carregado, apenas atualizar session sem reload
+        if (currentUserId === newUserId && hasLoadedData && currentSession?.user) {
+          console.log('[AuthContext] Mesmo usuário já carregado, atualizando session silenciosamente');
+          setSession(currentSession);
+          setUser(currentSession?.user ?? null);
+          return;
+        }
+
         // Atualizar ID do usuário atual
         currentUserId = newUserId;
 
