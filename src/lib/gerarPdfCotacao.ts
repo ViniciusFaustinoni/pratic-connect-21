@@ -1232,7 +1232,7 @@ const desenharPaginaDetalhesPlano = (
       doc.text('✗', col1X + 6, textY);
       doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
       doc.setFont('helvetica', 'normal');
-      doc.text(truncateText(item, 32), col1X + 14, textY);
+      doc.text(truncateText(item, 45), col1X + 14, textY);
     });
 
     naoIncluiCol2.forEach((item, index) => {
