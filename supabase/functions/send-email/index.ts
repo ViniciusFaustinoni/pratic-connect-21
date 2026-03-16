@@ -307,7 +307,7 @@ const TEMPLATES: Record<string, {
             </a>
             <div style="background-color: #fef3c7; border-radius: 8px; padding: 16px; margin-top: 24px; border: 1px solid #fde68a;">
               <p style="color: #92400e; font-size: 14px; margin: 0;">
-                ⏰ Este link é válido por 48 horas.
+                ⏰ Este link é válido por ${data.prazoHoras || 48} horas.
               </p>
             </div>
             <hr style="border: none; border-top: 1px solid #e4e4e7; margin: 32px 0;">
