@@ -30,7 +30,7 @@ interface PrazoRessarcimentoProps {
   prazoTotal?: number;
 }
 
-export function PrazoRessarcimento({ sinistroId, dataInicio, prazoSuspenso, prazoSuspensoEm, motivoSuspensao }: PrazoRessarcimentoProps) {
+export function PrazoRessarcimento({ sinistroId, dataInicio, prazoSuspenso, prazoSuspensoEm, motivoSuspensao, prazoTotal: PRAZO_TOTAL = 60 }: PrazoRessarcimentoProps) {
   const { data: suspensoes = [] } = useQuery({
     queryKey: ['suspensoes-prazo', sinistroId],
     queryFn: async () => {
