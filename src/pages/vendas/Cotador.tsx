@@ -50,7 +50,7 @@ import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useAllLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useCriarCotacao } from '@/hooks/useCotacao';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
-import { AlertaElegibilidadeNegada } from '@/components/cotacao/AlertaElegibilidadeNegada';
+
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { useTemplateWhatsappCotacao } from '@/hooks/useConteudosSistema';
