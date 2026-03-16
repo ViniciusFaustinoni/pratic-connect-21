@@ -134,7 +134,7 @@ export function AtribuirFornecedoresDialog({
     const itensTexto = itensPecas
       .map((item, i) => `${i + 1}. ${item.descricao} — Qtd: ${item.quantidade || 1}`)
       .join('\n');
-    return `Olá [Nome]! Aqui é a Pratic Car.\nPrecisamos de uma cotação de peças para:\n\n🚗 Veículo: ${veiculo?.marca || ''} ${veiculo?.modelo || ''} ${veiculo?.ano_modelo || ''} — Placa: ${veiculo?.placa || ''}\n\n📋 Itens para cotação:\n${itensTexto}\n\n⏰ Prazo para resposta: 24 horas\n📎 Referência: Evento #${sinistro?.protocolo || ''}\n\nPor favor, responda com o valor de cada item e o prazo de entrega. Obrigado!`;
+    return `Olá [Nome]! Aqui é a Pratic Car.\nPrecisamos de uma cotação de peças para:\n\n🚗 Veículo: ${veiculo?.marca || ''} ${veiculo?.modelo || ''} ${veiculo?.ano_modelo || ''} — Placa: ${veiculo?.placa || ''}\n\n📋 Itens para cotação:\n${itensTexto}\n\n⏰ Prazo para resposta: ${prazoCotacao} horas\n📎 Referência: Evento #${sinistro?.protocolo || ''}\n\nPor favor, responda com o valor de cada item e o prazo de entrega. Obrigado!`;
   }, [itensPecas, veiculo, sinistro]);
 
   const handleToggleAutoCenter = (id: string) => {
