@@ -3367,7 +3367,9 @@ Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato c
     let respostaFinal = "Desculpe, não consegui processar sua mensagem. Tente novamente em alguns instantes. 🙏";
     
     try {
-      let aiResponse = await callAI(messages, WHATSAPP_SYSTEM_PROMPT + "\n\n" + context);
+      const prazoLinkEvento = await getConfiguracaoNumero(supabase, 'prazo_link_evento_horas', 72);
+      const whatsappPrompt = buildWhatsappSystemPrompt(prazoLinkEvento);
+      let aiResponse = await callAI(messages, whatsappPrompt + "\n\n" + context);
       let assistantMessage = aiResponse.choices?.[0]?.message;
       let iterations = 0;
       const maxIterations = 4;
