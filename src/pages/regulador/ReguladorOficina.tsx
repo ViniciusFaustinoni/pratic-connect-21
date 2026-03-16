@@ -63,10 +63,10 @@ function getTempoEmOficina(entrada: string | null, created: string): string {
   return `Há ${dias} dias`;
 }
 
-function getAlertaAtualizacao(updated: string): 'ok' | 'warning' | 'urgent' {
+function getAlertaAtualizacao(updated: string, prazoManutencao = 48): 'ok' | 'warning' | 'urgent' {
   const horas = differenceInHours(new Date(), new Date(updated));
-  if (horas > 48) return 'urgent';
-  if (horas > 24) return 'warning';
+  if (horas > prazoManutencao) return 'urgent';
+  if (horas > prazoManutencao / 2) return 'warning';
   return 'ok';
 }
 
