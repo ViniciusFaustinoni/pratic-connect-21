@@ -247,12 +247,8 @@ Deno.serve(async (req) => {
           await supabaseAdmin.from("cotacoes").delete().eq("id", contrato.cotacao_id);
         }
 
-        // Desvincular contrato do veículo antes de excluir o contrato
-        const veiculoUnlinkResult = await supabaseAdmin
-          .from("veiculos")
-          .update({ contrato_id: null })
-          .eq("contrato_id", contrato.id);
-        logIfError("desvincular veiculo do contrato", veiculoUnlinkResult, { contrato_id: contrato.id });
+
+
 
         // Delete the contract itself
         const contratoDeleteResult = await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
