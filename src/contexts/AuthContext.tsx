@@ -1,5 +1,6 @@
 import React, { createContext, useContext, useEffect, useState, useCallback, ReactNode } from 'react';
 import { User, Session } from '@supabase/supabase-js';
+import { useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { encerrarSessao, SESSION_TOKEN_KEY } from '@/hooks/useAuthSession';
 import {
@@ -50,6 +51,8 @@ type ExtendedAuthContextType = Omit<AuthContextType, 'isFuncionario' | 'isAssoci
 // PROVIDER
 // ============================================
 export function AuthProvider({ children }: AuthProviderProps) {
+  const queryClient = useQueryClient();
+  
   // Estado principal
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
@@ -198,6 +201,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
 
         // Atualizar ID do usuário atual
         currentUserId = newUserId;
+
+        // Invalidar queries dependentes de usuário ao detectar novo login
+        if (newUserId) {
+          queryClient.invalidateQueries({ queryKey: ['module-visibility', newUserId] });
+          queryClient.invalidateQueries({ queryKey: ['module-item-visibility', newUserId] });
+          queryClient.invalidateQueries({ queryKey: ['app-roles-config'] });
+        }
 
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
@@ -399,8 +409,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setProfile(null);
       setPerfis([]);
       setLoading(false);
+      
+      // Limpar todo o cache do React Query para evitar dados stale no re-login
+      queryClient.clear();
     }
-  }, []);
+  }, [queryClient]);
 
   const resetPassword = useCallback(async (email: string): Promise<AuthResult> => {
     try {

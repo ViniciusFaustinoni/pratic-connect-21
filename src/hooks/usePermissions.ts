@@ -289,6 +289,6 @@ export function usePermissions() {
     operationalRedirectPath,
     userIsOnlyOperational,
     hasPermission: (key: PermissionKey) => permissions[key] ?? false,
-    isPermissionsLoading: isRolesConfigLoading || isAuthLoading,
+    isPermissionsLoading: isRolesConfigLoading || isAuthLoading || (!!user && (roles?.length ?? 0) === 0 && profile?.tipo !== 'associado'),
   };
 }
