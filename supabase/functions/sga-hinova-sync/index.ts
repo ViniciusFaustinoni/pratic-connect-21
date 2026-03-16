@@ -514,6 +514,9 @@ serve(async (req) => {
 
     // Heavy sync runs in background via EdgeRuntime.waitUntil
     const doBackgroundSync = async () => {
+      // Capture IDs explicitly to prevent stale closures in EdgeRuntime.waitUntil
+      const _vid = veiculo_id;
+      const _aid = associado_id;
       try {
 
     // ========================================
