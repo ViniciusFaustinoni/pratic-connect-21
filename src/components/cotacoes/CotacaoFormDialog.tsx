@@ -2163,8 +2163,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               </>
             )}
 
-            {/* BLOCO 5: AÇÕES */}
-            <div className="flex items-center justify-end pt-2 border-t">
+            </div>
+
+            {/* BLOCO 5: AÇÕES - sticky no rodapé */}
+            <div className="sticky bottom-0 bg-background border-t px-4 py-3 sm:px-6 flex items-center justify-end">
               <Button 
                 type="submit" 
                 disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || (valorAdesao <= 0 && !isCenarioIsento) || !dadosAssociadoValidos}
