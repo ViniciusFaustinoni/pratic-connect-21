@@ -37,9 +37,11 @@ serve(async (req) => {
 
     console.log("[cron-lembrete-documentos] Iniciando verificação de documentos pendentes...");
 
-    // Buscar documentos pendentes há mais de 3 dias (com prazo de 7 dias)
-    const tresDiasAtras = new Date(Date.now() - 3 * 24 * 60 * 60 * 1000);
-    const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);
+    // Buscar documentos pendentes (prazo dinâmico)
+    const prazoDocs = await getConfiguracaoNumero(supabase, 'prazo_documento_upload_dias', 7);
+    const lembreteAposDias = Math.max(Math.floor(prazoDocs * 3 / 7), 1); // lembrete proporcional
+    const tresDiasAtras = new Date(Date.now() - lembreteAposDias * 24 * 60 * 60 * 1000);
+    const seteDiasAtras = new Date(Date.now() - prazoDocs * 24 * 60 * 60 * 1000);
 
     // Buscar documentos solicitados pendentes
     const { data: docsPendentes, error: docsError } = await supabase
