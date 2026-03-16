@@ -166,7 +166,8 @@ serve(async (req) => {
             to: associado.email,
             data: {
               nome: associado.nome.split(' ')[0],
-              linkCriarSenha
+              linkCriarSenha,
+              prazoHoras: prazoAcesso
             }
           }
         });
