@@ -100,6 +100,12 @@ export function useCalcularCotacao() {
         // Excluir variantes internas "aplicativo" — o preço app é resolvido pelo motor de pricing nos planos principais
         if (isPlanoAplicativo && !isMotoLine) continue;
 
+        // Filtrar linhas que não suportam uso de aplicativo
+        const LINHAS_COM_APP = ['select', 'select-one', 'lancamento'];
+        const mappingPreview = planoPrecoMap.find(m => m.plano_id === plano.id);
+        const linhaSlugPreview = mappingPreview?.linha_slug?.toLowerCase() || '';
+        if (params.tipo_uso === 'aplicativo' && linhaSlugPreview && !LINHAS_COM_APP.includes(linhaSlugPreview)) continue;
+
         if (plano.fipe_minima && params.valor_fipe < Number(plano.fipe_minima)) continue;
         if (plano.fipe_maxima && params.valor_fipe > Number(plano.fipe_maxima)) continue;
 
