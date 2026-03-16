@@ -58,9 +58,10 @@ serve(async (req) => {
   try {
     console.log('[Verificar Instalação] Iniciando verificação de instalações pendentes...');
 
-    // Buscar rastreadores instalados sem comunicação (última 24h)
+    // Buscar rastreadores instalados sem comunicação (prazo dinâmico)
+    const prazoSemSinal = await getConfiguracaoNumero(supabase, 'prazo_rastreador_sem_sinal_horas', 4);
     const vinteQuatroHorasAtras = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
-    const quatroHorasAtras = new Date(Date.now() - 4 * 60 * 60 * 1000).toISOString();
+    const semSinalAtras = new Date(Date.now() - prazoSemSinal * 60 * 60 * 1000).toISOString();
 
     const { data: rastreadores, error } = await supabase
       .from('rastreadores')
