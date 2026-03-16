@@ -314,12 +314,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
   // Detectar tipo de veículo automaticamente (moto vs carro)
   const tipoVeiculoDetectado = useMemo(() => {
+    // Se o vendedor selecionou marca manualmente, usar o tipo da marca
+    if (marcaSelecionada && tipoFipeSelecionado === 'motos') return 'moto' as const;
+    // Fallback para detecção por nome (busca por placa/código)
     const marca = veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
     const modelo = veiculoEncontrado?.vehicleData?.modelo || '';
     if (!marca && !modelo) return 'carro' as const;
     const tipo = detectarTipoVeiculo(undefined, modelo, marca);
     return tipo === 'moto' ? 'moto' as const : 'carro' as const;
-  }, [veiculoEncontrado, marcaSelecionada, getMarcaNomeFromCodigo]);
+  }, [veiculoEncontrado, marcaSelecionada, getMarcaNomeFromCodigo, tipoFipeSelecionado]);
 
   // Resolver marca/modelo para elegibilidade
   const marcaResolvida = useMemo(() => {
