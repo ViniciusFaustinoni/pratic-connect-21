@@ -63,7 +63,7 @@ export function PrazoRessarcimento({ sinistroId, dataInicio, prazoSuspenso, praz
   const percentual = Math.min(100, Math.round((diasUteisConsumidos / PRAZO_TOTAL) * 100));
 
   const isVencido = diasUteisConsumidos >= PRAZO_TOTAL;
-  const isProximo = diasUteisConsumidos > 55;
+  const isProximo = diasUteisConsumidos > PRAZO_TOTAL - 5;
 
   return (
     <Card className={isVencido ? 'border-destructive/50' : isProximo ? 'border-amber-400/50' : ''}>

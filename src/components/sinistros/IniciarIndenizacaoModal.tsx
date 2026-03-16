@@ -244,7 +244,7 @@ export function IniciarIndenizacaoModal({
             <div className="flex items-start gap-2">
               <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <div className="space-y-1 text-xs text-muted-foreground">
-                <p>• <strong>Prazo:</strong> 60 dias úteis a partir da documentação completa</p>
+                <p>• <strong>Prazo:</strong> {prazoSinistro ?? 60} dias úteis a partir da documentação completa</p>
                 <p>• <strong>Kit GNV:</strong> Se o veículo tem kit gás, o associado pode retirar antes da entrega</p>
                 <p>• <strong>Financiamento:</strong> Se financiado, o credor é pago primeiro, saldo restante ao associado</p>
               </div>
