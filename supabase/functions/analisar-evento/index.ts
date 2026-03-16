@@ -124,7 +124,10 @@ serve(async (req) => {
         usuario_nome: analistaNome,
       });
 
-      // 3. Invalidate active links
+      // 3. Read dynamic deadline
+      const prazoLink = await getConfiguracaoNumero(supabase, 'prazo_link_evento_horas', 72);
+
+      // 3b. Invalidate active links
       await supabase
         .from("sinistro_evento_links")
         .update({ status: "invalidado" })
