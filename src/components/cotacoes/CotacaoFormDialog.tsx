@@ -463,8 +463,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       const buscarFipeAutomatico = async () => {
         setBuscandoFipe(true);
         try {
-          const tipoFipe = tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros';
-          const resultado = await getPreco(marcaSelecionada, modeloSelecionado, anoSelecionado, tipoFipe);
+          const resultado = await getPreco(marcaSelecionada, modeloSelecionado, anoSelecionado, tipoFipeSelecionado);
           if (resultado && resultado.valorNumerico) {
             form.setValue('valor_fipe', resultado.valorNumerico);
             toast.success(`Valor FIPE: ${resultado.valor}`);
