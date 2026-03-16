@@ -236,6 +236,7 @@ const menuConfig: {
         { title: 'Sindicâncias', url: '/eventos/sindicancias', icon: Search },
         { title: 'Sindicantes', url: '/eventos/sindicantes', icon: Building2 },
         { title: 'Solicitações IA', url: '/eventos/solicitacoes-ia', icon: Bot },
+        { title: 'Chat IA', url: '/eventos/chat-ia', icon: MessageCircle },
       ],
     },
     {

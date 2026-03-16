@@ -252,6 +252,7 @@ import LogsAuditoria from "./pages/diretoria/LogsAuditoria";
 import RelatoriosGerenciais from "./pages/diretoria/RelatoriosGerenciais";
 import FaixasCotas from "./pages/diretoria/FaixasCotas";
 import SolicitacoesIA from "./pages/diretoria/SolicitacoesIA";
+import EventosChatIA from "./pages/eventos/EventosChatIA";
 import CampanhasDesconto from "./pages/diretoria/CampanhasDesconto";
 import FechamentoMensal from "./pages/diretoria/FechamentoMensal";
 import Blacklist from "./pages/diretoria/Blacklist";
@@ -482,6 +483,7 @@ const App = () => (
               <Route path="/eventos/sindicancias/:id" element={<SindicanciaDetalhe />} />
               <Route path="/eventos/sla" element={<EventosSLADashboard />} />
               <Route path="/eventos/solicitacoes-ia" element={<SolicitacoesIA />} />
+              <Route path="/eventos/chat-ia" element={<EventosChatIA />} />
               
               {/* Sindicante (web desktop dentro do AppLayout) */}
               <Route path="/sindicante" element={<SindicanteDashboard />} />
