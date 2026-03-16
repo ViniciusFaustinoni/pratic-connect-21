@@ -27,7 +27,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-const SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC, um chatbot inteligente e amigável da associação de proteção veicular PRATIC.
+const buildSystemPrompt = (prazoLinkEvento: number) => `Você é o Assistente Virtual PRATIC, um chatbot inteligente e amigável da associação de proteção veicular PRATIC.
 
 ## Sua Personalidade
 - Seja cordial, profissional e empático
