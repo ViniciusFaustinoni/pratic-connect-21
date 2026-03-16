@@ -225,8 +225,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       return marcaMatch && modeloMatch && anoMatch && combustivelMatch;
     });
 
-    // Whitelist: modelo não encontrado = negado
-    if (!regra) return 'negado';
+    // Blocklist: modelo não encontrado = aceito por padrão
+    if (!regra) return 'aprovado';
     if (regra.status === 'negado') return 'negado';
     if (regra.status === 'limitado') return 'limitado';
     return 'aprovado';
