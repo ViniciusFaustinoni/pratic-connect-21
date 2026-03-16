@@ -29,20 +29,24 @@ Deno.serve(async (req) => {
     }
 
     const payload = await req.json();
-    const event = payload.event;
+    const event = payload.event || "";
 
     console.log(`[chatwoot-webhook] Evento recebido: ${event}`);
 
-    // Só processar mensagens criadas do tipo incoming
-    if (event !== "message_created") {
+    // Aceitar tanto "message_created" quanto "automation_event.message_created"
+    if (!event.includes("message_created")) {
       return new Response(
         JSON.stringify({ success: true, ignorado: true, motivo: `Evento ${event} ignorado` }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    const messageType = payload.message_type;
-    if (messageType !== "incoming" && messageType !== 0) {
+    // Extrair primeira mensagem do array messages
+    const msg = payload.messages?.[0] || {};
+    const messageType = msg.message_type;
+
+    // message_type 0 = incoming (contato enviou)
+    if (messageType !== 0 && messageType !== "incoming") {
       console.log(`[chatwoot-webhook] Mensagem não-incoming ignorada (type: ${messageType})`);
       return new Response(
         JSON.stringify({ success: true, ignorado: true, motivo: "Mensagem não é incoming" }),
@@ -50,22 +54,17 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Extrair dados do payload
-    const content = payload.content || payload.message?.content || "";
-    const sender = payload.sender || {};
-    const conversation = payload.conversation || {};
-    const contactInbox = conversation.contact_inbox || {};
-    const contact = conversation.contact || sender;
+    // Extrair conteúdo da mensagem
+    const content = msg.content || msg.processed_message_content || "";
 
-    // Extrair telefone de múltiplas fontes possíveis
+    // Extrair telefone: priorizar contact_inbox.source_id, fallback meta.sender.phone_number
     let telefone =
-      sender.phone_number ||
-      contact.phone_number ||
-      contactInbox.source_id ||
+      payload.contact_inbox?.source_id ||
+      payload.meta?.sender?.phone_number ||
       "";
 
-    // Limpar telefone - remover @s.whatsapp.net e caracteres não numéricos
-    telefone = telefone.replace(/@s\.whatsapp\.net$/i, "").replace(/\D/g, "");
+    // Limpar telefone - remover + e caracteres não numéricos
+    telefone = telefone.replace(/\D/g, "");
 
     if (!telefone) {
       console.warn("[chatwoot-webhook] Telefone não encontrado no payload:", JSON.stringify(payload).substring(0, 500));
@@ -83,8 +82,13 @@ Deno.serve(async (req) => {
       );
     }
 
-    const nomeContato = sender.name || contact.name || "Desconhecido";
-    const messageId = payload.id ? `chatwoot_${payload.id}` : `chatwoot_${Date.now()}`;
+    // Nome do contato via meta.sender.name
+    const nomeContato = payload.meta?.sender?.name || "Desconhecido";
+
+    // message_id: preferir source_id (wamid do WhatsApp), fallback id numérico
+    const messageId = msg.source_id
+      ? `chatwoot_${msg.source_id}`
+      : `chatwoot_${msg.id || Date.now()}`;
 
     console.log(`[chatwoot-webhook] Processando msg de ${telefone} (${nomeContato}): "${content.substring(0, 80)}"`);
 
