@@ -438,7 +438,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       const fetchMarcas = async () => {
         setLoadingMarcas(true);
         try {
-          const data = await getMarcas('carros');
+          const [dataCarros, dataMotos] = await Promise.all([
+            getMarcas('carros'),
+            getMarcas('motos'),
+          ]);
+          const data = [...dataCarros, ...dataMotos];
           setMarcas(data);
         } catch (error) {
           console.error('Erro ao carregar marcas:', error);
