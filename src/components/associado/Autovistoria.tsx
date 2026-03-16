@@ -1,7 +1,8 @@
 import { useState, useRef, useEffect, useCallback } from 'react';
 import { 
   Camera, Check, ArrowLeft, ArrowRight, Loader2, ChevronRight, Gauge, 
-  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, RefreshCw, AlertTriangle
+  CheckCircle, XCircle, Lightbulb, RotateCcw, Lock, RefreshCw, AlertTriangle,
+  Video
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -12,6 +13,7 @@ import { useCriarAutovistoria, useUploadFotoAutovistoria, useAutovistoriaExisten
 import { toast } from 'sonner';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
 import { LocationCapture, Coordenadas } from './LocationCapture';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 interface AutovistoriaProps {
   contratoId: string;
