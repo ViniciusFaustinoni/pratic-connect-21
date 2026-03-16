@@ -30,6 +30,7 @@ export function SinistroDetalheDocs({
   sinistro, documentos, processosVinculados, onSolicitarDocs, onVincularProcesso,
 }: SinistroDetalheDocsProps) {
   const navigate = useNavigate();
+  const { data: prazoSinistro } = useConfiguracaoNumero('operacional_prazo_sinistro', 60);
 
   return (
     <div className="space-y-6">
