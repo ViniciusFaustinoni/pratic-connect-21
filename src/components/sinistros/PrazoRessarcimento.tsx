@@ -6,8 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 
-const PRAZO_TOTAL = 60;
-
 /** Conta dias úteis (seg-sex) entre duas datas */
 function calcularDiasUteis(inicio: Date, fim: Date): number {
   let count = 0;
