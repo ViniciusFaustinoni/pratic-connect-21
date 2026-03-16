@@ -201,66 +201,25 @@ export function PropostaHeroHeader({
             </div>
           </div>
 
-          {/* Lado direito: Botões de ação maiores */}
-          {podeAprovar && (
-            <div className="flex items-center gap-2 flex-shrink-0">
-              <Button
-                className="bg-success hover:bg-success/90 text-white shadow-sm"
-                onClick={onAprovar}
-                disabled={isAprovando}
-              >
-                {isAutovistoria ? (
-                  <ShieldCheck className="mr-2 h-4 w-4" />
-                ) : (
-                  <CheckCircle className="mr-2 h-4 w-4" />
-                )}
-                {isAprovando 
-                  ? 'Aprovando...' 
-                  : isAutovistoria 
-                    ? 'Aprovar R/F' 
-                    : 'Aprovar'
-                }
-              </Button>
-
-              <Button
-                className="bg-warning hover:bg-warning/90 text-warning-foreground shadow-sm"
-                onClick={onSolicitarDocs}
-              >
-                <FileText className="mr-2 h-4 w-4" />
-                Docs
-              </Button>
-
-              <Button
-                className="bg-destructive hover:bg-destructive/90 text-destructive-foreground shadow-sm"
-                onClick={onReprovar}
-              >
-                <XCircle className="mr-2 h-4 w-4" />
-                Reprovar
-              </Button>
-            </div>
-          )}
-
-          {/* Mensagem quando não pode aprovar */}
-          {!podeAprovar && (
-            <div className="flex-shrink-0">
-              {proposta.tem_documento_pendente ? (
-                <Badge className="bg-warning/15 text-warning border-warning/30 gap-1.5 px-3 py-1.5">
-                  <Clock className="h-3.5 w-3.5" />
-                  Aguardando docs do cliente
-                </Badge>
-              ) : proposta.status === 'ativo' ? (
-                <Badge className="bg-success/15 text-success border-success/30 gap-1.5 px-3 py-1.5">
-                  <CheckCircle className="h-3.5 w-3.5" />
-                  Proposta aprovada
-                </Badge>
-              ) : proposta.status === 'reprovado' ? (
-                <Badge className="bg-destructive/15 text-destructive border-destructive/30 gap-1.5 px-3 py-1.5">
-                  <XCircle className="h-3.5 w-3.5" />
-                  Proposta reprovada
-                </Badge>
-              ) : null}
-            </div>
-          )}
+          {/* Status badge */}
+          <div className="flex-shrink-0">
+            {proposta.tem_documento_pendente ? (
+              <Badge className="bg-warning/15 text-warning border-warning/30 gap-1.5 px-3 py-1.5">
+                <Clock className="h-3.5 w-3.5" />
+                Aguardando docs do cliente
+              </Badge>
+            ) : proposta.status === 'ativo' ? (
+              <Badge className="bg-success/15 text-success border-success/30 gap-1.5 px-3 py-1.5">
+                <CheckCircle className="h-3.5 w-3.5" />
+                Proposta aprovada
+              </Badge>
+            ) : proposta.status === 'reprovado' ? (
+              <Badge className="bg-destructive/15 text-destructive border-destructive/30 gap-1.5 px-3 py-1.5">
+                <XCircle className="h-3.5 w-3.5" />
+                Proposta reprovada
+              </Badge>
+            ) : null}
+          </div>
         </div>
       </div>
     </div>
