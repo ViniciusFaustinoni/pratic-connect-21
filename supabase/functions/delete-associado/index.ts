@@ -148,13 +148,35 @@ Deno.serve(async (req) => {
       for (const contrato of contratos) {
         console.log(`[delete-associado] Limpando contrato: ${contrato.id}`);
 
-        // **CRÍTICO**: Excluir comissoes_deducoes ANTES de excluir contratos (FK sem cascade)
+        // **CRÍTICO**: Excluir dependências FK ANTES de excluir contratos
         const comissoesDeducoesResult = await supabaseAdmin
           .from("comissoes_deducoes")
           .delete()
           .eq("contrato_id", contrato.id);
         logIfError("excluir comissoes_deducoes", comissoesDeducoesResult, { contrato_id: contrato.id });
-        console.log(`[delete-associado] comissoes_deducoes excluídas para contrato: ${contrato.id}`);
+
+        // cc_vendedor_lancamentos (FK cc_vendedor_lancamentos_contrato_id_fkey)
+        const ccLancResult = await supabaseAdmin
+          .from("cc_vendedor_lancamentos")
+          .delete()
+          .eq("contrato_id", contrato.id);
+        logIfError("excluir cc_vendedor_lancamentos", ccLancResult, { contrato_id: contrato.id });
+
+        // pontuacao_eventos (FK pontuacao_eventos_contrato_id_fkey)
+        const pontEvtResult = await supabaseAdmin
+          .from("pontuacao_eventos")
+          .delete()
+          .eq("contrato_id", contrato.id);
+        logIfError("excluir pontuacao_eventos", pontEvtResult, { contrato_id: contrato.id });
+
+        // substituicoes_veiculo (FK to contratos)
+        const substResult = await supabaseAdmin
+          .from("substituicoes_veiculo")
+          .delete()
+          .eq("contrato_id", contrato.id);
+        logIfError("excluir substituicoes_veiculo", substResult, { contrato_id: contrato.id });
+
+        console.log(`[delete-associado] dependências FK excluídas para contrato: ${contrato.id}`);
 
         // Excluir comissoes (segurança adicional, mesmo com cascade)
         const comissoesResult = await supabaseAdmin
@@ -225,12 +247,8 @@ Deno.serve(async (req) => {
           await supabaseAdmin.from("cotacoes").delete().eq("id", contrato.cotacao_id);
         }
 
-        // Desvincular contrato do veículo antes de excluir o contrato
-        const veiculoUnlinkResult = await supabaseAdmin
-          .from("veiculos")
-          .update({ contrato_id: null })
-          .eq("contrato_id", contrato.id);
-        logIfError("desvincular veiculo do contrato", veiculoUnlinkResult, { contrato_id: contrato.id });
+
+
 
         // Delete the contract itself
         const contratoDeleteResult = await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
@@ -254,10 +272,11 @@ Deno.serve(async (req) => {
       console.log(`[delete-associado] Encontrados ${contratosRestantes.length} contratos restantes, limpando dependências...`);
       
       for (const contrato of contratosRestantes) {
-        // **CRÍTICO**: comissoes_deducoes primeiro!
-        const comDeducResult = await supabaseAdmin.from("comissoes_deducoes").delete().eq("contrato_id", contrato.id);
-        logIfError("force delete comissoes_deducoes", comDeducResult, { contrato_id: contrato.id });
-        
+        // **CRÍTICO**: todas as dependências FK primeiro
+        await supabaseAdmin.from("comissoes_deducoes").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("cc_vendedor_lancamentos").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("pontuacao_eventos").delete().eq("contrato_id", contrato.id);
+        await supabaseAdmin.from("substituicoes_veiculo").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("comissoes").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("instalacoes_pendentes_criacao").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("servicos").delete().eq("contrato_id", contrato.id);
@@ -268,12 +287,6 @@ Deno.serve(async (req) => {
         await supabaseAdmin.from("gastos_beneficios").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("instalacoes").delete().eq("contrato_id", contrato.id);
         await supabaseAdmin.from("vistorias").delete().eq("contrato_id", contrato.id);
-        
-        // Desvincular veículo
-        await supabaseAdmin
-          .from("veiculos")
-          .update({ contrato_id: null })
-          .eq("contrato_id", contrato.id);
         
         // Excluir contrato
         const forceDeleteResult = await supabaseAdmin.from("contratos").delete().eq("id", contrato.id);
@@ -452,11 +465,8 @@ Deno.serve(async (req) => {
           })
           .eq("veiculo_id", veiculo.id);
 
-        // Desvincular contrato do veículo antes de excluir
-        await supabaseAdmin
-          .from("veiculos")
-          .update({ contrato_id: null })
-          .eq("id", veiculo.id);
+
+
       }
       
       await supabaseAdmin.from("veiculos").delete().eq("associado_id", associadoId);
