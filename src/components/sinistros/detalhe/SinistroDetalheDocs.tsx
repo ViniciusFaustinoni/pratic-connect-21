@@ -10,6 +10,7 @@ import { CardVidrosDetalhe } from '@/components/sinistros/CardVidrosDetalhe';
 import { CardAnaliseIncendio } from '@/components/sinistros/CardAnaliseIncendio';
 import { CardAnaliseAlagamento } from '@/components/sinistros/CardAnaliseAlagamento';
 import { PrazoRessarcimento } from '@/components/sinistros/PrazoRessarcimento';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 
 const documentoStatusConfig: Record<string, { label: string; class: string; icon: React.ComponentType<{ className?: string }> }> = {
   pendente: { label: 'Pendente', class: 'bg-yellow-100 text-yellow-800', icon: Clock },
