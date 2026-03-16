@@ -436,7 +436,7 @@ export default function CotacaoPage() {
             ano={ano}
             valorFipe={valorFipe}
             placa={placa}
-            categoria={categoria || modalidade}
+            categoria={categoria || undefined}
             regiao={regiao}
             combustivel={combustivel}
             planos={planosCalculados}
