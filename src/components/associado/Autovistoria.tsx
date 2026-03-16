@@ -44,6 +44,8 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const [imagensComErro, setImagensComErro] = useState<Record<string, boolean>>({});
   const [coordenadas, setCoordenadas] = useState<Coordenadas | null>(null);
   const [chassiResultado, setChassiResultado] = useState<ChassiResultado | null>(null);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   const inputRef = useRef<HTMLInputElement>(null);
 
   // Buscar autovistoria existente para reidratar fotos após refresh
