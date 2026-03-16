@@ -4,24 +4,16 @@ import { useState, useEffect, useCallback, useRef } from 'react';
 // TIPOS
 // ============================================
 interface SessionTimeoutConfig {
-  /** Tempo de inatividade até expirar (em segundos) */
   timeoutDuration: number;
-  /** Tempo antes de expirar para mostrar aviso (em segundos) */
   warningBefore: number;
-  /** Callback quando sessão expira */
   onTimeout: () => void;
-  /** Callback quando aviso deve ser mostrado */
   onWarning?: () => void;
-  /** Habilitado ou não */
   enabled?: boolean;
 }
 
 interface SessionTimeoutState {
-  /** Mostrando modal de aviso */
   showWarning: boolean;
-  /** Segundos restantes até expirar */
   remainingTime: number;
-  /** Se o timeout está ativo */
   isActive: boolean;
 }
 
@@ -55,7 +47,16 @@ export function useSessionTimeout({
   const [showWarning, setShowWarning] = useState(false);
   const [remainingTime, setRemainingTime] = useState(timeoutDuration);
   const [isActive, setIsActive] = useState(enabled);
-  
+
+  // Refs para callbacks instáveis — quebra a cascata de re-renders
+  const onTimeoutRef = useRef(onTimeout);
+  const onWarningRef = useRef(onWarning);
+  const showWarningRef = useRef(showWarning);
+
+  useEffect(() => { onTimeoutRef.current = onTimeout; }, [onTimeout]);
+  useEffect(() => { onWarningRef.current = onWarning; }, [onWarning]);
+  useEffect(() => { showWarningRef.current = showWarning; }, [showWarning]);
+
   const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const warningTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const countdownRef = useRef<ReturnType<typeof setInterval> | null>(null);
@@ -85,43 +86,41 @@ export function useSessionTimeout({
   const startCountdown = useCallback(() => {
     setShowWarning(true);
     setRemainingTime(warningBefore);
-    onWarning?.();
+    onWarningRef.current?.();
 
     countdownRef.current = setInterval(() => {
       setRemainingTime((prev) => {
         if (prev <= 1) {
           clearAllTimers();
-          onTimeout();
+          onTimeoutRef.current();
           return 0;
         }
         return prev - 1;
       });
     }, 1000);
-  }, [warningBefore, onWarning, onTimeout, clearAllTimers]);
+  }, [warningBefore, clearAllTimers]);
 
   // ============================================
   // RESETAR TIMEOUT
   // ============================================
   const resetTimeout = useCallback(() => {
     if (!enabled) return;
-    
+
     clearAllTimers();
     setShowWarning(false);
     setRemainingTime(timeoutDuration);
     lastActivityRef.current = Date.now();
 
-    // Timer para mostrar aviso
     const warningTime = (timeoutDuration - warningBefore) * 1000;
     warningTimeoutRef.current = setTimeout(() => {
       startCountdown();
     }, warningTime);
 
-    // Timer para timeout final (backup)
     timeoutRef.current = setTimeout(() => {
       clearAllTimers();
-      onTimeout();
+      onTimeoutRef.current();
     }, timeoutDuration * 1000);
-  }, [enabled, timeoutDuration, warningBefore, startCountdown, onTimeout, clearAllTimers]);
+  }, [enabled, timeoutDuration, warningBefore, startCountdown, clearAllTimers]);
 
   // ============================================
   // ESTENDER SESSÃO
@@ -131,18 +130,16 @@ export function useSessionTimeout({
   }, [resetTimeout]);
 
   // ============================================
-  // HANDLER DE ATIVIDADE
+  // HANDLER DE ATIVIDADE (usa refs para estabilidade)
   // ============================================
   const handleActivity = useCallback(() => {
-    // Só reseta se não estiver no período de warning
-    if (!showWarning) {
-      // Debounce: só reseta se passou pelo menos 1 segundo
+    if (!showWarningRef.current) {
       const now = Date.now();
       if (now - lastActivityRef.current > 1000) {
         resetTimeout();
       }
     }
-  }, [showWarning, resetTimeout]);
+  }, [resetTimeout]);
 
   // ============================================
   // SETUP LISTENERS
@@ -157,12 +154,10 @@ export function useSessionTimeout({
     setIsActive(true);
     resetTimeout();
 
-    // Adicionar listeners
     ACTIVITY_EVENTS.forEach((event) => {
       window.addEventListener(event, handleActivity, { passive: true });
     });
 
-    // Cleanup
     return () => {
       clearAllTimers();
       ACTIVITY_EVENTS.forEach((event) => {
@@ -172,19 +167,19 @@ export function useSessionTimeout({
   }, [enabled, handleActivity, resetTimeout, clearAllTimers]);
 
   // ============================================
-  // PAUSAR QUANDO TAB INATIVA
+  // VERIFICAR AO VOLTAR DE TAB (deps estáveis)
   // ============================================
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.hidden) {
-        // Tab inativa - não pausa, continua contando
-      } else {
-        // Tab ativa - verifica se expirou enquanto ausente
+      if (!document.hidden) {
         const elapsed = (Date.now() - lastActivityRef.current) / 1000;
         if (elapsed >= timeoutDuration) {
-          onTimeout();
+          onTimeoutRef.current();
         } else if (elapsed >= timeoutDuration - warningBefore) {
           startCountdown();
+        } else {
+          // Sessão ainda válida — atualiza ref para evitar falsos positivos
+          lastActivityRef.current = Date.now();
         }
       }
     };
@@ -193,7 +188,7 @@ export function useSessionTimeout({
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [timeoutDuration, warningBefore, onTimeout, startCountdown]);
+  }, [timeoutDuration, warningBefore, startCountdown]);
 
   return {
     showWarning,
@@ -208,14 +203,12 @@ export function useSessionTimeout({
 // CONFIGURAÇÕES PADRÃO
 // ============================================
 export const SESSION_TIMEOUT_CONFIG = {
-  /** Sistema Interno - 30 minutos */
   INTERNAL: {
-    timeoutDuration: 30 * 60, // 1800 segundos
-    warningBefore: 5 * 60,    // 300 segundos
+    timeoutDuration: 30 * 60,
+    warningBefore: 5 * 60,
   },
-  /** App do Associado - 60 minutos */
   APP: {
-    timeoutDuration: 60 * 60, // 3600 segundos
-    warningBefore: 5 * 60,    // 300 segundos
+    timeoutDuration: 60 * 60,
+    warningBefore: 5 * 60,
   },
 } as const;
