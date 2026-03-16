@@ -79,7 +79,7 @@ serve(async (req) => {
         chamado_id: despacho.chamado_id,
         status_anterior: "aguardando_aceites",
         status_novo: "aguardando_aceites",
-        observacao: `⚠️ Nenhum reboquista aceitou o chamado em 10 minutos (ciclo ${despacho.ciclo}). Intervenção manual necessária.`,
+        observacao: `⚠️ ${motivo} Intervenção manual necessária.`,
       });
 
       // Marcar convites sem resposta como expirados
