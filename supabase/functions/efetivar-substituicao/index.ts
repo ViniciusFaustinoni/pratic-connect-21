@@ -1,4 +1,5 @@
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getParametroPontuacao, registrarEventoPontuacao } from '../_shared/pontuacao-helper.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
