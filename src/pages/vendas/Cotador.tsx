@@ -1390,17 +1390,6 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               </div>
             ) : (
               <div className="space-y-4">
-                {/* Alerta de planos negados por elegibilidade */}
-                {planosNegados.length > 0 && (
-                  <AlertaElegibilidadeNegada
-                    planosNegados={planosNegados.map(p => ({ ...p, solicitacaoStatus: null }))}
-                    marca={marca}
-                    modelo={modelo}
-                    ano={parseInt(ano) || new Date().getFullYear()}
-                    combustivel={veiculoEncontrado?.combustivel || 'flex'}
-                    placa={veiculoEncontrado?.placa || placaBusca}
-                  />
-                )}
                 {/* Tabs de planos */}
                 <div className="flex border-b">
                   {planos.map((plano) => (

@@ -417,18 +417,6 @@ export default function CotacaoPage() {
         {/* ETAPA 4 - RESULTADO */}
         {etapaAtual === 4 && (
           <>
-            {planosNegados.length > 0 && (
-              <div className="mb-4">
-                <AlertaElegibilidadeNegada
-                  planosNegados={planosNegados.map(p => ({ ...p, solicitacaoStatus: null }))}
-                  marca={marca}
-                  modelo={modelo}
-                  ano={parseInt(ano) || new Date().getFullYear()}
-                  combustivel={combustivel || 'flex'}
-                  placa={placa}
-                />
-              </div>
-            )}
             <EtapaResultado
             veiculoFipe={veiculoEncontrado}
             marca={marca}
