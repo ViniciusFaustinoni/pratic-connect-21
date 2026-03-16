@@ -66,9 +66,14 @@ export function PlanoCardCotacao({
               <CardTitle className="text-base font-semibold">
                 {plano.nome}
               </CardTitle>
+              {plano.elegibilidadeStatus === 'negado' && (
+                <Badge className="bg-destructive/15 text-destructive border-destructive/30 text-[10px] px-1.5 py-0">
+                  Restrição de modelo
+                </Badge>
+              )}
               {plano.elegibilidadeStatus === 'limitado' && (
                 <Badge className="bg-amber-500/15 text-amber-600 border-amber-300 text-[10px] px-1.5 py-0">
-                  Aceitação com restrições
+                  Aceitação condicionada
                 </Badge>
               )}
             </div>
