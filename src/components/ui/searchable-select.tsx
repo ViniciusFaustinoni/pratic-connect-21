@@ -68,7 +68,7 @@ export function SearchableSelect({
           <ChevronsUpDown className="ml-2 h-3 w-3 shrink-0 opacity-50" />
         </Button>
       </PopoverTrigger>
-      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start">
+      <PopoverContent className="w-[--radix-popover-trigger-width] p-0" align="start" onCloseAutoFocus={(e) => e.preventDefault()}>
         <Command>
           <CommandInput placeholder={searchPlaceholder} />
           <CommandList>
