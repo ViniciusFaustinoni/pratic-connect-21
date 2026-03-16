@@ -262,17 +262,11 @@ export default function PropostaAnalise() {
 
   return (
     <div className="max-w-5xl mx-auto space-y-6 px-4 pb-8">
-      {/* ZONA 1: Header Hero */}
+      {/* ZONA 1: Header Hero (sem botões de ação) */}
       <PropostaHeroHeader
         proposta={proposta}
-        onAprovar={handleAprovar}
-        onSolicitarDocs={() => setShowSolicitarDocs(true)}
-        onReprovar={() => setShowReprovar(true)}
         onVoltar={() => navigate('/cadastro/propostas')}
         onProxima={nextProposta ? () => navigate(`/cadastro/propostas/${nextProposta.id}`) : undefined}
-        isAprovando={aprovarMutation.isPending}
-        isAutovistoria={isAutovistoria}
-        podeAprovar={podeAprovar}
       />
 
       {/* Botão de ativação Softruck (quando aplicável) */}
@@ -309,33 +303,22 @@ export default function PropostaAnalise() {
         </div>
       )}
 
-      {/* ZONA 2: Grid de Mídia */}
-      <PropostaMidiaGrid
-        video360Url={proposta.vistoria?.video_360_url}
-        fotos={proposta.vistoria?.fotos || []}
-        assinaturaUrl={proposta.instalacao_info?.assinatura_cliente_url}
-        assinaturaData={proposta.instalacao_info?.concluida_em}
-        assinaturaPor={proposta.instalacao_info?.instalador_nome}
-        documentosSolicitados={proposta.documentos_solicitados_enviados}
-      />
-
-      {/* Observações do Vistoriador (se houver) */}
-      {proposta.vistoria && (proposta.vistoria.observacoes || proposta.vistoria.km_atual) && (
-        <VistoriaObservacoesCard 
-          observacoes={proposta.vistoria.observacoes}
-          kmAtual={proposta.vistoria.km_atual}
-        />
-      )}
-
-      {/* ZONA 2.5: Documentos sempre visíveis */}
-      <DocumentosAnexadosPanel
+      {/* ZONA 2: Stepper de Aprovação por Etapas */}
+      <PropostaApprovalStepper
+        proposta={proposta}
         documentos={(proposta.documentos || []) as unknown as DocumentoAnexadoCompleto[]}
         onViewDocumento={setDocumentoVisualizar}
         onAprovarDocumento={handleAprovarDocumento}
         onReprovarDocumento={handleReprovarDocumento}
+        onAprovar={handleAprovar}
+        onSolicitarDocs={() => setShowSolicitarDocs(true)}
+        onReprovar={() => setShowReprovar(true)}
+        isAprovando={aprovarMutation.isPending}
+        isAutovistoria={isAutovistoria}
+        podeAprovar={podeAprovar}
       />
 
-      {/* ZONA 3: Tabs de Detalhes */}
+      {/* ZONA 3: Tabs de Detalhes (sempre visíveis) */}
       <PropostaDetalhesTabs
         proposta={proposta}
         veiculoRenavam={veiculoRenavam}
