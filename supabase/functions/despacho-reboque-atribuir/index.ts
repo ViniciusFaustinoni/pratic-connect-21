@@ -38,7 +38,7 @@ serve(async (req) => {
     }
 
     // Buscar aceites ordenados por valor (menor primeiro), desempate por data_aceite
-    const { data: aceites } = await supabase
+    const { data: todosAceites } = await supabase
       .from("despacho_reboque_convites")
       .select(`
         *,
@@ -49,9 +49,25 @@ serve(async (req) => {
       .order("valor_calculado", { ascending: true })
       .order("data_aceite", { ascending: true });
 
+    // Filtrar aceites que respeitam o valor_sugerido do prestador
+    const aceites = (todosAceites || []).filter((a) => {
+      // Se não tem valor_sugerido configurado, aceitar qualquer valor
+      if (!a.valor_sugerido && a.valor_sugerido !== 0) return true;
+      // Se valor_calculado <= valor_sugerido, aceitar
+      return (a.valor_calculado || 0) <= a.valor_sugerido;
+    });
+
+    const aceitesRejeitados = (todosAceites || []).length - aceites.length;
+    if (aceitesRejeitados > 0) {
+      console.log(`[despacho-atribuir] ${aceitesRejeitados} aceites rejeitados por ultrapassar valor_sugerido`);
+    }
+
     if (!aceites || aceites.length === 0) {
-      // Ninguém aceitou
-      console.log(`[despacho-atribuir] Nenhum aceite recebido`);
+      // Ninguém aceitou (ou todos ultrapassam valor_sugerido)
+      const motivo = (todosAceites || []).length > 0
+        ? `Nenhum aceite dentro do valor sugerido (${todosAceites!.length} aceites recebidos, todos acima do valor configurado).`
+        : `Nenhum reboquista aceitou o chamado em 10 minutos (ciclo ${despacho.ciclo}).`;
+      console.log(`[despacho-atribuir] ${motivo}`);
 
       await supabase
         .from("despacho_reboque")
@@ -63,7 +79,7 @@ serve(async (req) => {
         chamado_id: despacho.chamado_id,
         status_anterior: "aguardando_aceites",
         status_novo: "aguardando_aceites",
-        observacao: `⚠️ Nenhum reboquista aceitou o chamado em 10 minutos (ciclo ${despacho.ciclo}). Intervenção manual necessária.`,
+        observacao: `⚠️ ${motivo} Intervenção manual necessária.`,
       });
 
       // Marcar convites sem resposta como expirados
@@ -221,10 +237,46 @@ Este link é válido por 2 horas.`;
 
           console.log(`[despacho-atribuir] WhatsApp de acompanhamento enviado ao associado ${associado?.nome}`);
         }
+
+        // === ENVIAR DADOS DO ASSOCIADO AO PRESTADOR ===
+        if (prestadorTelefone) {
+          const nomeAssociado = associado?.nome || "Associado";
+          const telAssociado = associado?.whatsapp || associado?.telefone || "Não informado";
+
+          // Buscar endereço de origem do chamado
+          const { data: chamadoOrigem } = await supabase
+            .from("chamados_assistencia")
+            .select("origem_endereco, origem_logradouro, origem_cidade, origem_uf, destino_endereco, destino_logradouro, destino_cidade, destino_uf")
+            .eq("id", despacho.chamado_id)
+            .single();
+
+          const endOrigem = chamadoOrigem?.origem_logradouro || chamadoOrigem?.origem_endereco || "A informar";
+          const endDestino = chamadoOrigem?.destino_logradouro || chamadoOrigem?.destino_endereco || "A definir";
+
+          const msgPrestador = `✅ *CHAMADO ATRIBUÍDO A VOCÊ*
+
+👤 Associado: ${nomeAssociado}
+📞 Telefone: ${telAssociado}
+
+📍 Origem: ${endOrigem}
+📍 Destino: ${endDestino}
+
+🚗 Veículo: ${veiculo ? `${veiculo.marca || ""} ${veiculo.modelo || ""} — ${veiculo.placa || ""}`.trim() : "N/D"}
+
+Por favor, dirija-se ao local e entre em contato com o associado.`;
+
+          await supabase.functions.invoke("whatsapp-send-text", {
+            body: {
+              telefone: prestadorTelefone.replace(/\D/g, ""),
+              mensagem: msgPrestador,
+            },
+          });
+
+          console.log(`[despacho-atribuir] WhatsApp com dados do associado enviado ao prestador ${prestadorNome}`);
+        }
       }
     } catch (whatsErr: any) {
-      console.error("[despacho-atribuir] Erro ao enviar WhatsApp ao associado:", whatsErr.message);
-      // Não falha a atribuição por erro no WhatsApp
+      console.error("[despacho-atribuir] Erro ao enviar WhatsApp:", whatsErr.message);
     }
 
     return new Response(

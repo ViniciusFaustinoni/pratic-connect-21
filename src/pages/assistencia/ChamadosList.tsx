@@ -44,12 +44,14 @@ import {
 } from '@/components/ui/table';
 import { NovoChamadoModal } from '@/components/assistencia/NovoChamadoModal';
 import { ConfirmacaoExclusaoChamadoDialog } from '@/components/assistencia/ConfirmacaoExclusaoChamadoDialog';
+import { BadgeDespachoStatus } from '@/components/assistencia/BadgeDespachoStatus';
 import { usePermissions } from '@/hooks/usePermissions';
 import { toast } from 'sonner';
 
 const statusOptions = [
   { value: 'todos', label: 'Todos os status' },
   { value: 'aberto', label: 'Aberto' },
+  { value: 'aguardando_aceites', label: 'Aguardando Aceites' },
   { value: 'aguardando_prestador', label: 'Aguardando Prestador' },
   { value: 'prestador_a_caminho', label: 'A Caminho' },
   { value: 'em_atendimento', label: 'Em Atendimento' },
@@ -78,6 +80,7 @@ const tiposServico: Record<string, { icon: LucideIcon; label: string }> = {
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   aberto: { label: 'Aberto', className: 'bg-yellow-100 text-yellow-800' },
+  aguardando_aceites: { label: 'Aguard. Aceites', className: 'bg-amber-100 text-amber-800' },
   aguardando_prestador: { label: 'Aguard. Prestador', className: 'bg-orange-100 text-orange-800' },
   prestador_despachado: { label: 'Despachado', className: 'bg-blue-100 text-blue-800' },
   prestador_a_caminho: { label: 'A Caminho', className: 'bg-purple-100 text-purple-800' },
@@ -91,7 +94,7 @@ import { Database } from '@/integrations/supabase/types';
 
 type StatusChamado = Database['public']['Enums']['status_chamado'];
 
-const STATUS_ATIVOS: StatusChamado[] = ['aberto', 'aguardando_prestador', 'prestador_despachado', 'prestador_a_caminho', 'em_atendimento'];
+const STATUS_ATIVOS: StatusChamado[] = ['aberto', 'aguardando_aceites' as StatusChamado, 'aguardando_prestador', 'prestador_despachado', 'prestador_a_caminho', 'em_atendimento'];
 const STATUS_CANCELADOS: StatusChamado[] = ['cancelado_associado', 'cancelado_sistema'];
 
 export default function ChamadosList() {
@@ -433,7 +436,10 @@ export default function ChamadosList() {
                       <TableCell>{chamado.veiculo?.placa || '-'}</TableCell>
                       <TableCell>{chamado.origem_cidade || 'Não informado'}</TableCell>
                       <TableCell>
-                        <Badge className={status.className}>{status.label}</Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge className={status.className}>{status.label}</Badge>
+                          <BadgeDespachoStatus chamadoId={chamado.id} chamadoStatus={chamado.status} />
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDistanceToNow(new Date(chamado.data_abertura), {

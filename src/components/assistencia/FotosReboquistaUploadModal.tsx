@@ -4,7 +4,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Upload, X, Loader2, ImageIcon } from 'lucide-react';
+import { Upload, X, Loader2, ImageIcon, Video } from 'lucide-react';
 import { useAddFotoReboquista } from '@/hooks/useFotosReboquista';
 
 const MOMENTOS = [
@@ -31,8 +31,12 @@ export function FotosReboquistaUploadModal({ open, onClose, chamadoId }: Props) 
   const handleFiles = useCallback((newFiles: FileList | null) => {
     if (!newFiles) return;
     const arr = Array.from(newFiles).filter(f => {
-      if (f.size > 5 * 1024 * 1024) return false;
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) return false;
+      const isImage = ['image/jpeg', 'image/png', 'image/webp'].includes(f.type);
+      const isVideo = ['video/mp4', 'video/webm'].includes(f.type);
+      if (!isImage && !isVideo) return false;
+      // 5MB for images, 50MB for videos
+      const maxSize = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+      if (f.size > maxSize) return false;
       return true;
     });
     const total = [...files, ...arr].slice(0, 20);
@@ -74,15 +78,16 @@ export function FotosReboquistaUploadModal({ open, onClose, chamadoId }: Props) 
         <div className="space-y-4">
           {/* File input */}
           <div>
-            <Label>Fotos (máx. 20, até 5MB cada, JPG/PNG)</Label>
+            <Label>Fotos e Vídeos (máx. 20, fotos até 5MB, vídeos até 50MB)</Label>
             <div className="mt-1">
               <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg p-6 cursor-pointer hover:border-primary transition-colors">
                 <ImageIcon className="h-6 w-6 text-muted-foreground" />
-                <span className="text-sm text-muted-foreground">Clique para selecionar fotos</span>
+                <Video className="h-6 w-6 text-muted-foreground" />
+                <span className="text-sm text-muted-foreground">Clique para selecionar fotos ou vídeos</span>
                 <input
                   type="file"
                   multiple
-                  accept="image/jpeg,image/png,image/webp"
+                  accept="image/jpeg,image/png,image/webp,video/mp4,video/webm"
                   className="hidden"
                   onChange={(e) => handleFiles(e.target.files)}
                 />
@@ -95,7 +100,11 @@ export function FotosReboquistaUploadModal({ open, onClose, chamadoId }: Props) 
             <div className="grid grid-cols-4 gap-2">
               {previews.map((src, i) => (
                 <div key={i} className="relative group">
-                  <img src={src} alt="" className="w-full aspect-square object-cover rounded-md border" />
+                  {files[i]?.type.startsWith('video/') ? (
+                    <video src={src} className="w-full aspect-square object-cover rounded-md border" muted />
+                  ) : (
+                    <img src={src} alt="" className="w-full aspect-square object-cover rounded-md border" />
+                  )}
                   <button
                     onClick={() => removeFile(i)}
                     className="absolute -top-1 -right-1 bg-destructive text-destructive-foreground rounded-full p-0.5 opacity-0 group-hover:opacity-100 transition-opacity"
