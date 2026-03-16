@@ -134,9 +134,9 @@ serve(async (req) => {
         .eq("sinistro_id", sinistro_id)
         .eq("status", "ativo");
 
-      // 4. Generate new link (72h)
+      // 4. Generate new link (dynamic deadline)
       const expiraEm = new Date();
-      expiraEm.setHours(expiraEm.getHours() + 72);
+      expiraEm.setHours(expiraEm.getHours() + prazoLink);
 
       const { data: novoLink, error: linkError } = await supabase
         .from("sinistro_evento_links")
