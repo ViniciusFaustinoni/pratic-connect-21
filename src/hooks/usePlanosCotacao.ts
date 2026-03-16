@@ -340,20 +340,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
             combustivel: combustivelOriginal,
           },
         );
-        if (resultado === 'negado') {
-          // Coletar plano negado para exibir alerta
-          const regraObs = elegibilidadeData?.find(
-            e => e.plano_id === plano.id && e.status === 'negado'
-          )?.observacao;
-          negados.push({
-            planoId: plano.id,
-            planoNome: plano.nome,
-            linha: plano.linha?.toLowerCase() || null,
-            motivo: 'Restrição de modelo/marca por elegibilidade',
-            observacao: regraObs || undefined,
-          });
-          continue;
-        }
+        // Elegibilidade negada não exclui o plano — apenas sinaliza visualmente no card
       }
 
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
