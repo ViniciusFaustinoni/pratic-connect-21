@@ -1795,9 +1795,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           </div>
                         )}
                         <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5">
-                              <h4 className="font-semibold text-sm">{plano.nome}</h4>
+                          <div className="flex items-center justify-between mb-2 gap-1">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <h4 className="font-semibold text-sm truncate">{plano.nome}</h4>
                               {plano.elegibilidadeStatus === 'limitado' && (
                                 <Badge className="bg-amber-500/15 text-amber-600 border-amber-300 text-[10px] px-1.5 py-0">
                                   Restrições
@@ -1822,17 +1822,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                               cr => cr.toLowerCase().includes(cobertura.toLowerCase())
                             );
                             return (
-                              <li key={idx} className="flex items-center gap-1">
+                              <li key={idx} className="flex items-start gap-1">
                                 {isRemovida ? (
                                   <>
-                                    <X className="h-3 w-3 text-destructive shrink-0" />
-                                    <span className="truncate line-through text-muted-foreground/60">{cobertura}</span>
-                                    <span className="text-[10px] text-destructive">(não cobre)</span>
+                                    <X className="h-3 w-3 text-destructive shrink-0 mt-0.5" />
+                                    <span className="line-through text-muted-foreground/60">{cobertura}</span>
+                                    <span className="text-[10px] text-destructive shrink-0">(não cobre)</span>
                                   </>
                                 ) : (
                                   <>
-                                    <Check className="h-3 w-3 text-green-500 shrink-0" />
-                                    <span className="truncate">{cobertura}</span>
+                                    <Check className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
+                                    <span>{cobertura}</span>
                                   </>
                                 )}
                               </li>
@@ -1842,17 +1842,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                 {plano.coberturas.slice(4).map((cobertura, idx) => {
                                   const isRemovida = isCoberturaRemovida(cobertura, categoria);
                                   return (
-                                    <li key={idx + 4} className="flex items-center gap-1 mt-1">
+                                    <li key={idx + 4} className="flex items-start gap-1 mt-1">
                                       {isRemovida ? (
                                         <>
-                                          <X className="h-3 w-3 text-destructive shrink-0" />
-                                          <span className="truncate line-through text-muted-foreground/60">{cobertura}</span>
-                                          <span className="text-[10px] text-destructive">(não cobre)</span>
+                                          <X className="h-3 w-3 text-destructive shrink-0 mt-0.5" />
+                                          <span className="line-through text-muted-foreground/60">{cobertura}</span>
+                                          <span className="text-[10px] text-destructive shrink-0">(não cobre)</span>
                                         </>
                                       ) : (
                                         <>
-                                          <Check className="h-3 w-3 text-green-500 shrink-0" />
-                                          <span className="truncate">{cobertura}</span>
+                                          <Check className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
+                                          <span>{cobertura}</span>
                                         </>
                                       )}
                                     </li>

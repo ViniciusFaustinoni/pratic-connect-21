@@ -98,17 +98,17 @@ export function PlanoCardSelecao({
               const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo || plano.categoriaVeiculo);
               
               return (
-                <div key={index} className={cn('flex items-center gap-2', compact ? 'text-xs' : 'text-sm')}>
+                <div key={index} className={cn('flex items-start gap-2', compact ? 'text-xs' : 'text-sm')}>
                   {isRemovida ? (
                     <>
-                      <X className={cn('flex-shrink-0 text-destructive', compact ? 'h-3 w-3' : 'h-4 w-4')} />
-                      <span className="text-muted-foreground truncate line-through">{cobertura}</span>
-                      {!compact && <span className="text-xs text-destructive ml-auto">(não disponível)</span>}
+                      <X className={cn('flex-shrink-0 text-destructive mt-0.5', compact ? 'h-3 w-3' : 'h-4 w-4')} />
+                      <span className="text-muted-foreground line-through">{cobertura}</span>
+                      {!compact && <span className="text-xs text-destructive ml-auto shrink-0">(não disponível)</span>}
                     </>
                   ) : (
                     <>
-                      <Check className={cn('flex-shrink-0 text-green-500', compact ? 'h-3 w-3' : 'h-4 w-4')} />
-                      <span className="text-muted-foreground truncate">{cobertura}</span>
+                      <Check className={cn('flex-shrink-0 text-green-500 mt-0.5', compact ? 'h-3 w-3' : 'h-4 w-4')} />
+                      <span className="text-muted-foreground">{cobertura}</span>
                     </>
                   )}
                 </div>

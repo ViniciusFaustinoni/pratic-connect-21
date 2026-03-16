@@ -775,7 +775,7 @@ const desenharCardPlanoExpandido = (
   const coberturaFontSize = compact ? 7 : 9;
   const maxChars = compact 
     ? Math.floor((width - padding * 2 - 8) / 1.6) 
-    : Math.floor((width - padding * 2 - 8) / 2.2);
+    : Math.floor((width - padding * 2 - 8) / 1.8);
   
   // Calcular altura baseada nas coberturas
   const numCoberturas = Math.min(plano.coberturas.length, maxCoberturas);
@@ -1187,7 +1187,7 @@ const desenharPaginaDetalhesPlano = (
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(truncateText(cobertura, 32), col1X + 14, textY);
+    doc.text(truncateText(cobertura, 45), col1X + 14, textY);
   });
 
   coberturasCol2.forEach((cobertura, index) => {
@@ -1203,7 +1203,7 @@ const desenharPaginaDetalhesPlano = (
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(truncateText(cobertura, 32), col2X + 14, textY);
+    doc.text(truncateText(cobertura, 45), col2X + 14, textY);
   });
 
   y = startCobY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + 10;
@@ -1232,7 +1232,7 @@ const desenharPaginaDetalhesPlano = (
       doc.text('✗', col1X + 6, textY);
       doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
       doc.setFont('helvetica', 'normal');
-      doc.text(truncateText(item, 32), col1X + 14, textY);
+      doc.text(truncateText(item, 45), col1X + 14, textY);
     });
 
     naoIncluiCol2.forEach((item, index) => {
@@ -1249,7 +1249,7 @@ const desenharPaginaDetalhesPlano = (
       doc.text('✗', col2X + 6, textY);
       doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
       doc.setFont('helvetica', 'normal');
-      doc.text(truncateText(item, 32), col2X + 14, textY);
+      doc.text(truncateText(item, 45), col2X + 14, textY);
     });
 
     y = startNaoY + Math.max(naoIncluiCol1.length, naoIncluiCol2.length) * coberturaLineHeight + 10;
