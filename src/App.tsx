@@ -482,6 +482,7 @@ const App = () => (
               <Route path="/eventos/sindicancias/:id" element={<SindicanciaDetalhe />} />
               <Route path="/eventos/sla" element={<EventosSLADashboard />} />
               <Route path="/eventos/solicitacoes-ia" element={<SolicitacoesIA />} />
+              <Route path="/eventos/chat-ia" element={<EventosChatIA />} />
               
               {/* Sindicante (web desktop dentro do AppLayout) */}
               <Route path="/sindicante" element={<SindicanteDashboard />} />
