@@ -157,6 +157,19 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
+  // Buscar overrides de cota por categoria (planos_cotas_categoria)
+  const { data: cotasCategoriaData } = useQuery({
+    queryKey: ['planos_cotas_categoria'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos_cotas_categoria')
+        .select('plano_id, categoria_veiculo, cota_percentual, cota_minima_valor');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   // Buscar elegibilidade de modelos por plano
   const { data: elegibilidadeData, isLoading: elegibilidadeLoading } = useQuery({
     queryKey: ['plano_elegibilidade_modelos'],
@@ -463,20 +476,32 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Adesão
       const valorAdesao = Number(plano.valor_adesao);
 
-      // Cota
+      // Cota - Cascata: planos_cotas_categoria → plano defaults → configuracoes defaults
       const cotaBase = plano.cota_participacao != null ? Number(plano.cota_participacao) : cotaParticipacaoDefault;
       const cotaMinima = plano.cota_minima != null ? Number(plano.cota_minima) : cotaMinimaDefault;
       let cotaPercentual = cotaBase;
       let cotaMinimaFinal = cotaMinima;
 
-      // Usar cota de desagio para uso aplicativo (baseado no parâmetro usoApp, não na categoria)
-      if (params.usoApp) {
+      // Determinar categoria de lookup para planos_cotas_categoria
+      let cotaCategoriaLookup = categoria || 'passeio';
+      if (params.usoApp) cotaCategoriaLookup = 'aplicativo';
+      if (elegibilidadeStatus === 'limitado') cotaCategoriaLookup = 'desagio';
+
+      // 1º: Tentar override da tabela planos_cotas_categoria
+      const cotaCategoriaOverride = cotasCategoriaData?.find(
+        cc => cc.plano_id === plano.id && cc.categoria_veiculo === cotaCategoriaLookup
+      );
+
+      if (cotaCategoriaOverride) {
+        cotaPercentual = cotaCategoriaOverride.cota_percentual != null ? Number(cotaCategoriaOverride.cota_percentual) : cotaBase;
+        cotaMinimaFinal = cotaCategoriaOverride.cota_minima_valor != null ? Number(cotaCategoriaOverride.cota_minima_valor) : cotaMinima;
+        console.log(`[COTA] ${plano.nome}: override categoria '${cotaCategoriaLookup}' → ${cotaPercentual}% mín R$${cotaMinimaFinal}`);
+      } else if (params.usoApp) {
+        // 2º: Fallback para campos do plano (app)
         cotaPercentual = plano.cota_desagio != null ? Number(plano.cota_desagio) : cotaDesagioDefault;
         cotaMinimaFinal = plano.cota_minima_desagio != null ? Number(plano.cota_minima_desagio) : cotaMinimaDesagioDefault;
-      }
-
-      // Deságio para elegibilidade limitada (mesma lógica de app — cota maior)
-      if (elegibilidadeStatus === 'limitado') {
+      } else if (elegibilidadeStatus === 'limitado') {
+        // 2º: Fallback para campos do plano (deságio)
         cotaPercentual = plano.cota_desagio != null ? Number(plano.cota_desagio) : cotaDesagioDefault;
         cotaMinimaFinal = plano.cota_minima_desagio != null ? Number(plano.cota_minima_desagio) : cotaMinimaDesagioDefault;
       }
@@ -546,7 +571,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     return { planos: sorted, planosNegados: negados };
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading, configApp]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading, configApp, cotasCategoriaData]);
 
   return {
     planos,

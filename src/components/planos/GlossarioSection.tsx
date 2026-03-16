@@ -15,6 +15,8 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { 
   useGlossario, 
   useRegrasImportantes, 
@@ -24,6 +26,43 @@ import {
 import { useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
 import { BookOpen, AlertTriangle, DollarSign, Loader2 } from 'lucide-react';
+
+// Hook para buscar cotas da tabela planos_cotas_categoria (fonte primária)
+function useCotasCategoriaTabela() {
+  return useQuery({
+    queryKey: ['planos_cotas_categoria_glossario'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos_cotas_categoria')
+        .select('categoria_veiculo, cota_percentual, cota_minima_valor')
+        .order('categoria_veiculo');
+      if (error) throw error;
+      // Agrupar por categoria (pegar valores únicos — todos os planos de mesma categoria têm mesmos valores)
+      const map = new Map<string, { percentual: number; minimo: number }>();
+      (data || []).forEach(row => {
+        if (!map.has(row.categoria_veiculo)) {
+          map.set(row.categoria_veiculo, {
+            percentual: Number(row.cota_percentual ?? 6),
+            minimo: Number(row.cota_minima_valor ?? 1200),
+          });
+        }
+      });
+      return map;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+const CATEGORIA_LABELS: Record<string, string> = {
+  passeio: 'Passeio',
+  aplicativo: 'Aplicativo (Uber, 99, etc)',
+  desagio: 'Com Deságio',
+  moto: 'Motocicletas',
+  diesel: 'Diesel',
+  especial_plus: 'Especial Plus',
+  lancamento: 'Lançamento',
+  eletrico: 'Elétricos',
+};
 
 export function GlossarioTermos() {
   const { data: glossario = [], isLoading } = useGlossario();
@@ -131,14 +170,39 @@ export function RegrasImportantes() {
 
 export function TabelaCotasTaxas() {
   const { data: cotasTaxas = [], isLoading: loadingCotas } = useCotasTaxas();
+  const { data: cotasCategoriaMap, isLoading: loadingCotasTabela } = useCotasCategoriaTabela();
   const { data: taxasProcedimentos = [], isLoading: loadingTaxas } = useTaxasProcedimentos();
   const { data: cotaPercDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinDefault = 1200 } = useCotaMinimaDefault();
 
-  const isLoading = loadingCotas || loadingTaxas;
+  const isLoading = loadingCotas || loadingTaxas || loadingCotasTabela;
+
+  // Fonte primária: planos_cotas_categoria (tabela). Fallback: cotas_taxas (JSON)
+  const cotasExibicao = (() => {
+    if (cotasCategoriaMap && cotasCategoriaMap.size > 0) {
+      return Array.from(cotasCategoriaMap.entries()).map(([cat, vals]) => ({
+        categoria: CATEGORIA_LABELS[cat] || cat,
+        percentual: `${vals.percentual}%`,
+        minimo: vals.minimo === 0 ? 'Sem mínimo' : `R$ ${vals.minimo.toLocaleString('pt-BR')}`,
+        comDesagio: cat === 'passeio' ? '8%' : undefined,
+        minimoDesagio: cat === 'passeio' ? 'R$ 2.000' : undefined,
+      }));
+    }
+    return cotasTaxas;
+  })();
 
   // Derivar valores de deságio das cotas para o alerta
   const desagioInfo = (() => {
+    if (cotasCategoriaMap && cotasCategoriaMap.size > 0) {
+      const desagioEntry = cotasCategoriaMap.get('desagio');
+      const percDesagio = desagioEntry ? `${desagioEntry.percentual}%` : '8%';
+      const minDesagio = desagioEntry
+        ? (desagioEntry.minimo === 0 ? 'Sem mínimo' : `R$ ${desagioEntry.minimo.toLocaleString('pt-BR')}`)
+        : `R$ ${(cotaMinDefault * 2).toLocaleString('pt-BR')}`;
+      const passeioEntry = cotasCategoriaMap.get('passeio');
+      const categoriasNormais = passeioEntry ? `Passeio ${passeioEntry.percentual}%` : `Passeio ${cotaPercDefault}%`;
+      return { percDesagio, minDesagio, categoriasNormais };
+    }
     const comDesagio = cotasTaxas.find(c => c.comDesagio);
     const percDesagio = comDesagio?.comDesagio || '8%';
     const minDesagio = comDesagio?.minimoDesagio || `R$ ${(cotaMinDefault * 2).toLocaleString('pt-BR')}`;
@@ -179,7 +243,7 @@ export function TabelaCotasTaxas() {
               </TableRow>
             </TableHeader>
             <TableBody>
-              {cotasTaxas.map((cota, index) => (
+              {cotasExibicao.map((cota, index) => (
                 <TableRow 
                   key={index}
                   className={index % 2 === 0 ? 'bg-background' : 'bg-muted/30'}

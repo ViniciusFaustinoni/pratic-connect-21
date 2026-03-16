@@ -75,7 +75,7 @@ Deno.serve(async (req) => {
               .single(),
             supabase
               .from('veiculos')
-              .select('valor_fipe, uso_aplicativo')
+              .select('valor_fipe, uso_aplicativo, combustivel')
               .eq('id', veiculoId)
               .single(),
           ]);
@@ -93,19 +93,39 @@ Deno.serve(async (req) => {
             let percentual = plano.cota_participacao ?? cotaDefault;
             let minimo = plano.cota_minima ?? minimoDefault;
 
-            if (veiculoFull.uso_aplicativo && plano.cota_app_percent) {
+            // Determinar categoria do veículo para lookup na tabela
+            let categoriaVeiculo = 'passeio';
+            if (veiculoFull.uso_aplicativo) categoriaVeiculo = 'aplicativo';
+            else if (veiculoFull.combustivel?.toLowerCase() === 'diesel') categoriaVeiculo = 'diesel';
+
+            // 1º: Buscar override na tabela planos_cotas_categoria
+            const { data: cotaCategoria } = await supabase
+              .from('planos_cotas_categoria')
+              .select('cota_percentual, cota_minima_valor')
+              .eq('plano_id', associadoData.plano_id)
+              .eq('categoria_veiculo', categoriaVeiculo)
+              .maybeSingle();
+
+            if (cotaCategoria) {
+              percentual = cotaCategoria.cota_percentual ?? percentual;
+              minimo = cotaCategoria.cota_minima_valor ?? minimo;
+              console.log(`[aprovar-sinistro] Override categoria '${categoriaVeiculo}': ${percentual}% mín R$${minimo}`);
+            } else if (veiculoFull.uso_aplicativo && plano.cota_app_percent) {
+              // 2º: Fallback para campos do plano (app)
               percentual = plano.cota_app_percent;
-              minimo = plano.cota_app_min || minimo;
+              minimo = plano.cota_app_min ?? minimo;
             }
 
-            valorCotaCalculado = Math.max(
-              veiculoFull.valor_fipe * percentual / 100,
-              minimo
-            );
+            // Regra: cota_minima = 0 significa sem mínimo
+            valorCotaCalculado = minimo === 0
+              ? veiculoFull.valor_fipe * percentual / 100
+              : Math.max(veiculoFull.valor_fipe * percentual / 100, minimo);
+
             console.log('[aprovar-sinistro] Cota calculada:', {
               valor_fipe: veiculoFull.valor_fipe,
               percentual,
               minimo,
+              categoria: categoriaVeiculo,
               uso_app: veiculoFull.uso_aplicativo,
               valor_cota: valorCotaCalculado,
             });
