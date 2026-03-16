@@ -880,7 +880,32 @@ serve(async (req) => {
                     },
                   });
 
-                  // Notificar cliente sobre cancelamento
+                  // === ESTORNAR PONTUAÇÃO DE ADESÃO ===
+                  try {
+                    const { data: contratoVendedorOverdue } = await supabase
+                      .from('contratos')
+                      .select('vendedor_id')
+                      .eq('id', cobranca.contrato_id)
+                      .maybeSingle();
+
+                    if (contratoVendedorOverdue?.vendedor_id) {
+                      const { data: eventoOriginal } = await supabase
+                        .from('pontuacao_eventos')
+                        .select('id, pontos')
+                        .eq('contrato_id', cobranca.contrato_id)
+                        .eq('tipo_operacao', 'nova_adesao')
+                        .eq('estornado', false)
+                        .maybeSingle();
+
+                      if (eventoOriginal) {
+                        await estornarEventoPontuacao(supabase, eventoOriginal.id, contratoVendedorOverdue.vendedor_id, cobranca.contrato_id);
+                        console.log(`[asaas-webhook] Pontuação estornada para contrato ${cobranca.contrato_id}`);
+                      }
+                    }
+                  } catch (estornoErr) {
+                    console.error('[asaas-webhook] Erro ao estornar pontuação:', estornoErr);
+                  }
+
                   if (associadoOverdue?.user_id) {
                     await supabase.functions.invoke('disparar-notificacao', {
                       body: {
