@@ -330,7 +330,7 @@ Após registrar o sinistro com sucesso e o resultado conter "link_evento":
 2. Pergunte ao associado:
    "Quer dar entrada no processo do sinistro agora? Vou te enviar um link para você completar as etapas (auto vistoria, B.O., agendamento). Ou prefere que a gente retorne amanhã?"
 3. Se o associado disser AGORA / SIM / QUERO:
-   - Envie o link: "Aqui está o link: [link_evento]. Válido por 72h."
+   - Envie o link: "Aqui está o link: [link_evento]. Válido por ${prazoLinkEvento}h."
    - Explique brevemente as etapas: Auto Vistoria, B.O., Agendamento da vistoria presencial, Pagamento da coparticipação
 4. Se disser DEPOIS / AMANHÃ / NÃO AGORA:
    - Responda: "Sem problemas! Amanhã de manhã enviaremos o link para você dar continuidade."
