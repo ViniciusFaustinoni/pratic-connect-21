@@ -202,6 +202,13 @@ export function AuthProvider({ children }: AuthProviderProps) {
         // Atualizar ID do usuário atual
         currentUserId = newUserId;
 
+        // Invalidar queries dependentes de usuário ao detectar novo login
+        if (newUserId) {
+          queryClient.invalidateQueries({ queryKey: ['module-visibility', newUserId] });
+          queryClient.invalidateQueries({ queryKey: ['module-item-visibility', newUserId] });
+          queryClient.invalidateQueries({ queryKey: ['app-roles-config'] });
+        }
+
         setSession(currentSession);
         setUser(currentSession?.user ?? null);
 
