@@ -200,7 +200,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     'VW': 'VOLKSWAGEN',
     'GM': 'CHEVROLET',
     'MERCEDES': 'MERCEDES-BENZ',
-    'CAOA CHERY': 'CHERY',
     'CHERY': 'CAOA CHERY',
     'CITROËN': 'CITROEN',
   };
@@ -230,15 +229,32 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
     const regra = regrasOrdenadas.find(r => {
       // Double-check de marca: normaliza ambos os lados via aliases
-      const marcaMatch = normalizarMarcaElegibilidade(r.marca) === marcaNormAPI;
+      const marcaNormBanco = normalizarMarcaElegibilidade(r.marca);
+      const marcaMatch = marcaNormBanco === marcaNormAPI
+        || r.marca.trim().toUpperCase() === veiculo.marca.trim().toUpperCase();
       
-      // Matching de modelo com 3 níveis de fallback
-      const modeloBanco = r.modelo.trim().toUpperCase();
-      const prefixMatch = modeloAPI.startsWith(modeloBanco) 
-        || modeloBanco.startsWith(modeloAPI);
-      const containsMatch = modeloAPI.includes(modeloBanco) 
-        || modeloBanco.includes(modeloAPI);
-      const modeloMatch = prefixMatch || containsMatch;
+      // Normalizar modelo: remover qualificadores entre parênteses
+      const modeloBanco = r.modelo.trim().toUpperCase()
+        .replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+      const modeloAPIClean = modeloAPI
+        .replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+
+      // Wildcard: TODOS OS MODELOS aceita qualquer modelo
+      let modeloMatch = false;
+      if (modeloBanco.startsWith('TODOS')) {
+        modeloMatch = true;
+      } else {
+        // 3 níveis de matching
+        const prefixMatch = modeloAPIClean.startsWith(modeloBanco)
+          || modeloBanco.startsWith(modeloAPIClean);
+        const containsMatch = modeloAPIClean.includes(modeloBanco)
+          || modeloBanco.includes(modeloAPIClean);
+        const baseBanco = modeloBanco.split(' ')[0];
+        const baseMatch = baseBanco.length >= 2 && (
+          modeloAPIClean.startsWith(baseBanco + ' ') || modeloAPIClean === baseBanco
+        );
+        modeloMatch = prefixMatch || containsMatch || baseMatch;
+      }
       
       const anoMatch = veiculo.ano >= r.ano_min &&
                        (r.ano_max === null || veiculo.ano <= r.ano_max);
@@ -368,7 +384,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           },
         );
 
-        // HARD GATE: planos negados são excluídos da cotação
+        // Planos negados permanecem com badge visual (sem continue)
         if (elegibilidadeStatus === 'negado') {
           negados.push({
             planoId: plano.id,
@@ -376,7 +392,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
             linha,
             motivo: 'Modelo não elegível para este plano',
           });
-          continue;
         }
       }
 
