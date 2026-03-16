@@ -31,8 +31,12 @@ export function FotosReboquistaUploadModal({ open, onClose, chamadoId }: Props) 
   const handleFiles = useCallback((newFiles: FileList | null) => {
     if (!newFiles) return;
     const arr = Array.from(newFiles).filter(f => {
-      if (f.size > 5 * 1024 * 1024) return false;
-      if (!['image/jpeg', 'image/png', 'image/webp'].includes(f.type)) return false;
+      const isImage = ['image/jpeg', 'image/png', 'image/webp'].includes(f.type);
+      const isVideo = ['video/mp4', 'video/webm'].includes(f.type);
+      if (!isImage && !isVideo) return false;
+      // 5MB for images, 50MB for videos
+      const maxSize = isVideo ? 50 * 1024 * 1024 : 5 * 1024 * 1024;
+      if (f.size > maxSize) return false;
       return true;
     });
     const total = [...files, ...arr].slice(0, 20);
