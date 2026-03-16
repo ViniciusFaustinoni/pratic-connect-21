@@ -514,10 +514,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     setAnos([]);
     form.setValue('valor_fipe', 0);
 
-    if (marcaSelecionada && value) {
+    const codigoMarca = marcaSelecionada.includes(':') ? marcaSelecionada.split(':')[1] : marcaSelecionada;
+    if (codigoMarca && value) {
       setLoadingAnos(true);
       try {
-        const data = await getAnos(marcaSelecionada, value, tipoFipeSelecionado);
+        const data = await getAnos(codigoMarca, value, tipoFipeSelecionado);
         setAnos(data);
       } catch (error) {
         console.error('Erro ao carregar anos:', error);
