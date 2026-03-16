@@ -167,31 +167,37 @@ Deno.serve(async (req) => {
     for (const contratoId of contratoIds) {
       console.log(`[delete-cotacao] Processando contrato ${contratoId}`)
 
-      // 4a. Excluir contratos_documentos
+      // 4a. Excluir comissoes_deducoes (FK constraint bloqueia exclusão de contratos)
+      await adminClient
+        .from('comissoes_deducoes')
+        .delete()
+        .eq('contrato_id', contratoId)
+
+      // 4b. Excluir contratos_documentos
       await adminClient
         .from('contratos_documentos')
         .delete()
         .eq('contrato_id', contratoId)
 
-      // 4b. Excluir contratos_historico
+      // 4c. Excluir contratos_historico
       await adminClient
         .from('contratos_historico')
         .delete()
         .eq('contrato_id', contratoId)
 
-      // 4c. Excluir asaas_cobrancas
+      // 4d. Excluir asaas_cobrancas
       await adminClient
         .from('asaas_cobrancas')
         .delete()
         .eq('contrato_id', contratoId)
 
-      // 4d. Excluir instalacoes vinculadas ao contrato
+      // 4e. Excluir instalacoes vinculadas ao contrato
       await adminClient
         .from('instalacoes')
         .delete()
         .eq('contrato_id', contratoId)
 
-      // 4e. Excluir vistorias vinculadas ao contrato
+      // 4f. Excluir vistorias vinculadas ao contrato
       await adminClient
         .from('vistorias')
         .delete()
