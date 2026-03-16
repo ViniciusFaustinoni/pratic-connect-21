@@ -37,13 +37,12 @@ import { useAtivarRastreador } from '@/hooks/useAtivarRastreador';
 import { SolicitarDocumentosDialog } from '@/components/cadastro/SolicitarDocumentosDialog';
 import { ReprovarPropostaDialog } from '@/components/cadastro/ReprovarPropostaDialog';
 import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDocumentoModal';
-import { VistoriaObservacoesCard } from '@/components/cadastro/VistoriaObservacoesCard';
 import {
   PropostaHeroHeader,
   PropostaDetalhesTabs,
   PropostaApprovalStepper,
 } from '@/components/cadastro/proposta';
-import { DocumentosAnexadosPanel } from '@/components/cadastro/DocumentosAnexadosPanel';
+import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 
 // ============================================
