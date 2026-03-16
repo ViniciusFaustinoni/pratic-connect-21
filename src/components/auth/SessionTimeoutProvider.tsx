@@ -1,21 +1,14 @@
-import { ReactNode } from 'react';
+import { ReactNode, useCallback } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
 import { useSessionTimeout, SESSION_TIMEOUT_CONFIG } from '@/hooks/useSessionTimeout';
 import { SessionTimeoutModal } from './SessionTimeoutModal';
 
-// ============================================
-// TIPOS
-// ============================================
 interface SessionTimeoutProviderProps {
   children: ReactNode;
-  /** 'internal' para sistema, 'app' para associado */
   variant?: 'internal' | 'app';
 }
 
-// ============================================
-// COMPONENTE
-// ============================================
 export function SessionTimeoutProvider({
   children,
   variant = 'internal',
@@ -23,22 +16,19 @@ export function SessionTimeoutProvider({
   const navigate = useNavigate();
   const { user, signOut } = useAuth();
 
-  // Configuração baseada na variante
   const config = variant === 'internal' 
     ? SESSION_TIMEOUT_CONFIG.INTERNAL 
     : SESSION_TIMEOUT_CONFIG.APP;
 
-  // Callback de logout
-  const handleTimeout = async () => {
+  const handleTimeout = useCallback(async () => {
     await signOut();
     const loginPath = variant === 'internal' ? '/auth' : '/app/login';
     navigate(loginPath, { 
       replace: true,
       state: { reason: 'session_expired' }
     });
-  };
+  }, [signOut, navigate, variant]);
 
-  // Hook de timeout
   const {
     showWarning,
     remainingTime,
@@ -47,7 +37,7 @@ export function SessionTimeoutProvider({
     timeoutDuration: config.timeoutDuration,
     warningBefore: config.warningBefore,
     onTimeout: handleTimeout,
-    enabled: !!user, // Só ativa se estiver logado
+    enabled: !!user,
   });
 
   return (
