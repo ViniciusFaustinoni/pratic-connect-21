@@ -875,7 +875,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Get marca/modelo names for display
   const getMarcaNome = () => {
     if (veiculoEncontrado?.vehicleData?.marca) return veiculoEncontrado.vehicleData.marca;
-    const marca = marcas.find(m => m.codigo === marcaSelecionada);
+    const codigoMarca = marcaSelecionada.includes(':') ? marcaSelecionada.split(':')[1] : marcaSelecionada;
+    const marca = marcas.find(m => m.codigo === codigoMarca);
     return marca?.nome || '';
   };
 
