@@ -1141,8 +1141,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   return (
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-3xl max-h-[90vh] overflow-y-auto" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
+      <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
+        <DialogHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-6">
           <DialogTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" />
             Cotação Rápida
@@ -1153,7 +1153,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 overflow-y-auto px-4 pb-4 sm:px-6 space-y-5">
             
             {/* BLOCO 0: DADOS DO ASSOCIADO */}
             <div className="space-y-3">
@@ -2162,8 +2163,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               </>
             )}
 
-            {/* BLOCO 5: AÇÕES */}
-            <div className="flex items-center justify-end pt-2 border-t">
+            </div>
+
+            {/* BLOCO 5: AÇÕES - sticky no rodapé */}
+            <div className="sticky bottom-0 bg-background border-t px-4 py-3 sm:px-6 flex items-center justify-end">
               <Button 
                 type="submit" 
                 disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || (valorAdesao <= 0 && !isCenarioIsento) || !dadosAssociadoValidos}
