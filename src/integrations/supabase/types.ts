@@ -18574,6 +18574,7 @@ export type Database = {
           requires_recent_year: boolean
           slug: string
           sort_priority: number
+          supports_app: boolean
           updated_at: string | null
           vehicle_type: string | null
         }
@@ -18590,6 +18591,7 @@ export type Database = {
           requires_recent_year?: boolean
           slug: string
           sort_priority?: number
+          supports_app?: boolean
           updated_at?: string | null
           vehicle_type?: string | null
         }
@@ -18606,6 +18608,7 @@ export type Database = {
           requires_recent_year?: boolean
           slug?: string
           sort_priority?: number
+          supports_app?: boolean
           updated_at?: string | null
           vehicle_type?: string | null
         }
