@@ -78,7 +78,7 @@ export function FotosReboquistaUploadModal({ open, onClose, chamadoId }: Props) 
         <div className="space-y-4">
           {/* File input */}
           <div>
-            <Label>Fotos (máx. 20, até 5MB cada, JPG/PNG)</Label>
+            <Label>Fotos e Vídeos (máx. 20, fotos até 5MB, vídeos até 50MB)</Label>
             <div className="mt-1">
               <label className="flex items-center justify-center gap-2 border-2 border-dashed rounded-lg p-6 cursor-pointer hover:border-primary transition-colors">
                 <ImageIcon className="h-6 w-6 text-muted-foreground" />
