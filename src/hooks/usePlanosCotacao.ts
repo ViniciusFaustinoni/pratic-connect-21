@@ -303,8 +303,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
 
       // Filtrar por categorias bloqueadas no product_line
+      // Nota: 'aplicativo' NÃO é exceção — o bloqueio por categoria é independente do uso (app/passeio)
       const blockedCategories: string[] = plProductLine?.blocked_categories || [];
-      if (categoria && categoria !== 'nenhuma' && categoria !== 'aplicativo' 
+      if (categoria && categoria !== 'nenhuma' 
           && blockedCategories.length > 0 && blockedCategories.includes(categoria)) {
         continue;
       }
