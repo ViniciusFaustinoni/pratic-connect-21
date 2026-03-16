@@ -94,7 +94,7 @@ import { Database } from '@/integrations/supabase/types';
 
 type StatusChamado = Database['public']['Enums']['status_chamado'];
 
-const STATUS_ATIVOS: StatusChamado[] = ['aberto', 'aguardando_prestador', 'prestador_despachado', 'prestador_a_caminho', 'em_atendimento'];
+const STATUS_ATIVOS: StatusChamado[] = ['aberto', 'aguardando_aceites' as StatusChamado, 'aguardando_prestador', 'prestador_despachado', 'prestador_a_caminho', 'em_atendimento'];
 const STATUS_CANCELADOS: StatusChamado[] = ['cancelado_associado', 'cancelado_sistema'];
 
 export default function ChamadosList() {
