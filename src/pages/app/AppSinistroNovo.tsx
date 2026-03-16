@@ -757,7 +757,7 @@ export default function AppSinistroNovo() {
           </div>
 
           <p className="text-sm text-gray-600 mt-4">
-            Nossa equipe irá analisar e entrar em contato em até 24 horas úteis.
+            Nossa equipe irá analisar e entrar em contato em até {prazoCotacao} horas úteis.
           </p>
 
           <Button onClick={() => navigate('/app/sinistros')} className="w-full mt-4">
