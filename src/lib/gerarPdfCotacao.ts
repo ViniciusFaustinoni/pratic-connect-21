@@ -1203,7 +1203,7 @@ const desenharPaginaDetalhesPlano = (
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(truncateText(cobertura, 32), col2X + 14, textY);
+    doc.text(truncateText(cobertura, 45), col2X + 14, textY);
   });
 
   y = startCobY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + 10;
