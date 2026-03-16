@@ -197,7 +197,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [showPlacaDuplicadaModal, setShowPlacaDuplicadaModal] = useState(false);
 
   // Estados para seleção FIPE manual
-  const [marcas, setMarcas] = useState<FipeMarca[]>([]);
+  type FipeMarcaComTipo = FipeMarca & { tipoFipe: 'carros' | 'motos' };
+  const [marcas, setMarcas] = useState<FipeMarcaComTipo[]>([]);
+  const [tipoFipeSelecionado, setTipoFipeSelecionado] = useState<'carros' | 'motos'>('carros');
   const [modelos, setModelos] = useState<FipeModelo[]>([]);
   const [anos, setAnos] = useState<FipeAno[]>([]);
   const [marcaSelecionada, setMarcaSelecionada] = useState('');
