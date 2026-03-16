@@ -120,6 +120,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class, blocked_categories, supports_app)
         `)
         .eq('ativo', true)
+        .eq('visivel_gestao', true)
         .order('ordem', { ascending: true });
       
       if (error) throw error;
