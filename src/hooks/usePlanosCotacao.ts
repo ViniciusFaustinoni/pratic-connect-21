@@ -332,8 +332,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Filtrar por elegibilidade de modelo (aditivo — só aplica se dados carregados e veículo informado)
       // Usa o combustível original (não o normalizado para pricing) para compatibilidade com regras de elegibilidade
       const combustivelOriginal = (combustivel || 'flex').toLowerCase();
+      let elegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined = undefined;
+
       if (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData && !elegibilidadeLoading) {
-        const resultado = verificarElegibilidadeModelo(
+        elegibilidadeStatus = verificarElegibilidadeModelo(
           plano.id,
           {
             marca: params.marca,
@@ -342,7 +344,17 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
             combustivel: combustivelOriginal,
           },
         );
-        // Elegibilidade negada não exclui o plano — apenas sinaliza visualmente no card
+
+        // HARD GATE: planos negados são excluídos da cotação
+        if (elegibilidadeStatus === 'negado') {
+          negados.push({
+            planoId: plano.id,
+            planoNome: plano.nome,
+            linha,
+            motivo: 'Modelo não elegível para este plano',
+          });
+          continue;
+        }
       }
 
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
