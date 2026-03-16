@@ -311,7 +311,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   const { planos, planosNegados } = useMemo<{ planos: PlanoCotacao[]; planosNegados: PlanoNegadoInfo[] }>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
 
-    if (!valorFipe || valorFipe <= 0 || !planosBanco) {
+    if (!valorFipe || valorFipe <= 0 || !planosBanco || elegibilidadeLoading) {
       return { planos: [], planosNegados: [] };
     }
 
@@ -386,24 +386,33 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
-      // Filtrar por elegibilidade de modelo (aditivo — só aplica se dados carregados e veículo informado)
-      // Usa o combustível original (não o normalizado para pricing) para compatibilidade com regras de elegibilidade
+      // Filtrar por elegibilidade de modelo (whitelist restritiva)
       const combustivelOriginal = (combustivel || 'flex').toLowerCase();
       let elegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined = undefined;
 
-      if (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData && !elegibilidadeLoading) {
-        elegibilidadeStatus = verificarElegibilidadeModelo(
-          plano.id,
-          linha,
-          {
-            marca: params.marca,
-            modelo: params.modelo,
-            ano: anoVeiculoNum,
-            combustivel: combustivelOriginal,
-          },
-        );
+      // Verificar se existem regras de elegibilidade para esta linha
+      const planosNaLinhaIds = linha
+        ? (planosBanco || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
+        : [plano.id];
+      const temRegrasElegibilidade = elegibilidadeData?.some(e => planosNaLinhaIds.includes(e.plano_id)) ?? false;
 
-        // Planos negados são excluídos da cotação
+      if (temRegrasElegibilidade) {
+        if (params.marca && params.modelo && anoVeiculoNum) {
+          elegibilidadeStatus = verificarElegibilidadeModelo(
+            plano.id,
+            linha,
+            {
+              marca: params.marca,
+              modelo: params.modelo,
+              ano: anoVeiculoNum,
+              combustivel: combustivelOriginal,
+            },
+          );
+        } else {
+          // Regras existem mas não temos dados do veículo para validar → negar
+          elegibilidadeStatus = 'negado';
+        }
+
         if (elegibilidadeStatus === 'negado') {
           negados.push({
             planoId: plano.id,
