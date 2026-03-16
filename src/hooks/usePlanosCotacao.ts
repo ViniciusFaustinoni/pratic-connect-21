@@ -206,7 +206,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
     // Remove versão/motorização — ex: "VOYAGE 1.6" → "VOYAGE", "ONIX PLUS 1.0" → "ONIX PLUS"
     const normalizarModelo = (m: string) =>
-      m.trim().toUpperCase().replace(/\s+\d[\d.,V]*.*$/i, '').trim();
+      m.trim().toUpperCase()
+        .replace(/\s+\d[\d.,]*\s*[A-Z]*$/, '')
+        .replace(/\s+[A-Z]*\d+[A-Z]*$/, '')
+        .trim();
 
     const marcaNorm = veiculo.marca.trim().toUpperCase();
     const modeloNorm = normalizarModelo(veiculo.modelo);
