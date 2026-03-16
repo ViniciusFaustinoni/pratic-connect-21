@@ -143,3 +143,6 @@ verify_jwt = false
 
 [functions.cron-integracoes-health-check]
 verify_jwt = false
+
+[functions.chatwoot-webhook]
+verify_jwt = false
