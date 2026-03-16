@@ -260,6 +260,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Regra de ano recente usando campo do banco
       if (requiresRecentYear && anoVeiculoNum < anoAtual - 1) continue;
 
+      // Filtrar linhas que não suportam uso de aplicativo
+      if (params.usoApp && plProductLine?.supports_app === false) {
+        continue;
+      }
+
       // Filtrar por categorias bloqueadas no product_line
       const blockedCategories: string[] = plProductLine?.blocked_categories || [];
       if (categoria && categoria !== 'nenhuma' && categoria !== 'aplicativo' 
