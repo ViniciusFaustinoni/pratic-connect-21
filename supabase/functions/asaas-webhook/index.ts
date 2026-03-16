@@ -178,6 +178,28 @@ serve(async (req) => {
             },
           });
 
+          // === PONTUAR NOVA ADESÃO (FALLBACK) ===
+          try {
+            const { data: contratoVendedorFallback } = await supabase
+              .from('contratos')
+              .select('vendedor_id')
+              .eq('id', payment.externalReference)
+              .maybeSingle();
+
+            if (contratoVendedorFallback?.vendedor_id) {
+              const pontos = await getParametroPontuacao(supabase, 'pontos_nova_adesao', 1.0);
+              await registrarEventoPontuacao(supabase, {
+                vendedor_id: contratoVendedorFallback.vendedor_id,
+                tipo_operacao: 'nova_adesao',
+                pontos,
+                contrato_id: payment.externalReference,
+                referencia_tipo: 'cobranca',
+              });
+            }
+          } catch (pontErr) {
+            console.error('[asaas-webhook] Erro ao pontuar adesão fallback:', pontErr);
+          }
+
           // === CRIAR DOCUMENTO NO AUTENTIQUE AUTOMATICAMENTE (FALLBACK) ===
           try {
             const contratoId = payment.externalReference;
