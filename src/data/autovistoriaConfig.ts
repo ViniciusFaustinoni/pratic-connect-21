@@ -813,3 +813,11 @@ export const getPeriodosDisponivelsPorHora = (date: Date): PeriodoConfig[] => {
     return periodo.horarioInicio > horaAgora;
   });
 };
+
+// Função para obter horários disponíveis baseado na data (legado)
+export const getHorariosParaDia = (date: Date): string[] => {
+  if (isSabado(date)) {
+    return HORARIOS_SABADO;
+  }
+  return HORARIOS_DISPONIVEIS;
+};
