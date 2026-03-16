@@ -436,7 +436,11 @@ export default function ChamadosList() {
                       <TableCell>{chamado.veiculo?.placa || '-'}</TableCell>
                       <TableCell>{chamado.origem_cidade || 'Não informado'}</TableCell>
                       <TableCell>
-                        <Badge className={status.className}>{status.label}</Badge>
+                        <div className="flex flex-col gap-1">
+                          <Badge className={status.className}>{status.label}</Badge>
+                          <BadgeDespachoStatus chamadoId={chamado.id} chamadoStatus={chamado.status} />
+                        </div>
+                      </TableCell>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDistanceToNow(new Date(chamado.data_abertura), {
