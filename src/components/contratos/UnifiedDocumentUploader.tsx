@@ -287,9 +287,7 @@ export function UnifiedDocumentUploader({
     
     setIsProcessing(true);
     
-    for (const file of Array.from(files)) {
-      await processFile(file);
-    }
+    await Promise.allSettled(Array.from(files).map(file => processFile(file)));
     
     setIsProcessing(false);
   }, [processFile]);
