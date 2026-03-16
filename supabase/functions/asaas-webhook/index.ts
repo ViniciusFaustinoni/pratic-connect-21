@@ -444,6 +444,29 @@ serve(async (req) => {
 
               console.log(`[asaas-webhook] Adesão paga para contrato ${cobranca.contrato_id}`);
 
+              // === PONTUAR NOVA ADESÃO ===
+              try {
+                const { data: contratoVendedor } = await supabase
+                  .from('contratos')
+                  .select('vendedor_id')
+                  .eq('id', cobranca.contrato_id)
+                  .maybeSingle();
+
+                if (contratoVendedor?.vendedor_id) {
+                  const pontos = await getParametroPontuacao(supabase, 'pontos_nova_adesao', 1.0);
+                  await registrarEventoPontuacao(supabase, {
+                    vendedor_id: contratoVendedor.vendedor_id,
+                    tipo_operacao: 'nova_adesao',
+                    pontos,
+                    contrato_id: cobranca.contrato_id,
+                    referencia_tipo: 'cobranca',
+                    referencia_id: cobranca.id,
+                  });
+                }
+              } catch (pontErr) {
+                console.error('[asaas-webhook] Erro ao pontuar adesão:', pontErr);
+              }
+
               // === ATUALIZAR STATUS DA COTAÇÃO ===
               const { data: contratoData } = await supabase
                 .from('contratos')
