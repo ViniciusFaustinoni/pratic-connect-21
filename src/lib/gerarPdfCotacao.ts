@@ -775,7 +775,7 @@ const desenharCardPlanoExpandido = (
   const coberturaFontSize = compact ? 7 : 9;
   const maxChars = compact 
     ? Math.floor((width - padding * 2 - 8) / 1.6) 
-    : Math.floor((width - padding * 2 - 8) / 2.2);
+    : Math.floor((width - padding * 2 - 8) / 1.8);
   
   // Calcular altura baseada nas coberturas
   const numCoberturas = Math.min(plano.coberturas.length, maxCoberturas);
