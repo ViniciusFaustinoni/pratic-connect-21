@@ -128,9 +128,10 @@ export function IniciarIndenizacaoModal({
             .single();
 
           if (assocData && valorFinal > 0) {
-            // 60 dias úteis ≈ 84 dias corridos
+            const prazo = prazoSinistro ?? 60;
+            const diasCorridos = Math.round(prazo * 1.4);
             const vencimento = new Date();
-            vencimento.setDate(vencimento.getDate() + 84);
+            vencimento.setDate(vencimento.getDate() + diasCorridos);
 
             await supabase.from('contas_pagar').insert({
               fornecedor_nome: assocData.nome,
