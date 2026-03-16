@@ -490,6 +490,23 @@ serve(async (req) => {
       },
     });
 
+    // Enviar link de assinatura via WhatsApp (fire-and-forget)
+    try {
+      const telefoneWpp = clienteTelefone || contrato.cliente_telefone || contrato.associados?.telefone || contrato.leads?.telefone;
+      if (signatureLink && telefoneWpp) {
+        const linkCode = signatureLink.replace('https://assina.ae/', '');
+        const nomeDoc = `Termo de Afiliação ${contrato.numero}`;
+        await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+          body: JSON.stringify({ telefone: telefoneWpp, template_name: 'assinatura_documento', params: [clienteNome, nomeDoc], button_params: [linkCode] }),
+        });
+        console.log('[autentique-create-by-token] WhatsApp assinatura enviado para', telefoneWpp);
+      }
+    } catch (whatsErr) {
+      console.error('[autentique-create-by-token] Erro ao enviar WhatsApp assinatura (não-fatal):', whatsErr);
+    }
+
     // Registrar no histórico do lead se existir
     if (contrato.lead_id) {
       await supabase.from("leads_historico").insert({

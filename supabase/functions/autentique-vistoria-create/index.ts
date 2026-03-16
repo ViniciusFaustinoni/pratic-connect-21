@@ -353,7 +353,29 @@ serve(async (req) => {
 
     if (updateError) {
       console.error('[autentique-vistoria-create] Erro ao atualizar vistoria:', updateError);
-      // Não falha se não conseguir atualizar, documento já foi criado
+    }
+
+    // Enviar link de assinatura via WhatsApp (fire-and-forget)
+    try {
+      // Buscar telefone do cliente (não vem no request, buscar do lead/associado via vistoria)
+      const { data: vistoria } = await supabase
+        .from('vistorias')
+        .select('cotacao_id, cotacoes(lead_id, leads(telefone, nome))')
+        .eq('id', params.vistoriaId)
+        .maybeSingle();
+      const telefoneWpp = (vistoria as any)?.cotacoes?.leads?.telefone;
+      if (signatureLink && telefoneWpp) {
+        const linkCode = signatureLink.replace('https://assina.ae/', '');
+        const nomeDoc = `Termo de Vistoria - ${params.veiculoPlaca}`;
+        await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+          body: JSON.stringify({ telefone: telefoneWpp, template_name: 'assinatura_documento', params: [params.clienteNome, nomeDoc], button_params: [linkCode] }),
+        });
+        console.log('[autentique-vistoria-create] WhatsApp assinatura enviado para', telefoneWpp);
+      }
+    } catch (whatsErr) {
+      console.error('[autentique-vistoria-create] Erro ao enviar WhatsApp assinatura (não-fatal):', whatsErr);
     }
 
     return new Response(
