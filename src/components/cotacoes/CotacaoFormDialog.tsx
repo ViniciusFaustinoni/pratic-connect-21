@@ -1142,7 +1142,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     <>
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-3xl max-h-[90vh] flex flex-col overflow-hidden p-0" onPointerDownOutside={(e) => e.preventDefault()} onInteractOutside={(e) => e.preventDefault()}>
-        <DialogHeader>
+        <DialogHeader className="px-4 pt-4 pb-2 sm:px-6 sm:pt-6">
           <DialogTitle className="flex items-center gap-2">
             <Zap className="h-5 w-5 text-primary" />
             Cotação Rápida
