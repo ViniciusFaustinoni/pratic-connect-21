@@ -165,7 +165,7 @@ serve(async (req) => {
       .insert({
         chamado_id,
         hora_disparo: now.toISOString(),
-        hora_limite: new Date(now.getTime() + 60 * 60 * 1000).toISOString(), // 1h limite máximo
+        hora_limite: new Date(now.getTime() + 10 * 60 * 1000).toISOString(), // 10min limite
         total_enviados: reboquistasDisponiveis.length,
         ciclo,
       })
