@@ -83,6 +83,7 @@ export function SinistroDetalheDocs({
         prazoSuspenso={sinistro.prazo_suspenso}
         prazoSuspensoEm={sinistro.prazo_suspenso_em}
         motivoSuspensao={sinistro.prazo_motivo_suspensao}
+        prazoTotal={prazoSinistro}
       />
 
       {/* Link do Evento */}
