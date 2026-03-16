@@ -487,10 +487,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     setAnos([]);
     form.setValue('valor_fipe', 0);
 
-    // Detectar tipo FIPE a partir da marca selecionada
-    const marcaObj = marcas.find(m => m.codigo === value);
-    const tipo = marcaObj?.tipoFipe || 'carros';
+    // Parse composite key "tipo:codigo"
+    const [tipoPart, codigoPart] = value.split(':');
+    const tipo = (tipoPart === 'motos' ? 'motos' : 'carros') as 'carros' | 'motos';
     setTipoFipeSelecionado(tipo);
+    const codigoMarca = codigoPart || value;
 
     if (value) {
       setLoadingModelos(true);
