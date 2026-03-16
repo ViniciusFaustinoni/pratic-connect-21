@@ -460,10 +460,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Auto-buscar FIPE quando marca, modelo e ano estiverem selecionados
   useEffect(() => {
     if (marcaSelecionada && modeloSelecionado && anoSelecionado) {
+      const codigoMarca = marcaSelecionada.includes(':') ? marcaSelecionada.split(':')[1] : marcaSelecionada;
       const buscarFipeAutomatico = async () => {
         setBuscandoFipe(true);
         try {
-          const resultado = await getPreco(marcaSelecionada, modeloSelecionado, anoSelecionado, tipoFipeSelecionado);
+          const resultado = await getPreco(codigoMarca, modeloSelecionado, anoSelecionado, tipoFipeSelecionado);
           if (resultado && resultado.valorNumerico) {
             form.setValue('valor_fipe', resultado.valorNumerico);
             toast.success(`Valor FIPE: ${resultado.valor}`);
