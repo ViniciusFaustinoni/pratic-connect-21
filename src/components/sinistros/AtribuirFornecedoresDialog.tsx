@@ -52,6 +52,7 @@ export function AtribuirFornecedoresDialog({
   
   const [autoCentersSelecionados, setAutoCentersSelecionados] = useState<string[]>([]);
   const [loading, setLoading] = useState(false);
+  const { data: prazoCotacao = 24 } = useConfiguracaoNumero('prazo_cotacao_fornecedor_horas', 24);
 
   const veiculo = sinistro?.veiculo as any;
   const marcaVeiculo = veiculo?.marca || '';
