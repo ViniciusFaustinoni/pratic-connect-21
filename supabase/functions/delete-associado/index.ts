@@ -148,13 +148,35 @@ Deno.serve(async (req) => {
       for (const contrato of contratos) {
         console.log(`[delete-associado] Limpando contrato: ${contrato.id}`);
 
-        // **CRÍTICO**: Excluir comissoes_deducoes ANTES de excluir contratos (FK sem cascade)
+        // **CRÍTICO**: Excluir dependências FK ANTES de excluir contratos
         const comissoesDeducoesResult = await supabaseAdmin
           .from("comissoes_deducoes")
           .delete()
           .eq("contrato_id", contrato.id);
         logIfError("excluir comissoes_deducoes", comissoesDeducoesResult, { contrato_id: contrato.id });
-        console.log(`[delete-associado] comissoes_deducoes excluídas para contrato: ${contrato.id}`);
+
+        // cc_vendedor_lancamentos (FK cc_vendedor_lancamentos_contrato_id_fkey)
+        const ccLancResult = await supabaseAdmin
+          .from("cc_vendedor_lancamentos")
+          .delete()
+          .eq("contrato_id", contrato.id);
+        logIfError("excluir cc_vendedor_lancamentos", ccLancResult, { contrato_id: contrato.id });
+
+        // pontuacao_eventos (FK pontuacao_eventos_contrato_id_fkey)
+        const pontEvtResult = await supabaseAdmin
+          .from("pontuacao_eventos")
+          .delete()
+          .eq("contrato_id", contrato.id);
+        logIfError("excluir pontuacao_eventos", pontEvtResult, { contrato_id: contrato.id });
+
+        // substituicoes_veiculo (FK to contratos)
+        const substResult = await supabaseAdmin
+          .from("substituicoes_veiculo")
+          .delete()
+          .eq("contrato_id", contrato.id);
+        logIfError("excluir substituicoes_veiculo", substResult, { contrato_id: contrato.id });
+
+        console.log(`[delete-associado] dependências FK excluídas para contrato: ${contrato.id}`);
 
         // Excluir comissoes (segurança adicional, mesmo com cascade)
         const comissoesResult = await supabaseAdmin
