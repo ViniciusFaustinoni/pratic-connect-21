@@ -471,8 +471,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       // Usar cota de desagio para uso aplicativo (baseado no parâmetro usoApp, não na categoria)
       if (params.usoApp) {
-        cotaPercentual = Number(plano.cota_desagio) || cotaDesagioDefault;
-        cotaMinimaFinal = Number(plano.cota_minima_desagio) || cotaMinimaDesagioDefault;
+        cotaPercentual = plano.cota_desagio != null ? Number(plano.cota_desagio) : cotaDesagioDefault;
+        cotaMinimaFinal = plano.cota_minima_desagio != null ? Number(plano.cota_minima_desagio) : cotaMinimaDesagioDefault;
       }
 
       // Deságio para elegibilidade limitada (mesma lógica de app — cota maior)
