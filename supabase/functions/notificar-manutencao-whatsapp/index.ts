@@ -40,8 +40,15 @@ serve(async (req) => {
     // Montar mensagem conforme tipo de local
     let mensagem: string;
     
+    // Montar mensagem conforme tipo de local (prazo dinâmico)
+    const supabaseConfig = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+    const prazoManutencao = await getConfiguracaoNumero(supabaseConfig, 'prazo_manutencao_rastreador_horas', 48);
+
     if (payload.tipo_local === 'base' || payload.tipo_local === 'ponto_instalacao') {
-      mensagem = `Olá ${payload.nome_associado}, sua Praticcar informa: foi agendada uma manutenção do rastreador do seu veículo para o dia ${dataFormatada} no período da ${periodoTexto}. Por favor, compareça à nossa sede no endereço: ${payload.endereco || 'Sede Praticcar'}. Prazo: 48 horas. Em caso de não comparecimento, as proteções contra roubo, furto e colisão poderão ser suspensas. Dúvidas? Entre em contato conosco.`;
+      mensagem = `Olá ${payload.nome_associado}, sua Praticcar informa: foi agendada uma manutenção do rastreador do seu veículo para o dia ${dataFormatada} no período da ${periodoTexto}. Por favor, compareça à nossa sede no endereço: ${payload.endereco || 'Sede Praticcar'}. Prazo: ${prazoManutencao} horas. Em caso de não comparecimento, as proteções contra roubo, furto e colisão poderão ser suspensas. Dúvidas? Entre em contato conosco.`;
     } else {
       mensagem = `Olá ${payload.nome_associado}, sua Praticcar informa: foi agendada uma visita técnica para manutenção do rastreador do seu veículo para o dia ${dataFormatada} no período da ${periodoTexto}. Nosso técnico irá até o endereço informado. Por favor, esteja disponível no local. Dúvidas? Entre em contato conosco.`;
     }
