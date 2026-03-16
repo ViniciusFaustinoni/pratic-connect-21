@@ -1249,7 +1249,7 @@ const desenharPaginaDetalhesPlano = (
       doc.text('✗', col2X + 6, textY);
       doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
       doc.setFont('helvetica', 'normal');
-      doc.text(truncateText(item, 32), col2X + 14, textY);
+      doc.text(truncateText(item, 45), col2X + 14, textY);
     });
 
     y = startNaoY + Math.max(naoIncluiCol1.length, naoIncluiCol2.length) * coberturaLineHeight + 10;
