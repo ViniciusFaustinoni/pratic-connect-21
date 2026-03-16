@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';

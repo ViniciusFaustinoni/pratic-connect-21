@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect, useMemo } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { FOTOS_INSTALACAO } from '@/hooks/useInstalacaoFotos';
 import { useFotosReboquistaBySinistro } from '@/hooks/useFotosReboquista';

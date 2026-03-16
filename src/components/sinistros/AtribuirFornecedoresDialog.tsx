@@ -1,4 +1,5 @@
 import { useState, useMemo } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { supabase } from '@/integrations/supabase/client';
 import { useOficinas } from '@/hooks/useOficinas';
 

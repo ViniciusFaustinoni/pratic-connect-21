@@ -1,4 +1,5 @@
 import { useState, useMemo, useCallback } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { CardOrcamentoReparo } from '@/components/orcamento/CardOrcamentoReparo';
 import { useVeiculosOficina, useOficinasDisponiveis, type VeiculoOficina } from '@/hooks/useVeiculosOficina';
 import { OrcamentoPDFImport, type DadosExtraidos } from '@/components/regulador/OrcamentoPDFImport';

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEventoLink } from '@/hooks/useEventoLink';

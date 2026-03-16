@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { FileText, Loader2, Camera, FileCheck, AlertCircle } from 'lucide-react';
 import {
