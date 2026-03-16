@@ -330,8 +330,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   }, [veiculoEncontrado, marcaSelecionada, marcas]);
 
   const modeloResolvido = useMemo(() => {
-    return veiculoEncontrado?.vehicleData?.modelo || '';
-  }, [veiculoEncontrado]);
+    if (veiculoEncontrado?.vehicleData?.modelo) return veiculoEncontrado.vehicleData.modelo;
+    const mod = modelos.find(m => m.codigo.toString() === modeloSelecionado);
+    return mod?.nome || '';
+  }, [veiculoEncontrado, modeloSelecionado, modelos]);
 
   // Hook de planos calculados dinamicamente do banco
   const { planos: planosCalculados, planosNegados, isLoading: planosLoading } = usePlanosCotacao({
