@@ -12,7 +12,8 @@ import {
   Gauge,
   Info,
   X,
-  RefreshCw
+  RefreshCw,
+  Video
 } from 'lucide-react';
 import { getFotosAutovistoria, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
 import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao } from '@/hooks/useCotacaoVistoria';
@@ -20,6 +21,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 interface AutovistoriaCotacaoProps {
   cotacaoId: string;
