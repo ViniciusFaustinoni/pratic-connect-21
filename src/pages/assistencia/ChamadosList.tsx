@@ -79,6 +79,7 @@ const tiposServico: Record<string, { icon: LucideIcon; label: string }> = {
 
 const statusConfig: Record<string, { label: string; className: string }> = {
   aberto: { label: 'Aberto', className: 'bg-yellow-100 text-yellow-800' },
+  aguardando_aceites: { label: 'Aguard. Aceites', className: 'bg-amber-100 text-amber-800' },
   aguardando_prestador: { label: 'Aguard. Prestador', className: 'bg-orange-100 text-orange-800' },
   prestador_despachado: { label: 'Despachado', className: 'bg-blue-100 text-blue-800' },
   prestador_a_caminho: { label: 'A Caminho', className: 'bg-purple-100 text-purple-800' },
