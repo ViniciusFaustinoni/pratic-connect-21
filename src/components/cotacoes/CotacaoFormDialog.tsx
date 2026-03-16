@@ -493,10 +493,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     setTipoFipeSelecionado(tipo);
     const codigoMarca = codigoPart || value;
 
-    if (value) {
+    if (codigoMarca) {
       setLoadingModelos(true);
       try {
-        const data = await getModelos(value, tipo);
+        const data = await getModelos(codigoMarca, tipo);
         setModelos(data);
       } catch (error) {
         console.error('Erro ao carregar modelos:', error);
