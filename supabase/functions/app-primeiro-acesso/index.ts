@@ -108,8 +108,9 @@ serve(async (req) => {
     }
 
     // 5. Gerar token único para criação de senha
+    const prazoAcesso = await getConfiguracaoNumero(supabase, 'prazo_link_primeiro_acesso_horas', 48);
     const token = crypto.randomUUID();
-    const expiraEm = new Date(Date.now() + 48 * 60 * 60 * 1000); // 48 horas
+    const expiraEm = new Date(Date.now() + prazoAcesso * 60 * 60 * 1000);
 
     // 6. Invalidar tokens anteriores do mesmo associado
     await supabase
