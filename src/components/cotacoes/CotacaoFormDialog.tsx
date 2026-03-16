@@ -314,12 +314,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
   // Detectar tipo de veículo automaticamente (moto vs carro)
   const tipoVeiculoDetectado = useMemo(() => {
+    // Se o vendedor selecionou marca manualmente, usar o tipo da marca
+    if (marcaSelecionada && tipoFipeSelecionado === 'motos') return 'moto' as const;
+    // Fallback para detecção por nome (busca por placa/código)
     const marca = veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
     const modelo = veiculoEncontrado?.vehicleData?.modelo || '';
     if (!marca && !modelo) return 'carro' as const;
     const tipo = detectarTipoVeiculo(undefined, modelo, marca);
     return tipo === 'moto' ? 'moto' as const : 'carro' as const;
-  }, [veiculoEncontrado, marcaSelecionada, getMarcaNomeFromCodigo]);
+  }, [veiculoEncontrado, marcaSelecionada, getMarcaNomeFromCodigo, tipoFipeSelecionado]);
 
   // Resolver marca/modelo para elegibilidade
   const marcaResolvida = useMemo(() => {
@@ -327,8 +330,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   }, [veiculoEncontrado, marcaSelecionada, marcas]);
 
   const modeloResolvido = useMemo(() => {
-    return veiculoEncontrado?.vehicleData?.modelo || '';
-  }, [veiculoEncontrado]);
+    if (veiculoEncontrado?.vehicleData?.modelo) return veiculoEncontrado.vehicleData.modelo;
+    const mod = modelos.find(m => m.codigo.toString() === modeloSelecionado);
+    return mod?.nome || '';
+  }, [veiculoEncontrado, modeloSelecionado, modelos]);
 
   // Hook de planos calculados dinamicamente do banco
   const { planos: planosCalculados, planosNegados, isLoading: planosLoading } = usePlanosCotacao({
