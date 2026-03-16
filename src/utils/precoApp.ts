@@ -1,40 +1,55 @@
 // ============================================
 // UTILITÁRIO: Resolução de preço para planos APP
-// Regras de adicional por região/linha/tipo_uso
+// 100% dinâmico — nenhuma região ou linha hardcoded
 // ============================================
 
-// Tipos de uso que são específicos de linha (motos, etc.)
-// e devem ser passados diretamente para a query sem alteração.
-const TIPOS_USO_ESPECIFICOS = ['advanced', 'advanced-plus'];
+/**
+ * Configuração dinâmica para resolução de preço de aplicativo.
+ * Todos os valores vêm do banco de dados.
+ */
+export interface ConfigAdicionalApp {
+  /** Regiões onde o uso como aplicativo exige adicional mensal (ex: ["rj","lagos"]) */
+  regioesComAdicional: string[];
+  /** Linhas que possuem coluna dedicada 'aplicativo' na tabela de preços (ex: ["select-one"]) */
+  linhasComColunaApp: string[];
+  /** Linhas que suportam uso de aplicativo (campo supports_app=true em product_lines) */
+  linhasSupportsApp: string[];
+}
 
 /**
  * Determina qual tipo_uso usar na query de busca em tabelas_preco_mensalidade.
- * 
- * - Valores específicos de linha (advanced, advanced-plus) → retorna direto
- * - select-one + RJ/Lagos + aplicativo → busca 'aplicativo' (coluna própria na tabela)
+ *
+ * - Se a linha tem coluna dedicada 'aplicativo' na tabela de preços E
+ *   a região exige adicional → busca 'aplicativo' (valor direto)
  * - Todos os outros → busca 'particular' (o adicional é somado depois se necessário)
+ * - Tipos que não são 'aplicativo' nem 'particular' (ex: 'advanced', 'advanced-plus')
+ *   são retornados diretamente (usados por motos)
  */
 export function resolverTipoUsoQuery(
   linhaSlug: string,
   regiao: string,
   tipoUso: string,
+  config: ConfigAdicionalApp,
 ): string {
   const tipoUsoLower = tipoUso.toLowerCase();
+  const linhaLower = linhaSlug.toLowerCase();
+  const regiaoLower = regiao.toLowerCase();
 
-  // Tipos específicos de linha (motos advanced/advanced-plus) → retorna direto
-  if (TIPOS_USO_ESPECIFICOS.includes(tipoUsoLower)) {
+  // Se o tipo_uso não é 'particular' nem 'aplicativo', é um tipo específico de linha (motos)
+  if (tipoUsoLower !== 'particular' && tipoUsoLower !== 'aplicativo') {
     return tipoUsoLower;
   }
 
-  const regiaoLower = regiao.toLowerCase();
-  const linhaLower = linhaSlug.toLowerCase();
+  // Se não é aplicativo, retorna particular
+  if (tipoUsoLower !== 'aplicativo') {
+    return 'particular';
+  }
 
-  // Select One RJ/Lagos app: tem coluna própria na tabela de preços
-  if (
-    linhaLower === 'select-one' &&
-    (regiaoLower === 'rj' || regiaoLower === 'lagos') &&
-    tipoUsoLower === 'aplicativo'
-  ) {
+  // Aplicativo: verificar se a linha tem coluna dedicada E a região exige adicional
+  const temColunaApp = config.linhasComColunaApp.includes(linhaLower);
+  const regiaoExigeAdicional = config.regioesComAdicional.includes(regiaoLower);
+
+  if (temColunaApp && regiaoExigeAdicional) {
     return 'aplicativo';
   }
 
@@ -44,12 +59,12 @@ export function resolverTipoUsoQuery(
 
 /**
  * Aplica o adicional de aplicativo sobre o valor mensal quando necessário.
- * 
- * REGRA 1: select/lancamento + RJ/Lagos + aplicativo → particular + adicionalApp
- * REGRA 2: select-one + RJ/Lagos + aplicativo → valor direto (já veio da coluna 'aplicativo')
- * REGRA 3: SP + aplicativo → valor direto (SP não tem distinção passeio/app)
- * REGRA 4: advanced/advanced-plus → valor direto (motos não têm adicional app)
- * REGRA 5: demais → valor direto
+ *
+ * O adicional só é somado quando TODAS as condições são verdadeiras:
+ * 1. tipoUso é 'aplicativo'
+ * 2. A linha suporta aplicativo (supports_app=true)
+ * 3. A região exige adicional
+ * 4. A linha NÃO tem coluna dedicada (se tem, o valor já veio correto da tabela)
  */
 export function resolverPrecoApp(
   linhaSlug: string,
@@ -57,37 +72,30 @@ export function resolverPrecoApp(
   tipoUso: string,
   valorMensalParticular: number,
   adicionalApp: number,
+  config: ConfigAdicionalApp,
 ): number {
   if (tipoUso !== 'aplicativo') {
     return valorMensalParticular;
   }
 
-  const regiaoLower = regiao.toLowerCase();
   const linhaLower = linhaSlug.toLowerCase();
+  const regiaoLower = regiao.toLowerCase();
 
-  // Advanced/Advanced-plus (motos): sem adicional app
-  if (TIPOS_USO_ESPECIFICOS.includes(linhaLower)) {
+  // Se a linha não suporta app, retorna direto
+  if (!config.linhasSupportsApp.includes(linhaLower)) {
     return valorMensalParticular;
   }
 
-  // SP: valor único para passeio e app — sem adicional
-  if (regiaoLower === 'sp') {
+  // Se a linha tem coluna dedicada na tabela de preços, o valor já veio correto
+  if (config.linhasComColunaApp.includes(linhaLower)) {
     return valorMensalParticular;
   }
 
-  // Select One RJ/Lagos: coluna própria na tabela — retornado direto
-  if (linhaLower === 'select-one') {
+  // Se a região não exige adicional, retorna direto
+  if (!config.regioesComAdicional.includes(regiaoLower)) {
     return valorMensalParticular;
   }
 
-  // Select / Lançamento RJ/Lagos: particular + adicional_app
-  if (
-    (linhaLower === 'select' || linhaLower === 'lancamento') &&
-    (regiaoLower === 'rj' || regiaoLower === 'lagos')
-  ) {
-    return valorMensalParticular + adicionalApp;
-  }
-
-  // Todos os demais: valor direto
-  return valorMensalParticular;
+  // Região exige adicional + linha suporta app + sem coluna dedicada → soma adicional
+  return valorMensalParticular + adicionalApp;
 }

@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
+import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 
 // ============================================
@@ -48,8 +49,8 @@ export function useCalcularCotacao() {
     setError(null);
 
     try {
-      // Buscar planos ativos, mapeamento e preços em paralelo
-      const [planosRes, mapRes, mensalidadeRes, configRes] = await Promise.all([
+      // Buscar planos ativos, mapeamento, preços, product_lines e configs em paralelo
+      const [planosRes, mapRes, mensalidadeRes, configRes, productLinesRes] = await Promise.all([
         publicSupabase
           .from('planos')
           .select('*')
@@ -66,7 +67,10 @@ export function useCalcularCotacao() {
         publicSupabase
           .from('configuracoes')
           .select('chave, valor')
-          .in('chave', ['taxa_fallback_carro', 'adicional_app', 'adesao_minima']),
+          .in('chave', ['taxa_fallback_carro', 'adicional_app', 'adesao_minima', 'regioes_com_adicional_app']),
+        publicSupabase
+          .from('product_lines')
+          .select('slug, supports_app'),
       ]);
 
       if (planosRes.error) throw planosRes.error;
@@ -79,11 +83,35 @@ export function useCalcularCotacao() {
       const planoPrecoMap = mapRes.data || [];
       const tabelasMensalidade = mensalidadeRes.data || [];
       
-      // Taxa fallback dinâmica
+      // Configurações dinâmicas
       const configMap = Object.fromEntries((configRes.data || []).map(c => [c.chave, c.valor]));
-      const taxaFallback = parseFloat(configMap.taxa_fallback_carro || '0.025');
       const adicionalApp = parseFloat(configMap.adicional_app || '35.90') || 35.90;
       const minimoAdesao = parseFloat(configMap.adesao_minima || '100');
+
+      // Montar ConfigAdicionalApp a partir do banco
+      let regioesComAdicional: string[] = [];
+      try {
+        regioesComAdicional = JSON.parse(configMap.regioes_com_adicional_app || '[]');
+      } catch { regioesComAdicional = []; }
+
+      const productLines = productLinesRes.data || [];
+      const linhasSupportsApp = productLines
+        .filter(pl => pl.supports_app === true)
+        .map(pl => (pl.slug || '').toLowerCase());
+
+      // Linhas que têm coluna dedicada 'aplicativo' na tabela de preços
+      const linhasComColunaApp = [...new Set(
+        tabelasMensalidade
+          .filter(t => t.tipo_uso === 'aplicativo')
+          .map(t => (t.linha_slug || '').toLowerCase())
+          .filter(Boolean)
+      )];
+
+      const configApp: ConfigAdicionalApp = {
+        regioesComAdicional,
+        linhasComColunaApp,
+        linhasSupportsApp,
+      };
 
       const regiaoLower = (params.regiao || 'rj').toLowerCase();
       const combustivelLower = normalizarCombustivelParaPricing(params.combustivel);
@@ -100,11 +128,10 @@ export function useCalcularCotacao() {
         // Excluir variantes internas "aplicativo" — o preço app é resolvido pelo motor de pricing nos planos principais
         if (isPlanoAplicativo && !isMotoLine) continue;
 
-        // Filtrar linhas que não suportam uso de aplicativo
-        const LINHAS_COM_APP = ['select', 'select-one', 'lancamento'];
+        // Filtrar linhas que não suportam uso de aplicativo (dinâmico via product_lines)
         const mappingPreview = planoPrecoMap.find(m => m.plano_id === plano.id);
         const linhaSlugPreview = mappingPreview?.linha_slug?.toLowerCase() || '';
-        if (params.tipo_uso === 'aplicativo' && linhaSlugPreview && !LINHAS_COM_APP.includes(linhaSlugPreview)) continue;
+        if (params.tipo_uso === 'aplicativo' && linhaSlugPreview && !linhasSupportsApp.includes(linhaSlugPreview)) continue;
 
         if (plano.fipe_minima && params.valor_fipe < Number(plano.fipe_minima)) continue;
         if (plano.fipe_maxima && params.valor_fipe > Number(plano.fipe_maxima)) continue;
@@ -115,7 +142,7 @@ export function useCalcularCotacao() {
         const tipoUsoOriginal = params.tipo_uso === 'aplicativo' ? 'aplicativo' : (mapping?.tipo_uso || params.tipo_uso);
         // Resolver tipo_uso para query (regras de adicional app)
         const tipoUsoPricing = linhaSlug
-          ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal)
+          ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal, configApp)
           : tipoUsoOriginal;
 
         let valorMensal = 0;
@@ -151,7 +178,7 @@ export function useCalcularCotacao() {
 
         // Aplicar adicional app se necessário
         if (linhaSlug && tipoUsoOriginal === 'aplicativo') {
-          valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp);
+          valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp, configApp);
         }
 
         // Se não encontrou faixa de preço válida, ocultar o plano
