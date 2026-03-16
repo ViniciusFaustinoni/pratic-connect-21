@@ -195,6 +195,21 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
+  // ── Aliases de marca para double-check ──
+  const MARCA_ALIASES: Record<string, string> = {
+    'VW': 'VOLKSWAGEN',
+    'GM': 'CHEVROLET',
+    'MERCEDES': 'MERCEDES-BENZ',
+    'CAOA CHERY': 'CHERY',
+    'CHERY': 'CAOA CHERY',
+    'CITROËN': 'CITROEN',
+  };
+
+  function normalizarMarcaElegibilidade(marca: string): string {
+    const upper = marca.trim().toUpperCase();
+    return MARCA_ALIASES[upper] || upper;
+  }
+
   // Função de verificação de elegibilidade por modelo
   function verificarElegibilidadeModelo(
     planoId: string,
@@ -204,18 +219,26 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     // Sem configuração = aceita tudo
     if (regrasDoPlano.length === 0) return 'aprovado';
 
-    const marcaNorm = veiculo.marca.trim().toUpperCase();
+    const marcaNormAPI = normalizarMarcaElegibilidade(veiculo.marca);
     const modeloAPI = veiculo.modelo.trim().toUpperCase();
     const combustivelNorm = veiculo.combustivel.trim().toLowerCase();
 
-    const regra = regrasDoPlano.find(r => {
-      const marcaMatch = r.marca.toUpperCase() === marcaNorm;
+    // Ordenar por comprimento de modelo desc → regra mais específica primeiro
+    const regrasOrdenadas = [...regrasDoPlano].sort(
+      (a, b) => b.modelo.length - a.modelo.length
+    );
+
+    const regra = regrasOrdenadas.find(r => {
+      // Double-check de marca: normaliza ambos os lados via aliases
+      const marcaMatch = normalizarMarcaElegibilidade(r.marca) === marcaNormAPI;
       
-      // Matching flexível por prefixo: "VOYAGE 1.6 MSI" startsWith "VOYAGE" = match
+      // Matching de modelo com 3 níveis de fallback
       const modeloBanco = r.modelo.trim().toUpperCase();
-      const modeloMatch = modeloAPI.startsWith(modeloBanco) 
-        || modeloBanco.startsWith(modeloAPI)
-        || modeloAPI === modeloBanco;
+      const prefixMatch = modeloAPI.startsWith(modeloBanco) 
+        || modeloBanco.startsWith(modeloAPI);
+      const containsMatch = modeloAPI.includes(modeloBanco) 
+        || modeloBanco.includes(modeloAPI);
+      const modeloMatch = prefixMatch || containsMatch;
       
       const anoMatch = veiculo.ano >= r.ano_min &&
                        (r.ano_max === null || veiculo.ano <= r.ano_max);
