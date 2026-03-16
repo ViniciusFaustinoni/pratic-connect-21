@@ -40,8 +40,8 @@ import { VisualizadorDocumentoModal } from '@/components/cadastro/VisualizadorDo
 import { VistoriaObservacoesCard } from '@/components/cadastro/VistoriaObservacoesCard';
 import {
   PropostaHeroHeader,
-  PropostaMidiaGrid,
   PropostaDetalhesTabs,
+  PropostaApprovalStepper,
 } from '@/components/cadastro/proposta';
 import { DocumentosAnexadosPanel } from '@/components/cadastro/DocumentosAnexadosPanel';
 import type { DocumentoAnexadoCompleto } from '@/types/documentos';
