@@ -200,7 +200,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     'VW': 'VOLKSWAGEN',
     'GM': 'CHEVROLET',
     'MERCEDES': 'MERCEDES-BENZ',
-    'CAOA CHERY': 'CHERY',
     'CHERY': 'CAOA CHERY',
     'CITROËN': 'CITROEN',
   };
