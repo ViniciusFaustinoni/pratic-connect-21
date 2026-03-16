@@ -18,14 +18,8 @@ import type { PropostaPendente } from '@/hooks/usePropostasPendentes';
 
 interface PropostaHeroHeaderProps {
   proposta: PropostaPendente;
-  onAprovar: () => void;
-  onSolicitarDocs: () => void;
-  onReprovar: () => void;
   onVoltar: () => void;
   onProxima?: () => void;
-  isAprovando?: boolean;
-  isAutovistoria?: boolean;
-  podeAprovar?: boolean;
 }
 
 const statusConfig: Record<string, { 
