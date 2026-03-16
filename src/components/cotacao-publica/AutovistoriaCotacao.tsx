@@ -429,6 +429,33 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
           )}
         </div>
         
+        {/* Seção de Vídeo 360° (após todas as fotos) */}
+        {videoObrigatorio && todasFotosEnviadas && (
+          <motion.div
+            initial={{ opacity: 0, y: 20 }}
+            animate={{ opacity: 1, y: 0 }}
+            className="pt-4 space-y-3"
+          >
+            <div className="text-center">
+              <h3 className="font-semibold text-lg text-foreground flex items-center justify-center gap-2">
+                <Video className="h-5 w-5 text-purple-500" />
+                Vídeo 360° do Veículo
+              </h3>
+              <p className="text-sm text-muted-foreground mt-1">
+                Grave um vídeo dando a volta completa no veículo (máx. 2 min)
+              </p>
+            </div>
+            <VideoCapture
+              onCapture={handleVideoCapture}
+              onReset={() => setVideoUrl(null)}
+              videoUrl={videoUrl || undefined}
+              uploading={uploadingVideo}
+              maxDuration={120}
+              label="Vídeo 360°"
+            />
+          </motion.div>
+        )}
+
         {/* Botão finalizar */}
         {todasEnviadas && (
           <motion.div
