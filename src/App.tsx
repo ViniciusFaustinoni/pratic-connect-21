@@ -252,6 +252,7 @@ import LogsAuditoria from "./pages/diretoria/LogsAuditoria";
 import RelatoriosGerenciais from "./pages/diretoria/RelatoriosGerenciais";
 import FaixasCotas from "./pages/diretoria/FaixasCotas";
 import SolicitacoesIA from "./pages/diretoria/SolicitacoesIA";
+import EventosChatIA from "./pages/eventos/EventosChatIA";
 import CampanhasDesconto from "./pages/diretoria/CampanhasDesconto";
 import FechamentoMensal from "./pages/diretoria/FechamentoMensal";
 import Blacklist from "./pages/diretoria/Blacklist";
