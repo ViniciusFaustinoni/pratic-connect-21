@@ -100,7 +100,7 @@ export function SolicitarDocumentosSinistroDialog({
       // 2. Gerar token único para upload e atualizar status
       const uploadToken = crypto.randomUUID().substring(0, 12);
       const expiresAt = new Date();
-      expiresAt.setDate(expiresAt.getDate() + 7); // Expira em 7 dias
+      expiresAt.setDate(expiresAt.getDate() + prazoDocs);
 
       const { error: statusError } = await supabase
         .from('sinistros')

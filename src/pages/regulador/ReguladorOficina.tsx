@@ -515,7 +515,7 @@ export default function ReguladorOficina() {
       ) : (
         <div className="space-y-3">
           {veiculos.map((v) => {
-            const alerta = getAlertaAtualizacao(v.updated_at);
+            const alerta = getAlertaAtualizacao(v.updated_at, prazoManutencao);
             const statusInfo = STATUS_MAP[v.status] || { label: v.status, color: 'bg-gray-100 text-gray-800' };
             const atualizadoHoje = atualizacoesHoje.includes(v.id);
             return (

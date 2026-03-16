@@ -189,7 +189,7 @@ export function AtribuirFornecedoresDialog({
         if (!ac) continue;
 
         const prazo = new Date();
-        prazo.setHours(prazo.getHours() + 24);
+        prazo.setHours(prazo.getHours() + prazoCotacao);
 
         // Criar registro da cotação
         const { data: cotacao, error: cotError } = await supabase

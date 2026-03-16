@@ -84,7 +84,7 @@ export function SolicitarOrcamentoDialog({
     try {
       for (const acId of selecionados) {
         const prazo = new Date();
-        prazo.setHours(prazo.getHours() + 24);
+        prazo.setHours(prazo.getHours() + prazoCotacao);
 
         const { data: cotacao, error: cotError } = await supabase
           .from('evento_cotacoes_pecas')
