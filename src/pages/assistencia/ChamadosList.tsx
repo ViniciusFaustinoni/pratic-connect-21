@@ -441,7 +441,6 @@ export default function ChamadosList() {
                           <BadgeDespachoStatus chamadoId={chamado.id} chamadoStatus={chamado.status} />
                         </div>
                       </TableCell>
-                      </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDistanceToNow(new Date(chamado.data_abertura), {
                           locale: ptBR,
