@@ -311,7 +311,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   const { planos, planosNegados } = useMemo<{ planos: PlanoCotacao[]; planosNegados: PlanoNegadoInfo[] }>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
 
-    if (!valorFipe || valorFipe <= 0 || !planosBanco) {
+    if (!valorFipe || valorFipe <= 0 || !planosBanco || elegibilidadeLoading) {
       return { planos: [], planosNegados: [] };
     }
 
