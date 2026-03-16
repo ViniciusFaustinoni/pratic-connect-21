@@ -47,6 +47,7 @@ export function IniciarIndenizacaoModal({
   open, onOpenChange, sinistroId, veiculoId, protocolo, valorFipe,
 }: IniciarIndenizacaoModalProps) {
   const queryClient = useQueryClient();
+  const { data: prazoSinistro } = useConfiguracaoNumero('operacional_prazo_sinistro', 60);
   const [depreciacoes, setDepreciacoes] = useState<Record<string, boolean>>({});
   const [observacoes, setObservacoes] = useState('');
 
