@@ -55,7 +55,7 @@ import { CurrencyInput, TelefoneInput } from '@/components/inputs/MaskedInputs';
 import { cotacaoSchema, type CotacaoFormData } from '@/lib/validations';
 import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
-import { AlertaElegibilidadeNegada } from '@/components/cotacao/AlertaElegibilidadeNegada';
+
 import { useCriarSolicitacaoFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useTabelasPreco } from '@/hooks/usePlanos';
