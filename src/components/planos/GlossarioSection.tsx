@@ -170,14 +170,39 @@ export function RegrasImportantes() {
 
 export function TabelaCotasTaxas() {
   const { data: cotasTaxas = [], isLoading: loadingCotas } = useCotasTaxas();
+  const { data: cotasCategoriaMap, isLoading: loadingCotasTabela } = useCotasCategoriaTabela();
   const { data: taxasProcedimentos = [], isLoading: loadingTaxas } = useTaxasProcedimentos();
   const { data: cotaPercDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinDefault = 1200 } = useCotaMinimaDefault();
 
-  const isLoading = loadingCotas || loadingTaxas;
+  const isLoading = loadingCotas || loadingTaxas || loadingCotasTabela;
+
+  // Fonte primária: planos_cotas_categoria (tabela). Fallback: cotas_taxas (JSON)
+  const cotasExibicao = (() => {
+    if (cotasCategoriaMap && cotasCategoriaMap.size > 0) {
+      return Array.from(cotasCategoriaMap.entries()).map(([cat, vals]) => ({
+        categoria: CATEGORIA_LABELS[cat] || cat,
+        percentual: `${vals.percentual}%`,
+        minimo: vals.minimo === 0 ? 'Sem mínimo' : `R$ ${vals.minimo.toLocaleString('pt-BR')}`,
+        comDesagio: cat === 'passeio' ? '8%' : undefined,
+        minimoDesagio: cat === 'passeio' ? 'R$ 2.000' : undefined,
+      }));
+    }
+    return cotasTaxas;
+  })();
 
   // Derivar valores de deságio das cotas para o alerta
   const desagioInfo = (() => {
+    if (cotasCategoriaMap && cotasCategoriaMap.size > 0) {
+      const desagioEntry = cotasCategoriaMap.get('desagio');
+      const percDesagio = desagioEntry ? `${desagioEntry.percentual}%` : '8%';
+      const minDesagio = desagioEntry
+        ? (desagioEntry.minimo === 0 ? 'Sem mínimo' : `R$ ${desagioEntry.minimo.toLocaleString('pt-BR')}`)
+        : `R$ ${(cotaMinDefault * 2).toLocaleString('pt-BR')}`;
+      const passeioEntry = cotasCategoriaMap.get('passeio');
+      const categoriasNormais = passeioEntry ? `Passeio ${passeioEntry.percentual}%` : `Passeio ${cotaPercDefault}%`;
+      return { percDesagio, minDesagio, categoriasNormais };
+    }
     const comDesagio = cotasTaxas.find(c => c.comDesagio);
     const percDesagio = comDesagio?.comDesagio || '8%';
     const minDesagio = comDesagio?.minimoDesagio || `R$ ${(cotaMinDefault * 2).toLocaleString('pt-BR')}`;
