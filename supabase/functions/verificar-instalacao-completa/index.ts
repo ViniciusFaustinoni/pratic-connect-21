@@ -134,9 +134,9 @@ serve(async (req) => {
           }
         }
 
-        // Se passou mais de 4h sem comunicação, gerar alerta
+        // Se passou mais de o prazo sem comunicação, gerar alerta
         const instaladoEm = new Date(rastreador.updated_at);
-        if (instaladoEm < new Date(quatroHorasAtras)) {
+        if (instaladoEm < new Date(semSinalAtras)) {
           console.log(`[Verificar Instalação] ${rastreador.imei} - gerando alerta (>4h sem comunicação)`);
 
           // Criar alerta

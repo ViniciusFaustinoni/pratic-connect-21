@@ -54,10 +54,7 @@ serve(async (req) => {
     }
 
     // Enviar via whatsapp-send-text
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
+    const supabase = supabaseConfig;
 
     const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
       body: {
