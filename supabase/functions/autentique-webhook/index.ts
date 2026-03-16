@@ -495,7 +495,7 @@ serve(async (req) => {
                       .single(),
                     supabase
                       .from("veiculos")
-                      .select("valor_fipe, uso_aplicativo")
+                      .select("valor_fipe, uso_aplicativo, combustivel")
                       .eq("id", sinistroDoc.veiculo_id)
                       .single(),
                   ]);
@@ -504,7 +504,6 @@ serve(async (req) => {
                     if (plano.cota_participacao == null || plano.cota_minima == null) {
                       console.warn('[autentique-webhook] ATENÇÃO: plano sem cota_participacao/cota_minima configurados. Verifique o cadastro do plano.');
                     }
-                    // Buscar defaults do banco
                     const { data: cfgCota } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_participacao_default').single();
                     const { data: cfgMin } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_minima_default').single();
                     const cotaDefault = cfgCota ? parseFloat(cfgCota.valor) : 6;
@@ -513,19 +512,35 @@ serve(async (req) => {
                     let percentual = plano.cota_participacao ?? cotaDefault;
                     let minimo = plano.cota_minima ?? minimoDefault;
 
-                    if (veiculo.uso_aplicativo && plano.cota_app_percent) {
+                    // Determinar categoria do veículo
+                    let categoriaVeiculo = 'passeio';
+                    if (veiculo.uso_aplicativo) categoriaVeiculo = 'aplicativo';
+                    else if ((veiculo as any).combustivel?.toLowerCase() === 'diesel') categoriaVeiculo = 'diesel';
+
+                    // 1º: Override da tabela planos_cotas_categoria
+                    const { data: cotaCategoria } = await supabase
+                      .from('planos_cotas_categoria')
+                      .select('cota_percentual, cota_minima_valor')
+                      .eq('plano_id', assocData.plano_id)
+                      .eq('categoria_veiculo', categoriaVeiculo)
+                      .maybeSingle();
+
+                    if (cotaCategoria) {
+                      percentual = cotaCategoria.cota_percentual ?? percentual;
+                      minimo = cotaCategoria.cota_minima_valor ?? minimo;
+                      console.log(`[autentique-webhook] Override categoria '${categoriaVeiculo}': ${percentual}% mín R$${minimo}`);
+                    } else if (veiculo.uso_aplicativo && plano.cota_app_percent) {
                       percentual = plano.cota_app_percent;
-                      minimo = plano.cota_app_min || minimo;
+                      minimo = plano.cota_app_min ?? minimo;
                     }
 
-                    const recalculado = Math.max(
-                      veiculo.valor_fipe * percentual / 100,
-                      minimo
-                    );
-                    console.log(`[autentique-webhook] Cota recalculada: R$ ${recalculado.toFixed(2)} (FIPE: ${veiculo.valor_fipe}, ${percentual}%, min: ${minimo})`);
+                    // cota_minima = 0 → sem mínimo
+                    const recalculado = minimo === 0
+                      ? veiculo.valor_fipe * percentual / 100
+                      : Math.max(veiculo.valor_fipe * percentual / 100, minimo);
+                    console.log(`[autentique-webhook] Cota recalculada: R$ ${recalculado.toFixed(2)} (FIPE: ${veiculo.valor_fipe}, ${percentual}%, min: ${minimo}, cat: ${categoriaVeiculo})`);
                     valorCota = recalculado;
 
-                    // Persistir valor correto no sinistro
                     await supabase
                       .from("sinistros")
                       .update({ valor_cota_participacao: recalculado })

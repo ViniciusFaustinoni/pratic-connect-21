@@ -93,9 +93,24 @@ serve(async (req) => {
           percentual = plano.cota_participacao ?? 0;
           cotaMinima = plano.cota_minima ?? 0;
 
-          if (veiculo?.uso_aplicativo && plano.cota_app_percent) {
+          // Determinar categoria do veículo
+          let categoriaVeiculo = 'passeio';
+          if (veiculo?.uso_aplicativo) categoriaVeiculo = 'aplicativo';
+
+          // 1º: Override da tabela planos_cotas_categoria
+          const { data: cotaCategoria } = await supabase
+            .from('planos_cotas_categoria')
+            .select('cota_percentual, cota_minima_valor')
+            .eq('plano_id', associado.plano_id)
+            .eq('categoria_veiculo', categoriaVeiculo)
+            .maybeSingle();
+
+          if (cotaCategoria) {
+            percentual = cotaCategoria.cota_percentual ?? percentual;
+            cotaMinima = cotaCategoria.cota_minima_valor ?? cotaMinima;
+          } else if (veiculo?.uso_aplicativo && plano.cota_app_percent) {
             percentual = plano.cota_app_percent;
-            cotaMinima = plano.cota_app_min || cotaMinima;
+            cotaMinima = plano.cota_app_min ?? cotaMinima;
           }
         }
       }
