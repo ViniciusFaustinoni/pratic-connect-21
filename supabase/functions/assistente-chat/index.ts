@@ -1253,8 +1253,8 @@ ${assistenciasTexto}
     console.log(`[assistente-chat] Contexto: ${veiculos.length} veículos, ${boletosPendentes.length} boletos pendentes`);
 
     // Build messages array with FULL context
+    const prazoLinkEvento = await getConfiguracaoNumero(supabaseAdmin, 'prazo_link_evento_horas', 72);
     const aiMessages = [
-      const prazoLinkEvento = await getConfiguracaoNumero(supabaseAdmin, 'prazo_link_evento_horas', 72);
       { role: "system", content: buildSystemPrompt(prazoLinkEvento) + "\n\n" + contextoAssociado },
       ...conversationHistory.slice(-10), // Last 10 messages for context
       ...messages,
