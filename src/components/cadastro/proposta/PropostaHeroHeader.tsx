@@ -71,14 +71,8 @@ function formatCurrency(value: number | null): string {
 
 export function PropostaHeroHeader({
   proposta,
-  onAprovar,
-  onSolicitarDocs,
-  onReprovar,
   onVoltar,
   onProxima,
-  isAprovando = false,
-  isAutovistoria = false,
-  podeAprovar = true,
 }: PropostaHeroHeaderProps) {
   const config = statusConfig[proposta.status || ''] || {
     label: proposta.status || 'Desconhecido',
