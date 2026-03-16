@@ -157,6 +157,19 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
+  // Buscar overrides de cota por categoria (planos_cotas_categoria)
+  const { data: cotasCategoriaData } = useQuery({
+    queryKey: ['planos_cotas_categoria'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos_cotas_categoria')
+        .select('plano_id, categoria_veiculo, cota_percentual, cota_minima_valor');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   // Buscar elegibilidade de modelos por plano
   const { data: elegibilidadeData, isLoading: elegibilidadeLoading } = useQuery({
     queryKey: ['plano_elegibilidade_modelos'],
