@@ -1795,9 +1795,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           </div>
                         )}
                         <CardContent className="p-4">
-                          <div className="flex items-center justify-between mb-2">
-                            <div className="flex items-center gap-1.5">
-                              <h4 className="font-semibold text-sm">{plano.nome}</h4>
+                          <div className="flex items-center justify-between mb-2 gap-1">
+                            <div className="flex items-center gap-1.5 min-w-0">
+                              <h4 className="font-semibold text-sm truncate">{plano.nome}</h4>
                               {plano.elegibilidadeStatus === 'limitado' && (
                                 <Badge className="bg-amber-500/15 text-amber-600 border-amber-300 text-[10px] px-1.5 py-0">
                                   Restrições
