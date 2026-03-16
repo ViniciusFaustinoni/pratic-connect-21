@@ -209,6 +209,15 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     return MARCA_ALIASES[upper] || upper;
   }
 
+  function normalizarModeloElegibilidade(modelo: string): string {
+    return modelo
+      .trim()
+      .toUpperCase()
+      .replace(/\s*\(.*?\)\s*/g, ' ')
+      .replace(/\s+/g, ' ')
+      .trim();
+  }
+
   // Função de verificação de elegibilidade por modelo
   function verificarElegibilidadeModelo(
     planoId: string,
