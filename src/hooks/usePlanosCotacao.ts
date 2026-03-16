@@ -381,6 +381,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData && !elegibilidadeLoading) {
         elegibilidadeStatus = verificarElegibilidadeModelo(
           plano.id,
+          linha,
           {
             marca: params.marca,
             modelo: params.modelo,
