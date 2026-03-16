@@ -212,9 +212,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   // Função de verificação de elegibilidade por modelo
   function verificarElegibilidadeModelo(
     planoId: string,
+    linha: string | null,
     veiculo: { marca: string; modelo: string; ano: number; combustivel: string },
   ): 'aprovado' | 'limitado' | 'negado' {
-    const regrasDoPlano = elegibilidadeData?.filter(e => e.plano_id === planoId) ?? [];
+    // Buscar regras por linha (família) — variantes compartilham elegibilidade
+    const planosNaLinha = linha
+      ? (planosBanco || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
+      : [planoId];
+    const regrasDoPlano = elegibilidadeData?.filter(e => planosNaLinha.includes(e.plano_id)) ?? [];
     // Sem configuração = aceita tudo
     if (regrasDoPlano.length === 0) return 'aprovado';
 
@@ -376,6 +381,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       if (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData && !elegibilidadeLoading) {
         elegibilidadeStatus = verificarElegibilidadeModelo(
           plano.id,
+          linha,
           {
             marca: params.marca,
             modelo: params.modelo,
