@@ -48,8 +48,7 @@ export function useVerificarPlacaDuplicada() {
           numero,
           vendedor_id,
           created_at,
-          status,
-          vendedor:profiles!cotacoes_vendedor_id_fkey(id, nome)
+          status
         `)
         .eq('veiculo_placa', placaNormalizada)
         .in('status', ['rascunho', 'enviada', 'aceita'])
