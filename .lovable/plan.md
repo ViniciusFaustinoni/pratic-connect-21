@@ -1,167 +1,116 @@
-## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
-### Causas Raiz Identificadas
-1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
-2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
-3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-### Correções Aplicadas
+## Plano: Eliminar Hardcodes de Prazo e Conectar Configs Órfãs
 
-1. **`sga-hinova-sync/index.ts`**:
-   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
-   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
+### Escopo
 
-2. **`cron-sga-retry/index.ts`**:
-   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
+20+ arquivos com prazos hardcoded. Criar helper compartilhado para edge functions, inserir 7 chaves no banco, e substituir todos os valores fixos por leitura dinâmica.
 
 ---
 
-## Painel de Monitoramento SGA Hinova — ✅ Implementado
+### 1. Inserir chaves faltantes no banco (migration de dados via insert tool)
 
-### O que foi criado
+7 novas chaves em `configuracoes`:
 
-1. **Página `/configuracoes/integracoes/sga-hinova`** com:
-   - Status de conexão com API Hinova (teste em tempo real)
-   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
-   - Logs recentes dos últimos 50 registros
-   - Veículos pendentes (ativos não sincronizados) com envio individual
-   - Histórico de health checks
+| Chave | Valor | Unidade |
+|-------|-------|---------|
+| `prazo_link_evento_horas` | 72 | horas |
+| `prazo_link_primeiro_acesso_horas` | 48 | horas |
+| `prazo_cotacao_fornecedor_horas` | 24 | horas |
+| `prazo_vencimento_adesao_dias` | 3 | dias |
+| `prazo_documento_upload_dias` | 7 | dias |
+| `prazo_rastreador_sem_sinal_horas` | 4 | horas |
+| `prazo_manutencao_rastreador_horas` | 48 | horas_uteis |
 
-2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
-
-3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
-
-4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
-
----
-
-## Health Check Universal para Todas as Integrações — ✅ Implementado
-
-### O que foi criado
-
-1. **Tabela `integracoes_health_checks`** (genérica):
-   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
-   - Dados existentes do SGA migrados automaticamente
-   - RLS: leitura para autenticados, escrita para service_role
-
-2. **Edge Function `cron-integracoes-health-check`**:
-   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
-   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
-   - Notifica admins (role `diretor`) se qualquer integração falhar
-   - Grava resultado por integração na tabela genérica
-
-3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
-   - Props: `integracao` (slug) e `titulo` (opcional)
-   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
-   - Botão "Testar agora" invoca a edge function para a integração específica
-
-4. **Hook `useIntegracaoHealthCheck(integracao)`**:
-   - Busca histórico filtrado por integração
-   - Mutation `testNow` para teste manual
-   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
-
-5. **Integração nas páginas**:
-   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
-   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
-   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
-
-6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
-   ```sql
-   select cron.schedule(
-     'integracoes-health-check-3x-dia',
-     '0 8,13,18 * * *',
-     $$ select net.http_post(
-       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
-       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
-       body:='{}'::jsonb
-     ) as request_id; $$
-   );
-   ```
-
-### Arquivos criados/modificados
-- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
-- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
-- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
-- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
-- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
-- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
-- `supabase/config.toml` — verify_jwt para nova function
+As duas chaves órfãs (`operacional_prazo_instalacao`, `operacional_prazo_analise_docs`) já existem -- não precisam ser inseridas, apenas passam a ser lidas pelo código.
 
 ---
 
-## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
+### 2. Criar helper para edge functions
 
-### Causas Raiz
-1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
-2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
-3. Triggers de sync sobrescreviam coordenadas válidas com `null`
+**Arquivo:** `supabase/functions/_shared/config-helper.ts`
 
-### Correções Aplicadas
-
-1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
-
-2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
-
-3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
-
-4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
-
----
-
-## Correção Triggers Enum Mismatch (status_instalacao → status_servico) — ✅ Implementado
-
-### Causa Raiz
-Triggers `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` faziam `status = NEW.status` direto, mas `NEW.status` é `status_instalacao` e `servicos.status` é `status_servico` — erro PostgreSQL 42804 abortava toda atribuição automática.
-
-### Correções Aplicadas
-1. **Função `map_to_status_servico(text)`**: Mapeamento explícito e imutável de qualquer texto para `status_servico`, com fallback seguro.
-2. **Triggers corrigidos**: Ambos agora usam `public.map_to_status_servico(NEW.status::text)` em vez de atribuição direta.
-3. **Observabilidade**: `processar-encaixes-automaticos` agora loga `code/message/details/hint` do erro antes de classificar como concorrência.
-
----
-
-## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
-
-### Bloqueios de adesão zero removidos
-
-| Arquivo | Correção |
-|---------|----------|
-| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
-| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
-| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
-
-### Geração automática de lançamentos CC vendedor externo
-
-Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
-1. Após criar instalação, busca `vendedor_id` da cotação
-2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
-3. Busca configurações de comissão da tabela `configuracoes`
-4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
-5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
-
----
-
-## Fluxo Completo Vendedor Externo — Autovistoria até Ativação 360 — ✅ Implementado
-
-### Gaps Corrigidos
-
-| Gap | Arquivo | Correção |
-|-----|---------|----------|
-| Propostas de autovistoria não apareciam no cadastro | `usePropostasPendentes.ts` L523 | Filtro agora permite propostas com `temAutovistoria` ou `temVistoriaBaseRealizada` mesmo sem instalação |
-| Race condition na isenção de adesão | `EtapaPagamentoCotacao.tsx` L245 | Passa `skipPaymentCheck: true` no body da Edge Function |
-| Edge Function falhava para autovistoria sem data | `criar-instalacao-pos-pagamento/index.ts` | Autovistoria sem data: pula instalação, mas gera lançamentos CC normalmente |
-| Aprovação ignorava preferências de agendamento | `usePropostasPendentes.ts` L1538-1590 | Busca `vistoria_completa_*` da cotação para criar instalação com dados do cliente |
-
-### Fluxo Corrigido
-
-```text
-Vendedor externo cria cotação (4 cenários)
-  → Cliente abre link → Plano → Docs → Assinatura → Vistoria → Pagamento/Isenção
-    → Edge Function gera lançamentos CC (mesmo sem data de instalação)
-    → Etapa 5: Cliente preenche preferência de agendamento
-    → Tela "Em Análise Cadastral"
-    → Proposta aparece no cadastro (filtro corrigido)
-    → Analista aprova → cobertura_roubo_furto = true
-    → Instalação criada COM dados de preferência do cliente
-    → Atribuição automática → Instalação → Proteção 360°
+```typescript
+export async function getConfiguracaoNumero(
+  supabase: any, chave: string, fallback: number
+): Promise<number> {
+  const { data } = await supabase
+    .from('configuracoes')
+    .select('valor')
+    .eq('chave', chave)
+    .maybeSingle();
+  return data ? parseFloat(data.valor) || fallback : fallback;
+}
 ```
+
+Padrão idêntico ao já usado em `efetivar-substituicao` (inline), mas centralizado.
+
+---
+
+### 3. Substituições por arquivo
+
+#### Edge Functions (backend) — importar `getConfiguracaoNumero` do helper
+
+| Arquivo | Hardcode | Substituição |
+|---------|----------|-------------|
+| `gerar-link-evento/index.ts` L85 | `+ 72` | `getConfiguracaoNumero(sb, 'prazo_link_evento_horas', 72)` |
+| `agendar-contato-sinistro/index.ts` L31 | `+ 72` | idem |
+| `analisar-evento/index.ts` L135 | `+ 72` | idem |
+| `analisar-evento/index.ts` L177 | texto "72 horas" | usar variável `${prazoLink} horas` |
+| `cron-contato-sinistro/index.ts` L189 | texto "72 horas" | idem |
+| `aprovar-solicitacao-ia/index.ts` L369 | texto "72 horas" | idem |
+| `assistente-chat/index.ts` L159 | texto "72 horas" | texto estático do system prompt -- substituir por variável carregada no início |
+| `whatsapp-webhook/index.ts` L333 | texto "72h" | idem (system prompt) |
+| `app-primeiro-acesso/index.ts` L111 | `48 * 60 * 60 * 1000` | `prazoAcesso * 60 * 60 * 1000` |
+| `app-primeiro-acesso/index.ts` L147 | texto "48 horas" | `${prazoAcesso} horas` |
+| `send-email/index.ts` L310 | texto "48 horas" | `${prazoAcesso} horas` |
+| `send-email/index.ts` L378 | texto "24 horas" | `${prazoCotacao} horas` |
+| `notificar-manutencao-whatsapp/index.ts` L43 | texto "48 horas" | `${prazoManutencao} horas` |
+| `asaas-cobranca-adesao/index.ts` L221 | `+ 3` | `getConfiguracaoNumero(sb, 'prazo_vencimento_adesao_dias', 3)` |
+| `autentique-webhook/index.ts` L641 | `+ 3` | idem |
+| `retroativo-pagamento-termo/index.ts` L116 | `+ 3` | idem |
+| `verificar-instalacao-completa/index.ts` L62 | `4 * 60 * 60 * 1000` | `prazoSemSinal * 60 * 60 * 1000` |
+| `verificar-instalacao-completa/index.ts` L149 | texto "4 horas" | `${prazoSemSinal} horas` |
+| `cron-lembrete-documentos/index.ts` L40-95 | `7 * 24 * 60 * 60 * 1000` (2x) e `3 * 24...` | `prazoDocs * 24 * 60 * 60 * 1000` |
+
+#### Frontend (React) — usar `useConfiguracaoNumero` (hook já existe)
+
+| Arquivo | Hardcode | Substituição |
+|---------|----------|-------------|
+| `SinistroAnalise.tsx` L581 | texto "72 horas" | `useConfiguracaoNumero('prazo_link_evento_horas', 72)` → interpolar no texto |
+| `EventoLinkCard.tsx` L107 | texto "72 horas" | idem |
+| `SolicitarOrcamentoDialog.tsx` L85 | `+ 24` | `useConfiguracaoNumero('prazo_cotacao_fornecedor_horas', 24)` |
+| `AtribuirFornecedoresDialog.tsx` L135 | texto "24 horas" | idem |
+| `AtribuirFornecedoresDialog.tsx` L190 | `+ 24` | idem |
+| `AppSinistroNovo.tsx` L758 | texto "24 horas" | idem |
+| `SolicitarDocumentosSinistroDialog.tsx` L101 | `+ 7` | `useConfiguracaoNumero('prazo_documento_upload_dias', 7)` |
+| `ReguladorOficina.tsx` L67 | `> 48` | `useConfiguracaoNumero('prazo_manutencao_rastreador_horas', 48)` |
+
+---
+
+### 4. O que NÃO será alterado
+
+- `ReguladorOficina.tsx` L67 (`horas > 48`) — é um alerta de UX, não um prazo operacional. **Porém** mapeia diretamente para `prazo_manutencao_rastreador_horas`, então será conectado.
+- `AgendarVistoriaModal.tsx` — opções de seleção de prazo (24h/48h/72h) são opções de UI dropdown, não hardcodes de regra de negócio.
+- `ConsultaTrajetoAvancada.tsx` — filtros de análise de trajeto, não prazos operacionais.
+- `DespesaRecorrenteModal.tsx` — cálculo de recorrência financeira, não prazo operacional.
+- `ModalEnviarAssinatura.tsx` — opções de prazo para assinatura, configuração de UI.
+- `AppSinistroDetalhe.tsx` / `SinistroDetalhe.tsx` — janela de busca de mensagens IA (24h antes), não prazo operacional.
+- Cotação validade 7 dias — já dinâmico via `validade_dias`.
+- `operacional_prazo_sinistro` — já corrigido e conectado.
+
+---
+
+### 5. Resumo de arquivos afetados
+
+- **1 novo arquivo:** `supabase/functions/_shared/config-helper.ts`
+- **13 edge functions editadas** (substituir hardcodes por helper)
+- **6 componentes React editados** (substituir hardcodes por hook)
+- **7 inserts na tabela `configuracoes`** (via insert tool)
+
+---
+
+### Nota técnica
+
+Para edge functions que têm prazos em textos de system prompt (como `assistente-chat` e `whatsapp-webhook`), o prazo será lido uma vez no início da request e interpolado no template. Isso evita queries extras e mantém o prompt dinâmico.
+
