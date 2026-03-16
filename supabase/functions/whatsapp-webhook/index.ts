@@ -256,7 +256,7 @@ async function vincularMidiaADocumentoPendente(
 }
 
 // System prompt adaptado para WhatsApp (mais conciso) - ALINHADO COM APP
-const WHATSAPP_SYSTEM_PROMPT = `Você é o Assistente Virtual PRATIC via WhatsApp.
+const buildWhatsappSystemPrompt = (prazoLinkEvento: number) => `Você é o Assistente Virtual PRATIC via WhatsApp.
 
 ## ACOLHIMENTO (MUITO IMPORTANTE!)
 - SEMPRE cumprimente pelo PRIMEIRO NOME do associado (fornecido no contexto)
