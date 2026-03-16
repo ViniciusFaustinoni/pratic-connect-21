@@ -384,7 +384,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           },
         );
 
-        // HARD GATE: planos negados são excluídos da cotação
+        // Planos negados permanecem com badge visual (sem continue)
         if (elegibilidadeStatus === 'negado') {
           negados.push({
             planoId: plano.id,
@@ -392,7 +392,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
             linha,
             motivo: 'Modelo não elegível para este plano',
           });
-          continue;
         }
       }
 
