@@ -304,14 +304,22 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return anoTexto ? parseInt(anoTexto.split(' ')[0]) : undefined;
   }, [anoTexto]);
 
+  // Helper to extract marca name from composite key
+  const getMarcaNomeFromCodigo = useCallback((compositeKey: string) => {
+    if (!compositeKey) return '';
+    const codigo = compositeKey.includes(':') ? compositeKey.split(':')[1] : compositeKey;
+    const marca = marcas.find(m => m.codigo === codigo);
+    return marca?.nome || '';
+  }, [marcas]);
+
   // Detectar tipo de veículo automaticamente (moto vs carro)
   const tipoVeiculoDetectado = useMemo(() => {
-    const marca = veiculoEncontrado?.vehicleData?.marca || marcaSelecionada || '';
+    const marca = veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
     const modelo = veiculoEncontrado?.vehicleData?.modelo || '';
     if (!marca && !modelo) return 'carro' as const;
     const tipo = detectarTipoVeiculo(undefined, modelo, marca);
     return tipo === 'moto' ? 'moto' as const : 'carro' as const;
-  }, [veiculoEncontrado, marcaSelecionada]);
+  }, [veiculoEncontrado, marcaSelecionada, getMarcaNomeFromCodigo]);
 
   // Resolver marca/modelo para elegibilidade
   const marcaResolvida = useMemo(() => {
