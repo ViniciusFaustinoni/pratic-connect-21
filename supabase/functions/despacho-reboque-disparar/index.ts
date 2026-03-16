@@ -180,7 +180,7 @@ serve(async (req) => {
       return {
         despacho_id: despacho.id,
         prestador_id: prest.id,
-        token_expira_em: new Date(now.getTime() + 60 * 60 * 1000).toISOString(),
+        token_expira_em: new Date(now.getTime() + 10 * 60 * 1000).toISOString(),
         valor_saida: vals.valor_saida,
         valor_km: vals.valor_km,
         valor_calculado: vals.valor_sugerido || null,
