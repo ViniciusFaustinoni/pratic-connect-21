@@ -1,6 +1,7 @@
 import { User, Car, DollarSign, Clock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { differenceInDays } from 'date-fns';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 
 const formatCurrency = (value: number | null) => {
   if (!value) return '-';
