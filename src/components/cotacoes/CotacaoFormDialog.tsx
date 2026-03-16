@@ -488,11 +488,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     setAnos([]);
     form.setValue('valor_fipe', 0);
 
+    // Detectar tipo FIPE a partir da marca selecionada
+    const marcaObj = marcas.find(m => m.codigo === value);
+    const tipo = marcaObj?.tipoFipe || 'carros';
+    setTipoFipeSelecionado(tipo);
+
     if (value) {
       setLoadingModelos(true);
       try {
-        const tipoFipe = tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros';
-        const data = await getModelos(value, tipoFipe);
+        const data = await getModelos(value, tipo);
         setModelos(data);
       } catch (error) {
         console.error('Erro ao carregar modelos:', error);
