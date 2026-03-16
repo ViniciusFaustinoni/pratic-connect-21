@@ -90,6 +90,7 @@ interface FotoItem {
 
 export default function AppSinistroNovo() {
   const navigate = useNavigate();
+  const { data: prazoCotacao = 24 } = useConfiguracaoNumero('prazo_cotacao_fornecedor_horas', 24);
 
   // Navegação do wizard
   const [etapa, setEtapa] = useState(1);
