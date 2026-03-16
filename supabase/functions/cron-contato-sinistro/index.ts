@@ -187,7 +187,7 @@ Já é possível dar entrada no conserto do veículo.
 Acesse o link abaixo para completar as etapas:
 ${siteUrl}/evento/${token}
 
-O link é válido por 72 horas.
+O link é válido por ${prazoLink} horas.
 Em caso de dúvidas, estamos à disposição!`;
 
           const telefone = associado.whatsapp || associado.telefone;

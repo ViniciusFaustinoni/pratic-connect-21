@@ -146,7 +146,7 @@ serve(async (req) => {
           body: {
             telefone: whatsappNumero.replace(/\D/g, ''),
             tipo: 'text',
-            mensagem: `🎉 Olá, ${associado.nome.split(' ')[0]}!\n\nSeu veículo está protegido pela PRATIC!\n\nAcesse o App e crie sua senha:\n🔗 ${linkCriarSenha}\n\n⏰ Link válido por 48 horas.`,
+            mensagem: `🎉 Olá, ${associado.nome.split(' ')[0]}!\n\nSeu veículo está protegido pela PRATIC!\n\nAcesse o App e crie sua senha:\n🔗 ${linkCriarSenha}\n\n⏰ Link válido por ${prazoAcesso} horas.`,
             referencia_tipo: 'primeiro_acesso',
             referencia_id: associado.id
           }

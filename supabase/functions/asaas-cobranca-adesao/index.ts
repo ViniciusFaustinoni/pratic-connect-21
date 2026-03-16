@@ -217,9 +217,10 @@ serve(async (req) => {
       console.log(`[asaas-cobranca-adesao] Novo cliente criado: ${asaasClienteId}`);
     }
 
-    // Criar cobrança com PIX e boleto
+    // Criar cobrança com PIX e boleto (prazo dinâmico)
+    const prazoAdesao = await getConfiguracaoNumero(supabase, 'prazo_vencimento_adesao_dias', 3);
     const vencimento = new Date();
-    vencimento.setDate(vencimento.getDate() + 3); // 3 dias para pagar
+    vencimento.setDate(vencimento.getDate() + prazoAdesao);
 
     // Criar cobrança com forma de pagamento selecionada
     // Se for UNDEFINED, permite múltiplas formas no link de pagamento

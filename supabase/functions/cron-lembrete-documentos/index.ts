@@ -95,7 +95,7 @@ serve(async (req) => {
 
       const associadoId = doc.associado_id;
       const createdAt = new Date(doc.created_at);
-      const prazoFinal = new Date(createdAt.getTime() + 7 * 24 * 60 * 60 * 1000);
+      const prazoFinal = new Date(createdAt.getTime() + prazoDocs * 24 * 60 * 60 * 1000);
       const diasRestantes = Math.ceil((prazoFinal.getTime() - Date.now()) / (1000 * 60 * 60 * 24));
 
       if (!docsAgrupados[associadoId]) {

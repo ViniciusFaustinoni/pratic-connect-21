@@ -148,7 +148,7 @@ serve(async (req) => {
               tipo: 'sem_comunicacao',
               severidade: 'alta',
               titulo: 'Rastreador sem comunicação após instalação',
-              descricao: `O rastreador ${rastreador.imei} foi instalado há mais de 4 horas e ainda não comunicou. Verificar instalação física.`,
+              descricao: `O rastreador ${rastreador.imei} foi instalado há mais de ${prazoSemSinal} horas e ainda não comunicou. Verificar instalação física.`,
               status: 'aberto',
             });
 
