@@ -409,8 +409,11 @@ export function AuthProvider({ children }: AuthProviderProps) {
       setProfile(null);
       setPerfis([]);
       setLoading(false);
+      
+      // Limpar todo o cache do React Query para evitar dados stale no re-login
+      queryClient.clear();
     }
-  }, []);
+  }, [queryClient]);
 
   const resetPassword = useCallback(async (email: string): Promise<AuthResult> => {
     try {

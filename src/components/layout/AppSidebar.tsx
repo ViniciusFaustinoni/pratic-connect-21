@@ -545,8 +545,8 @@ export function AppSidebar() {
       }))
       .filter(group => group.items.length > 0);
 
-  // Filtra grupos visíveis usando visibilidade dinâmica do banco
-  const getVisibleGroups = () => {
+  // Filtra grupos visíveis usando visibilidade dinâmica do banco (memoizado)
+  const visibleGroups = useMemo(() => {
     if (permissions.isSindicanteOnly) {
       return []; // Sindicante não vê nenhum grupo de menu
     }
@@ -588,21 +588,22 @@ export function AppSidebar() {
     }
     
     return baseGroups;
-  };
+  }, [permissions, visibleModules, fipeMenorAtivo]);
 
-  const visibleMainItems = permissions.isSindicanteOnly
-    ? [
+  const visibleMainItems = useMemo(() => {
+    if (permissions.isSindicanteOnly) {
+      return [
         { title: 'Dashboard', url: '/sindicante', icon: LayoutDashboard, color: MENU_COLORS.dashboard },
         { title: 'Meus Casos', url: '/sindicante', icon: Search, color: MENU_COLORS.eventos },
-      ]
-    : filterByPermission(menuConfig.main).filter(item => {
-        // Dashboard visível se módulo 'dashboard' está nos visíveis
-        if (item.url === '/dashboard') {
-          return visibleModules.length === 0 || visibleModules.includes('dashboard');
-        }
-        return true;
-      });
-  const visibleGroups = getVisibleGroups();
+      ];
+    }
+    return filterByPermission(menuConfig.main).filter(item => {
+      if (item.url === '/dashboard') {
+        return visibleModules.length === 0 || visibleModules.includes('dashboard');
+      }
+      return true;
+    });
+  }, [permissions, visibleModules, fipeMenorAtivo]);
   // Visibilidade de configurações baseada no banco
   const showConfigModule = visibleModules.length === 0 || visibleModules.includes('configuracoes');
   const visibleConfigItems = (permissions.isPerfilLimitado || !showConfigModule) ? [] : filterByPermission(configItems);
