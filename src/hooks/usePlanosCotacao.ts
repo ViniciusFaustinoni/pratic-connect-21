@@ -101,7 +101,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         .select(`
           *,
 
-          product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class, blocked_categories)
+          product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class, blocked_categories, supports_app)
         `)
         .eq('ativo', true)
         .order('ordem', { ascending: true });
@@ -259,6 +259,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       // Regra de ano recente usando campo do banco
       if (requiresRecentYear && anoVeiculoNum < anoAtual - 1) continue;
+
+      // Filtrar linhas que não suportam uso de aplicativo
+      if (params.usoApp && plProductLine?.supports_app === false) {
+        continue;
+      }
 
       // Filtrar por categorias bloqueadas no product_line
       const blockedCategories: string[] = plProductLine?.blocked_categories || [];
