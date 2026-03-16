@@ -332,8 +332,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Filtrar por elegibilidade de modelo (aditivo — só aplica se dados carregados e veículo informado)
       // Usa o combustível original (não o normalizado para pricing) para compatibilidade com regras de elegibilidade
       const combustivelOriginal = (combustivel || 'flex').toLowerCase();
+      let elegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined = undefined;
+
       if (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData && !elegibilidadeLoading) {
-        const resultado = verificarElegibilidadeModelo(
+        elegibilidadeStatus = verificarElegibilidadeModelo(
           plano.id,
           {
             marca: params.marca,
@@ -342,7 +344,17 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
             combustivel: combustivelOriginal,
           },
         );
-        // Elegibilidade negada não exclui o plano — apenas sinaliza visualmente no card
+
+        // HARD GATE: planos negados são excluídos da cotação
+        if (elegibilidadeStatus === 'negado') {
+          negados.push({
+            planoId: plano.id,
+            planoNome: plano.nome,
+            linha,
+            motivo: 'Modelo não elegível para este plano',
+          });
+          continue;
+        }
       }
 
       // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
@@ -416,6 +428,12 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaMinimaFinal = Number(plano.cota_minima_desagio) || cotaMinimaDesagioDefault;
       }
 
+      // Deságio para elegibilidade limitada (mesma lógica de app — cota maior)
+      if (elegibilidadeStatus === 'limitado') {
+        cotaPercentual = Number(plano.cota_desagio) || cotaDesagioDefault;
+        cotaMinimaFinal = Number(plano.cota_minima_desagio) || cotaMinimaDesagioDefault;
+      }
+
       const cotaString = `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
 
       const coberturas = Array.isArray(plano.coberturas) ? plano.coberturas : [];
@@ -464,14 +482,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaDesagio: Number(plano.cota_desagio) || undefined,
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
         anoMinimo: anoMinimo || undefined,
-        elegibilidadeStatus: (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData)
-          ? verificarElegibilidadeModelo(plano.id, {
-              marca: params.marca,
-              modelo: params.modelo,
-              ano: anoVeiculoNum,
-              combustivel: combustivelOriginal,
-            })
-          : undefined,
+        elegibilidadeStatus,
       });
     }
 
