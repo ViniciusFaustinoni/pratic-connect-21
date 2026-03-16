@@ -298,7 +298,39 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     );
   }
 
-  // Se todas foram enviadas, mostrar tela de conclusão
+  // Se todas as fotos foram enviadas mas falta vídeo, mostrar etapa de vídeo
+  if (todasFotosEnviadas && videoObrigatorio && !videoUrl) {
+    return (
+      <Card className="max-w-lg mx-auto">
+        <CardContent className="pt-8 pb-8 space-y-6">
+          <div className="text-center space-y-4">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+              <Video className="h-10 w-10 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground">
+                Agora grave o Vídeo 360°
+              </h2>
+              <p className="text-muted-foreground mt-1">
+                Todas as {totalFotos} fotos foram enviadas! Agora grave um vídeo dando a volta completa no veículo (máx. 2 min).
+              </p>
+            </div>
+          </div>
+
+          <VideoCapture
+            onCapture={handleVideoCapture}
+            onReset={() => setVideoUrl(null)}
+            videoUrl={videoUrl || undefined}
+            uploading={uploadingVideo}
+            maxDuration={120}
+            label="Vídeo 360°"
+          />
+        </CardContent>
+      </Card>
+    );
+  }
+
+  // Se todas foram enviadas (fotos + vídeo), mostrar tela de conclusão
   if (todasEnviadas) {
     return (
       <Card className="max-w-lg mx-auto">
