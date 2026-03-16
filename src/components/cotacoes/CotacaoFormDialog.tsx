@@ -1508,16 +1508,45 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     </div>
                   </div>
 
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-4 gap-2">
+                    <div className="space-y-1">
+                      <Label className="text-xs">Tipo</Label>
+                      <Select
+                        value={tipoFipeSelecionado}
+                        onValueChange={(value: 'carros' | 'motos') => {
+                          setTipoFipeSelecionado(value);
+                          setMarcaSelecionada('');
+                          setModeloSelecionado('');
+                          setAnoSelecionado('');
+                          setModelos([]);
+                          setAnos([]);
+                          form.setValue('valor_fipe', 0);
+                        }}
+                      >
+                        <SelectTrigger className="h-9">
+                          <SelectValue />
+                        </SelectTrigger>
+                        <SelectContent>
+                          <SelectItem value="carros">
+                            <span className="flex items-center gap-1.5">
+                              <Car className="h-3.5 w-3.5" /> Carro
+                            </span>
+                          </SelectItem>
+                          <SelectItem value="motos">
+                            <span className="flex items-center gap-1.5">
+                              🏍️ Moto
+                            </span>
+                          </SelectItem>
+                        </SelectContent>
+                      </Select>
+                    </div>
+
                     <div className="space-y-1">
                       <Label className="text-xs">Marca</Label>
                       <SearchableSelect
-                        options={marcas.map((m) => {
-                          // Check if brand name exists in both carros and motos
-                          const hasDuplicate = marcas.some(other => other.nome === m.nome && other.tipoFipe !== m.tipoFipe);
-                          const label = hasDuplicate ? `${m.nome} (${m.tipoFipe === 'motos' ? 'Moto' : 'Carro'})` : m.nome;
-                          return { value: `${m.tipoFipe}:${m.codigo}`, label };
-                        })}
+                        options={marcas
+                          .filter((m) => m.tipoFipe === tipoFipeSelecionado)
+                          .map((m) => ({ value: `${m.tipoFipe}:${m.codigo}`, label: m.nome }))}
                         value={marcaSelecionada}
                         onValueChange={handleMarcaChange}
                         placeholder="Marca"
