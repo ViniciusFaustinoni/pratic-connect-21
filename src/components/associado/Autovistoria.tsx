@@ -260,6 +260,26 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     }
   };
 
+  const handleVideoCapture = async (file: File) => {
+    if (!vistoriaId) return;
+    setUploadingVideo(true);
+    try {
+      const result = await uploadFoto.mutateAsync({
+        vistoriaId,
+        fotoId: 'video_360',
+        file,
+        contratoId,
+      });
+      setVideoUrl(result.url);
+      toast.success('Vídeo 360° enviado com sucesso!');
+    } catch (error) {
+      console.error('[Autovistoria] Erro no upload do vídeo:', error);
+      toast.error('Erro ao enviar vídeo. Tente novamente.');
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
   const handleContinuar = () => {
     if (vistoriaId) {
       onComplete(vistoriaId);
