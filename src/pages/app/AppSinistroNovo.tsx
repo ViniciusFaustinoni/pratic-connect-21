@@ -1,4 +1,5 @@
 import { useState, ChangeEvent } from 'react';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
