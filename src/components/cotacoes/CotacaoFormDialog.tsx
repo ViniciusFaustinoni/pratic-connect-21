@@ -315,8 +315,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
   // Resolver marca/modelo para elegibilidade
   const marcaResolvida = useMemo(() => {
-    return veiculoEncontrado?.vehicleData?.marca || marcaSelecionada || '';
-  }, [veiculoEncontrado, marcaSelecionada]);
+    return veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
+  }, [veiculoEncontrado, marcaSelecionada, marcas]);
 
   const modeloResolvido = useMemo(() => {
     return veiculoEncontrado?.vehicleData?.modelo || '';
