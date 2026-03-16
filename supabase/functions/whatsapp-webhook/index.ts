@@ -3416,7 +3416,7 @@ Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato c
             assistantMessage,
             ...toolResults,
           ],
-          WHATSAPP_SYSTEM_PROMPT + "\n\n" + context
+          whatsappPrompt + "\n\n" + context
         );
         assistantMessage = aiResponse.choices?.[0]?.message;
       }
