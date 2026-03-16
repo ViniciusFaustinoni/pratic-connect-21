@@ -43,7 +43,6 @@ import {
   PropostaApprovalStepper,
 } from '@/components/cadastro/proposta';
 import type { DocumentoAnexadoCompleto } from '@/types/documentos';
-import type { DocumentoAnexadoCompleto } from '@/types/documentos';
 
 // ============================================
 // COMPONENTE PRINCIPAL
