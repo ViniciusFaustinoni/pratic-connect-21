@@ -516,7 +516,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     if (marcaSelecionada && value) {
       setLoadingAnos(true);
       try {
-        const data = await getAnos(marcaSelecionada, value, 'carros');
+        const data = await getAnos(marcaSelecionada, value, tipoFipeSelecionado);
         setAnos(data);
       } catch (error) {
         console.error('Erro ao carregar anos:', error);
