@@ -59,7 +59,23 @@ serve(async (req) => {
     const apiUrl = `https://placas.fipeapi.com.br/placas/${placaNormalizada}?key=${apiKey}`;
     
     console.log(`[plate-lookup] Chamando API: placas.fipeapi.com.br`);
-    const response = await fetch(apiUrl);
+    
+    let response: Response;
+    try {
+      response = await fetch(apiUrl);
+    } catch (fetchError) {
+      console.error(`[plate-lookup] Erro de conexão:`, fetchError);
+      return new Response(
+        JSON.stringify({ 
+          success: false, 
+          error: 'Serviço de consulta de placas indisponível. Preencha os dados manualmente.' 
+        }),
+        { 
+          status: 503, 
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
+        }
+      );
+    }
 
     if (!response.ok) {
       console.error(`[plate-lookup] Erro HTTP: ${response.status}`);
