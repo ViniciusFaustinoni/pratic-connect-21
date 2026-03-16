@@ -51,6 +51,8 @@ type ExtendedAuthContextType = Omit<AuthContextType, 'isFuncionario' | 'isAssoci
 // PROVIDER
 // ============================================
 export function AuthProvider({ children }: AuthProviderProps) {
+  const queryClient = useQueryClient();
+  
   // Estado principal
   const [user, setUser] = useState<User | null>(null);
   const [session, setSession] = useState<Session | null>(null);
