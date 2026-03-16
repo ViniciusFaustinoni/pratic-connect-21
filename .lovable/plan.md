@@ -1,214 +1,167 @@
+## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
+### Causas Raiz Identificadas
+1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
+2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
+3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-## Plano: Corrigir e Complementar Sistema de Pontuação de Consultores
+### Correções Aplicadas
 
-### Contexto
+1. **`sga-hinova-sync/index.ts`**:
+   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
+   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
 
-A infraestrutura base existe: `comissoes_parametros` (com `troca_titularidade_peso_ranking = 0.5`), `fn_parametro_comissao()` helper SQL, `fn_fechamento_mensal_comissoes()`, `comissoes_ranking_mensal`. A tabela `consultores` foi dropada — o sistema usa `profiles` via `vendedor_id`. Há dois hardcodes de `0.5` e a substituição de placa não entra no ranking.
-
----
-
-### 1. Migration: Criar tabela `pontuacao_eventos` + inserir parâmetros
-
-```sql
--- Tabela de histórico granular de pontuação
-CREATE TABLE IF NOT EXISTS pontuacao_eventos (
-  id              UUID          PRIMARY KEY DEFAULT gen_random_uuid(),
-  vendedor_id     UUID          NOT NULL REFERENCES profiles(id),
-  tipo_operacao   VARCHAR(60)   NOT NULL,
-  pontos          DECIMAL(4,1)  NOT NULL,
-  conta_ranking   BOOLEAN       NOT NULL DEFAULT TRUE,
-  contrato_id     UUID          REFERENCES contratos(id),
-  referencia_tipo VARCHAR(40),
-  referencia_id   UUID,
-  mes_referencia  DATE          NOT NULL DEFAULT date_trunc('month', NOW()),
-  estornado       BOOLEAN       NOT NULL DEFAULT FALSE,
-  estorno_id      UUID          REFERENCES pontuacao_eventos(id),
-  created_at      TIMESTAMPTZ   NOT NULL DEFAULT NOW()
-);
-
--- RLS + policies
-ALTER TABLE pontuacao_eventos ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Leitura pontuacao" ON pontuacao_eventos FOR SELECT TO authenticated USING (true);
-CREATE POLICY "Escrita pontuacao" ON pontuacao_eventos FOR INSERT TO authenticated WITH CHECK (true);
-CREATE POLICY "Update pontuacao" ON pontuacao_eventos FOR UPDATE TO authenticated USING (true);
-
--- Índices
-CREATE INDEX idx_pontuacao_vendedor ON pontuacao_eventos(vendedor_id);
-CREATE INDEX idx_pontuacao_mes ON pontuacao_eventos(mes_referencia);
-CREATE INDEX idx_pontuacao_contrato ON pontuacao_eventos(contrato_id);
-
--- Inserir parâmetros de pontuação (ON CONFLICT para não duplicar)
-INSERT INTO comissoes_parametros (chave, valor, descricao, tipo_dado) VALUES
-  ('pontos_nova_adesao',                 '1.0', 'Pontos por nova adesão confirmada (1º boleto pago)', 'numero'),
-  ('pontos_substituicao_placa',          '0.5', 'Pontos por substituição de placa', 'numero'),
-  ('pontos_reativacao_120_dias',         '1.0', 'Pontos por reativação após 120 dias', 'numero'),
-  ('pontos_cancelamento_antes_1_boleto', '0.0', 'Cancelamento antes do 1º boleto — não conta', 'numero')
-ON CONFLICT (chave) DO NOTHING;
-
--- troca_titularidade_peso_ranking já existe, renomear para consistência
-UPDATE comissoes_parametros 
-SET chave = 'pontos_troca_titularidade', 
-    descricao = 'Pontos por troca de titularidade'
-WHERE chave = 'troca_titularidade_peso_ranking';
-```
-
-### 2. Migration: Atualizar `fn_fechamento_mensal_comissoes` 
-
-Corrigir duas coisas na function SQL:
-- Substituir `* 0.5` hardcoded por `fn_parametro_comissao('pontos_troca_titularidade')`
-- Somar pontos de substituição de placa (de `substituicoes_veiculo`) no cálculo de `vendas_liquidas`
-
-Trecho da linha 532-556 atualizado:
-
-```sql
--- No loop de vendedores, adicionar subquery para substituições:
-(SELECT COALESCE(SUM(sv.pontos_consultor), 0)
- FROM substituicoes_veiculo sv
- JOIN contratos ct ON ct.id = sv.contrato_id
- WHERE sv.consultor_id = c.vendedor_id
-   AND sv.status = 'efetivada'
-   AND EXTRACT(MONTH FROM sv.efetivada_em) = v_campanha.mes
-   AND EXTRACT(YEAR FROM sv.efetivada_em) = v_campanha.ano
-) as pontos_substituicao
-
--- Na linha de vendas_liquidas (554):
-v_vendedor.vendas_confirmadas - v_vendedor.vendas_canceladas 
-  + (v_vendedor.trocas_titularidade * fn_parametro_comissao('pontos_troca_titularidade'))
-  + v_vendedor.pontos_substituicao
-```
-
-### 3. Edge Function: `efetivar-substituicao/index.ts`
-
-**Linha 238** — substituir hardcode por leitura dinâmica:
-
-```typescript
-// Buscar pontos da tabela de parâmetros
-const { data: paramPontos } = await supabase
-  .from('comissoes_parametros')
-  .select('valor')
-  .eq('chave', 'pontos_substituicao_placa')
-  .eq('ativo', true)
-  .maybeSingle();
-
-const pontosConsultor = paramPontos ? parseFloat(paramPontos.valor) : 0.5;
-
-// Usar valor dinâmico
-await supabase.from('substituicoes_veiculo')
-  .update({ comissao_creditada: true, pontos_consultor: pontosConsultor })
-  .eq('id', substituicao_id);
-
-// Registrar evento de pontuação
-await supabase.from('pontuacao_eventos').insert({
-  vendedor_id: substituicao.consultor_id,
-  tipo_operacao: 'substituicao_placa',
-  pontos: pontosConsultor,
-  contrato_id: substituicao.contrato_id,
-  referencia_tipo: 'substituicao',
-  referencia_id: substituicao.id,
-});
-```
-
-### 4. Edge Function: `asaas-webhook/index.ts`
-
-**4a. Pontuar ao confirmar 1º boleto (adesão paga)**
-
-Após as duas ocorrências de `adesao_paga: true` (linhas ~157 e ~405), adicionar:
-
-```typescript
-// Buscar vendedor_id do contrato
-const { data: contratoVendedor } = await supabase
-  .from('contratos')
-  .select('vendedor_id')
-  .eq('id', contratoId)
-  .maybeSingle();
-
-if (contratoVendedor?.vendedor_id) {
-  const { data: paramPontos } = await supabase
-    .from('comissoes_parametros')
-    .select('valor')
-    .eq('chave', 'pontos_nova_adesao')
-    .eq('ativo', true)
-    .maybeSingle();
-
-  const pontos = paramPontos ? parseFloat(paramPontos.valor) : 1.0;
-
-  await supabase.from('pontuacao_eventos').insert({
-    vendedor_id: contratoVendedor.vendedor_id,
-    tipo_operacao: 'nova_adesao',
-    pontos,
-    contrato_id: contratoId,
-    referencia_tipo: 'cobranca',
-    referencia_id: cobranca?.id || null,
-  });
-  
-  console.log(`[asaas-webhook] Pontuação ${pontos} registrada para vendedor ${contratoVendedor.vendedor_id}`);
-}
-```
-
-**4b. Estorno ao cancelar cotação por falta de pagamento (PAYMENT_OVERDUE com adesão)**
-
-Na seção de cancelamento por adesão vencida (~linha 798), após cancelar a cotação, adicionar:
-
-```typescript
-// Estornar pontuação se existir
-const { data: eventoOriginal } = await supabase
-  .from('pontuacao_eventos')
-  .select('id, pontos')
-  .eq('contrato_id', cobranca.contrato_id)
-  .eq('tipo_operacao', 'nova_adesao')
-  .eq('estornado', false)
-  .maybeSingle();
-
-if (eventoOriginal) {
-  // Criar evento de estorno
-  await supabase.from('pontuacao_eventos').insert({
-    vendedor_id: contratoVendedor.vendedor_id,
-    tipo_operacao: 'estorno_cancelamento',
-    pontos: eventoOriginal.pontos * -1,
-    contrato_id: cobranca.contrato_id,
-    referencia_tipo: 'estorno',
-    referencia_id: eventoOriginal.id,
-    estorno_id: eventoOriginal.id,
-  });
-  // Marcar original como estornado
-  await supabase.from('pontuacao_eventos')
-    .update({ estornado: true })
-    .eq('id', eventoOriginal.id);
-}
-```
-
-**4c. Pontuar reativação 120+ dias**
-
-Na seção de 120+ dias (~linha 628), quando a reativação for aprovada manualmente, adicionar pontuação. Como hoje o webhook **não reativa** automaticamente em 120+ dias (só notifica), a pontuação será adicionada no fluxo futuro de reativação manual. Por ora, preparar o parâmetro e documentar o ponto de inserção.
-
-### 5. Helper centralizado (TypeScript)
-
-Criar `supabase/functions/_shared/pontuacao-helper.ts` com funções reutilizáveis:
-
-```typescript
-export async function getParametroPontuacao(supabase, chave: string, fallback: number): Promise<number>
-export async function registrarEventoPontuacao(supabase, params): Promise<void>
-export async function estornarEventoPontuacao(supabase, eventoId: string, vendedorId: string, contratoId: string): Promise<void>
-```
-
-Essas funções encapsulam a leitura de `comissoes_parametros` e inserção/estorno em `pontuacao_eventos`, evitando duplicação de código entre `efetivar-substituicao` e `asaas-webhook`.
+2. **`cron-sga-retry/index.ts`**:
+   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
 
 ---
 
-### Arquivos afetados
+## Painel de Monitoramento SGA Hinova — ✅ Implementado
 
-| Arquivo | Alteração |
-|---------|-----------|
-| Nova migration SQL | Criar `pontuacao_eventos`, inserir parâmetros, renomear chave |
-| Nova migration SQL | Recriar `fn_fechamento_mensal_comissoes` com leitura dinâmica + substituições |
-| `supabase/functions/_shared/pontuacao-helper.ts` | Novo helper centralizado |
-| `supabase/functions/efetivar-substituicao/index.ts` | Remover 0.5 hardcoded, usar helper |
-| `supabase/functions/asaas-webhook/index.ts` | Adicionar pontuação em adesão paga + estorno em cancelamento |
+### O que foi criado
 
-### O que NÃO será alterado
+1. **Página `/configuracoes/integracoes/sga-hinova`** com:
+   - Status de conexão com API Hinova (teste em tempo real)
+   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
+   - Logs recentes dos últimos 50 registros
+   - Veículos pendentes (ativos não sincronizados) com envio individual
+   - Histórico de health checks
 
-- `comissoes_ranking_mensal` (tabela mantida)
-- Frontend de ranking (`ComissoesRankingTab.tsx`, `TabRanking.tsx`)
-- Ranking de propostas (`usePropostasMetricas.ts`)
+2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
 
+3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
+
+4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
+
+---
+
+## Health Check Universal para Todas as Integrações — ✅ Implementado
+
+### O que foi criado
+
+1. **Tabela `integracoes_health_checks`** (genérica):
+   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
+   - Dados existentes do SGA migrados automaticamente
+   - RLS: leitura para autenticados, escrita para service_role
+
+2. **Edge Function `cron-integracoes-health-check`**:
+   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
+   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
+   - Notifica admins (role `diretor`) se qualquer integração falhar
+   - Grava resultado por integração na tabela genérica
+
+3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
+   - Props: `integracao` (slug) e `titulo` (opcional)
+   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
+   - Botão "Testar agora" invoca a edge function para a integração específica
+
+4. **Hook `useIntegracaoHealthCheck(integracao)`**:
+   - Busca histórico filtrado por integração
+   - Mutation `testNow` para teste manual
+   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
+
+5. **Integração nas páginas**:
+   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
+   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
+   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
+
+6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
+   ```sql
+   select cron.schedule(
+     'integracoes-health-check-3x-dia',
+     '0 8,13,18 * * *',
+     $$ select net.http_post(
+       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
+       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
+       body:='{}'::jsonb
+     ) as request_id; $$
+   );
+   ```
+
+### Arquivos criados/modificados
+- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
+- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
+- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
+- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
+- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
+- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
+- `supabase/config.toml` — verify_jwt para nova function
+
+---
+
+## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
+
+### Causas Raiz
+1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
+2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
+3. Triggers de sync sobrescreviam coordenadas válidas com `null`
+
+### Correções Aplicadas
+
+1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
+
+2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
+
+3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
+
+4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
+
+---
+
+## Correção Triggers Enum Mismatch (status_instalacao → status_servico) — ✅ Implementado
+
+### Causa Raiz
+Triggers `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` faziam `status = NEW.status` direto, mas `NEW.status` é `status_instalacao` e `servicos.status` é `status_servico` — erro PostgreSQL 42804 abortava toda atribuição automática.
+
+### Correções Aplicadas
+1. **Função `map_to_status_servico(text)`**: Mapeamento explícito e imutável de qualquer texto para `status_servico`, com fallback seguro.
+2. **Triggers corrigidos**: Ambos agora usam `public.map_to_status_servico(NEW.status::text)` em vez de atribuição direta.
+3. **Observabilidade**: `processar-encaixes-automaticos` agora loga `code/message/details/hint` do erro antes de classificar como concorrência.
+
+---
+
+## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
+
+### Bloqueios de adesão zero removidos
+
+| Arquivo | Correção |
+|---------|----------|
+| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
+| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
+| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
+
+### Geração automática de lançamentos CC vendedor externo
+
+Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
+1. Após criar instalação, busca `vendedor_id` da cotação
+2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
+3. Busca configurações de comissão da tabela `configuracoes`
+4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
+5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
+
+---
+
+## Fluxo Completo Vendedor Externo — Autovistoria até Ativação 360 — ✅ Implementado
+
+### Gaps Corrigidos
+
+| Gap | Arquivo | Correção |
+|-----|---------|----------|
+| Propostas de autovistoria não apareciam no cadastro | `usePropostasPendentes.ts` L523 | Filtro agora permite propostas com `temAutovistoria` ou `temVistoriaBaseRealizada` mesmo sem instalação |
+| Race condition na isenção de adesão | `EtapaPagamentoCotacao.tsx` L245 | Passa `skipPaymentCheck: true` no body da Edge Function |
+| Edge Function falhava para autovistoria sem data | `criar-instalacao-pos-pagamento/index.ts` | Autovistoria sem data: pula instalação, mas gera lançamentos CC normalmente |
+| Aprovação ignorava preferências de agendamento | `usePropostasPendentes.ts` L1538-1590 | Busca `vistoria_completa_*` da cotação para criar instalação com dados do cliente |
+
+### Fluxo Corrigido
+
+```text
+Vendedor externo cria cotação (4 cenários)
+  → Cliente abre link → Plano → Docs → Assinatura → Vistoria → Pagamento/Isenção
+    → Edge Function gera lançamentos CC (mesmo sem data de instalação)
+    → Etapa 5: Cliente preenche preferência de agendamento
+    → Tela "Em Análise Cadastral"
+    → Proposta aparece no cadastro (filtro corrigido)
+    → Analista aprova → cobertura_roubo_furto = true
+    → Instalação criada COM dados de preferência do cliente
+    → Atribuição automática → Instalação → Proteção 360°
+```

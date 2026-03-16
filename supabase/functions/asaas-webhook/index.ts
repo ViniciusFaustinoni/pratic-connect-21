@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getParametroPontuacao, registrarEventoPontuacao, estornarEventoPontuacao } from '../_shared/pontuacao-helper.ts';
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -176,6 +177,28 @@ serve(async (req) => {
               fallback: true,
             },
           });
+
+          // === PONTUAR NOVA ADESÃO (FALLBACK) ===
+          try {
+            const { data: contratoVendedorFallback } = await supabase
+              .from('contratos')
+              .select('vendedor_id')
+              .eq('id', payment.externalReference)
+              .maybeSingle();
+
+            if (contratoVendedorFallback?.vendedor_id) {
+              const pontos = await getParametroPontuacao(supabase, 'pontos_nova_adesao', 1.0);
+              await registrarEventoPontuacao(supabase, {
+                vendedor_id: contratoVendedorFallback.vendedor_id,
+                tipo_operacao: 'nova_adesao',
+                pontos,
+                contrato_id: payment.externalReference,
+                referencia_tipo: 'cobranca',
+              });
+            }
+          } catch (pontErr) {
+            console.error('[asaas-webhook] Erro ao pontuar adesão fallback:', pontErr);
+          }
 
           // === CRIAR DOCUMENTO NO AUTENTIQUE AUTOMATICAMENTE (FALLBACK) ===
           try {
@@ -420,6 +443,29 @@ serve(async (req) => {
               });
 
               console.log(`[asaas-webhook] Adesão paga para contrato ${cobranca.contrato_id}`);
+
+              // === PONTUAR NOVA ADESÃO ===
+              try {
+                const { data: contratoVendedor } = await supabase
+                  .from('contratos')
+                  .select('vendedor_id')
+                  .eq('id', cobranca.contrato_id)
+                  .maybeSingle();
+
+                if (contratoVendedor?.vendedor_id) {
+                  const pontos = await getParametroPontuacao(supabase, 'pontos_nova_adesao', 1.0);
+                  await registrarEventoPontuacao(supabase, {
+                    vendedor_id: contratoVendedor.vendedor_id,
+                    tipo_operacao: 'nova_adesao',
+                    pontos,
+                    contrato_id: cobranca.contrato_id,
+                    referencia_tipo: 'cobranca',
+                    referencia_id: cobranca.id,
+                  });
+                }
+              } catch (pontErr) {
+                console.error('[asaas-webhook] Erro ao pontuar adesão:', pontErr);
+              }
 
               // === ATUALIZAR STATUS DA COTAÇÃO ===
               const { data: contratoData } = await supabase
@@ -834,7 +880,32 @@ serve(async (req) => {
                     },
                   });
 
-                  // Notificar cliente sobre cancelamento
+                  // === ESTORNAR PONTUAÇÃO DE ADESÃO ===
+                  try {
+                    const { data: contratoVendedorOverdue } = await supabase
+                      .from('contratos')
+                      .select('vendedor_id')
+                      .eq('id', cobranca.contrato_id)
+                      .maybeSingle();
+
+                    if (contratoVendedorOverdue?.vendedor_id) {
+                      const { data: eventoOriginal } = await supabase
+                        .from('pontuacao_eventos')
+                        .select('id, pontos')
+                        .eq('contrato_id', cobranca.contrato_id)
+                        .eq('tipo_operacao', 'nova_adesao')
+                        .eq('estornado', false)
+                        .maybeSingle();
+
+                      if (eventoOriginal) {
+                        await estornarEventoPontuacao(supabase, eventoOriginal.id, contratoVendedorOverdue.vendedor_id, cobranca.contrato_id);
+                        console.log(`[asaas-webhook] Pontuação estornada para contrato ${cobranca.contrato_id}`);
+                      }
+                    }
+                  } catch (estornoErr) {
+                    console.error('[asaas-webhook] Erro ao estornar pontuação:', estornoErr);
+                  }
+
                   if (associadoOverdue?.user_id) {
                     await supabase.functions.invoke('disparar-notificacao', {
                       body: {
