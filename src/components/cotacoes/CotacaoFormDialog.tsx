@@ -1153,7 +1153,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         </DialogHeader>
 
         <Form {...form}>
-          <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-5">
+          <form onSubmit={form.handleSubmit(onSubmit)} className="flex flex-col flex-1 min-h-0">
+            <div className="flex-1 overflow-y-auto px-4 pb-4 sm:px-6 space-y-5">
             
             {/* BLOCO 0: DADOS DO ASSOCIADO */}
             <div className="space-y-3">
