@@ -482,14 +482,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaDesagio: Number(plano.cota_desagio) || undefined,
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
         anoMinimo: anoMinimo || undefined,
-        elegibilidadeStatus: (params.marca && params.modelo && anoVeiculoNum && elegibilidadeData)
-          ? verificarElegibilidadeModelo(plano.id, {
-              marca: params.marca,
-              modelo: params.modelo,
-              ano: anoVeiculoNum,
-              combustivel: combustivelOriginal,
-            })
-          : undefined,
+        elegibilidadeStatus,
       });
     }
 
