@@ -1,0 +1,1 @@
+UPDATE configuracoes SET valor = '60', descricao = 'Prazo em dias úteis para indenização de roubo, furto e perda total após entrega da documentação completa' WHERE chave = 'operacional_prazo_sinistro';

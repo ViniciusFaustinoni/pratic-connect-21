@@ -10,6 +10,7 @@ import { CardVidrosDetalhe } from '@/components/sinistros/CardVidrosDetalhe';
 import { CardAnaliseIncendio } from '@/components/sinistros/CardAnaliseIncendio';
 import { CardAnaliseAlagamento } from '@/components/sinistros/CardAnaliseAlagamento';
 import { PrazoRessarcimento } from '@/components/sinistros/PrazoRessarcimento';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 
 const documentoStatusConfig: Record<string, { label: string; class: string; icon: React.ComponentType<{ className?: string }> }> = {
   pendente: { label: 'Pendente', class: 'bg-yellow-100 text-yellow-800', icon: Clock },
@@ -29,6 +30,7 @@ export function SinistroDetalheDocs({
   sinistro, documentos, processosVinculados, onSolicitarDocs, onVincularProcesso,
 }: SinistroDetalheDocsProps) {
   const navigate = useNavigate();
+  const { data: prazoSinistro } = useConfiguracaoNumero('operacional_prazo_sinistro', 60);
 
   return (
     <div className="space-y-6">
@@ -81,6 +83,7 @@ export function SinistroDetalheDocs({
         prazoSuspenso={sinistro.prazo_suspenso}
         prazoSuspensoEm={sinistro.prazo_suspenso_em}
         motivoSuspensao={sinistro.prazo_motivo_suspensao}
+        prazoTotal={prazoSinistro}
       />
 
       {/* Link do Evento */}

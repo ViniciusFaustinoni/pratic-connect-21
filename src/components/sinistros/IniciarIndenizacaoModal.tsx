@@ -2,6 +2,7 @@ import { useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -46,6 +47,7 @@ export function IniciarIndenizacaoModal({
   open, onOpenChange, sinistroId, veiculoId, protocolo, valorFipe,
 }: IniciarIndenizacaoModalProps) {
   const queryClient = useQueryClient();
+  const { data: prazoSinistro } = useConfiguracaoNumero('operacional_prazo_sinistro', 60);
   const [depreciacoes, setDepreciacoes] = useState<Record<string, boolean>>({});
   const [observacoes, setObservacoes] = useState('');
 
@@ -126,9 +128,10 @@ export function IniciarIndenizacaoModal({
             .single();
 
           if (assocData && valorFinal > 0) {
-            // 60 dias úteis ≈ 84 dias corridos
+            const prazo = prazoSinistro ?? 60;
+            const diasCorridos = Math.round(prazo * 1.4);
             const vencimento = new Date();
-            vencimento.setDate(vencimento.getDate() + 84);
+            vencimento.setDate(vencimento.getDate() + diasCorridos);
 
             await supabase.from('contas_pagar').insert({
               fornecedor_nome: assocData.nome,
@@ -241,7 +244,7 @@ export function IniciarIndenizacaoModal({
             <div className="flex items-start gap-2">
               <Info className="h-4 w-4 text-muted-foreground mt-0.5 shrink-0" />
               <div className="space-y-1 text-xs text-muted-foreground">
-                <p>• <strong>Prazo:</strong> 60 dias úteis a partir da documentação completa</p>
+                <p>• <strong>Prazo:</strong> {prazoSinistro ?? 60} dias úteis a partir da documentação completa</p>
                 <p>• <strong>Kit GNV:</strong> Se o veículo tem kit gás, o associado pode retirar antes da entrega</p>
                 <p>• <strong>Financiamento:</strong> Se financiado, o credor é pago primeiro, saldo restante ao associado</p>
               </div>

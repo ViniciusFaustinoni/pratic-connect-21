@@ -6,8 +6,6 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
 
-const PRAZO_TOTAL = 60;
-
 /** Conta dias úteis (seg-sex) entre duas datas */
 function calcularDiasUteis(inicio: Date, fim: Date): number {
   let count = 0;
@@ -29,9 +27,10 @@ interface PrazoRessarcimentoProps {
   prazoSuspenso?: boolean;
   prazoSuspensoEm?: string | null;
   motivoSuspensao?: string | null;
+  prazoTotal?: number;
 }
 
-export function PrazoRessarcimento({ sinistroId, dataInicio, prazoSuspenso, prazoSuspensoEm, motivoSuspensao }: PrazoRessarcimentoProps) {
+export function PrazoRessarcimento({ sinistroId, dataInicio, prazoSuspenso, prazoSuspensoEm, motivoSuspensao, prazoTotal: PRAZO_TOTAL = 60 }: PrazoRessarcimentoProps) {
   const { data: suspensoes = [] } = useQuery({
     queryKey: ['suspensoes-prazo', sinistroId],
     queryFn: async () => {
@@ -64,7 +63,7 @@ export function PrazoRessarcimento({ sinistroId, dataInicio, prazoSuspenso, praz
   const percentual = Math.min(100, Math.round((diasUteisConsumidos / PRAZO_TOTAL) * 100));
 
   const isVencido = diasUteisConsumidos >= PRAZO_TOTAL;
-  const isProximo = diasUteisConsumidos > 55;
+  const isProximo = diasUteisConsumidos > PRAZO_TOTAL - 5;
 
   return (
     <Card className={isVencido ? 'border-destructive/50' : isProximo ? 'border-amber-400/50' : ''}>

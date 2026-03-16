@@ -1,6 +1,7 @@
 import { User, Car, DollarSign, Clock } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { differenceInDays } from 'date-fns';
+import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 
 const formatCurrency = (value: number | null) => {
   if (!value) return '-';
@@ -12,9 +13,10 @@ interface SinistroDetalheQuickStatsProps {
 }
 
 export function SinistroDetalheQuickStats({ sinistro }: SinistroDetalheQuickStatsProps) {
+  const { data: prazoSinistro } = useConfiguracaoNumero('operacional_prazo_sinistro', 60);
   const prazoInicio = sinistro.prazo_ressarcimento_inicio || sinistro.created_at;
   const diasDesdeAbertura = prazoInicio ? differenceInDays(new Date(), new Date(prazoInicio)) : null;
-  const diasRestantes = diasDesdeAbertura !== null ? Math.max(0, 30 - diasDesdeAbertura) : null;
+  const diasRestantes = diasDesdeAbertura !== null ? Math.max(0, (prazoSinistro ?? 60) - diasDesdeAbertura) : null;
 
   const stats = [
     {
