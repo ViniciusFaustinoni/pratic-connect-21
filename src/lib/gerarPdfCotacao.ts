@@ -1187,7 +1187,7 @@ const desenharPaginaDetalhesPlano = (
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'normal');
-    doc.text(truncateText(cobertura, 32), col1X + 14, textY);
+    doc.text(truncateText(cobertura, 45), col1X + 14, textY);
   });
 
   coberturasCol2.forEach((cobertura, index) => {
