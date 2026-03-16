@@ -1495,7 +1495,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     <div className="space-y-1">
                       <Label className="text-xs">Marca</Label>
                       <SearchableSelect
-                        options={marcas.map((m) => ({ value: m.codigo, label: m.nome }))}
+                        options={marcas.map((m) => {
+                          // Check if brand name exists in both carros and motos
+                          const hasDuplicate = marcas.some(other => other.nome === m.nome && other.tipoFipe !== m.tipoFipe);
+                          const label = hasDuplicate ? `${m.nome} (${m.tipoFipe === 'motos' ? 'Moto' : 'Carro'})` : m.nome;
+                          return { value: `${m.tipoFipe}:${m.codigo}`, label };
+                        })}
                         value={marcaSelecionada}
                         onValueChange={handleMarcaChange}
                         placeholder="Marca"
