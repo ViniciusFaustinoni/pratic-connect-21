@@ -465,11 +465,8 @@ Deno.serve(async (req) => {
           })
           .eq("veiculo_id", veiculo.id);
 
-        // Desvincular contrato do veículo antes de excluir
-        await supabaseAdmin
-          .from("veiculos")
-          .update({ contrato_id: null })
-          .eq("id", veiculo.id);
+
+
       }
       
       await supabaseAdmin.from("veiculos").delete().eq("associado_id", associadoId);
