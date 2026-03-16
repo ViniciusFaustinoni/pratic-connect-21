@@ -444,8 +444,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             getMarcas('carros'),
             getMarcas('motos'),
           ]);
-          const data = [...dataCarros, ...dataMotos];
-          setMarcas(data);
+          const marcasCarros = dataCarros.map(m => ({ ...m, tipoFipe: 'carros' as const }));
+          const marcasMotos = dataMotos.map(m => ({ ...m, tipoFipe: 'motos' as const }));
+          setMarcas([...marcasCarros, ...marcasMotos]);
         } catch (error) {
           console.error('Erro ao carregar marcas:', error);
         } finally {
