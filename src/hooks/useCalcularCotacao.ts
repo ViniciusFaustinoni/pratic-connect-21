@@ -188,7 +188,7 @@ export function useCalcularCotacao() {
         }
 
         // Calcular adesão como 1% FIPE (mínimo configurável) em vez do valor fixo do plano
-        const valorAdesao = Math.max(params.valor_fipe * 0.01, minimoAdesao);
+        const valorAdesao = Math.max(params.valor_fipe * (percentualAdesao / 100), minimoAdesao);
         const coberturas = Array.isArray(plano.coberturas) ? plano.coberturas as string[] : [];
 
         planos.push({
