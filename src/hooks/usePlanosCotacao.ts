@@ -391,6 +391,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Filtrar por elegibilidade de modelo (whitelist restritiva)
       const combustivelOriginal = (combustivel || 'flex').toLowerCase();
       let elegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined = undefined;
+      let elegibilidadeCoberturaFipe = 100;
 
       // Verificar se existem regras de elegibilidade para esta linha
       const planosNaLinhaIds = linha
@@ -400,7 +401,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       if (temRegrasElegibilidade) {
         if (params.marca && params.modelo && anoVeiculoNum) {
-          elegibilidadeStatus = verificarElegibilidadeModelo(
+          const resultado = verificarElegibilidadeModelo(
             plano.id,
             linha,
             {
@@ -410,6 +411,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
               combustivel: combustivelOriginal,
             },
           );
+          elegibilidadeStatus = resultado.status;
+          elegibilidadeCoberturaFipe = resultado.coberturaFipe;
         } else {
           // Regras existem mas não temos dados do veículo para validar → negar
           elegibilidadeStatus = 'negado';
