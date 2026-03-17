@@ -390,7 +390,7 @@ export default function CotadorPage() {
         // Inicializar adesão com 1% FIPE (mínimo R$ 100) — exceto se vendedor externo escolheu cenário isento
         const cenarioZeraAdesao = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
         if (!cenarioZeraAdesao) {
-          setValorAdesaoCustom(Math.max(100, Math.round(valorFipe * 0.01 * 100) / 100));
+          setValorAdesaoCustom(Math.max(minimoAdesaoConfig, Math.round(valorFipe * (percentualAdesaoConfig / 100) * 100) / 100));
         }
       }
     }
