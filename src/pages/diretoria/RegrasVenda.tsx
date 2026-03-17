@@ -5,7 +5,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
-import { Award, Save, Loader2 } from 'lucide-react';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
+import { Award, Save, Loader2, Scale, Info } from 'lucide-react';
 import { useComissoesFaixas } from '@/hooks/useComissoesFaixas';
 import { toast } from 'sonner';
 
@@ -22,7 +23,15 @@ interface PontuacaoConfig {
   prazo_reativacao_dias: number;
 }
 
-const DEFAULTS: PontuacaoConfig = {
+interface RepasseMaiorConfig {
+  repasse_maior_corte_boletos: number;
+  repasse_maior_pct_favoravel: number;
+  repasse_maior_valor_favoravel: number;
+  repasse_maior_pct_reduzido: number;
+  repasse_maior_valor_reduzido: number;
+}
+
+const PONTUACAO_DEFAULTS: PontuacaoConfig = {
   pontos_nova_adesao: 1,
   pontos_migracao_aprovada: 1,
   pontos_indicacao_convertida: 1,
@@ -33,6 +42,14 @@ const DEFAULTS: PontuacaoConfig = {
   pontos_substituicao_placa_parcial: 0,
   estorno_cancelamento_antes_1_boleto: true,
   prazo_reativacao_dias: 120,
+};
+
+const REPASSE_DEFAULTS: RepasseMaiorConfig = {
+  repasse_maior_corte_boletos: 4,
+  repasse_maior_pct_favoravel: 50,
+  repasse_maior_valor_favoravel: 100,
+  repasse_maior_pct_reduzido: 70,
+  repasse_maior_valor_reduzido: 150,
 };
 
 const CAMPOS_BLOCO1: { chave: keyof PontuacaoConfig; label: string }[] = [
@@ -50,44 +67,70 @@ const CHAVES_PARCIAL = ['pontos_troca_titularidade_parcial', 'pontos_substituica
 
 export default function RegrasVenda() {
   const { parametros, isLoading, updateParametro } = useComissoesFaixas();
-  const [config, setConfig] = useState<PontuacaoConfig>(DEFAULTS);
+  const [pontuacao, setPontuacao] = useState<PontuacaoConfig>(PONTUACAO_DEFAULTS);
+  const [repasse, setRepasse] = useState<RepasseMaiorConfig>(REPASSE_DEFAULTS);
   const [initialized, setInitialized] = useState(false);
-  const [saving, setSaving] = useState(false);
+  const [savingPontuacao, setSavingPontuacao] = useState(false);
+  const [savingRepasse, setSavingRepasse] = useState(false);
 
   // Initialize state from DB
   useEffect(() => {
     if (!parametros.length || initialized) return;
-    const next = { ...DEFAULTS };
+    const nextPontuacao = { ...PONTUACAO_DEFAULTS };
+    const nextRepasse = { ...REPASSE_DEFAULTS };
+
     for (const p of parametros) {
-      if (p.chave in next) {
+      if (p.chave in nextPontuacao) {
         if (p.chave === 'estorno_cancelamento_antes_1_boleto') {
-          (next as Record<string, unknown>)[p.chave] = p.valor === 'true';
+          (nextPontuacao as Record<string, unknown>)[p.chave] = p.valor === 'true';
         } else {
-          (next as Record<string, unknown>)[p.chave] = parseFloat(p.valor) || 0;
+          (nextPontuacao as Record<string, unknown>)[p.chave] = parseFloat(p.valor) || 0;
         }
       }
+      if (p.chave in nextRepasse) {
+        (nextRepasse as Record<string, unknown>)[p.chave] = parseFloat(p.valor) || 0;
+      }
     }
-    setConfig(next);
+    setPontuacao(nextPontuacao);
+    setRepasse(nextRepasse);
     setInitialized(true);
   }, [parametros, initialized]);
 
-  const handleNumberChange = (chave: keyof PontuacaoConfig, value: string) => {
-    setConfig((prev) => ({ ...prev, [chave]: value === '' ? 0 : parseFloat(value) }));
+  const handlePontuacaoChange = (chave: keyof PontuacaoConfig, value: string) => {
+    setPontuacao((prev) => ({ ...prev, [chave]: value === '' ? 0 : parseFloat(value) }));
   };
 
-  const handleSave = async () => {
-    setSaving(true);
+  const handleRepasseChange = (chave: keyof RepasseMaiorConfig, value: string) => {
+    setRepasse((prev) => ({ ...prev, [chave]: value === '' ? 0 : parseFloat(value) }));
+  };
+
+  const handleSavePontuacao = async () => {
+    setSavingPontuacao(true);
     try {
-      const entries = Object.entries(config) as [keyof PontuacaoConfig, unknown][];
+      const entries = Object.entries(pontuacao) as [keyof PontuacaoConfig, unknown][];
       for (const [chave, valor] of entries) {
-        const valorStr = typeof valor === 'boolean' ? String(valor) : String(valor);
-        await updateParametro.mutateAsync({ chave: chave as string, valor: valorStr });
+        await updateParametro.mutateAsync({ chave: chave as string, valor: String(valor) });
       }
-      toast.success('Configurações salvas com sucesso!');
+      toast.success('Configurações de pontuação salvas com sucesso!');
     } catch {
-      // error already handled by mutation's onError
+      // error handled by mutation
     } finally {
-      setSaving(false);
+      setSavingPontuacao(false);
+    }
+  };
+
+  const handleSaveRepasse = async () => {
+    setSavingRepasse(true);
+    try {
+      const entries = Object.entries(repasse) as [keyof RepasseMaiorConfig, unknown][];
+      for (const [chave, valor] of entries) {
+        await updateParametro.mutateAsync({ chave: chave as string, valor: String(valor) });
+      }
+      toast.success('Configurações de repasse maior salvas com sucesso!');
+    } catch {
+      // error handled by mutation
+    } finally {
+      setSavingRepasse(false);
     }
   };
 
@@ -114,11 +157,14 @@ export default function RegrasVenda() {
             <Award className="h-4 w-4" />
             Pontuação do Consultor
           </TabsTrigger>
-          {/* Futuras abas: basta adicionar novos TabsTrigger + TabsContent */}
+          <TabsTrigger value="repasse-maior" className="gap-2">
+            <Scale className="h-4 w-4" />
+            Repasse Maior
+          </TabsTrigger>
         </TabsList>
 
+        {/* ═══════════ ABA PONTUAÇÃO ═══════════ */}
         <TabsContent value="pontuacao" className="space-y-6 mt-4">
-          {/* BLOCO 1 — Peso por tipo de operação */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Valor de cada tipo de operação no ranking</CardTitle>
@@ -139,11 +185,11 @@ export default function RegrasVenda() {
                       step="0.1"
                       min="0"
                       className="w-24 text-right"
-                      value={config[chave] as number}
-                      onChange={(e) => handleNumberChange(chave, e.target.value)}
+                      value={pontuacao[chave] as number}
+                      onChange={(e) => handlePontuacaoChange(chave, e.target.value)}
                     />
                   </div>
-                  {CHAVES_PARCIAL.includes(chave) && (config[chave] as number) === 0 && (
+                  {CHAVES_PARCIAL.includes(chave) && (pontuacao[chave] as number) === 0 && (
                     <p className="text-xs text-muted-foreground ml-1">
                       O procedimento é realizado, mas não gera pontuação no ranking.
                     </p>
@@ -153,7 +199,6 @@ export default function RegrasVenda() {
             </CardContent>
           </Card>
 
-          {/* BLOCO 2 — Regra de estorno */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Cancelamento antes do primeiro boleto</CardTitle>
@@ -168,9 +213,9 @@ export default function RegrasVenda() {
                 </Label>
                 <Switch
                   id="estorno"
-                  checked={config.estorno_cancelamento_antes_1_boleto}
+                  checked={pontuacao.estorno_cancelamento_antes_1_boleto}
                   onCheckedChange={(checked) =>
-                    setConfig((prev) => ({ ...prev, estorno_cancelamento_antes_1_boleto: checked }))
+                    setPontuacao((prev) => ({ ...prev, estorno_cancelamento_antes_1_boleto: checked }))
                   }
                 />
               </div>
@@ -180,7 +225,6 @@ export default function RegrasVenda() {
             </CardContent>
           </Card>
 
-          {/* BLOCO 3 — Prazo de reativação */}
           <Card>
             <CardHeader>
               <CardTitle className="text-lg">Prazo mínimo de inadimplência para reativação contar como nova adesão</CardTitle>
@@ -198,17 +242,163 @@ export default function RegrasVenda() {
                   type="number"
                   min="1"
                   className="w-24 text-right"
-                  value={config.prazo_reativacao_dias}
-                  onChange={(e) => handleNumberChange('prazo_reativacao_dias', e.target.value)}
+                  value={pontuacao.prazo_reativacao_dias}
+                  onChange={(e) => handlePontuacaoChange('prazo_reativacao_dias', e.target.value)}
                 />
               </div>
             </CardContent>
           </Card>
 
+          <div className="flex justify-end">
+            <Button onClick={handleSavePontuacao} disabled={savingPontuacao} className="gap-2">
+              {savingPontuacao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar configurações
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* ═══════════ ABA REPASSE MAIOR ═══════════ */}
+        <TabsContent value="repasse-maior" className="space-y-6 mt-4">
+          {/* BLOCO 1 — Critério de corte */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Divisão por histórico de pagamentos</CardTitle>
+              <CardDescription>
+                Define a quantidade de boletos pagos que separa os dois grupos de associados. Associados com essa quantidade ou mais recebem a condição mais favorável.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="corte_boletos" className="flex-1 text-sm">
+                  Quantidade de boletos pagos para grupo favorável
+                </Label>
+                <Input
+                  id="corte_boletos"
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="w-24 text-right"
+                  value={repasse.repasse_maior_corte_boletos}
+                  onChange={(e) => handleRepasseChange('repasse_maior_corte_boletos', e.target.value)}
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 2 — Grupo favorável */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Condições para associados com bom histórico</CardTitle>
+              <CardDescription>
+                Valores aplicados quando o associado possui boletos pagos igual ou acima do corte definido.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="pct_favoravel" className="flex-1 text-sm">
+                  Percentual mínimo do débito a pagar
+                </Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    id="pct_favoravel"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    className="w-24 text-right"
+                    value={repasse.repasse_maior_pct_favoravel}
+                    onChange={(e) => handleRepasseChange('repasse_maior_pct_favoravel', e.target.value)}
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="valor_favoravel" className="flex-1 text-sm">
+                  Valor mínimo em reais
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="valor_favoravel"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-24 text-right"
+                    value={repasse.repasse_maior_valor_favoravel}
+                    onChange={(e) => handleRepasseChange('repasse_maior_valor_favoravel', e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 3 — Grupo reduzido */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Condições para associados com histórico reduzido</CardTitle>
+              <CardDescription>
+                Valores aplicados quando o associado possui boletos pagos abaixo do corte definido.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="pct_reduzido" className="flex-1 text-sm">
+                  Percentual mínimo do débito a pagar
+                </Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    id="pct_reduzido"
+                    type="number"
+                    min="0"
+                    max="100"
+                    step="1"
+                    className="w-24 text-right"
+                    value={repasse.repasse_maior_pct_reduzido}
+                    onChange={(e) => handleRepasseChange('repasse_maior_pct_reduzido', e.target.value)}
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="valor_reduzido" className="flex-1 text-sm">
+                  Valor mínimo em reais
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="valor_reduzido"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-24 text-right"
+                    value={repasse.repasse_maior_valor_reduzido}
+                    onChange={(e) => handleRepasseChange('repasse_maior_valor_reduzido', e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 4 — Nota informativa */}
+          <Alert>
+            <Info className="h-4 w-4" />
+            <AlertTitle>Pontuação nas operações com pagamento parcial</AlertTitle>
+            <AlertDescription className="text-sm text-muted-foreground">
+              Este bloco é apenas informativo. O comportamento descrito aqui é controlado pela aba Pontuação do Consultor.
+            </AlertDescription>
+          </Alert>
+          <Card className="border-dashed">
+            <CardContent className="pt-6">
+              <p className="text-sm text-muted-foreground leading-relaxed">
+                Quando o associado utiliza o pagamento parcial permitido por esta regra, o procedimento é realizado, mas a pontuação gerada para o consultor segue o que está configurado na aba <strong>Pontuação do Consultor</strong> para os tipos com pagamento parcial.
+              </p>
+            </CardContent>
+          </Card>
+
           {/* Botão Salvar */}
           <div className="flex justify-end">
-            <Button onClick={handleSave} disabled={saving} className="gap-2">
-              {saving ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            <Button onClick={handleSaveRepasse} disabled={savingRepasse} className="gap-2">
+              {savingRepasse ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Salvar configurações
             </Button>
           </div>
