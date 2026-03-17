@@ -275,9 +275,7 @@ export default function CotadorPage() {
   const [cenarioExterno, setCenarioExterno] = useState<string | null>(null);
   const [tipoInstalacao, setTipoInstalacao] = useState<'rota' | 'base' | null>(null);
 
-  // Mínimo efetivo conforme tipo de instalação e role do consultor
-  const minimoAdesaoVolante = isVendedorExterno ? minimoVolanteExterno : minimoVolanteInterno;
-  const minimoAdesaoConfig = tipoInstalacao === 'rota' ? minimoAdesaoVolante : minimoAdesaoBase;
+  // Mínimo efetivo — derivado abaixo após usePermissions
 
   // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
