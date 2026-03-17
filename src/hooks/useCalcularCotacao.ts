@@ -68,7 +68,7 @@ export function useCalcularCotacao() {
         publicSupabase
           .from('configuracoes')
           .select('chave, valor')
-          .in('chave', ['taxa_fallback_carro', 'adicional_app', 'adesao_minima', 'regioes_com_adicional_app']),
+        .in('chave', ['taxa_fallback_carro', 'adicional_app', 'adesao_minima', 'regioes_com_adicional_app', 'taxa_adesao_percentual_fipe', 'taxa_adesao_minimo_base']),
         publicSupabase
           .from('product_lines')
           .select('slug, supports_app'),
@@ -87,7 +87,8 @@ export function useCalcularCotacao() {
       // Configurações dinâmicas
       const configMap = Object.fromEntries((configRes.data || []).map(c => [c.chave, c.valor]));
       const adicionalApp = parseFloat(configMap.adicional_app || '35.90') || 35.90;
-      const minimoAdesao = parseFloat(configMap.adesao_minima || '100');
+      const percentualAdesao = parseFloat(configMap.taxa_adesao_percentual_fipe || '1') || 1;
+      const minimoAdesao = parseFloat(configMap.taxa_adesao_minimo_base || configMap.adesao_minima || '100');
 
       // Montar ConfigAdicionalApp a partir do banco
       let regioesComAdicional: string[] = [];
@@ -187,7 +188,7 @@ export function useCalcularCotacao() {
         }
 
         // Calcular adesão como 1% FIPE (mínimo configurável) em vez do valor fixo do plano
-        const valorAdesao = Math.max(params.valor_fipe * 0.01, minimoAdesao);
+        const valorAdesao = Math.max(params.valor_fipe * (percentualAdesao / 100), minimoAdesao);
         const coberturas = Array.isArray(plano.coberturas) ? plano.coberturas as string[] : [];
 
         planos.push({

@@ -53,7 +53,7 @@ import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hoo
 
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
-import { useTemplateWhatsappCotacao } from '@/hooks/useConteudosSistema';
+import { useTemplateWhatsappCotacao, useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase } from '@/hooks/useConteudosSistema';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { BotaoGerarProposta } from '@/components/vendas/BotaoGerarProposta';
@@ -233,6 +233,8 @@ import { estimarValorFipe } from '@/utils/fipe';
 export default function CotadorPage() {
   const navigate = useNavigate();
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
+  const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
+  const { data: minimoAdesaoConfig = 100 } = useTaxaAdesaoMinimoBase();
   
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
@@ -388,7 +390,7 @@ export default function CotadorPage() {
         // Inicializar adesão com 1% FIPE (mínimo R$ 100) — exceto se vendedor externo escolheu cenário isento
         const cenarioZeraAdesao = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
         if (!cenarioZeraAdesao) {
-          setValorAdesaoCustom(Math.max(100, Math.round(valorFipe * 0.01 * 100) / 100));
+          setValorAdesaoCustom(Math.max(minimoAdesaoConfig, Math.round(valorFipe * (percentualAdesaoConfig / 100) * 100) / 100));
         }
       }
     }
@@ -654,7 +656,7 @@ export default function CotadorPage() {
     const fipeAtual = valorFipe || (marca && ano ? estimarValorFipe(marca, parseInt(ano)) : 0);
     const cenarioZeraAdesao = cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base';
     if (fipeAtual > 0 && !cenarioZeraAdesao) {
-      setValorAdesaoCustom(Math.max(100, Math.round(fipeAtual * 0.01 * 100) / 100));
+      setValorAdesaoCustom(Math.max(minimoAdesaoConfig, Math.round(fipeAtual * (percentualAdesaoConfig / 100) * 100) / 100));
     }
     setIsCalculando(false);
     

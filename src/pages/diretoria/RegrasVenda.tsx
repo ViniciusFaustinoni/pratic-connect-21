@@ -6,9 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle } from 'lucide-react';
+import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle, DollarSign } from 'lucide-react';
 import { useComissoesFaixas } from '@/hooks/useComissoesFaixas';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { formatarMoeda } from '@/utils/format';
 
 interface PontuacaoConfig {
   pontos_nova_adesao: number;
@@ -79,15 +82,73 @@ const CAMPOS_BLOCO1: { chave: keyof PontuacaoConfig; label: string }[] = [
 
 const CHAVES_PARCIAL = ['pontos_troca_titularidade_parcial', 'pontos_substituicao_placa_parcial'];
 
+const TAXAS_CHAVES = [
+  'taxa_adesao_percentual_fipe',
+  'taxa_adesao_minimo_volante',
+  'taxa_adesao_minimo_base',
+  'taxa_repasse_volante',
+  'taxa_substituicao_placa',
+  'taxa_troca_titularidade',
+  'taxa_revistoria',
+  'multa_rastreador',
+] as const;
+
+type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
+
+const TAXAS_DEFAULTS: TaxasConfig = {
+  taxa_adesao_percentual_fipe: '1',
+  taxa_adesao_minimo_volante: '100',
+  taxa_adesao_minimo_base: '100',
+  taxa_repasse_volante: '50',
+  taxa_substituicao_placa: '50',
+  taxa_troca_titularidade: '50',
+  taxa_revistoria: '50',
+  multa_rastreador: '400',
+};
+
+function useTaxasConfiguracoes() {
+  return useQuery({
+    queryKey: ['configuracoes-taxas-adesao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', [...TAXAS_CHAVES]);
+      if (error) throw error;
+      const map = { ...TAXAS_DEFAULTS };
+      for (const row of data || []) {
+        if (row.chave in map) {
+          (map as Record<string, string>)[row.chave] = row.valor ?? TAXAS_DEFAULTS[row.chave as keyof TaxasConfig];
+        }
+      }
+      return map;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export default function RegrasVenda() {
   const { parametros, isLoading, updateParametro } = useComissoesFaixas();
+  const queryClient = useQueryClient();
+  const { data: taxasDB, isLoading: isLoadingTaxas } = useTaxasConfiguracoes();
   const [pontuacao, setPontuacao] = useState<PontuacaoConfig>(PONTUACAO_DEFAULTS);
   const [repasse, setRepasse] = useState<RepasseMaiorConfig>(REPASSE_DEFAULTS);
   const [migracao, setMigracao] = useState<MigracaoConfig>(MIGRACAO_DEFAULTS);
+  const [taxas, setTaxas] = useState<TaxasConfig>(TAXAS_DEFAULTS);
   const [initialized, setInitialized] = useState(false);
+  const [taxasInitialized, setTaxasInitialized] = useState(false);
   const [savingPontuacao, setSavingPontuacao] = useState(false);
   const [savingRepasse, setSavingRepasse] = useState(false);
   const [savingMigracao, setSavingMigracao] = useState(false);
+  const [savingTaxas, setSavingTaxas] = useState(false);
+
+  // Initialize taxas from DB
+  useEffect(() => {
+    if (taxasDB && !taxasInitialized) {
+      setTaxas(taxasDB);
+      setTaxasInitialized(true);
+    }
+  }, [taxasDB, taxasInitialized]);
 
   // Initialize state from DB
   useEffect(() => {
@@ -179,7 +240,30 @@ export default function RegrasVenda() {
     }
   };
 
-  if (isLoading) {
+  const handleTaxaChange = (chave: keyof TaxasConfig, value: string) => {
+    setTaxas(prev => ({ ...prev, [chave]: value }));
+  };
+
+  const handleSaveTaxas = async () => {
+    setSavingTaxas(true);
+    try {
+      for (const chave of TAXAS_CHAVES) {
+        await supabase
+          .from('configuracoes')
+          .update({ valor: taxas[chave], updated_at: new Date().toISOString() })
+          .eq('chave', chave);
+      }
+      queryClient.invalidateQueries({ queryKey: ['configuracoes-taxas-adesao'] });
+      queryClient.invalidateQueries({ queryKey: ['configuracao'] });
+      toast.success('Configurações de taxas e adesão salvas com sucesso!');
+    } catch {
+      toast.error('Erro ao salvar configurações de taxas');
+    } finally {
+      setSavingTaxas(false);
+    }
+  };
+
+  if (isLoading || isLoadingTaxas) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -209,6 +293,10 @@ export default function RegrasVenda() {
           <TabsTrigger value="migracao" className="gap-2">
             <ArrowRightLeft className="h-4 w-4" />
             Migração
+          </TabsTrigger>
+          <TabsTrigger value="taxas-adesao" className="gap-2">
+            <DollarSign className="h-4 w-4" />
+            Taxas e Adesão
           </TabsTrigger>
         </TabsList>
 
@@ -580,6 +668,207 @@ export default function RegrasVenda() {
           <div className="flex justify-end">
             <Button onClick={handleSaveMigracao} disabled={savingMigracao} className="gap-2">
               {savingMigracao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar configurações
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* ═══════════ ABA TAXAS E ADESÃO ═══════════ */}
+        <TabsContent value="taxas-adesao" className="space-y-6 mt-4">
+          {/* BLOCO 1 — Cálculo da taxa de adesão */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Cálculo da taxa de adesão</CardTitle>
+              <CardDescription>
+                A taxa de adesão é calculada como um percentual do valor FIPE do veículo no momento da contratação.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_adesao_percentual_fipe" className="flex-1 text-sm">
+                  Percentual sobre o valor FIPE
+                </Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    id="taxa_adesao_percentual_fipe"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="w-24 text-right"
+                    value={taxas.taxa_adesao_percentual_fipe}
+                    onChange={(e) => handleTaxaChange('taxa_adesao_percentual_fipe', e.target.value)}
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 2 — Valores mínimos de adesão */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Valor mínimo por tipo de atendimento</CardTitle>
+              <CardDescription>
+                Define o menor valor aceitável para a taxa de adesão conforme o local onde a vistoria e instalação são realizadas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_adesao_minimo_volante" className="flex-1 text-sm">
+                  Valor mínimo para vistoria volante (na residência do associado)
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_adesao_minimo_volante"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_adesao_minimo_volante}
+                    onChange={(e) => handleTaxaChange('taxa_adesao_minimo_volante', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_adesao_minimo_base" className="flex-1 text-sm">
+                  Valor mínimo para atendimento na base administrativa
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_adesao_minimo_base"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_adesao_minimo_base}
+                    onChange={(e) => handleTaxaChange('taxa_adesao_minimo_base', e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 3 — Repasse volante */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Repasse para instalações fora da base</CardTitle>
+              <CardDescription>
+                Quando a vistoria e instalação são realizadas na residência do associado, há um repasse obrigatório à Praticcar.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_repasse_volante" className="flex-1 text-sm">
+                  Valor do repasse para instalação volante
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_repasse_volante"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_repasse_volante}
+                    onChange={(e) => handleTaxaChange('taxa_repasse_volante', e.target.value)}
+                  />
+                </div>
+              </div>
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription className="text-sm text-muted-foreground">
+                  Este repasse é obrigatório e se aplica também nos procedimentos de troca de titularidade e substituição de placa realizados fora da base.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 4 — Taxas de procedimentos administrativos */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Taxas para procedimentos específicos</CardTitle>
+              <CardDescription>
+                Valores cobrados para procedimentos que não são nova adesão.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_substituicao_placa" className="flex-1 text-sm">
+                  Taxa de substituição de placa
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_substituicao_placa"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_substituicao_placa}
+                    onChange={(e) => handleTaxaChange('taxa_substituicao_placa', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_troca_titularidade" className="flex-1 text-sm">
+                  Taxa de troca de titularidade
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_troca_titularidade"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_troca_titularidade}
+                    onChange={(e) => handleTaxaChange('taxa_troca_titularidade', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_revistoria" className="flex-1 text-sm">
+                  Taxa de revistoria
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_revistoria"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_revistoria}
+                    onChange={(e) => handleTaxaChange('taxa_revistoria', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="multa_rastreador" className="flex-1 text-sm">
+                  Multa por não devolução do rastreador
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="multa_rastreador"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.multa_rastreador}
+                    onChange={(e) => handleTaxaChange('multa_rastreador', e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botão Salvar */}
+          <div className="flex justify-end">
+            <Button onClick={handleSaveTaxas} disabled={savingTaxas} className="gap-2">
+              {savingTaxas ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Salvar configurações
             </Button>
           </div>

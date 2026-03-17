@@ -253,6 +253,38 @@ export function useMultaRastreador() {
 }
 
 // ============================================
+// Taxas de Adesão e Procedimentos
+// ============================================
+
+export function useTaxaAdesaoPercentual() {
+  return useConfiguracaoNumero('taxa_adesao_percentual_fipe', 1);
+}
+
+export function useTaxaAdesaoMinimoVolante() {
+  return useConfiguracaoNumero('taxa_adesao_minimo_volante', 100);
+}
+
+export function useTaxaAdesaoMinimoBase() {
+  return useConfiguracaoNumero('taxa_adesao_minimo_base', 100);
+}
+
+export function useTaxaRepasseVolante() {
+  return useConfiguracaoNumero('taxa_repasse_volante', 50);
+}
+
+export function useTaxaSubstituicaoPlaca() {
+  return useConfiguracaoNumero('taxa_substituicao_placa', 50);
+}
+
+export function useTaxaTrocaTitularidade() {
+  return useConfiguracaoNumero('taxa_troca_titularidade', 50);
+}
+
+export function useTaxaRevistoria() {
+  return useConfiguracaoNumero('taxa_revistoria', 50);
+}
+
+// ============================================
 // Carência
 // ============================================
 

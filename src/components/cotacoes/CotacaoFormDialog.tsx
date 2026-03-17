@@ -2,6 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
+import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase } from '@/hooks/useConteudosSistema';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -162,6 +163,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
   const { user, profile } = useAuth();
   const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno } = usePermissions();
+  const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
+  const { data: minimoAdesaoConfig = 100 } = useTaxaAdesaoMinimoBase();
   
   // Estado do cenário de adesão para vendedor externo
   type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
@@ -286,12 +289,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     // Vendedor externo com cenário isento: não sobrescrever adesão zerada
     if (isCenarioIsento) return;
     if (valorFipe && valorFipe > 0 && !adesaoEditadaManualmente.current) {
-      const MINIMO_ADESAO = 100;
-      const adesaoCalculada = Math.max(valorFipe * 0.01, MINIMO_ADESAO);
+      const adesaoCalculada = Math.max(valorFipe * (percentualAdesaoConfig / 100), minimoAdesaoConfig);
       const adesaoArredondada = Math.round(adesaoCalculada * 100) / 100;
       form.setValue('valor_adesao', adesaoArredondada);
     }
-  }, [valorFipe, form, isCenarioIsento]);
+  }, [valorFipe, form, isCenarioIsento, percentualAdesaoConfig, minimoAdesaoConfig]);
   
   // Extrair ano numérico para o hook de planos
   const anoTexto = useMemo(() => {
@@ -1693,7 +1695,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                         } else if (cenarioExterno?.startsWith('isenta')) {
                           adesaoEditadaManualmente.current = false;
                           if (valorFipe && valorFipe > 0) {
-                            const adesaoCalculada = Math.max(valorFipe * 0.01, 100);
+                            const adesaoCalculada = Math.max(valorFipe * (percentualAdesaoConfig / 100), minimoAdesaoConfig);
                             form.setValue('valor_adesao', Math.round(adesaoCalculada * 100) / 100);
                           }
                         }
