@@ -314,7 +314,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Cobertura FIPE (%)</Label>
+                <Label className="text-xs">Cobertura FIPE (%)<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_cobertura_fipe} /></Label>
                 <Input
                   type="number"
                   min={0}
