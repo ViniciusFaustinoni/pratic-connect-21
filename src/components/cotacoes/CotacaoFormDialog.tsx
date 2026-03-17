@@ -1010,10 +1010,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         return;
       }
       
-      // Validar valor mínimo de adesão (R$ 50,00) para evitar erros de digitação
-      const VALOR_ADESAO_MINIMO = 50;
-      if (data.valor_adesao < VALOR_ADESAO_MINIMO) {
-        toast.error(`O valor de adesão (${formatCurrency(data.valor_adesao)}) está muito baixo. O mínimo é ${formatCurrency(VALOR_ADESAO_MINIMO)}.`);
+      // Validar valor mínimo de adesão dinâmico
+      if (data.valor_adesao < minimoAdesaoConfig) {
+        toast.error(`O valor de adesão (${formatCurrency(data.valor_adesao)}) está abaixo do mínimo configurado (${formatCurrency(minimoAdesaoConfig)}).`);
         return;
       }
     }
