@@ -550,7 +550,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         nivel,
         coberturas: coberturas as string[],
         naoInclui,
-        coberturaFipe: plano.cobertura_fipe || 100,
+        coberturaFipe: elegibilidadeStatus === 'limitado' && elegibilidadeCoberturaFipe < 100
+          ? elegibilidadeCoberturaFipe
+          : (plano.cobertura_fipe || 100),
         cota: cotaString,
         cotaPercentual,
         cotaMinima: cotaMinimaFinal,
