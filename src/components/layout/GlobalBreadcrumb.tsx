@@ -118,7 +118,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   
   '/monitoramento/calendario': { label: 'Calendário' },
   '/monitoramento/alertas': { label: 'Alertas' },
-  '/monitoramento/acionamentos-roubo': { label: 'Acionamentos Roubo/Furto' },
+  '/monitoramento/aprovacao-associados': { label: 'Aprovação de Associados' },
   
   // Marketing
   '/marketing': { label: 'Marketing' },
