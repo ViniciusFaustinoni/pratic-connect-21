@@ -146,3 +146,6 @@ verify_jwt = false
 
 [functions.chatwoot-webhook]
 verify_jwt = false
+
+[functions.pontuar-operacao]
+verify_jwt = false
