@@ -53,7 +53,7 @@ import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hoo
 
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
-import { useTemplateWhatsappCotacao, useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase } from '@/hooks/useConteudosSistema';
+import { useTemplateWhatsappCotacao, useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolante, useTaxaRepasseVolante, useCarenciaDiasPadrao, useMigracaoConfig } from '@/hooks/useConteudosSistema';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { BotaoGerarProposta } from '@/components/vendas/BotaoGerarProposta';
@@ -234,7 +234,11 @@ export default function CotadorPage() {
   const navigate = useNavigate();
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
-  const { data: minimoAdesaoConfig = 100 } = useTaxaAdesaoMinimoBase();
+  const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
+  const { data: minimoAdesaoVolante = 100 } = useTaxaAdesaoMinimoVolante();
+  const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
+  const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
+  const { data: migracaoConfig } = useMigracaoConfig();
   
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
@@ -269,6 +273,9 @@ export default function CotadorPage() {
   // Cenário de adesão para vendedor externo
   const [cenarioExterno, setCenarioExterno] = useState<string | null>(null);
   const [tipoInstalacao, setTipoInstalacao] = useState<'rota' | 'base' | null>(null);
+
+  // Mínimo efetivo conforme tipo de instalação
+  const minimoAdesaoConfig = tipoInstalacao === 'rota' ? minimoAdesaoVolante : minimoAdesaoBase;
 
   // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
@@ -674,6 +681,13 @@ export default function CotadorPage() {
     // Vendedor externo DEVE selecionar um cenário antes de salvar
     if (isVendedorExterno && !cenarioExterno) {
       toast.error('Selecione o cenário de adesão/instalação antes de salvar.');
+      return;
+    }
+
+    // Validar adesão mínima (exceto cenários isentos)
+    const cenarioIsento = cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base';
+    if (!cenarioIsento && valorAdesaoCustom !== null && valorAdesaoCustom < minimoAdesaoConfig) {
+      toast.error(`O valor de adesão (${formatCurrency(valorAdesaoCustom)}) está abaixo do mínimo configurado (${formatCurrency(minimoAdesaoConfig)}). Ajuste o valor para continuar.`);
       return;
     }
     
@@ -1314,7 +1328,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     <RadioGroupItem value="cobra_rota" className="mt-0.5" />
                     <div>
                       <p className="font-medium text-sm">Cobrar adesão + Instalação na rota</p>
-                      <p className="text-xs text-muted-foreground">R$ 50 descontado da adesão para cobrir a rota. Sem desconto no recorrente.</p>
+                      <p className="text-xs text-muted-foreground">{formatCurrency(repasseVolante)} descontado da adesão para cobrir a rota. Sem desconto no recorrente.</p>
                     </div>
                   </label>
                   <label
@@ -1585,6 +1599,40 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               </div>
             </div>
 
+            {/* Blocos informativos dinâmicos */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Repasse volante */}
+              {tipoInstalacao === 'rota' && (
+                <Alert className="border-amber-500/50 bg-amber-500/10">
+                  <DollarSign className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-sm">
+                    <span className="font-medium">Repasse obrigatório:</span> {formatCurrency(repasseVolante)} será descontado (instalação rota).
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Carência */}
+              <Alert className="border-blue-500/50 bg-blue-500/10">
+                <AlertCircle className="h-4 w-4 text-blue-500" />
+                <AlertDescription className="text-sm">
+                  <span className="font-medium">Carência:</span>{' '}
+                  {migracaoConfig?.isentar_carencia && cenarioExterno === 'cobra_rota'
+                    ? 'Sem carência (migração aprovada)'
+                    : `${carenciaDias} dias`}
+                </AlertDescription>
+              </Alert>
+            </div>
+
+            {/* Alerta de adesão abaixo do mínimo */}
+            {valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base') && (
+              <Alert className="border-destructive/50 bg-destructive/10">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <AlertDescription className="text-sm text-destructive">
+                  Valor de adesão ({formatCurrency(valorAdesaoCustom)}) abaixo do mínimo configurado ({formatCurrency(minimoAdesaoConfig)}).
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Box de valores */}
             <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
               <div className="grid grid-cols-3 gap-4 text-center">
@@ -1596,9 +1644,17 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     step={0.01}
                     value={valorAdesaoCustom ?? ''}
                     onChange={(e) => setValorAdesaoCustom(parseFloat(e.target.value) || 0)}
-                    className="text-center font-bold text-lg h-10"
+                    className={cn(
+                      "text-center font-bold text-lg h-10",
+                      valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base')
+                        ? "border-destructive text-destructive"
+                        : ""
+                    )}
                     disabled={isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base')}
                   />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Sugerido: {percentualAdesaoConfig}% da FIPE (mín. {formatCurrency(minimoAdesaoConfig)})
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Mensal</p>

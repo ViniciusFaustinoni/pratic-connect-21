@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
-import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase } from '@/hooks/useConteudosSistema';
+import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolante, useTaxaRepasseVolante, useCarenciaDiasPadrao, useMigracaoConfig } from '@/hooks/useConteudosSistema';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -164,12 +164,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { user, profile } = useAuth();
   const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno } = usePermissions();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
-  const { data: minimoAdesaoConfig = 100 } = useTaxaAdesaoMinimoBase();
+  const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
+  const { data: minimoAdesaoVolante = 100 } = useTaxaAdesaoMinimoVolante();
+  const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
+  const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
+  const { data: migracaoConfig } = useMigracaoConfig();
   
   // Estado do cenário de adesão para vendedor externo
   type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
   const [cenarioExterno, setCenarioExterno] = useState<CenarioExterno | null>(null);
   const isCenarioIsento = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
+
+  // Mínimo efetivo: volante quando cenário inclui rota
+  const minimoAdesaoConfig = cenarioExterno?.includes('rota') ? minimoAdesaoVolante : minimoAdesaoBase;
   
   // Hook para verificar placa duplicada
   const verificarPlacaDuplicada = useVerificarPlacaDuplicada();
@@ -1003,10 +1010,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         return;
       }
       
-      // Validar valor mínimo de adesão (R$ 50,00) para evitar erros de digitação
-      const VALOR_ADESAO_MINIMO = 50;
-      if (data.valor_adesao < VALOR_ADESAO_MINIMO) {
-        toast.error(`O valor de adesão (${formatCurrency(data.valor_adesao)}) está muito baixo. O mínimo é ${formatCurrency(VALOR_ADESAO_MINIMO)}.`);
+      // Validar valor mínimo de adesão dinâmico
+      if (data.valor_adesao < minimoAdesaoConfig) {
+        toast.error(`O valor de adesão (${formatCurrency(data.valor_adesao)}) está abaixo do mínimo configurado (${formatCurrency(minimoAdesaoConfig)}).`);
         return;
       }
     }
@@ -1745,10 +1751,54 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   )}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Valor sugerido: 1% da FIPE (mín. R$ 100). Altere conforme necessário.
+                  Valor sugerido: {percentualAdesaoConfig}% da FIPE (mín. {formatCurrency(minimoAdesaoConfig)}). Altere conforme necessário.
                 </p>
               </div>
             )}
+
+            {/* Blocos informativos dinâmicos */}
+            <div className="space-y-2">
+              {/* Alerta de adesão abaixo do mínimo */}
+              {!isCenarioIsento && form.watch('valor_adesao') > 0 && form.watch('valor_adesao') < minimoAdesaoConfig && (
+                <Alert className="border-destructive/50 bg-destructive/10">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <AlertDescription className="text-sm text-destructive">
+                    Valor de adesão ({formatCurrency(form.watch('valor_adesao'))}) abaixo do mínimo configurado ({formatCurrency(minimoAdesaoConfig)}).
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Repasse volante */}
+              {cenarioExterno?.includes('rota') && (
+                <Alert className="border-amber-500/50 bg-amber-500/10">
+                  <Info className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-sm">
+                    <span className="font-medium">Repasse obrigatório:</span> {formatCurrency(repasseVolante)} será descontado (instalação rota).
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Carência */}
+              <Alert className="border-blue-500/50 bg-blue-500/10">
+                <Info className="h-4 w-4 text-blue-500" />
+                <AlertDescription className="text-sm">
+                  <span className="font-medium">Carência:</span>{' '}
+                  {migracaoConfig?.isentar_carencia && cenarioExterno?.includes('rota')
+                    ? 'Sem carência (migração aprovada)'
+                    : `${carenciaDias} dias`}
+                </AlertDescription>
+              </Alert>
+
+              {/* Info migração */}
+              {migracaoConfig && (
+                <Alert className="border-muted-foreground/30 bg-muted/30">
+                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  <AlertDescription className="text-xs text-muted-foreground">
+                    <span className="font-medium">Migração:</span> {migracaoConfig.comprovantes} comprovantes exigidos · Prazo {migracaoConfig.prazo_horas}h · Via {migracaoConfig.canal}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
 
             <Separator />
 

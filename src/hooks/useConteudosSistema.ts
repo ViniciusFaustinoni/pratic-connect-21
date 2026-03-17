@@ -428,3 +428,63 @@ export function useRestricoesAbsolutas() {
     staleTime: 1000 * 60 * 10,
   });
 }
+
+// ============================================
+// Migração (lê de comissoes_parametros)
+// ============================================
+
+export interface MigracaoConfig {
+  comprovantes: number;
+  prazo_horas: number;
+  canal: string;
+  isentar_carencia: boolean;
+}
+
+export function useMigracaoConfig() {
+  return useQuery({
+    queryKey: ['comissoes-parametros', 'migracao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('comissoes_parametros')
+        .select('chave, valor')
+        .in('chave', [
+          'migracao_comprovantes_exigidos',
+          'migracao_prazo_resposta_horas',
+          'migracao_canal_oficial',
+          'migracao_isentar_carencia',
+        ]);
+
+      if (error) throw error;
+
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        comprovantes: parseInt(map.migracao_comprovantes_exigidos) || 3,
+        prazo_horas: parseInt(map.migracao_prazo_resposta_horas) || 48,
+        canal: map.migracao_canal_oficial || 'e-mail',
+        isentar_carencia: map.migracao_isentar_carencia === 'true',
+      } as MigracaoConfig;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
+
+// ============================================
+// Prazo de Reativação (lê de comissoes_parametros)
+// ============================================
+
+export function usePrazoReativacaoDias() {
+  return useQuery({
+    queryKey: ['comissoes-parametros', 'prazo_reativacao_dias'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('comissoes_parametros')
+        .select('valor')
+        .eq('chave', 'prazo_reativacao_dias')
+        .maybeSingle();
+
+      if (error) throw error;
+      return parseInt(data?.valor || '120') || 120;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
