@@ -429,7 +429,7 @@ export function PlanFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-5xl h-[90vh] p-0">
+      <DialogContent className="max-w-6xl max-h-[95vh] h-[95vh] p-0 overflow-hidden">
         <DialogHeader className="p-6 pb-0">
           <DialogTitle>
             {isEditing ? 'Editar Plano' : 'Novo Plano'}
