@@ -1756,6 +1756,50 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               </div>
             )}
 
+            {/* Blocos informativos dinâmicos */}
+            <div className="space-y-2">
+              {/* Alerta de adesão abaixo do mínimo */}
+              {!isCenarioIsento && form.watch('valor_adesao') > 0 && form.watch('valor_adesao') < minimoAdesaoConfig && (
+                <Alert className="border-destructive/50 bg-destructive/10">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <AlertDescription className="text-sm text-destructive">
+                    Valor de adesão ({formatCurrency(form.watch('valor_adesao'))}) abaixo do mínimo configurado ({formatCurrency(minimoAdesaoConfig)}).
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Repasse volante */}
+              {cenarioExterno?.includes('rota') && (
+                <Alert className="border-amber-500/50 bg-amber-500/10">
+                  <Info className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-sm">
+                    <span className="font-medium">Repasse obrigatório:</span> {formatCurrency(repasseVolante)} será descontado (instalação rota).
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Carência */}
+              <Alert className="border-blue-500/50 bg-blue-500/10">
+                <Info className="h-4 w-4 text-blue-500" />
+                <AlertDescription className="text-sm">
+                  <span className="font-medium">Carência:</span>{' '}
+                  {migracaoConfig?.isentar_carencia && cenarioExterno?.includes('rota')
+                    ? 'Sem carência (migração aprovada)'
+                    : `${carenciaDias} dias`}
+                </AlertDescription>
+              </Alert>
+
+              {/* Info migração */}
+              {migracaoConfig && (
+                <Alert className="border-muted-foreground/30 bg-muted/30">
+                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
+                  <AlertDescription className="text-xs text-muted-foreground">
+                    <span className="font-medium">Migração:</span> {migracaoConfig.comprovantes} comprovantes exigidos · Prazo {migracaoConfig.prazo_horas}h · Via {migracaoConfig.canal}
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+
             <Separator />
 
             {/* BLOCO 3: PLANOS - Sempre visível */}
