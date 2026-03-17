@@ -665,7 +665,7 @@ export function PlanFormModal({
                             setFormData((prev) => ({ ...prev, is_active: checked }))
                           }
                         />
-                        <Label htmlFor="is_active">Ativo</Label>
+                        <Label htmlFor="is_active">Ativo<FieldHint text={PLAN_FIELD_HINTS.is_active} /></Label>
                       </div>
                     </div>
                   </TabsContent>
