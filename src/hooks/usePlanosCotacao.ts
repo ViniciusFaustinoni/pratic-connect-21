@@ -495,7 +495,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
 
       // Deságio: derive flag from category
-      const isDesagio = !!categoria && CATEGORIAS_DESAGIO.includes(categoria);
+      const isDesagio = !!categoria && categoriasDesagio.includes(categoria);
 
       // Bug 1 fix: use valor_desagio as base price for eligible lines
       if (isDesagio && valorDesagio != null && LINHAS_COM_DESAGIO.includes(linhaSlug || '')) {
