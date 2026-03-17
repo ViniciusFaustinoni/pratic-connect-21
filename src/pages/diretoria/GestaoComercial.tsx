@@ -3,7 +3,6 @@ import { PageHeader } from '@/components/gestao-comercial/PageHeader';
 import { TabNavigation } from '@/components/gestao-comercial/TabNavigation';
 import { ProdutosPlanos } from '@/components/gestao-comercial/ProdutosPlanos';
 import { BeneficiosCoberturas } from '@/components/gestao-comercial/BeneficiosCoberturas';
-import { TabelaPrecosTab } from '@/components/gestao-comercial/TabelaPrecosTab';
 import { BeneficiosAdicionaisConfig } from '@/components/planos/BeneficiosAdicionaisConfig';
 import { SimuladorRateio } from '@/components/gestao-comercial/SimuladorRateio';
 import { ElegibilidadeVeiculos } from '@/components/gestao-comercial/ElegibilidadeVeiculos';
@@ -18,10 +17,9 @@ export default function GestaoComercial() {
       
       {activeTab === 0 && <ProdutosPlanos />}
       {activeTab === 1 && <BeneficiosCoberturas />}
-      {activeTab === 2 && <TabelaPrecosTab />}
-      {activeTab === 3 && <BeneficiosAdicionaisConfig />}
-      {activeTab === 4 && <SimuladorRateio />}
-      {activeTab === 5 && <ElegibilidadeVeiculos />}
+      {activeTab === 2 && <BeneficiosAdicionaisConfig />}
+      {activeTab === 3 && <SimuladorRateio />}
+      {activeTab === 4 && <ElegibilidadeVeiculos />}
     </div>
   );
 }
