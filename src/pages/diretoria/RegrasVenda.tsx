@@ -295,6 +295,14 @@ export default function RegrasVenda() {
     }
   }, [autorizacoesDB, autorizacoesInitialized]);
 
+  // Initialize indicacao from DB
+  useEffect(() => {
+    if (indicacaoDB && !indicacaoInitialized) {
+      setIndicacao(indicacaoDB);
+      setIndicacaoInitialized(true);
+    }
+  }, [indicacaoDB, indicacaoInitialized]);
+
   // Initialize state from DB
   useEffect(() => {
     if (!parametros.length || initialized) return;
