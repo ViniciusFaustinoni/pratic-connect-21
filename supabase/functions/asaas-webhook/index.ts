@@ -675,6 +675,36 @@ serve(async (req) => {
                   // 120+ dias: NÃO reativar, já está em processo de exclusão
                   console.log(`[asaas-webhook] Associado ${cobranca.associado_id} com ${diasAtraso} dias - exclusão pendente, não reativar`);
 
+                  // === PONTUAR REATIVAÇÃO 120+ DIAS ===
+                  try {
+                    const prazoReativacao = await getParametroPontuacao(supabase, 'prazo_reativacao_dias', 120);
+                    if (diasAtraso >= prazoReativacao) {
+                      const { data: contratoReativ } = await supabase
+                        .from('contratos')
+                        .select('id, vendedor_id')
+                        .eq('associado_id', cobranca.associado_id)
+                        .eq('status', 'ativo')
+                        .order('created_at', { ascending: false })
+                        .limit(1)
+                        .maybeSingle();
+
+                      if (contratoReativ?.vendedor_id) {
+                        const pontosReativ = await getParametroPontuacao(supabase, 'pontos_reativacao_120_dias', 1.0);
+                        await registrarEventoPontuacao(supabase, {
+                          vendedor_id: contratoReativ.vendedor_id,
+                          tipo_operacao: 'reativacao_120_dias',
+                          pontos: pontosReativ,
+                          contrato_id: contratoReativ.id,
+                          referencia_tipo: 'cobranca',
+                          referencia_id: cobranca.id,
+                        });
+                        console.log(`[asaas-webhook] Pontuação reativação ${pontosReativ} pts para vendedor ${contratoReativ.vendedor_id}`);
+                      }
+                    }
+                  } catch (pontErr) {
+                    console.error('[asaas-webhook] Erro ao pontuar reativação:', pontErr);
+                  }
+
                   await supabase.from('notificacoes').insert({
                     user_id: cobranca.associado_id,
                     titulo: 'Pagamento Recebido - Exclusão Pendente',
