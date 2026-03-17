@@ -252,7 +252,7 @@ export default function AssociadoDetalhe() {
     }
   };
   const handleSuspender = (motivo: string) => { if (id) suspenderAssociado({ id, motivo }); };
-  const handleReativar = () => { if (id) reativarAssociado(id); };
+  const handleReativar = () => { setReativacaoWizardOpen(true); };
 
   const handleConfirmRastreadorModal = async (acao: 'criar_retirada' | 'apenas_registrar') => {
     if (!rastreadorModalData || !id || !associado) return;
