@@ -341,7 +341,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={resetForm}>Cancelar</Button>
             </div>
-          </form>
+          </div>
         </div>
       ) : (
         <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
