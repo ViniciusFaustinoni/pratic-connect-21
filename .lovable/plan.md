@@ -1,67 +1,167 @@
+## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
+### Causas Raiz Identificadas
+1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
+2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
+3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-## Plano: Nova aba "Autorizações e Exceções" em Regras de Venda
+### Correções Aplicadas
 
-### Estado atual
+1. **`sga-hinova-sync/index.ts`**:
+   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
+   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
 
-- A página `RegrasVenda.tsx` já tem 4 abas (Pontuação, Repasse Maior, Migração, Taxas e Adesão) — ~879 linhas.
-- Configurações existentes no banco relevantes: `fipe_limite_autorizacao` (120000), `aceitar_blindado` (autorizar), `perfil_veiculo_fipe_maximo` (500000).
-- Não existem chaves para: faixas de vendas/exceções, limite FIPE motos, exceção zero km, exceção histórico boletos, mudança de linha, depreciação 100%.
-- A tabela `aprovacoes_elegibilidade` já existe para aprovações de planos — o sistema de verificação de limite de solicitações se integrará a ela.
+2. **`cron-sga-retry/index.ts`**:
+   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
 
-### Alterações
+---
 
-#### 1. Inserir novas chaves em `configuracoes` (via insert tool)
+## Painel de Monitoramento SGA Hinova — ✅ Implementado
 
-| Chave | Valor | Descrição |
-|---|---|---|
-| `excecao_faixas_vendas` | `[{"min":0,"max":9,"permitidas":0},{"min":10,"max":19,"permitidas":1},{"min":20,"max":29,"permitidas":2},{"min":30,"max":null,"permitidas":3}]` | Faixas de vendas e solicitações de exceção permitidas por mês |
-| `excecao_fipe_max_carro` | `120000` | Valor máximo FIPE para carros em exceções |
-| `excecao_fipe_max_moto` | `27000` | Valor máximo FIPE para motos em exceções |
-| `excecao_historico_boletos_ativo` | `true` | Permitir exceção para associado ativo com histórico |
-| `excecao_historico_boletos_minimo` | `6` | Quantidade mínima de boletos para exceção |
-| `excecao_zero_km_ativo` | `true` | Permitir exceção para veículo 0km com NF |
-| `restricao_mudanca_linha` | `true` | Bloquear mudança de linha de produto |
-| `restricao_depreciacao_cobertura_100` | `true` | Bloquear depreciado em plano 100% |
-| `restricao_blindado_absoluta` | `true` | Bloquear blindados em qualquer hipótese |
+### O que foi criado
 
-O campo `excecao_faixas_vendas` armazena JSON com as faixas editáveis. Isso evita criar uma tabela separada para poucas linhas fixas.
+1. **Página `/configuracoes/integracoes/sga-hinova`** com:
+   - Status de conexão com API Hinova (teste em tempo real)
+   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
+   - Logs recentes dos últimos 50 registros
+   - Veículos pendentes (ativos não sincronizados) com envio individual
+   - Histórico de health checks
 
-#### 2. Adicionar 5ª aba em `RegrasVenda.tsx`
+2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
 
-Nova tab "Autorizações e Exceções" com ícone `ShieldCheck`:
+3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
 
-- **BLOCO 1** — Tabela editável inline com colunas: Vendas Mín, Vendas Máx, Solicitações Permitidas. Dados vêm do JSON `excecao_faixas_vendas`. Linhas fixas (não adiciona/remove), apenas edita valores.
-- **BLOCO 2** — Campo monetário: `excecao_fipe_max_carro`
-- **BLOCO 3** — Campo monetário: `excecao_fipe_max_moto`
-- **BLOCO 4** — 2 toggles (`excecao_historico_boletos_ativo`, `excecao_zero_km_ativo`) + campo condicional `excecao_historico_boletos_minimo`
-- **BLOCO 5** — 3 toggles (restrições absolutas), todos iniciam ativados
-- Botão "Salvar configurações"
+4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
 
-Estado local + fetch das 9 chaves via `useQuery` (mesmo padrão das taxas).
+---
 
-#### 3. Hooks em `useConteudosSistema.ts`
+## Health Check Universal para Todas as Integrações — ✅ Implementado
 
-Adicionar hooks para consumo nos motores de cotação/validação:
-```typescript
-export function useExcecaoFipeLimites()
-export function useRestricoesAbsolutas()
-export function useExcecaoFaixasVendas()
+### O que foi criado
+
+1. **Tabela `integracoes_health_checks`** (genérica):
+   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
+   - Dados existentes do SGA migrados automaticamente
+   - RLS: leitura para autenticados, escrita para service_role
+
+2. **Edge Function `cron-integracoes-health-check`**:
+   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
+   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
+   - Notifica admins (role `diretor`) se qualquer integração falhar
+   - Grava resultado por integração na tabela genérica
+
+3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
+   - Props: `integracao` (slug) e `titulo` (opcional)
+   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
+   - Botão "Testar agora" invoca a edge function para a integração específica
+
+4. **Hook `useIntegracaoHealthCheck(integracao)`**:
+   - Busca histórico filtrado por integração
+   - Mutation `testNow` para teste manual
+   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
+
+5. **Integração nas páginas**:
+   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
+   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
+   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
+
+6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
+   ```sql
+   select cron.schedule(
+     'integracoes-health-check-3x-dia',
+     '0 8,13,18 * * *',
+     $$ select net.http_post(
+       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
+       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
+       body:='{}'::jsonb
+     ) as request_id; $$
+   );
+   ```
+
+### Arquivos criados/modificados
+- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
+- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
+- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
+- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
+- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
+- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
+- `supabase/config.toml` — verify_jwt para nova function
+
+---
+
+## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
+
+### Causas Raiz
+1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
+2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
+3. Triggers de sync sobrescreviam coordenadas válidas com `null`
+
+### Correções Aplicadas
+
+1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
+
+2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
+
+3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
+
+4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
+
+---
+
+## Correção Triggers Enum Mismatch (status_instalacao → status_servico) — ✅ Implementado
+
+### Causa Raiz
+Triggers `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` faziam `status = NEW.status` direto, mas `NEW.status` é `status_instalacao` e `servicos.status` é `status_servico` — erro PostgreSQL 42804 abortava toda atribuição automática.
+
+### Correções Aplicadas
+1. **Função `map_to_status_servico(text)`**: Mapeamento explícito e imutável de qualquer texto para `status_servico`, com fallback seguro.
+2. **Triggers corrigidos**: Ambos agora usam `public.map_to_status_servico(NEW.status::text)` em vez de atribuição direta.
+3. **Observabilidade**: `processar-encaixes-automaticos` agora loga `code/message/details/hint` do erro antes de classificar como concorrência.
+
+---
+
+## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
+
+### Bloqueios de adesão zero removidos
+
+| Arquivo | Correção |
+|---------|----------|
+| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
+| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
+| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
+
+### Geração automática de lançamentos CC vendedor externo
+
+Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
+1. Após criar instalação, busca `vendedor_id` da cotação
+2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
+3. Busca configurações de comissão da tabela `configuracoes`
+4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
+5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
+
+---
+
+## Fluxo Completo Vendedor Externo — Autovistoria até Ativação 360 — ✅ Implementado
+
+### Gaps Corrigidos
+
+| Gap | Arquivo | Correção |
+|-----|---------|----------|
+| Propostas de autovistoria não apareciam no cadastro | `usePropostasPendentes.ts` L523 | Filtro agora permite propostas com `temAutovistoria` ou `temVistoriaBaseRealizada` mesmo sem instalação |
+| Race condition na isenção de adesão | `EtapaPagamentoCotacao.tsx` L245 | Passa `skipPaymentCheck: true` no body da Edge Function |
+| Edge Function falhava para autovistoria sem data | `criar-instalacao-pos-pagamento/index.ts` | Autovistoria sem data: pula instalação, mas gera lançamentos CC normalmente |
+| Aprovação ignorava preferências de agendamento | `usePropostasPendentes.ts` L1538-1590 | Busca `vistoria_completa_*` da cotação para criar instalação com dados do cliente |
+
+### Fluxo Corrigido
+
+```text
+Vendedor externo cria cotação (4 cenários)
+  → Cliente abre link → Plano → Docs → Assinatura → Vistoria → Pagamento/Isenção
+    → Edge Function gera lançamentos CC (mesmo sem data de instalação)
+    → Etapa 5: Cliente preenche preferência de agendamento
+    → Tela "Em Análise Cadastral"
+    → Proposta aparece no cadastro (filtro corrigido)
+    → Analista aprova → cobertura_roubo_furto = true
+    → Instalação criada COM dados de preferência do cliente
+    → Atribuição automática → Instalação → Proteção 360°
 ```
-
-#### 4. Validação no fluxo de exceção existente (`useAprovacaoElegibilidade.ts`)
-
-Na mutation `solicitarExcecao`, antes de inserir em `aprovacoes_elegibilidade`:
-1. Contar solicitações do consultor no mês corrente
-2. Buscar vendas confirmadas do mês anterior
-3. Ler `excecao_faixas_vendas` e encontrar a faixa correspondente
-4. Bloquear se limite atingido
-5. Verificar restrições absolutas (blindado, depreciação, mudança de linha) e bloquear antes de qualquer solicitação
-
-### Arquivos alterados
-
-1. **`configuracoes`** — 9 novas chaves (insert tool)
-2. **`src/pages/diretoria/RegrasVenda.tsx`** — nova aba com 5 blocos
-3. **`src/hooks/useConteudosSistema.ts`** — 3 novos hooks
-4. **`src/hooks/useAprovacaoElegibilidade.ts`** — validação de limites na mutation
-

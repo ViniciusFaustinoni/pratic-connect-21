@@ -375,3 +375,56 @@ export function useEstimativaFipeAjusteMarca() {
     Fiat: 1.0, Renault: 0.95, Nissan: 1.1, Jeep: 1.4, Ford: 1.0,
   });
 }
+
+// ============================================
+// Exceções e Autorizações
+// ============================================
+
+export interface FaixaVendaExcecao {
+  min: number;
+  max: number | null;
+  permitidas: number;
+}
+
+export function useExcecaoFaixasVendas() {
+  return useConfiguracaoJson<FaixaVendaExcecao[]>('excecao_faixas_vendas', [
+    { min: 0, max: 9, permitidas: 0 },
+    { min: 10, max: 19, permitidas: 1 },
+    { min: 20, max: 29, permitidas: 2 },
+    { min: 30, max: null, permitidas: 3 },
+  ]);
+}
+
+export function useExcecaoFipeMaxCarro() {
+  return useConfiguracaoNumero('excecao_fipe_max_carro', 120000);
+}
+
+export function useExcecaoFipeMaxMoto() {
+  return useConfiguracaoNumero('excecao_fipe_max_moto', 27000);
+}
+
+export interface RestricoesAbsolutas {
+  mudanca_linha: boolean;
+  depreciacao_cobertura_100: boolean;
+  blindado_absoluta: boolean;
+}
+
+export function useRestricoesAbsolutas() {
+  return useQuery({
+    queryKey: ['configuracoes', 'restricoes-absolutas'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['restricao_mudanca_linha', 'restricao_depreciacao_cobertura_100', 'restricao_blindado_absoluta']);
+      if (error) throw error;
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        mudanca_linha: map.restricao_mudanca_linha !== 'false',
+        depreciacao_cobertura_100: map.restricao_depreciacao_cobertura_100 !== 'false',
+        blindado_absoluta: map.restricao_blindado_absoluta !== 'false',
+      } as RestricoesAbsolutas;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}

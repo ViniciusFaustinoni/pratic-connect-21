@@ -6,7 +6,8 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle, DollarSign } from 'lucide-react';
+import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
+import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle, DollarSign, ShieldCheck } from 'lucide-react';
 import { useComissoesFaixas } from '@/hooks/useComissoesFaixas';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -106,6 +107,55 @@ const TAXAS_DEFAULTS: TaxasConfig = {
   multa_rastreador: '400',
 };
 
+// ═══════════ AUTORIZAÇÕES E EXCEÇÕES ═══════════
+
+const AUTORIZACOES_CHAVES = [
+  'excecao_faixas_vendas',
+  'excecao_fipe_max_carro',
+  'excecao_fipe_max_moto',
+  'excecao_historico_boletos_ativo',
+  'excecao_historico_boletos_minimo',
+  'excecao_zero_km_ativo',
+  'restricao_mudanca_linha',
+  'restricao_depreciacao_cobertura_100',
+  'restricao_blindado_absoluta',
+] as const;
+
+interface FaixaVenda {
+  min: number;
+  max: number | null;
+  permitidas: number;
+}
+
+interface AutorizacoesConfig {
+  faixas_vendas: FaixaVenda[];
+  fipe_max_carro: string;
+  fipe_max_moto: string;
+  historico_boletos_ativo: boolean;
+  historico_boletos_minimo: string;
+  zero_km_ativo: boolean;
+  restricao_mudanca_linha: boolean;
+  restricao_depreciacao_cobertura_100: boolean;
+  restricao_blindado_absoluta: boolean;
+}
+
+const AUTORIZACOES_DEFAULTS: AutorizacoesConfig = {
+  faixas_vendas: [
+    { min: 0, max: 9, permitidas: 0 },
+    { min: 10, max: 19, permitidas: 1 },
+    { min: 20, max: 29, permitidas: 2 },
+    { min: 30, max: null, permitidas: 3 },
+  ],
+  fipe_max_carro: '120000',
+  fipe_max_moto: '27000',
+  historico_boletos_ativo: true,
+  historico_boletos_minimo: '6',
+  zero_km_ativo: true,
+  restricao_mudanca_linha: true,
+  restricao_depreciacao_cobertura_100: true,
+  restricao_blindado_absoluta: true,
+};
+
 function useTaxasConfiguracoes() {
   return useQuery({
     queryKey: ['configuracoes-taxas-adesao'],
@@ -127,20 +177,55 @@ function useTaxasConfiguracoes() {
   });
 }
 
+function useAutorizacoesConfiguracoes() {
+  return useQuery({
+    queryKey: ['configuracoes-autorizacoes-excecoes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', [...AUTORIZACOES_CHAVES]);
+      if (error) throw error;
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      let faixas = AUTORIZACOES_DEFAULTS.faixas_vendas;
+      try {
+        if (map.excecao_faixas_vendas) faixas = JSON.parse(map.excecao_faixas_vendas);
+      } catch { /* keep default */ }
+      return {
+        faixas_vendas: faixas,
+        fipe_max_carro: map.excecao_fipe_max_carro ?? AUTORIZACOES_DEFAULTS.fipe_max_carro,
+        fipe_max_moto: map.excecao_fipe_max_moto ?? AUTORIZACOES_DEFAULTS.fipe_max_moto,
+        historico_boletos_ativo: map.excecao_historico_boletos_ativo !== 'false',
+        historico_boletos_minimo: map.excecao_historico_boletos_minimo ?? AUTORIZACOES_DEFAULTS.historico_boletos_minimo,
+        zero_km_ativo: map.excecao_zero_km_ativo !== 'false',
+        restricao_mudanca_linha: map.restricao_mudanca_linha !== 'false',
+        restricao_depreciacao_cobertura_100: map.restricao_depreciacao_cobertura_100 !== 'false',
+        restricao_blindado_absoluta: map.restricao_blindado_absoluta !== 'false',
+      } as AutorizacoesConfig;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+
 export default function RegrasVenda() {
   const { parametros, isLoading, updateParametro } = useComissoesFaixas();
   const queryClient = useQueryClient();
   const { data: taxasDB, isLoading: isLoadingTaxas } = useTaxasConfiguracoes();
+  const { data: autorizacoesDB, isLoading: isLoadingAutorizacoes } = useAutorizacoesConfiguracoes();
   const [pontuacao, setPontuacao] = useState<PontuacaoConfig>(PONTUACAO_DEFAULTS);
   const [repasse, setRepasse] = useState<RepasseMaiorConfig>(REPASSE_DEFAULTS);
   const [migracao, setMigracao] = useState<MigracaoConfig>(MIGRACAO_DEFAULTS);
   const [taxas, setTaxas] = useState<TaxasConfig>(TAXAS_DEFAULTS);
+  const [autorizacoes, setAutorizacoes] = useState<AutorizacoesConfig>(AUTORIZACOES_DEFAULTS);
   const [initialized, setInitialized] = useState(false);
   const [taxasInitialized, setTaxasInitialized] = useState(false);
+  const [autorizacoesInitialized, setAutorizacoesInitialized] = useState(false);
   const [savingPontuacao, setSavingPontuacao] = useState(false);
   const [savingRepasse, setSavingRepasse] = useState(false);
   const [savingMigracao, setSavingMigracao] = useState(false);
   const [savingTaxas, setSavingTaxas] = useState(false);
+  const [savingAutorizacoes, setSavingAutorizacoes] = useState(false);
 
   // Initialize taxas from DB
   useEffect(() => {
@@ -149,6 +234,14 @@ export default function RegrasVenda() {
       setTaxasInitialized(true);
     }
   }, [taxasDB, taxasInitialized]);
+
+  // Initialize autorizacoes from DB
+  useEffect(() => {
+    if (autorizacoesDB && !autorizacoesInitialized) {
+      setAutorizacoes(autorizacoesDB);
+      setAutorizacoesInitialized(true);
+    }
+  }, [autorizacoesDB, autorizacoesInitialized]);
 
   // Initialize state from DB
   useEffect(() => {
@@ -263,7 +356,50 @@ export default function RegrasVenda() {
     }
   };
 
-  if (isLoading || isLoadingTaxas) {
+  const handleSaveAutorizacoes = async () => {
+    setSavingAutorizacoes(true);
+    try {
+      const updates: Record<string, string> = {
+        excecao_faixas_vendas: JSON.stringify(autorizacoes.faixas_vendas),
+        excecao_fipe_max_carro: autorizacoes.fipe_max_carro,
+        excecao_fipe_max_moto: autorizacoes.fipe_max_moto,
+        excecao_historico_boletos_ativo: String(autorizacoes.historico_boletos_ativo),
+        excecao_historico_boletos_minimo: autorizacoes.historico_boletos_minimo,
+        excecao_zero_km_ativo: String(autorizacoes.zero_km_ativo),
+        restricao_mudanca_linha: String(autorizacoes.restricao_mudanca_linha),
+        restricao_depreciacao_cobertura_100: String(autorizacoes.restricao_depreciacao_cobertura_100),
+        restricao_blindado_absoluta: String(autorizacoes.restricao_blindado_absoluta),
+      };
+      for (const [chave, valor] of Object.entries(updates)) {
+        await supabase
+          .from('configuracoes')
+          .update({ valor, updated_at: new Date().toISOString() })
+          .eq('chave', chave);
+      }
+      queryClient.invalidateQueries({ queryKey: ['configuracoes-autorizacoes-excecoes'] });
+      queryClient.invalidateQueries({ queryKey: ['configuracao'] });
+      queryClient.invalidateQueries({ queryKey: ['configuracoes'] });
+      toast.success('Configurações de autorizações e exceções salvas com sucesso!');
+    } catch {
+      toast.error('Erro ao salvar configurações de autorizações');
+    } finally {
+      setSavingAutorizacoes(false);
+    }
+  };
+
+  const handleFaixaChange = (index: number, field: keyof FaixaVenda, value: string) => {
+    setAutorizacoes(prev => {
+      const faixas = [...prev.faixas_vendas];
+      if (field === 'max') {
+        faixas[index] = { ...faixas[index], max: value === '' ? null : parseInt(value) || 0 };
+      } else {
+        faixas[index] = { ...faixas[index], [field]: parseInt(value) || 0 };
+      }
+      return { ...prev, faixas_vendas: faixas };
+    });
+  };
+
+  if (isLoading || isLoadingTaxas || isLoadingAutorizacoes) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -297,6 +433,10 @@ export default function RegrasVenda() {
           <TabsTrigger value="taxas-adesao" className="gap-2">
             <DollarSign className="h-4 w-4" />
             Taxas e Adesão
+          </TabsTrigger>
+          <TabsTrigger value="autorizacoes" className="gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            Autorizações e Exceções
           </TabsTrigger>
         </TabsList>
 
@@ -869,6 +1009,233 @@ export default function RegrasVenda() {
           <div className="flex justify-end">
             <Button onClick={handleSaveTaxas} disabled={savingTaxas} className="gap-2">
               {savingTaxas ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar configurações
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* ═══════════ ABA AUTORIZAÇÕES E EXCEÇÕES ═══════════ */}
+        <TabsContent value="autorizacoes" className="space-y-6 mt-4">
+          {/* BLOCO 1 — Tabela de faixas de vendas */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Quantidade de exceções permitidas por desempenho</CardTitle>
+              <CardDescription>
+                Define quantas solicitações de redução de cota cada consultor pode abrir no mês atual, com base na quantidade de vendas confirmadas que ele teve no mês anterior.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Vendas mínimas (mês anterior)</TableHead>
+                    <TableHead>Vendas máximas (mês anterior)</TableHead>
+                    <TableHead>Solicitações permitidas</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {autorizacoes.faixas_vendas.map((faixa, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="w-24 text-right"
+                          value={faixa.min}
+                          onChange={(e) => handleFaixaChange(i, 'min', e.target.value)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="w-24 text-right"
+                          value={faixa.max ?? ''}
+                          placeholder="Sem limite"
+                          onChange={(e) => handleFaixaChange(i, 'max', e.target.value)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="w-24 text-right"
+                          value={faixa.permitidas}
+                          onChange={(e) => handleFaixaChange(i, 'permitidas', e.target.value)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 2 — Limite FIPE carros */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Valor máximo de FIPE para carros</CardTitle>
+              <CardDescription>
+                Veículos com valor FIPE acima deste limite não podem ter solicitação de redução de cota aprovada, salvo exceções específicas definidas abaixo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="excecao_fipe_max_carro" className="flex-1 text-sm">
+                  Valor máximo de FIPE para carros
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="excecao_fipe_max_carro"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    className="w-32 text-right"
+                    value={autorizacoes.fipe_max_carro}
+                    onChange={(e) => setAutorizacoes(prev => ({ ...prev, fipe_max_carro: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 3 — Limite FIPE motos */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Valor máximo de FIPE para motos</CardTitle>
+              <CardDescription>
+                Motos com valor FIPE acima deste limite não podem ter solicitação de redução de cota aprovada.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="excecao_fipe_max_moto" className="flex-1 text-sm">
+                  Valor máximo de FIPE para motos
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="excecao_fipe_max_moto"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    className="w-32 text-right"
+                    value={autorizacoes.fipe_max_moto}
+                    onChange={(e) => setAutorizacoes(prev => ({ ...prev, fipe_max_moto: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 4 — Exceções acima do limite */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Exceções permitidas acima do limite de FIPE</CardTitle>
+              <CardDescription>
+                Define em quais situações um veículo acima do limite configurado ainda pode ser aceito mediante análise.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="historico_boletos" className="flex-1 text-sm">
+                  Associado já ativo com histórico mínimo de boletos pagos
+                </Label>
+                <Switch
+                  id="historico_boletos"
+                  checked={autorizacoes.historico_boletos_ativo}
+                  onCheckedChange={(checked) =>
+                    setAutorizacoes(prev => ({ ...prev, historico_boletos_ativo: checked }))
+                  }
+                />
+              </div>
+              {autorizacoes.historico_boletos_ativo && (
+                <div className="flex items-center justify-between gap-4 ml-4 pl-4 border-l-2 border-border">
+                  <Label htmlFor="historico_boletos_minimo" className="flex-1 text-sm">
+                    Quantidade mínima de boletos pagos exigida
+                  </Label>
+                  <Input
+                    id="historico_boletos_minimo"
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="w-24 text-right"
+                    value={autorizacoes.historico_boletos_minimo}
+                    onChange={(e) => setAutorizacoes(prev => ({ ...prev, historico_boletos_minimo: e.target.value }))}
+                  />
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="zero_km" className="flex-1 text-sm">
+                  Veículo zero quilômetro com nota fiscal dentro do prazo
+                </Label>
+                <Switch
+                  id="zero_km"
+                  checked={autorizacoes.zero_km_ativo}
+                  onCheckedChange={(checked) =>
+                    setAutorizacoes(prev => ({ ...prev, zero_km_ativo: checked }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 5 — Restrições absolutas */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Veículos nunca autorizados</CardTitle>
+              <CardDescription>
+                Estas restrições não podem ser contornadas por nenhuma solicitação de exceção, independente do histórico ou perfil.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="restricao_mudanca_linha" className="flex-1 text-sm">
+                  Mudança de linha de produto não é autorizada
+                </Label>
+                <Switch
+                  id="restricao_mudanca_linha"
+                  checked={autorizacoes.restricao_mudanca_linha}
+                  onCheckedChange={(checked) =>
+                    setAutorizacoes(prev => ({ ...prev, restricao_mudanca_linha: checked }))
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="restricao_depreciacao" className="flex-1 text-sm">
+                  Veículos com depreciação não podem ser cadastrados em planos com cobertura 100%
+                </Label>
+                <Switch
+                  id="restricao_depreciacao"
+                  checked={autorizacoes.restricao_depreciacao_cobertura_100}
+                  onCheckedChange={(checked) =>
+                    setAutorizacoes(prev => ({ ...prev, restricao_depreciacao_cobertura_100: checked }))
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="restricao_blindado" className="flex-1 text-sm">
+                  Veículos blindados não são autorizados em nenhuma hipótese
+                </Label>
+                <Switch
+                  id="restricao_blindado"
+                  checked={autorizacoes.restricao_blindado_absoluta}
+                  onCheckedChange={(checked) =>
+                    setAutorizacoes(prev => ({ ...prev, restricao_blindado_absoluta: checked }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botão Salvar */}
+          <div className="flex justify-end">
+            <Button onClick={handleSaveAutorizacoes} disabled={savingAutorizacoes} className="gap-2">
+              {savingAutorizacoes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Salvar configurações
             </Button>
           </div>

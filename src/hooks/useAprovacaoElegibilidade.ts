@@ -117,11 +117,76 @@ export function useCriarSolicitacaoElegibilidade() {
       const { data: currentUser } = await supabase.auth.getUser();
       if (!currentUser.user) throw new Error('Usuário não autenticado');
 
+      const userId = currentUser.user.id;
+
+      // ── Verificar restrições absolutas ──
+      const { data: restricoesRows } = await (supabase as any)
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['restricao_mudanca_linha', 'restricao_depreciacao_cobertura_100', 'restricao_blindado_absoluta']);
+
+      const restricoes = Object.fromEntries((restricoesRows || []).map((r: any) => [r.chave, r.valor]));
+
+      if (restricoes.restricao_blindado_absoluta !== 'false' && data.motivo_bloqueio?.toLowerCase().includes('blindado')) {
+        throw new Error('Veículos blindados não são autorizados em nenhuma hipótese.');
+      }
+      if (restricoes.restricao_mudanca_linha !== 'false' && data.motivo_bloqueio?.toLowerCase().includes('mudança de linha')) {
+        throw new Error('Mudança de linha de produto não é autorizada.');
+      }
+      if (restricoes.restricao_depreciacao_cobertura_100 !== 'false' && data.motivo_bloqueio?.toLowerCase().includes('depreciação')) {
+        throw new Error('Veículos com depreciação não podem ser cadastrados em planos com cobertura 100%.');
+      }
+
+      // ── Verificar limite de solicitações por faixa de vendas ──
+      const now = new Date();
+      const inicioMesAtual = new Date(now.getFullYear(), now.getMonth(), 1).toISOString();
+
+      // Contar solicitações do consultor no mês corrente
+      const { count: solicitacoesMes } = await (supabase as any)
+        .from('aprovacoes_elegibilidade')
+        .select('id', { count: 'exact', head: true })
+        .eq('solicitante_id', userId)
+        .gte('created_at', inicioMesAtual);
+
+      // Buscar vendas confirmadas do mês anterior
+      const mesAnterior = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+      const fimMesAnterior = new Date(now.getFullYear(), now.getMonth(), 0);
+      const { count: vendasMesAnterior } = await (supabase as any)
+        .from('cotacoes')
+        .select('id', { count: 'exact', head: true })
+        .eq('vendedor_id', userId)
+        .eq('status', 'confirmada')
+        .gte('created_at', mesAnterior.toISOString())
+        .lte('created_at', fimMesAnterior.toISOString());
+
+      // Ler faixas de vendas da configuração
+      const { data: faixasRow } = await (supabase as any)
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'excecao_faixas_vendas')
+        .maybeSingle();
+
+      let permitidas = 0;
+      try {
+        const faixas = JSON.parse(faixasRow?.valor || '[]');
+        const vendas = vendasMesAnterior || 0;
+        for (const faixa of faixas) {
+          if (vendas >= faixa.min && (faixa.max === null || vendas <= faixa.max)) {
+            permitidas = faixa.permitidas;
+            break;
+          }
+        }
+      } catch { /* use default 0 */ }
+
+      if ((solicitacoesMes || 0) >= permitidas) {
+        throw new Error(`Limite de ${permitidas} solicitação(ões) de exceção atingido para este mês. Suas vendas no mês anterior: ${vendasMesAnterior || 0}.`);
+      }
+
       const { error } = await (supabase as any)
         .from('aprovacoes_elegibilidade')
         .insert({
           ...data,
-          solicitante_id: currentUser.user.id,
+          solicitante_id: userId,
         });
 
       if (error) throw error;
