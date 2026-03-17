@@ -184,11 +184,10 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
 
         if (!faixa) continue;
 
-        // Aplicar adicional app se necessário
-        const isLinhaTipoUsoProprio = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
+        // Aplicar adicional app se necessário (reutiliza isLinhaTipoUsoProprio já declarado acima)
         let valorMensal = isLinhaTipoUsoProprio
           ? Number(faixa.valor_mensal)
-          : resolverPrecoApp(mapping.linha_slug, regiaoLower, mapping.tipo_uso, Number(faixa.valor_mensal), adicionalApp, configApp);
+          : resolverPrecoApp(mapping.linha_slug, regiaoLower, tipoUsoEfetivo, Number(faixa.valor_mensal), adicionalApp, configApp);
 
         // Aplicar adicional_mensal do plano (Premium +30, Exclusive +60)
         valorMensal += Number(plano.adicional_mensal || 0);
