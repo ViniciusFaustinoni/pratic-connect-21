@@ -87,7 +87,8 @@ export function useCalcularCotacao() {
       // Configurações dinâmicas
       const configMap = Object.fromEntries((configRes.data || []).map(c => [c.chave, c.valor]));
       const adicionalApp = parseFloat(configMap.adicional_app || '35.90') || 35.90;
-      const minimoAdesao = parseFloat(configMap.adesao_minima || '100');
+      const percentualAdesao = parseFloat(configMap.taxa_adesao_percentual_fipe || '1') || 1;
+      const minimoAdesao = parseFloat(configMap.taxa_adesao_minimo_base || configMap.adesao_minima || '100');
 
       // Montar ConfigAdicionalApp a partir do banco
       let regioesComAdicional: string[] = [];
