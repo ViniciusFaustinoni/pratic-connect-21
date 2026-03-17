@@ -464,7 +464,7 @@ export function PlanFormModal({
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="slug">Slug</Label>
+                        <Label htmlFor="slug">Slug<FieldHint text={PLAN_FIELD_HINTS.slug} /></Label>
                         <Input
                           id="slug"
                           value={formData.slug}
