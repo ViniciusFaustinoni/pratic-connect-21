@@ -240,9 +240,6 @@ export default function CotadorPage() {
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
   
-  // Mínimo efetivo conforme tipo de instalação
-  const minimoAdesaoConfig = tipoInstalacao === 'rota' ? minimoAdesaoVolante : minimoAdesaoBase;
-  
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
   
