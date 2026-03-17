@@ -231,10 +231,26 @@ Deno.serve(async (req) => {
       results.push({ step: 11, name: 'Registrar no histórico', success: false, error: (e as Error).message })
     }
 
-    // ─── STEP 12: Creditar consultor (pontuação dinâmica) ───
+    // ─── STEP 12: Creditar consultor (pontuação dinâmica — integral vs parcial) ───
     try {
       if (substituicao.consultor_id) {
-        const pontosConsultor = await getParametroPontuacao(supabase, 'pontos_substituicao_placa', 0.5);
+        // Determinar se pagamento da taxa foi integral ou parcial
+        let pagamentoIntegral = true;
+        if (substituicao.cobranca_taxa_asaas_id) {
+          const { data: cobrancaTaxa } = await supabase
+            .from('asaas_cobrancas')
+            .select('valor, pagamento_valor')
+            .eq('id', substituicao.cobranca_taxa_asaas_id)
+            .maybeSingle();
+
+          if (cobrancaTaxa) {
+            pagamentoIntegral = (cobrancaTaxa.pagamento_valor || 0) >= cobrancaTaxa.valor;
+          }
+        }
+
+        const chaveParam = pagamentoIntegral ? 'pontos_substituicao_placa' : 'pontos_substituicao_placa_parcial';
+        const fallback = pagamentoIntegral ? 0.5 : 0;
+        const pontosConsultor = await getParametroPontuacao(supabase, chaveParam, fallback);
 
         await supabase
           .from('substituicoes_veiculo')
@@ -250,6 +266,8 @@ Deno.serve(async (req) => {
           referencia_tipo: 'substituicao',
           referencia_id: substituicao.id,
         });
+
+        console.log(`[efetivar-substituicao] Pontuação: ${pontosConsultor} (${pagamentoIntegral ? 'integral' : 'parcial'}) para ${substituicao.consultor_id}`);
       }
       results.push({ step: 12, name: 'Creditar consultor', success: true })
     } catch (e) {

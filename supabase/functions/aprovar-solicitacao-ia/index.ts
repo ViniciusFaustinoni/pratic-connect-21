@@ -667,6 +667,37 @@ serve(async (req) => {
       } catch (whatsErr) {
         console.error("[aprovar-solicitacao-ia] Erro ao enviar WhatsApp de troca:", whatsErr);
       }
+
+      // === PONTUAR CONSULTOR — TROCA DE TITULARIDADE ===
+      try {
+        // Buscar vendedor do contrato do associado
+        const { data: contratoTroca } = await supabaseAdmin
+          .from("contratos")
+          .select("id, vendedor_id")
+          .eq("associado_id", solicitacao.associado_id)
+          .eq("status", "ativo")
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (contratoTroca?.vendedor_id) {
+          await fetch(`${SUPABASE_URL}/functions/v1/pontuar-operacao`, {
+            method: "POST",
+            headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
+            body: JSON.stringify({
+              tipo_operacao: "troca_titularidade",
+              vendedor_id: contratoTroca.vendedor_id,
+              contrato_id: contratoTroca.id,
+              referencia_tipo: "solicitacao_ia",
+              referencia_id: solicitacao.id,
+              pagamento_integral: true, // Será refinado quando houver cobrança vinculada
+            }),
+          });
+          console.log(`[aprovar-solicitacao-ia] Pontuação troca_titularidade enviada para vendedor ${contratoTroca.vendedor_id}`);
+        }
+      } catch (pontErr) {
+        console.error("[aprovar-solicitacao-ia] Erro ao pontuar troca de titularidade:", pontErr);
+      }
     }
 
     // Atualizar solicitação como aprovada
