@@ -43,6 +43,7 @@ interface AssociadoHeroHeaderProps {
   onEmail: () => void;
   onSincronizar: () => void;
   onExcluir: (tipo: string) => void;
+  onTrocaTitularidade?: () => void;
   setActiveTab: (tab: string) => void;
   // Loading states
   isReativando: boolean;
