@@ -551,7 +551,7 @@ export function PlanFormModal({
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="coverage_type">Tipo de Cobertura</Label>
+                        <Label htmlFor="coverage_type">Tipo de Cobertura<FieldHint text={PLAN_FIELD_HINTS.coverage_type} /></Label>
                         <Input
                           id="coverage_type"
                           value={formData.coverage_type}
