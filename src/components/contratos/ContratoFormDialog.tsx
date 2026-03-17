@@ -249,6 +249,31 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
         cliente_cpf: pendingFormData.cliente_cpf || selectedLead?.cpf || null,
       });
 
+      // Vincular indicação se existir nos dados da cotação
+      if (prefilledData?.indicacao?.indicador_id && cotacaoPrioritaria?.id) {
+        try {
+          // Try to find existing indicação record and update it
+          const { data: existingIndicacao } = await supabase
+            .from('indicacoes')
+            .select('id')
+            .eq('indicador_id', prefilledData.indicacao.indicador_id)
+            .eq('cotacao_id', cotacaoPrioritaria.id)
+            .maybeSingle();
+
+          if (existingIndicacao) {
+            await supabase
+              .from('indicacoes')
+              .update({
+                status: 'convertido',
+                data_conversao: new Date().toISOString(),
+              })
+              .eq('id', existingIndicacao.id);
+          }
+        } catch (err) {
+          console.warn('Erro ao atualizar indicação:', err);
+        }
+      }
+
       toast.success('Proposta criada como rascunho');
       onOpenChange(false);
       form.reset();

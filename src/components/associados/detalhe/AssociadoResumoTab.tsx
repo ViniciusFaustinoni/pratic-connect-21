@@ -106,6 +106,9 @@ export function AssociadoResumoTab({
       {/* Situação do Associado */}
       {situacao && <AssociadoSituacaoCard situacao={situacao} />}
 
+      {/* Origem do Cadastro */}
+      {associado?.id && <OrigemCadastroCard associadoId={associado.id} />}
+
       {/* Info Grid */}
       <div className="grid sm:grid-cols-2 gap-3">
         {/* Plano & Contrato */}
