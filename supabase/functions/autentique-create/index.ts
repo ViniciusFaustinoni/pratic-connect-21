@@ -230,6 +230,9 @@ serve(async (req) => {
 
     // ============= BUSCAR CONFIG RASTREADOR =============
     const configRastreador = await buscarConfigRastreador(supabase);
+
+    // ============= BUSCAR REGRAS DE VENDA =============
+    const { regras: regrasVenda, faltantes: regrasFaltantes } = await buscarRegrasVenda(supabase);
     
     // ============= MAPEAR DADOS PARA O TEMPLATE =============
     const templateData = mapearDadosParaTemplate(
@@ -247,6 +250,9 @@ serve(async (req) => {
       vendedorNome
     );
     templateData.configRastreador = configRastreador;
+    if (regrasVenda) {
+      templateData.regrasVenda = regrasVenda;
+    }
 
     // ============= GERAR HTML DO TERMO DE AFILIAÇÃO =============
     let contratoHTML: string;
