@@ -910,27 +910,40 @@ serve(async (req) => {
                     },
                   });
 
-                  // === ESTORNAR PONTUAÇÃO DE ADESÃO ===
+                  // === ESTORNAR PONTUAÇÃO DE ADESÃO (respeitar toggle) ===
                   try {
-                    const { data: contratoVendedorOverdue } = await supabase
-                      .from('contratos')
-                      .select('vendedor_id')
-                      .eq('id', cobranca.contrato_id)
+                    const { data: paramEstorno } = await supabase
+                      .from('comissoes_parametros')
+                      .select('valor')
+                      .eq('chave', 'estorno_cancelamento_antes_1_boleto')
+                      .eq('ativo', true)
                       .maybeSingle();
 
-                    if (contratoVendedorOverdue?.vendedor_id) {
-                      const { data: eventoOriginal } = await supabase
-                        .from('pontuacao_eventos')
-                        .select('id, pontos')
-                        .eq('contrato_id', cobranca.contrato_id)
-                        .eq('tipo_operacao', 'nova_adesao')
-                        .eq('estornado', false)
+                    const devEstornar = !paramEstorno || paramEstorno.valor === 'true';
+
+                    if (devEstornar) {
+                      const { data: contratoVendedorOverdue } = await supabase
+                        .from('contratos')
+                        .select('vendedor_id')
+                        .eq('id', cobranca.contrato_id)
                         .maybeSingle();
 
-                      if (eventoOriginal) {
-                        await estornarEventoPontuacao(supabase, eventoOriginal.id, contratoVendedorOverdue.vendedor_id, cobranca.contrato_id);
-                        console.log(`[asaas-webhook] Pontuação estornada para contrato ${cobranca.contrato_id}`);
+                      if (contratoVendedorOverdue?.vendedor_id) {
+                        const { data: eventoOriginal } = await supabase
+                          .from('pontuacao_eventos')
+                          .select('id, pontos')
+                          .eq('contrato_id', cobranca.contrato_id)
+                          .eq('tipo_operacao', 'nova_adesao')
+                          .eq('estornado', false)
+                          .maybeSingle();
+
+                        if (eventoOriginal) {
+                          await estornarEventoPontuacao(supabase, eventoOriginal.id, contratoVendedorOverdue.vendedor_id, cobranca.contrato_id);
+                          console.log(`[asaas-webhook] Pontuação estornada para contrato ${cobranca.contrato_id}`);
+                        }
                       }
+                    } else {
+                      console.log(`[asaas-webhook] Estorno desabilitado por parâmetro - contrato ${cobranca.contrato_id}`);
                     }
                   } catch (estornoErr) {
                     console.error('[asaas-webhook] Erro ao estornar pontuação:', estornoErr);
