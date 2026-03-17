@@ -7822,6 +7822,9 @@ export type Database = {
           vistoria_endereco_longitude: number | null
           vistoria_id: string | null
           vistoria_rota_id: string | null
+          whatsapp_enviado: boolean | null
+          whatsapp_enviado_em: string | null
+          whatsapp_erro: string | null
         }
         Insert: {
           adesao_cobranca_id?: string | null
@@ -7933,6 +7936,9 @@ export type Database = {
           vistoria_endereco_longitude?: number | null
           vistoria_id?: string | null
           vistoria_rota_id?: string | null
+          whatsapp_enviado?: boolean | null
+          whatsapp_enviado_em?: string | null
+          whatsapp_erro?: string | null
         }
         Update: {
           adesao_cobranca_id?: string | null
@@ -8044,6 +8050,9 @@ export type Database = {
           vistoria_endereco_longitude?: number | null
           vistoria_id?: string | null
           vistoria_rota_id?: string | null
+          whatsapp_enviado?: boolean | null
+          whatsapp_enviado_em?: string | null
+          whatsapp_erro?: string | null
         }
         Relationships: [
           {
