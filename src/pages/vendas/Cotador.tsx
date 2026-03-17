@@ -683,6 +683,13 @@ export default function CotadorPage() {
       toast.error('Selecione o cenário de adesão/instalação antes de salvar.');
       return;
     }
+
+    // Validar adesão mínima (exceto cenários isentos)
+    const cenarioIsento = cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base';
+    if (!cenarioIsento && valorAdesaoCustom !== null && valorAdesaoCustom < minimoAdesaoConfig) {
+      toast.error(`O valor de adesão (${formatCurrency(valorAdesaoCustom)}) está abaixo do mínimo configurado (${formatCurrency(minimoAdesaoConfig)}). Ajuste o valor para continuar.`);
+      return;
+    }
     
     setSalvandoCotacao(true);
     
