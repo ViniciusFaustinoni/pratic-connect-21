@@ -6,9 +6,12 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle } from 'lucide-react';
+import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle, DollarSign } from 'lucide-react';
 import { useComissoesFaixas } from '@/hooks/useComissoesFaixas';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
+import { formatarMoeda } from '@/utils/format';
 
 interface PontuacaoConfig {
   pontos_nova_adesao: number;
