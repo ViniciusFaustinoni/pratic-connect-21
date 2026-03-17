@@ -233,6 +233,8 @@ import { estimarValorFipe } from '@/utils/fipe';
 export default function CotadorPage() {
   const navigate = useNavigate();
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
+  const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
+  const { data: minimoAdesaoConfig = 100 } = useTaxaAdesaoMinimoBase();
   
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
