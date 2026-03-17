@@ -442,10 +442,11 @@ export function PlanFormModal({
             <form onSubmit={handleSubmit} className="h-full flex flex-col">
               <ScrollArea className="flex-1 px-6">
                 <Tabs defaultValue="basico" className="pb-6">
-                  <TabsList className="mb-4">
+                  <TabsList className="mb-4 flex-wrap">
                     <TabsTrigger value="basico">Básico</TabsTrigger>
                     <TabsTrigger value="cotas">Cotas</TabsTrigger>
                     <TabsTrigger value="beneficios">Benefícios</TabsTrigger>
+                    <TabsTrigger value="elegibilidade" disabled={!isEditing}>Elegibilidade</TabsTrigger>
                     <TabsTrigger value="outros">Outros</TabsTrigger>
                   </TabsList>
 
