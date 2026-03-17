@@ -321,6 +321,40 @@ export function ContratoDetailDrawer({ contratoId, open, onClose }: ContratoDeta
                 </div>
               </section>
 
+              {/* WhatsApp Status */}
+              {((contrato as any).whatsapp_enviado || (contrato as any).whatsapp_erro) && (
+                <>
+                  <Separator />
+                  <section>
+                    <h3 className="text-sm font-medium uppercase tracking-wide text-muted-foreground mb-3 flex items-center gap-2">
+                      <MessageCircle className="h-4 w-4" />
+                      WhatsApp Assinatura
+                    </h3>
+                    <div className="flex items-center gap-2 text-sm">
+                      {(contrato as any).whatsapp_enviado ? (
+                        <Badge className="bg-green-100 text-green-800">
+                          <CheckCircle className="mr-1 h-3 w-3" />
+                          Enviado
+                        </Badge>
+                      ) : (contrato as any).whatsapp_erro ? (
+                        <Badge className="bg-red-100 text-red-800">
+                          <XCircle className="mr-1 h-3 w-3" />
+                          Erro no envio
+                        </Badge>
+                      ) : null}
+                      {(contrato as any).whatsapp_enviado_em && (
+                        <span className="text-muted-foreground text-xs">
+                          {formatDateTime((contrato as any).whatsapp_enviado_em)}
+                        </span>
+                      )}
+                    </div>
+                    {(contrato as any).whatsapp_erro && (
+                      <p className="text-xs text-destructive mt-1">{(contrato as any).whatsapp_erro}</p>
+                    )}
+                  </section>
+                </>
+              )}
+
               <Separator />
 
               {/* Cliente */}
