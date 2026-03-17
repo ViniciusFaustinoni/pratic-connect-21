@@ -513,6 +513,14 @@ serve(async (req) => {
       console.log('Novo associado criado:', associadoId);
 
       // Criar VEÍCULO vinculado ao novo associado (status em_analise)
+      const categoriaFlagsNovo = {
+        flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
+        flag_ex_taxi: cotacao.categoria === 'ex_taxi',
+        flag_taxi_ativo: cotacao.categoria === 'taxi',
+        flag_chassi_remarcado: cotacao.categoria === 'chassi_remarcado',
+        flag_leilao: cotacao.categoria === 'leilao',
+        flag_ex_ressarcido: cotacao.categoria === 'ressarcimento_integral',
+      };
       const { data: novoVeiculo, error: veiculoError } = await supabase
         .from('veiculos')
         .insert({
@@ -526,12 +534,12 @@ serve(async (req) => {
           combustivel: cotacao.veiculo_combustivel || null,
           valor_fipe: cotacao.valor_fipe || null,
           codigo_fipe: cotacao.codigo_fipe || null,
-          // Dados obrigatórios para SGA Hinova (extraídos do CRLV via OCR)
           chassi: cotacao.veiculo_chassi || null,
           renavam: cotacao.veiculo_renavam || null,
           status: 'em_analise',
           cobertura_roubo_furto: false,
           cobertura_total: false,
+          ...categoriaFlagsNovo,
         })
         .select('id')
         .single();
