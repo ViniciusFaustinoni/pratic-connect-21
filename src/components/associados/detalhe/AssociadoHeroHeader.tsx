@@ -199,6 +199,11 @@ export function AssociadoHeroHeader({
                 <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> Substituir
               </Button>
             )}
+            {status === 'ativo' && !permissions.isAnalistaCadastroOnly && onTrocaTitularidade && (
+              <Button size="sm" variant="outline" onClick={onTrocaTitularidade}>
+                <Users className="h-3.5 w-3.5 mr-1.5" /> Troca Titular
+              </Button>
+            )}
             {status === 'ativo' && (
               <Button size="sm" variant="outline" className="text-amber-600 hover:text-amber-700 hover:border-amber-300" onClick={onSuspender}>
                 <Pause className="h-3.5 w-3.5 mr-1.5" /> Suspender
