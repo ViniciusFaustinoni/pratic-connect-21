@@ -48,7 +48,8 @@ export function BeneficiosCoberturas() {
     queryFn: async () => {
       const { data } = await supabase
         .from('planos_beneficios')
-        .select('benefit_id, plano_id, planos(nome)');
+        .select('benefit_id, plano_id, planos!inner(nome, visivel_gestao)')
+        .eq('planos.visivel_gestao', true);
       const map: Record<string, { plano_id: string; nome: string }[]> = {};
       data?.forEach((pb: any) => {
         if (!pb.benefit_id) return;
@@ -112,7 +113,7 @@ export function BeneficiosCoberturas() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Catálogo de itens visuais exibidos no app do associado e materiais comerciais. Vincule-os aos planos na aba "Produtos & Planos".
+            Catálogo de itens visuais exibidos no app do associado e materiais comerciais. Vincule-os aos planos na aba "Planos, Produtos e Preços".
           </p>
 
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
