@@ -723,7 +723,7 @@ export function PlanFormModal({
                               <p className="text-sm font-medium">{catLabel}</p>
                               <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
-                                  <Label className="text-xs">Cota (%)</Label>
+                                  <Label className="text-xs">Cota (%)<FieldHint text={PLAN_FIELD_HINTS.cota_percentual} /></Label>
                                   <Input
                                     type="number"
                                     step="0.1"
