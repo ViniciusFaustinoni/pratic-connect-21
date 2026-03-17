@@ -51,6 +51,7 @@ import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastread
 import { supabase } from '@/integrations/supabase/client';
 import { SubstituicaoStatusCard } from '@/components/substituicao/SubstituicaoStatusCard';
 import { ReativacaoWizard } from '@/components/associados/reativacao/ReativacaoWizard';
+import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
 
 // New redesign components
 import { AssociadoHeroHeader } from '@/components/associados/detalhe/AssociadoHeroHeader';
