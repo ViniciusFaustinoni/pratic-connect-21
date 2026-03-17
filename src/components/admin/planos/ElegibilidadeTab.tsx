@@ -188,39 +188,41 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
 
       {/* Rules table */}
       {regras && regras.length > 0 ? (
-        <div className="rounded-md border">
-          <Table>
+        <div className="rounded-md border overflow-x-auto">
+          <Table className="text-xs">
             <TableHeader>
               <TableRow>
-                <TableHead>Marca</TableHead>
-                <TableHead>Modelo</TableHead>
-                <TableHead>Ano</TableHead>
-                <TableHead>Combustível</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Cob. FIPE</TableHead>
-                <TableHead>Obs</TableHead>
-                <TableHead className="w-20">Ações</TableHead>
+                <TableHead className="whitespace-nowrap px-2">Marca</TableHead>
+                <TableHead className="whitespace-nowrap px-2">Modelo</TableHead>
+                <TableHead className="whitespace-nowrap px-2">Ano</TableHead>
+                <TableHead className="whitespace-nowrap px-2">Comb.</TableHead>
+                <TableHead className="whitespace-nowrap px-2">Status</TableHead>
+                <TableHead className="whitespace-nowrap px-2">FIPE</TableHead>
+                <TableHead className="whitespace-nowrap px-2 min-w-[100px]">Obs</TableHead>
+                <TableHead className="whitespace-nowrap px-2 w-16">Ações</TableHead>
               </TableRow>
             </TableHeader>
             <TableBody>
               {regras.map((r) => (
                 <TableRow key={r.id}>
-                  <TableCell className="font-medium">{r.marca}</TableCell>
-                  <TableCell>{r.modelo}</TableCell>
-                  <TableCell className="text-xs">
+                  <TableCell className="font-medium px-2 py-1.5 whitespace-nowrap">{r.marca}</TableCell>
+                  <TableCell className="px-2 py-1.5 whitespace-nowrap">{r.modelo}</TableCell>
+                  <TableCell className="px-2 py-1.5 whitespace-nowrap">
                     {r.ano_min}{r.ano_max ? ` - ${r.ano_max}` : '+'}
                   </TableCell>
-                  <TableCell className="text-xs capitalize">{r.combustivel || 'qualquer'}</TableCell>
-                  <TableCell>{statusBadge(r.status)}</TableCell>
-                  <TableCell>{r.status !== 'negado' ? `${r.cobertura_fipe ?? 100}%` : '—'}</TableCell>
-                  <TableCell className="text-xs text-muted-foreground max-w-[120px] truncate">{r.observacao || '—'}</TableCell>
-                  <TableCell>
-                    <div className="flex gap-1">
-                      <Button variant="ghost" size="icon" className="h-7 w-7" onClick={() => startEdit(r)}>
-                        <Pencil className="h-3.5 w-3.5" />
+                  <TableCell className="px-2 py-1.5 capitalize whitespace-nowrap">{r.combustivel || 'qualquer'}</TableCell>
+                  <TableCell className="px-2 py-1.5">{statusBadge(r.status)}</TableCell>
+                  <TableCell className="px-2 py-1.5">{r.status !== 'negado' ? `${r.cobertura_fipe ?? 100}%` : '—'}</TableCell>
+                  <TableCell className="px-2 py-1.5 text-muted-foreground max-w-[150px]">
+                    <span className="line-clamp-2">{r.observacao || '—'}</span>
+                  </TableCell>
+                  <TableCell className="px-2 py-1.5">
+                    <div className="flex gap-0.5">
+                      <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => startEdit(r)}>
+                        <Pencil className="h-3 w-3" />
                       </Button>
-                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive" onClick={() => removeMutation.mutate(r.id)}>
-                        <Trash2 className="h-3.5 w-3.5" />
+                      <Button variant="ghost" size="icon" className="h-6 w-6 text-destructive" onClick={() => removeMutation.mutate(r.id)}>
+                        <Trash2 className="h-3 w-3" />
                       </Button>
                     </div>
                   </TableCell>
