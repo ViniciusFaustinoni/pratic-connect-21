@@ -7,7 +7,7 @@ import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
-import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin, HelpCircle, X, Calendar, TrendingDown } from 'lucide-react';
+import { Loader2, Car, Search, CheckCircle2, Shield, Check, AlertCircle, Copy, MessageCircle, Zap, User, Link, UserCheck, Phone, Mail, AlertTriangle, Info, MapPin, HelpCircle, X, XCircle, Calendar, TrendingDown, Clock } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Button } from '@/components/ui/button';
@@ -58,6 +58,8 @@ import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
 
 import { useCriarSolicitacaoFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
+import { useCriarSolicitacaoFipeLimite, useAprovacaoFipeLimitePorCotacao } from '@/hooks/useAprovacoesFipeLimite';
+import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useLead } from '@/hooks/useLeads';
@@ -234,6 +236,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Hook para criar solicitação de FIPE menor
   const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
+
+  // Hook para FIPE limite (alto valor)
+  const { data: configLimites } = useConfigLimitesVeiculo();
+  const criarSolicitacaoFipeLimite = useCriarSolicitacaoFipeLimite();
+  const { data: aprovacaoFipeLimiteExistente } = useAprovacaoFipeLimitePorCotacao(cotacaoParaEditar?.id);
+  const [fipeLimiteSolicitado, setFipeLimiteSolicitado] = useState(false);
 
   // Função para calcular opções de vencimento baseado no dia atual
   const opcoesVencimento = useMemo((): [number, number] => {
@@ -1643,6 +1651,101 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   Faixa enquadrada: {formatCurrency(faixaAtualFipe.min)} – {formatCurrency(faixaAtualFipe.max)}
                 </p>
               )}
+
+              {/* Alerta FIPE acima do limite de autorização */}
+              {(() => {
+                if (!valorFipe || valorFipe <= 0 || !configLimites) return null;
+                const limiteAplicavel = tipoVeiculoDetectado === 'moto'
+                  ? configLimites.fipeLimiteAutorizacaoMoto
+                  : configLimites.fipeLimiteAutorizacao;
+                const excedeLimite = valorFipe > limiteAplicavel;
+                if (!excedeLimite) return null;
+                
+                const jaAprovado = cotacaoParaEditar?.id 
+                  ? aprovacaoFipeLimiteExistente?.status === 'aprovado'
+                  : false;
+                const jaRecusado = cotacaoParaEditar?.id 
+                  ? aprovacaoFipeLimiteExistente?.status === 'recusado'
+                  : false;
+                const jaSolicitado = fipeLimiteSolicitado || (aprovacaoFipeLimiteExistente?.status === 'pendente');
+
+                if (jaAprovado) {
+                  return (
+                    <Alert className="border-green-500/50 bg-green-500/10 mt-2">
+                      <CheckCircle2 className="h-4 w-4 text-green-600" />
+                      <AlertDescription className="text-sm text-green-700 dark:text-green-400">
+                        Autorização FIPE alto valor <strong>aprovada</strong>. Você pode prosseguir.
+                      </AlertDescription>
+                    </Alert>
+                  );
+                }
+
+                if (jaRecusado) {
+                  return (
+                    <Alert className="border-destructive/50 bg-destructive/10 mt-2">
+                      <XCircle className="h-4 w-4 text-destructive" />
+                      <AlertDescription className="text-sm text-destructive">
+                        Autorização FIPE alto valor <strong>recusada</strong>. Não é possível prosseguir com este veículo.
+                      </AlertDescription>
+                    </Alert>
+                  );
+                }
+
+                if (jaSolicitado) {
+                  return (
+                    <Alert className="border-amber-500/50 bg-amber-500/10 mt-2">
+                      <Clock className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
+                        Solicitação enviada. <strong>Aguarde a aprovação</strong> para prosseguir.
+                      </AlertDescription>
+                    </Alert>
+                  );
+                }
+
+                return (
+                  <div className="mt-2 space-y-2">
+                    <Alert className="border-destructive/50 bg-destructive/10">
+                      <AlertTriangle className="h-4 w-4 text-destructive" />
+                      <AlertDescription className="text-sm text-destructive">
+                        FIPE ({formatCurrency(valorFipe)}) acima do limite de {formatCurrency(limiteAplicavel)} para {tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros'}.
+                        Este veículo requer autorização prévia. Uma solicitação será enviada automaticamente para análise.
+                      </AlertDescription>
+                    </Alert>
+                    <Button
+                      type="button"
+                      variant="outline"
+                      size="sm"
+                      disabled={criarSolicitacaoFipeLimite.isPending}
+                      onClick={async () => {
+                        if (!cotacaoParaEditar?.id) {
+                          toast.error('Salve a cotação antes de solicitar autorização.');
+                          return;
+                        }
+                        await criarSolicitacaoFipeLimite.mutateAsync({
+                          cotacao_id: cotacaoParaEditar.id,
+                          valor_fipe: valorFipe,
+                          limite_aplicado: limiteAplicavel,
+                          tipo_veiculo: tipoVeiculoDetectado,
+                          veiculo_marca: veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || undefined,
+                          veiculo_modelo: veiculoEncontrado?.vehicleData?.modelo || modeloResolvido || undefined,
+                          veiculo_ano: anoNumerico,
+                          veiculo_placa: placa || undefined,
+                          nome_solicitante: nomeAssociado || undefined,
+                        });
+                        setFipeLimiteSolicitado(true);
+                      }}
+                      className="gap-1.5"
+                    >
+                      {criarSolicitacaoFipeLimite.isPending ? (
+                        <Loader2 className="h-4 w-4 animate-spin" />
+                      ) : (
+                        <Shield className="h-4 w-4" />
+                      )}
+                      Solicitar Autorização
+                    </Button>
+                  </div>
+                );
+              })()}
             </div>
 
             {/* BLOCO 2: CONDIÇÕES ESPECIAIS / DESÁGIOS */}
@@ -2271,7 +2374,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             <div className="sticky bottom-0 bg-background border-t px-4 py-3 sm:px-6 flex items-center justify-end">
               <Button 
                 type="submit" 
-                disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || (valorAdesao <= 0 && !isCenarioIsento) || !dadosAssociadoValidos}
+                disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || (valorAdesao <= 0 && !isCenarioIsento) || !dadosAssociadoValidos || (() => {
+                  if (!valorFipe || valorFipe <= 0 || !configLimites) return false;
+                  const limiteAplicavel = tipoVeiculoDetectado === 'moto' ? configLimites.fipeLimiteAutorizacaoMoto : configLimites.fipeLimiteAutorizacao;
+                  if (valorFipe <= limiteAplicavel) return false;
+                  const jaAprovado = cotacaoParaEditar?.id ? aprovacaoFipeLimiteExistente?.status === 'aprovado' : false;
+                  return !jaAprovado;
+                })()}
               >
                 {(createCotacao.isPending || updateCotacao.isPending) ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />

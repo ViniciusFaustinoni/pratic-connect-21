@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 interface LimitesVeiculo {
   fipeLimiteAutorizacao: number;
+  fipeLimiteAutorizacaoMoto: number;
   idadeLimite: number;
   fipeMinimo: number;
   fipeMaximo: number;
@@ -11,6 +12,7 @@ interface LimitesVeiculo {
 
 const DEFAULTS: LimitesVeiculo = {
   fipeLimiteAutorizacao: 120000,
+  fipeLimiteAutorizacaoMoto: 30000,
   idadeLimite: 15,
   fipeMinimo: 15000,
   fipeMaximo: 500000,
@@ -19,6 +21,7 @@ const DEFAULTS: LimitesVeiculo = {
 
 const CHAVES = [
   'fipe_limite_autorizacao',
+  'fipe_limite_autorizacao_moto',
   'perfil_veiculo_idade_limite',
   'perfil_veiculo_fipe_minimo',
   'perfil_veiculo_fipe_maximo',
@@ -40,6 +43,7 @@ export function useConfigLimitesVeiculo() {
 
       return {
         fipeLimiteAutorizacao: Number(mapStr['fipe_limite_autorizacao']) || DEFAULTS.fipeLimiteAutorizacao,
+        fipeLimiteAutorizacaoMoto: Number(mapStr['fipe_limite_autorizacao_moto']) || DEFAULTS.fipeLimiteAutorizacaoMoto,
         idadeLimite: Number(mapStr['perfil_veiculo_idade_limite']) || DEFAULTS.idadeLimite,
         fipeMinimo: Number(mapStr['perfil_veiculo_fipe_minimo']) || DEFAULTS.fipeMinimo,
         fipeMaximo: Number(mapStr['perfil_veiculo_fipe_maximo']) || DEFAULTS.fipeMaximo,
