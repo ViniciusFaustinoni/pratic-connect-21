@@ -4,6 +4,7 @@
 
 import {
   TermoAfiliacaoData,
+  RegrasVendaData,
   formatCPF,
   formatPhone,
   formatCEP,
@@ -115,6 +116,28 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     // Sistema
     'sistema.data_atual': formatDate(dataAtual),
     'sistema.data_extenso': formatDateExtended(dataAtual),
+
+    // Regras de Venda (dinâmicas da Diretoria)
+    ...(dados.regrasVenda ? {
+      'regras.taxa_adesao_percentual': `${dados.regrasVenda.taxa_adesao_percentual_fipe}%`,
+      'regras.taxa_adesao_minimo_volante': formatCurrency(Number(dados.regrasVenda.taxa_adesao_minimo_volante)),
+      'regras.taxa_adesao_minimo_base': formatCurrency(Number(dados.regrasVenda.taxa_adesao_minimo_base)),
+      'regras.repasse_volante': formatCurrency(Number(dados.regrasVenda.taxa_repasse_volante)),
+      'regras.taxa_substituicao_placa': formatCurrency(Number(dados.regrasVenda.taxa_substituicao_placa)),
+      'regras.taxa_troca_titularidade': formatCurrency(Number(dados.regrasVenda.taxa_troca_titularidade)),
+      'regras.taxa_revistoria': formatCurrency(Number(dados.regrasVenda.taxa_revistoria)),
+      'regras.multa_rastreador': formatCurrency(Number(dados.regrasVenda.multa_rastreador)),
+      'regras.migracao_comprovantes': dados.regrasVenda.migracao_comprovantes_exigidos,
+      'regras.migracao_prazo_horas': dados.regrasVenda.migracao_prazo_resposta_horas,
+      'regras.migracao_canal': dados.regrasVenda.migracao_canal_oficial,
+      'regras.migracao_carencia_isenta': dados.regrasVenda.migracao_isentar_carencia === 'true' ? 'Sim' : 'Não',
+      'regras.prazo_reativacao_dias': dados.regrasVenda.prazo_reativacao_dias,
+      'regras.repasse_pct_favoravel': `${dados.regrasVenda.repasse_maior_pct_favoravel}%`,
+      'regras.repasse_pct_reduzido': `${dados.regrasVenda.repasse_maior_pct_reduzido}%`,
+      'regras.repasse_valor_favoravel': formatCurrency(Number(dados.regrasVenda.repasse_maior_valor_favoravel)),
+      'regras.repasse_valor_reduzido': formatCurrency(Number(dados.regrasVenda.repasse_maior_valor_reduzido)),
+      'regras.repasse_corte_boletos': dados.regrasVenda.repasse_maior_corte_boletos,
+    } : {}),
   };
 }
 

@@ -8,7 +8,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { gerarPosicoesAssinatura, buscarPosicoesConfig } from "../_shared/autentique-positions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/termo-afiliacao-template.ts";
-import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa } from "../_shared/termo-afiliacao-utils.ts";
+import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa, buscarRegrasVenda } from "../_shared/termo-afiliacao-utils.ts";
 import { 
   substituirVariaveis, 
   limparVariaveisNaoSubstituidas,
@@ -230,6 +230,9 @@ serve(async (req) => {
 
     // ============= BUSCAR CONFIG RASTREADOR =============
     const configRastreador = await buscarConfigRastreador(supabase);
+
+    // ============= BUSCAR REGRAS DE VENDA =============
+    const { regras: regrasVenda, faltantes: regrasFaltantes } = await buscarRegrasVenda(supabase);
     
     // ============= MAPEAR DADOS PARA O TEMPLATE =============
     const templateData = mapearDadosParaTemplate(
@@ -247,12 +250,26 @@ serve(async (req) => {
       vendedorNome
     );
     templateData.configRastreador = configRastreador;
+    if (regrasVenda) {
+      templateData.regrasVenda = regrasVenda;
+    }
 
     // ============= GERAR HTML DO TERMO DE AFILIAÇÃO =============
     let contratoHTML: string;
     let templateUsado: string;
     
     if (usandoTemplateBanco) {
+      // Validar regras se o template usa variáveis {{regras.*}}
+      if (templateDB.conteudo.includes('{{regras.') && regrasFaltantes.length > 0) {
+        console.error('[autentique-create] Template usa variáveis de regras mas há configurações faltantes:', regrasFaltantes);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Configurações de Regras de Venda incompletas. Chaves faltantes: ${regrasFaltantes.join(', ')}. Configure em Diretoria > Regras de Venda antes de gerar o documento.`,
+          }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       // Usar template dinâmico do banco
       contratoHTML = await gerarHTMLDoTemplate(supabase, templateDB.conteudo, templateData);
       templateUsado = `${templateDB.codigo} (banco de dados)`;

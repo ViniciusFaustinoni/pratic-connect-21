@@ -87,6 +87,31 @@ export interface EmpresaData {
   lgpd_email?: string;
 }
 
+export interface RegrasVendaData {
+  // Taxas e Adesão
+  taxa_adesao_percentual_fipe: string;
+  taxa_adesao_minimo_volante: string;
+  taxa_adesao_minimo_base: string;
+  taxa_repasse_volante: string;
+  taxa_substituicao_placa: string;
+  taxa_troca_titularidade: string;
+  taxa_revistoria: string;
+  multa_rastreador: string;
+  // Migração
+  migracao_comprovantes_exigidos: string;
+  migracao_prazo_resposta_horas: string;
+  migracao_canal_oficial: string;
+  migracao_isentar_carencia: string;
+  // Pontuação
+  prazo_reativacao_dias: string;
+  // Repasse Maior
+  repasse_maior_pct_favoravel: string;
+  repasse_maior_pct_reduzido: string;
+  repasse_maior_valor_favoravel: string;
+  repasse_maior_valor_reduzido: string;
+  repasse_maior_corte_boletos: string;
+}
+
 export interface TermoAfiliacaoData {
   cliente: ClienteData;
   veiculo: VeiculoData;
@@ -98,6 +123,7 @@ export interface TermoAfiliacaoData {
     fipeMinCarro: number;
     fipeMinMoto: number;
   };
+  regrasVenda?: RegrasVendaData;
 }
 
 // ============= FORMATADORES =============
@@ -384,4 +410,102 @@ export async function buscarConfiguracoesEmpresa(supabase: any): Promise<Record<
   }
   
   return configs;
+}
+
+// ============= REGRAS DE VENDA =============
+
+const CHAVES_CONFIGURACOES_REGRAS = [
+  'taxa_adesao_percentual_fipe',
+  'taxa_adesao_minimo_volante',
+  'taxa_adesao_minimo_base',
+  'taxa_repasse_volante',
+  'taxa_substituicao_placa',
+  'taxa_troca_titularidade',
+  'taxa_revistoria',
+  'multa_rastreador',
+] as const;
+
+const CHAVES_COMISSOES_REGRAS = [
+  'migracao_comprovantes_exigidos',
+  'migracao_prazo_resposta_horas',
+  'migracao_canal_oficial',
+  'migracao_isentar_carencia',
+  'prazo_reativacao_dias',
+  'repasse_maior_pct_favoravel',
+  'repasse_maior_pct_reduzido',
+  'repasse_maior_valor_favoravel',
+  'repasse_maior_valor_reduzido',
+  'repasse_maior_corte_boletos',
+] as const;
+
+export interface BuscarRegrasVendaResult {
+  regras: RegrasVendaData | null;
+  faltantes: string[];
+}
+
+/**
+ * Busca todas as configurações de Regras de Venda de ambas as tabelas.
+ * Retorna as regras prontas para injeção no template e a lista de chaves faltantes.
+ */
+export async function buscarRegrasVenda(supabase: any): Promise<BuscarRegrasVendaResult> {
+  const faltantes: string[] = [];
+
+  // 1. Buscar de configuracoes
+  const { data: dataConf } = await supabase
+    .from('configuracoes')
+    .select('chave, valor')
+    .in('chave', [...CHAVES_CONFIGURACOES_REGRAS]);
+
+  const confMap: Record<string, string> = {};
+  for (const row of (dataConf || [])) {
+    confMap[row.chave] = row.valor;
+  }
+
+  // 2. Buscar de comissoes_parametros
+  const { data: dataComissoes } = await supabase
+    .from('comissoes_parametros')
+    .select('chave, valor')
+    .in('chave', [...CHAVES_COMISSOES_REGRAS]);
+
+  const comMap: Record<string, string> = {};
+  for (const row of (dataComissoes || [])) {
+    comMap[row.chave] = row.valor;
+  }
+
+  // 3. Validar presença de todas as chaves
+  for (const chave of CHAVES_CONFIGURACOES_REGRAS) {
+    if (confMap[chave] == null) faltantes.push(`configuracoes.${chave}`);
+  }
+  for (const chave of CHAVES_COMISSOES_REGRAS) {
+    if (comMap[chave] == null) faltantes.push(`comissoes_parametros.${chave}`);
+  }
+
+  if (faltantes.length > 0) {
+    console.warn('[buscarRegrasVenda] Chaves faltantes:', faltantes);
+    return { regras: null, faltantes };
+  }
+
+  return {
+    regras: {
+      taxa_adesao_percentual_fipe: confMap['taxa_adesao_percentual_fipe'],
+      taxa_adesao_minimo_volante: confMap['taxa_adesao_minimo_volante'],
+      taxa_adesao_minimo_base: confMap['taxa_adesao_minimo_base'],
+      taxa_repasse_volante: confMap['taxa_repasse_volante'],
+      taxa_substituicao_placa: confMap['taxa_substituicao_placa'],
+      taxa_troca_titularidade: confMap['taxa_troca_titularidade'],
+      taxa_revistoria: confMap['taxa_revistoria'],
+      multa_rastreador: confMap['multa_rastreador'],
+      migracao_comprovantes_exigidos: comMap['migracao_comprovantes_exigidos'],
+      migracao_prazo_resposta_horas: comMap['migracao_prazo_resposta_horas'],
+      migracao_canal_oficial: comMap['migracao_canal_oficial'],
+      migracao_isentar_carencia: comMap['migracao_isentar_carencia'],
+      prazo_reativacao_dias: comMap['prazo_reativacao_dias'],
+      repasse_maior_pct_favoravel: comMap['repasse_maior_pct_favoravel'],
+      repasse_maior_pct_reduzido: comMap['repasse_maior_pct_reduzido'],
+      repasse_maior_valor_favoravel: comMap['repasse_maior_valor_favoravel'],
+      repasse_maior_valor_reduzido: comMap['repasse_maior_valor_reduzido'],
+      repasse_maior_corte_boletos: comMap['repasse_maior_corte_boletos'],
+    },
+    faltantes: [],
+  };
 }
