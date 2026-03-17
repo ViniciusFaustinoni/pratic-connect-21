@@ -123,11 +123,8 @@ export function useCalcularCotacao() {
         const tipoUsoPlano = plano.tipo_uso?.toLowerCase() || '';
         const categoriaPlano = plano.categoria?.toLowerCase() || '';
         const linhaPlano = plano.linha?.toLowerCase() || '';
-        const isPlanoAplicativo = tipoUsoPlano === 'aplicativo' || categoriaPlano === 'aplicativo';
-        const isMotoLine = linhaPlano === 'advanced' || categoriaPlano === 'advanced';
-
-        // Excluir variantes internas "aplicativo" — o preço app é resolvido pelo motor de pricing nos planos principais
-        if (isPlanoAplicativo && !isMotoLine) continue;
+        // Com visivel_gestao=true, variantes internas (ex: "SELECT EXCLUSIVE APLICATIVO") já são excluídas pelo filtro SQL.
+        // Nenhuma exclusão adicional necessária aqui — o preço app é resolvido dinamicamente pelo motor de pricing.
 
         // Filtrar linhas que não suportam uso de aplicativo (dinâmico via product_lines)
         const mappingPreview = planoPrecoMap.find(m => m.plano_id === plano.id);

@@ -155,11 +155,9 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
       const regiaoLower = regiao.toLowerCase();
       const combustivelLower = combustivel.toLowerCase();
 
-      // Filtrar por tipo uso
-      const planosFiltrados = planos.filter(p => {
-        const isApp = p.categoria === 'aplicativo' || p.codigo?.includes('aplicativo');
-        return usoAplicativo ? isApp : !isApp;
-      });
+      // Com visivel_gestao=true, só chegam planos principais (sem variantes internas).
+      // O preço app é resolvido dinamicamente pelo motor de pricing (resolverPrecoApp).
+      const planosFiltrados = planos;
 
       const resultado: PlanoOpcaoCotacao[] = [];
 
