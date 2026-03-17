@@ -176,7 +176,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('plano_elegibilidade_modelos')
-        .select('plano_id, marca, modelo, ano_min, ano_max, combustivel, status, observacao')
+        .select('plano_id, marca, modelo, ano_min, ano_max, combustivel, status, observacao, cobertura_fipe')
         .eq('is_active', true);
       if (error) throw error;
       return data ?? [];
@@ -227,14 +227,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     planoId: string,
     linha: string | null,
     veiculo: { marca: string; modelo: string; ano: number; combustivel: string },
-  ): 'aprovado' | 'limitado' | 'negado' {
+  ): { status: 'aprovado' | 'limitado' | 'negado'; coberturaFipe: number } {
     // Buscar regras por linha (família) — variantes compartilham elegibilidade
     const planosNaLinha = linha
       ? (planosBanco || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
       : [planoId];
     const regrasDoPlano = elegibilidadeData?.filter(e => planosNaLinha.includes(e.plano_id)) ?? [];
     // Sem configuração = aceita tudo
-    if (regrasDoPlano.length === 0) return 'aprovado';
+    if (regrasDoPlano.length === 0) return { status: 'aprovado', coberturaFipe: 100 };
 
     const marcaNormAPI = normalizarMarcaElegibilidade(veiculo.marca);
     const modeloAPI = veiculo.modelo.trim().toUpperCase();
@@ -282,10 +282,12 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     // Whitelist: modelo não encontrado na lista = negado
-    if (!regra) return 'negado';
-    if (regra.status === 'negado') return 'negado';
-    if (regra.status === 'limitado') return 'limitado';
-    return 'aprovado';
+    if (!regra) return { status: 'negado', coberturaFipe: 0 };
+    if (regra.status === 'negado') return { status: 'negado', coberturaFipe: 0 };
+    
+    const cobFipe = (regra as any).cobertura_fipe ?? 100;
+    if (regra.status === 'limitado') return { status: 'limitado', coberturaFipe: cobFipe };
+    return { status: 'aprovado', coberturaFipe: cobFipe };
   }
 
   // Montar ConfigAdicionalApp dinamicamente
@@ -389,6 +391,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Filtrar por elegibilidade de modelo (whitelist restritiva)
       const combustivelOriginal = (combustivel || 'flex').toLowerCase();
       let elegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined = undefined;
+      let elegibilidadeCoberturaFipe = 100;
 
       // Verificar se existem regras de elegibilidade para esta linha
       const planosNaLinhaIds = linha
@@ -398,7 +401,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       if (temRegrasElegibilidade) {
         if (params.marca && params.modelo && anoVeiculoNum) {
-          elegibilidadeStatus = verificarElegibilidadeModelo(
+          const resultado = verificarElegibilidadeModelo(
             plano.id,
             linha,
             {
@@ -408,6 +411,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
               combustivel: combustivelOriginal,
             },
           );
+          elegibilidadeStatus = resultado.status;
+          elegibilidadeCoberturaFipe = resultado.coberturaFipe;
         } else {
           // Regras existem mas não temos dados do veículo para validar → negar
           elegibilidadeStatus = 'negado';
@@ -545,7 +550,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         nivel,
         coberturas: coberturas as string[],
         naoInclui,
-        coberturaFipe: plano.cobertura_fipe || 100,
+        coberturaFipe: elegibilidadeStatus === 'limitado' && elegibilidadeCoberturaFipe < 100
+          ? elegibilidadeCoberturaFipe
+          : (plano.cobertura_fipe || 100),
         cota: cotaString,
         cotaPercentual,
         cotaMinima: cotaMinimaFinal,

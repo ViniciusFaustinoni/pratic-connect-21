@@ -28,6 +28,7 @@ import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
 import { useRegioes } from '@/hooks/useRegioes';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
+import { ElegibilidadeTab } from './ElegibilidadeTab';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { PlanWithDetails } from '@/hooks/usePlans';
@@ -441,10 +442,11 @@ export function PlanFormModal({
             <form onSubmit={handleSubmit} className="h-full flex flex-col">
               <ScrollArea className="flex-1 px-6">
                 <Tabs defaultValue="basico" className="pb-6">
-                  <TabsList className="mb-4">
+                  <TabsList className="mb-4 flex-wrap">
                     <TabsTrigger value="basico">Básico</TabsTrigger>
                     <TabsTrigger value="cotas">Cotas</TabsTrigger>
                     <TabsTrigger value="beneficios">Benefícios</TabsTrigger>
+                    <TabsTrigger value="elegibilidade" disabled={!isEditing}>Elegibilidade</TabsTrigger>
                     <TabsTrigger value="outros">Outros</TabsTrigger>
                   </TabsList>
 
@@ -765,6 +767,14 @@ export function PlanFormModal({
                       onChange={setSelectedBenefits}
                       onExclusionsChange={handleExclusionsChange}
                     />
+                  </TabsContent>
+
+                  <TabsContent value="elegibilidade">
+                    {plan?.id ? (
+                      <ElegibilidadeTab planoId={plan.id} linhaSlug={formData.linha_slug || ''} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground py-4">Salve o plano primeiro para configurar elegibilidade.</p>
+                    )}
                   </TabsContent>
 
                   <TabsContent value="outros" className="space-y-4">
