@@ -50,6 +50,7 @@ import { ExcluirAssociadoDialog, type TipoExclusao } from '@/components/cadastro
 import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastreador';
 import { supabase } from '@/integrations/supabase/client';
 import { SubstituicaoStatusCard } from '@/components/substituicao/SubstituicaoStatusCard';
+import { ReativacaoWizard } from '@/components/associados/reativacao/ReativacaoWizard';
 
 // New redesign components
 import { AssociadoHeroHeader } from '@/components/associados/detalhe/AssociadoHeroHeader';
