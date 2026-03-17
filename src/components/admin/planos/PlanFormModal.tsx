@@ -739,7 +739,7 @@ export function PlanFormModal({
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-xs">Mínimo (R$)</Label>
+                                  <Label className="text-xs">Mínimo (R$)<FieldHint text={PLAN_FIELD_HINTS.cota_minima_valor} /></Label>
                                   <Input
                                     type="number"
                                     step="0.01"
