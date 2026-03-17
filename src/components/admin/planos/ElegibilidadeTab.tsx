@@ -286,7 +286,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Combustível</Label>
+                <Label className="text-xs">Combustível<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_combustivel} /></Label>
                 <Select value={form.combustivel} onValueChange={(v) => setForm(f => ({ ...f, combustivel: v }))}>
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue />
