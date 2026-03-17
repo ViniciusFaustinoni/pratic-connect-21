@@ -459,7 +459,26 @@ export default function RegrasVenda() {
     });
   };
 
-  if (isLoading || isLoadingTaxas || isLoadingAutorizacoes) {
+  const handleSaveIndicacao = async () => {
+    setSavingIndicacao(true);
+    try {
+      for (const chave of INDICACAO_CHAVES) {
+        await supabase
+          .from('configuracoes')
+          .update({ valor: indicacao[chave], updated_at: new Date().toISOString() })
+          .eq('chave', chave);
+      }
+      queryClient.invalidateQueries({ queryKey: ['configuracoes-indicacao'] });
+      queryClient.invalidateQueries({ queryKey: ['configuracao'] });
+      toast.success('Configurações de indicação salvas com sucesso!');
+    } catch {
+      toast.error('Erro ao salvar configurações de indicação');
+    } finally {
+      setSavingIndicacao(false);
+    }
+  };
+
+  if (isLoading || isLoadingTaxas || isLoadingAutorizacoes || isLoadingIndicacao) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
