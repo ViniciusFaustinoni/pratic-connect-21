@@ -55,6 +55,7 @@ export function useCalcularCotacao() {
           .from('planos')
           .select('*')
           .eq('ativo', true)
+          .eq('visivel_gestao', true)
           .order('ordem', { ascending: true }),
         publicSupabase
           .from('plano_preco_map')
