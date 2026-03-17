@@ -264,6 +264,14 @@ export function useTaxaAdesaoMinimoVolante() {
   return useConfiguracaoNumero('taxa_adesao_minimo_volante', 100);
 }
 
+export function useTaxaAdesaoMinimoVolanteInterno() {
+  return useConfiguracaoNumero('taxa_adesao_minimo_volante_interno', 150);
+}
+
+export function useTaxaAdesaoMinimoVolanteExterno() {
+  return useConfiguracaoNumero('taxa_adesao_minimo_volante_externo', 50);
+}
+
 export function useTaxaAdesaoMinimoBase() {
   return useConfiguracaoNumero('taxa_adesao_minimo_base', 100);
 }

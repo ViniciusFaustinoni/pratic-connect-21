@@ -53,7 +53,7 @@ import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hoo
 
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
-import { useTemplateWhatsappCotacao, useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolante, useTaxaRepasseVolante, useCarenciaDiasPadrao, useMigracaoConfig } from '@/hooks/useConteudosSistema';
+import { useTemplateWhatsappCotacao, useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useCarenciaDiasPadrao, useMigracaoConfig } from '@/hooks/useConteudosSistema';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { BotaoGerarProposta } from '@/components/vendas/BotaoGerarProposta';
@@ -235,7 +235,8 @@ export default function CotadorPage() {
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
-  const { data: minimoAdesaoVolante = 100 } = useTaxaAdesaoMinimoVolante();
+  const { data: minimoVolanteInterno = 150 } = useTaxaAdesaoMinimoVolanteInterno();
+  const { data: minimoVolanteExterno = 50 } = useTaxaAdesaoMinimoVolanteExterno();
   const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
@@ -274,8 +275,7 @@ export default function CotadorPage() {
   const [cenarioExterno, setCenarioExterno] = useState<string | null>(null);
   const [tipoInstalacao, setTipoInstalacao] = useState<'rota' | 'base' | null>(null);
 
-  // Mínimo efetivo conforme tipo de instalação
-  const minimoAdesaoConfig = tipoInstalacao === 'rota' ? minimoAdesaoVolante : minimoAdesaoBase;
+  // Mínimo efetivo — derivado abaixo após usePermissions
 
   // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
@@ -315,6 +315,10 @@ export default function CotadorPage() {
   // Auth para obter profile do usuário atual
   const { profile } = useAuth();
   const { isVendedorExterno } = usePermissions();
+
+  // Mínimo efetivo conforme tipo de instalação e role do consultor
+  const minimoAdesaoVolante = isVendedorExterno ? minimoVolanteExterno : minimoVolanteInterno;
+  const minimoAdesaoConfig = tipoInstalacao === 'rota' ? minimoAdesaoVolante : minimoAdesaoBase;
 
   // Hooks Supabase
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();

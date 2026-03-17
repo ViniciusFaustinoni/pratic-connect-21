@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
-import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolante, useTaxaRepasseVolante, useCarenciaDiasPadrao, useMigracaoConfig } from '@/hooks/useConteudosSistema';
+import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useCarenciaDiasPadrao, useMigracaoConfig } from '@/hooks/useConteudosSistema';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -165,7 +165,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno } = usePermissions();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
-  const { data: minimoAdesaoVolante = 100 } = useTaxaAdesaoMinimoVolante();
+  const { data: minimoVolanteInterno = 150 } = useTaxaAdesaoMinimoVolanteInterno();
+  const { data: minimoVolanteExterno = 50 } = useTaxaAdesaoMinimoVolanteExterno();
   const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
@@ -176,6 +177,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const isCenarioIsento = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
 
   // Mínimo efetivo: volante quando cenário inclui rota
+  const minimoAdesaoVolante = isVendedorExterno ? minimoVolanteExterno : minimoVolanteInterno;
   const minimoAdesaoConfig = cenarioExterno?.includes('rota') ? minimoAdesaoVolante : minimoAdesaoBase;
   
   // Hook para verificar placa duplicada

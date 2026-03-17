@@ -85,7 +85,8 @@ const CHAVES_PARCIAL = ['pontos_troca_titularidade_parcial', 'pontos_substituica
 
 const TAXAS_CHAVES = [
   'taxa_adesao_percentual_fipe',
-  'taxa_adesao_minimo_volante',
+  'taxa_adesao_minimo_volante_interno',
+  'taxa_adesao_minimo_volante_externo',
   'taxa_adesao_minimo_base',
   'taxa_repasse_volante',
   'taxa_substituicao_placa',
@@ -98,7 +99,8 @@ type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
 
 const TAXAS_DEFAULTS: TaxasConfig = {
   taxa_adesao_percentual_fipe: '1',
-  taxa_adesao_minimo_volante: '100',
+  taxa_adesao_minimo_volante_interno: '150',
+  taxa_adesao_minimo_volante_externo: '50',
   taxa_adesao_minimo_base: '100',
   taxa_repasse_volante: '50',
   taxa_substituicao_placa: '50',
@@ -854,19 +856,36 @@ export default function RegrasVenda() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
-                <Label htmlFor="taxa_adesao_minimo_volante" className="flex-1 text-sm">
-                  Valor mínimo para vistoria volante (na residência do associado)
+                <Label htmlFor="taxa_adesao_minimo_volante_interno" className="flex-1 text-sm">
+                  Mínimo volante — Vendedor CLT (interno)
                 </Label>
                 <div className="flex items-center gap-1">
                   <span className="text-sm text-muted-foreground">R$</span>
                   <Input
-                    id="taxa_adesao_minimo_volante"
+                    id="taxa_adesao_minimo_volante_interno"
                     type="number"
                     min="0"
                     step="0.01"
                     className="w-28 text-right"
-                    value={taxas.taxa_adesao_minimo_volante}
-                    onChange={(e) => handleTaxaChange('taxa_adesao_minimo_volante', e.target.value)}
+                    value={taxas.taxa_adesao_minimo_volante_interno}
+                    onChange={(e) => handleTaxaChange('taxa_adesao_minimo_volante_interno', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_adesao_minimo_volante_externo" className="flex-1 text-sm">
+                  Mínimo volante — Vendedor Externo
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_adesao_minimo_volante_externo"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_adesao_minimo_volante_externo}
+                    onChange={(e) => handleTaxaChange('taxa_adesao_minimo_volante_externo', e.target.value)}
                   />
                 </div>
               </div>
