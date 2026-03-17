@@ -163,8 +163,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
     setShowForm(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (!form.marca.trim()) {
       toast.error('Informe a marca');
       return;
@@ -245,7 +244,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
               <X className="h-4 w-4" />
             </Button>
           </div>
-          <form onSubmit={handleSubmit} className="space-y-3">
+          <div className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Marca *<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_marca} /></Label>
@@ -336,13 +335,13 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
               </div>
             </div>
             <div className="flex gap-2 pt-1">
-              <Button type="submit" size="sm" disabled={saveMutation.isPending}>
+              <Button type="button" size="sm" disabled={saveMutation.isPending} onClick={handleSubmit}>
                 <Check className="h-3.5 w-3.5 mr-1" />
                 {editingId ? 'Salvar' : 'Adicionar'}
               </Button>
               <Button type="button" variant="outline" size="sm" onClick={resetForm}>Cancelar</Button>
             </div>
-          </form>
+          </div>
         </div>
       ) : (
         <Button variant="outline" size="sm" onClick={() => setShowForm(true)}>
