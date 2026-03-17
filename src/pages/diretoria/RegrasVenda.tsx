@@ -1013,6 +1013,233 @@ export default function RegrasVenda() {
             </Button>
           </div>
         </TabsContent>
+
+        {/* ═══════════ ABA AUTORIZAÇÕES E EXCEÇÕES ═══════════ */}
+        <TabsContent value="autorizacoes" className="space-y-6 mt-4">
+          {/* BLOCO 1 — Tabela de faixas de vendas */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Quantidade de exceções permitidas por desempenho</CardTitle>
+              <CardDescription>
+                Define quantas solicitações de redução de cota cada consultor pode abrir no mês atual, com base na quantidade de vendas confirmadas que ele teve no mês anterior.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Vendas mínimas (mês anterior)</TableHead>
+                    <TableHead>Vendas máximas (mês anterior)</TableHead>
+                    <TableHead>Solicitações permitidas</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {autorizacoes.faixas_vendas.map((faixa, i) => (
+                    <TableRow key={i}>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="w-24 text-right"
+                          value={faixa.min}
+                          onChange={(e) => handleFaixaChange(i, 'min', e.target.value)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="w-24 text-right"
+                          value={faixa.max ?? ''}
+                          placeholder="Sem limite"
+                          onChange={(e) => handleFaixaChange(i, 'max', e.target.value)}
+                        />
+                      </TableCell>
+                      <TableCell>
+                        <Input
+                          type="number"
+                          min="0"
+                          step="1"
+                          className="w-24 text-right"
+                          value={faixa.permitidas}
+                          onChange={(e) => handleFaixaChange(i, 'permitidas', e.target.value)}
+                        />
+                      </TableCell>
+                    </TableRow>
+                  ))}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 2 — Limite FIPE carros */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Valor máximo de FIPE para carros</CardTitle>
+              <CardDescription>
+                Veículos com valor FIPE acima deste limite não podem ter solicitação de redução de cota aprovada, salvo exceções específicas definidas abaixo.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="excecao_fipe_max_carro" className="flex-1 text-sm">
+                  Valor máximo de FIPE para carros
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="excecao_fipe_max_carro"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    className="w-32 text-right"
+                    value={autorizacoes.fipe_max_carro}
+                    onChange={(e) => setAutorizacoes(prev => ({ ...prev, fipe_max_carro: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 3 — Limite FIPE motos */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Valor máximo de FIPE para motos</CardTitle>
+              <CardDescription>
+                Motos com valor FIPE acima deste limite não podem ter solicitação de redução de cota aprovada.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="excecao_fipe_max_moto" className="flex-1 text-sm">
+                  Valor máximo de FIPE para motos
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="excecao_fipe_max_moto"
+                    type="number"
+                    min="0"
+                    step="1000"
+                    className="w-32 text-right"
+                    value={autorizacoes.fipe_max_moto}
+                    onChange={(e) => setAutorizacoes(prev => ({ ...prev, fipe_max_moto: e.target.value }))}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 4 — Exceções acima do limite */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Exceções permitidas acima do limite de FIPE</CardTitle>
+              <CardDescription>
+                Define em quais situações um veículo acima do limite configurado ainda pode ser aceito mediante análise.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="historico_boletos" className="flex-1 text-sm">
+                  Associado já ativo com histórico mínimo de boletos pagos
+                </Label>
+                <Switch
+                  id="historico_boletos"
+                  checked={autorizacoes.historico_boletos_ativo}
+                  onCheckedChange={(checked) =>
+                    setAutorizacoes(prev => ({ ...prev, historico_boletos_ativo: checked }))
+                  }
+                />
+              </div>
+              {autorizacoes.historico_boletos_ativo && (
+                <div className="flex items-center justify-between gap-4 ml-4 pl-4 border-l-2 border-border">
+                  <Label htmlFor="historico_boletos_minimo" className="flex-1 text-sm">
+                    Quantidade mínima de boletos pagos exigida
+                  </Label>
+                  <Input
+                    id="historico_boletos_minimo"
+                    type="number"
+                    min="1"
+                    step="1"
+                    className="w-24 text-right"
+                    value={autorizacoes.historico_boletos_minimo}
+                    onChange={(e) => setAutorizacoes(prev => ({ ...prev, historico_boletos_minimo: e.target.value }))}
+                  />
+                </div>
+              )}
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="zero_km" className="flex-1 text-sm">
+                  Veículo zero quilômetro com nota fiscal dentro do prazo
+                </Label>
+                <Switch
+                  id="zero_km"
+                  checked={autorizacoes.zero_km_ativo}
+                  onCheckedChange={(checked) =>
+                    setAutorizacoes(prev => ({ ...prev, zero_km_ativo: checked }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 5 — Restrições absolutas */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Veículos nunca autorizados</CardTitle>
+              <CardDescription>
+                Estas restrições não podem ser contornadas por nenhuma solicitação de exceção, independente do histórico ou perfil.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="restricao_mudanca_linha" className="flex-1 text-sm">
+                  Mudança de linha de produto não é autorizada
+                </Label>
+                <Switch
+                  id="restricao_mudanca_linha"
+                  checked={autorizacoes.restricao_mudanca_linha}
+                  onCheckedChange={(checked) =>
+                    setAutorizacoes(prev => ({ ...prev, restricao_mudanca_linha: checked }))
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="restricao_depreciacao" className="flex-1 text-sm">
+                  Veículos com depreciação não podem ser cadastrados em planos com cobertura 100%
+                </Label>
+                <Switch
+                  id="restricao_depreciacao"
+                  checked={autorizacoes.restricao_depreciacao_cobertura_100}
+                  onCheckedChange={(checked) =>
+                    setAutorizacoes(prev => ({ ...prev, restricao_depreciacao_cobertura_100: checked }))
+                  }
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="restricao_blindado" className="flex-1 text-sm">
+                  Veículos blindados não são autorizados em nenhuma hipótese
+                </Label>
+                <Switch
+                  id="restricao_blindado"
+                  checked={autorizacoes.restricao_blindado_absoluta}
+                  onCheckedChange={(checked) =>
+                    setAutorizacoes(prev => ({ ...prev, restricao_blindado_absoluta: checked }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botão Salvar */}
+          <div className="flex justify-end">
+            <Button onClick={handleSaveAutorizacoes} disabled={savingAutorizacoes} className="gap-2">
+              {savingAutorizacoes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar configurações
+            </Button>
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   );
