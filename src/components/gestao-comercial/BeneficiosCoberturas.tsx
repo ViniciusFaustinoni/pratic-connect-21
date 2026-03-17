@@ -48,7 +48,8 @@ export function BeneficiosCoberturas() {
     queryFn: async () => {
       const { data } = await supabase
         .from('planos_beneficios')
-        .select('benefit_id, plano_id, planos(nome)');
+        .select('benefit_id, plano_id, planos!inner(nome, visivel_gestao)')
+        .eq('planos.visivel_gestao', true);
       const map: Record<string, { plano_id: string; nome: string }[]> = {};
       data?.forEach((pb: any) => {
         if (!pb.benefit_id) return;
