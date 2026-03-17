@@ -97,6 +97,10 @@ export interface PrefilledCotacaoData {
   categoria?: string | null;
   regiao?: string;
   usoApp?: boolean;
+  indicacao?: {
+    indicador_id: string;
+    indicador_nome: string;
+  };
 }
 
 interface ContratoFormDialogProps {
