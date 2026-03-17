@@ -107,6 +107,55 @@ const TAXAS_DEFAULTS: TaxasConfig = {
   multa_rastreador: '400',
 };
 
+// ═══════════ AUTORIZAÇÕES E EXCEÇÕES ═══════════
+
+const AUTORIZACOES_CHAVES = [
+  'excecao_faixas_vendas',
+  'excecao_fipe_max_carro',
+  'excecao_fipe_max_moto',
+  'excecao_historico_boletos_ativo',
+  'excecao_historico_boletos_minimo',
+  'excecao_zero_km_ativo',
+  'restricao_mudanca_linha',
+  'restricao_depreciacao_cobertura_100',
+  'restricao_blindado_absoluta',
+] as const;
+
+interface FaixaVenda {
+  min: number;
+  max: number | null;
+  permitidas: number;
+}
+
+interface AutorizacoesConfig {
+  faixas_vendas: FaixaVenda[];
+  fipe_max_carro: string;
+  fipe_max_moto: string;
+  historico_boletos_ativo: boolean;
+  historico_boletos_minimo: string;
+  zero_km_ativo: boolean;
+  restricao_mudanca_linha: boolean;
+  restricao_depreciacao_cobertura_100: boolean;
+  restricao_blindado_absoluta: boolean;
+}
+
+const AUTORIZACOES_DEFAULTS: AutorizacoesConfig = {
+  faixas_vendas: [
+    { min: 0, max: 9, permitidas: 0 },
+    { min: 10, max: 19, permitidas: 1 },
+    { min: 20, max: 29, permitidas: 2 },
+    { min: 30, max: null, permitidas: 3 },
+  ],
+  fipe_max_carro: '120000',
+  fipe_max_moto: '27000',
+  historico_boletos_ativo: true,
+  historico_boletos_minimo: '6',
+  zero_km_ativo: true,
+  restricao_mudanca_linha: true,
+  restricao_depreciacao_cobertura_100: true,
+  restricao_blindado_absoluta: true,
+};
+
 function useTaxasConfiguracoes() {
   return useQuery({
     queryKey: ['configuracoes-taxas-adesao'],
