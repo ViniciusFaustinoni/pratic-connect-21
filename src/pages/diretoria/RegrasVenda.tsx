@@ -672,6 +672,207 @@ export default function RegrasVenda() {
             </Button>
           </div>
         </TabsContent>
+
+        {/* ═══════════ ABA TAXAS E ADESÃO ═══════════ */}
+        <TabsContent value="taxas-adesao" className="space-y-6 mt-4">
+          {/* BLOCO 1 — Cálculo da taxa de adesão */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Cálculo da taxa de adesão</CardTitle>
+              <CardDescription>
+                A taxa de adesão é calculada como um percentual do valor FIPE do veículo no momento da contratação.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_adesao_percentual_fipe" className="flex-1 text-sm">
+                  Percentual sobre o valor FIPE
+                </Label>
+                <div className="flex items-center gap-1">
+                  <Input
+                    id="taxa_adesao_percentual_fipe"
+                    type="number"
+                    min="0"
+                    step="0.1"
+                    className="w-24 text-right"
+                    value={taxas.taxa_adesao_percentual_fipe}
+                    onChange={(e) => handleTaxaChange('taxa_adesao_percentual_fipe', e.target.value)}
+                  />
+                  <span className="text-sm text-muted-foreground">%</span>
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 2 — Valores mínimos de adesão */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Valor mínimo por tipo de atendimento</CardTitle>
+              <CardDescription>
+                Define o menor valor aceitável para a taxa de adesão conforme o local onde a vistoria e instalação são realizadas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_adesao_minimo_volante" className="flex-1 text-sm">
+                  Valor mínimo para vistoria volante (na residência do associado)
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_adesao_minimo_volante"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_adesao_minimo_volante}
+                    onChange={(e) => handleTaxaChange('taxa_adesao_minimo_volante', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_adesao_minimo_base" className="flex-1 text-sm">
+                  Valor mínimo para atendimento na base administrativa
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_adesao_minimo_base"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_adesao_minimo_base}
+                    onChange={(e) => handleTaxaChange('taxa_adesao_minimo_base', e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 3 — Repasse volante */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Repasse para instalações fora da base</CardTitle>
+              <CardDescription>
+                Quando a vistoria e instalação são realizadas na residência do associado, há um repasse obrigatório à Praticcar.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_repasse_volante" className="flex-1 text-sm">
+                  Valor do repasse para instalação volante
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_repasse_volante"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_repasse_volante}
+                    onChange={(e) => handleTaxaChange('taxa_repasse_volante', e.target.value)}
+                  />
+                </div>
+              </div>
+              <Alert>
+                <Info className="h-4 w-4" />
+                <AlertDescription className="text-sm text-muted-foreground">
+                  Este repasse é obrigatório e se aplica também nos procedimentos de troca de titularidade e substituição de placa realizados fora da base.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 4 — Taxas de procedimentos administrativos */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Taxas para procedimentos específicos</CardTitle>
+              <CardDescription>
+                Valores cobrados para procedimentos que não são nova adesão.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_substituicao_placa" className="flex-1 text-sm">
+                  Taxa de substituição de placa
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_substituicao_placa"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_substituicao_placa}
+                    onChange={(e) => handleTaxaChange('taxa_substituicao_placa', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_troca_titularidade" className="flex-1 text-sm">
+                  Taxa de troca de titularidade
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_troca_titularidade"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_troca_titularidade}
+                    onChange={(e) => handleTaxaChange('taxa_troca_titularidade', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_revistoria" className="flex-1 text-sm">
+                  Taxa de revistoria
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_revistoria"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_revistoria}
+                    onChange={(e) => handleTaxaChange('taxa_revistoria', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="multa_rastreador" className="flex-1 text-sm">
+                  Multa por não devolução do rastreador
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="multa_rastreador"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.multa_rastreador}
+                    onChange={(e) => handleTaxaChange('multa_rastreador', e.target.value)}
+                  />
+                </div>
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botão Salvar */}
+          <div className="flex justify-end">
+            <Button onClick={handleSaveTaxas} disabled={savingTaxas} className="gap-2">
+              {savingTaxas ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar configurações
+            </Button>
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   );
