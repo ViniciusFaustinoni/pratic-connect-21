@@ -139,7 +139,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
   const { data: minimoVolanteInterno = 150 } = useTaxaAdesaoMinimoVolanteInterno();
   const { data: minimoVolanteExterno = 50 } = useTaxaAdesaoMinimoVolanteExterno();
-  const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
+  const { data: repasseVolanteInterno = 50 } = useTaxaRepasseVolante();
+  const { data: repasseVolanteExterno = 50 } = useTaxaRepasseVolanteExterno();
+  const repasseVolante = isVendedorExterno ? repasseVolanteExterno : repasseVolanteInterno;
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
   const { data: observacoesCategoria = {} } = useObservacoesCategoria();
