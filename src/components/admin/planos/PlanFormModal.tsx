@@ -630,7 +630,7 @@ export function PlanFormModal({
 
                     {/* Regiões */}
                     <div className="space-y-2">
-                      <Label>Regiões Disponíveis</Label>
+                      <Label>Regiões Disponíveis<FieldHint text={PLAN_FIELD_HINTS.regioes} /></Label>
                       <div className="grid grid-cols-2 gap-2">
                         {regioes?.filter(r => r.ativa).map((regiao) => (
                           <div key={regiao.id} className="flex items-center gap-2">
