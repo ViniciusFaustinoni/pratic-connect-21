@@ -289,12 +289,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     // Vendedor externo com cenário isento: não sobrescrever adesão zerada
     if (isCenarioIsento) return;
     if (valorFipe && valorFipe > 0 && !adesaoEditadaManualmente.current) {
-      const MINIMO_ADESAO = 100;
-      const adesaoCalculada = Math.max(valorFipe * 0.01, MINIMO_ADESAO);
+      const adesaoCalculada = Math.max(valorFipe * (percentualAdesaoConfig / 100), minimoAdesaoConfig);
       const adesaoArredondada = Math.round(adesaoCalculada * 100) / 100;
       form.setValue('valor_adesao', adesaoArredondada);
     }
-  }, [valorFipe, form, isCenarioIsento]);
+  }, [valorFipe, form, isCenarioIsento, percentualAdesaoConfig, minimoAdesaoConfig]);
   
   // Extrair ano numérico para o hook de planos
   const anoTexto = useMemo(() => {
