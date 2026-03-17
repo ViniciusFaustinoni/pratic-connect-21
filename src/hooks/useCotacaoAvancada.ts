@@ -166,8 +166,11 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
         const mapping = planoPrecoMap.find(m => m.plano_id === plano.id);
         if (!mapping) continue;
 
-        // Resolver tipo_uso para query (regras de adicional app)
-        const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiaoLower, mapping.tipo_uso, configApp);
+        // Resolver tipo_uso: se a linha tem tipo próprio (ex: advanced, advanced-plus), usa direto;
+        // senão, aplica a escolha do usuário (aplicativo/particular)
+        const isLinhaTipoUsoProprio = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
+        const tipoUsoEfetivo = isLinhaTipoUsoProprio ? mapping.tipo_uso : (usoAplicativo ? 'aplicativo' : 'particular');
+        const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiaoLower, tipoUsoEfetivo, configApp);
 
         // Buscar faixa de preço na nova tabela
         const faixa = tabelasMensalidade.find(t =>
