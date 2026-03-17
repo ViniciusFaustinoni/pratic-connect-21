@@ -177,6 +177,37 @@ function useTaxasConfiguracoes() {
   });
 }
 
+function useAutorizacoesConfiguracoes() {
+  return useQuery({
+    queryKey: ['configuracoes-autorizacoes-excecoes'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', [...AUTORIZACOES_CHAVES]);
+      if (error) throw error;
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      let faixas = AUTORIZACOES_DEFAULTS.faixas_vendas;
+      try {
+        if (map.excecao_faixas_vendas) faixas = JSON.parse(map.excecao_faixas_vendas);
+      } catch { /* keep default */ }
+      return {
+        faixas_vendas: faixas,
+        fipe_max_carro: map.excecao_fipe_max_carro ?? AUTORIZACOES_DEFAULTS.fipe_max_carro,
+        fipe_max_moto: map.excecao_fipe_max_moto ?? AUTORIZACOES_DEFAULTS.fipe_max_moto,
+        historico_boletos_ativo: map.excecao_historico_boletos_ativo !== 'false',
+        historico_boletos_minimo: map.excecao_historico_boletos_minimo ?? AUTORIZACOES_DEFAULTS.historico_boletos_minimo,
+        zero_km_ativo: map.excecao_zero_km_ativo !== 'false',
+        restricao_mudanca_linha: map.restricao_mudanca_linha !== 'false',
+        restricao_depreciacao_cobertura_100: map.restricao_depreciacao_cobertura_100 !== 'false',
+        restricao_blindado_absoluta: map.restricao_blindado_absoluta !== 'false',
+      } as AutorizacoesConfig;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
+
 export default function RegrasVenda() {
   const { parametros, isLoading, updateParametro } = useComissoesFaixas();
   const queryClient = useQueryClient();
