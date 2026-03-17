@@ -510,7 +510,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Determinar categoria de lookup para planos_cotas_categoria
       let cotaCategoriaLookup = categoria || 'passeio';
       if (params.usoApp) cotaCategoriaLookup = 'aplicativo';
-      if (elegibilidadeStatus === 'limitado') cotaCategoriaLookup = 'desagio';
+      if (elegibilidadeStatus === 'limitado' || isDesagio) cotaCategoriaLookup = 'desagio';
 
       // 1º: Tentar override da tabela planos_cotas_categoria
       const cotaCategoriaOverride = cotasCategoriaData?.find(
