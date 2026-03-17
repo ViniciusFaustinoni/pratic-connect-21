@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Info, X, Check } from 'lucide-react';
+import { FieldHint } from './FieldHint';
+import { PLAN_FIELD_HINTS } from './planFieldHints';
 import { COMBUSTIVEIS_FALLBACK } from '@/data/combustiveis';
 
 interface ElegibilidadeTabProps {

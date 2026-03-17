@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
+import { FieldHint } from './FieldHint';
+import { PLAN_FIELD_HINTS } from './planFieldHints';
 import {
   Dialog,
   DialogContent,
