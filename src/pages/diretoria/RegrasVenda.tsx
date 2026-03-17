@@ -1003,7 +1003,7 @@ export default function RegrasVenda() {
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
                 <Label htmlFor="taxa_repasse_volante" className="flex-1 text-sm">
-                  Valor do repasse para instalação volante
+                  Repasse volante — Vendedor CLT (interno)
                 </Label>
                 <div className="flex items-center gap-1">
                   <span className="text-sm text-muted-foreground">R$</span>
@@ -1018,10 +1018,27 @@ export default function RegrasVenda() {
                   />
                 </div>
               </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_repasse_volante_externo" className="flex-1 text-sm">
+                  Repasse volante — Vendedor Externo
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_repasse_volante_externo"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_repasse_volante_externo}
+                    onChange={(e) => handleTaxaChange('taxa_repasse_volante_externo', e.target.value)}
+                  />
+                </div>
+              </div>
               <Alert>
                 <Info className="h-4 w-4" />
                 <AlertDescription className="text-sm text-muted-foreground">
-                  Este repasse é obrigatório e se aplica também nos procedimentos de troca de titularidade e substituição de placa realizados fora da base.
+                  Este repasse é obrigatório e se aplica também nos procedimentos de troca de titularidade e substituição de placa realizados fora da base. O valor aplicado depende do tipo de vínculo do consultor (CLT ou externo).
                 </AlertDescription>
               </Alert>
             </CardContent>
