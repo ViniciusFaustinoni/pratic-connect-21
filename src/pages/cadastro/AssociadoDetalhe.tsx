@@ -970,6 +970,16 @@ export default function AssociadoDetalhe() {
           situacao={situacao}
         />
       )}
+
+      {/* Dialog Troca de Titularidade */}
+      {id && associado && (
+        <TrocaTitularidadeDialog
+          open={trocaTitularidadeOpen}
+          onOpenChange={setTrocaTitularidadeOpen}
+          associadoId={id}
+          associadoNome={associado.nome}
+        />
+      )}
     </div>
   );
 }
