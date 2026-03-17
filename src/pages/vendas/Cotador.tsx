@@ -286,6 +286,12 @@ export default function CotadorPage() {
   // Nome do associado (quando não vinculado a lead)
   const [nomeAssociado, setNomeAssociado] = useState('');
 
+  // Indicação
+  const [isIndicacao, setIsIndicacao] = useState(false);
+  const [indicadorId, setIndicadorId] = useState<string | null>(null);
+  const [indicadorNome, setIndicadorNome] = useState('');
+  const [buscaIndicador, setBuscaIndicador] = useState('');
+
   // Cotação
   const [isCalculando, setIsCalculando] = useState(false);
   const [cotacaoCalculada, setCotacaoCalculada] = useState(false);

@@ -544,6 +544,8 @@ export function useCriarCotacao() {
         regiao: payload.regiao || null,
         nome_solicitante: payload.nome_solicitante || null,
         tipo_instalacao: payload.tipo_instalacao || null,
+        indicador_id: payload.indicador_id || null,
+        indicador_nome: payload.indicador_nome || null,
       };
 
       const { data, error } = await supabase
