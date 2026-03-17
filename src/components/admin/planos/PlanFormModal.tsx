@@ -477,7 +477,7 @@ export function PlanFormModal({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="product_line_id">Linha de Produto *</Label>
+                      <Label htmlFor="product_line_id">Linha de Produto *<FieldHint text={PLAN_FIELD_HINTS.product_line_id} /></Label>
                       <Select
                         value={formData.product_line_id}
                         onValueChange={(value) =>
