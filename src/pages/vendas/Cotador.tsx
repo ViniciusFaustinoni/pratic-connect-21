@@ -1599,6 +1599,40 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               </div>
             </div>
 
+            {/* Blocos informativos dinâmicos */}
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+              {/* Repasse volante */}
+              {tipoInstalacao === 'rota' && (
+                <Alert className="border-amber-500/50 bg-amber-500/10">
+                  <DollarSign className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-sm">
+                    <span className="font-medium">Repasse obrigatório:</span> {formatCurrency(repasseVolante)} será descontado (instalação rota).
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Carência */}
+              <Alert className="border-blue-500/50 bg-blue-500/10">
+                <AlertCircle className="h-4 w-4 text-blue-500" />
+                <AlertDescription className="text-sm">
+                  <span className="font-medium">Carência:</span>{' '}
+                  {migracaoConfig?.isentar_carencia && cenarioExterno === 'cobra_rota'
+                    ? 'Sem carência (migração aprovada)'
+                    : `${carenciaDias} dias`}
+                </AlertDescription>
+              </Alert>
+            </div>
+
+            {/* Alerta de adesão abaixo do mínimo */}
+            {valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base') && (
+              <Alert className="border-destructive/50 bg-destructive/10">
+                <AlertTriangle className="h-4 w-4 text-destructive" />
+                <AlertDescription className="text-sm text-destructive">
+                  Valor de adesão ({formatCurrency(valorAdesaoCustom)}) abaixo do mínimo configurado ({formatCurrency(minimoAdesaoConfig)}).
+                </AlertDescription>
+              </Alert>
+            )}
+
             {/* Box de valores */}
             <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
               <div className="grid grid-cols-3 gap-4 text-center">
@@ -1610,9 +1644,17 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     step={0.01}
                     value={valorAdesaoCustom ?? ''}
                     onChange={(e) => setValorAdesaoCustom(parseFloat(e.target.value) || 0)}
-                    className="text-center font-bold text-lg h-10"
+                    className={cn(
+                      "text-center font-bold text-lg h-10",
+                      valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base')
+                        ? "border-destructive text-destructive"
+                        : ""
+                    )}
                     disabled={isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base')}
                   />
+                  <p className="text-[10px] text-muted-foreground mt-0.5">
+                    Sugerido: {percentualAdesaoConfig}% da FIPE (mín. {formatCurrency(minimoAdesaoConfig)})
+                  </p>
                 </div>
                 <div>
                   <p className="text-xs text-muted-foreground uppercase">Mensal</p>
