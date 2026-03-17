@@ -1321,7 +1321,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     <RadioGroupItem value="cobra_rota" className="mt-0.5" />
                     <div>
                       <p className="font-medium text-sm">Cobrar adesão + Instalação na rota</p>
-                      <p className="text-xs text-muted-foreground">R$ 50 descontado da adesão para cobrir a rota. Sem desconto no recorrente.</p>
+                      <p className="text-xs text-muted-foreground">{formatCurrency(repasseVolante)} descontado da adesão para cobrir a rota. Sem desconto no recorrente.</p>
                     </div>
                   </label>
                   <label
