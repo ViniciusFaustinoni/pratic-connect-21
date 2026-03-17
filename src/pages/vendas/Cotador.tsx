@@ -274,6 +274,9 @@ export default function CotadorPage() {
   const [cenarioExterno, setCenarioExterno] = useState<string | null>(null);
   const [tipoInstalacao, setTipoInstalacao] = useState<'rota' | 'base' | null>(null);
 
+  // Mínimo efetivo conforme tipo de instalação
+  const minimoAdesaoConfig = tipoInstalacao === 'rota' ? minimoAdesaoVolante : minimoAdesaoBase;
+
   // Lead
   const [leadSelecionado, setLeadSelecionado] = useState<LeadDB | null>(null);
   const [buscaLead, setBuscaLead] = useState('');
