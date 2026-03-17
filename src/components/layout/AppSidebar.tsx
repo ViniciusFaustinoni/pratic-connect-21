@@ -182,6 +182,7 @@ const menuConfig: {
         { title: 'Propostas Pendentes', url: '/cadastro/propostas', icon: ClipboardCheck },
         { title: 'Associados', url: '/cadastro/associados', icon: Users },
         { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
+        { title: 'Processos', url: '/cadastro/processos', icon: ClipboardList },
         { title: 'Substituições', url: '/cadastro/substituicoes', icon: RefreshCw },
         { title: 'Recusas do Instalador', url: '/cadastro/recusas-instalador', icon: ShieldAlert },
     ],

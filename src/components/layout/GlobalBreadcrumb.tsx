@@ -33,6 +33,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/cadastro/veiculos': { label: 'Veículos' },
   '/cadastro/documentos': { label: 'Documentos' },
   '/cadastro/fila-documentos': { label: 'Fila de Documentos' },
+  '/cadastro/processos': { label: 'Processos' },
   '/cadastro/substituicoes': { label: 'Substituições' },
   
   // Eventos
