@@ -68,7 +68,7 @@ export function useCalcularCotacao() {
         publicSupabase
           .from('configuracoes')
           .select('chave, valor')
-          .in('chave', ['taxa_fallback_carro', 'adicional_app', 'adesao_minima', 'regioes_com_adicional_app']),
+        .in('chave', ['taxa_fallback_carro', 'adicional_app', 'adesao_minima', 'regioes_com_adicional_app', 'taxa_adesao_percentual_fipe', 'taxa_adesao_minimo_base']),
         publicSupabase
           .from('product_lines')
           .select('slug, supports_app'),
