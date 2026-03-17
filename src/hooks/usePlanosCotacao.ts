@@ -525,7 +525,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         // 2º: Fallback para campos do plano (app)
         cotaPercentual = plano.cota_desagio != null ? Number(plano.cota_desagio) : cotaDesagioDefault;
         cotaMinimaFinal = plano.cota_minima_desagio != null ? Number(plano.cota_minima_desagio) : cotaMinimaDesagioDefault;
-      } else if (elegibilidadeStatus === 'limitado') {
+      } else if (elegibilidadeStatus === 'limitado' || isDesagio) {
         // 2º: Fallback para campos do plano (deságio)
         cotaPercentual = plano.cota_desagio != null ? Number(plano.cota_desagio) : cotaDesagioDefault;
         cotaMinimaFinal = plano.cota_minima_desagio != null ? Number(plano.cota_minima_desagio) : cotaMinimaDesagioDefault;
