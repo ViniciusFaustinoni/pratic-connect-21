@@ -220,6 +220,12 @@ const menuConfig: {
           url: '/monitoramento/ressalvas-pendentes',
           icon: AlertTriangle,
         },
+        {
+          title: 'Acionamentos Roubo/Furto',
+          url: '/monitoramento/acionamentos-roubo',
+          icon: ShieldAlert,
+          permission: 'canManageRastreadores',
+        },
       ],
     },
     {
