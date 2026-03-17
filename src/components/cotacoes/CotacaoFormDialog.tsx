@@ -163,6 +163,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: vendedores = [], isLoading: vendedoresLoading } = useVendedores();
   const { user, profile } = useAuth();
   const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno } = usePermissions();
+  const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
+  const { data: minimoAdesaoConfig = 100 } = useTaxaAdesaoMinimoBase();
   
   // Estado do cenário de adesão para vendedor externo
   type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
