@@ -43,7 +43,7 @@ export function useAprovacoesFipeLimite(statusFilter?: string) {
   return useQuery({
     queryKey: ['aprovacoes-fipe-limite', statusFilter],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from('aprovacoes_fipe_limite')
         .select(`
           *,
@@ -61,7 +61,7 @@ export function useAprovacoesFipeLimite(statusFilter?: string) {
 
       const { data, error } = await query;
       if (error) throw error;
-      return (data || []) as unknown as AprovacaoFipeLimite[];
+      return (data || []) as AprovacaoFipeLimite[];
     },
   });
 }
@@ -71,7 +71,7 @@ export function useAprovacaoFipeLimitePorCotacao(cotacaoId: string | undefined) 
     queryKey: ['aprovacao-fipe-limite-cotacao', cotacaoId],
     queryFn: async () => {
       if (!cotacaoId) return null;
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('aprovacoes_fipe_limite')
         .select('id, status')
         .eq('cotacao_id', cotacaoId)
@@ -100,7 +100,7 @@ export function useAprovarFipeLimite() {
     }) => {
       const { data: currentUser } = await supabase.auth.getUser();
 
-      const { error: updateErr } = await supabase
+      const { error: updateErr } = await (supabase as any)
         .from('aprovacoes_fipe_limite')
         .update({
           status: 'aprovado',
@@ -113,7 +113,7 @@ export function useAprovarFipeLimite() {
 
       if (updateErr) throw updateErr;
 
-      const { error: cotErr } = await supabase
+      const { error: cotErr } = await (supabase as any)
         .from('cotacoes')
         .update({ fipe_limite_aprovado: true })
         .eq('id', cotacao_id);
@@ -147,7 +147,7 @@ export function useRecusarFipeLimite() {
     }) => {
       const { data: currentUser } = await supabase.auth.getUser();
 
-      const { error: updateErr } = await supabase
+      const { error: updateErr } = await (supabase as any)
         .from('aprovacoes_fipe_limite')
         .update({
           status: 'recusado',
@@ -160,7 +160,7 @@ export function useRecusarFipeLimite() {
 
       if (updateErr) throw updateErr;
 
-      const { error: cotErr } = await supabase
+      const { error: cotErr } = await (supabase as any)
         .from('cotacoes')
         .update({ fipe_limite_aprovado: false })
         .eq('id', cotacao_id);
@@ -197,7 +197,7 @@ export function useCriarSolicitacaoFipeLimite() {
     }) => {
       const { data: currentUser } = await supabase.auth.getUser();
 
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('aprovacoes_fipe_limite')
         .insert({
           ...data,
