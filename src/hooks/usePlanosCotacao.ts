@@ -343,9 +343,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const requiresRecentYear = plProductLine?.requires_recent_year || false;
       const sortPriority = plProductLine?.sort_priority || 100;
 
-      // Excluir variantes internas "aplicativo" — o preço app é resolvido pelo motor de pricing nos planos principais
-      const isPlanoAplicativo = tipoUsoPlano === 'aplicativo' || categoriaPlano === 'aplicativo';
-      if (isPlanoAplicativo) continue;
+      // Filtrar por tipo de uso: passeio vs aplicativo
+      if (params.usoApp && tipoUsoPlano !== 'aplicativo') continue;
+      if (!params.usoApp && tipoUsoPlano === 'aplicativo') continue;
 
       // Filtrar motos/carros/elétricos usando vehicle_type e linha_slug do banco
       const plSlug = plProductLine?.slug?.toLowerCase() || '';
