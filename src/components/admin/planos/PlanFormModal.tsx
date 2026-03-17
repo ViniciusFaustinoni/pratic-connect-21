@@ -562,7 +562,7 @@ export function PlanFormModal({
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="min_vehicle_year">Ano Mínimo</Label>
+                        <Label htmlFor="min_vehicle_year">Ano Mínimo<FieldHint text={PLAN_FIELD_HINTS.min_vehicle_year} /></Label>
                         <Input
                           id="min_vehicle_year"
                           value={formData.min_vehicle_year}
