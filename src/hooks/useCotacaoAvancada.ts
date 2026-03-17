@@ -166,6 +166,9 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
         const mapping = planoPrecoMap.find(m => m.plano_id === plano.id);
         if (!mapping) continue;
 
+        // Se uso aplicativo, excluir linhas que não suportam app
+        if (usoAplicativo && !configApp.linhasSupportsApp.includes(mapping.linha_slug.toLowerCase())) continue;
+
         // Resolver tipo_uso: se a linha tem tipo próprio (ex: advanced, advanced-plus), usa direto;
         // senão, aplica a escolha do usuário (aplicativo/particular)
         const isLinhaTipoUsoProprio = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
