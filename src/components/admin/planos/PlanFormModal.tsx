@@ -579,7 +579,7 @@ export function PlanFormModal({
 
                     {/* Tabela de Preços (linha_slug) */}
                     <div className="space-y-2">
-                      <Label>Tabela de Preços (Linha)</Label>
+                      <Label>Tabela de Preços (Linha)<FieldHint text={PLAN_FIELD_HINTS.linha_slug} /></Label>
                       <Select
                         value={formData.linha_slug}
                         onValueChange={(value) =>
