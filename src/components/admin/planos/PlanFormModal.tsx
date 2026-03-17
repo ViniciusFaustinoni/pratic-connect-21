@@ -781,7 +781,7 @@ export function PlanFormModal({
 
                   <TabsContent value="outros" className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="restriction_alert">Alerta de Restrição</Label>
+                      <Label htmlFor="restriction_alert">Alerta de Restrição<FieldHint text={PLAN_FIELD_HINTS.restriction_alert} /></Label>
                       <Textarea
                         id="restriction_alert"
                         value={formData.restriction_alert}
