@@ -6,6 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { AssociadoSituacaoCard } from './AssociadoSituacaoCard';
+import type { SituacaoAssociado } from '@/hooks/useAssociadoSituacao';
 
 interface AssociadoResumoTabProps {
   stats: any;
@@ -14,6 +16,7 @@ interface AssociadoResumoTabProps {
   associado: any;
   historico: any[] | undefined;
   isLoadingHistorico: boolean;
+  situacao?: SituacaoAssociado;
 }
 
 const formatDate = (d: string | null | undefined) =>
