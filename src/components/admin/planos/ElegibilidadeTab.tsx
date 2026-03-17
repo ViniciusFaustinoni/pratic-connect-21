@@ -335,7 +335,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
               </div>
             </div>
             <div className="flex gap-2 pt-1">
-              <Button type="submit" size="sm" disabled={saveMutation.isPending}>
+              <Button type="button" size="sm" disabled={saveMutation.isPending} onClick={handleSubmit}>
                 <Check className="h-3.5 w-3.5 mr-1" />
                 {editingId ? 'Salvar' : 'Adicionar'}
               </Button>
