@@ -76,7 +76,7 @@ const formatCurrency = (v: number | null | undefined) =>
 
 export function AssociadoHeroHeader({
   associado, status, statusLabel, statusColor, contrato, resumoFinanceiro,
-  veiculosComRastreador, statusPlataforma, permissions, docsPendentes,
+  veiculosComRastreador, statusPlataforma, permissions, docsPendentes, coberturasSuspensas,
   onSuspender, onReativar, onCancelar, onAbrirMapa, onWhatsApp, onEmail,
   onSincronizar, onExcluir, setActiveTab, isReativando, isSincronizando,
 }: AssociadoHeroHeaderProps) {
