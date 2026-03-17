@@ -303,6 +303,10 @@ export function BenefitsSelector({
   return (
     <ScrollArea className="h-[500px] pr-4">
       <div className="space-y-6">
+        <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 border text-sm text-muted-foreground">
+          <Info className="h-4 w-4 mt-0.5 shrink-0" />
+          <p>{PLAN_FIELD_HINTS.beneficios}</p>
+        </div>
         {Object.entries(groupedBenefits).map(([category, categoryBenefits]) => (
           <div key={category}>
             <h4 className="text-sm font-semibold text-muted-foreground mb-2">

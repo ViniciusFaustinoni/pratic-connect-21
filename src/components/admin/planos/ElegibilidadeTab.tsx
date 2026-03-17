@@ -326,7 +326,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Observação</Label>
+                <Label className="text-xs">Observação<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_observacao} /></Label>
                 <Input
                   value={form.observacao}
                   onChange={(e) => setForm(f => ({ ...f, observacao: e.target.value }))}
