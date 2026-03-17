@@ -226,6 +226,7 @@ export default function AssociadoDetalhe() {
   const ativarRastreadorMutation = useAtivarRastreadorPlataforma();
   const { data: statusPlataforma } = useStatusClienteRedeVeiculos(id);
   const sincronizarStatusMutation = useSincronizarStatusRedeVeiculos();
+  const situacao = useAssociadoSituacao(id, contrato?.id);
 
   // Handlers
   const handleWhatsApp = () => {
