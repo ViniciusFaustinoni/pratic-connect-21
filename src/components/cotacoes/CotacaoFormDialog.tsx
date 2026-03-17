@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
-import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useCarenciaDiasPadrao, useMigracaoConfig, useObservacoesCategoria } from '@/hooks/useConteudosSistema';
+import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useMigracaoConfig, useObservacoesCategoria } from '@/hooks/useConteudosSistema';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -139,7 +139,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
   const { data: minimoVolanteInterno = 150 } = useTaxaAdesaoMinimoVolanteInterno();
   const { data: minimoVolanteExterno = 50 } = useTaxaAdesaoMinimoVolanteExterno();
-  const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
+  const { data: repasseVolanteInterno = 50 } = useTaxaRepasseVolante();
+  const { data: repasseVolanteExterno = 50 } = useTaxaRepasseVolanteExterno();
+  const repasseVolante = isVendedorExterno ? repasseVolanteExterno : repasseVolanteInterno;
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
   const { data: observacoesCategoria = {} } = useObservacoesCategoria();

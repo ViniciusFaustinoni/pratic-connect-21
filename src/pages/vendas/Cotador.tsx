@@ -53,7 +53,7 @@ import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hoo
 
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
-import { useTemplateWhatsappCotacao, useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useCarenciaDiasPadrao, useMigracaoConfig } from '@/hooks/useConteudosSistema';
+import { useTemplateWhatsappCotacao, useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useMigracaoConfig } from '@/hooks/useConteudosSistema';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { BotaoGerarProposta } from '@/components/vendas/BotaoGerarProposta';
@@ -237,7 +237,8 @@ export default function CotadorPage() {
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
   const { data: minimoVolanteInterno = 150 } = useTaxaAdesaoMinimoVolanteInterno();
   const { data: minimoVolanteExterno = 50 } = useTaxaAdesaoMinimoVolanteExterno();
-  const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
+  const { data: repasseVolanteInterno = 50 } = useTaxaRepasseVolante();
+  const { data: repasseVolanteExterno = 50 } = useTaxaRepasseVolanteExterno();
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
   
@@ -319,6 +320,7 @@ export default function CotadorPage() {
   // Mínimo efetivo conforme tipo de instalação e role do consultor
   const minimoAdesaoVolante = isVendedorExterno ? minimoVolanteExterno : minimoVolanteInterno;
   const minimoAdesaoConfig = tipoInstalacao === 'rota' ? minimoAdesaoVolante : minimoAdesaoBase;
+  const repasseVolante = isVendedorExterno ? repasseVolanteExterno : repasseVolanteInterno;
 
   // Hooks Supabase
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();

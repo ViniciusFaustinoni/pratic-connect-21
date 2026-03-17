@@ -280,6 +280,10 @@ export function useTaxaRepasseVolante() {
   return useConfiguracaoNumero('taxa_repasse_volante', 50);
 }
 
+export function useTaxaRepasseVolanteExterno() {
+  return useConfiguracaoNumero('taxa_repasse_volante_externo', 50);
+}
+
 export function useTaxaSubstituicaoPlaca() {
   return useConfiguracaoNumero('taxa_substituicao_placa', 50);
 }
