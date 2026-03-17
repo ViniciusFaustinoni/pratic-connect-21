@@ -725,6 +725,8 @@ export default function CotadorPage() {
         veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
         valor_adesao: valorAdesaoCustom ?? undefined,
         tipo_instalacao: tipoInstalacao || undefined,
+        indicador_id: indicadorId || null,
+        indicador_nome: indicadorNome || null,
       });
 
       setCotacaoSalva(cotacaoData);
