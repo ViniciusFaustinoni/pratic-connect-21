@@ -517,7 +517,7 @@ export function PlanFormModal({
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="badge_text">Badge</Label>
+                        <Label htmlFor="badge_text">Badge<FieldHint text={PLAN_FIELD_HINTS.badge_text} /></Label>
                         <Input
                           id="badge_text"
                           value={formData.badge_text}
