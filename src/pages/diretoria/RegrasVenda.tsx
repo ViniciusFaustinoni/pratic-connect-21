@@ -235,6 +235,14 @@ export default function RegrasVenda() {
     }
   }, [taxasDB, taxasInitialized]);
 
+  // Initialize autorizacoes from DB
+  useEffect(() => {
+    if (autorizacoesDB && !autorizacoesInitialized) {
+      setAutorizacoes(autorizacoesDB);
+      setAutorizacoesInitialized(true);
+    }
+  }, [autorizacoesDB, autorizacoesInitialized]);
+
   // Initialize state from DB
   useEffect(() => {
     if (!parametros.length || initialized) return;
