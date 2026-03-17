@@ -8,11 +8,21 @@ import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { useVeiculosAceitos, useMotosAceitas } from '@/hooks/useConteudosSistema';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
+import { useProductLines } from '@/hooks/usePlans';
 import { Car, Bike, Loader2 } from 'lucide-react';
 
 export function VeiculosAceitosCarros() {
   const { data: veiculosAceitos = {}, isLoading } = useVeiculosAceitos();
+  const { data: productLines } = useProductLines();
   const marcas = Object.entries(veiculosAceitos);
+
+  // Montar texto dinâmico com nomes das linhas de carros
+  const linhasCarros = productLines
+    ?.filter(pl => pl.tipo_veiculo === 'carro' && pl.is_active)
+    .map(pl => pl.name) || [];
+  const textoLinhas = linhasCarros.length > 0
+    ? `Válido para ${linhasCarros.join(', ')}`
+    : 'Válido para todas as linhas de carros';
 
   if (isLoading) {
     return (
@@ -32,7 +42,7 @@ export function VeiculosAceitosCarros() {
           <CardTitle className="text-lg">Veículos Aceitos</CardTitle>
         </div>
         <p className="text-sm text-muted-foreground">
-          Válido para Select, Select One e Lançamento
+          {textoLinhas}
         </p>
       </CardHeader>
       <CardContent className="pt-0">
