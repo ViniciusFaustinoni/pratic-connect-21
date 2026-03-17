@@ -257,7 +257,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Modelo</Label>
+                <Label className="text-xs">Modelo<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_modelo} /></Label>
                 <Input
                   value={form.modelo}
                   onChange={(e) => setForm(f => ({ ...f, modelo: e.target.value.toUpperCase() }))}
