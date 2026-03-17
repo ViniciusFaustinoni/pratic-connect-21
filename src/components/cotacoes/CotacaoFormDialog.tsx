@@ -164,7 +164,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { user, profile } = useAuth();
   const { userId, isDiretor, isGerente, isSupervisor, isVendedorExterno } = usePermissions();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
-  const { data: minimoAdesaoConfig = 100 } = useTaxaAdesaoMinimoBase();
+  const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
+  const { data: minimoAdesaoVolante = 100 } = useTaxaAdesaoMinimoVolante();
+  const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
+  const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
+  const { data: migracaoConfig } = useMigracaoConfig();
+  
+  // Mínimo efetivo: volante quando cenário inclui rota
+  const minimoAdesaoConfig = cenarioExterno?.includes('rota') ? minimoAdesaoVolante : minimoAdesaoBase;
   
   // Estado do cenário de adesão para vendedor externo
   type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
