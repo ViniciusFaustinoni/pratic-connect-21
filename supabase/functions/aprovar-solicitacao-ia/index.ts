@@ -668,7 +668,7 @@ serve(async (req) => {
         console.error("[aprovar-solicitacao-ia] Erro ao enviar WhatsApp de troca:", whatsErr);
       }
 
-      // === PONTUAR CONSULTOR — TROCA DE TITULARIDADE ===
+      // === PONTUAR CONSULTOR — TROCA DE TITULARIDADE (com validação repasse maior) ===
       try {
         // Buscar vendedor do contrato do associado
         const { data: contratoTroca } = await supabaseAdmin
@@ -681,6 +681,68 @@ serve(async (req) => {
           .maybeSingle();
 
         if (contratoTroca?.vendedor_id) {
+          // Determinar se pagamento é integral verificando boletos em aberto
+          let pagamentoIntegralTroca = true;
+
+          // Buscar boletos pendentes do associado
+          const { data: boletosPendentes } = await supabaseAdmin
+            .from("asaas_cobrancas")
+            .select("id, valor, pagamento_valor")
+            .eq("associado_id", solicitacao.associado_id)
+            .in("status", ["PENDING", "OVERDUE"])
+            .order("data_vencimento", { ascending: true })
+            .limit(1);
+
+          if (boletosPendentes && boletosPendentes.length > 0) {
+            const boletoPendente = boletosPendentes[0];
+            const valorPagoBoleto = boletoPendente.pagamento_valor || 0;
+            pagamentoIntegralTroca = valorPagoBoleto >= boletoPendente.valor;
+
+            // Se parcial, validar regras de repasse maior
+            if (!pagamentoIntegralTroca && valorPagoBoleto > 0) {
+              const { data: repasseParams } = await supabaseAdmin
+                .from("comissoes_parametros")
+                .select("chave, valor")
+                .in("chave", [
+                  "repasse_maior_corte_boletos",
+                  "repasse_maior_pct_favoravel",
+                  "repasse_maior_valor_favoravel",
+                  "repasse_maior_pct_reduzido",
+                  "repasse_maior_valor_reduzido",
+                ]);
+
+              if (repasseParams && repasseParams.length > 0) {
+                const paramMap: Record<string, number> = {};
+                for (const rp of repasseParams) {
+                  paramMap[rp.chave] = parseFloat(rp.valor) || 0;
+                }
+
+                const { count: totalBoletosPagos } = await supabaseAdmin
+                  .from("asaas_cobrancas")
+                  .select("id", { count: "exact", head: true })
+                  .eq("associado_id", solicitacao.associado_id)
+                  .eq("status", "RECEIVED");
+
+                const corteBoletos = paramMap["repasse_maior_corte_boletos"] || 4;
+                const grupoFavoravel = (totalBoletosPagos || 0) >= corteBoletos;
+
+                const pct = grupoFavoravel
+                  ? (paramMap["repasse_maior_pct_favoravel"] || 50)
+                  : (paramMap["repasse_maior_pct_reduzido"] || 70);
+                const valorFixo = grupoFavoravel
+                  ? (paramMap["repasse_maior_valor_favoravel"] || 100)
+                  : (paramMap["repasse_maior_valor_reduzido"] || 150);
+
+                const debitoPendente = boletoPendente.valor;
+                const valorMinimoAceitavel = Math.max(debitoPendente * (pct / 100), valorFixo);
+
+                if (valorPagoBoleto < valorMinimoAceitavel) {
+                  console.log(`[aprovar-solicitacao-ia] Troca: pagamento parcial R$${valorPagoBoleto} abaixo do mínimo R$${valorMinimoAceitavel}`);
+                }
+              }
+            }
+          }
+
           await fetch(`${SUPABASE_URL}/functions/v1/pontuar-operacao`, {
             method: "POST",
             headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
@@ -690,10 +752,10 @@ serve(async (req) => {
               contrato_id: contratoTroca.id,
               referencia_tipo: "solicitacao_ia",
               referencia_id: solicitacao.id,
-              pagamento_integral: true, // Será refinado quando houver cobrança vinculada
+              pagamento_integral: pagamentoIntegralTroca,
             }),
           });
-          console.log(`[aprovar-solicitacao-ia] Pontuação troca_titularidade enviada para vendedor ${contratoTroca.vendedor_id}`);
+          console.log(`[aprovar-solicitacao-ia] Pontuação troca_titularidade enviada para vendedor ${contratoTroca.vendedor_id} (integral: ${pagamentoIntegralTroca})`);
         }
       } catch (pontErr) {
         console.error("[aprovar-solicitacao-ia] Erro ao pontuar troca de titularidade:", pontErr);

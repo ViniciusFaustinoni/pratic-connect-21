@@ -231,7 +231,7 @@ Deno.serve(async (req) => {
       results.push({ step: 11, name: 'Registrar no histórico', success: false, error: (e as Error).message })
     }
 
-    // ─── STEP 12: Creditar consultor (pontuação dinâmica — integral vs parcial) ───
+    // ─── STEP 12: Validar repasse maior + Creditar consultor ───
     try {
       if (substituicao.consultor_id) {
         // Determinar se pagamento da taxa foi integral ou parcial
@@ -244,7 +244,59 @@ Deno.serve(async (req) => {
             .maybeSingle();
 
           if (cobrancaTaxa) {
-            pagamentoIntegral = (cobrancaTaxa.pagamento_valor || 0) >= cobrancaTaxa.valor;
+            const valorPago = cobrancaTaxa.pagamento_valor || 0;
+            pagamentoIntegral = valorPago >= cobrancaTaxa.valor;
+
+            // Se pagamento parcial, validar regras de repasse maior
+            if (!pagamentoIntegral) {
+              const { data: repasseParams } = await supabase
+                .from('comissoes_parametros')
+                .select('chave, valor')
+                .in('chave', [
+                  'repasse_maior_corte_boletos',
+                  'repasse_maior_pct_favoravel',
+                  'repasse_maior_valor_favoravel',
+                  'repasse_maior_pct_reduzido',
+                  'repasse_maior_valor_reduzido',
+                ]);
+
+              if (repasseParams && repasseParams.length > 0) {
+                const paramMap: Record<string, number> = {};
+                for (const rp of repasseParams) {
+                  paramMap[rp.chave] = parseFloat(rp.valor) || 0;
+                }
+
+                // Contar boletos pagos do associado
+                const { count: boletosPagos } = await supabase
+                  .from('asaas_cobrancas')
+                  .select('id', { count: 'exact', head: true })
+                  .eq('associado_id', substituicao.associado_id)
+                  .eq('status', 'RECEIVED');
+
+                const totalBoletosPagos = boletosPagos || 0;
+                const corteBoletos = paramMap['repasse_maior_corte_boletos'] || 4;
+                const grupoFavoravel = totalBoletosPagos >= corteBoletos;
+
+                const pct = grupoFavoravel
+                  ? (paramMap['repasse_maior_pct_favoravel'] || 50)
+                  : (paramMap['repasse_maior_pct_reduzido'] || 70);
+                const valorFixo = grupoFavoravel
+                  ? (paramMap['repasse_maior_valor_favoravel'] || 100)
+                  : (paramMap['repasse_maior_valor_reduzido'] || 150);
+
+                const debitoPendente = cobrancaTaxa.valor;
+                const valorMinimoPct = debitoPendente * (pct / 100);
+                const valorMinimoAceitavel = Math.max(valorMinimoPct, valorFixo);
+
+                if (valorPago < valorMinimoAceitavel) {
+                  console.log(`[efetivar-substituicao] Pagamento parcial R$${valorPago} abaixo do mínimo R$${valorMinimoAceitavel} (grupo: ${grupoFavoravel ? 'favorável' : 'reduzido'}, boletos: ${totalBoletosPagos})`);
+                  results.push({ step: 12, name: 'Creditar consultor', success: false, error: `Pagamento parcial R$${valorPago.toFixed(2)} abaixo do mínimo aceitável R$${valorMinimoAceitavel.toFixed(2)}` });
+                  throw new Error('REPASSE_MAIOR_INSUFICIENTE');
+                }
+
+                console.log(`[efetivar-substituicao] Repasse maior OK: pago R$${valorPago} >= mínimo R$${valorMinimoAceitavel} (grupo: ${grupoFavoravel ? 'favorável' : 'reduzido'})`);
+              }
+            }
           }
         }
 
