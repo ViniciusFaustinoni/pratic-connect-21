@@ -406,6 +406,7 @@ export default function AssociadoDetalhe() {
         onEmail={handleEmail}
         onSincronizar={() => sincronizarStatusMutation.mutate({ associadoId: id!, forcarAtualizacao: true })}
         onExcluir={(tipo) => { setTipoExclusao(tipo as TipoExclusao); setExcluirDialogOpen(true); }}
+        onTrocaTitularidade={() => setTrocaTitularidadeOpen(true)}
         setActiveTab={setActiveTab}
         isReativando={isReativando}
         isSincronizando={sincronizarStatusMutation.isPending}
