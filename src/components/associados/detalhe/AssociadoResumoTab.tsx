@@ -102,6 +102,9 @@ export function AssociadoResumoTab({
         />
       </div>
 
+      {/* Situação do Associado */}
+      {situacao && <AssociadoSituacaoCard situacao={situacao} />}
+
       {/* Info Grid */}
       <div className="grid sm:grid-cols-2 gap-3">
         {/* Plano & Contrato */}
