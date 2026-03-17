@@ -6,6 +6,7 @@ import { BeneficiosCoberturas } from '@/components/gestao-comercial/BeneficiosCo
 import { BeneficiosAdicionaisConfig } from '@/components/planos/BeneficiosAdicionaisConfig';
 import { SimuladorRateio } from '@/components/gestao-comercial/SimuladorRateio';
 import { ElegibilidadeVeiculos } from '@/components/gestao-comercial/ElegibilidadeVeiculos';
+import { RegrasVendaContent } from '@/components/gestao-comercial/RegrasVendaContent';
 
 export default function GestaoComercial() {
   const [activeTab, setActiveTab] = useState(0);
@@ -20,6 +21,7 @@ export default function GestaoComercial() {
       {activeTab === 2 && <BeneficiosAdicionaisConfig />}
       {activeTab === 3 && <SimuladorRateio />}
       {activeTab === 4 && <ElegibilidadeVeiculos />}
+      {activeTab === 5 && <RegrasVendaContent />}
     </div>
   );
 }

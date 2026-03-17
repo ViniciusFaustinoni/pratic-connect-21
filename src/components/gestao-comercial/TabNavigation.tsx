@@ -1,4 +1,4 @@
-import { Package, Shield, Gift, Calculator, ShieldCheck, LucideIcon } from 'lucide-react';
+import { Package, Shield, Gift, Calculator, ShieldCheck, Gavel, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Tab {
@@ -12,6 +12,7 @@ const tabs: Tab[] = [
   { label: 'Adicionais', icon: Gift },
   { label: 'Simulador de Rateio', icon: Calculator },
   { label: 'Elegibilidade', icon: ShieldCheck },
+  { label: 'Regras de Venda', icon: Gavel },
 ];
 
 interface TabNavigationProps {
