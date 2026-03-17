@@ -93,6 +93,8 @@ const TAXAS_CHAVES = [
   'taxa_troca_titularidade',
   'taxa_revistoria',
   'multa_rastreador',
+  'troca_titularidade_dispensa_vistoria_ativa',
+  'troca_titularidade_prazo_dispensa_vistoria',
 ] as const;
 
 type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
@@ -107,6 +109,8 @@ const TAXAS_DEFAULTS: TaxasConfig = {
   taxa_troca_titularidade: '50',
   taxa_revistoria: '50',
   multa_rastreador: '400',
+  troca_titularidade_dispensa_vistoria_ativa: 'true',
+  troca_titularidade_prazo_dispensa_vistoria: '0',
 };
 
 // ═══════════ AUTORIZAÇÕES E EXCEÇÕES ═══════════
