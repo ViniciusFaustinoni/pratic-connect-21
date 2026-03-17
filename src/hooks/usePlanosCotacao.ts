@@ -12,6 +12,9 @@ import {
   type BenefitExclusionData
 } from '@/data/restricoesCategorias';
 
+const CATEGORIAS_DESAGIO = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
+const LINHAS_COM_DESAGIO = ['select', 'lancamento'];
+
 // ============================================
 // INTERFACES
 // ============================================
@@ -461,6 +464,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
+      // Deságio: derive flag from category
+      const isDesagio = !!categoria && CATEGORIAS_DESAGIO.includes(categoria);
+
+      // Bug 1 fix: use valor_desagio as base price for eligible lines
+      if (isDesagio && valorDesagio != null && LINHAS_COM_DESAGIO.includes(linhaSlug || '')) {
+        valorMensal = valorDesagio;
+      }
+
       // Aplicar adicional app se necessário
       if (linhaSlug && tipoUsoOriginal === 'aplicativo') {
         valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp, configApp);
@@ -499,7 +510,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Determinar categoria de lookup para planos_cotas_categoria
       let cotaCategoriaLookup = categoria || 'passeio';
       if (params.usoApp) cotaCategoriaLookup = 'aplicativo';
-      if (elegibilidadeStatus === 'limitado') cotaCategoriaLookup = 'desagio';
+      if (elegibilidadeStatus === 'limitado' || isDesagio) cotaCategoriaLookup = 'desagio';
 
       // 1º: Tentar override da tabela planos_cotas_categoria
       const cotaCategoriaOverride = cotasCategoriaData?.find(
@@ -514,7 +525,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         // 2º: Fallback para campos do plano (app)
         cotaPercentual = plano.cota_desagio != null ? Number(plano.cota_desagio) : cotaDesagioDefault;
         cotaMinimaFinal = plano.cota_minima_desagio != null ? Number(plano.cota_minima_desagio) : cotaMinimaDesagioDefault;
-      } else if (elegibilidadeStatus === 'limitado') {
+      } else if (elegibilidadeStatus === 'limitado' || isDesagio) {
         // 2º: Fallback para campos do plano (deságio)
         cotaPercentual = plano.cota_desagio != null ? Number(plano.cota_desagio) : cotaDesagioDefault;
         cotaMinimaFinal = plano.cota_minima_desagio != null ? Number(plano.cota_minima_desagio) : cotaMinimaDesagioDefault;
