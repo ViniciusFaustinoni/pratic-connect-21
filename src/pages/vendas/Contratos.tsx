@@ -484,10 +484,10 @@ export default function Contratos() {
                             {status.label}
                           </Badge>
                           {(contrato as any).whatsapp_enviado === true && (
-                            <MessageSquare className="h-3.5 w-3.5 text-green-600" title="WhatsApp enviado" />
+                            <span title="WhatsApp enviado"><MessageSquare className="h-3.5 w-3.5 text-green-600" /></span>
                           )}
                           {(contrato as any).whatsapp_erro && !(contrato as any).whatsapp_enviado && (
-                            <MessageSquare className="h-3.5 w-3.5 text-destructive" title={(contrato as any).whatsapp_erro} />
+                            <span title={(contrato as any).whatsapp_erro}><MessageSquare className="h-3.5 w-3.5 text-destructive" /></span>
                           )}
                         </div>
                       </TableCell>
