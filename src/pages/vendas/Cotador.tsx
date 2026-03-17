@@ -316,6 +316,10 @@ export default function CotadorPage() {
   const { profile } = useAuth();
   const { isVendedorExterno } = usePermissions();
 
+  // Mínimo efetivo conforme tipo de instalação e role do consultor
+  const minimoAdesaoVolante = isVendedorExterno ? minimoVolanteExterno : minimoVolanteInterno;
+  const minimoAdesaoConfig = tipoInstalacao === 'rota' ? minimoAdesaoVolante : minimoAdesaoBase;
+
   // Hooks Supabase
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
   
