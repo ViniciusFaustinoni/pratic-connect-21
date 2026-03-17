@@ -656,7 +656,7 @@ export default function CotadorPage() {
     const fipeAtual = valorFipe || (marca && ano ? estimarValorFipe(marca, parseInt(ano)) : 0);
     const cenarioZeraAdesao = cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base';
     if (fipeAtual > 0 && !cenarioZeraAdesao) {
-      setValorAdesaoCustom(Math.max(100, Math.round(fipeAtual * 0.01 * 100) / 100));
+      setValorAdesaoCustom(Math.max(minimoAdesaoConfig, Math.round(fipeAtual * (percentualAdesaoConfig / 100) * 100) / 100));
     }
     setIsCalculando(false);
     
