@@ -528,7 +528,7 @@ export function PlanFormModal({
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="badge_color">Cor do Badge</Label>
+                        <Label htmlFor="badge_color">Cor do Badge<FieldHint text={PLAN_FIELD_HINTS.badge_color} /></Label>
                         <Select
                           value={formData.badge_color}
                           onValueChange={(value) =>
