@@ -66,6 +66,7 @@ import {
   Send,
   Layers,
   TrendingDown,
+  Gavel,
   ShieldCheck,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
@@ -392,6 +393,7 @@ const menuConfig: {
       items: [
         { title: 'Dashboard', url: '/diretoria', icon: BarChart3 },
         { title: 'Gestão Comercial', url: '/diretoria/gestao-comercial', icon: Layers },
+        { title: 'Regras de Venda', url: '/diretoria/regras-venda', icon: Gavel },
         { title: 'Fechamento & Rateio', url: '/diretoria/fechamento', icon: PieChart },
         { title: 'Faixas & Cotas', url: '/diretoria/faixas-cotas', icon: Calculator },
         { title: 'Atuarial', url: '/diretoria/indicadores', icon: TrendingUp },

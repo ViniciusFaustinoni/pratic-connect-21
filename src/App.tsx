@@ -243,6 +243,7 @@ import ProdutoDetalhe from "./pages/diretoria/ProdutoDetalhe";
 import TabelaPrecos from "./pages/diretoria/TabelaPrecos";
 import RateioSinistros from "./pages/diretoria/RateioSinistros";
 import GestaoComercial from "./pages/diretoria/GestaoComercial";
+import RegrasVenda from "./pages/diretoria/RegrasVenda";
 import IndicadoresAtuariais from "./pages/diretoria/IndicadoresAtuariais";
 import ConfiguracoesSistema from "./pages/diretoria/Configuracoes";
 import PerfisAcesso from "./pages/diretoria/PerfisAcesso";
@@ -635,6 +636,7 @@ const App = () => (
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />
               <Route path="/diretoria/gestao-comercial" element={<GestaoComercial />} />
+              <Route path="/diretoria/regras-venda" element={<RegrasVenda />} />
               <Route path="/diretoria/produtos" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
               <Route path="/diretoria/planos-beneficios" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
               <Route path="/diretoria/precos" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
