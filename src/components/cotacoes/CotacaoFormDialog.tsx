@@ -400,14 +400,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     };
   }, [valorFipe, planosSelecionados, todasFaixas]);
 
-  // Faixa de preço atual onde o FIPE se enquadra
+  // Faixa de preço atual onde o FIPE se enquadra (filtra pela linha do plano selecionado)
   const faixaAtualFipe = useMemo(() => {
     if (!valorFipe || valorFipe <= 0 || todasFaixas.length === 0) return null;
-    // Buscar faixas únicas (sem duplicar por linha/região)
-    const faixa = todasFaixas.find(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max);
-    if (!faixa) return null;
+    const matching = todasFaixas.filter(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max);
+    if (matching.length === 0) return null;
+    const linhaPlano = planosSelecionados[0]?.linha || null;
+    const preferred = linhaPlano ? matching.find(f => f.linha_slug === linhaPlano) : null;
+    const faixa = preferred || matching.sort((a, b) => (b.fipe_max - b.fipe_min) - (a.fipe_max - a.fipe_min))[0];
     return { min: faixa.fipe_min, max: faixa.fipe_max };
-  }, [valorFipe, todasFaixas]);
+  }, [valorFipe, todasFaixas, planosSelecionados]);
 
 
   const dadosAssociadoValidos = useMemo(() => {
