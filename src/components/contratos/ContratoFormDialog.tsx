@@ -254,7 +254,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
       if (prefilledData?.indicacao?.indicador_id && cotacaoPrioritaria?.id) {
         try {
           // Try to find existing indicação record and update it
-          const { data: existingIndicacao } = await supabase
+          const { data: existingIndicacao } = await (supabase as any)
             .from('indicacoes')
             .select('id')
             .eq('indicador_id', prefilledData.indicacao.indicador_id)
