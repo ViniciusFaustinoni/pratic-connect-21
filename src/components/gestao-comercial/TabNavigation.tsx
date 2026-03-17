@@ -12,6 +12,7 @@ const tabs: Tab[] = [
   { label: 'Adicionais', icon: Gift },
   { label: 'Simulador de Rateio', icon: Calculator },
   { label: 'Elegibilidade', icon: ShieldCheck },
+  { label: 'Regras de Venda', icon: Gavel },
 ];
 
 interface TabNavigationProps {
