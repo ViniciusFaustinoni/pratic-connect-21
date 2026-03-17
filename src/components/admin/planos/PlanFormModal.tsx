@@ -498,7 +498,7 @@ export function PlanFormModal({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="tipo_uso">Tipo de Cliente *</Label>
+                      <Label htmlFor="tipo_uso">Tipo de Cliente *<FieldHint text={PLAN_FIELD_HINTS.tipo_uso} /></Label>
                       <Select
                         value={formData.tipo_uso}
                         onValueChange={(value: 'passeio' | 'aplicativo') =>
