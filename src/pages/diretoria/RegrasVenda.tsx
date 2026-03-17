@@ -434,6 +434,10 @@ export default function RegrasVenda() {
             <DollarSign className="h-4 w-4" />
             Taxas e Adesão
           </TabsTrigger>
+          <TabsTrigger value="autorizacoes" className="gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            Autorizações e Exceções
+          </TabsTrigger>
         </TabsList>
 
         {/* ═══════════ ABA PONTUAÇÃO ═══════════ */}
