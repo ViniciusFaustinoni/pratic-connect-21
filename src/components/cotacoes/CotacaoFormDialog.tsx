@@ -1751,7 +1751,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   )}
                 />
                 <p className="text-xs text-muted-foreground mt-1">
-                  Valor sugerido: 1% da FIPE (mín. R$ 100). Altere conforme necessário.
+                  Valor sugerido: {percentualAdesaoConfig}% da FIPE (mín. {formatCurrency(minimoAdesaoConfig)}). Altere conforme necessário.
                 </p>
               </div>
             )}
