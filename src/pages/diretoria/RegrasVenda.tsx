@@ -85,7 +85,8 @@ const CHAVES_PARCIAL = ['pontos_troca_titularidade_parcial', 'pontos_substituica
 
 const TAXAS_CHAVES = [
   'taxa_adesao_percentual_fipe',
-  'taxa_adesao_minimo_volante',
+  'taxa_adesao_minimo_volante_interno',
+  'taxa_adesao_minimo_volante_externo',
   'taxa_adesao_minimo_base',
   'taxa_repasse_volante',
   'taxa_substituicao_placa',
@@ -98,7 +99,8 @@ type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
 
 const TAXAS_DEFAULTS: TaxasConfig = {
   taxa_adesao_percentual_fipe: '1',
-  taxa_adesao_minimo_volante: '100',
+  taxa_adesao_minimo_volante_interno: '150',
+  taxa_adesao_minimo_volante_externo: '50',
   taxa_adesao_minimo_base: '100',
   taxa_repasse_volante: '50',
   taxa_substituicao_placa: '50',
