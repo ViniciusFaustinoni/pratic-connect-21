@@ -86,7 +86,7 @@ export function VeiculosAceitosMotos() {
   const marcas = Object.entries(motosAceitas);
 
   // Buscar nome dinâmico da linha de motos (ex: "Advanced")
-  const linhaMoto = productLines?.find(pl => pl.tipo_veiculo === 'moto' && pl.is_active);
+  const linhaMoto = productLines?.find(pl => pl.vehicle_type === 'moto' && pl.is_active);
   const nomeLinhaMoto = linhaMoto?.name || 'linha de motos';
 
   if (isLoading) {
