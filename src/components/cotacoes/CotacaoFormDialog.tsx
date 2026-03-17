@@ -58,6 +58,8 @@ import { useCreateCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
 
 import { useCriarSolicitacaoFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
+import { useCriarSolicitacaoFipeLimite, useAprovacaoFipeLimitePorCotacao } from '@/hooks/useAprovacoesFipeLimite';
+import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useLead } from '@/hooks/useLeads';
