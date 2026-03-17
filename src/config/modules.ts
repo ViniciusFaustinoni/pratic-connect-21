@@ -24,7 +24,7 @@ export const MODULES: ModuleConfig[] = [
   { id: 'assistencia', label: 'Assistência 24h' },
   { id: 'oficinas', label: 'Oficinas' },
   { id: 'financeiro', label: 'Financeiro' },
-  { id: 'cobranca', label: 'Cobrança' },
+  { id: 'cobranca', label: 'Relacionamento' },
   { id: 'contabilidade', label: 'Contabilidade' },
   { id: 'juridico', label: 'Jurídico' },
   { id: 'rh', label: 'Recursos Humanos' },

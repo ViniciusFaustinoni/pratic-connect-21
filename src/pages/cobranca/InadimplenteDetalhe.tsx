@@ -323,7 +323,7 @@ const InadimplenteDetalhe = () => {
         {/* Coluna 3 — Ações */}
         <div className="space-y-6">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Ações de Cobrança</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-base">Ações de Relacionamento</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <Button className="w-full" asChild><a href={`tel:${associado.telefone}`}><Phone className="h-4 w-4 mr-2" />Ligar Agora</a></Button>
               <Button variant="outline" className="w-full" onClick={() => openWhatsApp(associado.whatsapp || associado.telefone)}><MessageSquare className="h-4 w-4 mr-2" />Enviar WhatsApp</Button>
