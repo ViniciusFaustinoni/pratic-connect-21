@@ -240,7 +240,30 @@ export default function RegrasVenda() {
     }
   };
 
-  if (isLoading) {
+  const handleTaxaChange = (chave: keyof TaxasConfig, value: string) => {
+    setTaxas(prev => ({ ...prev, [chave]: value }));
+  };
+
+  const handleSaveTaxas = async () => {
+    setSavingTaxas(true);
+    try {
+      for (const chave of TAXAS_CHAVES) {
+        await supabase
+          .from('configuracoes')
+          .update({ valor: taxas[chave], updated_at: new Date().toISOString() })
+          .eq('chave', chave);
+      }
+      queryClient.invalidateQueries({ queryKey: ['configuracoes-taxas-adesao'] });
+      queryClient.invalidateQueries({ queryKey: ['configuracao'] });
+      toast.success('Configurações de taxas e adesão salvas com sucesso!');
+    } catch {
+      toast.error('Erro ao salvar configurações de taxas');
+    } finally {
+      setSavingTaxas(false);
+    }
+  };
+
+  if (isLoading || isLoadingTaxas) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
