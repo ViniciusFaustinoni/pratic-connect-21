@@ -689,7 +689,7 @@ export function PlanFormModal({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="desconto_percentual">Desconto Promocional (%)</Label>
+                      <Label htmlFor="desconto_percentual">Desconto Promocional (%)<FieldHint text={PLAN_FIELD_HINTS.desconto_percentual} /></Label>
                       <Input
                         id="desconto_percentual"
                         type="number"
