@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { 
   Settings, 
   Building, 
@@ -8,7 +8,9 @@ import {
   Save,
   TrendingDown,
   FileSignature,
-  LucideIcon
+  LucideIcon,
+  Info,
+  AlertTriangle
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -18,10 +20,14 @@ import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-
+import { ValueLabelListEditor } from '@/components/configuracoes/json-editors/ValueLabelListEditor';
+import { CotasTaxasEditor } from '@/components/configuracoes/json-editors/CotasTaxasEditor';
+import { KeyValueEditor } from '@/components/configuracoes/json-editors/KeyValueEditor';
+import { GlossarioEditor } from '@/components/configuracoes/json-editors/GlossarioEditor';
 
 interface CategoriaConfig {
   label: string;
@@ -36,6 +42,18 @@ const categoriaConfig: Record<string, CategoriaConfig> = {
   notificacoes: { label: 'Notificações', icon: Bell, desc: 'Canais de comunicação' },
   atuarial: { label: 'Atuarial', icon: Calculator, desc: 'Parâmetros de cálculo' },
   documentos: { label: 'Documentos', icon: FileSignature, desc: 'Posição de rubrica e assinatura nos documentos' },
+};
+
+/** Descrições amigáveis de fallback para chaves conhecidas */
+const FALLBACK_HINTS: Record<string, string> = {
+  cotas_taxas: 'Valores globais de cotas de participação. Planos com configuração própria (aba Cotas no modal do plano) ignoram estes valores.',
+  combustiveis: 'Lista de combustíveis disponíveis em todo o sistema. Usada como referência global.',
+  categorias_veiculo: 'Categorias de veículo exibidas na cotação. Usada como referência global.',
+  estimativa_fipe_ajuste_marca: 'Fatores de ajuste por marca para estimativa quando FIPE real não é encontrada. Valor 1.0 = sem ajuste.',
+  glossario_consultor: 'Termos e definições exibidos para consultores no módulo comercial.',
+  marcas_modelos_fallback: 'Marcas e modelos usados quando a consulta à tabela FIPE falha. Serve como alternativa de entrada manual.',
+  motos_aceitas: 'Regras de aceitação de motos por marca. Cada plano pode ter regras próprias de elegibilidade.',
+  observacoes_categoria: 'Textos explicativos exibidos ao selecionar cada categoria de veículo na cotação.',
 };
 
 type ConfigRow = {
@@ -81,7 +99,6 @@ export default function ConfiguracoesSistema() {
     mutationFn: async ({ chave, valor }: { chave: string; valor: string }) => {
       const { data: { user } } = await supabase.auth.getUser();
       
-      // Buscar profile.id (FK exige referência a profiles, não auth.users)
       let profileId: string | null = null;
       if (user?.id) {
         const { data: profile } = await supabase
@@ -116,19 +133,133 @@ export default function ConfiguracoesSistema() {
     }
   });
 
-  const handleValueChange = (chave: string, valor: string) => {
+  const handleValueChange = useCallback((chave: string, valor: string) => {
     setEditedValues(prev => ({ ...prev, [chave]: valor }));
-  };
+  }, []);
 
-  const handleSave = (chave: string, valorOriginal: string | null) => {
+  const handleSave = useCallback((chave: string, valorOriginal: string | null) => {
     const valor = editedValues[chave] ?? valorOriginal ?? '';
     updateConfig.mutate({ chave, valor });
-  };
+  }, [editedValues, updateConfig]);
 
   const formatChave = (chave: string) => {
     return chave
       .replace(/_/g, ' ')
       .replace(/\b\w/g, l => l.toUpperCase());
+  };
+
+  /** Try to parse JSON safely */
+  const safeParse = (val: string): unknown => {
+    try { return JSON.parse(val); } catch { return null; }
+  };
+
+  /** Render visual editor for known JSON configs */
+  const renderJsonEditor = (config: ConfigRow): JSX.Element | null => {
+    const currentValue = editedValues[config.chave] ?? config.valor ?? '';
+    const parsed = safeParse(currentValue);
+    if (!parsed) return null;
+
+    const hasChanges = config.chave in editedValues && editedValues[config.chave] !== config.valor;
+
+    const handleJsonChange = (newData: unknown) => {
+      // Clean up empty optional fields for cotas_taxas
+      const cleaned = typeof newData === 'object' ? newData : newData;
+      handleValueChange(config.chave, JSON.stringify(cleaned));
+    };
+
+    const saveBtn = hasChanges ? (
+      <div className="flex justify-end pt-2">
+        <Button size="sm" onClick={() => handleSave(config.chave, config.valor)} disabled={updateConfig.isPending}>
+          <Save className="h-4 w-4 mr-2" /> Salvar alterações
+        </Button>
+      </div>
+    ) : null;
+
+    switch (config.chave) {
+      case 'combustiveis':
+      case 'categorias_veiculo':
+        if (!Array.isArray(parsed)) return null;
+        return (
+          <div className="space-y-2">
+            <ValueLabelListEditor
+              items={parsed as { value: string; label: string }[]}
+              onChange={handleJsonChange}
+              valuePlaceholder="Código (ex: diesel)"
+              labelPlaceholder="Nome exibido (ex: Diesel)"
+            />
+            {saveBtn}
+          </div>
+        );
+
+      case 'cotas_taxas':
+        if (!Array.isArray(parsed)) return null;
+        return (
+          <div className="space-y-2">
+            <CotasTaxasEditor rows={parsed} onChange={handleJsonChange} />
+            {saveBtn}
+          </div>
+        );
+
+      case 'estimativa_fipe_ajuste_marca':
+        if (typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        return (
+          <div className="space-y-2">
+            <KeyValueEditor
+              data={parsed as Record<string, number>}
+              onChange={handleJsonChange}
+              keyLabel="Marca"
+              valueLabel="Fator"
+              valueType="number"
+            />
+            {saveBtn}
+          </div>
+        );
+
+      case 'motos_aceitas':
+        if (typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        return (
+          <div className="space-y-2">
+            <KeyValueEditor
+              data={parsed as Record<string, string>}
+              onChange={handleJsonChange}
+              keyLabel="Marca"
+              valueLabel="Regra de aceitação"
+              valueType="text"
+            />
+            {saveBtn}
+          </div>
+        );
+
+      case 'observacoes_categoria':
+        if (typeof parsed !== 'object' || Array.isArray(parsed)) return null;
+        return (
+          <div className="space-y-2">
+            <KeyValueEditor
+              data={parsed as Record<string, string>}
+              onChange={handleJsonChange}
+              keyLabel="Categoria"
+              valueLabel="Observação"
+              valueType="text"
+            />
+            {saveBtn}
+          </div>
+        );
+
+      case 'glossario_consultor':
+        if (!Array.isArray(parsed)) return null;
+        return (
+          <div className="space-y-2">
+            <GlossarioEditor
+              items={parsed as { termo: string; definicao: string }[]}
+              onChange={handleJsonChange}
+            />
+            {saveBtn}
+          </div>
+        );
+
+      default:
+        return null;
+    }
   };
 
   const renderInput = (config: ConfigRow) => {
@@ -140,6 +271,34 @@ export default function ConfiguracoesSistema() {
         <div className="flex items-center gap-2">
           <Input value={currentValue} disabled className="bg-muted" />
           <Badge variant="secondary">Somente leitura</Badge>
+        </div>
+      );
+    }
+
+    // For JSON type, try visual editor first
+    if (config.tipo === 'json') {
+      const visualEditor = renderJsonEditor(config);
+      if (visualEditor) return visualEditor;
+
+      // Fallback: raw JSON textarea for unknown structures
+      return (
+        <div className="space-y-2">
+          <Textarea
+            value={currentValue}
+            onChange={(e) => handleValueChange(config.chave, e.target.value)}
+            rows={4}
+            className="font-mono text-sm"
+          />
+          {hasChanges && (
+            <Button 
+              size="sm" 
+              onClick={() => handleSave(config.chave, config.valor)}
+              disabled={updateConfig.isPending}
+            >
+              <Save className="h-4 w-4 mr-2" />
+              Salvar
+            </Button>
+          )}
         </div>
       );
     }
@@ -160,28 +319,6 @@ export default function ConfiguracoesSistema() {
           </div>
         );
 
-      case 'json':
-        return (
-          <div className="space-y-2">
-            <Textarea
-              value={currentValue}
-              onChange={(e) => handleValueChange(config.chave, e.target.value)}
-              rows={4}
-              className="font-mono text-sm"
-            />
-            {hasChanges && (
-              <Button 
-                size="sm" 
-                onClick={() => handleSave(config.chave, config.valor)}
-                disabled={updateConfig.isPending}
-              >
-                <Save className="h-4 w-4 mr-2" />
-                Salvar
-              </Button>
-            )}
-          </div>
-        );
-
       case 'percentual':
         return (
           <div className="flex items-center gap-2">
@@ -195,11 +332,7 @@ export default function ConfiguracoesSistema() {
               <span className="absolute right-3 top-1/2 -translate-y-1/2 text-muted-foreground">%</span>
             </div>
             {hasChanges && (
-              <Button 
-                size="sm" 
-                onClick={() => handleSave(config.chave, config.valor)}
-                disabled={updateConfig.isPending}
-              >
+              <Button size="sm" onClick={() => handleSave(config.chave, config.valor)} disabled={updateConfig.isPending}>
                 <Save className="h-4 w-4" />
               </Button>
             )}
@@ -220,11 +353,7 @@ export default function ConfiguracoesSistema() {
               />
             </div>
             {hasChanges && (
-              <Button 
-                size="sm" 
-                onClick={() => handleSave(config.chave, config.valor)}
-                disabled={updateConfig.isPending}
-              >
+              <Button size="sm" onClick={() => handleSave(config.chave, config.valor)} disabled={updateConfig.isPending}>
                 <Save className="h-4 w-4" />
               </Button>
             )}
@@ -241,11 +370,7 @@ export default function ConfiguracoesSistema() {
               className="flex-1"
             />
             {hasChanges && (
-              <Button 
-                size="sm" 
-                onClick={() => handleSave(config.chave, config.valor)}
-                disabled={updateConfig.isPending}
-              >
+              <Button size="sm" onClick={() => handleSave(config.chave, config.valor)} disabled={updateConfig.isPending}>
                 <Save className="h-4 w-4" />
               </Button>
             )}
@@ -262,11 +387,7 @@ export default function ConfiguracoesSistema() {
               className="flex-1"
             />
             {hasChanges && (
-              <Button 
-                size="sm" 
-                onClick={() => handleSave(config.chave, config.valor)}
-                disabled={updateConfig.isPending}
-              >
+              <Button size="sm" onClick={() => handleSave(config.chave, config.valor)} disabled={updateConfig.isPending}>
                 <Save className="h-4 w-4" />
               </Button>
             )}
@@ -290,7 +411,6 @@ export default function ConfiguracoesSistema() {
     );
   }
 
-  // Find the fipe_menor_ativo config for the highlighted card
   const fipeMenorConfig = configuracoes?.find(c => c.chave === 'fipe_menor_ativo');
 
   return (
@@ -299,6 +419,16 @@ export default function ConfiguracoesSistema() {
         <h1 className="text-2xl font-bold">Configurações do Sistema</h1>
         <p className="text-muted-foreground">Gerencie os parâmetros de funcionamento da associação</p>
       </div>
+
+      {/* Banner: fallback global */}
+      <Alert className="border-primary/30 bg-primary/5">
+        <Info className="h-4 w-4 text-primary" />
+        <AlertDescription className="text-sm">
+          <strong>Valores de fallback global.</strong> Estas configurações são padrões do sistema.
+          Planos e benefícios com configuração própria (editados no modal de cada plano) <strong>sobrescrevem</strong> estes valores.
+          Alterações aqui afetam apenas planos que <em>não</em> possuem configuração específica.
+        </AlertDescription>
+      </Alert>
 
       {/* Card destacado: FIPE Menor */}
       {fipeMenorConfig && (
@@ -339,7 +469,7 @@ export default function ConfiguracoesSistema() {
         </Card>
       ) : (
         <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList className="mb-4">
+          <TabsList className="mb-4 flex-wrap h-auto gap-1">
             {availableCategories.map(cat => {
               const config = categoriaConfig[cat];
               const Icon = config?.icon || Settings;
@@ -356,7 +486,6 @@ export default function ConfiguracoesSistema() {
             const config = categoriaConfig[cat];
             const configs = configsPorCategoria[cat] || [];
             
-            
             return (
               <TabsContent key={cat} value={cat}>
                 <Card>
@@ -367,16 +496,25 @@ export default function ConfiguracoesSistema() {
                     </CardTitle>
                     <CardDescription>{config?.desc}</CardDescription>
                   </CardHeader>
-                  <CardContent className="space-y-6">
-                    {configs.map(cfg => (
-                      <div key={cfg.id} className="space-y-2">
-                        <Label className="font-medium">{formatChave(cfg.chave)}</Label>
-                        {cfg.descricao && (
-                          <p className="text-sm text-muted-foreground">{cfg.descricao}</p>
-                        )}
-                        {renderInput(cfg)}
-                      </div>
-                    ))}
+                  <CardContent className="space-y-8">
+                    {configs.map(cfg => {
+                      const fallbackHint = FALLBACK_HINTS[cfg.chave];
+                      return (
+                        <div key={cfg.id} className="space-y-2">
+                          <Label className="font-medium text-base">{formatChave(cfg.chave)}</Label>
+                          {cfg.descricao && (
+                            <p className="text-sm text-muted-foreground">{cfg.descricao}</p>
+                          )}
+                          {fallbackHint && (
+                            <div className="flex items-start gap-2 text-xs text-amber-600 dark:text-amber-400 bg-amber-500/10 rounded-md px-3 py-2">
+                              <AlertTriangle className="h-3.5 w-3.5 mt-0.5 shrink-0" />
+                              <span>{fallbackHint}</span>
+                            </div>
+                          )}
+                          {renderInput(cfg)}
+                        </div>
+                      );
+                    })}
                   </CardContent>
                 </Card>
               </TabsContent>
