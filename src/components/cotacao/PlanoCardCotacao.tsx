@@ -97,6 +97,13 @@ export function PlanoCardCotacao({
             {formatCurrency(plano.valorMensal)}
           </span>
           <span className="text-sm text-muted-foreground">/mês</span>
+          {plano.precoDesagioAplicado && (
+            <div className="mt-1">
+              <Badge className="bg-amber-100 text-amber-800 border-amber-300 text-[10px] px-2 py-0.5">
+                Preço com deságio aplicado
+              </Badge>
+            </div>
+          )}
         </div>
 
         {/* Info rápida */}

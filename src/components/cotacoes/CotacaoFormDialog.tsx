@@ -2,7 +2,7 @@ import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
-import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useCarenciaDiasPadrao, useMigracaoConfig } from '@/hooks/useConteudosSistema';
+import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useCarenciaDiasPadrao, useMigracaoConfig, useObservacoesCategoria } from '@/hooks/useConteudosSistema';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -83,37 +83,7 @@ const REGIOES = [
   { value: 'interior_sp', label: 'Interior de São Paulo' },
 ];
 
-// Alertas baseados na categoria selecionada
-const ALERTAS_CATEGORIA: Record<string, { tipo: 'warning' | 'info'; mensagem: string }> = {
-  leilao: {
-    tipo: 'warning',
-    mensagem: 'Veículos de leilão não possuem cobertura de incêndio.',
-  },
-  aplicativo: {
-    tipo: 'info',
-    mensagem: 'Categoria APP: cota de participação será 8% (mínimo R$ 3.000).',
-  },
-  chassi_remarcado: {
-    tipo: 'warning',
-    mensagem: 'Veículo sujeito à análise de aceitação prévia.',
-  },
-  taxi: {
-    tipo: 'info',
-    mensagem: 'Categoria especial: valores diferenciados podem ser aplicados.',
-  },
-  ex_taxi: {
-    tipo: 'info',
-    mensagem: 'Categoria especial: valores diferenciados podem ser aplicados.',
-  },
-  placa_vermelha: {
-    tipo: 'info',
-    mensagem: 'Veículo de aluguel: valores diferenciados podem ser aplicados.',
-  },
-  ressarcimento_integral: {
-    tipo: 'warning',
-    mensagem: 'Veículo com histórico de ressarcimento integral. Sujeito à análise.',
-  },
-};
+// Alertas de categoria agora vêm do banco (observacoes_categoria)
 
 // Interface para cotação base (duplicação)
 export interface CotacaoBaseParaFormulario {
@@ -172,6 +142,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
+  const { data: observacoesCategoria = {} } = useObservacoesCategoria();
   
   // Estado do cenário de adesão para vendedor externo
   type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
@@ -426,11 +397,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return nomeValido && telefoneValido;
   }, [nomeAssociado, telefoneAssociado]);
 
-  // Alerta da categoria selecionada
+  // Alerta da categoria selecionada (do banco)
   const alertaCategoria = useMemo(() => {
-    if (!categoria) return null;
-    return ALERTAS_CATEGORIA[categoria] || null;
-  }, [categoria]);
+    if (!categoria || !observacoesCategoria) return null;
+    const texto = observacoesCategoria[categoria];
+    if (!texto) return null;
+    return { tipo: 'warning' as const, mensagem: texto };
+  }, [categoria, observacoesCategoria]);
 
   // Resetar formulário quando o modal abre sem leadId (exceto em modo edição ou duplicação)
   useEffect(() => {

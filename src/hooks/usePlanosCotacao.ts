@@ -49,6 +49,7 @@ export interface PlanoCotacao {
   cotaMinimaDesagio?: number;
   anoMinimo?: number;
   elegibilidadeStatus?: 'aprovado' | 'limitado' | 'negado';
+  precoDesagioAplicado?: boolean;
 }
 
 export interface PlanoNegadoInfo {
@@ -616,6 +617,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
         anoMinimo: anoMinimo || undefined,
         elegibilidadeStatus,
+        precoDesagioAplicado: isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || ''),
       });
     }
 
