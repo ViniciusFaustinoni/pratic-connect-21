@@ -43,6 +43,7 @@ export function useConfigLimitesVeiculo() {
 
       return {
         fipeLimiteAutorizacao: Number(mapStr['fipe_limite_autorizacao']) || DEFAULTS.fipeLimiteAutorizacao,
+        fipeLimiteAutorizacaoMoto: Number(mapStr['fipe_limite_autorizacao_moto']) || DEFAULTS.fipeLimiteAutorizacaoMoto,
         idadeLimite: Number(mapStr['perfil_veiculo_idade_limite']) || DEFAULTS.idadeLimite,
         fipeMinimo: Number(mapStr['perfil_veiculo_fipe_minimo']) || DEFAULTS.fipeMinimo,
         fipeMaximo: Number(mapStr['perfil_veiculo_fipe_maximo']) || DEFAULTS.fipeMaximo,
