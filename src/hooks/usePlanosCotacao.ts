@@ -111,6 +111,36 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
+  // Buscar categorias de deságio do banco
+  const { data: categoriasDesagio = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'categorias_desagio'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'categorias_desagio')
+        .maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; }
+      catch { return CATEGORIAS_DESAGIO_FALLBACK; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Buscar linhas com deságio do banco
+  const { data: linhasComDesagio = LINHAS_COM_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'linhas_com_desagio'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'linhas_com_desagio')
+        .maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; }
+      catch { return LINHAS_COM_DESAGIO_FALLBACK; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({
     queryKey: ['planos_cotacao'],
