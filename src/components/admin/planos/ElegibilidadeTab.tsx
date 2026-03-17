@@ -163,8 +163,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
     setShowForm(true);
   };
 
-  const handleSubmit = (e: React.FormEvent) => {
-    e.preventDefault();
+  const handleSubmit = () => {
     if (!form.marca.trim()) {
       toast.error('Informe a marca');
       return;
