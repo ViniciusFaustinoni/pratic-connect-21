@@ -955,6 +955,17 @@ export default function AssociadoDetalhe() {
           isLoading={isProcessingCancelamento}
         />
       )}
+
+      {/* Wizard Reativação */}
+      {id && contrato && (
+        <ReativacaoWizard
+          open={reativacaoWizardOpen}
+          onOpenChange={setReativacaoWizardOpen}
+          associadoId={id}
+          contratoId={contrato.id}
+          situacao={situacao}
+        />
+      )}
     </div>
   );
 }
