@@ -710,7 +710,7 @@ export function PlanFormModal({
 
                     {/* Dynamic cotas per selected category */}
                     <div className="space-y-3">
-                      <Label className="text-sm font-semibold">Cota de Participação por Categoria</Label>
+                      <Label className="text-sm font-semibold">Cota de Participação por Categoria<FieldHint text={PLAN_FIELD_HINTS.cotas_categoria} /></Label>
                       {formData.categorias_veiculo.length === 0 ? (
                         <p className="text-xs text-muted-foreground italic">
                           Selecione categorias de veículo na aba "Básico" para configurar cotas.
