@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Phone, Mail, MessageCircle, Edit, Pause, Play, Map,
   MoreHorizontal, XCircle, DollarSign, AlertTriangle, Shield,
-  ArrowLeftRight, Loader2, Radio, RefreshCw, FileCheck,
+  ArrowLeftRight, Loader2, Radio, RefreshCw, FileCheck, Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -43,6 +43,7 @@ interface AssociadoHeroHeaderProps {
   onEmail: () => void;
   onSincronizar: () => void;
   onExcluir: (tipo: string) => void;
+  onTrocaTitularidade?: () => void;
   setActiveTab: (tab: string) => void;
   // Loading states
   isReativando: boolean;
@@ -78,7 +79,7 @@ export function AssociadoHeroHeader({
   associado, status, statusLabel, statusColor, contrato, resumoFinanceiro,
   veiculosComRastreador, statusPlataforma, permissions, docsPendentes, coberturasSuspensas,
   onSuspender, onReativar, onCancelar, onAbrirMapa, onWhatsApp, onEmail,
-  onSincronizar, onExcluir, setActiveTab, isReativando, isSincronizando,
+  onSincronizar, onExcluir, onTrocaTitularidade, setActiveTab, isReativando, isSincronizando,
 }: AssociadoHeroHeaderProps) {
   const navigate = useNavigate();
   const id = associado.id;
@@ -196,6 +197,11 @@ export function AssociadoHeroHeader({
             {status === 'ativo' && (
               <Button size="sm" variant="outline" onClick={() => navigate(`/cadastro/associados/${id}/substituicao`)}>
                 <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> Substituir
+              </Button>
+            )}
+            {status === 'ativo' && !permissions.isAnalistaCadastroOnly && onTrocaTitularidade && (
+              <Button size="sm" variant="outline" onClick={onTrocaTitularidade}>
+                <Users className="h-3.5 w-3.5 mr-1.5" /> Troca Titular
               </Button>
             )}
             {status === 'ativo' && (

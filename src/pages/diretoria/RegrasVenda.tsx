@@ -93,6 +93,8 @@ const TAXAS_CHAVES = [
   'taxa_troca_titularidade',
   'taxa_revistoria',
   'multa_rastreador',
+  'troca_titularidade_dispensa_vistoria_ativa',
+  'troca_titularidade_prazo_dispensa_vistoria',
 ] as const;
 
 type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
@@ -107,6 +109,8 @@ const TAXAS_DEFAULTS: TaxasConfig = {
   taxa_troca_titularidade: '50',
   taxa_revistoria: '50',
   multa_rastreador: '400',
+  troca_titularidade_dispensa_vistoria_ativa: 'true',
+  troca_titularidade_prazo_dispensa_vistoria: '0',
 };
 
 // ═══════════ AUTORIZAÇÕES E EXCEÇÕES ═══════════
@@ -1021,6 +1025,59 @@ export default function RegrasVenda() {
                   />
                 </div>
               </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO — Troca de Titularidade */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg flex items-center gap-2">
+                <ArrowRightLeft className="h-5 w-5" />
+                Troca de Titularidade
+              </CardTitle>
+              <CardDescription>
+                Configure as regras de dispensa de vistoria quando a troca de titularidade ocorre dentro de um prazo configurado.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="troca_dispensa_toggle" className="text-sm font-medium">
+                    Permitir dispensa de vistoria (Cenário A)
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Quando ativado, a vistoria é dispensada se a troca ocorrer dentro do prazo configurado abaixo.
+                  </p>
+                </div>
+                <Switch
+                  id="troca_dispensa_toggle"
+                  checked={taxas.troca_titularidade_dispensa_vistoria_ativa === 'true'}
+                  onCheckedChange={(checked) => handleTaxaChange('troca_titularidade_dispensa_vistoria_ativa', String(checked))}
+                />
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="troca_prazo_dispensa" className="flex-1 text-sm">
+                  Prazo máximo (dias) para considerar troca no mesmo dia
+                </Label>
+                <Input
+                  id="troca_prazo_dispensa"
+                  type="number"
+                  min="0"
+                  step="1"
+                  className="w-28 text-right"
+                  value={taxas.troca_titularidade_prazo_dispensa_vistoria}
+                  onChange={(e) => handleTaxaChange('troca_titularidade_prazo_dispensa_vistoria', e.target.value)}
+                  disabled={taxas.troca_titularidade_dispensa_vistoria_ativa !== 'true'}
+                />
+              </div>
+              <Alert className="border-blue-200 bg-blue-50 dark:bg-blue-950/30 dark:border-blue-800">
+                <Info className="h-4 w-4 text-blue-600" />
+                <AlertDescription className="text-xs text-blue-800 dark:text-blue-300">
+                  <strong>Cenário A:</strong> Se o veículo ainda está ativo ou foi cancelado há menos dias que o prazo configurado, a vistoria é dispensada e o rastreador permanece.
+                  <br />
+                  <strong>Cenário B:</strong> Caso contrário, nova vistoria é obrigatória e o rastreador é verificado.
+                </AlertDescription>
+              </Alert>
             </CardContent>
           </Card>
 

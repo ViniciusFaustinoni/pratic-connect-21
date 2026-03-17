@@ -596,7 +596,7 @@ serve(async (req) => {
       }
 
     } else if (solicitacao.tipo === "troca_titularidade") {
-      // TROCA DE TITULARIDADE: Criar serviço de vistoria para o veículo
+      // TROCA DE TITULARIDADE: Cenário A/B — dispensa ou exigência de vistoria
       console.log("[aprovar-solicitacao-ia] Processando troca de titularidade...", dados);
 
       const dadosNovoTitular = solicitacao.dados_novo_titular as Record<string, string> | null;
@@ -612,31 +612,107 @@ serve(async (req) => {
         veiculoId = veiculos?.[0]?.id;
       }
 
-      // Criar serviço de vistoria para troca
-      const { data: servico, error: servError } = await supabaseAdmin
-        .from("servicos")
-        .insert({
-          tipo: "vistoria",
-          tipo_servico: "vistoria_entrada",
-          status: "pendente",
-          associado_id: solicitacao.associado_id,
-          veiculo_id: veiculoId,
-          origem: "troca_titularidade",
-          observacoes: `Troca de titularidade via IA. Novo titular: ${dadosNovoTitular?.nome || "N/I"} (CPF: ${dadosNovoTitular?.cpf || "N/I"})`,
-        })
-        .select("id")
-        .single();
+      // === Ler configurações de dispensa de vistoria ===
+      const { data: cfgDispensa } = await supabaseAdmin
+        .from("configuracoes")
+        .select("chave, valor")
+        .in("chave", ["troca_titularidade_dispensa_vistoria_ativa", "troca_titularidade_prazo_dispensa_vistoria"]);
 
-      if (servError) {
-        console.error("[aprovar-solicitacao-ia] Erro ao criar vistoria de troca:", servError);
-        return new Response(JSON.stringify({ success: false, error: "Erro ao criar vistoria" }), {
-          status: 500,
-          headers: { ...corsHeaders, "Content-Type": "application/json" },
-        });
+      const cfgMap = Object.fromEntries((cfgDispensa || []).map(c => [c.chave, c.valor]));
+      const dispensaAtiva = cfgMap.troca_titularidade_dispensa_vistoria_ativa === "true";
+      const prazoDias = parseInt(cfgMap.troca_titularidade_prazo_dispensa_vistoria || "0", 10);
+
+      // === Verificar status do veículo e data de cancelamento ===
+      let veiculoAtivo = false;
+      let diasDesdeCancelamento = Infinity;
+      let pendenciaRastreador = false;
+
+      if (veiculoId) {
+        const { data: veiculoData } = await supabaseAdmin
+          .from("veiculos")
+          .select("status, data_cancelamento")
+          .eq("id", veiculoId)
+          .maybeSingle();
+
+        if (veiculoData) {
+          veiculoAtivo = veiculoData.status === "ativo";
+          if (veiculoData.data_cancelamento) {
+            const cancelDate = new Date(veiculoData.data_cancelamento);
+            const now = new Date();
+            diasDesdeCancelamento = Math.floor((now.getTime() - cancelDate.getTime()) / (1000 * 60 * 60 * 24));
+          }
+        }
+
+        // Verificar rastreador pendente
+        const { data: assocData } = await supabaseAdmin
+          .from("associados")
+          .select("pendencia_rastreador")
+          .eq("id", solicitacao.associado_id)
+          .maybeSingle();
+
+        pendenciaRastreador = assocData?.pendencia_rastreador === true;
       }
 
-      resultado_id = servico.id;
-      resultado_protocolo = `TRC-${servico.id.substring(0, 8).toUpperCase()}`;
+      // === Determinar cenário ===
+      const cenarioA = dispensaAtiva && (veiculoAtivo || diasDesdeCancelamento <= prazoDias);
+      console.log(`[aprovar-solicitacao-ia] Troca titularidade: dispensaAtiva=${dispensaAtiva}, veiculoAtivo=${veiculoAtivo}, diasDesdeCancelamento=${diasDesdeCancelamento}, prazoDias=${prazoDias}, cenarioA=${cenarioA}`);
+
+      if (cenarioA) {
+        // CENÁRIO A — Dispensa de vistoria
+        console.log("[aprovar-solicitacao-ia] Cenário A: vistoria dispensada, rastreador permanece.");
+
+        // Registrar log de dispensa
+        await supabaseAdmin.from("logs_auditoria").insert({
+          acao: "troca_titularidade_vistoria_dispensada",
+          modulo: "solicitacoes",
+          descricao: `Vistoria dispensada na troca de titularidade. Veículo ativo: ${veiculoAtivo}. Dias desde cancelamento: ${diasDesdeCancelamento}. Prazo configurado: ${prazoDias} dias.`,
+          dados_novos: { cenario: "A", veiculoAtivo, diasDesdeCancelamento, prazoDias, dadosNovoTitular },
+        });
+
+        resultado_protocolo = `TRC-DISP-${solicitacao.id.substring(0, 8).toUpperCase()}`;
+        resultado_id = solicitacao.id;
+
+      } else {
+        // CENÁRIO B — Exige vistoria
+        console.log("[aprovar-solicitacao-ia] Cenário B: vistoria obrigatória.");
+
+        // Se há pendência de rastreador, registrar antes de prosseguir
+        if (!veiculoAtivo && pendenciaRastreador) {
+          console.log("[aprovar-solicitacao-ia] Pendência de rastreador detectada no cenário B.");
+          await supabaseAdmin.from("logs_auditoria").insert({
+            acao: "troca_titularidade_pendencia_rastreador",
+            modulo: "solicitacoes",
+            descricao: `Troca de titularidade com veículo cancelado e pendência de rastreador.`,
+            dados_novos: { associado_id: solicitacao.associado_id, veiculo_id: veiculoId },
+          });
+        }
+
+        // Criar serviço de vistoria para troca
+        const { data: servico, error: servError } = await supabaseAdmin
+          .from("servicos")
+          .insert({
+            tipo: "vistoria",
+            tipo_servico: "vistoria_entrada",
+            status: "pendente",
+            associado_id: solicitacao.associado_id,
+            veiculo_id: veiculoId,
+            origem: "troca_titularidade",
+            observacoes: `Troca de titularidade via IA. Novo titular: ${dadosNovoTitular?.nome || "N/I"} (CPF: ${dadosNovoTitular?.cpf || "N/I"}). Cenário B: vistoria obrigatória.`,
+          })
+          .select("id")
+          .single();
+
+        if (servError) {
+          console.error("[aprovar-solicitacao-ia] Erro ao criar vistoria de troca:", servError);
+          return new Response(JSON.stringify({ success: false, error: "Erro ao criar vistoria" }), {
+            status: 500,
+            headers: { ...corsHeaders, "Content-Type": "application/json" },
+          });
+        }
+
+        resultado_id = servico.id;
+        resultado_protocolo = `TRC-${servico.id.substring(0, 8).toUpperCase()}`;
+      }
 
       // Enviar WhatsApp notificando ambos
       try {

@@ -51,6 +51,7 @@ import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastread
 import { supabase } from '@/integrations/supabase/client';
 import { SubstituicaoStatusCard } from '@/components/substituicao/SubstituicaoStatusCard';
 import { ReativacaoWizard } from '@/components/associados/reativacao/ReativacaoWizard';
+import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
 
 // New redesign components
 import { AssociadoHeroHeader } from '@/components/associados/detalhe/AssociadoHeroHeader';
@@ -153,6 +154,7 @@ export default function AssociadoDetalhe() {
 
   const [activeTab, setActiveTab] = useState('resumo');
   const [reativacaoWizardOpen, setReativacaoWizardOpen] = useState(false);
+  const [trocaTitularidadeOpen, setTrocaTitularidadeOpen] = useState(false);
   const [suspenderDialogOpen, setSuspenderDialogOpen] = useState(false);
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
   const [excluirDialogOpen, setExcluirDialogOpen] = useState(false);
@@ -404,6 +406,7 @@ export default function AssociadoDetalhe() {
         onEmail={handleEmail}
         onSincronizar={() => sincronizarStatusMutation.mutate({ associadoId: id!, forcarAtualizacao: true })}
         onExcluir={(tipo) => { setTipoExclusao(tipo as TipoExclusao); setExcluirDialogOpen(true); }}
+        onTrocaTitularidade={() => setTrocaTitularidadeOpen(true)}
         setActiveTab={setActiveTab}
         isReativando={isReativando}
         isSincronizando={sincronizarStatusMutation.isPending}
@@ -965,6 +968,16 @@ export default function AssociadoDetalhe() {
           associadoId={id}
           contratoId={contrato.id}
           situacao={situacao}
+        />
+      )}
+
+      {/* Dialog Troca de Titularidade */}
+      {id && associado && (
+        <TrocaTitularidadeDialog
+          open={trocaTitularidadeOpen}
+          onOpenChange={setTrocaTitularidadeOpen}
+          associadoId={id}
+          associadoNome={associado.nome}
         />
       )}
     </div>
