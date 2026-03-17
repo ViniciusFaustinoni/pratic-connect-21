@@ -16825,6 +16825,7 @@ export type Database = {
         Row: {
           ano_max: number | null
           ano_min: number
+          cobertura_fipe: number | null
           combustivel: string | null
           created_at: string | null
           id: string
@@ -16840,6 +16841,7 @@ export type Database = {
         Insert: {
           ano_max?: number | null
           ano_min?: number
+          cobertura_fipe?: number | null
           combustivel?: string | null
           created_at?: string | null
           id?: string
@@ -16855,6 +16857,7 @@ export type Database = {
         Update: {
           ano_max?: number | null
           ano_min?: number
+          cobertura_fipe?: number | null
           combustivel?: string | null
           created_at?: string | null
           id?: string
