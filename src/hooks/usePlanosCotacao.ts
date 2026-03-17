@@ -498,7 +498,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const isDesagio = !!categoria && categoriasDesagio.includes(categoria);
 
       // Bug 1 fix: use valor_desagio as base price for eligible lines
-      if (isDesagio && valorDesagio != null && LINHAS_COM_DESAGIO.includes(linhaSlug || '')) {
+      if (isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || '')) {
         valorMensal = valorDesagio;
       }
 
