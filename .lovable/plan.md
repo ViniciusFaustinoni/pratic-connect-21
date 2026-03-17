@@ -1,167 +1,104 @@
-## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
-### Causas Raiz Identificadas
-1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
-2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
-3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-### Correções Aplicadas
+## Plano: Ficha do associado com condições dinâmicas de "Regras de Venda"
 
-1. **`sga-hinova-sync/index.ts`**:
-   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
-   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
+### Contexto atual
 
-2. **`cron-sga-retry/index.ts`**:
-   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
+- A ficha do associado (`AssociadoDetalhe.tsx`) tem 6 abas (Resumo, Dados, Veículos, Documentos, Financeiro, Histórico, WhatsApp) mas **não exibe** carência, situação de inadimplência detalhada, coberturas suspensas, multa de rastreador dinâmica, nem pontuação do consultor vinculado.
+- A tabela `associados` não tem colunas para `tipo_entrada`, `data_carencia_inicio`, `data_carencia_fim`, nem `config_snapshot`.
+- A tabela `contratos` tem `tipo_venda` (ex: `nova`) e `tipo_atendimento` (ex: `volante`) mas não tem `tipo_entrada` (migração, reativação, etc).
+- Hooks existentes: `useCarenciaDiasPadrao`, `useMigracaoConfig`, `usePrazoReativacaoDias`, `useMultaRastreador` — todos lendo de configurações dinâmicas.
+- O conceito de "snapshot de configuração no momento do registro" não existe ainda.
 
----
+### Alterações necessárias
 
-## Painel de Monitoramento SGA Hinova — ✅ Implementado
+#### 1. Migration: Novas colunas em `contratos` e nova tabela `operacao_config_snapshot`
 
-### O que foi criado
+**contratos** — adicionar:
+- `tipo_entrada` varchar (nova, migracao, reativacao, troca_titularidade, substituicao)
+- `data_carencia_inicio` date
+- `data_carencia_fim` date  
+- `carencia_isenta` boolean default false
+- `carencia_motivo_isencao` text
 
-1. **Página `/configuracoes/integracoes/sga-hinova`** com:
-   - Status de conexão com API Hinova (teste em tempo real)
-   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
-   - Logs recentes dos últimos 50 registros
-   - Veículos pendentes (ativos não sincronizados) com envio individual
-   - Histórico de health checks
+**Nova tabela `operacao_config_snapshot`** — armazena snapshot das configurações aplicadas no momento do registro:
+- `id` uuid PK
+- `contrato_id` uuid FK contratos
+- `associado_id` uuid FK associados
+- `tipo_operacao` varchar (adesao, reativacao, migracao, etc)
+- `config_data` jsonb (snapshot completo das regras vigentes)
+- `created_at` timestamptz
 
-2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
+Isso garante que operações já registradas mantêm os valores vigentes no momento.
 
-3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
+#### 2. Novo componente: `AssociadoSituacaoCard.tsx`
 
-4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
+Card dedicado para a aba Resumo exibindo:
 
----
+**Carência:**
+- Se `contrato.carencia_isenta` → "Isento de carência (migração aprovada)"
+- Senão → Início/Fim da carência, com badge "Em carência" ou "Carência concluída"
+- Se reativação: verifica `prazo_reativacao_dias` vs dias de inadimplência para determinar se nova carência foi aplicada
 
-## Health Check Universal para Todas as Integrações — ✅ Implementado
+**Inadimplência:**
+- Calcula dias de atraso com base em `cobrancasData`
+- Compara com prazos configurados (usar `comissoes_parametros`): 
+  - Dentro do prazo sem revistoria → "Inadimplente - regularização simples"
+  - Acima do prazo de revistoria → "Inadimplente - revistoria necessária"  
+  - Acima do prazo máximo → "Inadimplente - nova adesão obrigatória"
+- Esses prazos serão lidos de `comissoes_parametros` (novas chaves: `inadimplencia_prazo_sem_revistoria`, `inadimplencia_prazo_revistoria`, `inadimplencia_prazo_nova_adesao`)
 
-### O que foi criado
+**Coberturas:**
+- Se inadimplente → exibir badges "Suspensa" em cada cobertura
+- Se ativo → exibir coberturas com status normal
 
-1. **Tabela `integracoes_health_checks`** (genérica):
-   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
-   - Dados existentes do SGA migrados automaticamente
-   - RLS: leitura para autenticados, escrita para service_role
+**Multa rastreador:**
+- Se `associado.pendencia_rastreador` → exibir valor da multa via `useMultaRastreador()` (dinâmico)
 
-2. **Edge Function `cron-integracoes-health-check`**:
-   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
-   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
-   - Notifica admins (role `diretor`) se qualquer integração falhar
-   - Grava resultado por integração na tabela genérica
+**Consultor vinculado:**
+- Buscar `vendedor_original_id` do associado + `pontuacao_eventos` do contrato
+- Exibir nome do consultor e pontuação gerada nessa operação
 
-3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
-   - Props: `integracao` (slug) e `titulo` (opcional)
-   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
-   - Botão "Testar agora" invoca a edge function para a integração específica
+#### 3. Novos hooks
 
-4. **Hook `useIntegracaoHealthCheck(integracao)`**:
-   - Busca histórico filtrado por integração
-   - Mutation `testNow` para teste manual
-   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
+**`useConteudosSistema.ts`** — adicionar:
+- `useInadimplenciaPrazos()` → lê 3 chaves de `comissoes_parametros` (prazo sem revistoria, revistoria, nova adesão)
 
-5. **Integração nas páginas**:
-   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
-   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
-   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
+**`useAssociadoSituacao.ts`** — novo hook que agrega:
+- Dados de carência do contrato
+- Cálculo de inadimplência vs prazos configurados
+- Status das coberturas (ativo/suspenso)
+- Pontuação do consultor vinculado
 
-6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
-   ```sql
-   select cron.schedule(
-     'integracoes-health-check-3x-dia',
-     '0 8,13,18 * * *',
-     $$ select net.http_post(
-       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
-       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
-       body:='{}'::jsonb
-     ) as request_id; $$
-   );
-   ```
+#### 4. Inserir novas chaves em `comissoes_parametros`
 
-### Arquivos criados/modificados
-- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
-- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
-- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
-- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
-- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
-- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
-- `supabase/config.toml` — verify_jwt para nova function
+| Chave | Valor | Descrição |
+|---|---|---|
+| `inadimplencia_prazo_sem_revistoria` | `30` | Dias de atraso sem necessidade de revistoria |
+| `inadimplencia_prazo_revistoria` | `90` | Dias de atraso que exigem revistoria |
+| `inadimplencia_prazo_nova_adesao` | `180` | Dias de atraso que exigem nova adesão completa |
 
----
+#### 5. Integrar card na ficha
 
-## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
+- Inserir `AssociadoSituacaoCard` na aba "Resumo" (entre métricas e grid de info)
+- Atualizar `AssociadoResumoTab` para receber e exibir o novo card
 
-### Causas Raiz
-1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
-2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
-3. Triggers de sync sobrescreviam coordenadas válidas com `null`
+#### 6. Salvar snapshot na criação de contrato
 
-### Correções Aplicadas
+- Alterar o fluxo de criação de contrato (edge functions e hooks existentes) para:
+  1. Buscar configurações vigentes
+  2. Calcular e salvar `data_carencia_inicio`, `data_carencia_fim`, `carencia_isenta`
+  3. Inserir registro em `operacao_config_snapshot` com JSON das regras aplicadas
 
-1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
+### Resumo de arquivos
 
-2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
+| Arquivo | Alteração |
+|---|---|
+| Migration SQL | +colunas em `contratos`, +tabela `operacao_config_snapshot`, +chaves em `comissoes_parametros` |
+| `src/components/associados/detalhe/AssociadoSituacaoCard.tsx` | Novo componente |
+| `src/hooks/useConteudosSistema.ts` | +`useInadimplenciaPrazos()` |
+| `src/hooks/useAssociadoSituacao.ts` | Novo hook agregador |
+| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Integrar `AssociadoSituacaoCard` |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Passar dados ao ResumoTab |
+| `src/hooks/useMinhasCoberturasApp.ts` | Ler inadimplência para suspender coberturas no app |
 
-3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
-
-4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
-
----
-
-## Correção Triggers Enum Mismatch (status_instalacao → status_servico) — ✅ Implementado
-
-### Causa Raiz
-Triggers `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` faziam `status = NEW.status` direto, mas `NEW.status` é `status_instalacao` e `servicos.status` é `status_servico` — erro PostgreSQL 42804 abortava toda atribuição automática.
-
-### Correções Aplicadas
-1. **Função `map_to_status_servico(text)`**: Mapeamento explícito e imutável de qualquer texto para `status_servico`, com fallback seguro.
-2. **Triggers corrigidos**: Ambos agora usam `public.map_to_status_servico(NEW.status::text)` em vez de atribuição direta.
-3. **Observabilidade**: `processar-encaixes-automaticos` agora loga `code/message/details/hint` do erro antes de classificar como concorrência.
-
----
-
-## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
-
-### Bloqueios de adesão zero removidos
-
-| Arquivo | Correção |
-|---------|----------|
-| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
-| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
-| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
-
-### Geração automática de lançamentos CC vendedor externo
-
-Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
-1. Após criar instalação, busca `vendedor_id` da cotação
-2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
-3. Busca configurações de comissão da tabela `configuracoes`
-4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
-5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
-
----
-
-## Fluxo Completo Vendedor Externo — Autovistoria até Ativação 360 — ✅ Implementado
-
-### Gaps Corrigidos
-
-| Gap | Arquivo | Correção |
-|-----|---------|----------|
-| Propostas de autovistoria não apareciam no cadastro | `usePropostasPendentes.ts` L523 | Filtro agora permite propostas com `temAutovistoria` ou `temVistoriaBaseRealizada` mesmo sem instalação |
-| Race condition na isenção de adesão | `EtapaPagamentoCotacao.tsx` L245 | Passa `skipPaymentCheck: true` no body da Edge Function |
-| Edge Function falhava para autovistoria sem data | `criar-instalacao-pos-pagamento/index.ts` | Autovistoria sem data: pula instalação, mas gera lançamentos CC normalmente |
-| Aprovação ignorava preferências de agendamento | `usePropostasPendentes.ts` L1538-1590 | Busca `vistoria_completa_*` da cotação para criar instalação com dados do cliente |
-
-### Fluxo Corrigido
-
-```text
-Vendedor externo cria cotação (4 cenários)
-  → Cliente abre link → Plano → Docs → Assinatura → Vistoria → Pagamento/Isenção
-    → Edge Function gera lançamentos CC (mesmo sem data de instalação)
-    → Etapa 5: Cliente preenche preferência de agendamento
-    → Tela "Em Análise Cadastral"
-    → Proposta aparece no cadastro (filtro corrigido)
-    → Analista aprova → cobertura_roubo_furto = true
-    → Instalação criada COM dados de preferência do cliente
-    → Atribuição automática → Instalação → Proteção 360°
-```
