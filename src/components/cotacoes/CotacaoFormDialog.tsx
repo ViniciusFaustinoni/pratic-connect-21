@@ -177,6 +177,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const isCenarioIsento = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
 
   // Mínimo efetivo: volante quando cenário inclui rota
+  const minimoAdesaoVolante = isVendedorExterno ? minimoVolanteExterno : minimoVolanteInterno;
   const minimoAdesaoConfig = cenarioExterno?.includes('rota') ? minimoAdesaoVolante : minimoAdesaoBase;
   
   // Hook para verificar placa duplicada

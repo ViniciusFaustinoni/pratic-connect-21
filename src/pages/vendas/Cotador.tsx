@@ -235,7 +235,8 @@ export default function CotadorPage() {
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
-  const { data: minimoAdesaoVolante = 100 } = useTaxaAdesaoMinimoVolante();
+  const { data: minimoVolanteInterno = 150 } = useTaxaAdesaoMinimoVolanteInterno();
+  const { data: minimoVolanteExterno = 50 } = useTaxaAdesaoMinimoVolanteExterno();
   const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
