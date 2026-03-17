@@ -28,6 +28,7 @@ import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
 import { useRegioes } from '@/hooks/useRegioes';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
+import { ElegibilidadeTab } from './ElegibilidadeTab';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { PlanWithDetails } from '@/hooks/usePlans';
