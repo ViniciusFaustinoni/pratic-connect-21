@@ -604,7 +604,7 @@ export function PlanFormModal({
 
                     {/* Categorias de Veículo Aceitas */}
                     <div className="space-y-2">
-                      <Label>Categorias de Veículo Aceitas</Label>
+                      <Label>Categorias de Veículo Aceitas<FieldHint text={PLAN_FIELD_HINTS.categorias_veiculo} /></Label>
                       <div className="grid grid-cols-2 gap-2">
                         {VEHICLE_CATEGORIES.map((cat) => (
                           <div key={cat.value} className="flex items-center gap-2">
