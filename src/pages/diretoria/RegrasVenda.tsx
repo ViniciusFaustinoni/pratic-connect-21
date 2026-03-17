@@ -6,7 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { Award, Save, Loader2, Scale, Info } from 'lucide-react';
+import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle } from 'lucide-react';
 import { useComissoesFaixas } from '@/hooks/useComissoesFaixas';
 import { toast } from 'sonner';
 
@@ -31,6 +31,13 @@ interface RepasseMaiorConfig {
   repasse_maior_valor_reduzido: number;
 }
 
+interface MigracaoConfig {
+  migracao_comprovantes_exigidos: number;
+  migracao_prazo_resposta_horas: number;
+  migracao_canal_oficial: string;
+  migracao_isentar_carencia: boolean;
+}
+
 const PONTUACAO_DEFAULTS: PontuacaoConfig = {
   pontos_nova_adesao: 1,
   pontos_migracao_aprovada: 1,
@@ -52,6 +59,13 @@ const REPASSE_DEFAULTS: RepasseMaiorConfig = {
   repasse_maior_valor_reduzido: 150,
 };
 
+const MIGRACAO_DEFAULTS: MigracaoConfig = {
+  migracao_comprovantes_exigidos: 3,
+  migracao_prazo_resposta_horas: 48,
+  migracao_canal_oficial: 'e-mail',
+  migracao_isentar_carencia: true,
+};
+
 const CAMPOS_BLOCO1: { chave: keyof PontuacaoConfig; label: string }[] = [
   { chave: 'pontos_nova_adesao', label: 'Nova Adesão' },
   { chave: 'pontos_migracao_aprovada', label: 'Migração Aprovada' },
@@ -69,15 +83,18 @@ export default function RegrasVenda() {
   const { parametros, isLoading, updateParametro } = useComissoesFaixas();
   const [pontuacao, setPontuacao] = useState<PontuacaoConfig>(PONTUACAO_DEFAULTS);
   const [repasse, setRepasse] = useState<RepasseMaiorConfig>(REPASSE_DEFAULTS);
+  const [migracao, setMigracao] = useState<MigracaoConfig>(MIGRACAO_DEFAULTS);
   const [initialized, setInitialized] = useState(false);
   const [savingPontuacao, setSavingPontuacao] = useState(false);
   const [savingRepasse, setSavingRepasse] = useState(false);
+  const [savingMigracao, setSavingMigracao] = useState(false);
 
   // Initialize state from DB
   useEffect(() => {
     if (!parametros.length || initialized) return;
     const nextPontuacao = { ...PONTUACAO_DEFAULTS };
     const nextRepasse = { ...REPASSE_DEFAULTS };
+    const nextMigracao = { ...MIGRACAO_DEFAULTS };
 
     for (const p of parametros) {
       if (p.chave in nextPontuacao) {
@@ -90,9 +107,22 @@ export default function RegrasVenda() {
       if (p.chave in nextRepasse) {
         (nextRepasse as Record<string, unknown>)[p.chave] = parseFloat(p.valor) || 0;
       }
+      if (p.chave === 'migracao_comprovantes_exigidos') {
+        nextMigracao.migracao_comprovantes_exigidos = parseInt(p.valor) || 3;
+      }
+      if (p.chave === 'migracao_prazo_resposta_horas') {
+        nextMigracao.migracao_prazo_resposta_horas = parseInt(p.valor) || 48;
+      }
+      if (p.chave === 'migracao_canal_oficial') {
+        nextMigracao.migracao_canal_oficial = p.valor || 'e-mail';
+      }
+      if (p.chave === 'migracao_isentar_carencia') {
+        nextMigracao.migracao_isentar_carencia = p.valor === 'true';
+      }
     }
     setPontuacao(nextPontuacao);
     setRepasse(nextRepasse);
+    setMigracao(nextMigracao);
     setInitialized(true);
   }, [parametros, initialized]);
 
@@ -134,6 +164,21 @@ export default function RegrasVenda() {
     }
   };
 
+  const handleSaveMigracao = async () => {
+    setSavingMigracao(true);
+    try {
+      await updateParametro.mutateAsync({ chave: 'migracao_comprovantes_exigidos', valor: String(migracao.migracao_comprovantes_exigidos) });
+      await updateParametro.mutateAsync({ chave: 'migracao_prazo_resposta_horas', valor: String(migracao.migracao_prazo_resposta_horas) });
+      await updateParametro.mutateAsync({ chave: 'migracao_canal_oficial', valor: migracao.migracao_canal_oficial });
+      await updateParametro.mutateAsync({ chave: 'migracao_isentar_carencia', valor: String(migracao.migracao_isentar_carencia) });
+      toast.success('Configurações de migração salvas com sucesso!');
+    } catch {
+      // error handled by mutation
+    } finally {
+      setSavingMigracao(false);
+    }
+  };
+
   if (isLoading) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -160,6 +205,10 @@ export default function RegrasVenda() {
           <TabsTrigger value="repasse-maior" className="gap-2">
             <Scale className="h-4 w-4" />
             Repasse Maior
+          </TabsTrigger>
+          <TabsTrigger value="migracao" className="gap-2">
+            <ArrowRightLeft className="h-4 w-4" />
+            Migração
           </TabsTrigger>
         </TabsList>
 
@@ -399,6 +448,138 @@ export default function RegrasVenda() {
           <div className="flex justify-end">
             <Button onClick={handleSaveRepasse} disabled={savingRepasse} className="gap-2">
               {savingRepasse ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar configurações
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* ═══════════ ABA MIGRAÇÃO ═══════════ */}
+        <TabsContent value="migracao" className="space-y-6 mt-4">
+          {/* BLOCO 1 — Comprovantes exigidos */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Documentação obrigatória para aprovação</CardTitle>
+              <CardDescription>
+                Define quantos comprovantes de pagamento da associação anterior o consultor deve apresentar para solicitar migração.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="comprovantes_exigidos" className="flex-1 text-sm">
+                  Quantidade de comprovantes exigidos
+                </Label>
+                <Input
+                  id="comprovantes_exigidos"
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="w-24 text-right"
+                  value={migracao.migracao_comprovantes_exigidos}
+                  onChange={(e) =>
+                    setMigracao((prev) => ({
+                      ...prev,
+                      migracao_comprovantes_exigidos: e.target.value === '' ? 0 : parseInt(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 2 — Prazo de resposta */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Prazo para resposta da Praticcar</CardTitle>
+              <CardDescription>
+                Tempo máximo em horas úteis para a Praticcar responder à solicitação de migração enviada por e-mail.
+              </CardDescription>
+            </CardHeader>
+            <CardContent>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="prazo_resposta" className="flex-1 text-sm">
+                  Prazo em horas úteis
+                </Label>
+                <Input
+                  id="prazo_resposta"
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="w-24 text-right"
+                  value={migracao.migracao_prazo_resposta_horas}
+                  onChange={(e) =>
+                    setMigracao((prev) => ({
+                      ...prev,
+                      migracao_prazo_resposta_horas: e.target.value === '' ? 0 : parseInt(e.target.value),
+                    }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 3 — Canal oficial */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Canal válido para solicitação</CardTitle>
+              <CardDescription>
+                Define qual canal é aceito para receber pedidos de autorização de migração. Solicitações por outros canais são automaticamente inválidas.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="canal_oficial" className="flex-1 text-sm">
+                  Canal oficial
+                </Label>
+                <Input
+                  id="canal_oficial"
+                  type="text"
+                  className="w-48 text-right"
+                  value={migracao.migracao_canal_oficial}
+                  onChange={(e) =>
+                    setMigracao((prev) => ({ ...prev, migracao_canal_oficial: e.target.value }))
+                  }
+                />
+              </div>
+              <Alert variant="destructive" className="border-destructive/30 bg-destructive/5">
+                <AlertTriangle className="h-4 w-4" />
+                <AlertDescription className="text-sm">
+                  Solicitações recebidas por qualquer canal diferente do informado acima são consideradas inválidas e não geram autorização.
+                </AlertDescription>
+              </Alert>
+            </CardContent>
+          </Card>
+
+          {/* BLOCO 4 — Isenção de carência */}
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Isenção de carência para migrações aprovadas</CardTitle>
+              <CardDescription>
+                Define se associados com migração aprovada ficam isentos do período de carência padrão.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-4">
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="isentar_carencia" className="flex-1 text-sm">
+                  Isentar carência em migrações aprovadas
+                </Label>
+                <Switch
+                  id="isentar_carencia"
+                  checked={migracao.migracao_isentar_carencia}
+                  onCheckedChange={(checked) =>
+                    setMigracao((prev) => ({ ...prev, migracao_isentar_carencia: checked }))
+                  }
+                />
+              </div>
+              <p className="text-xs text-muted-foreground leading-relaxed">
+                Quando ativado, o período de carência configurado no sistema não se aplica a associados cuja migração foi formalmente aprovada. Quando desativado, a carência padrão vale para todos.
+              </p>
+            </CardContent>
+          </Card>
+
+          {/* Botão Salvar */}
+          <div className="flex justify-end">
+            <Button onClick={handleSaveMigracao} disabled={savingMigracao} className="gap-2">
+              {savingMigracao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Salvar configurações
             </Button>
           </div>
