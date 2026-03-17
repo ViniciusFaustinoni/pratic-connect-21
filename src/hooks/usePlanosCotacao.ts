@@ -617,6 +617,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
         anoMinimo: anoMinimo || undefined,
         elegibilidadeStatus,
+        precoDesagioAplicado: isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || ''),
       });
     }
 

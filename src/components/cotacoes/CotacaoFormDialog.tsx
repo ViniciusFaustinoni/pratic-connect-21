@@ -396,11 +396,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return nomeValido && telefoneValido;
   }, [nomeAssociado, telefoneAssociado]);
 
-  // Alerta da categoria selecionada
+  // Alerta da categoria selecionada (do banco)
   const alertaCategoria = useMemo(() => {
-    if (!categoria) return null;
-    return ALERTAS_CATEGORIA[categoria] || null;
-  }, [categoria]);
+    if (!categoria || !observacoesCategoria) return null;
+    const texto = observacoesCategoria[categoria];
+    if (!texto) return null;
+    return { tipo: 'warning' as const, mensagem: texto };
+  }, [categoria, observacoesCategoria]);
 
   // Resetar formulário quando o modal abre sem leadId (exceto em modo edição ou duplicação)
   useEffect(() => {
