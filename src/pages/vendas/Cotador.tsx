@@ -63,6 +63,8 @@ import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { PlacaBlacklistModal } from '@/components/cotacoes/PlacaBlacklistModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { Switch } from '@/components/ui/switch';
+import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 
 // ============================================
 // INTERFACES
