@@ -221,8 +221,8 @@ const menuConfig: {
           icon: AlertTriangle,
         },
         {
-          title: 'Acionamentos Roubo/Furto',
-          url: '/monitoramento/acionamentos-roubo',
+          title: 'Aprovação de Associados',
+          url: '/monitoramento/aprovacao-associados',
           icon: ShieldAlert,
           permission: 'canManageRastreadores',
         },
