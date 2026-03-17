@@ -50,6 +50,7 @@ import { ExcluirAssociadoDialog, type TipoExclusao } from '@/components/cadastro
 import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastreador';
 import { supabase } from '@/integrations/supabase/client';
 import { SubstituicaoStatusCard } from '@/components/substituicao/SubstituicaoStatusCard';
+import { ReativacaoWizard } from '@/components/associados/reativacao/ReativacaoWizard';
 
 // New redesign components
 import { AssociadoHeroHeader } from '@/components/associados/detalhe/AssociadoHeroHeader';
@@ -151,6 +152,7 @@ export default function AssociadoDetalhe() {
   const { isAnalistaCadastroOnly, isDiretor, isGerencia, isDesenvolvedor, isAdminMaster } = usePermissions();
 
   const [activeTab, setActiveTab] = useState('resumo');
+  const [reativacaoWizardOpen, setReativacaoWizardOpen] = useState(false);
   const [suspenderDialogOpen, setSuspenderDialogOpen] = useState(false);
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
   const [excluirDialogOpen, setExcluirDialogOpen] = useState(false);
@@ -250,7 +252,7 @@ export default function AssociadoDetalhe() {
     }
   };
   const handleSuspender = (motivo: string) => { if (id) suspenderAssociado({ id, motivo }); };
-  const handleReativar = () => { if (id) reativarAssociado(id); };
+  const handleReativar = () => { setReativacaoWizardOpen(true); };
 
   const handleConfirmRastreadorModal = async (acao: 'criar_retirada' | 'apenas_registrar') => {
     if (!rastreadorModalData || !id || !associado) return;
@@ -393,6 +395,7 @@ export default function AssociadoDetalhe() {
         statusPlataforma={statusPlataforma}
         permissions={{ isAnalistaCadastroOnly, isDiretor, isGerencia, isDesenvolvedor, isAdminMaster }}
         docsPendentes={docsPendentes}
+        coberturasSuspensas={situacao.coberturasSuspensas}
         onSuspender={() => setSuspenderDialogOpen(true)}
         onReativar={handleReativar}
         onCancelar={() => setCancelarDialogOpen(true)}
@@ -951,6 +954,17 @@ export default function AssociadoDetalhe() {
           veiculo={rastreadorModalData.veiculo}
           onConfirm={handleConfirmRastreadorModal}
           isLoading={isProcessingCancelamento}
+        />
+      )}
+
+      {/* Wizard Reativação */}
+      {id && contrato && (
+        <ReativacaoWizard
+          open={reativacaoWizardOpen}
+          onOpenChange={setReativacaoWizardOpen}
+          associadoId={id}
+          contratoId={contrato.id}
+          situacao={situacao}
         />
       )}
     </div>

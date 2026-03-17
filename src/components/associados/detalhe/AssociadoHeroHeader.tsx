@@ -33,6 +33,7 @@ interface AssociadoHeroHeaderProps {
     isAdminMaster: boolean;
   };
   docsPendentes: number;
+  coberturasSuspensas?: boolean;
   // Actions
   onSuspender: () => void;
   onReativar: () => void;
@@ -75,7 +76,7 @@ const formatCurrency = (v: number | null | undefined) =>
 
 export function AssociadoHeroHeader({
   associado, status, statusLabel, statusColor, contrato, resumoFinanceiro,
-  veiculosComRastreador, statusPlataforma, permissions, docsPendentes,
+  veiculosComRastreador, statusPlataforma, permissions, docsPendentes, coberturasSuspensas,
   onSuspender, onReativar, onCancelar, onAbrirMapa, onWhatsApp, onEmail,
   onSincronizar, onExcluir, setActiveTab, isReativando, isSincronizando,
 }: AssociadoHeroHeaderProps) {
@@ -202,7 +203,7 @@ export function AssociadoHeroHeader({
                 <Pause className="h-3.5 w-3.5 mr-1.5" /> Suspender
               </Button>
             )}
-            {status === 'suspenso' && (
+            {(status === 'suspenso' || coberturasSuspensas) && (
               <Button size="sm" variant="outline" className="text-emerald-600 hover:text-emerald-700 hover:border-emerald-300" onClick={onReativar} disabled={isReativando}>
                 {isReativando ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Play className="h-3.5 w-3.5 mr-1.5" />}
                 Reativar

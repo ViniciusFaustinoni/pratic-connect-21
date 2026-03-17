@@ -293,7 +293,7 @@ const menuConfig: {
     },
     {
       id: 'cobranca',
-      label: 'Cobrança',
+      label: 'Relacionamento',
       icon: UserX,
       permission: 'isGerencia',
       color: MENU_COLORS.cobranca,

@@ -309,7 +309,7 @@ const InadimplenteDetalhe = () => {
           {/* Timeline Unificada */}
           <Card>
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-base"><Clock className="h-4 w-4" />Timeline de Cobrança</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base"><Clock className="h-4 w-4" />Timeline de Relacionamento</CardTitle>
               <Button variant="outline" size="sm" onClick={() => setContatoModalOpen(true)}><Plus className="h-4 w-4 mr-1" />Registrar Contato</Button>
             </CardHeader>
             <CardContent>
@@ -323,7 +323,7 @@ const InadimplenteDetalhe = () => {
         {/* Coluna 3 — Ações */}
         <div className="space-y-6">
           <Card>
-            <CardHeader className="pb-3"><CardTitle className="text-base">Ações de Cobrança</CardTitle></CardHeader>
+            <CardHeader className="pb-3"><CardTitle className="text-base">Ações de Relacionamento</CardTitle></CardHeader>
             <CardContent className="space-y-3">
               <Button className="w-full" asChild><a href={`tel:${associado.telefone}`}><Phone className="h-4 w-4 mr-2" />Ligar Agora</a></Button>
               <Button variant="outline" className="w-full" onClick={() => openWhatsApp(associado.whatsapp || associado.telefone)}><MessageSquare className="h-4 w-4 mr-2" />Enviar WhatsApp</Button>

@@ -156,8 +156,8 @@ export default function ReguaCobranca() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold">Régua de Cobrança</h1>
-          <p className="text-muted-foreground">Configure o fluxo automatizado de cobrança</p>
+          <h1 className="text-2xl font-bold">Régua de Relacionamento</h1>
+          <p className="text-muted-foreground">Configure o fluxo automatizado de relacionamento</p>
         </div>
         <Button onClick={() => salvarRegua.mutate()} disabled={salvarRegua.isPending}>
           <Save className="h-4 w-4 mr-2" />
