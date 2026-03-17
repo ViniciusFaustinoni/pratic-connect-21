@@ -49,7 +49,7 @@ export function resolverTipoUsoQuery(
   const temColunaApp = config.linhasComColunaApp.includes(linhaLower);
   const regiaoExigeAdicional = config.regioesComAdicional.includes(regiaoLower);
 
-  if (temColunaApp && regiaoExigeAdicional) {
+  if (temColunaApp) {
     return 'aplicativo';
   }
 

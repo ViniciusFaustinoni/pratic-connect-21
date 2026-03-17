@@ -1,0 +1,1 @@
+UPDATE planos SET tipo_uso = 'ambos' WHERE linha = 'select-one' AND ativo = true;

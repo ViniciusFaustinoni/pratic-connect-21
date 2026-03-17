@@ -344,7 +344,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const sortPriority = plProductLine?.sort_priority || 100;
 
       // Filtrar por tipo de uso: passeio vs aplicativo
-      if (params.usoApp && tipoUsoPlano !== 'aplicativo') continue;
+      if (params.usoApp && tipoUsoPlano !== 'aplicativo' && tipoUsoPlano !== 'ambos') continue;
       if (!params.usoApp && tipoUsoPlano === 'aplicativo') continue;
 
       // Filtrar motos/carros/elétricos usando vehicle_type e linha_slug do banco
