@@ -1,5 +1,6 @@
 import { useState, useEffect, useMemo } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
+import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -97,6 +98,10 @@ export interface PrefilledCotacaoData {
   categoria?: string | null;
   regiao?: string;
   usoApp?: boolean;
+  indicacao?: {
+    indicador_id: string;
+    indicador_nome: string;
+  };
 }
 
 interface ContratoFormDialogProps {
@@ -244,6 +249,31 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
         cliente_telefone: pendingFormData.cliente_telefone || selectedLead?.telefone || null,
         cliente_cpf: pendingFormData.cliente_cpf || selectedLead?.cpf || null,
       });
+
+      // Vincular indicação se existir nos dados da cotação
+      if (prefilledData?.indicacao?.indicador_id && cotacaoPrioritaria?.id) {
+        try {
+          // Try to find existing indicação record and update it
+          const { data: existingIndicacao } = await (supabase as any)
+            .from('indicacoes')
+            .select('id')
+            .eq('indicador_id', prefilledData.indicacao.indicador_id)
+            .eq('cotacao_id', cotacaoPrioritaria.id)
+            .maybeSingle();
+
+          if (existingIndicacao) {
+            await (supabase as any)
+              .from('indicacoes')
+              .update({
+                status: 'convertido',
+                data_conversao: new Date().toISOString(),
+              })
+              .eq('id', existingIndicacao.id);
+          }
+        } catch (err) {
+          console.warn('Erro ao atualizar indicação:', err);
+        }
+      }
 
       toast.success('Proposta criada como rascunho');
       onOpenChange(false);

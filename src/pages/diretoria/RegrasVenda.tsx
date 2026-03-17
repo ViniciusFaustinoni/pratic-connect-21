@@ -5,9 +5,10 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Button } from '@/components/ui/button';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle, DollarSign, ShieldCheck } from 'lucide-react';
+import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle, DollarSign, ShieldCheck, UserPlus } from 'lucide-react';
 import { useComissoesFaixas } from '@/hooks/useComissoesFaixas';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -213,25 +214,70 @@ function useAutorizacoesConfiguracoes() {
   });
 }
 
+const INDICACAO_CHAVES = [
+  'indicacao_validade_dias',
+  'indicacao_valor_recompensa',
+  'indicacao_momento_pagamento',
+  'indicacao_gera_pontuacao_consultor',
+] as const;
+
+interface IndicacaoConfig {
+  indicacao_validade_dias: string;
+  indicacao_valor_recompensa: string;
+  indicacao_momento_pagamento: string;
+  indicacao_gera_pontuacao_consultor: string;
+}
+
+const INDICACAO_DEFAULTS: IndicacaoConfig = {
+  indicacao_validade_dias: '30',
+  indicacao_valor_recompensa: '50',
+  indicacao_momento_pagamento: 'apos_conversao',
+  indicacao_gera_pontuacao_consultor: 'true',
+};
+
+function useIndicacaoConfiguracoes() {
+  return useQuery({
+    queryKey: ['configuracoes-indicacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', [...INDICACAO_CHAVES]);
+      if (error) throw error;
+      const map = { ...INDICACAO_DEFAULTS };
+      for (const row of data || []) {
+        if (row.chave in map) {
+          (map as Record<string, string>)[row.chave] = row.valor ?? INDICACAO_DEFAULTS[row.chave as keyof IndicacaoConfig];
+        }
+      }
+      return map;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
 
 export default function RegrasVenda() {
   const { parametros, isLoading, updateParametro } = useComissoesFaixas();
   const queryClient = useQueryClient();
   const { data: taxasDB, isLoading: isLoadingTaxas } = useTaxasConfiguracoes();
   const { data: autorizacoesDB, isLoading: isLoadingAutorizacoes } = useAutorizacoesConfiguracoes();
+  const { data: indicacaoDB, isLoading: isLoadingIndicacao } = useIndicacaoConfiguracoes();
   const [pontuacao, setPontuacao] = useState<PontuacaoConfig>(PONTUACAO_DEFAULTS);
   const [repasse, setRepasse] = useState<RepasseMaiorConfig>(REPASSE_DEFAULTS);
   const [migracao, setMigracao] = useState<MigracaoConfig>(MIGRACAO_DEFAULTS);
   const [taxas, setTaxas] = useState<TaxasConfig>(TAXAS_DEFAULTS);
   const [autorizacoes, setAutorizacoes] = useState<AutorizacoesConfig>(AUTORIZACOES_DEFAULTS);
+  const [indicacao, setIndicacao] = useState<IndicacaoConfig>(INDICACAO_DEFAULTS);
   const [initialized, setInitialized] = useState(false);
   const [taxasInitialized, setTaxasInitialized] = useState(false);
   const [autorizacoesInitialized, setAutorizacoesInitialized] = useState(false);
+  const [indicacaoInitialized, setIndicacaoInitialized] = useState(false);
   const [savingPontuacao, setSavingPontuacao] = useState(false);
   const [savingRepasse, setSavingRepasse] = useState(false);
   const [savingMigracao, setSavingMigracao] = useState(false);
   const [savingTaxas, setSavingTaxas] = useState(false);
   const [savingAutorizacoes, setSavingAutorizacoes] = useState(false);
+  const [savingIndicacao, setSavingIndicacao] = useState(false);
 
   // Initialize taxas from DB
   useEffect(() => {
@@ -248,6 +294,14 @@ export default function RegrasVenda() {
       setAutorizacoesInitialized(true);
     }
   }, [autorizacoesDB, autorizacoesInitialized]);
+
+  // Initialize indicacao from DB
+  useEffect(() => {
+    if (indicacaoDB && !indicacaoInitialized) {
+      setIndicacao(indicacaoDB);
+      setIndicacaoInitialized(true);
+    }
+  }, [indicacaoDB, indicacaoInitialized]);
 
   // Initialize state from DB
   useEffect(() => {
@@ -405,7 +459,26 @@ export default function RegrasVenda() {
     });
   };
 
-  if (isLoading || isLoadingTaxas || isLoadingAutorizacoes) {
+  const handleSaveIndicacao = async () => {
+    setSavingIndicacao(true);
+    try {
+      for (const chave of INDICACAO_CHAVES) {
+        await supabase
+          .from('configuracoes')
+          .update({ valor: indicacao[chave], updated_at: new Date().toISOString() })
+          .eq('chave', chave);
+      }
+      queryClient.invalidateQueries({ queryKey: ['configuracoes-indicacao'] });
+      queryClient.invalidateQueries({ queryKey: ['configuracao'] });
+      toast.success('Configurações de indicação salvas com sucesso!');
+    } catch {
+      toast.error('Erro ao salvar configurações de indicação');
+    } finally {
+      setSavingIndicacao(false);
+    }
+  };
+
+  if (isLoading || isLoadingTaxas || isLoadingAutorizacoes || isLoadingIndicacao) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
@@ -443,6 +516,10 @@ export default function RegrasVenda() {
           <TabsTrigger value="autorizacoes" className="gap-2">
             <ShieldCheck className="h-4 w-4" />
             Autorizações e Exceções
+          </TabsTrigger>
+          <TabsTrigger value="indicacao" className="gap-2">
+            <UserPlus className="h-4 w-4" />
+            Indicação
           </TabsTrigger>
         </TabsList>
 
@@ -1312,6 +1389,108 @@ export default function RegrasVenda() {
           <div className="flex justify-end">
             <Button onClick={handleSaveAutorizacoes} disabled={savingAutorizacoes} className="gap-2">
               {savingAutorizacoes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar configurações
+            </Button>
+          </div>
+        </TabsContent>
+
+        {/* ═══════════ ABA INDICAÇÃO ═══════════ */}
+        <TabsContent value="indicacao" className="space-y-6 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Programa de Indicação</CardTitle>
+              <CardDescription>
+                Configure as regras do programa de indicação entre associados. Esses valores refletem no app do associado e no módulo de marketing.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="indicacao_validade_dias" className="text-sm">
+                    Prazo de validade da indicação (dias)
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Após esse prazo sem conversão, a indicação expira automaticamente.
+                  </p>
+                </div>
+                <Input
+                  id="indicacao_validade_dias"
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="w-24 text-right"
+                  value={indicacao.indicacao_validade_dias}
+                  onChange={(e) => setIndicacao(prev => ({ ...prev, indicacao_validade_dias: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="indicacao_valor_recompensa" className="text-sm">
+                    Valor da recompensa para o indicador (R$)
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Valor monetário pago ao associado que realizou a indicação.
+                  </p>
+                </div>
+                <Input
+                  id="indicacao_valor_recompensa"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="w-32 text-right"
+                  value={indicacao.indicacao_valor_recompensa}
+                  onChange={(e) => setIndicacao(prev => ({ ...prev, indicacao_valor_recompensa: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="indicacao_momento_pagamento" className="text-sm">
+                    Momento do pagamento da recompensa
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Define quando a recompensa é liberada para o indicador.
+                  </p>
+                </div>
+                <Select
+                  value={indicacao.indicacao_momento_pagamento}
+                  onValueChange={(v) => setIndicacao(prev => ({ ...prev, indicacao_momento_pagamento: v }))}
+                >
+                  <SelectTrigger className="w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="apos_conversao">Após conversão confirmada</SelectItem>
+                    <SelectItem value="apos_primeiro_boleto">Após pagamento do primeiro boleto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="indicacao_pontuacao" className="text-sm">
+                    Indicação gera pontuação para o consultor
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Quando ativado, usa o valor configurado na aba Pontuação do Consultor para "Indicação Convertida".
+                  </p>
+                </div>
+                <Switch
+                  id="indicacao_pontuacao"
+                  checked={indicacao.indicacao_gera_pontuacao_consultor === 'true'}
+                  onCheckedChange={(checked) =>
+                    setIndicacao(prev => ({ ...prev, indicacao_gera_pontuacao_consultor: String(checked) }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botão Salvar */}
+          <div className="flex justify-end">
+            <Button onClick={handleSaveIndicacao} disabled={savingIndicacao} className="gap-2">
+              {savingIndicacao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
               Salvar configurações
             </Button>
           </div>

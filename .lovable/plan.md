@@ -1,63 +1,167 @@
+## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
+### Causas Raiz Identificadas
+1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
+2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
+3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-## Plan: Connect Referral System — Cotador, Associate Detail, Config Tab
+### Correções Aplicadas
 
-### Part 1 — Fix cotador → contract indicação data flow
+1. **`sga-hinova-sync/index.ts`**:
+   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
+   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
 
-The cotador already has real-time search for the referrer (working). The problem is `PrefilledCotacaoData` doesn't include indicação fields, so the data is lost when navigating to contracts.
+2. **`cron-sga-retry/index.ts`**:
+   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
 
-**Changes:**
+---
 
-1. **`src/components/contratos/ContratoFormDialog.tsx`** — Add `indicacao?: { indicador_id: string; indicador_nome: string }` to `PrefilledCotacaoData`. When creating the contract, if indicação data exists, also insert/update the `indicacoes` table record linking `indicador_id` to the new `associado_id` with status `convertido`.
+## Painel de Monitoramento SGA Hinova — ✅ Implementado
 
-2. **`src/pages/vendas/Cotacao.tsx`** — Already passes `indicacao` in `dadosCotacao`. The `PrefilledCotacaoData` also needs `associado` fields (nome, email, telefone) and `indicacao`. Currently `dadosCotacao` has them but the interface doesn't — extend it.
+### O que foi criado
 
-3. **Contract creation flow** (`ContratoFormDialog` or the `useCreateContrato` hook) — After successful contract + associado creation, if `indicacao` data was provided:
-   - Query `indicacoes` for a matching record (`indicador_id` + `indicado_telefone` or `indicado_nome`) and update its `status` to `convertido`, `associado_id` to the new associate, `data_conversao` to now
-   - If no existing record found, insert a new `indicacoes` row with status `convertido`
+1. **Página `/configuracoes/integracoes/sga-hinova`** com:
+   - Status de conexão com API Hinova (teste em tempo real)
+   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
+   - Logs recentes dos últimos 50 registros
+   - Veículos pendentes (ativos não sincronizados) com envio individual
+   - Histórico de health checks
 
-### Part 2 — "Origem do cadastro" section in associate detail
+2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
 
-**New component:** `src/components/associados/detalhe/OrigemCadastroCard.tsx`
+3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
 
-A read-only card that queries:
-- `indicacoes` table where `associado_id = current associate id` to find if they were referred
-- `contratos` table for consultant info and creation date
+4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
 
-Displays:
-- **Tipo de entrada**: Determined by checking if an `indicacoes` record exists (→ "Indicação"), or if `contrato.tipo_instalacao` or other fields suggest migration/reactivation. Falls back to "Nova adesão"
-- **Indicador**: Name with link to `/cadastro/associados/{indicador_id}` (only when type is Indicação)
-- **Consultor responsável**: From contract's vendedor join
-- **Data da conversão**: Contract creation date or indicação `data_conversao`
+---
 
-**Integration:** Add this card to `AssociadoResumoTab.tsx` between the Situação card and the Info Grid, passing the `associado.id`.
+## Health Check Universal para Todas as Integrações — ✅ Implementado
 
-### Part 3 — "Indicação" tab in Regras de Venda
+### O que foi criado
 
-Add a new tab to `src/pages/diretoria/RegrasVenda.tsx`.
+1. **Tabela `integracoes_health_checks`** (genérica):
+   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
+   - Dados existentes do SGA migrados automaticamente
+   - RLS: leitura para autenticados, escrita para service_role
 
-**New config keys** (insert into `configuracoes` table via migration):
-- `indicacao_validade_dias` — default `"30"`
-- `indicacao_valor_recompensa` — default `"50"`
-- `indicacao_momento_pagamento` — default `"apos_conversao"` (options: `apos_conversao`, `apos_primeiro_boleto`)
-- `indicacao_gera_pontuacao_consultor` — default `"true"`
+2. **Edge Function `cron-integracoes-health-check`**:
+   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
+   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
+   - Notifica admins (role `diretor`) se qualquer integração falhar
+   - Grava resultado por integração na tabela genérica
 
-**Tab UI:**
-- Number input: "Prazo de validade da indicação (dias)"
-- Currency input: "Valor da recompensa para o indicador (R$)"
-- Select: "Momento do pagamento" with 2 options
-- Toggle: "Indicação gera pontuação para o consultor"
-- Save button using same pattern as other tabs (upsert into `configuracoes`)
+3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
+   - Props: `integracao` (slug) e `titulo` (opcional)
+   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
+   - Botão "Testar agora" invoca a edge function para a integração específica
 
-Add `TabsTrigger value="indicacao"` with `UserPlus` icon after "Autorizações e Exceções".
+4. **Hook `useIntegracaoHealthCheck(integracao)`**:
+   - Busca histórico filtrado por integração
+   - Mutation `testNow` para teste manual
+   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
 
-**Note:** The existing `programa_indicacao` table has similar fields (`prazo_validade_dias`, `valor_indicador`, `condicao_pagamento`). The new config keys in `configuracoes` serve as global defaults. The `programa_indicacao` records override these when a specific program is active.
+5. **Integração nas páginas**:
+   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
+   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
+   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
 
-### Files changed
+6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
+   ```sql
+   select cron.schedule(
+     'integracoes-health-check-3x-dia',
+     '0 8,13,18 * * *',
+     $$ select net.http_post(
+       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
+       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
+       body:='{}'::jsonb
+     ) as request_id; $$
+   );
+   ```
 
-1. **Migration** — insert 4 new config keys into `configuracoes`
-2. `src/components/contratos/ContratoFormDialog.tsx` — extend `PrefilledCotacaoData` with indicação, handle post-creation indicação update
-3. `src/components/associados/detalhe/OrigemCadastroCard.tsx` — **new** read-only origin card
-4. `src/components/associados/detalhe/AssociadoResumoTab.tsx` — add OrigemCadastroCard
-5. `src/pages/diretoria/RegrasVenda.tsx` — new "Indicação" tab
+### Arquivos criados/modificados
+- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
+- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
+- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
+- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
+- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
+- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
+- `supabase/config.toml` — verify_jwt para nova function
 
+---
+
+## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
+
+### Causas Raiz
+1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
+2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
+3. Triggers de sync sobrescreviam coordenadas válidas com `null`
+
+### Correções Aplicadas
+
+1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
+
+2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
+
+3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
+
+4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
+
+---
+
+## Correção Triggers Enum Mismatch (status_instalacao → status_servico) — ✅ Implementado
+
+### Causa Raiz
+Triggers `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` faziam `status = NEW.status` direto, mas `NEW.status` é `status_instalacao` e `servicos.status` é `status_servico` — erro PostgreSQL 42804 abortava toda atribuição automática.
+
+### Correções Aplicadas
+1. **Função `map_to_status_servico(text)`**: Mapeamento explícito e imutável de qualquer texto para `status_servico`, com fallback seguro.
+2. **Triggers corrigidos**: Ambos agora usam `public.map_to_status_servico(NEW.status::text)` em vez de atribuição direta.
+3. **Observabilidade**: `processar-encaixes-automaticos` agora loga `code/message/details/hint` do erro antes de classificar como concorrência.
+
+---
+
+## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
+
+### Bloqueios de adesão zero removidos
+
+| Arquivo | Correção |
+|---------|----------|
+| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
+| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
+| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
+
+### Geração automática de lançamentos CC vendedor externo
+
+Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
+1. Após criar instalação, busca `vendedor_id` da cotação
+2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
+3. Busca configurações de comissão da tabela `configuracoes`
+4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
+5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
+
+---
+
+## Fluxo Completo Vendedor Externo — Autovistoria até Ativação 360 — ✅ Implementado
+
+### Gaps Corrigidos
+
+| Gap | Arquivo | Correção |
+|-----|---------|----------|
+| Propostas de autovistoria não apareciam no cadastro | `usePropostasPendentes.ts` L523 | Filtro agora permite propostas com `temAutovistoria` ou `temVistoriaBaseRealizada` mesmo sem instalação |
+| Race condition na isenção de adesão | `EtapaPagamentoCotacao.tsx` L245 | Passa `skipPaymentCheck: true` no body da Edge Function |
+| Edge Function falhava para autovistoria sem data | `criar-instalacao-pos-pagamento/index.ts` | Autovistoria sem data: pula instalação, mas gera lançamentos CC normalmente |
+| Aprovação ignorava preferências de agendamento | `usePropostasPendentes.ts` L1538-1590 | Busca `vistoria_completa_*` da cotação para criar instalação com dados do cliente |
+
+### Fluxo Corrigido
+
+```text
+Vendedor externo cria cotação (4 cenários)
+  → Cliente abre link → Plano → Docs → Assinatura → Vistoria → Pagamento/Isenção
+    → Edge Function gera lançamentos CC (mesmo sem data de instalação)
+    → Etapa 5: Cliente preenche preferência de agendamento
+    → Tela "Em Análise Cadastral"
+    → Proposta aparece no cadastro (filtro corrigido)
+    → Analista aprova → cobertura_roubo_furto = true
+    → Instalação criada COM dados de preferência do cliente
+    → Atribuição automática → Instalação → Proteção 360°
+```

@@ -7,6 +7,7 @@ import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
 import { AssociadoSituacaoCard } from './AssociadoSituacaoCard';
+import { OrigemCadastroCard } from './OrigemCadastroCard';
 import type { SituacaoAssociado } from '@/hooks/useAssociadoSituacao';
 
 interface AssociadoResumoTabProps {
@@ -104,6 +105,9 @@ export function AssociadoResumoTab({
 
       {/* Situação do Associado */}
       {situacao && <AssociadoSituacaoCard situacao={situacao} />}
+
+      {/* Origem do Cadastro */}
+      {associado?.id && <OrigemCadastroCard associadoId={associado.id} />}
 
       {/* Info Grid */}
       <div className="grid sm:grid-cols-2 gap-3">
