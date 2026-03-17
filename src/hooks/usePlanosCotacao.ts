@@ -176,7 +176,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('plano_elegibilidade_modelos')
-        .select('plano_id, marca, modelo, ano_min, ano_max, combustivel, status, observacao')
+        .select('plano_id, marca, modelo, ano_min, ano_max, combustivel, status, observacao, cobertura_fipe')
         .eq('is_active', true);
       if (error) throw error;
       return data ?? [];

@@ -769,6 +769,14 @@ export function PlanFormModal({
                     />
                   </TabsContent>
 
+                  <TabsContent value="elegibilidade">
+                    {plan?.id ? (
+                      <ElegibilidadeTab planoId={plan.id} linhaSlug={formData.linha_slug || ''} />
+                    ) : (
+                      <p className="text-sm text-muted-foreground py-4">Salve o plano primeiro para configurar elegibilidade.</p>
+                    )}
+                  </TabsContent>
+
                   <TabsContent value="outros" className="space-y-4">
                     <div className="space-y-2">
                       <Label htmlFor="restriction_alert">Alerta de Restrição</Label>
