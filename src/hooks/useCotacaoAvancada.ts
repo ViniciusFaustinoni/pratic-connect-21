@@ -91,6 +91,7 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
           .from('planos')
           .select('id, codigo, nome, categoria, valor_adesao, descricao, adicional_mensal, desconto_percentual')
           .eq('ativo', true)
+          .eq('visivel_gestao', true)
           .order('ordem', { ascending: true }),
         supabase
           .from('plano_preco_map')
