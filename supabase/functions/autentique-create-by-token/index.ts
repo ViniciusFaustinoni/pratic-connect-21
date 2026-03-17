@@ -215,8 +215,19 @@ serve(async (req) => {
     let templateUsado: string;
 
     if (usandoTemplateBanco) {
+      // Validar regras se o template usa variáveis {{regras.*}}
+      if (templateDB.conteudo.includes('{{regras.') && regrasFaltantes.length > 0) {
+        console.error('[autentique-create-by-token] Template usa variáveis de regras mas há configurações faltantes:', regrasFaltantes);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Configurações de Regras de Venda incompletas. Chaves faltantes: ${regrasFaltantes.join(', ')}. Configure em Diretoria > Regras de Venda.`,
+            errorCode: 'MISSING_REGRAS_VENDA',
+          }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       // Usar template dinâmico do banco (mesma lógica do autentique-create)
-      const conteudoPreenchido = substituirVariaveis(templateDB.conteudo, templateData);
       let conteudoHTML = markdownParaHTML(conteudoPreenchido);
       // Sanitizar blocos de assinatura manual que possam existir no template
       conteudoHTML = sanitizeSignatureBlocks(conteudoHTML);
