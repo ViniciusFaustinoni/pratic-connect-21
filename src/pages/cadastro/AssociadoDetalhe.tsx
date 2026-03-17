@@ -56,6 +56,7 @@ import { AssociadoHeroHeader } from '@/components/associados/detalhe/AssociadoHe
 import { AssociadoResumoTab } from '@/components/associados/detalhe/AssociadoResumoTab';
 import { AssociadoTabNav } from '@/components/associados/detalhe/AssociadoTabNav';
 import { AdicionarRessalva } from '@/components/cadastro/AdicionarRessalva';
+import { useAssociadoSituacao } from '@/hooks/useAssociadoSituacao';
 
 // ============================================
 // UTILITÁRIOS
