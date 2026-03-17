@@ -309,7 +309,7 @@ const InadimplenteDetalhe = () => {
           {/* Timeline Unificada */}
           <Card>
             <CardHeader className="pb-3 flex flex-row items-center justify-between">
-              <CardTitle className="flex items-center gap-2 text-base"><Clock className="h-4 w-4" />Timeline de Cobrança</CardTitle>
+              <CardTitle className="flex items-center gap-2 text-base"><Clock className="h-4 w-4" />Timeline de Relacionamento</CardTitle>
               <Button variant="outline" size="sm" onClick={() => setContatoModalOpen(true)}><Plus className="h-4 w-4 mr-1" />Registrar Contato</Button>
             </CardHeader>
             <CardContent>
