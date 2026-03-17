@@ -395,6 +395,7 @@ export default function AssociadoDetalhe() {
         statusPlataforma={statusPlataforma}
         permissions={{ isAnalistaCadastroOnly, isDiretor, isGerencia, isDesenvolvedor, isAdminMaster }}
         docsPendentes={docsPendentes}
+        coberturasSuspensas={situacao.coberturasSuspensas}
         onSuspender={() => setSuspenderDialogOpen(true)}
         onReativar={handleReativar}
         onCancelar={() => setCancelarDialogOpen(true)}
