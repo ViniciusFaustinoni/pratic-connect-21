@@ -79,7 +79,7 @@ export function AssociadoHeroHeader({
   associado, status, statusLabel, statusColor, contrato, resumoFinanceiro,
   veiculosComRastreador, statusPlataforma, permissions, docsPendentes, coberturasSuspensas,
   onSuspender, onReativar, onCancelar, onAbrirMapa, onWhatsApp, onEmail,
-  onSincronizar, onExcluir, setActiveTab, isReativando, isSincronizando,
+  onSincronizar, onExcluir, onTrocaTitularidade, setActiveTab, isReativando, isSincronizando,
 }: AssociadoHeroHeaderProps) {
   const navigate = useNavigate();
   const id = associado.id;
