@@ -90,6 +90,7 @@ const TAXAS_CHAVES = [
   'taxa_adesao_minimo_volante_externo',
   'taxa_adesao_minimo_base',
   'taxa_repasse_volante',
+  'taxa_repasse_volante_externo',
   'taxa_substituicao_placa',
   'taxa_troca_titularidade',
   'taxa_revistoria',
