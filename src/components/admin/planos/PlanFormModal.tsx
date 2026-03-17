@@ -813,7 +813,7 @@ export function PlanFormModal({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="display_order">Ordem de Exibição</Label>
+                      <Label htmlFor="display_order">Ordem de Exibição<FieldHint text={PLAN_FIELD_HINTS.display_order} /></Label>
                       <Input
                         id="display_order"
                         type="number"
