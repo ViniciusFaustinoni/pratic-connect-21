@@ -214,6 +214,47 @@ function useAutorizacoesConfiguracoes() {
   });
 }
 
+const INDICACAO_CHAVES = [
+  'indicacao_validade_dias',
+  'indicacao_valor_recompensa',
+  'indicacao_momento_pagamento',
+  'indicacao_gera_pontuacao_consultor',
+] as const;
+
+interface IndicacaoConfig {
+  indicacao_validade_dias: string;
+  indicacao_valor_recompensa: string;
+  indicacao_momento_pagamento: string;
+  indicacao_gera_pontuacao_consultor: string;
+}
+
+const INDICACAO_DEFAULTS: IndicacaoConfig = {
+  indicacao_validade_dias: '30',
+  indicacao_valor_recompensa: '50',
+  indicacao_momento_pagamento: 'apos_conversao',
+  indicacao_gera_pontuacao_consultor: 'true',
+};
+
+function useIndicacaoConfiguracoes() {
+  return useQuery({
+    queryKey: ['configuracoes-indicacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', [...INDICACAO_CHAVES]);
+      if (error) throw error;
+      const map = { ...INDICACAO_DEFAULTS };
+      for (const row of data || []) {
+        if (row.chave in map) {
+          (map as Record<string, string>)[row.chave] = row.valor ?? INDICACAO_DEFAULTS[row.chave as keyof IndicacaoConfig];
+        }
+      }
+      return map;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
 
 export default function RegrasVenda() {
   const { parametros, isLoading, updateParametro } = useComissoesFaixas();
