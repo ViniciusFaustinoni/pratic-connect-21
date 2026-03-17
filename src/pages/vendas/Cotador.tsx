@@ -234,7 +234,14 @@ export default function CotadorPage() {
   const navigate = useNavigate();
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
-  const { data: minimoAdesaoConfig = 100 } = useTaxaAdesaoMinimoBase();
+  const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
+  const { data: minimoAdesaoVolante = 100 } = useTaxaAdesaoMinimoVolante();
+  const { data: repasseVolante = 50 } = useTaxaRepasseVolante();
+  const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
+  const { data: migracaoConfig } = useMigracaoConfig();
+  
+  // Mínimo efetivo conforme tipo de instalação
+  const minimoAdesaoConfig = tipoInstalacao === 'rota' ? minimoAdesaoVolante : minimoAdesaoBase;
   
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
