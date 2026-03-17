@@ -213,6 +213,10 @@ export default function RegrasVenda() {
             <ArrowRightLeft className="h-4 w-4" />
             Migração
           </TabsTrigger>
+          <TabsTrigger value="taxas-adesao" className="gap-2">
+            <DollarSign className="h-4 w-4" />
+            Taxas e Adesão
+          </TabsTrigger>
         </TabsList>
 
         {/* ═══════════ ABA PONTUAÇÃO ═══════════ */}
