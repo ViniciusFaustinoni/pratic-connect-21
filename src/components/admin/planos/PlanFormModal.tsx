@@ -672,7 +672,7 @@ export function PlanFormModal({
 
                   <TabsContent value="cotas" className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="additional_price">Preço Adicional (R$)</Label>
+                      <Label htmlFor="additional_price">Preço Adicional (R$)<FieldHint text={PLAN_FIELD_HINTS.additional_price} /></Label>
                       <Input
                         id="additional_price"
                         type="number"
