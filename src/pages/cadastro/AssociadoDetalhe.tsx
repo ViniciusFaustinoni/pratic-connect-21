@@ -426,6 +426,7 @@ export default function AssociadoDetalhe() {
             associado={associado}
             historico={historico}
             isLoadingHistorico={isLoadingHistorico}
+            situacao={situacao}
           />
         )}
 
