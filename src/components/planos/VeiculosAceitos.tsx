@@ -18,7 +18,7 @@ export function VeiculosAceitosCarros() {
 
   // Montar texto dinâmico com nomes das linhas de carros
   const linhasCarros = productLines
-    ?.filter(pl => pl.tipo_veiculo === 'carro' && pl.is_active)
+    ?.filter(pl => pl.vehicle_type === 'carro' && pl.is_active)
     .map(pl => pl.name) || [];
   const textoLinhas = linhasCarros.length > 0
     ? `Válido para ${linhasCarros.join(', ')}`
