@@ -473,6 +473,7 @@ const App = () => (
               <Route path="/cadastro/propostas" element={<PropostasPendentes />} />
               <Route path="/cadastro/propostas/:id" element={<PropostaAnalise />} />
               <Route path="/cadastro/instalacoes/:id/ativar" element={<VistoriaCompletaAnalise />} />
+              <Route path="/cadastro/processos" element={<ProcessosOperacionais />} />
               <Route path="/cadastro/recusas-instalador" element={<RecusasInstalador />} />
               <Route path="/cadastro/gerar-termo" element={<GerarTermo />} />
               
