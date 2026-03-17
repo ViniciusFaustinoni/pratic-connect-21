@@ -25,10 +25,10 @@ export function PlanoLineSection({ productLine, plans }: PlanoLineSectionProps) 
     return null;
   }
 
-  // Escolher ícone baseado na cor ou slug
+  // Escolher ícone baseado no campo icon da linha ou fallback por cor
   const icon = productLine.icon 
     ? <span className="text-xl">{productLine.icon}</span>
-    : SLUG_ICONS[productLine.slug] || LINE_ICONS[productLine.color || 'blue'] || <Car className="h-5 w-5" />;
+    : LINE_ICONS[productLine.color || 'blue'] || DEFAULT_ICON;
 
   // Determinar número de colunas baseado na quantidade de planos
   const getGridCols = () => {

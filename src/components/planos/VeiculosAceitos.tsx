@@ -82,7 +82,12 @@ export function VeiculosAceitosMotos() {
   const { data: motosAceitas = {}, isLoading } = useMotosAceitas();
   const { data: fipeCarro = 30000 } = useConfigFipeRastreador();
   const { data: fipeMoto = 9000 } = useConfigFipeRastreadorMoto();
+  const { data: productLines } = useProductLines();
   const marcas = Object.entries(motosAceitas);
+
+  // Buscar nome dinâmico da linha de motos (ex: "Advanced")
+  const linhaMoto = productLines?.find(pl => pl.tipo_veiculo === 'moto' && pl.is_active);
+  const nomeLinhaMoto = linhaMoto?.name || 'linha de motos';
 
   if (isLoading) {
     return (
@@ -120,7 +125,7 @@ export function VeiculosAceitosMotos() {
             ⚠️ Atenção:
           </p>
           <ul className="text-xs text-amber-700 dark:text-amber-300 space-y-1">
-            <li>• Honda/Yamaha acima de R$35.000: Apenas Advanced</li>
+            <li>• Honda/Yamaha acima de R$35.000: Apenas {nomeLinhaMoto}</li>
             <li>• FIPE acima de R$ {fipeMoto.toLocaleString('pt-BR')}: Rastreador obrigatório</li>
             <li>• Acima de R$ {fipeCarro.toLocaleString('pt-BR')}: Requer autorização por email</li>
           </ul>

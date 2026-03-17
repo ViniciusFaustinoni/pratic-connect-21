@@ -33,24 +33,13 @@ interface BeneficioAdicionalModalProps {
   beneficio: BeneficioAdicional | null;
 }
 
-const LINHAS_FALLBACK = [
-  { slug: 'select', name: 'Select' },
-  { slug: 'select-one', name: 'Select One' },
-  { slug: 'especial', name: 'Especial' },
-  { slug: 'lancamento', name: 'Lançamento' },
-  { slug: 'advanced', name: 'Advanced' },
-  { slug: 'eletrico', name: 'Elétrico' },
-];
-
 export function BeneficioAdicionalModal({ open, onOpenChange, beneficio }: BeneficioAdicionalModalProps) {
   const createBeneficio = useCreateBeneficio();
   const updateBeneficio = useUpdateBeneficio();
-  const { data: productLines } = useProductLines();
+  const { data: productLines, isLoading: loadingLines } = useProductLines();
   const isEditing = !!beneficio;
 
-  const linhas = productLines?.length
-    ? productLines.map(pl => ({ slug: pl.slug, name: pl.name }))
-    : LINHAS_FALLBACK;
+  const linhas = (productLines || []).map(pl => ({ slug: pl.slug, name: pl.name }));
 
   const [formData, setFormData] = useState({
     nome: '',
