@@ -8450,6 +8450,8 @@ export type Database = {
           fipe_faixa_cobranca_min: number | null
           fipe_menor_aprovado: boolean | null
           id: string
+          indicador_id: string | null
+          indicador_nome: string | null
           lead_id: string | null
           meses_desconto_campanha: number | null
           motivo_cancelamento: string | null
@@ -8568,6 +8570,8 @@ export type Database = {
           fipe_faixa_cobranca_min?: number | null
           fipe_menor_aprovado?: boolean | null
           id?: string
+          indicador_id?: string | null
+          indicador_nome?: string | null
           lead_id?: string | null
           meses_desconto_campanha?: number | null
           motivo_cancelamento?: string | null
@@ -8686,6 +8690,8 @@ export type Database = {
           fipe_faixa_cobranca_min?: number | null
           fipe_menor_aprovado?: boolean | null
           id?: string
+          indicador_id?: string | null
+          indicador_nome?: string | null
           lead_id?: string | null
           meses_desconto_campanha?: number | null
           motivo_cancelamento?: string | null
@@ -8784,6 +8790,55 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "cotacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cotacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cotacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cotacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "cotacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "cotacoes_indicador_id_fkey"
+            columns: ["indicador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
           },
           {
             foreignKeyName: "cotacoes_lead_id_fkey"

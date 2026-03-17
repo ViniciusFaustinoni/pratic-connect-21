@@ -182,4 +182,6 @@ export interface CriarCotacaoPayload {
   nome_solicitante?: string | null;
   valor_adesao?: number;
   tipo_instalacao?: 'rota' | 'base';
+  indicador_id?: string | null;
+  indicador_nome?: string | null;
 }

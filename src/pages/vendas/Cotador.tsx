@@ -63,6 +63,8 @@ import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { PlacaBlacklistModal } from '@/components/cotacoes/PlacaBlacklistModal';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
+import { Switch } from '@/components/ui/switch';
+import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 
 // ============================================
 // INTERFACES
@@ -286,6 +288,12 @@ export default function CotadorPage() {
   // Nome do associado (quando não vinculado a lead)
   const [nomeAssociado, setNomeAssociado] = useState('');
 
+  // Indicação
+  const [isIndicacao, setIsIndicacao] = useState(false);
+  const [indicadorId, setIndicadorId] = useState<string | null>(null);
+  const [indicadorNome, setIndicadorNome] = useState('');
+  const [buscaIndicador, setBuscaIndicador] = useState('');
+
   // Cotação
   const [isCalculando, setIsCalculando] = useState(false);
   const [cotacaoCalculada, setCotacaoCalculada] = useState(false);
@@ -348,6 +356,7 @@ export default function CotadorPage() {
   const { planos: planosDB, planosNegados, isLoading: loadingPlanos } = usePlanosCotacao(parametrosPlanos);
   const criarCotacao = useCriarCotacao();
   const atualizarLead = useUpdateLead();
+  const { data: resultadosBuscaIndicador = [], isLoading: isSearchingIndicador } = useAssociadoSearch(buscaIndicador);
 
   // Lista de leads
   const leads = leadsData || [];
@@ -716,6 +725,8 @@ export default function CotadorPage() {
         veiculo_placa: veiculoEncontrado?.placa || placaBusca.replace(/[^A-Za-z0-9]/g, '').toUpperCase() || null,
         valor_adesao: valorAdesaoCustom ?? undefined,
         tipo_instalacao: tipoInstalacao || undefined,
+        indicador_id: indicadorId || null,
+        indicador_nome: indicadorNome || null,
       });
 
       setCotacaoSalva(cotacaoData);
@@ -1185,6 +1196,99 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               <p className="text-xs text-muted-foreground">
                 Informe o nome do cliente para identificar a cotação
               </p>
+            </div>
+
+            {/* Indicação */}
+            <div className="space-y-3">
+              <div className="flex items-center justify-between">
+                <div className="flex items-center gap-2">
+                  <Users className="h-4 w-4 text-muted-foreground" />
+                  <Label htmlFor="indicacao-switch-cotador" className="cursor-pointer text-sm">
+                    Este cliente foi indicado por um associado?
+                  </Label>
+                </div>
+                <Switch
+                  id="indicacao-switch-cotador"
+                  checked={isIndicacao}
+                  onCheckedChange={(checked) => {
+                    setIsIndicacao(checked);
+                    if (!checked) {
+                      setIndicadorId(null);
+                      setIndicadorNome('');
+                      setBuscaIndicador('');
+                    }
+                  }}
+                />
+              </div>
+
+              {isIndicacao && (
+                <div className="space-y-2 pl-6 border-l-2 border-primary/20">
+                  <Label>
+                    Associado indicador <span className="text-destructive">*</span>
+                  </Label>
+
+                  {indicadorId ? (
+                    <div className="flex items-center gap-2 p-3 rounded-lg bg-primary/5 border border-primary/20">
+                      <Users className="h-4 w-4 text-primary shrink-0" />
+                      <span className="font-medium text-sm flex-1">{indicadorNome}</span>
+                      <button
+                        type="button"
+                        onClick={() => {
+                          setIndicadorId(null);
+                          setIndicadorNome('');
+                          setBuscaIndicador('');
+                        }}
+                        className="p-1 rounded hover:bg-muted transition-colors"
+                      >
+                        <X className="h-4 w-4 text-muted-foreground" />
+                      </button>
+                    </div>
+                  ) : (
+                    <div className="relative">
+                      <Input
+                        value={buscaIndicador}
+                        onChange={(e) => setBuscaIndicador(e.target.value)}
+                        placeholder="Buscar por nome, telefone ou CPF..."
+                      />
+                      {buscaIndicador.length >= 2 && (
+                        <div className="absolute z-50 top-full left-0 right-0 mt-1 bg-popover border border-border rounded-lg shadow-lg max-h-60 overflow-auto">
+                          {isSearchingIndicador ? (
+                            <div className="p-3 text-sm text-muted-foreground text-center">
+                              Buscando...
+                            </div>
+                          ) : resultadosBuscaIndicador.length === 0 ? (
+                            <div className="p-3 text-sm text-muted-foreground text-center">
+                              Nenhum associado encontrado
+                            </div>
+                          ) : (
+                            resultadosBuscaIndicador.map((assoc) => (
+                              <button
+                                key={assoc.id}
+                                type="button"
+                                onClick={() => {
+                                  setIndicadorId(assoc.id);
+                                  setIndicadorNome(assoc.nome);
+                                  setBuscaIndicador('');
+                                }}
+                                className="w-full text-left px-3 py-2 hover:bg-accent transition-colors flex items-center gap-3"
+                              >
+                                <Users className="h-4 w-4 text-muted-foreground shrink-0" />
+                                <div className="flex flex-col min-w-0">
+                                  <span className="text-sm font-medium truncate">{assoc.nome}</span>
+                                  <span className="text-xs text-muted-foreground">
+                                    CPF: {assoc.cpf}
+                                    {assoc.telefone && ` • Tel: ${assoc.telefone}`}
+                                  </span>
+                                </div>
+                              </button>
+                            ))
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
+              )}
             </div>
 
             {/* Região de atendimento */}
