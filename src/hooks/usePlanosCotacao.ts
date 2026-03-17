@@ -116,8 +116,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         .from('planos')
         .select(`
           *,
-
-          product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class, blocked_categories, supports_app)
+          product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class, blocked_categories, supports_app),
+          planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name, category))
         `)
         .eq('ativo', true)
         .eq('visivel_gestao', true)
@@ -524,7 +524,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         ? `${cotaPercentual}% (sem mínimo)`
         : `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
 
-      const coberturas = Array.isArray(plano.coberturas) ? plano.coberturas : [];
+      const coberturas = (plano.planos_beneficios || [])
+        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+        .map((pb: any) => pb.custom_text || pb.benefits?.name || 'Benefício');
       const naoInclui: string[] = [];
 
       const isDestaque = !!plano.destaque;
