@@ -91,6 +91,7 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
           .from('planos')
           .select('id, codigo, nome, categoria, valor_adesao, descricao, adicional_mensal, desconto_percentual')
           .eq('ativo', true)
+          .eq('visivel_gestao', true)
           .order('ordem', { ascending: true }),
         supabase
           .from('plano_preco_map')
@@ -154,11 +155,9 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
       const regiaoLower = regiao.toLowerCase();
       const combustivelLower = combustivel.toLowerCase();
 
-      // Filtrar por tipo uso
-      const planosFiltrados = planos.filter(p => {
-        const isApp = p.categoria === 'aplicativo' || p.codigo?.includes('aplicativo');
-        return usoAplicativo ? isApp : !isApp;
-      });
+      // Com visivel_gestao=true, só chegam planos principais (sem variantes internas).
+      // O preço app é resolvido dinamicamente pelo motor de pricing (resolverPrecoApp).
+      const planosFiltrados = planos;
 
       const resultado: PlanoOpcaoCotacao[] = [];
 
@@ -167,8 +166,14 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
         const mapping = planoPrecoMap.find(m => m.plano_id === plano.id);
         if (!mapping) continue;
 
-        // Resolver tipo_uso para query (regras de adicional app)
-        const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiaoLower, mapping.tipo_uso, configApp);
+        // Se uso aplicativo, excluir linhas que não suportam app
+        if (usoAplicativo && !configApp.linhasSupportsApp.includes(mapping.linha_slug.toLowerCase())) continue;
+
+        // Resolver tipo_uso: se a linha tem tipo próprio (ex: advanced, advanced-plus), usa direto;
+        // senão, aplica a escolha do usuário (aplicativo/particular)
+        const isLinhaTipoUsoProprio = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
+        const tipoUsoEfetivo = isLinhaTipoUsoProprio ? mapping.tipo_uso : (usoAplicativo ? 'aplicativo' : 'particular');
+        const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiaoLower, tipoUsoEfetivo, configApp);
 
         // Buscar faixa de preço na nova tabela
         const faixa = tabelasMensalidade.find(t =>
@@ -182,11 +187,10 @@ export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, 
 
         if (!faixa) continue;
 
-        // Aplicar adicional app se necessário
-        const isLinhaTipoUsoProprio = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
+        // Aplicar adicional app se necessário (reutiliza isLinhaTipoUsoProprio já declarado acima)
         let valorMensal = isLinhaTipoUsoProprio
           ? Number(faixa.valor_mensal)
-          : resolverPrecoApp(mapping.linha_slug, regiaoLower, mapping.tipo_uso, Number(faixa.valor_mensal), adicionalApp, configApp);
+          : resolverPrecoApp(mapping.linha_slug, regiaoLower, tipoUsoEfetivo, Number(faixa.valor_mensal), adicionalApp, configApp);
 
         // Aplicar adicional_mensal do plano (Premium +30, Exclusive +60)
         valorMensal += Number(plano.adicional_mensal || 0);
