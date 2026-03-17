@@ -261,19 +261,23 @@ export default function RegrasVenda() {
   const queryClient = useQueryClient();
   const { data: taxasDB, isLoading: isLoadingTaxas } = useTaxasConfiguracoes();
   const { data: autorizacoesDB, isLoading: isLoadingAutorizacoes } = useAutorizacoesConfiguracoes();
+  const { data: indicacaoDB, isLoading: isLoadingIndicacao } = useIndicacaoConfiguracoes();
   const [pontuacao, setPontuacao] = useState<PontuacaoConfig>(PONTUACAO_DEFAULTS);
   const [repasse, setRepasse] = useState<RepasseMaiorConfig>(REPASSE_DEFAULTS);
   const [migracao, setMigracao] = useState<MigracaoConfig>(MIGRACAO_DEFAULTS);
   const [taxas, setTaxas] = useState<TaxasConfig>(TAXAS_DEFAULTS);
   const [autorizacoes, setAutorizacoes] = useState<AutorizacoesConfig>(AUTORIZACOES_DEFAULTS);
+  const [indicacao, setIndicacao] = useState<IndicacaoConfig>(INDICACAO_DEFAULTS);
   const [initialized, setInitialized] = useState(false);
   const [taxasInitialized, setTaxasInitialized] = useState(false);
   const [autorizacoesInitialized, setAutorizacoesInitialized] = useState(false);
+  const [indicacaoInitialized, setIndicacaoInitialized] = useState(false);
   const [savingPontuacao, setSavingPontuacao] = useState(false);
   const [savingRepasse, setSavingRepasse] = useState(false);
   const [savingMigracao, setSavingMigracao] = useState(false);
   const [savingTaxas, setSavingTaxas] = useState(false);
   const [savingAutorizacoes, setSavingAutorizacoes] = useState(false);
+  const [savingIndicacao, setSavingIndicacao] = useState(false);
 
   // Initialize taxas from DB
   useEffect(() => {
