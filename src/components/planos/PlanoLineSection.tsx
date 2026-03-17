@@ -16,14 +16,8 @@ const LINE_ICONS: Record<string, React.ReactNode> = {
   red: <Bike className="h-5 w-5 text-red-600" />,
 };
 
-// Mapeamento de ícones por slug para fallback mais específico
-const SLUG_ICONS: Record<string, React.ReactNode> = {
-  select: <Star className="h-5 w-5 text-blue-600" />,
-  'select-one': <Star className="h-5 w-5 text-emerald-600" />,
-  especial: <Shield className="h-5 w-5 text-orange-600" />,
-  lancamento: <Zap className="h-5 w-5 text-violet-600" />,
-  advanced: <Bike className="h-5 w-5 text-red-600" />,
-};
+// Fallback genérico — ícone real vem de productLine.icon
+const DEFAULT_ICON = <Car className="h-5 w-5 text-primary" />;
 
 export function PlanoLineSection({ productLine, plans }: PlanoLineSectionProps) {
   // Não renderizar se não houver planos
@@ -31,10 +25,10 @@ export function PlanoLineSection({ productLine, plans }: PlanoLineSectionProps) 
     return null;
   }
 
-  // Escolher ícone baseado na cor ou slug
+  // Escolher ícone baseado no campo icon da linha ou fallback por cor
   const icon = productLine.icon 
     ? <span className="text-xl">{productLine.icon}</span>
-    : SLUG_ICONS[productLine.slug] || LINE_ICONS[productLine.color || 'blue'] || <Car className="h-5 w-5" />;
+    : LINE_ICONS[productLine.color || 'blue'] || DEFAULT_ICON;
 
   // Determinar número de colunas baseado na quantidade de planos
   const getGridCols = () => {

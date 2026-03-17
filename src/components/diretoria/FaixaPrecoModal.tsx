@@ -249,7 +249,7 @@ export function FaixaPrecoModal({ open, onClose, planoId, faixa }: FaixaPrecoMod
                   <SelectItem value="diesel">Diesel</SelectItem>
                 </SelectContent>
               </Select>
-              <p className="text-xs text-muted-foreground">Select One usa NULL (aceita qualquer combustível)</p>
+              <p className="text-xs text-muted-foreground">NULL = aceita qualquer combustível</p>
             </div>
             <div className="space-y-2">
               <Label htmlFor="tipo_uso">Tipo de Uso *</Label>
