@@ -262,7 +262,7 @@ export function ContratoFormDialog({ open, onOpenChange, prefilledData }: Contra
             .maybeSingle();
 
           if (existingIndicacao) {
-            await supabase
+            await (supabase as any)
               .from('indicacoes')
               .update({
                 status: 'convertido',
