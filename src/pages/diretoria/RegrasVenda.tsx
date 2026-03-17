@@ -82,15 +82,73 @@ const CAMPOS_BLOCO1: { chave: keyof PontuacaoConfig; label: string }[] = [
 
 const CHAVES_PARCIAL = ['pontos_troca_titularidade_parcial', 'pontos_substituicao_placa_parcial'];
 
+const TAXAS_CHAVES = [
+  'taxa_adesao_percentual_fipe',
+  'taxa_adesao_minimo_volante',
+  'taxa_adesao_minimo_base',
+  'taxa_repasse_volante',
+  'taxa_substituicao_placa',
+  'taxa_troca_titularidade',
+  'taxa_revistoria',
+  'multa_rastreador',
+] as const;
+
+type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
+
+const TAXAS_DEFAULTS: TaxasConfig = {
+  taxa_adesao_percentual_fipe: '1',
+  taxa_adesao_minimo_volante: '100',
+  taxa_adesao_minimo_base: '100',
+  taxa_repasse_volante: '50',
+  taxa_substituicao_placa: '50',
+  taxa_troca_titularidade: '50',
+  taxa_revistoria: '50',
+  multa_rastreador: '400',
+};
+
+function useTaxasConfiguracoes() {
+  return useQuery({
+    queryKey: ['configuracoes-taxas-adesao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', [...TAXAS_CHAVES]);
+      if (error) throw error;
+      const map = { ...TAXAS_DEFAULTS };
+      for (const row of data || []) {
+        if (row.chave in map) {
+          (map as Record<string, string>)[row.chave] = row.valor ?? TAXAS_DEFAULTS[row.chave as keyof TaxasConfig];
+        }
+      }
+      return map;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+}
+
 export default function RegrasVenda() {
   const { parametros, isLoading, updateParametro } = useComissoesFaixas();
+  const queryClient = useQueryClient();
+  const { data: taxasDB, isLoading: isLoadingTaxas } = useTaxasConfiguracoes();
   const [pontuacao, setPontuacao] = useState<PontuacaoConfig>(PONTUACAO_DEFAULTS);
   const [repasse, setRepasse] = useState<RepasseMaiorConfig>(REPASSE_DEFAULTS);
   const [migracao, setMigracao] = useState<MigracaoConfig>(MIGRACAO_DEFAULTS);
+  const [taxas, setTaxas] = useState<TaxasConfig>(TAXAS_DEFAULTS);
   const [initialized, setInitialized] = useState(false);
+  const [taxasInitialized, setTaxasInitialized] = useState(false);
   const [savingPontuacao, setSavingPontuacao] = useState(false);
   const [savingRepasse, setSavingRepasse] = useState(false);
   const [savingMigracao, setSavingMigracao] = useState(false);
+  const [savingTaxas, setSavingTaxas] = useState(false);
+
+  // Initialize taxas from DB
+  useEffect(() => {
+    if (taxasDB && !taxasInitialized) {
+      setTaxas(taxasDB);
+      setTaxasInitialized(true);
+    }
+  }, [taxasDB, taxasInitialized]);
 
   // Initialize state from DB
   useEffect(() => {
