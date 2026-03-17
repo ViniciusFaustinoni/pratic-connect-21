@@ -154,6 +154,7 @@ export default function AssociadoDetalhe() {
 
   const [activeTab, setActiveTab] = useState('resumo');
   const [reativacaoWizardOpen, setReativacaoWizardOpen] = useState(false);
+  const [trocaTitularidadeOpen, setTrocaTitularidadeOpen] = useState(false);
   const [suspenderDialogOpen, setSuspenderDialogOpen] = useState(false);
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
   const [excluirDialogOpen, setExcluirDialogOpen] = useState(false);
