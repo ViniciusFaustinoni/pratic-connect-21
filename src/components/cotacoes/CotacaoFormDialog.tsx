@@ -373,9 +373,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const valorReduzido = valorFipe * 0.99;
 
     // Encontrar faixa atual do veículo
-    const faixaAtual = todasFaixas.find(f =>
-      valorFipe >= f.fipe_min && valorFipe <= f.fipe_max
-    );
+    const matchingFaixas = todasFaixas.filter(f => valorFipe >= f.fipe_min && valorFipe <= f.fipe_max);
+    const linhaSlugPlano = plano?.linha || null;
+    const faixaAtual = (linhaSlugPlano ? matchingFaixas.find(f => f.linha_slug === linhaSlugPlano) : null)
+      || matchingFaixas.sort((a, b) => (b.fipe_max - b.fipe_min) - (a.fipe_max - a.fipe_min))[0] || null;
 
     if (!faixaAtual) return null;
 
