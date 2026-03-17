@@ -259,6 +259,17 @@ serve(async (req) => {
     let templateUsado: string;
     
     if (usandoTemplateBanco) {
+      // Validar regras se o template usa variáveis {{regras.*}}
+      if (templateDB.conteudo.includes('{{regras.') && regrasFaltantes.length > 0) {
+        console.error('[autentique-create] Template usa variáveis de regras mas há configurações faltantes:', regrasFaltantes);
+        return new Response(
+          JSON.stringify({
+            success: false,
+            error: `Configurações de Regras de Venda incompletas. Chaves faltantes: ${regrasFaltantes.join(', ')}. Configure em Diretoria > Regras de Venda antes de gerar o documento.`,
+          }),
+          { status: 422, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
       // Usar template dinâmico do banco
       contratoHTML = await gerarHTMLDoTemplate(supabase, templateDB.conteudo, templateData);
       templateUsado = `${templateDB.codigo} (banco de dados)`;
