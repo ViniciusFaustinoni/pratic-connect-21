@@ -107,6 +107,7 @@ const TAXAS_DEFAULTS: TaxasConfig = {
   taxa_adesao_minimo_volante_externo: '50',
   taxa_adesao_minimo_base: '100',
   taxa_repasse_volante: '50',
+  taxa_repasse_volante_externo: '50',
   taxa_substituicao_placa: '50',
   taxa_troca_titularidade: '50',
   taxa_revistoria: '50',
