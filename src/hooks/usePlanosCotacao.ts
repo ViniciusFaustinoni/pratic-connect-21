@@ -227,14 +227,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     planoId: string,
     linha: string | null,
     veiculo: { marca: string; modelo: string; ano: number; combustivel: string },
-  ): 'aprovado' | 'limitado' | 'negado' {
+  ): { status: 'aprovado' | 'limitado' | 'negado'; coberturaFipe: number } {
     // Buscar regras por linha (família) — variantes compartilham elegibilidade
     const planosNaLinha = linha
       ? (planosBanco || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
       : [planoId];
     const regrasDoPlano = elegibilidadeData?.filter(e => planosNaLinha.includes(e.plano_id)) ?? [];
     // Sem configuração = aceita tudo
-    if (regrasDoPlano.length === 0) return 'aprovado';
+    if (regrasDoPlano.length === 0) return { status: 'aprovado', coberturaFipe: 100 };
 
     const marcaNormAPI = normalizarMarcaElegibilidade(veiculo.marca);
     const modeloAPI = veiculo.modelo.trim().toUpperCase();
@@ -282,10 +282,12 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     // Whitelist: modelo não encontrado na lista = negado
-    if (!regra) return 'negado';
-    if (regra.status === 'negado') return 'negado';
-    if (regra.status === 'limitado') return 'limitado';
-    return 'aprovado';
+    if (!regra) return { status: 'negado', coberturaFipe: 0 };
+    if (regra.status === 'negado') return { status: 'negado', coberturaFipe: 0 };
+    
+    const cobFipe = (regra as any).cobertura_fipe ?? 100;
+    if (regra.status === 'limitado') return { status: 'limitado', coberturaFipe: cobFipe };
+    return { status: 'aprovado', coberturaFipe: cobFipe };
   }
 
   // Montar ConfigAdicionalApp dinamicamente
