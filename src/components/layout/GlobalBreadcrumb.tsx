@@ -134,7 +134,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/diretoria': { label: 'Diretoria' },
   '/diretoria/dashboard': { label: 'Dashboard' },
   '/diretoria/gestao-comercial': { label: 'Gestão Comercial' },
-  '/diretoria/regras-venda': { label: 'Regras de Venda' },
+  
   '/diretoria/produtos': { label: 'Produtos' },
   '/diretoria/precos': { label: 'Tabela de Preços' },
   '/diretoria/rateios': { label: 'Rateios' },
