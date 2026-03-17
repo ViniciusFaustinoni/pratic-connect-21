@@ -517,6 +517,10 @@ export default function RegrasVenda() {
             <ShieldCheck className="h-4 w-4" />
             Autorizações e Exceções
           </TabsTrigger>
+          <TabsTrigger value="indicacao" className="gap-2">
+            <UserPlus className="h-4 w-4" />
+            Indicação
+          </TabsTrigger>
         </TabsList>
 
         {/* ═══════════ ABA PONTUAÇÃO ═══════════ */}
