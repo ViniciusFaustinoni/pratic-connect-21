@@ -158,6 +158,9 @@ serve(async (req) => {
     // ============= BUSCAR CONFIG RASTREADOR =============
     const configRastreador = await buscarConfigRastreador(supabase);
 
+    // ============= BUSCAR REGRAS DE VENDA =============
+    const { regras: regrasVenda, faltantes: regrasFaltantes } = await buscarRegrasVenda(supabase);
+
     // Obter dados do cliente (associado tem prioridade, depois lead)
     const cliente = contrato.associados || contrato.leads;
     const clienteNome = cliente?.nome || 'Cliente';
@@ -184,6 +187,9 @@ serve(async (req) => {
       contrato.associados
     );
     templateData.configRastreador = configRastreador;
+    if (regrasVenda) {
+      templateData.regrasVenda = regrasVenda;
+    }
 
     // ============= BUSCAR TEMPLATE DO BANCO =============
     const { data: templatesDB, error: templateError } = await supabase
