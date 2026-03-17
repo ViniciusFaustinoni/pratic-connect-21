@@ -356,7 +356,50 @@ export default function RegrasVenda() {
     }
   };
 
-  if (isLoading || isLoadingTaxas) {
+  const handleSaveAutorizacoes = async () => {
+    setSavingAutorizacoes(true);
+    try {
+      const updates: Record<string, string> = {
+        excecao_faixas_vendas: JSON.stringify(autorizacoes.faixas_vendas),
+        excecao_fipe_max_carro: autorizacoes.fipe_max_carro,
+        excecao_fipe_max_moto: autorizacoes.fipe_max_moto,
+        excecao_historico_boletos_ativo: String(autorizacoes.historico_boletos_ativo),
+        excecao_historico_boletos_minimo: autorizacoes.historico_boletos_minimo,
+        excecao_zero_km_ativo: String(autorizacoes.zero_km_ativo),
+        restricao_mudanca_linha: String(autorizacoes.restricao_mudanca_linha),
+        restricao_depreciacao_cobertura_100: String(autorizacoes.restricao_depreciacao_cobertura_100),
+        restricao_blindado_absoluta: String(autorizacoes.restricao_blindado_absoluta),
+      };
+      for (const [chave, valor] of Object.entries(updates)) {
+        await supabase
+          .from('configuracoes')
+          .update({ valor, updated_at: new Date().toISOString() })
+          .eq('chave', chave);
+      }
+      queryClient.invalidateQueries({ queryKey: ['configuracoes-autorizacoes-excecoes'] });
+      queryClient.invalidateQueries({ queryKey: ['configuracao'] });
+      queryClient.invalidateQueries({ queryKey: ['configuracoes'] });
+      toast.success('Configurações de autorizações e exceções salvas com sucesso!');
+    } catch {
+      toast.error('Erro ao salvar configurações de autorizações');
+    } finally {
+      setSavingAutorizacoes(false);
+    }
+  };
+
+  const handleFaixaChange = (index: number, field: keyof FaixaVenda, value: string) => {
+    setAutorizacoes(prev => {
+      const faixas = [...prev.faixas_vendas];
+      if (field === 'max') {
+        faixas[index] = { ...faixas[index], max: value === '' ? null : parseInt(value) || 0 };
+      } else {
+        faixas[index] = { ...faixas[index], [field]: parseInt(value) || 0 };
+      }
+      return { ...prev, faixas_vendas: faixas };
+    });
+  };
+
+  if (isLoading || isLoadingTaxas || isLoadingAutorizacoes) {
     return (
       <div className="flex items-center justify-center py-20">
         <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
