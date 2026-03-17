@@ -170,13 +170,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
   
-  // Mínimo efetivo: volante quando cenário inclui rota
-  const minimoAdesaoConfig = cenarioExterno?.includes('rota') ? minimoAdesaoVolante : minimoAdesaoBase;
-  
   // Estado do cenário de adesão para vendedor externo
   type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
   const [cenarioExterno, setCenarioExterno] = useState<CenarioExterno | null>(null);
   const isCenarioIsento = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
+
+  // Mínimo efetivo: volante quando cenário inclui rota
+  const minimoAdesaoConfig = cenarioExterno?.includes('rota') ? minimoAdesaoVolante : minimoAdesaoBase;
   
   // Hook para verificar placa duplicada
   const verificarPlacaDuplicada = useVerificarPlacaDuplicada();
