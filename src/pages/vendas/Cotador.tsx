@@ -239,7 +239,6 @@ export default function CotadorPage() {
   const { data: minimoVolanteExterno = 50 } = useTaxaAdesaoMinimoVolanteExterno();
   const { data: repasseVolanteInterno = 50 } = useTaxaRepasseVolante();
   const { data: repasseVolanteExterno = 50 } = useTaxaRepasseVolanteExterno();
-  const repasseVolante = isVendedorExterno ? repasseVolanteExterno : repasseVolanteInterno;
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
   
