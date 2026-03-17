@@ -1,55 +1,167 @@
+## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
+### Causas Raiz Identificadas
+1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
+2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
+3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-## Plano: Tutorial passo a passo em cada campo do formulario de planos
+### Correções Aplicadas
 
-### Abordagem
+1. **`sga-hinova-sync/index.ts`**:
+   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
+   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
 
-Criar um componente `FieldHint` reutilizavel que exibe um icone de ajuda (?) ao lado do label. Ao clicar/hover, mostra um tooltip com explicacao do campo e seu impacto na cotacao/calculadora. Aplicar em todos os campos de todas as 5 abas do `PlanFormModal`.
+2. **`cron-sga-retry/index.ts`**:
+   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
 
-### 1. Novo componente: `src/components/admin/planos/FieldHint.tsx`
+---
 
-Componente simples usando `Tooltip` do shadcn. Recebe `text` (string) e renderiza um icone `HelpCircle` com tooltip ao hover. Estilo discreto (texto muted, icone pequeno).
+## Painel de Monitoramento SGA Hinova — ✅ Implementado
 
-### 2. Mapa de hints: `src/components/admin/planos/planFieldHints.ts`
+### O que foi criado
 
-Objeto constante com chave = campo e valor = texto explicativo. Exemplos:
+1. **Página `/configuracoes/integracoes/sga-hinova`** com:
+   - Status de conexão com API Hinova (teste em tempo real)
+   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
+   - Logs recentes dos últimos 50 registros
+   - Veículos pendentes (ativos não sincronizados) com envio individual
+   - Histórico de health checks
 
-- **name**: "Nome exibido no card do plano na cotacao e calculadora."
-- **slug**: "Identificador unico do plano. Gerado automaticamente. Nao pode ser alterado apos criacao."
-- **product_line_id**: "Linha de produto (ex: Auto, Moto). Determina em qual categoria o plano aparece na cotacao e calculadora."
-- **tipo_uso**: "Define se o plano e para veiculos particulares ou de aplicativo. Na cotacao, so aparecem planos compativeis com o tipo de uso do cliente."
-- **badge_text/badge_color**: "Texto destacado no card (ex: 'Mais Vendido'). Puramente visual, nao afeta calculo."
-- **coverage_type**: "Texto descritivo da cobertura (ex: '100% FIPE'). Exibido no card do plano na cotacao."
-- **min_vehicle_year**: "Ano minimo aceito (ex: '2015+'). Veiculos abaixo desse ano NAO verao este plano na cotacao nem na calculadora."
-- **linha_slug**: "Vincula o plano a uma tabela de precos mensais. Sem vinculo, o plano nao tera preco e sera ocultado na cotacao."
-- **categorias_veiculo**: "Categorias aceitas (passeio, aplicativo, moto, etc). O plano so aparece na cotacao se a categoria do veiculo estiver selecionada aqui."
-- **regioes**: "Regioes onde o plano esta disponivel. Se nenhuma regiao for selecionada, o plano pode nao aparecer para clientes de determinadas localidades."
-- **is_active**: "Desativado = plano invisivel em toda a plataforma (cotacao, calculadora, gestao)."
-- **additional_price**: "Valor fixo adicionado a mensalidade. Somado ao valor da tabela de precos na cotacao."
-- **desconto_percentual**: "Desconto aplicado sobre o valor mensal final. Exibido como promocao no card da cotacao."
-- **cotas por categoria**: "Percentual e valor minimo da cota de participacao para cada categoria. Usado no calculo de indenizacao. Se nao configurado, usa o fallback global."
-- **restriction_alert**: "Mensagem de alerta exibida em destaque no card do plano. Usada para avisar sobre restricoes especiais."
-- **footer_note**: "Texto pequeno no rodape do card. Informacao adicional como asteriscos e condicoes."
-- **display_order**: "Ordem de exibicao dos planos na cotacao e calculadora. Menor numero = aparece primeiro."
-- **elegibilidade**: "Regras de aceitacao por marca/modelo. Funciona como whitelist: se houver regras, somente modelos listados aparecem. Modelos nao listados sao automaticamente negados na cotacao E na calculadora."
+2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
 
-### 3. Aplicar `FieldHint` em todos os `<Label>` do PlanFormModal
+3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
 
-Em cada campo das abas Basico, Cotas e Outros, adicionar `<FieldHint>` ao lado do `<Label>`. Aproximadamente 15+ campos.
+4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
 
-### 4. Adicionar hints na ElegibilidadeTab
+---
 
-Adicionar explicacao no topo da aba e nos campos do formulario de regras (marca, modelo, status, cobertura_fipe).
+## Health Check Universal para Todas as Integrações — ✅ Implementado
 
-### 5. Adicionar hints no BenefitsSelector
+### O que foi criado
 
-Texto explicativo no topo sobre como beneficios afetam a exibicao na cotacao.
+1. **Tabela `integracoes_health_checks`** (genérica):
+   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
+   - Dados existentes do SGA migrados automaticamente
+   - RLS: leitura para autenticados, escrita para service_role
 
-### Arquivos afetados
+2. **Edge Function `cron-integracoes-health-check`**:
+   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
+   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
+   - Notifica admins (role `diretor`) se qualquer integração falhar
+   - Grava resultado por integração na tabela genérica
 
-- `src/components/admin/planos/FieldHint.tsx` (novo)
-- `src/components/admin/planos/planFieldHints.ts` (novo)
-- `src/components/admin/planos/PlanFormModal.tsx` (adicionar hints em ~15 campos)
-- `src/components/admin/planos/ElegibilidadeTab.tsx` (adicionar hints)
-- `src/components/admin/planos/BenefitsSelector.tsx` (adicionar hint no topo)
+3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
+   - Props: `integracao` (slug) e `titulo` (opcional)
+   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
+   - Botão "Testar agora" invoca a edge function para a integração específica
 
+4. **Hook `useIntegracaoHealthCheck(integracao)`**:
+   - Busca histórico filtrado por integração
+   - Mutation `testNow` para teste manual
+   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
+
+5. **Integração nas páginas**:
+   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
+   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
+   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
+
+6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
+   ```sql
+   select cron.schedule(
+     'integracoes-health-check-3x-dia',
+     '0 8,13,18 * * *',
+     $$ select net.http_post(
+       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
+       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
+       body:='{}'::jsonb
+     ) as request_id; $$
+   );
+   ```
+
+### Arquivos criados/modificados
+- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
+- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
+- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
+- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
+- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
+- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
+- `supabase/config.toml` — verify_jwt para nova function
+
+---
+
+## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
+
+### Causas Raiz
+1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
+2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
+3. Triggers de sync sobrescreviam coordenadas válidas com `null`
+
+### Correções Aplicadas
+
+1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
+
+2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
+
+3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
+
+4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
+
+---
+
+## Correção Triggers Enum Mismatch (status_instalacao → status_servico) — ✅ Implementado
+
+### Causa Raiz
+Triggers `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` faziam `status = NEW.status` direto, mas `NEW.status` é `status_instalacao` e `servicos.status` é `status_servico` — erro PostgreSQL 42804 abortava toda atribuição automática.
+
+### Correções Aplicadas
+1. **Função `map_to_status_servico(text)`**: Mapeamento explícito e imutável de qualquer texto para `status_servico`, com fallback seguro.
+2. **Triggers corrigidos**: Ambos agora usam `public.map_to_status_servico(NEW.status::text)` em vez de atribuição direta.
+3. **Observabilidade**: `processar-encaixes-automaticos` agora loga `code/message/details/hint` do erro antes de classificar como concorrência.
+
+---
+
+## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
+
+### Bloqueios de adesão zero removidos
+
+| Arquivo | Correção |
+|---------|----------|
+| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
+| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
+| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
+
+### Geração automática de lançamentos CC vendedor externo
+
+Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
+1. Após criar instalação, busca `vendedor_id` da cotação
+2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
+3. Busca configurações de comissão da tabela `configuracoes`
+4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
+5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
+
+---
+
+## Fluxo Completo Vendedor Externo — Autovistoria até Ativação 360 — ✅ Implementado
+
+### Gaps Corrigidos
+
+| Gap | Arquivo | Correção |
+|-----|---------|----------|
+| Propostas de autovistoria não apareciam no cadastro | `usePropostasPendentes.ts` L523 | Filtro agora permite propostas com `temAutovistoria` ou `temVistoriaBaseRealizada` mesmo sem instalação |
+| Race condition na isenção de adesão | `EtapaPagamentoCotacao.tsx` L245 | Passa `skipPaymentCheck: true` no body da Edge Function |
+| Edge Function falhava para autovistoria sem data | `criar-instalacao-pos-pagamento/index.ts` | Autovistoria sem data: pula instalação, mas gera lançamentos CC normalmente |
+| Aprovação ignorava preferências de agendamento | `usePropostasPendentes.ts` L1538-1590 | Busca `vistoria_completa_*` da cotação para criar instalação com dados do cliente |
+
+### Fluxo Corrigido
+
+```text
+Vendedor externo cria cotação (4 cenários)
+  → Cliente abre link → Plano → Docs → Assinatura → Vistoria → Pagamento/Isenção
+    → Edge Function gera lançamentos CC (mesmo sem data de instalação)
+    → Etapa 5: Cliente preenche preferência de agendamento
+    → Tela "Em Análise Cadastral"
+    → Proposta aparece no cadastro (filtro corrigido)
+    → Analista aprova → cobertura_roubo_furto = true
+    → Instalação criada COM dados de preferência do cliente
+    → Atribuição automática → Instalação → Proteção 360°
+```

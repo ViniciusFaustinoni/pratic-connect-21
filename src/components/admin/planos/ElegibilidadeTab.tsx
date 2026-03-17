@@ -12,6 +12,8 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { toast } from 'sonner';
 import { Plus, Pencil, Trash2, Info, X, Check } from 'lucide-react';
+import { FieldHint } from './FieldHint';
+import { PLAN_FIELD_HINTS } from './planFieldHints';
 import { COMBUSTIVEIS_FALLBACK } from '@/data/combustiveis';
 
 interface ElegibilidadeTabProps {
@@ -246,7 +248,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
           <form onSubmit={handleSubmit} className="space-y-3">
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Marca *</Label>
+                <Label className="text-xs">Marca *<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_marca} /></Label>
                 <Input
                   value={form.marca}
                   onChange={(e) => setForm(f => ({ ...f, marca: e.target.value.toUpperCase() }))}
@@ -255,7 +257,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Modelo</Label>
+                <Label className="text-xs">Modelo<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_modelo} /></Label>
                 <Input
                   value={form.modelo}
                   onChange={(e) => setForm(f => ({ ...f, modelo: e.target.value.toUpperCase() }))}
@@ -266,7 +268,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
             </div>
             <div className="grid grid-cols-4 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Ano Mín</Label>
+                <Label className="text-xs">Ano Mín<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_ano} /></Label>
                 <Input
                   type="number"
                   value={form.ano_min}
@@ -284,7 +286,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Combustível</Label>
+                <Label className="text-xs">Combustível<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_combustivel} /></Label>
                 <Select value={form.combustivel} onValueChange={(v) => setForm(f => ({ ...f, combustivel: v }))}>
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue />
@@ -297,7 +299,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
                 </Select>
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Status</Label>
+                <Label className="text-xs">Status<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_status} /></Label>
                 <Select value={form.status} onValueChange={(v) => setForm(f => ({ ...f, status: v }))}>
                   <SelectTrigger className="h-8 text-sm">
                     <SelectValue />
@@ -312,7 +314,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
             </div>
             <div className="grid grid-cols-2 gap-3">
               <div className="space-y-1">
-                <Label className="text-xs">Cobertura FIPE (%)</Label>
+                <Label className="text-xs">Cobertura FIPE (%)<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_cobertura_fipe} /></Label>
                 <Input
                   type="number"
                   min={0}
@@ -324,7 +326,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
                 />
               </div>
               <div className="space-y-1">
-                <Label className="text-xs">Observação</Label>
+                <Label className="text-xs">Observação<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_observacao} /></Label>
                 <Input
                   value={form.observacao}
                   onChange={(e) => setForm(f => ({ ...f, observacao: e.target.value }))}

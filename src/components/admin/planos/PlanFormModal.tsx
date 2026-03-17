@@ -1,5 +1,7 @@
 import { useEffect, useState, useCallback } from 'react';
 import { Loader2 } from 'lucide-react';
+import { FieldHint } from './FieldHint';
+import { PLAN_FIELD_HINTS } from './planFieldHints';
 import {
   Dialog,
   DialogContent,
@@ -453,7 +455,7 @@ export function PlanFormModal({
                   <TabsContent value="basico" className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="name">Nome *</Label>
+                        <Label htmlFor="name">Nome *<FieldHint text={PLAN_FIELD_HINTS.name} /></Label>
                         <Input
                           id="name"
                           value={formData.name}
@@ -462,7 +464,7 @@ export function PlanFormModal({
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="slug">Slug</Label>
+                        <Label htmlFor="slug">Slug<FieldHint text={PLAN_FIELD_HINTS.slug} /></Label>
                         <Input
                           id="slug"
                           value={formData.slug}
@@ -475,7 +477,7 @@ export function PlanFormModal({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="product_line_id">Linha de Produto *</Label>
+                      <Label htmlFor="product_line_id">Linha de Produto *<FieldHint text={PLAN_FIELD_HINTS.product_line_id} /></Label>
                       <Select
                         value={formData.product_line_id}
                         onValueChange={(value) =>
@@ -496,7 +498,7 @@ export function PlanFormModal({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="tipo_uso">Tipo de Cliente *</Label>
+                      <Label htmlFor="tipo_uso">Tipo de Cliente *<FieldHint text={PLAN_FIELD_HINTS.tipo_uso} /></Label>
                       <Select
                         value={formData.tipo_uso}
                         onValueChange={(value: 'passeio' | 'aplicativo') =>
@@ -515,7 +517,7 @@ export function PlanFormModal({
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="badge_text">Badge</Label>
+                        <Label htmlFor="badge_text">Badge<FieldHint text={PLAN_FIELD_HINTS.badge_text} /></Label>
                         <Input
                           id="badge_text"
                           value={formData.badge_text}
@@ -526,7 +528,7 @@ export function PlanFormModal({
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="badge_color">Cor do Badge</Label>
+                        <Label htmlFor="badge_color">Cor do Badge<FieldHint text={PLAN_FIELD_HINTS.badge_color} /></Label>
                         <Select
                           value={formData.badge_color}
                           onValueChange={(value) =>
@@ -549,7 +551,7 @@ export function PlanFormModal({
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="coverage_type">Tipo de Cobertura</Label>
+                        <Label htmlFor="coverage_type">Tipo de Cobertura<FieldHint text={PLAN_FIELD_HINTS.coverage_type} /></Label>
                         <Input
                           id="coverage_type"
                           value={formData.coverage_type}
@@ -560,7 +562,7 @@ export function PlanFormModal({
                         />
                       </div>
                       <div className="space-y-2">
-                        <Label htmlFor="min_vehicle_year">Ano Mínimo</Label>
+                        <Label htmlFor="min_vehicle_year">Ano Mínimo<FieldHint text={PLAN_FIELD_HINTS.min_vehicle_year} /></Label>
                         <Input
                           id="min_vehicle_year"
                           value={formData.min_vehicle_year}
@@ -577,7 +579,7 @@ export function PlanFormModal({
 
                     {/* Tabela de Preços (linha_slug) */}
                     <div className="space-y-2">
-                      <Label>Tabela de Preços (Linha)</Label>
+                      <Label>Tabela de Preços (Linha)<FieldHint text={PLAN_FIELD_HINTS.linha_slug} /></Label>
                       <Select
                         value={formData.linha_slug}
                         onValueChange={(value) =>
@@ -602,7 +604,7 @@ export function PlanFormModal({
 
                     {/* Categorias de Veículo Aceitas */}
                     <div className="space-y-2">
-                      <Label>Categorias de Veículo Aceitas</Label>
+                      <Label>Categorias de Veículo Aceitas<FieldHint text={PLAN_FIELD_HINTS.categorias_veiculo} /></Label>
                       <div className="grid grid-cols-2 gap-2">
                         {VEHICLE_CATEGORIES.map((cat) => (
                           <div key={cat.value} className="flex items-center gap-2">
@@ -628,7 +630,7 @@ export function PlanFormModal({
 
                     {/* Regiões */}
                     <div className="space-y-2">
-                      <Label>Regiões Disponíveis</Label>
+                      <Label>Regiões Disponíveis<FieldHint text={PLAN_FIELD_HINTS.regioes} /></Label>
                       <div className="grid grid-cols-2 gap-2">
                         {regioes?.filter(r => r.ativa).map((regiao) => (
                           <div key={regiao.id} className="flex items-center gap-2">
@@ -663,14 +665,14 @@ export function PlanFormModal({
                             setFormData((prev) => ({ ...prev, is_active: checked }))
                           }
                         />
-                        <Label htmlFor="is_active">Ativo</Label>
+                        <Label htmlFor="is_active">Ativo<FieldHint text={PLAN_FIELD_HINTS.is_active} /></Label>
                       </div>
                     </div>
                   </TabsContent>
 
                   <TabsContent value="cotas" className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="additional_price">Preço Adicional (R$)</Label>
+                      <Label htmlFor="additional_price">Preço Adicional (R$)<FieldHint text={PLAN_FIELD_HINTS.additional_price} /></Label>
                       <Input
                         id="additional_price"
                         type="number"
@@ -687,7 +689,7 @@ export function PlanFormModal({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="desconto_percentual">Desconto Promocional (%)</Label>
+                      <Label htmlFor="desconto_percentual">Desconto Promocional (%)<FieldHint text={PLAN_FIELD_HINTS.desconto_percentual} /></Label>
                       <Input
                         id="desconto_percentual"
                         type="number"
@@ -708,7 +710,7 @@ export function PlanFormModal({
 
                     {/* Dynamic cotas per selected category */}
                     <div className="space-y-3">
-                      <Label className="text-sm font-semibold">Cota de Participação por Categoria</Label>
+                      <Label className="text-sm font-semibold">Cota de Participação por Categoria<FieldHint text={PLAN_FIELD_HINTS.cotas_categoria} /></Label>
                       {formData.categorias_veiculo.length === 0 ? (
                         <p className="text-xs text-muted-foreground italic">
                           Selecione categorias de veículo na aba "Básico" para configurar cotas.
@@ -721,7 +723,7 @@ export function PlanFormModal({
                               <p className="text-sm font-medium">{catLabel}</p>
                               <div className="grid grid-cols-2 gap-3">
                                 <div className="space-y-1">
-                                  <Label className="text-xs">Cota (%)</Label>
+                                  <Label className="text-xs">Cota (%)<FieldHint text={PLAN_FIELD_HINTS.cota_percentual} /></Label>
                                   <Input
                                     type="number"
                                     step="0.1"
@@ -737,7 +739,7 @@ export function PlanFormModal({
                                   />
                                 </div>
                                 <div className="space-y-1">
-                                  <Label className="text-xs">Mínimo (R$)</Label>
+                                  <Label className="text-xs">Mínimo (R$)<FieldHint text={PLAN_FIELD_HINTS.cota_minima_valor} /></Label>
                                   <Input
                                     type="number"
                                     step="0.01"
@@ -779,7 +781,7 @@ export function PlanFormModal({
 
                   <TabsContent value="outros" className="space-y-4">
                     <div className="space-y-2">
-                      <Label htmlFor="restriction_alert">Alerta de Restrição</Label>
+                      <Label htmlFor="restriction_alert">Alerta de Restrição<FieldHint text={PLAN_FIELD_HINTS.restriction_alert} /></Label>
                       <Textarea
                         id="restriction_alert"
                         value={formData.restriction_alert}
@@ -795,7 +797,7 @@ export function PlanFormModal({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="footer_note">Nota de Rodapé</Label>
+                      <Label htmlFor="footer_note">Nota de Rodapé<FieldHint text={PLAN_FIELD_HINTS.footer_note} /></Label>
                       <Textarea
                         id="footer_note"
                         value={formData.footer_note}
@@ -811,7 +813,7 @@ export function PlanFormModal({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="display_order">Ordem de Exibição</Label>
+                      <Label htmlFor="display_order">Ordem de Exibição<FieldHint text={PLAN_FIELD_HINTS.display_order} /></Label>
                       <Input
                         id="display_order"
                         type="number"
