@@ -1,5 +1,5 @@
-import { useState, useMemo } from 'react';
-import { Package, Plus, Users, DollarSign, Shield, ChevronRight, Edit, Copy, Trash2, MoreVertical, Star, Gift, MapPin } from 'lucide-react';
+import { useState, useMemo, useRef } from 'react';
+import { Package, Plus, Users, DollarSign, Shield, ChevronRight, Edit, Copy, Trash2, MoreVertical, Star, Gift, MapPin, Upload, Download, History, Filter, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -7,6 +7,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -23,11 +24,13 @@ import { supabase } from '@/integrations/supabase/client';
 import { usePlans, useProductLines } from '@/hooks/usePlans';
 import { useDeletePlan, useDuplicatePlan, useTogglePlanStatus } from '@/hooks/usePlansAdmin';
 import { toast } from 'sonner';
+import { format } from 'date-fns';
 
 // Import existing modals
-import { VincularCoberturaModal, EditarCoberturaVinculadaModal } from '@/components/diretoria';
+import { VincularCoberturaModal, EditarCoberturaVinculadaModal, FaixaPrecoModal, HistoricoPrecoModal } from '@/components/diretoria';
 import { VincularBeneficioModal } from '@/components/gestao-comercial/VincularBeneficioModal';
 import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
+import { TabelaPrecosTab } from '@/components/gestao-comercial/TabelaPrecosTab';
 import type { PlanWithDetails } from '@/hooks/usePlans';
 
 function formatCurrency(value: number) {
@@ -43,6 +46,7 @@ export function ProdutosPlanos() {
   const [precosPage, setPrecosPage] = useState(0);
   const [precosRegiao, setPrecosRegiao] = useState<string>('all');
   const [precosTipoUso, setPrecosTipoUso] = useState<string>('all');
+  const [precosApenasAtivos, setPrecosApenasAtivos] = useState(true);
 
   // Cobertura modals
   const [vincularCoberturaOpen, setVincularCoberturaOpen] = useState(false);
@@ -54,6 +58,15 @@ export function ProdutosPlanos() {
   const [planToggleConfirm, setPlanToggleConfirm] = useState<{ id: string; activate: boolean } | null>(null);
   // Beneficio modals
   const [vincularBeneficioOpen, setVincularBeneficioOpen] = useState(false);
+
+  // Faixa price modals (CRUD)
+  const [faixaModalOpen, setFaixaModalOpen] = useState(false);
+  const [faixaEdit, setFaixaEdit] = useState<any>(null);
+  const [faixaDeleteConfirm, setFaixaDeleteConfirm] = useState<string | null>(null);
+  const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
+  const [historicoFaixaId, setHistoricoFaixaId] = useState<string | null>(null);
+
+  const fileInputRef = useRef<HTMLInputElement>(null);
 
   const queryClient = useQueryClient();
   const { data: lines, isLoading: linesLoading } = useProductLines();
@@ -77,36 +90,39 @@ export function ProdutosPlanos() {
     },
   });
 
-  // Fetch price mappings (using linha_slug + tipo_uso to distinguish e.g. Advanced vs Advanced+)
+  // Fetch price mappings to know which linha_slug a plan maps to
   const { data: precoMappings } = useQuery({
     queryKey: ['plano-preco-mappings'],
     queryFn: async () => {
       const { data: maps } = await supabase.from('plano_preco_map').select('plano_id, linha_slug, tipo_uso');
-      const { data: precos } = await supabase
-        .from('tabelas_preco_mensalidade')
-        .select('linha_slug, fipe_min, fipe_max, valor_mensal, regiao, tipo_uso')
-        .eq('is_active', true);
-
-      // Index by composite key: linha_slug|tipo_uso
-      const porChave: Record<string, typeof precos> = {};
-      precos?.forEach(p => {
-        const key = `${p.linha_slug || ''}|${p.tipo_uso || ''}`;
-        if (!porChave[key]) porChave[key] = [];
-        porChave[key]!.push(p);
-      });
-
-      const porPlano: Record<string, { linhaSlug: string; tipoUso: string; faixas: typeof precos }> = {};
+      const porPlano: Record<string, { linhaSlug: string; tipoUso: string }> = {};
       maps?.forEach(m => {
-        const key = `${m.linha_slug}|${m.tipo_uso}`;
-        if (porChave[key]) {
-          porPlano[m.plano_id] = { linhaSlug: m.linha_slug, tipoUso: m.tipo_uso, faixas: porChave[key]! };
-        }
+        porPlano[m.plano_id] = { linhaSlug: m.linha_slug, tipoUso: m.tipo_uso };
       });
       return porPlano;
     },
   });
 
-  // Fetch coberturas per plan (with full planos_coberturas data)
+  // Fetch full price rows for selected plan's linha_slug (source of truth: tabelas_preco_mensalidade)
+  const selectedMapping = selectedPlanoId ? precoMappings?.[selectedPlanoId] : null;
+  const { data: planFaixas, isLoading: faixasLoading } = useQuery({
+    queryKey: ['plan-faixas-full', selectedMapping?.linhaSlug, precosApenasAtivos],
+    queryFn: async () => {
+      if (!selectedMapping?.linhaSlug) return [];
+      let query = supabase
+        .from('tabelas_preco_mensalidade')
+        .select('*')
+        .eq('linha_slug', selectedMapping.linhaSlug)
+        .order('fipe_min');
+      if (precosApenasAtivos) query = query.eq('is_active', true);
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!selectedMapping?.linhaSlug,
+  });
+
+  // Fetch coberturas per plan
   const { data: coberturasPorPlano } = useQuery({
     queryKey: ['coberturas-por-plano'],
     queryFn: async () => {
@@ -116,10 +132,7 @@ export function ProdutosPlanos() {
       const map: Record<string, any[]> = {};
       data?.forEach((pc: any) => {
         if (!map[pc.plano_id]) map[pc.plano_id] = [];
-        map[pc.plano_id].push({
-          ...pc,
-          cobertura: pc.coberturas,
-        });
+        map[pc.plano_id].push({ ...pc, cobertura: pc.coberturas });
       });
       return map;
     },
@@ -170,8 +183,21 @@ export function ProdutosPlanos() {
     onError: () => toast.error('Erro ao desvincular benefício'),
   });
 
+  // Mutation: deletar faixa de preço
+  const deletarFaixa = useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('tabelas_preco_mensalidade').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      toast.success('Faixa excluída!');
+      queryClient.invalidateQueries({ queryKey: ['plan-faixas-full'] });
+      queryClient.invalidateQueries({ queryKey: ['tabela-precos-gc'] });
+      setFaixaDeleteConfirm(null);
+    },
+  });
+
   const selectedPlan = useMemo(() => plans?.find(p => p.id === selectedPlanoId), [plans, selectedPlanoId]);
-  const selectedPrecos = selectedPlanoId ? precoMappings?.[selectedPlanoId] : null;
   const selectedCoberturas = selectedPlanoId ? coberturasPorPlano?.[selectedPlanoId] || [] : [];
   const selectedBeneficios = selectedPlanoId ? beneficiosPorPlano?.[selectedPlanoId] || [] : [];
 
@@ -185,6 +211,79 @@ export function ProdutosPlanos() {
       desvincularBeneficio.mutate(deleteConfirmId);
     }
     setDeleteConfirmId(null);
+  };
+
+  // Filtered & paginated faixas for selected plan
+  const filteredFaixas = useMemo(() => {
+    if (!planFaixas) return [];
+    return planFaixas.filter(f => {
+      if (precosRegiao !== 'all' && f.regiao !== precosRegiao) return false;
+      if (precosTipoUso !== 'all' && f.tipo_uso !== precosTipoUso) return false;
+      return true;
+    });
+  }, [planFaixas, precosRegiao, precosTipoUso]);
+
+  const faixaRegioes = useMemo(() => {
+    if (!planFaixas) return [];
+    return Array.from(new Set(planFaixas.map(f => f.regiao).filter(Boolean))).sort() as string[];
+  }, [planFaixas]);
+
+  const faixaTiposUso = useMemo(() => {
+    if (!planFaixas) return [];
+    return Array.from(new Set(planFaixas.map(f => f.tipo_uso).filter(Boolean))).sort() as string[];
+  }, [planFaixas]);
+
+  const perPage = 30;
+  const totalPages = Math.max(1, Math.ceil(filteredFaixas.length / perPage));
+  const safePage = Math.min(precosPage, totalPages - 1);
+  const pagedFaixas = filteredFaixas.slice(safePage * perPage, (safePage + 1) * perPage);
+
+  // Export CSV for plan faixas
+  const handleExportarPlan = () => {
+    if (!filteredFaixas.length) { toast.warning('Nenhum dado'); return; }
+    const csv = [
+      ['Linha', 'Região', 'Combustível', 'Tipo Uso', 'FIPE Min', 'FIPE Max', 'Valor Mensal', 'Valor Deságio', 'Ativo'].join(';'),
+      ...filteredFaixas.map(p => [
+        p.linha_slug || '', p.regiao || '', p.combustivel_tipo || '', p.tipo_uso || '',
+        p.fipe_min, p.fipe_max, p.valor_mensal, p.valor_desagio || '', p.is_active ? 'Sim' : 'Não',
+      ].join(';'))
+    ].join('\n');
+    const blob = new Blob(['\ufeff' + csv], { type: 'text/csv;charset=utf-8' });
+    const a = document.createElement('a');
+    a.href = URL.createObjectURL(blob);
+    a.download = `faixas-${selectedMapping?.linhaSlug || 'plano'}-${format(new Date(), 'yyyy-MM-dd')}.csv`;
+    a.click();
+    toast.success('Exportado!');
+  };
+
+  const handleImportarPlan = (event: React.ChangeEvent<HTMLInputElement>) => {
+    const file = event.target.files?.[0];
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onload = async (e) => {
+      try {
+        const lines = (e.target?.result as string).split('\n').filter(l => l.trim());
+        if (lines.length < 2) { toast.error('Arquivo vazio'); return; }
+        let importados = 0, erros = 0;
+        for (const line of lines.slice(1)) {
+          const cols = line.split(';');
+          if (cols.length < 7) { erros++; continue; }
+          const { error } = await supabase.from('tabelas_preco_mensalidade').insert({
+            linha_slug: cols[0].trim() || null, regiao: cols[1].trim() || null,
+            combustivel_tipo: cols[2].trim() || null, tipo_uso: cols[3].trim() || null,
+            fipe_min: parseFloat(cols[4]) || 0, fipe_max: parseFloat(cols[5]) || 0,
+            valor_mensal: parseFloat(cols[6]) || 0, valor_desagio: cols[7] ? parseFloat(cols[7]) : null,
+            is_active: cols[8]?.toLowerCase().includes('sim') ?? true,
+          });
+          if (error) erros++; else importados++;
+        }
+        queryClient.invalidateQueries({ queryKey: ['plan-faixas-full'] });
+        queryClient.invalidateQueries({ queryKey: ['tabela-precos-gc'] });
+        toast.success(`${importados} importados, ${erros} erros`);
+      } catch { toast.error('Erro ao processar'); }
+    };
+    reader.readAsText(file);
+    if (fileInputRef.current) fileInputRef.current.value = '';
   };
 
   if (isLoading) {
@@ -263,14 +362,12 @@ export function ProdutosPlanos() {
           )}
         </div>
 
-        {/* Plan detail panel */}
+        {/* Detail panel */}
         <div className="lg:col-span-2 rounded-xl border bg-card">
           {!selectedPlan ? (
-            <div className="flex items-center justify-center h-full text-muted-foreground">
-              <div className="text-center">
-                <ChevronRight className="h-8 w-8 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Selecione um plano para ver detalhes</p>
-              </div>
+            /* Global mode: render full TabelaPrecosTab */
+            <div className="p-4">
+              <TabelaPrecosTab />
             </div>
           ) : (
             <div>
@@ -349,123 +446,162 @@ export function ProdutosPlanos() {
                     {tab.key === 'beneficios' && selectedBeneficios.length > 0 && (
                       <Badge variant="secondary" className="h-4 px-1 text-[10px]">{selectedBeneficios.length}</Badge>
                     )}
+                    {tab.key === 'precos' && planFaixas && planFaixas.length > 0 && (
+                      <Badge variant="secondary" className="h-4 px-1 text-[10px]">{planFaixas.length}</Badge>
+                    )}
                   </button>
                 ))}
               </div>
 
               {/* Sub-tab content */}
               <div className="p-4">
-                {detailSubTab === 'precos' && (() => {
-                  const allFaixas = selectedPrecos?.faixas || [];
-                  const regioes = Array.from(new Set(allFaixas.map(f => f.regiao).filter(Boolean))).sort() as string[];
-                  const tiposUso = Array.from(new Set(allFaixas.map(f => f.tipo_uso).filter(Boolean))).sort() as string[];
-                  const filtered = allFaixas.filter(f => {
-                    if (precosRegiao !== 'all' && f.regiao !== precosRegiao) return false;
-                    if (precosTipoUso !== 'all' && f.tipo_uso !== precosTipoUso) return false;
-                    return true;
-                  });
-                  const perPage = 30;
-                  const totalPages = Math.max(1, Math.ceil(filtered.length / perPage));
-                  const safePage = Math.min(precosPage, totalPages - 1);
-                  const paged = filtered.slice(safePage * perPage, (safePage + 1) * perPage);
+                {/* ============ FAIXAS DE PREÇO (enriched with full CRUD) ============ */}
+                {detailSubTab === 'precos' && (
+                  <div>
+                    {/* Toolbar */}
+                    <div className="flex flex-wrap items-center justify-between gap-2 mb-3">
+                      <div className="flex flex-wrap items-center gap-2">
+                        <p className="text-xs text-muted-foreground">
+                          Linha <Badge variant="outline" className="ml-1">{selectedMapping?.linhaSlug || '-'}</Badge>
+                        </p>
+                        <Select value={precosRegiao} onValueChange={v => { setPrecosRegiao(v); setPrecosPage(0); }}>
+                          <SelectTrigger className="w-[130px] h-7 text-xs"><SelectValue placeholder="Região" /></SelectTrigger>
+                          <SelectContent>
+                            <SelectItem value="all">Todas regiões</SelectItem>
+                            {faixaRegioes.map(r => <SelectItem key={r} value={r}>{r.toUpperCase()}</SelectItem>)}
+                          </SelectContent>
+                        </Select>
+                        {faixaTiposUso.length > 1 && (
+                          <Select value={precosTipoUso} onValueChange={v => { setPrecosTipoUso(v); setPrecosPage(0); }}>
+                            <SelectTrigger className="w-[130px] h-7 text-xs"><SelectValue placeholder="Tipo Uso" /></SelectTrigger>
+                            <SelectContent>
+                              <SelectItem value="all">Todos tipos</SelectItem>
+                              {faixaTiposUso.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
+                            </SelectContent>
+                          </Select>
+                        )}
+                        <div className="flex items-center gap-1.5">
+                          <Switch id="ativos-plan" checked={precosApenasAtivos} onCheckedChange={setPrecosApenasAtivos} />
+                          <Label htmlFor="ativos-plan" className="text-xs">Ativos</Label>
+                        </div>
+                      </div>
+                      <div className="flex gap-1.5">
+                        <input type="file" ref={fileInputRef} accept=".csv" onChange={handleImportarPlan} className="hidden" />
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={() => fileInputRef.current?.click()}>
+                          <Upload className="h-3 w-3 mr-1" /> Importar
+                        </Button>
+                        <Button variant="outline" size="sm" className="h-7 text-xs" onClick={handleExportarPlan}>
+                          <Download className="h-3 w-3 mr-1" /> Exportar
+                        </Button>
+                        <Button size="sm" className="h-7 text-xs" onClick={() => { setFaixaEdit(null); setFaixaModalOpen(true); }}>
+                          <Plus className="h-3 w-3 mr-1" /> Nova Faixa
+                        </Button>
+                      </div>
+                    </div>
 
-                  return (
-                    <div>
-                      {allFaixas.length > 0 ? (
-                        <div>
-                          <div className="flex flex-wrap items-center gap-2 mb-3">
-                            <p className="text-xs text-muted-foreground">
-                              Linha <Badge variant="outline" className="ml-1">{selectedPrecos?.linhaSlug}</Badge>
-                            </p>
-                            <Select value={precosRegiao} onValueChange={v => { setPrecosRegiao(v); setPrecosPage(0); }}>
-                              <SelectTrigger className="w-[130px] h-7 text-xs"><SelectValue placeholder="Região" /></SelectTrigger>
-                              <SelectContent>
-                                <SelectItem value="all">Todas regiões</SelectItem>
-                                {regioes.map(r => <SelectItem key={r} value={r}>{r.toUpperCase()}</SelectItem>)}
-                              </SelectContent>
-                            </Select>
-                            {tiposUso.length > 1 && (
-                              <Select value={precosTipoUso} onValueChange={v => { setPrecosTipoUso(v); setPrecosPage(0); }}>
-                                <SelectTrigger className="w-[130px] h-7 text-xs"><SelectValue placeholder="Tipo Uso" /></SelectTrigger>
-                                <SelectContent>
-                                  <SelectItem value="all">Todos tipos</SelectItem>
-                                  {tiposUso.map(t => <SelectItem key={t} value={t}>{t}</SelectItem>)}
-                                </SelectContent>
-                              </Select>
-                            )}
-                          </div>
-                          <Table>
-                            <TableHeader>
-                              <TableRow>
-                                <TableHead>Faixa FIPE</TableHead>
-                                <TableHead>Região</TableHead>
-                                <TableHead>Tipo Uso</TableHead>
-                                <TableHead className="text-right">Valor Mensal</TableHead>
-                              </TableRow>
-                            </TableHeader>
-                            <TableBody>
-                              {paged.map((f, i) => (
-                                <TableRow key={i}>
-                                  <TableCell className="text-xs">
-                                    {formatCurrency(Number(f.fipe_min))} – {formatCurrency(Number(f.fipe_max))}
+                    {faixasLoading ? (
+                      <Skeleton className="h-48" />
+                    ) : pagedFaixas.length > 0 ? (
+                      <>
+                        <Table>
+                          <TableHeader>
+                            <TableRow>
+                              <TableHead>Faixa FIPE</TableHead>
+                              <TableHead>Região</TableHead>
+                              <TableHead>Combustível</TableHead>
+                              <TableHead>Tipo Uso</TableHead>
+                              <TableHead>Valor Mensal</TableHead>
+                              <TableHead>Preço Ajustado</TableHead>
+                              <TableHead>Deságio</TableHead>
+                              <TableHead>Status</TableHead>
+                              <TableHead className="w-[100px]">Ações</TableHead>
+                            </TableRow>
+                          </TableHeader>
+                          <TableBody>
+                            {pagedFaixas.map((f: any) => {
+                              const base = Number(f.valor_mensal);
+                              const adicional = Number(selectedPlan?.adicional_mensal || 0);
+                              const desconto = Number(selectedPlan?.desconto_percentual || 0);
+                              let ajustado = base + adicional;
+                              if (desconto > 0) ajustado *= (1 - desconto / 100);
+                              ajustado = Math.round(ajustado * 100) / 100;
+                              const temAjuste = adicional !== 0 || desconto > 0;
+
+                              return (
+                                <TableRow key={f.id} className={!f.is_active ? 'opacity-50' : ''}>
+                                  <TableCell className="text-xs font-medium">
+                                    {formatCurrency(f.fipe_min)} – {formatCurrency(f.fipe_max)}
                                   </TableCell>
-                                  <TableCell><Badge variant="outline">{f.regiao?.toUpperCase() || '-'}</Badge></TableCell>
+                                  <TableCell><Badge variant="outline" className="text-xs">{f.regiao?.toUpperCase() || '-'}</Badge></TableCell>
+                                  <TableCell className="text-xs">{f.combustivel_tipo || '-'}</TableCell>
                                   <TableCell className="text-xs">{f.tipo_uso || '-'}</TableCell>
-                                  <TableCell className="text-right font-semibold text-primary">
-                                    {(() => {
-                                      const base = Number(f.valor_mensal);
-                                      const adicional = Number(selectedPlan?.adicional_mensal || 0);
-                                      const desconto = Number(selectedPlan?.desconto_percentual || 0);
-                                      let valor = base + adicional;
-                                      if (desconto > 0) valor *= (1 - desconto / 100);
-                                      valor = Math.round(valor * 100) / 100;
-                                      const temAjuste = adicional !== 0 || desconto > 0;
-                                      return (
-                                        <span title={temAjuste ? `Base: ${formatCurrency(base)}${adicional ? ` + ${formatCurrency(adicional)}` : ''}${desconto ? ` − ${desconto}%` : ''}` : undefined}>
-                                          {formatCurrency(valor)}
-                                          {temAjuste && <span className="text-xs text-muted-foreground ml-1">*</span>}
-                                        </span>
-                                      );
-                                    })()}
+                                  <TableCell className="font-semibold text-primary text-xs">{formatCurrency(base)}</TableCell>
+                                  <TableCell className="text-xs">
+                                    <span title={temAjuste ? `Base: ${formatCurrency(base)}${adicional ? ` + ${formatCurrency(adicional)}` : ''}${desconto ? ` − ${desconto}%` : ''}` : undefined}>
+                                      {formatCurrency(ajustado)}
+                                      {temAjuste && <span className="text-muted-foreground ml-1">*</span>}
+                                    </span>
+                                  </TableCell>
+                                  <TableCell className="text-xs">{f.valor_desagio ? formatCurrency(f.valor_desagio) : '-'}</TableCell>
+                                  <TableCell>
+                                    <Badge variant={f.is_active ? 'default' : 'secondary'} className="text-xs">
+                                      {f.is_active ? 'Ativo' : 'Inativo'}
+                                    </Badge>
+                                  </TableCell>
+                                  <TableCell>
+                                    <div className="flex gap-0.5">
+                                      <Button variant="ghost" size="icon" className="h-7 w-7"
+                                        onClick={() => { setFaixaEdit(f); setFaixaModalOpen(true); }}>
+                                        <Edit className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7"
+                                        onClick={() => { setHistoricoFaixaId(f.id); setHistoricoModalOpen(true); }}>
+                                        <History className="h-3.5 w-3.5" />
+                                      </Button>
+                                      <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                                        onClick={() => setFaixaDeleteConfirm(f.id)}>
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
+                                    </div>
                                   </TableCell>
                                 </TableRow>
-                              ))}
-                            </TableBody>
-                          </Table>
-                          {filtered.length > perPage && (
-                            <div className="flex items-center justify-between mt-3 px-1">
-                              <p className="text-xs text-muted-foreground">
-                                Página {safePage + 1} de {totalPages} · {filtered.length} faixas
-                              </p>
-                              <div className="flex gap-1.5">
-                                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={safePage === 0}
-                                  onClick={() => setPrecosPage(safePage - 1)}>
-                                  ← Anterior
-                                </Button>
-                                <Button variant="outline" size="sm" className="h-7 text-xs" disabled={safePage >= totalPages - 1}
-                                  onClick={() => setPrecosPage(safePage + 1)}>
-                                  Próximo →
-                                </Button>
-                              </div>
-                            </div>
-                          )}
-                          {filtered.length === 0 && allFaixas.length > 0 && (
-                            <p className="text-xs text-muted-foreground text-center py-4">
-                              Nenhuma faixa com os filtros selecionados
+                              );
+                            })}
+                          </TableBody>
+                        </Table>
+                        {filteredFaixas.length > perPage && (
+                          <div className="flex items-center justify-between mt-3 px-1">
+                            <p className="text-xs text-muted-foreground">
+                              Página {safePage + 1} de {totalPages} · {filteredFaixas.length} faixas
                             </p>
-                          )}
-                        </div>
-                      ) : (
-                        <div className="text-center py-8 text-muted-foreground">
-                          <DollarSign className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                          <p className="text-sm">Nenhuma faixa de preço vinculada</p>
-                          <p className="text-xs mt-1">Configure via plano_preco_map</p>
-                        </div>
-                      )}
-                    </div>
-                  );
-                })()}
+                            <div className="flex gap-1.5">
+                              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={safePage === 0}
+                                onClick={() => setPrecosPage(safePage - 1)}>
+                                ← Anterior
+                              </Button>
+                              <Button variant="outline" size="sm" className="h-7 text-xs" disabled={safePage >= totalPages - 1}
+                                onClick={() => setPrecosPage(safePage + 1)}>
+                                Próximo →
+                              </Button>
+                            </div>
+                          </div>
+                        )}
+                      </>
+                    ) : planFaixas && planFaixas.length > 0 ? (
+                      <p className="text-xs text-muted-foreground text-center py-4">
+                        Nenhuma faixa com os filtros selecionados
+                      </p>
+                    ) : (
+                      <div className="text-center py-8 text-muted-foreground">
+                        <DollarSign className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                        <p className="text-sm">Nenhuma faixa de preço vinculada</p>
+                        <p className="text-xs mt-1">Configure via plano_preco_map</p>
+                      </div>
+                    )}
+                  </div>
+                )}
 
+                {/* ============ COBERTURAS ============ */}
                 {detailSubTab === 'coberturas' && (
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -522,6 +658,7 @@ export function ProdutosPlanos() {
                   </div>
                 )}
 
+                {/* ============ BENEFÍCIOS ============ */}
                 {detailSubTab === 'beneficios' && (
                   <div>
                     <div className="flex items-center justify-between mb-3">
@@ -579,6 +716,7 @@ export function ProdutosPlanos() {
                   </div>
                 )}
 
+                {/* ============ DETALHES ============ */}
                 {detailSubTab === 'detalhes' && (
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <div>
@@ -618,9 +756,8 @@ export function ProdutosPlanos() {
                           if (!checked && count > 0) {
                             setPlanToggleConfirm({ id: selectedPlan.id, activate: false });
                           } else if (checked) {
-                            // Validate: must have at least coberturas or precos
                             const hasCoberturas = (coberturasPorPlano?.[selectedPlan.id]?.length ?? 0) > 0;
-                            const hasPrecos = !!precoMappings?.[selectedPlan.id]?.faixas?.length;
+                            const hasPrecos = !!planFaixas?.length;
                             if (!hasCoberturas && !hasPrecos) {
                               toast.error('O plano precisa ter coberturas ou preços vinculados antes de ser ativado');
                               return;
@@ -647,6 +784,14 @@ export function ProdutosPlanos() {
         plan={produtoEdit as PlanWithDetails | null}
       />
 
+      <FaixaPrecoModal
+        open={faixaModalOpen}
+        onClose={() => { setFaixaModalOpen(false); queryClient.invalidateQueries({ queryKey: ['plan-faixas-full'] }); queryClient.invalidateQueries({ queryKey: ['tabela-precos-gc'] }); }}
+        planoId=""
+        faixa={faixaEdit}
+      />
+      <HistoricoPrecoModal open={historicoModalOpen} onClose={() => setHistoricoModalOpen(false)} faixaId={historicoFaixaId} />
+
       {selectedPlanoId && (
         <>
           <VincularCoberturaModal
@@ -668,7 +813,7 @@ export function ProdutosPlanos() {
         </>
       )}
 
-      {/* Delete/unlink confirmation */}
+      {/* Delete/unlink confirmation (coberturas/beneficios) */}
       <AlertDialog open={!!deleteConfirmId} onOpenChange={(open) => { if (!open) setDeleteConfirmId(null); }}>
         <AlertDialogContent>
           <AlertDialogHeader>
@@ -683,6 +828,25 @@ export function ProdutosPlanos() {
             <AlertDialogCancel>Cancelar</AlertDialogCancel>
             <AlertDialogAction onClick={handleConfirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
               Desvincular
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Faixa delete confirmation */}
+      <AlertDialog open={!!faixaDeleteConfirm} onOpenChange={() => setFaixaDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => faixaDeleteConfirm && deletarFaixa.mutate(faixaDeleteConfirm)}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {deletarFaixa.isPending ? <Loader2 className="h-4 w-4 animate-spin" /> : 'Excluir'}
             </AlertDialogAction>
           </AlertDialogFooter>
         </AlertDialogContent>
