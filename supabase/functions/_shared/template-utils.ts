@@ -4,6 +4,7 @@
 
 import {
   TermoAfiliacaoData,
+  RegrasVendaData,
   formatCPF,
   formatPhone,
   formatCEP,

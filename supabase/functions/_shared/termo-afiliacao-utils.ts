@@ -87,6 +87,31 @@ export interface EmpresaData {
   lgpd_email?: string;
 }
 
+export interface RegrasVendaData {
+  // Taxas e Adesão
+  taxa_adesao_percentual_fipe: string;
+  taxa_adesao_minimo_volante: string;
+  taxa_adesao_minimo_base: string;
+  taxa_repasse_volante: string;
+  taxa_substituicao_placa: string;
+  taxa_troca_titularidade: string;
+  taxa_revistoria: string;
+  multa_rastreador: string;
+  // Migração
+  migracao_comprovantes_exigidos: string;
+  migracao_prazo_resposta_horas: string;
+  migracao_canal_oficial: string;
+  migracao_isentar_carencia: string;
+  // Pontuação
+  prazo_reativacao_dias: string;
+  // Repasse Maior
+  repasse_maior_pct_favoravel: string;
+  repasse_maior_pct_reduzido: string;
+  repasse_maior_valor_favoravel: string;
+  repasse_maior_valor_reduzido: string;
+  repasse_maior_corte_boletos: string;
+}
+
 export interface TermoAfiliacaoData {
   cliente: ClienteData;
   veiculo: VeiculoData;
@@ -98,6 +123,7 @@ export interface TermoAfiliacaoData {
     fipeMinCarro: number;
     fipeMinMoto: number;
   };
+  regrasVenda?: RegrasVendaData;
 }
 
 // ============= FORMATADORES =============
