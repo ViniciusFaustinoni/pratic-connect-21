@@ -12,8 +12,8 @@ import {
   type BenefitExclusionData
 } from '@/data/restricoesCategorias';
 
-const CATEGORIAS_DESAGIO = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
-const LINHAS_COM_DESAGIO = ['select', 'lancamento'];
+const CATEGORIAS_DESAGIO_FALLBACK = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
+const LINHAS_COM_DESAGIO_FALLBACK = ['select', 'lancamento'];
 
 // ============================================
 // INTERFACES
@@ -107,6 +107,36 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         .maybeSingle();
       try { return JSON.parse(data?.valor || '[]') as string[]; }
       catch { return [] as string[]; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Buscar categorias de deságio do banco
+  const { data: categoriasDesagio = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'categorias_desagio'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'categorias_desagio')
+        .maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; }
+      catch { return CATEGORIAS_DESAGIO_FALLBACK; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Buscar linhas com deságio do banco
+  const { data: linhasComDesagio = LINHAS_COM_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'linhas_com_desagio'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'linhas_com_desagio')
+        .maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; }
+      catch { return LINHAS_COM_DESAGIO_FALLBACK; }
     },
     staleTime: 1000 * 60 * 5,
   });
@@ -465,10 +495,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
 
       // Deságio: derive flag from category
-      const isDesagio = !!categoria && CATEGORIAS_DESAGIO.includes(categoria);
+      const isDesagio = !!categoria && categoriasDesagio.includes(categoria);
 
       // Bug 1 fix: use valor_desagio as base price for eligible lines
-      if (isDesagio && valorDesagio != null && LINHAS_COM_DESAGIO.includes(linhaSlug || '')) {
+      if (isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || '')) {
         valorMensal = valorDesagio;
       }
 
