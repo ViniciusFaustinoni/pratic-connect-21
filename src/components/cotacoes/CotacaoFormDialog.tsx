@@ -1695,7 +1695,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                         } else if (cenarioExterno?.startsWith('isenta')) {
                           adesaoEditadaManualmente.current = false;
                           if (valorFipe && valorFipe > 0) {
-                            const adesaoCalculada = Math.max(valorFipe * 0.01, 100);
+                            const adesaoCalculada = Math.max(valorFipe * (percentualAdesaoConfig / 100), minimoAdesaoConfig);
                             form.setValue('valor_adesao', Math.round(adesaoCalculada * 100) / 100);
                           }
                         }
