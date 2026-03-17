@@ -435,6 +435,14 @@ serve(async (req) => {
             veiculoId = veiculoExistente.id;
             console.log('Veículo existente encontrado pela placa:', veiculoId);
           } else {
+            const categoriaFlagsEmail = {
+              flag_placa_vermelha: cotacao.categoria === 'placa_vermelha',
+              flag_ex_taxi: cotacao.categoria === 'ex_taxi',
+              flag_taxi_ativo: cotacao.categoria === 'taxi',
+              flag_chassi_remarcado: cotacao.categoria === 'chassi_remarcado',
+              flag_leilao: cotacao.categoria === 'leilao',
+              flag_ex_ressarcido: cotacao.categoria === 'ressarcimento_integral',
+            };
             const { data: novoVeiculoEmail, error: veiculoEmailError } = await supabase
               .from('veiculos')
               .insert({
@@ -448,12 +456,12 @@ serve(async (req) => {
                 combustivel: cotacao.veiculo_combustivel || null,
                 valor_fipe: cotacao.valor_fipe || null,
                 codigo_fipe: cotacao.codigo_fipe || null,
-                // Dados obrigatórios para SGA Hinova (extraídos do CRLV via OCR)
                 chassi: cotacao.veiculo_chassi || null,
                 renavam: cotacao.veiculo_renavam || null,
                 status: 'em_analise',
                 cobertura_roubo_furto: false,
                 cobertura_total: false,
+                ...categoriaFlagsEmail,
               })
               .select('id')
               .single();
