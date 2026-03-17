@@ -1393,6 +1393,108 @@ export default function RegrasVenda() {
             </Button>
           </div>
         </TabsContent>
+
+        {/* ═══════════ ABA INDICAÇÃO ═══════════ */}
+        <TabsContent value="indicacao" className="space-y-6 mt-4">
+          <Card>
+            <CardHeader>
+              <CardTitle className="text-lg">Programa de Indicação</CardTitle>
+              <CardDescription>
+                Configure as regras do programa de indicação entre associados. Esses valores refletem no app do associado e no módulo de marketing.
+              </CardDescription>
+            </CardHeader>
+            <CardContent className="space-y-5">
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="indicacao_validade_dias" className="text-sm">
+                    Prazo de validade da indicação (dias)
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Após esse prazo sem conversão, a indicação expira automaticamente.
+                  </p>
+                </div>
+                <Input
+                  id="indicacao_validade_dias"
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="w-24 text-right"
+                  value={indicacao.indicacao_validade_dias}
+                  onChange={(e) => setIndicacao(prev => ({ ...prev, indicacao_validade_dias: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="indicacao_valor_recompensa" className="text-sm">
+                    Valor da recompensa para o indicador (R$)
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Valor monetário pago ao associado que realizou a indicação.
+                  </p>
+                </div>
+                <Input
+                  id="indicacao_valor_recompensa"
+                  type="number"
+                  min="0"
+                  step="0.01"
+                  className="w-32 text-right"
+                  value={indicacao.indicacao_valor_recompensa}
+                  onChange={(e) => setIndicacao(prev => ({ ...prev, indicacao_valor_recompensa: e.target.value }))}
+                />
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="indicacao_momento_pagamento" className="text-sm">
+                    Momento do pagamento da recompensa
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Define quando a recompensa é liberada para o indicador.
+                  </p>
+                </div>
+                <Select
+                  value={indicacao.indicacao_momento_pagamento}
+                  onValueChange={(v) => setIndicacao(prev => ({ ...prev, indicacao_momento_pagamento: v }))}
+                >
+                  <SelectTrigger className="w-64">
+                    <SelectValue />
+                  </SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="apos_conversao">Após conversão confirmada</SelectItem>
+                    <SelectItem value="apos_primeiro_boleto">Após pagamento do primeiro boleto</SelectItem>
+                  </SelectContent>
+                </Select>
+              </div>
+
+              <div className="flex items-center justify-between gap-4">
+                <div className="flex-1">
+                  <Label htmlFor="indicacao_pontuacao" className="text-sm">
+                    Indicação gera pontuação para o consultor
+                  </Label>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Quando ativado, usa o valor configurado na aba Pontuação do Consultor para "Indicação Convertida".
+                  </p>
+                </div>
+                <Switch
+                  id="indicacao_pontuacao"
+                  checked={indicacao.indicacao_gera_pontuacao_consultor === 'true'}
+                  onCheckedChange={(checked) =>
+                    setIndicacao(prev => ({ ...prev, indicacao_gera_pontuacao_consultor: String(checked) }))
+                  }
+                />
+              </div>
+            </CardContent>
+          </Card>
+
+          {/* Botão Salvar */}
+          <div className="flex justify-end">
+            <Button onClick={handleSaveIndicacao} disabled={savingIndicacao} className="gap-2">
+              {savingIndicacao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+              Salvar configurações
+            </Button>
+          </div>
+        </TabsContent>
       </Tabs>
     </div>
   );
