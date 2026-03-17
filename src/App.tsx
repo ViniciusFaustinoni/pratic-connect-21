@@ -636,6 +636,7 @@ const App = () => (
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />
               <Route path="/diretoria/gestao-comercial" element={<GestaoComercial />} />
+              <Route path="/diretoria/regras-venda" element={<RegrasVenda />} />
               <Route path="/diretoria/produtos" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
               <Route path="/diretoria/planos-beneficios" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
               <Route path="/diretoria/precos" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
