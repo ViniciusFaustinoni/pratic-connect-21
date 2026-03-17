@@ -33,6 +33,7 @@ interface AssociadoHeroHeaderProps {
     isAdminMaster: boolean;
   };
   docsPendentes: number;
+  coberturasSuspensas?: boolean;
   // Actions
   onSuspender: () => void;
   onReativar: () => void;
