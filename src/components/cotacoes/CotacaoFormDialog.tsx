@@ -83,37 +83,7 @@ const REGIOES = [
   { value: 'interior_sp', label: 'Interior de São Paulo' },
 ];
 
-// Alertas baseados na categoria selecionada
-const ALERTAS_CATEGORIA: Record<string, { tipo: 'warning' | 'info'; mensagem: string }> = {
-  leilao: {
-    tipo: 'warning',
-    mensagem: 'Veículos de leilão não possuem cobertura de incêndio.',
-  },
-  aplicativo: {
-    tipo: 'info',
-    mensagem: 'Categoria APP: cota de participação será 8% (mínimo R$ 3.000).',
-  },
-  chassi_remarcado: {
-    tipo: 'warning',
-    mensagem: 'Veículo sujeito à análise de aceitação prévia.',
-  },
-  taxi: {
-    tipo: 'info',
-    mensagem: 'Categoria especial: valores diferenciados podem ser aplicados.',
-  },
-  ex_taxi: {
-    tipo: 'info',
-    mensagem: 'Categoria especial: valores diferenciados podem ser aplicados.',
-  },
-  placa_vermelha: {
-    tipo: 'info',
-    mensagem: 'Veículo de aluguel: valores diferenciados podem ser aplicados.',
-  },
-  ressarcimento_integral: {
-    tipo: 'warning',
-    mensagem: 'Veículo com histórico de ressarcimento integral. Sujeito à análise.',
-  },
-};
+// Alertas de categoria agora vêm do banco (observacoes_categoria)
 
 // Interface para cotação base (duplicação)
 export interface CotacaoBaseParaFormulario {
