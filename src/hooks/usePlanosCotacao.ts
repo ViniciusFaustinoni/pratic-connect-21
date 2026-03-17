@@ -12,8 +12,8 @@ import {
   type BenefitExclusionData
 } from '@/data/restricoesCategorias';
 
-const CATEGORIAS_DESAGIO = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
-const LINHAS_COM_DESAGIO = ['select', 'lancamento'];
+const CATEGORIAS_DESAGIO_FALLBACK = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
+const LINHAS_COM_DESAGIO_FALLBACK = ['select', 'lancamento'];
 
 // ============================================
 // INTERFACES
