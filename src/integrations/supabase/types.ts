@@ -7726,6 +7726,8 @@ export type Database = {
           autentique_documento_id: string | null
           autentique_status: string | null
           autentique_url: string | null
+          carencia_isenta: boolean | null
+          carencia_motivo_isencao: string | null
           cliente_bairro: string | null
           cliente_cep: string | null
           cliente_cidade: string | null
@@ -7758,6 +7760,8 @@ export type Database = {
           data_assinatura: string | null
           data_ativacao: string | null
           data_cancelamento: string | null
+          data_carencia_fim: string | null
+          data_carencia_inicio: string | null
           data_envio: string | null
           data_fim: string | null
           data_inicio: string
@@ -7776,6 +7780,7 @@ export type Database = {
           plano_id: string
           status: Database["public"]["Enums"]["status_contrato"]
           tipo_atendimento: string | null
+          tipo_entrada: string | null
           tipo_venda: string | null
           tipo_vistoria: string | null
           updated_at: string
@@ -7832,6 +7837,8 @@ export type Database = {
           autentique_documento_id?: string | null
           autentique_status?: string | null
           autentique_url?: string | null
+          carencia_isenta?: boolean | null
+          carencia_motivo_isencao?: string | null
           cliente_bairro?: string | null
           cliente_cep?: string | null
           cliente_cidade?: string | null
@@ -7864,6 +7871,8 @@ export type Database = {
           data_assinatura?: string | null
           data_ativacao?: string | null
           data_cancelamento?: string | null
+          data_carencia_fim?: string | null
+          data_carencia_inicio?: string | null
           data_envio?: string | null
           data_fim?: string | null
           data_inicio?: string
@@ -7882,6 +7891,7 @@ export type Database = {
           plano_id: string
           status?: Database["public"]["Enums"]["status_contrato"]
           tipo_atendimento?: string | null
+          tipo_entrada?: string | null
           tipo_venda?: string | null
           tipo_vistoria?: string | null
           updated_at?: string
@@ -7938,6 +7948,8 @@ export type Database = {
           autentique_documento_id?: string | null
           autentique_status?: string | null
           autentique_url?: string | null
+          carencia_isenta?: boolean | null
+          carencia_motivo_isencao?: string | null
           cliente_bairro?: string | null
           cliente_cep?: string | null
           cliente_cidade?: string | null
@@ -7970,6 +7982,8 @@ export type Database = {
           data_assinatura?: string | null
           data_ativacao?: string | null
           data_cancelamento?: string | null
+          data_carencia_fim?: string | null
+          data_carencia_inicio?: string | null
           data_envio?: string | null
           data_fim?: string | null
           data_inicio?: string
@@ -7988,6 +8002,7 @@ export type Database = {
           plano_id?: string
           status?: Database["public"]["Enums"]["status_contrato"]
           tipo_atendimento?: string | null
+          tipo_entrada?: string | null
           tipo_venda?: string | null
           tipo_vistoria?: string | null
           updated_at?: string
@@ -15224,6 +15239,97 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_vendedores_conflito"
             referencedColumns: ["vendedor_id"]
+          },
+        ]
+      }
+      operacao_config_snapshot: {
+        Row: {
+          associado_id: string | null
+          config_data: Json
+          contrato_id: string | null
+          created_at: string
+          id: string
+          tipo_operacao: string
+        }
+        Insert: {
+          associado_id?: string | null
+          config_data?: Json
+          contrato_id?: string | null
+          created_at?: string
+          id?: string
+          tipo_operacao: string
+        }
+        Update: {
+          associado_id?: string | null
+          config_data?: Json
+          contrato_id?: string | null
+          created_at?: string
+          id?: string
+          tipo_operacao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "operacao_config_snapshot_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operacao_config_snapshot_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "operacao_config_snapshot_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "operacao_config_snapshot_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "operacao_config_snapshot_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operacao_config_snapshot_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "operacao_config_snapshot_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "operacao_config_snapshot_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "contratos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "operacao_config_snapshot_contrato_id_fkey"
+            columns: ["contrato_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["contrato_id"]
           },
         ]
       }

@@ -488,3 +488,39 @@ export function usePrazoReativacaoDias() {
     staleTime: 1000 * 60 * 10,
   });
 }
+
+// ============================================
+// Prazos de Inadimplência (lê de comissoes_parametros)
+// ============================================
+
+export interface InadimplenciaPrazos {
+  prazoSemRevistoria: number;
+  prazoRevistoria: number;
+  prazoNovaAdesao: number;
+}
+
+export function useInadimplenciaPrazos() {
+  return useQuery({
+    queryKey: ['comissoes-parametros', 'inadimplencia-prazos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('comissoes_parametros')
+        .select('chave, valor')
+        .in('chave', [
+          'inadimplencia_prazo_sem_revistoria',
+          'inadimplencia_prazo_revistoria',
+          'inadimplencia_prazo_nova_adesao',
+        ]);
+
+      if (error) throw error;
+
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        prazoSemRevistoria: parseInt(map.inadimplencia_prazo_sem_revistoria) || 30,
+        prazoRevistoria: parseInt(map.inadimplencia_prazo_revistoria) || 90,
+        prazoNovaAdesao: parseInt(map.inadimplencia_prazo_nova_adesao) || 180,
+      } as InadimplenciaPrazos;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}

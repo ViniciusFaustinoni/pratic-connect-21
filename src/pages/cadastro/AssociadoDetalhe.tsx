@@ -56,6 +56,7 @@ import { AssociadoHeroHeader } from '@/components/associados/detalhe/AssociadoHe
 import { AssociadoResumoTab } from '@/components/associados/detalhe/AssociadoResumoTab';
 import { AssociadoTabNav } from '@/components/associados/detalhe/AssociadoTabNav';
 import { AdicionarRessalva } from '@/components/cadastro/AdicionarRessalva';
+import { useAssociadoSituacao } from '@/hooks/useAssociadoSituacao';
 
 // ============================================
 // UTILITÁRIOS
@@ -225,6 +226,7 @@ export default function AssociadoDetalhe() {
   const ativarRastreadorMutation = useAtivarRastreadorPlataforma();
   const { data: statusPlataforma } = useStatusClienteRedeVeiculos(id);
   const sincronizarStatusMutation = useSincronizarStatusRedeVeiculos();
+  const situacao = useAssociadoSituacao(id, contrato?.id);
 
   // Handlers
   const handleWhatsApp = () => {
@@ -424,6 +426,7 @@ export default function AssociadoDetalhe() {
             associado={associado}
             historico={historico}
             isLoadingHistorico={isLoadingHistorico}
+            situacao={situacao}
           />
         )}
 

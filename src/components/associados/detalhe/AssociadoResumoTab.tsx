@@ -6,6 +6,8 @@ import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { cn } from '@/lib/utils';
+import { AssociadoSituacaoCard } from './AssociadoSituacaoCard';
+import type { SituacaoAssociado } from '@/hooks/useAssociadoSituacao';
 
 interface AssociadoResumoTabProps {
   stats: any;
@@ -14,6 +16,7 @@ interface AssociadoResumoTabProps {
   associado: any;
   historico: any[] | undefined;
   isLoadingHistorico: boolean;
+  situacao?: SituacaoAssociado;
 }
 
 const formatDate = (d: string | null | undefined) =>
@@ -59,7 +62,7 @@ const getTituloEvento = (tipo: string) => {
 };
 
 export function AssociadoResumoTab({
-  stats, resumoFinanceiro, contrato, associado, historico, isLoadingHistorico,
+  stats, resumoFinanceiro, contrato, associado, historico, isLoadingHistorico, situacao,
 }: AssociadoResumoTabProps) {
   const emAtraso = resumoFinanceiro?.emAtraso && resumoFinanceiro.emAtraso > 0;
 
@@ -98,6 +101,9 @@ export function AssociadoResumoTab({
           label="Próx. Vencimento"
         />
       </div>
+
+      {/* Situação do Associado */}
+      {situacao && <AssociadoSituacaoCard situacao={situacao} />}
 
       {/* Info Grid */}
       <div className="grid sm:grid-cols-2 gap-3">
