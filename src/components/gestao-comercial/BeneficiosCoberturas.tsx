@@ -113,7 +113,7 @@ export function BeneficiosCoberturas() {
             </Button>
           </div>
           <p className="text-xs text-muted-foreground">
-            Catálogo de itens visuais exibidos no app do associado e materiais comerciais. Vincule-os aos planos na aba "Produtos & Planos".
+            Catálogo de itens visuais exibidos no app do associado e materiais comerciais. Vincule-os aos planos na aba "Planos, Produtos e Preços".
           </p>
 
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
