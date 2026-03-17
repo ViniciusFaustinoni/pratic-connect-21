@@ -320,6 +320,7 @@ export default function CotadorPage() {
   // Mínimo efetivo conforme tipo de instalação e role do consultor
   const minimoAdesaoVolante = isVendedorExterno ? minimoVolanteExterno : minimoVolanteInterno;
   const minimoAdesaoConfig = tipoInstalacao === 'rota' ? minimoAdesaoVolante : minimoAdesaoBase;
+  const repasseVolante = isVendedorExterno ? repasseVolanteExterno : repasseVolanteInterno;
 
   // Hooks Supabase
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
