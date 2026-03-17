@@ -478,10 +478,18 @@ export default function Contratos() {
                         {formatCurrency(contrato.valor_mensal)}
                       </TableCell>
                       <TableCell>
-                        <Badge className={status.color}>
-                          <status.icon className="mr-1 h-3 w-3" />
-                          {status.label}
-                        </Badge>
+                        <div className="flex items-center gap-1.5">
+                          <Badge className={status.color}>
+                            <status.icon className="mr-1 h-3 w-3" />
+                            {status.label}
+                          </Badge>
+                          {(contrato as any).whatsapp_enviado === true && (
+                            <MessageSquare className="h-3.5 w-3.5 text-green-600" title="WhatsApp enviado" />
+                          )}
+                          {(contrato as any).whatsapp_erro && !(contrato as any).whatsapp_enviado && (
+                            <MessageSquare className="h-3.5 w-3.5 text-destructive" title={(contrato as any).whatsapp_erro} />
+                          )}
+                        </div>
                       </TableCell>
                       <TableCell className="text-sm text-muted-foreground">
                         {formatDate(contrato.created_at)}
