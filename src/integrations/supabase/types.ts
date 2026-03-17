@@ -24785,6 +24785,13 @@ export type Database = {
           created_at: string
           data_inativacao: string | null
           faixa_cota_id: string | null
+          flag_avarias_vistoria: boolean | null
+          flag_chassi_remarcado: boolean | null
+          flag_ex_ressarcido: boolean | null
+          flag_ex_taxi: boolean | null
+          flag_leilao: boolean | null
+          flag_placa_vermelha: boolean | null
+          flag_taxi_ativo: boolean | null
           id: string
           marca: string
           modelo: string
@@ -24831,6 +24838,13 @@ export type Database = {
           created_at?: string
           data_inativacao?: string | null
           faixa_cota_id?: string | null
+          flag_avarias_vistoria?: boolean | null
+          flag_chassi_remarcado?: boolean | null
+          flag_ex_ressarcido?: boolean | null
+          flag_ex_taxi?: boolean | null
+          flag_leilao?: boolean | null
+          flag_placa_vermelha?: boolean | null
+          flag_taxi_ativo?: boolean | null
           id?: string
           marca: string
           modelo: string
@@ -24877,6 +24891,13 @@ export type Database = {
           created_at?: string
           data_inativacao?: string | null
           faixa_cota_id?: string | null
+          flag_avarias_vistoria?: boolean | null
+          flag_chassi_remarcado?: boolean | null
+          flag_ex_ressarcido?: boolean | null
+          flag_ex_taxi?: boolean | null
+          flag_leilao?: boolean | null
+          flag_placa_vermelha?: boolean | null
+          flag_taxi_ativo?: boolean | null
           id?: string
           marca?: string
           modelo?: string

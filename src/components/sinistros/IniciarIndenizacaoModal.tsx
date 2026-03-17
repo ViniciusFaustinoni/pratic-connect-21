@@ -1,5 +1,5 @@
-import { useState } from 'react';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useState, useEffect } from 'react';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
@@ -21,11 +21,14 @@ interface IniciarIndenizacaoModalProps {
 }
 
 const DEPRECIACOES = [
-  { key: 'chassi_remarcado', label: 'Chassi remarcado', percentual: 30 },
-  { key: 'aplicativo', label: 'Táxi / placa vermelha / aplicativo (Uber, 99, etc)', percentual: 25 },
-  { key: 'leilao', label: 'Veículo de leilão / já indenizado antes', percentual: 30 },
-  { key: 'avarias', label: 'Avarias pré-existentes (da vistoria de adesão)', percentual: 20 },
-];
+  { key: 'flag_placa_vermelha', label: 'Placa vermelha', percentual: 25 },
+  { key: 'flag_ex_taxi', label: 'Ex-táxi', percentual: 25 },
+  { key: 'flag_taxi_ativo', label: 'Táxi ativo', percentual: 25 },
+  { key: 'flag_chassi_remarcado', label: 'Chassi remarcado', percentual: 30 },
+  { key: 'flag_leilao', label: 'Veículo de leilão', percentual: 30 },
+  { key: 'flag_ex_ressarcido', label: 'Já indenizado anteriormente', percentual: 30 },
+  { key: 'flag_avarias_vistoria', label: 'Avarias pré-existentes (vistoria)', percentual: 20, isAdditional: true },
+] as const;
 
 const DOCUMENTOS_INDENIZACAO = [
   { tipo: 'bo_original', nome: 'B.O. original', obrigatorio: true },
@@ -51,14 +54,49 @@ export function IniciarIndenizacaoModal({
   const [depreciacoes, setDepreciacoes] = useState<Record<string, boolean>>({});
   const [observacoes, setObservacoes] = useState('');
 
-  // Regra: aplica-se apenas a MAIOR depreciação
+  // Fetch vehicle flags to pre-check depreciation switches
+  const { data: veiculoFlags } = useQuery({
+    queryKey: ['veiculo-flags', veiculoId],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('veiculos')
+        .select('flag_placa_vermelha, flag_ex_taxi, flag_taxi_ativo, flag_chassi_remarcado, flag_leilao, flag_ex_ressarcido, flag_avarias_vistoria')
+        .eq('id', veiculoId)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!veiculoId && open,
+  });
+
+  // Pre-check switches based on vehicle flags when modal opens
+  useEffect(() => {
+    if (veiculoFlags) {
+      const preChecked: Record<string, boolean> = {};
+      for (const dep of DEPRECIACOES) {
+        const flagValue = (veiculoFlags as any)?.[dep.key];
+        if (flagValue === true) {
+          preChecked[dep.key] = true;
+        }
+      }
+      setDepreciacoes(preChecked);
+    }
+  }, [veiculoFlags]);
+
+  // Calculation: highest non-avarias depreciation, then 20% additional for avarias
   const depreciacoesSelecionadas = DEPRECIACOES.filter(d => depreciacoes[d.key]);
-  const maiorDepreciacao = depreciacoesSelecionadas.length > 0
-    ? Math.max(...depreciacoesSelecionadas.map(d => d.percentual))
+  const nonAvarias = depreciacoesSelecionadas.filter(d => !('isAdditional' in d && d.isAdditional));
+  const hasAvarias = depreciacoes['flag_avarias_vistoria'] === true;
+  const maiorDepreciacao = nonAvarias.length > 0
+    ? Math.max(...nonAvarias.map(d => d.percentual))
     : 0;
 
   const valorBase = valorFipe || 0;
-  const valorFinal = valorBase * (1 - maiorDepreciacao / 100);
+  // Apply highest depreciation first, then 20% additional on already-depreciated value
+  let valorFinal = valorBase * (1 - maiorDepreciacao / 100);
+  if (hasAvarias) {
+    valorFinal = valorFinal * (1 - 20 / 100);
+  }
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -79,12 +117,14 @@ export function IniciarIndenizacaoModal({
       if (updateError) throw new Error('Erro ao atualizar sinistro: ' + updateError.message);
 
       // 2. Registrar histórico
+      const depInfo = maiorDepreciacao > 0 ? `Maior depreciação: ${maiorDepreciacao}%` : 'Sem depreciação';
+      const avariasInfo = hasAvarias ? `, Avarias: -20% adicional` : '';
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistroId,
         status_anterior: 'em_recuperacao',
         status_novo: 'aguardando_pagamento',
         usuario_id: user.id,
-        observacao: `Indenização integral iniciada. Valor FIPE: ${formatCurrency(valorBase)}, Maior depreciação: ${maiorDepreciacao}%, Valor final: ${formatCurrency(valorFinal)}. ${observacoes}`,
+        observacao: `Indenização integral iniciada. Valor FIPE: ${formatCurrency(valorBase)}, ${depInfo}${avariasInfo}, Valor final: ${formatCurrency(valorFinal)}. ${observacoes}`,
       });
 
       // 3. Criar documentos pendentes de indenização
@@ -114,6 +154,7 @@ export function IniciarIndenizacaoModal({
             valor_fipe: valorBase,
             depreciacoes,
             maior_depreciacao: maiorDepreciacao,
+            avarias_adicional: hasAvarias,
             valor_final: valorFinal,
             sinistroId,
           },
@@ -201,31 +242,43 @@ export function IniciarIndenizacaoModal({
             <div>
               <Label className="text-sm font-medium">Depreciações aplicáveis</Label>
               <p className="text-xs text-muted-foreground mt-0.5">
-                Regra: aplica-se apenas a <strong>maior</strong> depreciação selecionada
+                Aplica-se a <strong>maior</strong> depreciação + avarias adicionais sobre o valor já depreciado
               </p>
             </div>
-            {DEPRECIACOES.map(dep => (
-              <div key={dep.key} className="flex items-center justify-between">
-                <div className="flex items-center gap-2">
-                  <Switch
-                    checked={!!depreciacoes[dep.key]}
-                    onCheckedChange={(checked) => setDepreciacoes(prev => ({ ...prev, [dep.key]: checked }))}
-                  />
-                  <span className="text-sm">{dep.label}</span>
+            {DEPRECIACOES.map(dep => {
+              const isAdditional = 'isAdditional' in dep && dep.isAdditional;
+              const isHighest = !isAdditional && depreciacoes[dep.key] && dep.percentual === maiorDepreciacao;
+              return (
+                <div key={dep.key} className="flex items-center justify-between">
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={!!depreciacoes[dep.key]}
+                      onCheckedChange={(checked) => setDepreciacoes(prev => ({ ...prev, [dep.key]: checked }))}
+                    />
+                    <span className="text-sm">{dep.label}</span>
+                  </div>
+                  <span className={`text-sm ${isHighest ? 'font-bold text-red-600' : isAdditional && depreciacoes[dep.key] ? 'font-bold text-orange-600' : 'text-muted-foreground'}`}>
+                    -{dep.percentual}%{isAdditional ? ' (adicional)' : ''}
+                  </span>
                 </div>
-                <span className={`text-sm ${depreciacoes[dep.key] && dep.percentual === maiorDepreciacao ? 'font-bold text-red-600' : 'text-muted-foreground'}`}>
-                  -{dep.percentual}%
-                </span>
-              </div>
-            ))}
+              );
+            })}
           </div>
 
-          {maiorDepreciacao > 0 && (
-            <div className="p-3 bg-muted rounded-lg">
-              <div className="flex justify-between text-sm">
-                <span>Maior depreciação aplicada:</span>
-                <span className="font-medium text-red-600">-{maiorDepreciacao}%</span>
-              </div>
+          {(maiorDepreciacao > 0 || hasAvarias) && (
+            <div className="p-3 bg-muted rounded-lg space-y-1">
+              {maiorDepreciacao > 0 && (
+                <div className="flex justify-between text-sm">
+                  <span>Maior depreciação aplicada:</span>
+                  <span className="font-medium text-red-600">-{maiorDepreciacao}%</span>
+                </div>
+              )}
+              {hasAvarias && (
+                <div className="flex justify-between text-sm">
+                  <span>Avarias (sobre valor já depreciado):</span>
+                  <span className="font-medium text-orange-600">-20%</span>
+                </div>
+              )}
             </div>
           )}
 
