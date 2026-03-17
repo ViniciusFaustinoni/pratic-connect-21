@@ -464,6 +464,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
+      // Deságio: derive flag from category
+      const isDesagio = !!categoria && CATEGORIAS_DESAGIO.includes(categoria);
+
+      // Bug 1 fix: use valor_desagio as base price for eligible lines
+      if (isDesagio && valorDesagio != null && LINHAS_COM_DESAGIO.includes(linhaSlug || '')) {
+        valorMensal = valorDesagio;
+      }
+
       // Aplicar adicional app se necessário
       if (linhaSlug && tipoUsoOriginal === 'aplicativo') {
         valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp, configApp);
