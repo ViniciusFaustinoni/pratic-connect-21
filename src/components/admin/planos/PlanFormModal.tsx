@@ -797,7 +797,7 @@ export function PlanFormModal({
                     </div>
 
                     <div className="space-y-2">
-                      <Label htmlFor="footer_note">Nota de Rodapé</Label>
+                      <Label htmlFor="footer_note">Nota de Rodapé<FieldHint text={PLAN_FIELD_HINTS.footer_note} /></Label>
                       <Textarea
                         id="footer_note"
                         value={formData.footer_note}
