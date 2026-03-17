@@ -524,7 +524,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         ? `${cotaPercentual}% (sem mínimo)`
         : `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
 
-      const coberturas = Array.isArray(plano.coberturas) ? plano.coberturas : [];
+      const coberturas = (plano.planos_beneficios || [])
+        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+        .map((pb: any) => pb.custom_text || pb.benefits?.name || 'Benefício');
       const naoInclui: string[] = [];
 
       const isDestaque = !!plano.destaque;
