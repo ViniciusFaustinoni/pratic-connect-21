@@ -1,167 +1,101 @@
-## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
-### Causas Raiz Identificadas
-1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
-2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
-3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-### Correções Aplicadas
+## Plano: Variáveis dinâmicas de "Regras de Venda" nos documentos Autentique
 
-1. **`sga-hinova-sync/index.ts`**:
-   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
-   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
+### Contexto
 
-2. **`cron-sga-retry/index.ts`**:
-   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
+Os documentos de adesão (Autentique) usam `criarMapeamentoVariaveis()` em `template-utils.ts` para substituir `{{variavel}}` no template. Hoje o mapeamento tem apenas dados de cliente/veículo/plano/empresa/sistema. As configurações de regras de venda (taxas, migração, pontuação, repasse) não estão disponíveis como variáveis — se usadas no template, aparecem como "—".
 
----
+Os valores estão em **duas tabelas**:
+- `configuracoes` — taxas de adesão, repasse, substituição, revistoria, multa rastreador, exceções FIPE
+- `comissoes_parametros` — migração (comprovantes, prazo, canal, carência), pontuação (prazo reativação), repasse maior (percentuais, valores, corte boletos)
 
-## Painel de Monitoramento SGA Hinova — ✅ Implementado
+### Alterações
 
-### O que foi criado
+#### 1. `supabase/functions/_shared/termo-afiliacao-utils.ts`
 
-1. **Página `/configuracoes/integracoes/sga-hinova`** com:
-   - Status de conexão com API Hinova (teste em tempo real)
-   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
-   - Logs recentes dos últimos 50 registros
-   - Veículos pendentes (ativos não sincronizados) com envio individual
-   - Histórico de health checks
+**a)** Expandir `TermoAfiliacaoData` com campo opcional `regrasVenda`:
 
-2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
-
-3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
-
-4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
-
----
-
-## Health Check Universal para Todas as Integrações — ✅ Implementado
-
-### O que foi criado
-
-1. **Tabela `integracoes_health_checks`** (genérica):
-   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
-   - Dados existentes do SGA migrados automaticamente
-   - RLS: leitura para autenticados, escrita para service_role
-
-2. **Edge Function `cron-integracoes-health-check`**:
-   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
-   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
-   - Notifica admins (role `diretor`) se qualquer integração falhar
-   - Grava resultado por integração na tabela genérica
-
-3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
-   - Props: `integracao` (slug) e `titulo` (opcional)
-   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
-   - Botão "Testar agora" invoca a edge function para a integração específica
-
-4. **Hook `useIntegracaoHealthCheck(integracao)`**:
-   - Busca histórico filtrado por integração
-   - Mutation `testNow` para teste manual
-   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
-
-5. **Integração nas páginas**:
-   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
-   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
-   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
-
-6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
-   ```sql
-   select cron.schedule(
-     'integracoes-health-check-3x-dia',
-     '0 8,13,18 * * *',
-     $$ select net.http_post(
-       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
-       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
-       body:='{}'::jsonb
-     ) as request_id; $$
-   );
-   ```
-
-### Arquivos criados/modificados
-- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
-- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
-- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
-- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
-- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
-- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
-- `supabase/config.toml` — verify_jwt para nova function
-
----
-
-## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
-
-### Causas Raiz
-1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
-2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
-3. Triggers de sync sobrescreviam coordenadas válidas com `null`
-
-### Correções Aplicadas
-
-1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
-
-2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
-
-3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
-
-4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
-
----
-
-## Correção Triggers Enum Mismatch (status_instalacao → status_servico) — ✅ Implementado
-
-### Causa Raiz
-Triggers `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` faziam `status = NEW.status` direto, mas `NEW.status` é `status_instalacao` e `servicos.status` é `status_servico` — erro PostgreSQL 42804 abortava toda atribuição automática.
-
-### Correções Aplicadas
-1. **Função `map_to_status_servico(text)`**: Mapeamento explícito e imutável de qualquer texto para `status_servico`, com fallback seguro.
-2. **Triggers corrigidos**: Ambos agora usam `public.map_to_status_servico(NEW.status::text)` em vez de atribuição direta.
-3. **Observabilidade**: `processar-encaixes-automaticos` agora loga `code/message/details/hint` do erro antes de classificar como concorrência.
-
----
-
-## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
-
-### Bloqueios de adesão zero removidos
-
-| Arquivo | Correção |
-|---------|----------|
-| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
-| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
-| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
-
-### Geração automática de lançamentos CC vendedor externo
-
-Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
-1. Após criar instalação, busca `vendedor_id` da cotação
-2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
-3. Busca configurações de comissão da tabela `configuracoes`
-4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
-5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
-
----
-
-## Fluxo Completo Vendedor Externo — Autovistoria até Ativação 360 — ✅ Implementado
-
-### Gaps Corrigidos
-
-| Gap | Arquivo | Correção |
-|-----|---------|----------|
-| Propostas de autovistoria não apareciam no cadastro | `usePropostasPendentes.ts` L523 | Filtro agora permite propostas com `temAutovistoria` ou `temVistoriaBaseRealizada` mesmo sem instalação |
-| Race condition na isenção de adesão | `EtapaPagamentoCotacao.tsx` L245 | Passa `skipPaymentCheck: true` no body da Edge Function |
-| Edge Function falhava para autovistoria sem data | `criar-instalacao-pos-pagamento/index.ts` | Autovistoria sem data: pula instalação, mas gera lançamentos CC normalmente |
-| Aprovação ignorava preferências de agendamento | `usePropostasPendentes.ts` L1538-1590 | Busca `vistoria_completa_*` da cotação para criar instalação com dados do cliente |
-
-### Fluxo Corrigido
-
-```text
-Vendedor externo cria cotação (4 cenários)
-  → Cliente abre link → Plano → Docs → Assinatura → Vistoria → Pagamento/Isenção
-    → Edge Function gera lançamentos CC (mesmo sem data de instalação)
-    → Etapa 5: Cliente preenche preferência de agendamento
-    → Tela "Em Análise Cadastral"
-    → Proposta aparece no cadastro (filtro corrigido)
-    → Analista aprova → cobertura_roubo_furto = true
-    → Instalação criada COM dados de preferência do cliente
-    → Atribuição automática → Instalação → Proteção 360°
+```typescript
+regrasVenda?: {
+  // Taxas e Adesão
+  taxa_adesao_percentual_fipe: string;
+  taxa_adesao_minimo_volante: string;
+  taxa_adesao_minimo_base: string;
+  taxa_repasse_volante: string;
+  taxa_substituicao_placa: string;
+  taxa_troca_titularidade: string;
+  taxa_revistoria: string;
+  multa_rastreador: string;
+  // Migração
+  migracao_comprovantes_exigidos: string;
+  migracao_prazo_resposta_horas: string;
+  migracao_canal_oficial: string;
+  migracao_isentar_carencia: string;
+  // Pontuação
+  prazo_reativacao_dias: string;
+  // Repasse Maior
+  repasse_maior_pct_favoravel: string;
+  repasse_maior_pct_reduzido: string;
+  repasse_maior_valor_favoravel: string;
+  repasse_maior_valor_reduzido: string;
+  repasse_maior_corte_boletos: string;
+};
 ```
+
+**b)** Nova função `buscarRegrasVenda(supabase)` que:
+1. Busca de `configuracoes` as 8 chaves de taxas
+2. Busca de `comissoes_parametros` as 10 chaves de migração/pontuação/repasse
+3. Retorna objeto tipado
+4. Valida que todas as chaves obrigatórias existem — retorna lista de faltantes
+
+#### 2. `supabase/functions/_shared/template-utils.ts`
+
+Expandir `criarMapeamentoVariaveis()` com ~18 novas variáveis no grupo `regras`:
+
+```
+regras.taxa_adesao_percentual       → "1%"
+regras.taxa_adesao_minimo_volante   → "R$ 100,00"
+regras.taxa_adesao_minimo_base      → "R$ 100,00"
+regras.repasse_volante              → "R$ 50,00"
+regras.taxa_substituicao_placa      → "R$ 50,00"
+regras.taxa_troca_titularidade      → "R$ 50,00"
+regras.taxa_revistoria              → "R$ 50,00"
+regras.multa_rastreador             → "R$ 400,00"
+regras.migracao_comprovantes        → "3"
+regras.migracao_prazo_horas         → "48"
+regras.migracao_canal               → "e-mail"
+regras.migracao_carencia_isenta     → "Sim"
+regras.prazo_reativacao_dias        → "120"
+regras.repasse_pct_favoravel        → "50%"
+regras.repasse_pct_reduzido         → "70%"
+regras.repasse_valor_favoravel      → "R$ 100,00"
+regras.repasse_valor_reduzido       → "R$ 150,00"
+regras.repasse_corte_boletos        → "4"
+```
+
+Se `dados.regrasVenda` não estiver presente, essas variáveis ficam sem mapeamento (e serão capturadas pela validação).
+
+#### 3. `supabase/functions/autentique-create/index.ts`
+
+Após `buscarConfiguracoesEmpresa`, chamar `buscarRegrasVenda(supabase)`.
+
+**Validação antes de gerar**: Se o template contém variáveis `{{regras.*}}` e alguma configuração está faltante, retornar erro 422 com mensagem indicando quais chaves estão ausentes — bloqueando a geração do documento.
+
+Atribuir `templateData.regrasVenda = regrasVenda` antes de chamar `gerarHTMLDoTemplate`.
+
+#### 4. `supabase/functions/autentique-create-by-token/index.ts`
+
+Mesma lógica: buscar regras de venda e injetar no `templateData`. Mesma validação de bloqueio.
+
+#### 5. Resumo de arquivos
+
+| Arquivo | Alteração |
+|---|---|
+| `_shared/termo-afiliacao-utils.ts` | +interface `RegrasVendaData`, +função `buscarRegrasVenda()` |
+| `_shared/template-utils.ts` | +18 variáveis em `criarMapeamentoVariaveis()` |
+| `autentique-create/index.ts` | +fetch regras, +validação, +injeção no templateData |
+| `autentique-create-by-token/index.ts` | +fetch regras, +validação, +injeção no templateData |
+
+Nenhuma migration necessária — todas as chaves já existem no banco. As variáveis ficam disponíveis para uso no editor de templates do TipTap como `{{regras.taxa_substituicao_placa}}` etc.
+
