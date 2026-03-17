@@ -455,7 +455,7 @@ export function PlanFormModal({
                   <TabsContent value="basico" className="space-y-4">
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
-                        <Label htmlFor="name">Nome *</Label>
+                        <Label htmlFor="name">Nome *<FieldHint text={PLAN_FIELD_HINTS.name} /></Label>
                         <Input
                           id="name"
                           value={formData.name}
