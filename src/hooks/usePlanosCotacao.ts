@@ -49,6 +49,7 @@ export interface PlanoCotacao {
   cotaMinimaDesagio?: number;
   anoMinimo?: number;
   elegibilidadeStatus?: 'aprovado' | 'limitado' | 'negado';
+  precoDesagioAplicado?: boolean;
 }
 
 export interface PlanoNegadoInfo {
