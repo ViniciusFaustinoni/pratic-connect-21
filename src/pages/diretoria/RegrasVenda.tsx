@@ -856,19 +856,36 @@ export default function RegrasVenda() {
             </CardHeader>
             <CardContent className="space-y-4">
               <div className="flex items-center justify-between gap-4">
-                <Label htmlFor="taxa_adesao_minimo_volante" className="flex-1 text-sm">
-                  Valor mínimo para vistoria volante (na residência do associado)
+                <Label htmlFor="taxa_adesao_minimo_volante_interno" className="flex-1 text-sm">
+                  Mínimo volante — Vendedor CLT (interno)
                 </Label>
                 <div className="flex items-center gap-1">
                   <span className="text-sm text-muted-foreground">R$</span>
                   <Input
-                    id="taxa_adesao_minimo_volante"
+                    id="taxa_adesao_minimo_volante_interno"
                     type="number"
                     min="0"
                     step="0.01"
                     className="w-28 text-right"
-                    value={taxas.taxa_adesao_minimo_volante}
-                    onChange={(e) => handleTaxaChange('taxa_adesao_minimo_volante', e.target.value)}
+                    value={taxas.taxa_adesao_minimo_volante_interno}
+                    onChange={(e) => handleTaxaChange('taxa_adesao_minimo_volante_interno', e.target.value)}
+                  />
+                </div>
+              </div>
+              <div className="flex items-center justify-between gap-4">
+                <Label htmlFor="taxa_adesao_minimo_volante_externo" className="flex-1 text-sm">
+                  Mínimo volante — Vendedor Externo
+                </Label>
+                <div className="flex items-center gap-1">
+                  <span className="text-sm text-muted-foreground">R$</span>
+                  <Input
+                    id="taxa_adesao_minimo_volante_externo"
+                    type="number"
+                    min="0"
+                    step="0.01"
+                    className="w-28 text-right"
+                    value={taxas.taxa_adesao_minimo_volante_externo}
+                    onChange={(e) => handleTaxaChange('taxa_adesao_minimo_volante_externo', e.target.value)}
                   />
                 </div>
               </div>
