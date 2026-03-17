@@ -2,7 +2,7 @@ import { useNavigate } from 'react-router-dom';
 import {
   Phone, Mail, MessageCircle, Edit, Pause, Play, Map,
   MoreHorizontal, XCircle, DollarSign, AlertTriangle, Shield,
-  ArrowLeftRight, Loader2, Radio, RefreshCw, FileCheck,
+  ArrowLeftRight, Loader2, Radio, RefreshCw, FileCheck, Users,
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
