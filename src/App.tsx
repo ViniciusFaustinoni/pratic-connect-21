@@ -243,7 +243,7 @@ import ProdutoDetalhe from "./pages/diretoria/ProdutoDetalhe";
 import TabelaPrecos from "./pages/diretoria/TabelaPrecos";
 import RateioSinistros from "./pages/diretoria/RateioSinistros";
 import GestaoComercial from "./pages/diretoria/GestaoComercial";
-import RegrasVenda from "./pages/diretoria/RegrasVenda";
+
 import IndicadoresAtuariais from "./pages/diretoria/IndicadoresAtuariais";
 import ConfiguracoesSistema from "./pages/diretoria/Configuracoes";
 import PerfisAcesso from "./pages/diretoria/PerfisAcesso";
