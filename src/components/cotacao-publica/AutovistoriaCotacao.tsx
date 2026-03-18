@@ -13,7 +13,6 @@ import {
   Info,
   X,
   RefreshCw,
-  Video
 } from 'lucide-react';
 import { getFotosAutovistoria, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
 import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao } from '@/hooks/useCotacaoVistoria';
@@ -21,7 +20,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
-import { VideoCapture } from '@/components/instalador/VideoCapture';
+
 
 interface AutovistoriaCotacaoProps {
   cotacaoId: string;
@@ -38,8 +37,6 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
   const [previewLocal, setPreviewLocal] = useState<string | null>(null);
   const [hidratado, setHidratado] = useState(false);
-  const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [uploadingVideo, setUploadingVideo] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
@@ -51,8 +48,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const fotoAtual = fotos[fotoAtualIndex];
   const progresso = (Object.keys(fotosEnviadas).length / totalFotos) * 100;
   const todasFotosEnviadas = Object.keys(fotosEnviadas).length >= totalFotos;
-  const videoObrigatorio = tipoVeiculo === 'carro';
-  const todasEnviadas = todasFotosEnviadas && (!videoObrigatorio || !!videoUrl);
+  const todasEnviadas = todasFotosEnviadas;
   
   // Reidratar fotos existentes (refresh mantém progresso)
   useEffect(() => {
@@ -192,23 +188,6 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     e.target.value = '';
   };
 
-  const handleVideoCapture = async (file: File) => {
-    setUploadingVideo(true);
-    try {
-      const result = await uploadMutation.mutateAsync({
-        cotacaoId,
-        fotoId: 'video_360',
-        file,
-      });
-      setVideoUrl(result.url);
-      toast.success('Vídeo 360° enviado com sucesso!');
-    } catch (error) {
-      console.error('[AutovistoriaCotacao] Erro no upload do vídeo:', error);
-      toast.error('Erro ao enviar vídeo. Tente novamente.');
-    } finally {
-      setUploadingVideo(false);
-    }
-  };
   
   const handleFinalizar = async () => {
     // Prevenir duplo clique
@@ -429,32 +408,6 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
           )}
         </div>
         
-        {/* Seção de Vídeo 360° (após todas as fotos) */}
-        {videoObrigatorio && todasFotosEnviadas && (
-          <motion.div
-            initial={{ opacity: 0, y: 20 }}
-            animate={{ opacity: 1, y: 0 }}
-            className="pt-4 space-y-3"
-          >
-            <div className="text-center">
-              <h3 className="font-semibold text-lg text-foreground flex items-center justify-center gap-2">
-                <Video className="h-5 w-5 text-purple-500" />
-                Vídeo 360° do Veículo
-              </h3>
-              <p className="text-sm text-muted-foreground mt-1">
-                Grave um vídeo dando a volta completa no veículo (máx. 2 min)
-              </p>
-            </div>
-            <VideoCapture
-              onCapture={handleVideoCapture}
-              onReset={() => setVideoUrl(null)}
-              videoUrl={videoUrl || undefined}
-              uploading={uploadingVideo}
-              maxDuration={120}
-              label="Vídeo 360°"
-            />
-          </motion.div>
-        )}
 
         {/* Botão finalizar */}
         {todasEnviadas && (
