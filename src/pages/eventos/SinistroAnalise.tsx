@@ -1149,7 +1149,7 @@ export default function SinistroAnalise() {
                         </CardHeader>
                         <CardContent>
                           {todasFotos.length > 0 ? (
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                               {todasFotos.map((foto, idx) => (
                                 <div
                                   key={foto.id}
