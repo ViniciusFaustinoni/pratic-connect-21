@@ -149,3 +149,6 @@ verify_jwt = false
 
 [functions.pontuar-operacao]
 verify_jwt = false
+
+[functions.delete-associado]
+verify_jwt = false
