@@ -3,7 +3,7 @@ import { useAssociadoSearch } from '@/hooks/useAssociadoSearch';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
-import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useMigracaoConfig, useObservacoesCategoria } from '@/hooks/useConteudosSistema';
+import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useMigracaoConfig, useObservacoesCategoria, useMarcasAceitasMotos } from '@/hooks/useConteudosSistema';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -314,6 +314,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return marca?.nome || '';
   }, [marcas]);
 
+
+
   // Detectar tipo de veículo automaticamente (moto vs carro)
   const marcaParaDeteccao = veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
   const modeloParaDeteccao = veiculoEncontrado?.vehicleData?.modelo || '';
@@ -400,6 +402,20 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const faixa = preferred || matching.sort((a, b) => (b.fipe_max - b.fipe_min) - (a.fipe_max - a.fipe_min))[0];
     return { min: faixa.fipe_min, max: faixa.fipe_max };
   }, [valorFipe, todasFaixas, planosSelecionados]);
+  // Marcas aceitas de motos
+  const { data: marcasAceitasMotos } = useMarcasAceitasMotos();
+
+  // Filtrar marcas por tipo e lista aceita (motos)
+  const marcasFiltradas = useMemo(() => {
+    return marcas
+      .filter((m) => m.tipoFipe === tipoFipeSelecionado)
+      .filter((m) => {
+        if (tipoFipeSelecionado !== 'motos') return true;
+        const lista = marcasAceitasMotos ?? [];
+        return lista.some(aceita => m.nome.toLowerCase().includes(aceita.toLowerCase()));
+      })
+      .map((m) => ({ value: `${m.tipoFipe}:${m.codigo}`, label: m.nome }));
+  }, [marcas, tipoFipeSelecionado, marcasAceitasMotos]);
 
 
   const dadosAssociadoValidos = useMemo(() => {
@@ -1647,10 +1663,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
                     <div className="space-y-1">
                       <Label className="text-xs">Marca</Label>
-                      <SearchableSelect
-                        options={marcas
-                          .filter((m) => m.tipoFipe === tipoFipeSelecionado)
-                          .map((m) => ({ value: `${m.tipoFipe}:${m.codigo}`, label: m.nome }))}
+                       <SearchableSelect
+                         options={marcasFiltradas}
                         value={marcaSelecionada}
                         onValueChange={handleMarcaChange}
                         placeholder="Marca"

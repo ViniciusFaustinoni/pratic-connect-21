@@ -36,6 +36,12 @@ export function useConfiguracaoJson<T>(chave: string, fallback: T) {
   }, fallback);
 }
 
+const MARCAS_ACEITAS_MOTOS_DEFAULT = ['Honda', 'Yamaha', 'Shineray', 'BMW', 'Haojue', 'Suzuki'];
+
+export function useMarcasAceitasMotos() {
+  return useConfiguracaoJson<string[]>('marcas_aceitas_motos', MARCAS_ACEITAS_MOTOS_DEFAULT);
+}
+
 // ============================================
 // Contatos
 // ============================================

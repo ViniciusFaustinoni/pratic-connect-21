@@ -54,6 +54,7 @@ const FALLBACK_HINTS: Record<string, string> = {
   glossario_consultor: 'Termos e definições exibidos para consultores no módulo comercial.',
   marcas_modelos_fallback: 'Marcas e modelos usados quando a consulta à tabela FIPE falha. Serve como alternativa de entrada manual.',
   motos_aceitas: 'Regras de aceitação de motos por marca. Cada plano pode ter regras próprias de elegibilidade.',
+  marcas_aceitas_motos: 'Lista de marcas de moto aceitas para cotação na Linha Advanced. Apenas essas marcas aparecerão no cotador quando o tipo de veículo for moto.',
   observacoes_categoria: 'Textos explicativos exibidos ao selecionar cada categoria de veículo na cotação.',
   regras_depreciacao: 'Percentuais de depreciação aplicados no cálculo de indenização. Concorrentes: usa-se o maior. Adicionais: aplicam-se de forma composta sobre o valor já depreciado.',
 };
@@ -267,6 +268,46 @@ export default function ConfiguracoesSistema() {
               items={parsed as { flag: string; label: string; percentual: number; adicional?: boolean }[]}
               onChange={handleJsonChange}
             />
+            {saveBtn}
+          </div>
+        );
+
+      case 'marcas_aceitas_motos':
+        if (!Array.isArray(parsed)) return null;
+        return (
+          <div className="space-y-2">
+            <div className="space-y-2">
+              {(parsed as string[]).map((marca, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    value={marca}
+                    onChange={(e) => {
+                      const updated = [...(parsed as string[])];
+                      updated[i] = e.target.value;
+                      handleJsonChange(updated);
+                    }}
+                    placeholder="Nome da marca"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const updated = (parsed as string[]).filter((_, idx) => idx !== i);
+                      handleJsonChange(updated);
+                    }}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleJsonChange([...(parsed as string[]), ''])}
+              >
+                + Adicionar marca
+              </Button>
+            </div>
             {saveBtn}
           </div>
         );
