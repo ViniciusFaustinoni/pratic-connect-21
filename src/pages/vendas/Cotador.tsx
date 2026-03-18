@@ -334,11 +334,7 @@ export default function CotadorPage() {
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
   
   // Detectar tipo de veículo automaticamente
-  const tipoVeiculoDetectado = useMemo(() => {
-    if (!marca && !modelo) return 'carro' as const;
-    const tipo = detectarTipoVeiculo(undefined, modelo, marca);
-    return tipo === 'moto' ? 'moto' as const : 'carro' as const;
-  }, [marca, modelo]);
+  const { tipoVeiculo: tipoVeiculoDetectado } = useDetectarTipoVeiculo(marca, modelo);
 
   // Hook de planos com filtro por uso (aplicativo vs passeio)
   const parametrosPlanos = useMemo(() => ({

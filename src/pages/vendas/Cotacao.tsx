@@ -107,11 +107,7 @@ export default function CotacaoPage() {
   }, []);
 
   // Detectar tipo de veículo automaticamente
-  const tipoVeiculoDetectado = useMemo(() => {
-    if (!marca && !modelo) return 'carro' as const;
-    const tipo = detectarTipoVeiculo(undefined, modelo, marca);
-    return tipo === 'moto' ? 'moto' as const : 'carro' as const;
-  }, [marca, modelo]);
+  const { tipoVeiculo: tipoVeiculoDetectado } = useDetectarTipoVeiculo(marca, modelo);
 
   // Hook de planos - busca do banco de dados e calcula baseado nos parâmetros
   const { planos: planosCalculados, planosNegados, isLoading: isLoadingPlanos } = usePlanosCotacao({
