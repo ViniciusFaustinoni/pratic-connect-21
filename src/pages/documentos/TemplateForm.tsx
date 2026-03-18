@@ -142,8 +142,11 @@ export default function TemplateForm() {
         });
       }
       navigate('/documentos/templates');
-    } catch (error) {
+    } catch (error: any) {
       console.error('Erro ao salvar template:', error);
+      if (error?.code === '23505') {
+        form.setError('codigo', { message: 'Este código já está em uso por outro template. Escolha outro.' });
+      }
     }
   };
 
