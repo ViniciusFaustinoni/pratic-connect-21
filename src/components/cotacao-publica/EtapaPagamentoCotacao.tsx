@@ -370,7 +370,7 @@ export function EtapaPagamentoCotacao({
   // Tentar novamente
   const tentarNovamente = async () => {
     setErro(null);
-    const idContrato = await gerarContrato();
+    const idContrato = await buscarContrato();
     if (idContrato) {
       await criarCobranca(idContrato);
     }
