@@ -11,9 +11,8 @@ interface GerarContratoPayload {
   vendedor_id?: string;
 }
 
-// Palavras-chave para detectar motos a partir de marca/modelo (fallback)
-const MOTO_KEYWORDS = [
-  'honda', 'yamaha', 'suzuki', 'kawasaki', 'harley', 'triumph', 'ducati', 'bmw motorrad',
+// Keywords de modelo como fallback de último recurso (sem marcas hardcoded)
+const MOTO_MODEL_KEYWORDS = [
   'nxr', 'bros', 'cg', 'biz', 'pop', 'xre', 'cb ', 'cbr', 'cbx', 'pcx', 'sh ',
   'fazer', 'ybr', 'factor', 'crosser', 'lander', 'tenere', 'mt-', 'xt ',
   'gsx', 'intruder', 'burgman', 'v-strom', 'hayabusa',
@@ -23,16 +22,7 @@ const MOTO_KEYWORDS = [
   'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon', 'sahara',
 ];
 
-function detectarCategoriaVeiculoFallback(marca?: string, modelo?: string, categoriaExistente?: string): string {
-  // Se já tem categoria definida (ex: aplicativo, taxi), usar ela
-  if (categoriaExistente && categoriaExistente !== 'nenhuma') return categoriaExistente;
-  
-  const texto = `${marca || ''} ${modelo || ''}`.toLowerCase();
-  const isMoto = MOTO_KEYWORDS.some(kw => texto.includes(kw));
-  return isMoto ? 'Motocicleta' : 'Automóvel';
-}
-
-/** Detecção dinâmica via plano_elegibilidade_modelos, com fallback para keywords */
+/** Detecção dinâmica via banco (3 regras), com fallback para keywords de modelo */
 async function detectarCategoriaVeiculo(
   supabase: any,
   marca?: string,
@@ -44,6 +34,28 @@ async function detectarCategoriaVeiculo(
   const marcaNorm = (marca || '').trim().toUpperCase();
   const modeloNorm = (modelo || '').trim().toUpperCase();
 
+  // Regra 1: Marcas exclusivas de moto (tabela configuracoes)
+  if (marcaNorm) {
+    const { data: configData } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'marcas_exclusivas_moto')
+      .maybeSingle();
+
+    if (configData?.valor) {
+      try {
+        const raw = configData.valor.trim();
+        const marcasList: string[] = raw.startsWith('[')
+          ? JSON.parse(raw).map((m: string) => m.toUpperCase().trim())
+          : raw.split(',').map((m: string) => m.toUpperCase().trim());
+        if (marcasList.some(m => marcaNorm.includes(m) || m.includes(marcaNorm))) {
+          return 'Motocicleta';
+        }
+      } catch { /* ignora parse error */ }
+    }
+  }
+
+  // Regra 2: Marca mista → consulta plano_elegibilidade_modelos
   if (marcaNorm && modeloNorm) {
     const { data } = await supabase
       .from('plano_elegibilidade_modelos')
@@ -58,7 +70,10 @@ async function detectarCategoriaVeiculo(
     }
   }
 
-  return detectarCategoriaVeiculoFallback(marca, modelo, categoriaExistente);
+  // Regra 3: Fallback — keywords de modelo apenas
+  const texto = `${modelo || ''}`.toLowerCase();
+  const isMoto = MOTO_MODEL_KEYWORDS.some(kw => texto.includes(kw));
+  return isMoto ? 'Motocicleta' : 'Automóvel';
 }
 
 serve(async (req) => {

@@ -173,21 +173,13 @@ const MOTO_KEYWORDS = [
   'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon',
 ];
 
-// Marcas exclusivamente de moto
-const MARCAS_EXCLUSIVAS_MOTO = [
-  'YAMAHA', 'SUZUKI', 'KAWASAKI', 'HARLEY-DAVIDSON', 'HARLEY DAVIDSON',
-  'TRIUMPH', 'DUCATI', 'KTM', 'DAFRA', 'SHINERAY', 'KASINSKI',
-  'ROYAL ENFIELD', 'HUSQVARNA', 'BENELLI', 'MV AGUSTA', 'INDIAN',
-  'HAOJUE', 'TRAXX', 'SUNDOWN', 'SOUSA',
-];
-
-// Detectar tipo de veículo a partir de tipo_veiculo, modelo e marca
+// Detectar tipo de veículo — FALLBACK síncrono apenas por keywords de modelo.
+// A detecção principal é feita pelo hook useDetectarTipoVeiculo (consultas ao banco).
 export function detectarTipoVeiculo(
   tipoVeiculoStr?: string | null,
   modelo?: string | null,
-  marca?: string | null
+  _marca?: string | null
 ): TipoVeiculo {
-  console.log('[detectarTipoVeiculo] Input:', { tipoVeiculoStr, modelo, marca });
   // 1. Tipo explícito
   if (tipoVeiculoStr) {
     const normalized = tipoVeiculoStr.toLowerCase();
@@ -196,18 +188,10 @@ export function detectarTipoVeiculo(
     }
   }
 
-  // 2. Keywords no modelo
+  // 2. Keywords no modelo (fallback de último recurso)
   if (modelo) {
     const modeloLower = ` ${modelo.toLowerCase()} `;
     if (MOTO_KEYWORDS.some(kw => modeloLower.includes(kw))) {
-      return 'moto';
-    }
-  }
-
-  // 3. Marca exclusiva de moto
-  if (marca) {
-    const marcaUpper = marca.toUpperCase().trim();
-    if (MARCAS_EXCLUSIVAS_MOTO.some(m => marcaUpper.includes(m))) {
       return 'moto';
     }
   }
