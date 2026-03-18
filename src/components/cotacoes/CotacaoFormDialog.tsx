@@ -1647,10 +1647,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
                     <div className="space-y-1">
                       <Label className="text-xs">Marca</Label>
-                      <SearchableSelect
-                        options={marcas
-                          .filter((m) => m.tipoFipe === tipoFipeSelecionado)
-                          .map((m) => ({ value: `${m.tipoFipe}:${m.codigo}`, label: m.nome }))}
+                       <SearchableSelect
+                         options={marcasFiltradas}
                         value={marcaSelecionada}
                         onValueChange={handleMarcaChange}
                         placeholder="Marca"
