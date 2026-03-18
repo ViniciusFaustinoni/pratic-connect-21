@@ -103,6 +103,8 @@ export interface CotacaoBaseParaFormulario {
   email_solicitante: string | null;
   lead_id: string | null;
   plano_id: string | null;
+  indicador_id?: string | null;
+  indicador_nome?: string | null;
   dados_extras?: {
     planos_comparacao?: {
       id: string;
