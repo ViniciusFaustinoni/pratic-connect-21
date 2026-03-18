@@ -399,6 +399,7 @@ export function UnifiedDocumentUploader({
               <Badge variant="secondary">CNH</Badge>
               <Badge variant="secondary">RG</Badge>
               <Badge variant="secondary">CRLV</Badge>
+              <Badge variant="secondary">Nota Fiscal</Badge>
               <Badge variant="secondary">Comprovante de Residência</Badge>
             </div>
 

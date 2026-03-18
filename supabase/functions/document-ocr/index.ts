@@ -25,6 +25,12 @@ placa (ABC1234/ABC1D23), renavam (11 dígitos), chassi (17 chars), marca, modelo
 - "ANO FAB/MOD: 2013/2014" → ano_fabricacao:2013, ano_modelo:2014
 - Blindado: procure em OBS/TIPO por "BLINDADO/BLINDAGEM/PROTEÇÃO BALÍSTICA". Sempre inclua campo blindado.
 
+### Nota Fiscal de Veículo (DANFE / NF-e com dados veiculares)
+Detectar quando o documento é uma Nota Fiscal (DANFE/NF-e) que contenha dados de veículo (chassi, motor, valor).
+Campos: valor_nota_fiscal (valor numérico da NF), chassi (17 chars), numero_motor, placa (se presente), marca, modelo, ano_fabricacao (int), ano_modelo (int), cor, nome_comprador, cpf_cnpj_comprador
+- tipo_detectado deve ser "nota_fiscal_veiculo"
+- Este documento substitui o CRLV para veículos zero km ou recém-adquiridos
+
 ### Comprovante de Residência
 Aceitar: contas (água/luz/gás/telefone/internet), faturas/boletos, IPTU/IPVA, IRPF, extratos, contratos aluguel, escrituras.
 Campos: logradouro, numero, complemento, bairro, cidade, uf (2 letras), cep, nome_titular, tipo_comprovante ("conta_luz"|"conta_agua"|"conta_gas"|"conta_telefone"|"conta_internet"|"fatura_cartao"|"boleto_plano_saude"|"boleto_condominio"|"iptu"|"ipva"|"extrato_bancario"|"contrato_aluguel"|"outro"), data_emissao
@@ -41,7 +47,7 @@ Compare nome_titular com nomeEsperado:
 - CPF: XXX.XXX.XXX-XX. Datas: YYYY-MM-DD. Placa: formato antigo ou Mercosul.
 
 ## JSON de resposta:
-{"tipo_detectado":"cnh"|"rg"|"crlv"|"comprovante_residencia"|"outro","sucesso":bool,"dados":{...},"legivel":bool,"valido":bool,"sugestao":"aprovar"|"reprovar"|"revisar","motivo":"...","confianca":0.0-1.0}`;
+{"tipo_detectado":"cnh"|"rg"|"crlv"|"nota_fiscal_veiculo"|"comprovante_residencia"|"outro","sucesso":bool,"dados":{...},"legivel":bool,"valido":bool,"sugestao":"aprovar"|"reprovar"|"revisar","motivo":"...","confianca":0.0-1.0}`;
 
 // Prompt específico para retry de extração de CPF
 const cpfRetryPrompt = `TAREFA ÚNICA: Extraia o CPF desta CNH brasileira.
