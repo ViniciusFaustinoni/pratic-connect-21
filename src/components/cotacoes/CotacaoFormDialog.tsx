@@ -314,17 +314,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return marca?.nome || '';
   }, [marcas]);
 
-  // Filtrar marcas por tipo e lista aceita (motos)
-  const marcasFiltradas = useMemo(() => {
-    return marcas
-      .filter((m) => m.tipoFipe === tipoFipeSelecionado)
-      .filter((m) => {
-        if (tipoFipeSelecionado !== 'motos') return true;
-        const lista = marcasAceitasMotos ?? [];
-        return lista.some(aceita => m.nome.toLowerCase().includes(aceita.toLowerCase()));
-      })
-      .map((m) => ({ value: `${m.tipoFipe}:${m.codigo}`, label: m.nome }));
-  }, [marcas, tipoFipeSelecionado, marcasAceitasMotos]);
 
 
   // Detectar tipo de veículo automaticamente (moto vs carro)
