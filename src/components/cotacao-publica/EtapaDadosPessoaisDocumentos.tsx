@@ -134,12 +134,17 @@ export function EtapaDadosPessoaisDocumentos({
   const temCrlv = tiposIdentificados.includes('crlv') || tiposIdentificados.includes('nota_fiscal_veiculo');
   
   // Verificar dados extraídos
-  const temDadosPessoais = !!(dadosExtraidos.nome && dadosExtraidos.cpf);
+  const cpfEfetivo = cpfManual || dadosExtraidos.cpf || '';
+  const cpfLimpoEfetivo = cpfEfetivo.replace(/\D/g, '');
+  const cpfValido = cpfLimpoEfetivo.length === 11 && validateCPF(cpfLimpoEfetivo);
+  const cpfExtraidoInvalido = !!(dadosExtraidos.cpf && !validateCPF(dadosExtraidos.cpf.replace(/\D/g, '')));
+  
+  const temDadosPessoais = !!(dadosExtraidos.nome && cpfEfetivo);
   const temEndereco = !!(dadosExtraidos.logradouro && dadosExtraidos.cidade && dadosExtraidos.uf);
   const temDadosVeiculo = !!(dadosExtraidos.veiculo_placa || dadosExtraidos.veiculo_chassi);
   const temContato = !!(email && telefone);
   
-  const podeAvancar = temDadosPessoais && temEndereco && temDadosVeiculo && temContato;
+  const podeAvancar = temDadosPessoais && temEndereco && temDadosVeiculo && temContato && cpfValido;
 
   const formatTelefone = (value: string) => {
     const cleaned = value.replace(/\D/g, '');
