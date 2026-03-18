@@ -267,7 +267,7 @@ export function ElegibilidadeTab({ planoId, linhaSlug }: ElegibilidadeTabProps) 
                 />
               </div>
             </div>
-            <div className="grid grid-cols-4 gap-3">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-3">
               <div className="space-y-1">
                 <Label className="text-xs">Ano Mín<FieldHint text={PLAN_FIELD_HINTS.elegibilidade_ano} /></Label>
                 <Input

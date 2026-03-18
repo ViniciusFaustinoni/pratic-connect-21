@@ -212,7 +212,7 @@ export default function FaixasCotas() {
       </Alert>
       
       {/* Estatísticas */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         <Card>
           <CardContent className="pt-4">
             <div className="text-sm text-muted-foreground">Total de Faixas</div>

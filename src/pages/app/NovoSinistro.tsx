@@ -1043,7 +1043,7 @@ export default function NovoSinistro() {
               </CollapsibleTrigger>
               <CollapsibleContent className="p-3 pt-2">
                 {fotos.length > 0 ? (
-                  <div className="grid grid-cols-4 gap-2">
+                  <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                     {fotos.slice(0, 4).map((foto) => (
                       <img
                         key={foto.id}

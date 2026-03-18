@@ -117,7 +117,7 @@ function WelcomeBanner({ nome, aguardando }: { nome: string; aguardando: number 
 function PipelineFunnel({ stats, loading }: { stats: any; loading: boolean }) {
   if (loading) {
     return (
-      <div className="grid grid-cols-4 gap-2">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-2">
         {[1, 2, 3, 4].map(i => <Skeleton key={i} className="h-20 rounded-xl bg-muted" />)}
       </div>
     );
