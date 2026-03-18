@@ -147,7 +147,17 @@ export function PagamentoAdesao({
       });
     } catch (error: any) {
       console.error('Erro ao criar cobrança:', error);
-      throw error; // Propagar erro para verificarOuCriarCobranca tratar
+      let mensagem = 'Erro ao processar cobrança';
+      if (error?.context) {
+        try {
+          const body = await error.context.json();
+          mensagem = body?.error || mensagem;
+        } catch (_) { /* ignore */ }
+      } else if (error?.message) {
+        mensagem = error.message;
+      }
+      toast.error(mensagem);
+      throw error;
     }
   };
 
