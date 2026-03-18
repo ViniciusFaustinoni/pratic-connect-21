@@ -48,8 +48,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const fotoAtual = fotos[fotoAtualIndex];
   const progresso = (Object.keys(fotosEnviadas).length / totalFotos) * 100;
   const todasFotosEnviadas = Object.keys(fotosEnviadas).length >= totalFotos;
-  const videoObrigatorio = tipoVeiculo === 'carro';
-  const todasEnviadas = todasFotosEnviadas && (!videoObrigatorio || !!videoUrl);
+  const todasEnviadas = todasFotosEnviadas;
   
   // Reidratar fotos existentes (refresh mantém progresso)
   useEffect(() => {
