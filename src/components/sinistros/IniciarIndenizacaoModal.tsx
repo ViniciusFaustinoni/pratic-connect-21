@@ -106,7 +106,6 @@ export function IniciarIndenizacaoModal({
   for (const ad of adicionais) {
     valorFinal = valorFinal * (1 - ad.percentual / 100);
   }
-  }
 
   const mutation = useMutation({
     mutationFn: async () => {
