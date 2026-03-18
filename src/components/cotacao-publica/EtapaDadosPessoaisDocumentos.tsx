@@ -427,7 +427,17 @@ export function EtapaDadosPessoaisDocumentos({
               {temDadosPessoais && (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground mt-1">
                   {dadosExtraidos.nome && <div><span className="font-medium">Nome:</span> {dadosExtraidos.nome}</div>}
-                  {dadosExtraidos.cpf && <div><span className="font-medium">CPF:</span> {dadosExtraidos.cpf}</div>}
+                  {dadosExtraidos.cpf && (
+                    <div>
+                      <span className="font-medium">CPF:</span> {cpfManual || dadosExtraidos.cpf}
+                      {cpfExtraidoInvalido && !cpfValido && (
+                        <span className="text-destructive ml-1">(inválido)</span>
+                      )}
+                      {cpfManual && cpfValido && (
+                        <span className="text-success ml-1">(corrigido ✓)</span>
+                      )}
+                    </div>
+                  )}
                   {dadosExtraidos.rg && <div><span className="font-medium">RG:</span> {dadosExtraidos.rg}{dadosExtraidos.rg_orgao ? ` (${dadosExtraidos.rg_orgao})` : ''}</div>}
                   {dadosExtraidos.data_nascimento && <div><span className="font-medium">Nascimento:</span> {dadosExtraidos.data_nascimento.includes('-') ? dadosExtraidos.data_nascimento.split('-').reverse().join('/') : dadosExtraidos.data_nascimento}</div>}
                   {dadosExtraidos.cnh && <div><span className="font-medium">Nº Registro:</span> {dadosExtraidos.cnh}</div>}
