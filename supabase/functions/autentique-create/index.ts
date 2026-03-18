@@ -261,9 +261,11 @@ serve(async (req) => {
       empresaConfig,
       contrato.leads,
       contrato.associados,
-      vendedorNome
+      vendedorNome,
+      veiculoDB
     );
     templateData.configRastreador = configRastreador;
+    templateData.regrasDepreciacao = regrasDepreciacao;
     if (regrasVenda) {
       templateData.regrasVenda = regrasVenda;
     }
