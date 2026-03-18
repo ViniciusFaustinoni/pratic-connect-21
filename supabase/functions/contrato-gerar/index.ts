@@ -11,7 +11,7 @@ interface GerarContratoPayload {
   vendedor_id?: string;
 }
 
-// Palavras-chave para detectar motos a partir de marca/modelo
+// Palavras-chave para detectar motos a partir de marca/modelo (fallback)
 const MOTO_KEYWORDS = [
   'honda', 'yamaha', 'suzuki', 'kawasaki', 'harley', 'triumph', 'ducati', 'bmw motorrad',
   'nxr', 'bros', 'cg', 'biz', 'pop', 'xre', 'cb ', 'cbr', 'cbx', 'pcx', 'sh ',
@@ -19,15 +19,46 @@ const MOTO_KEYWORDS = [
   'gsx', 'intruder', 'burgman', 'v-strom', 'hayabusa',
   'ninja', 'z900', 'z800', 'versys', 'vulcan',
   'motocicleta', 'moto ', 'scooter', 'triciclo',
+  'elite', 'adv', 'lead', 'xadv', 'x-adv', 'transalp', 'nmax', 'xtz', 'xj6',
+  'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon', 'sahara',
 ];
 
-function detectarCategoriaVeiculo(marca?: string, modelo?: string, categoriaExistente?: string): string {
+function detectarCategoriaVeiculoFallback(marca?: string, modelo?: string, categoriaExistente?: string): string {
   // Se já tem categoria definida (ex: aplicativo, taxi), usar ela
   if (categoriaExistente && categoriaExistente !== 'nenhuma') return categoriaExistente;
   
   const texto = `${marca || ''} ${modelo || ''}`.toLowerCase();
   const isMoto = MOTO_KEYWORDS.some(kw => texto.includes(kw));
   return isMoto ? 'Motocicleta' : 'Automóvel';
+}
+
+/** Detecção dinâmica via plano_elegibilidade_modelos, com fallback para keywords */
+async function detectarCategoriaVeiculo(
+  supabase: any,
+  marca?: string,
+  modelo?: string,
+  categoriaExistente?: string
+): Promise<string> {
+  if (categoriaExistente && categoriaExistente !== 'nenhuma') return categoriaExistente;
+
+  const marcaNorm = (marca || '').trim().toUpperCase();
+  const modeloNorm = (modelo || '').trim().toUpperCase();
+
+  if (marcaNorm && modeloNorm) {
+    const { data } = await supabase
+      .from('plano_elegibilidade_modelos')
+      .select('linha_slug')
+      .ilike('marca', marcaNorm)
+      .ilike('modelo', `%${modeloNorm}%`)
+      .eq('is_active', true)
+      .limit(5);
+
+    if (data && data.length > 0) {
+      return data.some((r: any) => r.linha_slug === 'advanced') ? 'Motocicleta' : 'Automóvel';
+    }
+  }
+
+  return detectarCategoriaVeiculoFallback(marca, modelo, categoriaExistente);
 }
 
 serve(async (req) => {
