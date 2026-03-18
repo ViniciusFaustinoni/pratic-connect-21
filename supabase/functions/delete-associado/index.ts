@@ -28,7 +28,7 @@ Deno.serve(async (req) => {
   try {
     // Get auth token
     const authHeader = req.headers.get("Authorization");
-    if (!authHeader) {
+    if (!authHeader?.startsWith("Bearer ")) {
       return new Response(
         JSON.stringify({ error: "Não autorizado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -39,14 +39,18 @@ Deno.serve(async (req) => {
     const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
     const supabaseKey = Deno.env.get("SUPABASE_ANON_KEY")!;
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+    const token = authHeader.replace("Bearer ", "");
 
     const supabase = createClient(supabaseUrl, supabaseKey, {
       global: { headers: { Authorization: authHeader } },
     });
 
-    // Verify user is authenticated
-    const { data: { user }, error: authError } = await supabase.auth.getUser();
-    if (authError || !user) {
+    // Verify user is authenticated using signing keys compatible validation
+    const { data: claimsData, error: authError } = await supabase.auth.getClaims(token);
+    const userId = claimsData?.claims?.sub;
+
+    if (authError || !userId) {
+      console.error("[delete-associado] Falha ao validar token:", authError);
       return new Response(
         JSON.stringify({ error: "Token inválido ou expirado" }),
         { status: 401, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -57,7 +61,7 @@ Deno.serve(async (req) => {
     const adminClient = createClient(supabaseUrl, supabaseServiceKey);
 
     const { data: temPermissao } = await adminClient.rpc('has_permission', {
-      _user_id: user.id,
+      _user_id: userId,
       _permission: 'canDeleteAssociado',
     });
 
