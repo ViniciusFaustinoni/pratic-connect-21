@@ -7,7 +7,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { gerarPosicoesAssinatura, buscarPosicoesConfig } from "../_shared/autentique-positions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/termo-afiliacao-template.ts";
-import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa, buscarRegrasVenda } from "../_shared/termo-afiliacao-utils.ts";
+import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa, buscarRegrasVenda, buscarRegrasDepreciacao } from "../_shared/termo-afiliacao-utils.ts";
 import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, generateSecaoAssinatura, markdownParaHTML, hasSignatureArea, sanitizeSignatureBlocks, exigeRastreador, extrairCodigosBeneficios } from "../_shared/template-utils.ts";
 
 const corsHeaders = {
