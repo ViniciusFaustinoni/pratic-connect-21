@@ -43,7 +43,7 @@ interface DadosExtraidos {
   bairro?: string;
   cidade?: string;
   uf?: string;
-  // Veículo (de CRLV)
+  // Veículo (de CRLV ou Nota Fiscal)
   veiculo_placa?: string;
   veiculo_chassi?: string;
   veiculo_renavam?: string;
@@ -52,6 +52,11 @@ interface DadosExtraidos {
   veiculo_motor?: string;
   veiculo_ano_fabricacao?: number;
   veiculo_ano_modelo?: number;
+  // Nota Fiscal
+  valor_nota_fiscal?: string;
+  numero_motor?: string;
+  // Flag de origem do documento
+  origem_documento_veiculo?: 'crlv' | 'nota_fiscal_veiculo';
 }
 
 // Opções para selects
@@ -124,12 +129,12 @@ export function EtapaDadosPessoaisDocumentos({
 
   const temDocumentoPessoal = tiposIdentificados.includes('cnh') || tiposIdentificados.includes('rg');
   const temComprovante = tiposIdentificados.includes('comprovante_residencia');
-  const temCrlv = tiposIdentificados.includes('crlv');
+  const temCrlv = tiposIdentificados.includes('crlv') || tiposIdentificados.includes('nota_fiscal_veiculo');
   
   // Verificar dados extraídos
   const temDadosPessoais = !!(dadosExtraidos.nome && dadosExtraidos.cpf);
   const temEndereco = !!(dadosExtraidos.logradouro && dadosExtraidos.cidade && dadosExtraidos.uf);
-  const temDadosVeiculo = !!(dadosExtraidos.veiculo_placa);
+  const temDadosVeiculo = !!(dadosExtraidos.veiculo_placa || dadosExtraidos.veiculo_chassi);
   const temContato = !!(email && telefone);
   
   const podeAvancar = temDadosPessoais && temEndereco && temDadosVeiculo && temContato;
@@ -192,16 +197,14 @@ export function EtapaDadosPessoaisDocumentos({
       
       // De CRLV: dados do veículo (expandido)
       if (tipoDocumento === 'crlv') {
+        novosDados.origem_documento_veiculo = 'crlv';
         if (dados.placa) novosDados.veiculo_placa = dados.placa;
         if (dados.chassi) novosDados.veiculo_chassi = dados.chassi;
         if (dados.renavam) novosDados.veiculo_renavam = dados.renavam;
-        
-        // NOVOS CAMPOS - Dados do veículo extraídos do CRLV
         if (dados.cor) novosDados.veiculo_cor = dados.cor;
         if (dados.combustivel) novosDados.veiculo_combustivel = dados.combustivel;
         if (dados.motor) novosDados.veiculo_motor = dados.motor;
         
-        // Ano de fabricação e modelo
         if (dados.ano_fabricacao) {
           const anoFab = parseInt(dados.ano_fabricacao);
           if (!isNaN(anoFab)) novosDados.veiculo_ano_fabricacao = anoFab;
@@ -217,6 +220,26 @@ export function EtapaDadosPessoaisDocumentos({
         } else if (dados.ano && dados.ano.includes('/')) {
           const [, mod] = dados.ano.split('/');
           const anoMod = parseInt(mod);
+          if (!isNaN(anoMod)) novosDados.veiculo_ano_modelo = anoMod;
+        }
+      }
+
+      // De Nota Fiscal de Veículo: substituto do CRLV
+      if (tipoDocumento === 'nota_fiscal_veiculo') {
+        novosDados.origem_documento_veiculo = 'nota_fiscal_veiculo';
+        if (dados.chassi) novosDados.veiculo_chassi = dados.chassi;
+        if (dados.numero_motor) novosDados.numero_motor = dados.numero_motor;
+        if (dados.valor_nota_fiscal) novosDados.valor_nota_fiscal = dados.valor_nota_fiscal;
+        if (dados.placa) novosDados.veiculo_placa = dados.placa;
+        if (dados.cor) novosDados.veiculo_cor = dados.cor;
+        if (dados.motor) novosDados.veiculo_motor = dados.motor;
+        
+        if (dados.ano_fabricacao) {
+          const anoFab = parseInt(dados.ano_fabricacao);
+          if (!isNaN(anoFab)) novosDados.veiculo_ano_fabricacao = anoFab;
+        }
+        if (dados.ano_modelo) {
+          const anoMod = parseInt(dados.ano_modelo);
           if (!isNaN(anoMod)) novosDados.veiculo_ano_modelo = anoMod;
         }
       }
@@ -399,7 +422,7 @@ export function EtapaDadosPessoaisDocumentos({
             </div>
           </div>
 
-          {/* CRLV */}
+          {/* CRLV ou Nota Fiscal */}
           <div className={cn(
             'flex items-center gap-3 p-3 rounded-lg transition-colors',
             temCrlv ? 'bg-success/5' : 'bg-muted/30'
@@ -415,7 +438,12 @@ export function EtapaDadosPessoaisDocumentos({
               )}
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium">CRLV do Veículo</p>
+              <p className="text-sm font-medium">CRLV ou Nota Fiscal do Veículo</p>
+              {dadosExtraidos.origem_documento_veiculo === 'nota_fiscal_veiculo' && (
+                <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-600 mt-1">
+                  Nota Fiscal (substitui CRLV)
+                </Badge>
+              )}
               {temDadosVeiculo && (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground mt-1">
                   {dadosExtraidos.veiculo_placa && <div><span className="font-medium">Placa:</span> {dadosExtraidos.veiculo_placa}</div>}
@@ -424,6 +452,8 @@ export function EtapaDadosPessoaisDocumentos({
                   {dadosExtraidos.veiculo_cor && <div><span className="font-medium">Cor:</span> {dadosExtraidos.veiculo_cor}</div>}
                   {dadosExtraidos.veiculo_combustivel && <div><span className="font-medium">Combustível:</span> {dadosExtraidos.veiculo_combustivel}</div>}
                   {dadosExtraidos.veiculo_motor && <div><span className="font-medium">Motor:</span> {dadosExtraidos.veiculo_motor}</div>}
+                  {dadosExtraidos.numero_motor && <div><span className="font-medium">Nº Motor:</span> {dadosExtraidos.numero_motor}</div>}
+                  {dadosExtraidos.valor_nota_fiscal && <div><span className="font-medium">Valor NF:</span> R$ {Number(dadosExtraidos.valor_nota_fiscal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>}
                   {dadosExtraidos.veiculo_ano_fabricacao && <div><span className="font-medium">Ano:</span> {dadosExtraidos.veiculo_ano_fabricacao}</div>}
                 </div>
               )}
@@ -509,7 +539,9 @@ export function EtapaDadosPessoaisDocumentos({
                     <Car className="h-4 w-4 text-success" />
                     <h4 className="font-medium text-sm">Dados do Veículo</h4>
                     <Badge variant="outline" className="text-xs border-success/30 text-success">
-                      Extraído do CRLV
+                      {dadosExtraidos.origem_documento_veiculo === 'nota_fiscal_veiculo' 
+                        ? 'Extraído da Nota Fiscal' 
+                        : 'Extraído do CRLV'}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-sm">
@@ -633,7 +665,7 @@ export function EtapaDadosPessoaisDocumentos({
           {!podeAvancar && (
             <p className="text-center text-sm text-muted-foreground">
               {!temDocumentoPessoal && 'Envie CNH ou RG • '}
-              {!temCrlv && 'Envie CRLV • '}
+              {!temCrlv && 'Envie CRLV ou Nota Fiscal • '}
               {!temComprovante && 'Envie Comprovante • '}
               {!temContato && 'Preencha e-mail e telefone'}
             </p>

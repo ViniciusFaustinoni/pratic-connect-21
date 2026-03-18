@@ -14,6 +14,7 @@ import type { DocumentoPendentePublico } from '@/hooks/useCotacaoContratacao';
 const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
   'cnh': 'CNH - Carteira Nacional de Habilitação',
   'crlv': 'CRLV - Documento do Veículo',
+  'nota_fiscal_veiculo': 'Nota Fiscal do Veículo',
   'comprovante_residencia': 'Comprovante de Residência',
   'foto_frontal_veiculo': 'Foto do Veículo - Frente',
   'foto_traseira_veiculo': 'Foto do Veículo - Traseira',
