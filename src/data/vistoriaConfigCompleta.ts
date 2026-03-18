@@ -165,6 +165,12 @@ const MOTO_KEYWORDS = [
   'dl ', 'crf', 'sahara', 'twister', 'hornet', 'africa twin', 'ninja',
   'z900', 'z800', 'z750', 'z400', 'versys', 'vulcan', 'next', 'riva',
   'citycom', 'maxsym', 'boulevard', 'bandit', 'hayabusa', 'gsxr', 'gsx',
+  // Modelos Honda moto faltantes (fallback)
+  'elite', 'adv', 'sh ', 'sh-', 'lead', 'xadv', 'x-adv', 'transalp',
+  // Modelos Yamaha faltantes
+  'nmax', 'xtz', 'xj6', 'mt-', 'mt ', 'crypton',
+  // Outros
+  'duke', 'apache', 'jet', 'kansas', 'mirage', 'horizon',
 ];
 
 // Marcas exclusivamente de moto
