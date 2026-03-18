@@ -659,7 +659,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     return { planos: sorted, planosNegados: negados };
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading, configApp, cotasCategoriaData]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading, configApp, cotasCategoriaData, categoriasQueSobrepoeApp]);
 
   return {
     planos,
