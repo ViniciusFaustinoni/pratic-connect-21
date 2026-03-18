@@ -1266,7 +1266,7 @@ serve(async (req) => {
     }
 
     const combustivelNormalizado = normalizarCombustivel(veiculo.combustivel);
-    const tipoVeiculoInferido = inferirTipoVeiculo(contrato?.veiculo_categoria, veiculo.marca, veiculo.modelo);
+    const tipoVeiculoInferido = await inferirTipoVeiculo(contrato?.veiculo_categoria, veiculo.marca, veiculo.modelo);
 
     const veiculoPayload = {
       codigo_associado: codigoAssociadoHinova,
