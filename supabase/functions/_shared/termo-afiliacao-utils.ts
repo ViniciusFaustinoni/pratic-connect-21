@@ -374,6 +374,7 @@ export function mapearDadosParaTemplate(
       dia_vencimento: contrato.dia_vencimento || 10,
       data_inicio: contrato.data_inicio || "",
       forma_pagamento: "Boleto Bancário",
+      tipo_entrada: contrato.tipo_entrada || 'adesao',
     },
     empresa: {
       nome: empresa?.empresa_nome || "ABP PraticCar",
