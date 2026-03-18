@@ -212,7 +212,7 @@ export function IniciarIndenizacaoModal({
       queryClient.invalidateQueries({ queryKey: ['sinistros'] });
       toast.success('Processo de indenização integral iniciado!');
       onOpenChange(false);
-      setDepreciacoes({});
+      setDepreciacoesState({});
       setObservacoes('');
     },
     onError: (error) => {
