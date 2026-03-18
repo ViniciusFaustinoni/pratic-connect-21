@@ -83,28 +83,29 @@ export function IniciarIndenizacaoModal({
     if (veiculoFlags) {
       const preChecked: Record<string, boolean> = {};
       for (const dep of DEPRECIACOES) {
-        const flagValue = (veiculoFlags as any)?.[dep.key];
+        const flagValue = (veiculoFlags as any)?.[dep.flag];
         if (flagValue === true) {
-          preChecked[dep.key] = true;
+          preChecked[dep.flag] = true;
         }
       }
-      setDepreciacoes(preChecked);
+      setDepreciacoesState(preChecked);
     }
-  }, [veiculoFlags]);
+  }, [veiculoFlags, DEPRECIACOES]);
 
-  // Calculation: highest non-avarias depreciation, then 20% additional for avarias
-  const depreciacoesSelecionadas = DEPRECIACOES.filter(d => depreciacoes[d.key]);
-  const nonAvarias = depreciacoesSelecionadas.filter(d => !('isAdditional' in d && d.isAdditional));
-  const hasAvarias = depreciacoes['flag_avarias_vistoria'] === true;
-  const maiorDepreciacao = nonAvarias.length > 0
-    ? Math.max(...nonAvarias.map(d => d.percentual))
+  // Calculation: highest non-avarias depreciation, then additional (compound)
+  const depreciacoesSelecionadas = DEPRECIACOES.filter(d => depreciacoesState[d.flag]);
+  const nonAdicionais = depreciacoesSelecionadas.filter(d => !d.adicional);
+  const adicionais = depreciacoesSelecionadas.filter(d => !!d.adicional);
+  const maiorDepreciacao = nonAdicionais.length > 0
+    ? Math.max(...nonAdicionais.map(d => d.percentual))
     : 0;
 
   const valorBase = valorFipe || 0;
-  // Apply highest depreciation first, then 20% additional on already-depreciated value
   let valorFinal = valorBase * (1 - maiorDepreciacao / 100);
-  if (hasAvarias) {
-    valorFinal = valorFinal * (1 - 20 / 100);
+  // Apply each additional (compound) depreciation
+  for (const ad of adicionais) {
+    valorFinal = valorFinal * (1 - ad.percentual / 100);
+  }
   }
 
   const mutation = useMutation({
