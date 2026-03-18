@@ -466,6 +466,66 @@ const generateSecao2 = (data: TermoAfiliacaoData): string => `
 
 // ============= SEÇÃO 3: PLANO E COBERTURAS =============
 
+// ============= BLOCO DE DEPRECIAÇÃO =============
+
+function generateBlocoDepreciacao(data: TermoAfiliacaoData): string {
+  const regras = data.regrasDepreciacao;
+  if (!regras || regras.length === 0) return '';
+
+  const v = data.veiculo;
+  // Mapear flags ativas do veículo
+  const flagsAtivas: string[] = [];
+  if (v.flag_placa_vermelha) flagsAtivas.push('flag_placa_vermelha');
+  if (v.flag_ex_taxi) flagsAtivas.push('flag_ex_taxi');
+  if (v.flag_taxi_ativo) flagsAtivas.push('flag_taxi_ativo');
+  if (v.flag_chassi_remarcado) flagsAtivas.push('flag_chassi_remarcado');
+  if (v.leilao) flagsAtivas.push('flag_leilao');
+  if (v.flag_ex_ressarcido) flagsAtivas.push('flag_ex_ressarcido');
+
+  if (flagsAtivas.length === 0) return '';
+
+  // Encontrar a regra concorrente (não-adicional) com maior percentual
+  const regrasConcorrentes = regras.filter(r => !r.adicional && flagsAtivas.includes(r.flag));
+  if (regrasConcorrentes.length === 0) return '';
+
+  const regraMaior = regrasConcorrentes.reduce((a, b) => a.percentual >= b.percentual ? a : b);
+
+  // Avarias (adicional)
+  const temAvarias = !!v.flag_avarias_vistoria;
+  const regraAvarias = temAvarias ? regras.find(r => r.flag === 'flag_avarias_vistoria' && r.adicional) : null;
+
+  let valorEstimado = v.valor_fipe * (1 - regraMaior.percentual / 100);
+  if (regraAvarias) {
+    valorEstimado = valorEstimado * (1 - regraAvarias.percentual / 100);
+  }
+
+  let html = `
+  <div class="highlight-box" style="border-left: 3px solid #d97706; background-color: #fffbeb;">
+    <strong>CONDIÇÃO ESPECIAL DE RESSARCIMENTO:</strong>
+    <p style="margin-top: 6pt;">Em caso de ressarcimento integral (perda total), o valor FIPE de referência 
+    será reduzido em <strong>${regraMaior.percentual}%</strong> em razão da condição do veículo 
+    (<strong>${regraMaior.label}</strong>), conforme regulamento item 10.4.2.</p>`;
+
+  if (regraAvarias) {
+    html += `
+    <p style="margin-top: 4pt;">Adicionalmente, será aplicado abatimento de <strong>${regraAvarias.percentual}%</strong> sobre o valor 
+    já depreciado, em razão de avarias pré-existentes registradas na vistoria.</p>`;
+  }
+
+  if (v.uso_aplicativo && flagsAtivas.length > 0) {
+    html += `
+    <p style="margin-top: 4pt;">A cobertura de 100% da tabela FIPE prevista para veículos de uso por aplicativo 
+    <strong>não se aplica</strong> a este veículo em razão da categoria de depreciação, 
+    conforme regulamento item 10.4.4.</p>`;
+  }
+
+  html += `
+    <p style="margin-top: 6pt; font-size: 9pt;"><strong>Valor FIPE:</strong> ${formatCurrency(v.valor_fipe)} → <strong>Valor estimado de ressarcimento:</strong> ${formatCurrency(valorEstimado)}</p>
+  </div>`;
+
+  return html;
+}
+
 const generateSecao3 = (data: TermoAfiliacaoData): string => {
   const coberturas = data.plano.coberturas || [];
   const rastreador = exigeRastreador(data.veiculo, data.configRastreador);
@@ -473,6 +533,7 @@ const generateSecao3 = (data: TermoAfiliacaoData): string => {
   const coberturasHTML = coberturas.map(c => 
     `<div class="cobertura-item"><span class="cobertura-check">[X]</span> ${c}</div>`
   ).join('\n');
+  const depreciacaoHTML = generateBlocoDepreciacao(data);
   
   return `
 <div class="section">
@@ -493,6 +554,8 @@ const generateSecao3 = (data: TermoAfiliacaoData): string => {
   <div class="cobertura-list">
     ${coberturasHTML || '<div class="cobertura-item"><span class="cobertura-check">[X]</span> Roubo e Furto</div><div class="cobertura-item"><span class="cobertura-check">[X]</span> Assistência 24 horas</div>'}
   </div>
+  
+  ${depreciacaoHTML}
   
   <div class="highlight-box">
     <strong>Rastreador Veicular:</strong> ${textoRastreador} (instalação por técnico credenciado)
