@@ -457,16 +457,8 @@ export function useCotacaoContratacao(token: string | undefined) {
 
       if (error) throw error;
 
-      // 2. Gerar proposta automaticamente se ainda não existir
-      if (!cotacao.contrato_gerado_id) {
-        try {
-          await gerarPropostaAutomatica.mutateAsync(cotacao.id);
-          console.log('[useCotacaoContratacao] Proposta gerada automaticamente após dados pessoais');
-        } catch (propostaError) {
-          console.error('[useCotacaoContratacao] Erro ao gerar proposta automática:', propostaError);
-          // Não impede o fluxo - proposta pode ser gerada depois
-        }
-      }
+      // NOTA: Geração de contrato removida daqui. O contrato será gerado
+      // exclusivamente na EtapaAssinaturaContrato para evitar loops de erro.
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
