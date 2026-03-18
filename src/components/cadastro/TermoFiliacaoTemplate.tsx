@@ -277,6 +277,41 @@ export function TermoFiliacaoTemplate({
             </div>
           ))}
         </div>
+
+        {/* BLOCO DE DEPRECIAÇÃO (condicional) */}
+        {regraMaior && (
+          <div style={{
+            backgroundColor: '#fffbeb',
+            border: '1px solid #d97706',
+            borderLeft: '3px solid #d97706',
+            borderRadius: '4pt',
+            padding: '10pt',
+            margin: '10pt 0',
+          }}>
+            <p style={{ fontWeight: 'bold', marginBottom: '6pt' }}>CONDIÇÃO ESPECIAL DE RESSARCIMENTO:</p>
+            <p style={{ fontSize: '9pt', lineHeight: 1.4, marginBottom: '4pt' }}>
+              Em caso de ressarcimento integral (perda total), o valor FIPE de referência 
+              será reduzido em <strong>{regraMaior.percentual}%</strong> em razão da condição do veículo 
+              (<strong>{regraMaior.label}</strong>), conforme regulamento item 10.4.2.
+            </p>
+            {regraAvarias && (
+              <p style={{ fontSize: '9pt', lineHeight: 1.4, marginBottom: '4pt' }}>
+                Adicionalmente, será aplicado abatimento de <strong>{regraAvarias.percentual}%</strong> sobre o valor 
+                já depreciado, em razão de avarias pré-existentes registradas na vistoria.
+              </p>
+            )}
+            {veiculo.usoAplicativo && (
+              <p style={{ fontSize: '9pt', lineHeight: 1.4, marginBottom: '4pt' }}>
+                A cobertura de 100% da tabela FIPE prevista para veículos de uso por aplicativo 
+                <strong> não se aplica</strong> a este veículo em razão da categoria de depreciação, 
+                conforme regulamento item 10.4.4.
+              </p>
+            )}
+            <p style={{ fontSize: '9pt', marginTop: '6pt' }}>
+              <strong>Valor FIPE:</strong> {formatarMoeda(veiculo.valorFipe)} → <strong>Valor estimado de ressarcimento:</strong> {formatarMoeda(valorEstimadoDepreciacao!)}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* SEÇÃO 4: VALORES E CONDIÇÕES */}
