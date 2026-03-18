@@ -141,6 +141,7 @@ export interface TermoAfiliacaoData {
     fipeMinMoto: number;
   };
   regrasVenda?: RegrasVendaData;
+  regrasDepreciacao?: RegraDepreciacaoData[];
 }
 
 // ============= FORMATADORES =============
