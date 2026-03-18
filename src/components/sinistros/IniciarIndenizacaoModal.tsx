@@ -159,11 +159,11 @@ export function IniciarIndenizacaoModal({
           tipo: 'indenizacao_iniciada',
           descricao: `Indenização integral iniciada para veículo ${veiculo.placa}. Valor: ${formatCurrency(valorFinal)}`,
           veiculo_id: veiculoId,
-          dados_novos: {
-            valor_fipe: valorBase,
-            depreciacoes,
-            maior_depreciacao: maiorDepreciacao,
-            avarias_adicional: hasAvarias,
+            dados_novos: {
+              valor_fipe: valorBase,
+              depreciacoes: depreciacoesState,
+              maior_depreciacao: maiorDepreciacao,
+              adicionais: adicionais.map(a => ({ flag: a.flag, percentual: a.percentual })),
             valor_final: valorFinal,
             sinistroId,
           },
