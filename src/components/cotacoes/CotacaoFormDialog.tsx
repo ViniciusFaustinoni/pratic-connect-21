@@ -445,6 +445,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setNomeAssociado('');
       setTelefoneAssociado('');
       setEmailAssociado('');
+      setIsIndicacao(false);
+      setIndicadorId(null);
+      setIndicadorNome('');
+      setBuscaIndicador('');
       setCategoria('nenhuma');
       setUsoVeiculo('particular');
       setRegiaoSelecionada('');
