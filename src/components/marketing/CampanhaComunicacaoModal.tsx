@@ -110,7 +110,7 @@ export function CampanhaComunicacaoModal({ open, onClose, onSuccess }: CampanhaC
 
           <div className="space-y-2">
             <Label>Tipo de Disparo *</Label>
-            <div className="grid grid-cols-3 gap-2">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
               {(['email', 'whatsapp', 'sms'] as const).map((t) => {
                 const Icon = tipoIcons[t];
                 return (

@@ -358,7 +358,7 @@ export default function OuvidoriaDashboard() {
               <Skeleton className="h-16" />
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Total de elogios */}
               <div className="text-center">
                 <div className="text-3xl font-bold text-green-700">

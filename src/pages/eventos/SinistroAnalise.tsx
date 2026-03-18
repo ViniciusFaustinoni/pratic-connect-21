@@ -1213,7 +1213,7 @@ export default function SinistroAnalise() {
                                   <Separator />
                                   <div>
                                     <p className="text-sm font-semibold mb-2">📸 Fotos do Regulador ({fotosRegulador.length})</p>
-                                    <div className="grid grid-cols-5 gap-2">
+                                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                                       {fotosRegulador.map((url, i) => (
                                         <img
                                           key={i}

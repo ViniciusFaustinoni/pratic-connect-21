@@ -218,7 +218,7 @@ export function NovaAudienciaModal({ open, onClose, processoId }: NovaAudienciaM
             {showPresencial && (
               <div className="space-y-3 p-3 border rounded-lg">
                 <Label className="flex items-center gap-2"><MapPin className="h-4 w-4" /> Local Presencial</Label>
-                <div className="grid grid-cols-3 gap-3">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                   <Input placeholder="Fórum" value={forum} onChange={(e) => setForum(e.target.value)} />
                   <Input placeholder="Vara" value={vara} onChange={(e) => setVara(e.target.value)} />
                   <Input placeholder="Sala" value={sala} onChange={(e) => setSala(e.target.value)} />

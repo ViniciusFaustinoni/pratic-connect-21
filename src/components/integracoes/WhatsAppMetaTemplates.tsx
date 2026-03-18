@@ -120,7 +120,7 @@ export function WhatsAppMetaTemplates() {
       </Alert>
 
       {/* Resumo */}
-      <div className="grid grid-cols-4 gap-3">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
           { label: 'Total', value: templates.length, className: 'bg-muted' },
           { label: 'Aprovados', value: approved, className: 'bg-green-500/10' },

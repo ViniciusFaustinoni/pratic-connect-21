@@ -43,7 +43,7 @@ export default function Sistema() {
         <CardContent className="space-y-6">
           <div className="space-y-3">
             <Label>Tema</Label>
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               {[
                 { value: 'light', label: 'Claro', icon: Sun },
                 { value: 'dark', label: 'Escuro', icon: Moon },

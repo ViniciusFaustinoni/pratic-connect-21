@@ -445,7 +445,7 @@ export function NovaOficinaModal({ open, onClose, onSuccess }: NovaOficinaModalP
 
           {/* TAB DADOS BANCÁRIOS */}
           <TabsContent value="bancario" className="space-y-4 mt-4">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="col-span-3">
                 <Label htmlFor="banco">Banco</Label>
                 <Select
