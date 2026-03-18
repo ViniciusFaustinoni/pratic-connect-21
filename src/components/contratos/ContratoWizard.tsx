@@ -88,6 +88,7 @@ const steps = [
 export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreated }: ContratoWizardProps) {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tipoOperacao, setTipoOperacao] = useState<string>('adesao');
   const [buscandoFipe, setBuscandoFipe] = useState(false);
   
   // Documentos uploadados
