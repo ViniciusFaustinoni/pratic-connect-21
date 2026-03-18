@@ -396,20 +396,19 @@ serve(async (req) => {
       throw new Error("Associado não possui email cadastrado para assinatura");
     }
 
+    const cpfRaw = (associado.cpf || '').replace(/\D/g, '');
+    const cpfOk = cpfRaw.length === 11 && !/^(\d)\1{10}$/.test(cpfRaw) && (() => {
+      for (let t = 9; t < 11; t++) { let d = 0; for (let c = 0; c < t; c++) d += parseInt(cpfRaw[c]) * ((t+1)-c); d = ((10*d)%11)%10; if (parseInt(cpfRaw[t]) !== d) return false; } return true;
+    })();
+    console.log(`[autentique-evento-create] CPF: ${cpfRaw} (válido: ${cpfOk})`);
+    const signerObj: any = { name: signerName, email: signerEmail, action: "SIGN", positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)) };
+    if (cpfOk) signerObj.configs = { cpf: cpfRaw };
+
     const operations = {
       query: mutation,
       variables: {
         document: { name: documentName },
-        signers: [(() => {
-          const cpfRaw = (associado.cpf || '').replace(/\D/g, '');
-          const cpfOk = cpfRaw.length === 11 && !/^(\d)\1{10}$/.test(cpfRaw) && (() => {
-            for (let t = 9; t < 11; t++) { let d = 0; for (let c = 0; c < t; c++) d += parseInt(cpfRaw[c]) * ((t+1)-c); d = ((10*d)%11)%10; if (parseInt(cpfRaw[t]) !== d) return false; } return true;
-          })();
-          console.log(`[autentique-evento-create] CPF: ${cpfRaw} (válido: ${cpfOk})`);
-          const s: any = { name: signerName, email: signerEmail, action: "SIGN", positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)) };
-          if (cpfOk) s.configs = { cpf: cpfRaw };
-          return s;
-        })()],
+        signers: [signerObj],
         file: null,
       },
     };
