@@ -129,7 +129,7 @@ export function EtapaDadosPessoaisDocumentos({
 
   const temDocumentoPessoal = tiposIdentificados.includes('cnh') || tiposIdentificados.includes('rg');
   const temComprovante = tiposIdentificados.includes('comprovante_residencia');
-  const temCrlv = tiposIdentificados.includes('crlv');
+  const temCrlv = tiposIdentificados.includes('crlv') || tiposIdentificados.includes('nota_fiscal_veiculo');
   
   // Verificar dados extraídos
   const temDadosPessoais = !!(dadosExtraidos.nome && dadosExtraidos.cpf);
