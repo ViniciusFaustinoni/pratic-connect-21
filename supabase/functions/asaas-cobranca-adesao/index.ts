@@ -133,21 +133,11 @@ serve(async (req) => {
       );
     }
 
-    // Validar dígitos verificadores do CPF/CNPJ antes de chamar o Asaas
-    if (cpfCnpj.length === 11) {
-      if (!validarCPF(cpfCnpj)) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'CPF inválido — dígitos verificadores incorretos' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
-    } else if (cpfCnpj.length === 14) {
-      if (!validarCNPJ(cpfCnpj)) {
-        return new Response(
-          JSON.stringify({ success: false, error: 'CNPJ inválido — dígitos verificadores incorretos' }),
-          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-        );
-      }
+    // Validar dígitos verificadores — apenas warn, sem bloquear (Asaas faz sua própria validação)
+    if (cpfCnpj.length === 11 && !validarCPF(cpfCnpj)) {
+      console.warn(`[asaas-cobranca-adesao] ⚠️ CPF com dígitos verificadores incorretos: ***${cpfCnpj.slice(-4)} — prosseguindo mesmo assim`);
+    } else if (cpfCnpj.length === 14 && !validarCNPJ(cpfCnpj)) {
+      console.warn(`[asaas-cobranca-adesao] ⚠️ CNPJ com dígitos verificadores incorretos: ***${cpfCnpj.slice(-4)} — prosseguindo mesmo assim`);
     }
 
     cliente.cpfCnpj = cpfCnpj;
