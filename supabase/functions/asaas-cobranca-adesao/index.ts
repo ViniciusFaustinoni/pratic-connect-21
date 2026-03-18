@@ -258,14 +258,25 @@ serve(async (req) => {
       asaasClienteId = searchResult.data[0].id;
       console.log(`[asaas-cobranca-adesao] Cliente existente encontrado: ${asaasClienteId}`);
     } else {
-      // Criar novo cliente
-      const novoCliente = await asaasRequest('/customers', 'POST', {
-        name: cliente.nome,
-        email: cliente.email,
-        cpfCnpj: cliente.cpfCnpj,
-      });
-      asaasClienteId = novoCliente.id;
-      console.log(`[asaas-cobranca-adesao] Novo cliente criado: ${asaasClienteId}`);
+      // Criar novo cliente - tentar com CPF primeiro, se falhar tentar sem CPF
+      try {
+        const novoCliente = await asaasRequest('/customers', 'POST', {
+          name: cliente.nome,
+          email: cliente.email,
+          cpfCnpj: cliente.cpfCnpj,
+        });
+        asaasClienteId = novoCliente.id;
+        console.log(`[asaas-cobranca-adesao] Novo cliente criado com CPF: ${asaasClienteId}`);
+      } catch (cpfError: any) {
+        // Se o Asaas rejeitar o CPF, criar cliente sem CPF para não bloquear o pagamento
+        console.warn(`[asaas-cobranca-adesao] ⚠️ Asaas rejeitou CPF, criando cliente sem CPF: ${cpfError.message}`);
+        const novoCliente = await asaasRequest('/customers', 'POST', {
+          name: cliente.nome,
+          email: cliente.email,
+        });
+        asaasClienteId = novoCliente.id;
+        console.log(`[asaas-cobranca-adesao] Novo cliente criado SEM CPF: ${asaasClienteId}`);
+      }
     }
 
     // Criar cobrança com PIX e boleto (prazo dinâmico)
