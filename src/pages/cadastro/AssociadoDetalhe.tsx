@@ -59,6 +59,7 @@ import { AssociadoResumoTab } from '@/components/associados/detalhe/AssociadoRes
 import { AssociadoTabNav } from '@/components/associados/detalhe/AssociadoTabNav';
 import { AdicionarRessalva } from '@/components/cadastro/AdicionarRessalva';
 import { useAssociadoSituacao } from '@/hooks/useAssociadoSituacao';
+import { BlocoDepreciacaoVeiculo } from '@/components/associados/detalhe/BlocoDepreciacaoVeiculo';
 
 // ============================================
 // UTILITÁRIOS
