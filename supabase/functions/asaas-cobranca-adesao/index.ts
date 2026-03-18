@@ -92,6 +92,20 @@ serve(async (req) => {
       );
     }
 
+    // Sanitizar CPF/CNPJ
+    let cpfCnpj = (cliente.cpfCnpj || '').replace(/\D/g, '');
+    if (cpfCnpj.length > 0 && cpfCnpj.length < 11) {
+      cpfCnpj = cpfCnpj.padStart(11, '0');
+    }
+    if (cpfCnpj.length !== 11 && cpfCnpj.length !== 14) {
+      return new Response(
+        JSON.stringify({ success: false, error: `CPF/CNPJ inválido (${cpfCnpj.length} dígitos)` }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    cliente.cpfCnpj = cpfCnpj;
+    console.log(`[asaas-cobranca-adesao] CPF sanitizado: ***${cpfCnpj.slice(-4)}`);
+
     console.log(`[asaas-cobranca-adesao] Iniciando para contrato ${contratoId}, valor recebido: R$ ${valor}, forma: ${formaPagamento || 'UNDEFINED'}`);
 
     // Definir billingType - usar UNDEFINED como padrão para permitir PIX e Cartão
