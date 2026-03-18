@@ -14,8 +14,6 @@ export default function InstaladorConfiguracoes() {
   const [notifEncaixes, setNotifEncaixes] = useState(true);
   const [gpsAltaPrecisao, setGpsAltaPrecisao] = useState(true);
   const [gpsBackground, setGpsBackground] = useState(true);
-  const [temaEscuro, setTemaEscuro] = useState(true);
-
   return (
     <div className="bg-slate-900">
       <div className="p-4 space-y-4">
