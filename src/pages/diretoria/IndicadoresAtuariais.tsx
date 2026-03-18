@@ -503,7 +503,7 @@ export default function IndicadoresAtuariais() {
 
         {/* Tab Financeiro */}
         <TabsContent value="financeiro" className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <CardContent className="pt-4">
                 <p className="text-sm text-muted-foreground">Receita Bruta (ano)</p>

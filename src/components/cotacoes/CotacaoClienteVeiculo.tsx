@@ -162,7 +162,7 @@ export function CotacaoClienteVeiculo({
                 {cotacao.veiculo_marca} {cotacao.veiculo_modelo}
               </p>
 
-              <div className="grid grid-cols-3 gap-3 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-sm">
                 <div>
                   <p className="text-xs text-muted-foreground">Ano</p>
                   <p className="font-medium">{cotacao.veiculo_ano || '—'}</p>

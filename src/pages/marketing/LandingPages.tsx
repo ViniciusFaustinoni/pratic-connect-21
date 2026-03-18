@@ -198,7 +198,7 @@ export default function LandingPages() {
                 )}
 
                 {/* Métricas */}
-                <div className="grid grid-cols-3 gap-2 text-center pt-2 border-t">
+                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center pt-2 border-t">
                   <div>
                     <p className="text-lg font-bold">{lp.visitas || 0}</p>
                     <p className="text-xs text-muted-foreground">Visitas</p>

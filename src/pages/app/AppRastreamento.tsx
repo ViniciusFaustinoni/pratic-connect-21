@@ -540,7 +540,7 @@ export default function AppRastreamento() {
             </div>
 
             {/* Metrics */}
-            <div className="grid grid-cols-3 gap-3">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
               <Card className="border-0 shadow-sm bg-muted/30">
                 <CardContent className="flex flex-col items-center justify-center p-3">
                   <Gauge className="h-5 w-5 text-primary" />

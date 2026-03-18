@@ -224,7 +224,7 @@ export default function PesquisaSatisfacao() {
               <Label className="text-base font-semibold">
                 Seu problema foi resolvido?
               </Label>
-              <div className="grid grid-cols-3 gap-4">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                 <button
                   onClick={() => setResolvido("sim")}
                   className={cn(
