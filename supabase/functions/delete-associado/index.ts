@@ -504,7 +504,7 @@ Deno.serve(async (req) => {
     // 16. Log the action
     try {
       await supabaseAdmin.from("auth_logs").insert({
-        profile_id: user.id,
+        profile_id: userId,
         acao: "exclusao_associado",
         modulo: "associados",
         metadata: {
