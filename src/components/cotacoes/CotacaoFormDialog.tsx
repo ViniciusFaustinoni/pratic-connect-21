@@ -1265,6 +1265,87 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     onChange={(e) => setEmailAssociado(e.target.value)}
                   />
                 </div>
+
+                {/* Indicação */}
+                <div className="col-span-2 space-y-2 pt-1">
+                  <div className="flex items-center gap-3">
+                    <Switch
+                      id="indicacao-switch"
+                      checked={isIndicacao}
+                      onCheckedChange={(checked) => {
+                        setIsIndicacao(checked);
+                        if (!checked) {
+                          setIndicadorId(null);
+                          setIndicadorNome('');
+                          setBuscaIndicador('');
+                        }
+                      }}
+                    />
+                    <Label htmlFor="indicacao-switch" className="text-sm cursor-pointer">
+                      Este cliente foi indicado por um associado?
+                    </Label>
+                  </div>
+
+                  {isIndicacao && (
+                    <div className="space-y-2">
+                      {indicadorId ? (
+                        <div className="flex items-center gap-2 p-2 rounded-md border bg-muted/50">
+                          <UserCheck className="h-4 w-4 text-primary shrink-0" />
+                          <span className="text-sm font-medium truncate flex-1">{indicadorNome}</span>
+                          <Button
+                            type="button"
+                            variant="ghost"
+                            size="icon"
+                            className="h-6 w-6 shrink-0"
+                            onClick={() => {
+                              setIndicadorId(null);
+                              setIndicadorNome('');
+                              setBuscaIndicador('');
+                            }}
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </Button>
+                        </div>
+                      ) : (
+                        <div className="relative">
+                          <Input
+                            placeholder="Buscar por nome, CPF ou telefone..."
+                            value={buscaIndicador}
+                            onChange={(e) => setBuscaIndicador(e.target.value)}
+                            className="pr-8"
+                          />
+                          {buscandoIndicador && (
+                            <Loader2 className="absolute right-2.5 top-2.5 h-4 w-4 animate-spin text-muted-foreground" />
+                          )}
+                          {buscaIndicador.length >= 2 && resultadosIndicador.length > 0 && (
+                            <div className="absolute z-50 mt-1 w-full rounded-md border bg-popover shadow-md max-h-48 overflow-y-auto">
+                              {resultadosIndicador.map((a) => (
+                                <button
+                                  key={a.id}
+                                  type="button"
+                                  className="w-full text-left px-3 py-2 text-sm hover:bg-accent transition-colors"
+                                  onClick={() => {
+                                    setIndicadorId(a.id);
+                                    setIndicadorNome(a.nome);
+                                    setBuscaIndicador('');
+                                  }}
+                                >
+                                  <span className="font-medium">{a.nome}</span>
+                                  {a.telefone && (
+                                    <span className="text-muted-foreground ml-2 text-xs">{a.telefone}</span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {buscaIndicador.length >= 2 && !buscandoIndicador && resultadosIndicador.length === 0 && (
+                            <p className="text-xs text-muted-foreground mt-1">Nenhum associado encontrado</p>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                  )}
+                </div>
               </div>
             </div>
 
