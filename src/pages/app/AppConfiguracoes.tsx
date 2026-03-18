@@ -30,8 +30,7 @@ import {
   Gauge,
   Clock,
   BarChart3,
-  Sun,
-  Moon,
+  Code,
   Code,
   ExternalLink,
   Gift
