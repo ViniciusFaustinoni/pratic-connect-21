@@ -30,7 +30,7 @@ function useConfiguracaoTexto(chave: string, fallback: string) {
   return useConfiguracao(chave, (v) => v, fallback);
 }
 
-function useConfiguracaoJson<T>(chave: string, fallback: T) {
+export function useConfiguracaoJson<T>(chave: string, fallback: T) {
   return useConfiguracao(chave, (v) => {
     try { return JSON.parse(v) as T; } catch { return fallback; }
   }, fallback);

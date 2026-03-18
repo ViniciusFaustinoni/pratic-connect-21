@@ -28,6 +28,7 @@ import { ValueLabelListEditor } from '@/components/configuracoes/json-editors/Va
 import { CotasTaxasEditor } from '@/components/configuracoes/json-editors/CotasTaxasEditor';
 import { KeyValueEditor } from '@/components/configuracoes/json-editors/KeyValueEditor';
 import { GlossarioEditor } from '@/components/configuracoes/json-editors/GlossarioEditor';
+import { DepreciacaoEditor } from '@/components/configuracoes/json-editors/DepreciacaoEditor';
 
 interface CategoriaConfig {
   label: string;
@@ -54,6 +55,7 @@ const FALLBACK_HINTS: Record<string, string> = {
   marcas_modelos_fallback: 'Marcas e modelos usados quando a consulta à tabela FIPE falha. Serve como alternativa de entrada manual.',
   motos_aceitas: 'Regras de aceitação de motos por marca. Cada plano pode ter regras próprias de elegibilidade.',
   observacoes_categoria: 'Textos explicativos exibidos ao selecionar cada categoria de veículo na cotação.',
+  regras_depreciacao: 'Percentuais de depreciação aplicados no cálculo de indenização. Concorrentes: usa-se o maior. Adicionais: aplicam-se de forma composta sobre o valor já depreciado.',
 };
 
 type ConfigRow = {
@@ -251,6 +253,18 @@ export default function ConfiguracoesSistema() {
           <div className="space-y-2">
             <GlossarioEditor
               items={parsed as { termo: string; definicao: string }[]}
+              onChange={handleJsonChange}
+            />
+            {saveBtn}
+          </div>
+        );
+
+      case 'regras_depreciacao':
+        if (!Array.isArray(parsed)) return null;
+        return (
+          <div className="space-y-2">
+            <DepreciacaoEditor
+              items={parsed as { flag: string; label: string; percentual: number; adicional?: boolean }[]}
               onChange={handleJsonChange}
             />
             {saveBtn}

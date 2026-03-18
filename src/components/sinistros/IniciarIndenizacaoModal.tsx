@@ -1,8 +1,8 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
+import { useConfiguracaoNumero, useConfiguracaoJson } from '@/hooks/useConteudosSistema';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
@@ -20,15 +20,22 @@ interface IniciarIndenizacaoModalProps {
   valorFipe?: number | null;
 }
 
-const DEPRECIACOES = [
-  { key: 'flag_placa_vermelha', label: 'Placa vermelha', percentual: 25 },
-  { key: 'flag_ex_taxi', label: 'Ex-táxi', percentual: 25 },
-  { key: 'flag_taxi_ativo', label: 'Táxi ativo', percentual: 25 },
-  { key: 'flag_chassi_remarcado', label: 'Chassi remarcado', percentual: 30 },
-  { key: 'flag_leilao', label: 'Veículo de leilão', percentual: 30 },
-  { key: 'flag_ex_ressarcido', label: 'Já indenizado anteriormente', percentual: 30 },
-  { key: 'flag_avarias_vistoria', label: 'Avarias pré-existentes (vistoria)', percentual: 20, isAdditional: true },
-] as const;
+interface RegraDepreciacao {
+  flag: string;
+  label: string;
+  percentual: number;
+  adicional?: boolean;
+}
+
+const DEPRECIACOES_FALLBACK: RegraDepreciacao[] = [
+  { flag: 'flag_placa_vermelha', label: 'Placa vermelha', percentual: 25 },
+  { flag: 'flag_ex_taxi', label: 'Ex-táxi', percentual: 25 },
+  { flag: 'flag_taxi_ativo', label: 'Táxi ativo', percentual: 25 },
+  { flag: 'flag_chassi_remarcado', label: 'Chassi remarcado', percentual: 30 },
+  { flag: 'flag_leilao', label: 'Veículo de leilão', percentual: 30 },
+  { flag: 'flag_ex_ressarcido', label: 'Já indenizado anteriormente', percentual: 30 },
+  { flag: 'flag_avarias_vistoria', label: 'Avarias pré-existentes (vistoria)', percentual: 20, adicional: true },
+];
 
 const DOCUMENTOS_INDENIZACAO = [
   { tipo: 'bo_original', nome: 'B.O. original', obrigatorio: true },
@@ -51,7 +58,9 @@ export function IniciarIndenizacaoModal({
 }: IniciarIndenizacaoModalProps) {
   const queryClient = useQueryClient();
   const { data: prazoSinistro } = useConfiguracaoNumero('operacional_prazo_sinistro', 60);
-  const [depreciacoes, setDepreciacoes] = useState<Record<string, boolean>>({});
+  const { data: regrasDepreciacao } = useConfiguracaoJson<RegraDepreciacao[]>('regras_depreciacao', DEPRECIACOES_FALLBACK);
+  const DEPRECIACOES = regrasDepreciacao ?? DEPRECIACOES_FALLBACK;
+  const [depreciacoesState, setDepreciacoesState] = useState<Record<string, boolean>>({});
   const [observacoes, setObservacoes] = useState('');
 
   // Fetch vehicle flags to pre-check depreciation switches
@@ -74,28 +83,28 @@ export function IniciarIndenizacaoModal({
     if (veiculoFlags) {
       const preChecked: Record<string, boolean> = {};
       for (const dep of DEPRECIACOES) {
-        const flagValue = (veiculoFlags as any)?.[dep.key];
+        const flagValue = (veiculoFlags as any)?.[dep.flag];
         if (flagValue === true) {
-          preChecked[dep.key] = true;
+          preChecked[dep.flag] = true;
         }
       }
-      setDepreciacoes(preChecked);
+      setDepreciacoesState(preChecked);
     }
-  }, [veiculoFlags]);
+  }, [veiculoFlags, DEPRECIACOES]);
 
-  // Calculation: highest non-avarias depreciation, then 20% additional for avarias
-  const depreciacoesSelecionadas = DEPRECIACOES.filter(d => depreciacoes[d.key]);
-  const nonAvarias = depreciacoesSelecionadas.filter(d => !('isAdditional' in d && d.isAdditional));
-  const hasAvarias = depreciacoes['flag_avarias_vistoria'] === true;
-  const maiorDepreciacao = nonAvarias.length > 0
-    ? Math.max(...nonAvarias.map(d => d.percentual))
+  // Calculation: highest non-avarias depreciation, then additional (compound)
+  const depreciacoesSelecionadas = DEPRECIACOES.filter(d => depreciacoesState[d.flag]);
+  const nonAdicionais = depreciacoesSelecionadas.filter(d => !d.adicional);
+  const adicionais = depreciacoesSelecionadas.filter(d => !!d.adicional);
+  const maiorDepreciacao = nonAdicionais.length > 0
+    ? Math.max(...nonAdicionais.map(d => d.percentual))
     : 0;
 
   const valorBase = valorFipe || 0;
-  // Apply highest depreciation first, then 20% additional on already-depreciated value
   let valorFinal = valorBase * (1 - maiorDepreciacao / 100);
-  if (hasAvarias) {
-    valorFinal = valorFinal * (1 - 20 / 100);
+  // Apply each additional (compound) depreciation
+  for (const ad of adicionais) {
+    valorFinal = valorFinal * (1 - ad.percentual / 100);
   }
 
   const mutation = useMutation({
@@ -118,13 +127,13 @@ export function IniciarIndenizacaoModal({
 
       // 2. Registrar histórico
       const depInfo = maiorDepreciacao > 0 ? `Maior depreciação: ${maiorDepreciacao}%` : 'Sem depreciação';
-      const avariasInfo = hasAvarias ? `, Avarias: -20% adicional` : '';
+      const adicionaisInfo = adicionais.length > 0 ? `, Adicionais: ${adicionais.map(a => `-${a.percentual}%`).join(', ')}` : '';
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistroId,
         status_anterior: 'em_recuperacao',
         status_novo: 'aguardando_pagamento',
         usuario_id: user.id,
-        observacao: `Indenização integral iniciada. Valor FIPE: ${formatCurrency(valorBase)}, ${depInfo}${avariasInfo}, Valor final: ${formatCurrency(valorFinal)}. ${observacoes}`,
+        observacao: `Indenização integral iniciada. Valor FIPE: ${formatCurrency(valorBase)}, ${depInfo}${adicionaisInfo}, Valor final: ${formatCurrency(valorFinal)}. ${observacoes}`,
       });
 
       // 3. Criar documentos pendentes de indenização
@@ -150,11 +159,11 @@ export function IniciarIndenizacaoModal({
           tipo: 'indenizacao_iniciada',
           descricao: `Indenização integral iniciada para veículo ${veiculo.placa}. Valor: ${formatCurrency(valorFinal)}`,
           veiculo_id: veiculoId,
-          dados_novos: {
-            valor_fipe: valorBase,
-            depreciacoes,
-            maior_depreciacao: maiorDepreciacao,
-            avarias_adicional: hasAvarias,
+            dados_novos: {
+              valor_fipe: valorBase,
+              depreciacoes: depreciacoesState,
+              maior_depreciacao: maiorDepreciacao,
+              adicionais: adicionais.map(a => ({ flag: a.flag, percentual: a.percentual })),
             valor_final: valorFinal,
             sinistroId,
           },
@@ -203,7 +212,7 @@ export function IniciarIndenizacaoModal({
       queryClient.invalidateQueries({ queryKey: ['sinistros'] });
       toast.success('Processo de indenização integral iniciado!');
       onOpenChange(false);
-      setDepreciacoes({});
+      setDepreciacoesState({});
       setObservacoes('');
     },
     onError: (error) => {
@@ -246,18 +255,18 @@ export function IniciarIndenizacaoModal({
               </p>
             </div>
             {DEPRECIACOES.map(dep => {
-              const isAdditional = 'isAdditional' in dep && dep.isAdditional;
-              const isHighest = !isAdditional && depreciacoes[dep.key] && dep.percentual === maiorDepreciacao;
+              const isAdditional = !!dep.adicional;
+              const isHighest = !isAdditional && depreciacoesState[dep.flag] && dep.percentual === maiorDepreciacao;
               return (
-                <div key={dep.key} className="flex items-center justify-between">
+                <div key={dep.flag} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Switch
-                      checked={!!depreciacoes[dep.key]}
-                      onCheckedChange={(checked) => setDepreciacoes(prev => ({ ...prev, [dep.key]: checked }))}
+                      checked={!!depreciacoesState[dep.flag]}
+                      onCheckedChange={(checked) => setDepreciacoesState(prev => ({ ...prev, [dep.flag]: checked }))}
                     />
                     <span className="text-sm">{dep.label}</span>
                   </div>
-                  <span className={`text-sm ${isHighest ? 'font-bold text-red-600' : isAdditional && depreciacoes[dep.key] ? 'font-bold text-orange-600' : 'text-muted-foreground'}`}>
+                  <span className={`text-sm ${isHighest ? 'font-bold text-red-600' : isAdditional && depreciacoesState[dep.flag] ? 'font-bold text-orange-600' : 'text-muted-foreground'}`}>
                     -{dep.percentual}%{isAdditional ? ' (adicional)' : ''}
                   </span>
                 </div>
@@ -265,7 +274,7 @@ export function IniciarIndenizacaoModal({
             })}
           </div>
 
-          {(maiorDepreciacao > 0 || hasAvarias) && (
+          {(maiorDepreciacao > 0 || adicionais.length > 0) && (
             <div className="p-3 bg-muted rounded-lg space-y-1">
               {maiorDepreciacao > 0 && (
                 <div className="flex justify-between text-sm">
@@ -273,12 +282,12 @@ export function IniciarIndenizacaoModal({
                   <span className="font-medium text-red-600">-{maiorDepreciacao}%</span>
                 </div>
               )}
-              {hasAvarias && (
-                <div className="flex justify-between text-sm">
-                  <span>Avarias (sobre valor já depreciado):</span>
-                  <span className="font-medium text-orange-600">-20%</span>
+              {adicionais.map(ad => (
+                <div key={ad.flag} className="flex justify-between text-sm">
+                  <span>{ad.label} (sobre valor já depreciado):</span>
+                  <span className="font-medium text-orange-600">-{ad.percentual}%</span>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
