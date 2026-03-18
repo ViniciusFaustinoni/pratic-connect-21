@@ -355,6 +355,9 @@ serve(async (req) => {
             name: signerName || undefined,
             email: signerEmail,
             action: "SIGN",
+            configs: {
+              cpf: (clienteCpf || contrato.cliente_cpf || contrato.associados?.cpf || contrato.leads?.cpf || '').replace(/\D/g, ''),
+            },
             positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
           },
         ],

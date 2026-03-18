@@ -217,6 +217,9 @@ ${conteudoHTML}
           name: associado.nome,
           email: associado.email,
           action: "SIGN",
+          configs: {
+            cpf: (associado.cpf || '').replace(/\D/g, ''),
+          },
           positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
         }],
         file: null,

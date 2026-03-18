@@ -286,8 +286,12 @@ serve(async (req) => {
         },
         signers: [
           {
+            name: params.clienteNome,
             email: params.clienteEmail,
             action: "SIGN",
+            configs: {
+              cpf: (params.clienteCpf || '').replace(/\D/g, ''),
+            },
             positions: [
               {
                 x: "50",
