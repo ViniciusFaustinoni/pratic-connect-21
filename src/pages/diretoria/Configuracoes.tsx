@@ -259,6 +259,18 @@ export default function ConfiguracoesSistema() {
           </div>
         );
 
+      case 'regras_depreciacao':
+        if (!Array.isArray(parsed)) return null;
+        return (
+          <div className="space-y-2">
+            <DepreciacaoEditor
+              items={parsed as { flag: string; label: string; percentual: number; adicional?: boolean }[]}
+              onChange={handleJsonChange}
+            />
+            {saveBtn}
+          </div>
+        );
+
       default:
         return null;
     }

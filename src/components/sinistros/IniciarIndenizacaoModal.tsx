@@ -256,18 +256,18 @@ export function IniciarIndenizacaoModal({
               </p>
             </div>
             {DEPRECIACOES.map(dep => {
-              const isAdditional = 'isAdditional' in dep && dep.isAdditional;
-              const isHighest = !isAdditional && depreciacoes[dep.key] && dep.percentual === maiorDepreciacao;
+              const isAdditional = !!dep.adicional;
+              const isHighest = !isAdditional && depreciacoesState[dep.flag] && dep.percentual === maiorDepreciacao;
               return (
-                <div key={dep.key} className="flex items-center justify-between">
+                <div key={dep.flag} className="flex items-center justify-between">
                   <div className="flex items-center gap-2">
                     <Switch
-                      checked={!!depreciacoes[dep.key]}
-                      onCheckedChange={(checked) => setDepreciacoes(prev => ({ ...prev, [dep.key]: checked }))}
+                      checked={!!depreciacoesState[dep.flag]}
+                      onCheckedChange={(checked) => setDepreciacoesState(prev => ({ ...prev, [dep.flag]: checked }))}
                     />
                     <span className="text-sm">{dep.label}</span>
                   </div>
-                  <span className={`text-sm ${isHighest ? 'font-bold text-red-600' : isAdditional && depreciacoes[dep.key] ? 'font-bold text-orange-600' : 'text-muted-foreground'}`}>
+                  <span className={`text-sm ${isHighest ? 'font-bold text-red-600' : isAdditional && depreciacoesState[dep.flag] ? 'font-bold text-orange-600' : 'text-muted-foreground'}`}>
                     -{dep.percentual}%{isAdditional ? ' (adicional)' : ''}
                   </span>
                 </div>
