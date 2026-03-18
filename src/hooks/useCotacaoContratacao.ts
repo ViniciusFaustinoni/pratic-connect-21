@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
+import { validateCPF } from '@/lib/validations';
 import type { Tables } from '@/integrations/supabase/types';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import type { PlanoOpcao } from '@/components/cotacao-publica/EscolhaPlano';
@@ -419,6 +420,12 @@ export function useCotacaoContratacao(token: string | undefined) {
     mutationFn: async (dados: DadosPessoaisForm) => {
       if (!cotacao) throw new Error('Cotação não encontrada');
 
+      // Validar CPF antes de persistir
+      const cpfLimpo = (dados.cpf || '').replace(/\D/g, '');
+      if (cpfLimpo && !validateCPF(cpfLimpo)) {
+        throw new Error('O CPF informado é inválido. Corrija os dígitos antes de continuar.');
+      }
+
       // 1. Salvar dados pessoais + dados do veículo extraídos do CRLV
       const { error } = await publicSupabase
         .from('cotacoes')
@@ -457,16 +464,8 @@ export function useCotacaoContratacao(token: string | undefined) {
 
       if (error) throw error;
 
-      // 2. Gerar proposta automaticamente se ainda não existir
-      if (!cotacao.contrato_gerado_id) {
-        try {
-          await gerarPropostaAutomatica.mutateAsync(cotacao.id);
-          console.log('[useCotacaoContratacao] Proposta gerada automaticamente após dados pessoais');
-        } catch (propostaError) {
-          console.error('[useCotacaoContratacao] Erro ao gerar proposta automática:', propostaError);
-          // Não impede o fluxo - proposta pode ser gerada depois
-        }
-      }
+      // NOTA: Geração de contrato removida daqui. O contrato será gerado
+      // exclusivamente na EtapaAssinaturaContrato para evitar loops de erro.
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
@@ -538,45 +537,32 @@ export function useCotacaoContratacao(token: string | undefined) {
     },
   });
 
-  // Confirmar pagamento e gerar contrato
+  // Confirmar pagamento (NÃO gera contrato — o contrato já deve existir via EtapaAssinatura)
   const confirmarPagamento = useMutation({
     mutationFn: async () => {
       if (!cotacao) throw new Error('Cotação não encontrada');
 
-      // 1. Atualizar status do pagamento
+      // Apenas atualizar status — contrato já foi gerado na etapa de assinatura
+      const updateData: Record<string, string> = {
+        status_contratacao: 'pagamento_ok',
+      };
+      
+      // Se cotação ainda não está 'aceita', marcar
+      if (cotacao.status !== 'aceita') {
+        updateData.status = 'aceita';
+      }
+
       const { error: updateError } = await publicSupabase
         .from('cotacoes')
-        .update({ status_contratacao: 'pagamento_ok' })
+        .update(updateData)
         .eq('id', cotacao.id);
 
       if (updateError) throw updateError;
-
-      // 2. Gerar contrato via edge function (usa publicSupabase para invocar)
-      const { data, error: fnError } = await publicSupabase.functions.invoke('contrato-gerar', {
-        body: { cotacao_id: cotacao.id },
-      });
-
-      if (fnError) throw fnError;
-
-      // 3. Atualizar cotação com ID do contrato gerado
-      if (data?.contrato?.id) {
-        await publicSupabase
-          .from('cotacoes')
-          .update({
-            contrato_gerado_id: data.contrato.id,
-            status_contratacao: 'contrato_gerado',
-            status: 'aceita',
-          })
-          .eq('id', cotacao.id);
-      }
-
-      return data;
     },
     onSuccess: async () => {
-      // Aguardar invalidação e refetch para garantir dados atualizados antes de mudar de etapa
       await queryClient.invalidateQueries({ queryKey: ['cotacao-contratacao', token] });
       await queryClient.refetchQueries({ queryKey: ['cotacao-contratacao', token] });
-      setEtapaAtual(5); // Ir para conclusão (etapa 5 no novo fluxo)
+      setEtapaAtual(5);
       toast.success('Pagamento confirmado! Sua cobertura está ativa.');
     },
     onError: (error: Error) => {

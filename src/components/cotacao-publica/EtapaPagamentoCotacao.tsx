@@ -48,6 +48,7 @@ interface CobrancaData {
 type FormaPagamento = 'PIX' | 'CREDIT_CARD';
 
 type EtapaInterna = 'gerando_contrato' | 'criando_cobranca' | 'aguardando_pagamento' | 'pago' | 'erro';
+// NOTA: 'gerando_contrato' agora é apenas "buscando contrato" — não gera mais
 
 export function EtapaPagamentoCotacao({
   cotacaoId,
@@ -70,14 +71,13 @@ export function EtapaPagamentoCotacao({
   const [adesaoZerada, setAdesaoZerada] = useState(false);
   const [msgAdesaoZerada, setMsgAdesaoZerada] = useState<string>('');
 
-  // 1. Gerar contrato ao montar
-  const gerarContrato = useCallback(async () => {
+  // 1. Buscar contrato existente (NÃO gera — contrato deve existir da etapa de assinatura)
+  const buscarContrato = useCallback(async () => {
     try {
       setEtapaInterna('gerando_contrato');
       setErro(null);
-      console.log('[EtapaPagamento] Verificando/gerando contrato para cotação:', cotacaoId);
+      console.log('[EtapaPagamento] Buscando contrato existente para cotação:', cotacaoId);
 
-      // Primeiro, verificar se já existe contrato vinculado à cotação
       const { data: cotacao, error: cotacaoError } = await publicSupabase
         .from('cotacoes')
         .select('contrato_gerado_id')
@@ -87,34 +87,16 @@ export function EtapaPagamentoCotacao({
       if (cotacaoError) throw cotacaoError;
 
       if (cotacao?.contrato_gerado_id) {
-        console.log('[EtapaPagamento] Contrato já existe:', cotacao.contrato_gerado_id);
+        console.log('[EtapaPagamento] Contrato encontrado:', cotacao.contrato_gerado_id);
         setContratoId(cotacao.contrato_gerado_id);
         return cotacao.contrato_gerado_id;
       }
 
-      // Gerar contrato via edge function
-      console.log('[EtapaPagamento] Gerando novo contrato...');
-      const { data, error } = await publicSupabase.functions.invoke('contrato-gerar', {
-        body: { cotacao_id: cotacaoId },
-      });
-
-      if (error) throw error;
-      if (!data?.success) throw new Error(data?.error || 'Erro ao gerar contrato');
-
-      const novoContratoId = data.contrato.id;
-      console.log('[EtapaPagamento] Contrato gerado:', novoContratoId);
-
-      // Atualizar cotação com o ID do contrato
-      await publicSupabase
-        .from('cotacoes')
-        .update({ contrato_gerado_id: novoContratoId })
-        .eq('id', cotacaoId);
-
-      setContratoId(novoContratoId);
-      return novoContratoId;
+      // Sem contrato — não tenta gerar, orienta o usuário
+      throw new Error('Contrato não encontrado. Volte para a etapa de assinatura para gerar o contrato.');
     } catch (error: any) {
-      console.error('[EtapaPagamento] Erro ao gerar contrato:', error);
-      setErro(error.message || 'Erro ao gerar contrato');
+      console.error('[EtapaPagamento] Erro ao buscar contrato:', error);
+      setErro(error.message || 'Erro ao buscar contrato');
       setEtapaInterna('erro');
       return null;
     }
@@ -236,7 +218,6 @@ export function EtapaPagamentoCotacao({
       if (valorAdesao <= 0) {
         console.log('[EtapaPagamento] Adesão zerada — pulando cobrança ASAAS');
 
-        // Buscar mensagem configurada
         const { data: configMsg } = await publicSupabase
           .from('configuracoes')
           .select('valor')
@@ -246,17 +227,15 @@ export function EtapaPagamentoCotacao({
         const msg = configMsg?.valor || 'Parabéns! Sua adesão foi isenta. Bem-vindo à Praticcar!';
         setMsgAdesaoZerada(msg);
 
-        // Gerar contrato normalmente
-        const idContrato = await gerarContrato();
+        // Buscar contrato existente (não gera novo)
+        const idContrato = await buscarContrato();
         if (!idContrato) return;
 
-        // Marcar adesão como paga (nada a cobrar)
         await publicSupabase
           .from('contratos')
           .update({ adesao_paga: true })
           .eq('id', idContrato);
 
-        // Criar instalação pós-adesão zerada
         try {
           await publicSupabase.functions.invoke('criar-instalacao-pos-pagamento', {
             body: { cotacaoId, skipPaymentCheck: true },
@@ -267,20 +246,18 @@ export function EtapaPagamentoCotacao({
 
         setAdesaoZerada(true);
         setEtapaInterna('pago');
-
-        // Avançar após breve delay
         setTimeout(() => onPagamentoConfirmado(), 1500);
         return;
       }
 
-      // Se não está pago, continuar fluxo normal
-      const idContrato = await gerarContrato();
+      // Se não está pago, buscar contrato existente e criar cobrança
+      const idContrato = await buscarContrato();
       if (idContrato) {
         await criarCobranca(idContrato);
       }
     };
     inicializar();
-  }, [cotacaoId, gerarContrato, criarCobranca, valorAdesao, onPagamentoConfirmado]);
+  }, [cotacaoId, buscarContrato, criarCobranca, valorAdesao, onPagamentoConfirmado]);
 
   // 4. Polling automático para verificar pagamento - consulta diretamente na API do Asaas
   useEffect(() => {
@@ -394,7 +371,7 @@ export function EtapaPagamentoCotacao({
   // Tentar novamente
   const tentarNovamente = async () => {
     setErro(null);
-    const idContrato = await gerarContrato();
+    const idContrato = await buscarContrato();
     if (idContrato) {
       await criarCobranca(idContrato);
     }

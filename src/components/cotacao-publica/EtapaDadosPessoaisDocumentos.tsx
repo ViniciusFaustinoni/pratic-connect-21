@@ -1,4 +1,5 @@
 import { useState, useCallback, useEffect } from 'react';
+import { validateCPF } from '@/lib/validations';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -99,6 +100,7 @@ export function EtapaDadosPessoaisDocumentos({
 }: EtapaDadosPessoaisDocumentosProps) {
   const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
   const [dadosExtraidos, setDadosExtraidos] = useState<DadosExtraidos>({});
+  const [cpfManual, setCpfManual] = useState(''); // Para correção manual quando OCR extrai CPF inválido
   
   // Campos manuais (não podem ser extraídos de documentos)
   const [email, setEmail] = useState(defaultValues?.email || '');
@@ -132,12 +134,17 @@ export function EtapaDadosPessoaisDocumentos({
   const temCrlv = tiposIdentificados.includes('crlv') || tiposIdentificados.includes('nota_fiscal_veiculo');
   
   // Verificar dados extraídos
-  const temDadosPessoais = !!(dadosExtraidos.nome && dadosExtraidos.cpf);
+  const cpfEfetivo = cpfManual || dadosExtraidos.cpf || '';
+  const cpfLimpoEfetivo = cpfEfetivo.replace(/\D/g, '');
+  const cpfValido = cpfLimpoEfetivo.length === 11 && validateCPF(cpfLimpoEfetivo);
+  const cpfExtraidoInvalido = !!(dadosExtraidos.cpf && !validateCPF(dadosExtraidos.cpf.replace(/\D/g, '')));
+  
+  const temDadosPessoais = !!(dadosExtraidos.nome && cpfEfetivo);
   const temEndereco = !!(dadosExtraidos.logradouro && dadosExtraidos.cidade && dadosExtraidos.uf);
   const temDadosVeiculo = !!(dadosExtraidos.veiculo_placa || dadosExtraidos.veiculo_chassi);
   const temContato = !!(email && telefone);
   
-  const podeAvancar = temDadosPessoais && temEndereco && temDadosVeiculo && temContato;
+  const podeAvancar = temDadosPessoais && temEndereco && temDadosVeiculo && temContato && cpfValido;
 
   const formatTelefone = (value: string) => {
     const cleaned = value.replace(/\D/g, '');
@@ -253,10 +260,19 @@ export function EtapaDadosPessoaisDocumentos({
       toast.error('Envie todos os documentos necessários e preencha email e telefone.');
       return;
     }
+
+    // Validar CPF extraído pelo OCR antes de persistir
+    const cpfExtraido = dadosExtraidos.cpf || '';
+    const cpfLimpo = cpfExtraido.replace(/\D/g, '');
+    if (!cpfLimpo || !validateCPF(cpfLimpo)) {
+      toast.error('O CPF extraído do documento é inválido. Corrija manualmente antes de continuar.');
+      return;
+    }
     
+    // Usar CPF corrigido manualmente se disponível
     const dados: DadosPessoaisForm = {
       nome: dadosExtraidos.nome || '',
-      cpf: dadosExtraidos.cpf || '',
+      cpf: cpfEfetivo,
       email,
       telefone,
       data_nascimento: dadosExtraidos.data_nascimento || '',
@@ -411,7 +427,17 @@ export function EtapaDadosPessoaisDocumentos({
               {temDadosPessoais && (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground mt-1">
                   {dadosExtraidos.nome && <div><span className="font-medium">Nome:</span> {dadosExtraidos.nome}</div>}
-                  {dadosExtraidos.cpf && <div><span className="font-medium">CPF:</span> {dadosExtraidos.cpf}</div>}
+                  {dadosExtraidos.cpf && (
+                    <div>
+                      <span className="font-medium">CPF:</span> {cpfManual || dadosExtraidos.cpf}
+                      {cpfExtraidoInvalido && !cpfValido && (
+                        <span className="text-destructive ml-1">(inválido)</span>
+                      )}
+                      {cpfManual && cpfValido && (
+                        <span className="text-success ml-1">(corrigido ✓)</span>
+                      )}
+                    </div>
+                  )}
                   {dadosExtraidos.rg && <div><span className="font-medium">RG:</span> {dadosExtraidos.rg}{dadosExtraidos.rg_orgao ? ` (${dadosExtraidos.rg_orgao})` : ''}</div>}
                   {dadosExtraidos.data_nascimento && <div><span className="font-medium">Nascimento:</span> {dadosExtraidos.data_nascimento.includes('-') ? dadosExtraidos.data_nascimento.split('-').reverse().join('/') : dadosExtraidos.data_nascimento}</div>}
                   {dadosExtraidos.cnh && <div><span className="font-medium">Nº Registro:</span> {dadosExtraidos.cnh}</div>}
@@ -421,6 +447,44 @@ export function EtapaDadosPessoaisDocumentos({
               )}
             </div>
           </div>
+
+          {/* Correção de CPF inválido */}
+          {cpfExtraidoInvalido && (
+            <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20 space-y-2">
+              <p className="text-sm text-destructive font-medium">
+                ⚠️ O CPF extraído do documento é inválido
+              </p>
+              <p className="text-xs text-muted-foreground">
+                A leitura automática capturou um CPF com dígitos incorretos. Digite o CPF correto abaixo:
+              </p>
+              <Input
+                type="text"
+                placeholder="000.000.000-00"
+                value={cpfManual}
+                onChange={(e) => {
+                  // Aplicar máscara de CPF
+                  const v = e.target.value.replace(/\D/g, '');
+                  const masked = v
+                    .replace(/(\d{3})(\d)/, '$1.$2')
+                    .replace(/(\d{3})(\d)/, '$1.$2')
+                    .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+                    .slice(0, 14);
+                  setCpfManual(masked);
+                }}
+                className={cn(
+                  "text-sm",
+                  cpfManual && cpfValido && "border-success",
+                  cpfManual && !cpfValido && cpfManual.length >= 14 && "border-destructive"
+                )}
+              />
+              {cpfManual && cpfManual.length >= 14 && !cpfValido && (
+                <p className="text-xs text-destructive">CPF ainda inválido. Verifique os dígitos.</p>
+              )}
+              {cpfManual && cpfValido && (
+                <p className="text-xs text-success">✓ CPF válido!</p>
+              )}
+            </div>
+          )}
 
           {/* CRLV ou Nota Fiscal */}
           <div className={cn(
