@@ -11,6 +11,34 @@ import {
   calcularPrimeiraMensalidade,
 } from '@/types/termo-filiacao';
 import { type TermoAditivo } from '@/hooks/useAditivos';
+import { useConfiguracaoJson } from '@/hooks/useConteudosSistema';
+import { formatarMoeda } from '@/utils/format';
+
+interface RegraDepreciacao {
+  flag: string;
+  label: string;
+  percentual: number;
+  adicional?: boolean;
+}
+
+const DEPRECIACOES_FALLBACK: RegraDepreciacao[] = [
+  { flag: 'flag_placa_vermelha', label: 'Placa vermelha', percentual: 25 },
+  { flag: 'flag_ex_taxi', label: 'Ex-táxi', percentual: 25 },
+  { flag: 'flag_taxi_ativo', label: 'Táxi ativo', percentual: 25 },
+  { flag: 'flag_chassi_remarcado', label: 'Chassi remarcado', percentual: 30 },
+  { flag: 'flag_leilao', label: 'Veículo de leilão', percentual: 30 },
+  { flag: 'flag_ex_ressarcido', label: 'Já indenizado anteriormente', percentual: 30 },
+  { flag: 'flag_avarias_vistoria', label: 'Avarias pré-existentes (vistoria)', percentual: 20, adicional: true },
+];
+
+const FLAG_MAP: Record<string, string> = {
+  flagPlacaVermelha: 'flag_placa_vermelha',
+  flagExTaxi: 'flag_ex_taxi',
+  flagTaxiAtivo: 'flag_taxi_ativo',
+  flagChassiRemarcado: 'flag_chassi_remarcado',
+  flagLeilao: 'flag_leilao',
+  flagExRessarcido: 'flag_ex_ressarcido',
+};
 
 interface TermoFiliacaoTemplateProps {
   dados: DadosTermoFiliacao;
@@ -22,6 +50,8 @@ export function TermoFiliacaoTemplate({
   aditivos = [] 
 }: TermoFiliacaoTemplateProps) {
   const { cliente, veiculo, plano, contrato, empresa } = dados;
+  const { data: regrasDepreciacao } = useConfiguracaoJson<RegraDepreciacao[]>('regras_depreciacao', DEPRECIACOES_FALLBACK);
+  const regras = regrasDepreciacao ?? DEPRECIACOES_FALLBACK;
   
   const cotaParticipacao = calcularCotaParticipacao(
     veiculo.valorFipe, 
@@ -30,6 +60,30 @@ export function TermoFiliacaoTemplate({
   const primeiraMensalidade = calcularPrimeiraMensalidade(contrato.diaVencimento);
   const dataAssinatura = formatDateExtended(new Date().toISOString());
   const localAssinatura = `${cliente.endereco.cidade}/${cliente.endereco.estado}`;
+
+  // Calcular depreciação
+  const flagsAtivas: string[] = [];
+  if (veiculo.flagPlacaVermelha) flagsAtivas.push('flag_placa_vermelha');
+  if (veiculo.flagExTaxi) flagsAtivas.push('flag_ex_taxi');
+  if (veiculo.flagTaxiAtivo) flagsAtivas.push('flag_taxi_ativo');
+  if (veiculo.flagChassiRemarcado) flagsAtivas.push('flag_chassi_remarcado');
+  if (veiculo.flagLeilao) flagsAtivas.push('flag_leilao');
+  if (veiculo.flagExRessarcido) flagsAtivas.push('flag_ex_ressarcido');
+
+  const regrasConcorrentes = regras.filter(r => !r.adicional && flagsAtivas.includes(r.flag));
+  const regraMaior = regrasConcorrentes.length > 0
+    ? regrasConcorrentes.reduce((a, b) => a.percentual >= b.percentual ? a : b)
+    : null;
+  const temAvarias = !!veiculo.flagAvariaVistoria;
+  const regraAvarias = temAvarias ? regras.find(r => r.flag === 'flag_avarias_vistoria' && r.adicional) : null;
+
+  let valorEstimadoDepreciacao: number | null = null;
+  if (regraMaior) {
+    valorEstimadoDepreciacao = veiculo.valorFipe * (1 - regraMaior.percentual / 100);
+    if (regraAvarias) {
+      valorEstimadoDepreciacao = valorEstimadoDepreciacao * (1 - regraAvarias.percentual / 100);
+    }
+  }
 
   return (
     <div 
@@ -223,6 +277,41 @@ export function TermoFiliacaoTemplate({
             </div>
           ))}
         </div>
+
+        {/* BLOCO DE DEPRECIAÇÃO (condicional) */}
+        {regraMaior && (
+          <div style={{
+            backgroundColor: '#fffbeb',
+            border: '1px solid #d97706',
+            borderLeft: '3px solid #d97706',
+            borderRadius: '4pt',
+            padding: '10pt',
+            margin: '10pt 0',
+          }}>
+            <p style={{ fontWeight: 'bold', marginBottom: '6pt' }}>CONDIÇÃO ESPECIAL DE RESSARCIMENTO:</p>
+            <p style={{ fontSize: '9pt', lineHeight: 1.4, marginBottom: '4pt' }}>
+              Em caso de ressarcimento integral (perda total), o valor FIPE de referência 
+              será reduzido em <strong>{regraMaior.percentual}%</strong> em razão da condição do veículo 
+              (<strong>{regraMaior.label}</strong>), conforme regulamento item 10.4.2.
+            </p>
+            {regraAvarias && (
+              <p style={{ fontSize: '9pt', lineHeight: 1.4, marginBottom: '4pt' }}>
+                Adicionalmente, será aplicado abatimento de <strong>{regraAvarias.percentual}%</strong> sobre o valor 
+                já depreciado, em razão de avarias pré-existentes registradas na vistoria.
+              </p>
+            )}
+            {veiculo.usoAplicativo && (
+              <p style={{ fontSize: '9pt', lineHeight: 1.4, marginBottom: '4pt' }}>
+                A cobertura de 100% da tabela FIPE prevista para veículos de uso por aplicativo 
+                <strong> não se aplica</strong> a este veículo em razão da categoria de depreciação, 
+                conforme regulamento item 10.4.4.
+              </p>
+            )}
+            <p style={{ fontSize: '9pt', marginTop: '6pt' }}>
+              <strong>Valor FIPE:</strong> {formatarMoeda(veiculo.valorFipe)} → <strong>Valor estimado de ressarcimento:</strong> {formatarMoeda(valorEstimadoDepreciacao!)}
+            </p>
+          </div>
+        )}
       </div>
 
       {/* SEÇÃO 4: VALORES E CONDIÇÕES */}

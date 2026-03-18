@@ -1,70 +1,167 @@
+## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
+### Causas Raiz Identificadas
+1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
+2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
+3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-## Plano: Incluir cláusula de depreciação no termo de filiação
+### Correções Aplicadas
 
-### Contexto
+1. **`sga-hinova-sync/index.ts`**:
+   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
+   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
 
-O termo é gerado em dois locais:
-1. **Edge function** (`supabase/functions/_shared/termo-afiliacao-template.ts`) — usado pela Autentique para assinatura digital
-2. **React** (`src/components/cadastro/TermoFiliacaoTemplate.tsx`) — preview/PDF local
+2. **`cron-sga-retry/index.ts`**:
+   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
 
-Nenhum dos dois menciona regras de depreciação. A `VeiculoData` no edge function só tem `leilao` e `uso_aplicativo` como flags; as demais (placa_vermelha, ex_taxi, etc.) não são passadas.
+---
 
-### Alterações
+## Painel de Monitoramento SGA Hinova — ✅ Implementado
 
-**1. `supabase/functions/_shared/termo-afiliacao-utils.ts`**
-- Expandir `VeiculoData` com todas as flags de depreciação: `flag_placa_vermelha`, `flag_ex_taxi`, `flag_taxi_ativo`, `flag_chassi_remarcado`, `flag_ex_ressarcido`, `flag_avarias_vistoria` (todas boolean opcionais)
-- Expandir `TermoAfiliacaoData` com campo opcional `regrasDepreciacao` (array de `{flag, label, percentual, adicional}`)
-- Atualizar `mapearDadosParaTemplate` para popular as novas flags a partir do contrato/veículo
-- Nova função `buscarRegrasDepreciacao(supabase)` que lê a chave `regras_depreciacao` da tabela `configuracoes`
+### O que foi criado
 
-**2. `supabase/functions/_shared/termo-afiliacao-template.ts`**
-- Na seção 3 (Plano e Coberturas), após as coberturas e antes do rastreador, inserir condicional:
-  - Se o veículo tiver alguma flag de depreciação ativa, gerar parágrafo com o percentual e motivo lido de `regrasDepreciacao`
-  - Se `flag_avarias_vistoria` ativa, incluir linha adicional do abatimento composto
-  - Se `uso_aplicativo` + flag de depreciação, incluir aviso de que cobertura 100% FIPE APP não se aplica (reg. 10.4.4)
-- Lógica: identificar a flag ativa com maior percentual entre as concorrentes (mesma lógica do `IniciarIndenizacaoModal`)
+1. **Página `/configuracoes/integracoes/sga-hinova`** com:
+   - Status de conexão com API Hinova (teste em tempo real)
+   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
+   - Logs recentes dos últimos 50 registros
+   - Veículos pendentes (ativos não sincronizados) com envio individual
+   - Histórico de health checks
 
-**3. `supabase/functions/autentique-create/index.ts` e `autentique-create-by-token/index.ts`**
-- Chamar `buscarRegrasDepreciacao` e incluir no `templateData`
-- Buscar flags do veículo vinculado ao contrato (query veículos pelo `veiculo_id` do contrato)
+2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
 
-**4. `src/components/cadastro/TermoFiliacaoTemplate.tsx`**
-- Usar `useConfiguracaoJson('regras_depreciacao')` para buscar regras
-- Após a seção 3 (coberturas), adicionar bloco condicional com mesma lógica
-- Verificar flags via props `dados.veiculo` (precisará de novas props)
+3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
 
-**5. `src/types/termo-filiacao.ts`**
-- Adicionar flags de depreciação opcionais à interface `VeiculoData`: `flagPlacaVermelha?`, `flagExTaxi?`, `flagTaxiAtivo?`, `flagChassiRemarcado?`, `flagLeilao?`, `flagExRessarcido?`, `flagAvariaVistoria?`
+4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
 
-### Parágrafo gerado (exemplo)
+---
 
-```html
-<div class="highlight-box" style="border-left: 3px solid #d97706;">
-  <strong>CONDIÇÃO ESPECIAL DE RESSARCIMENTO:</strong>
-  <p>Em caso de ressarcimento integral (perda total), o valor FIPE de referência 
-  será reduzido em <strong>30%</strong> em razão da condição do veículo 
-  (<strong>Veículo de leilão</strong>), conforme regulamento item 10.4.2.</p>
-  
-  <!-- Se avarias -->
-  <p>Adicionalmente, será aplicado abatimento de <strong>20%</strong> sobre o valor 
-  já depreciado, em razão de avarias pré-existentes registradas na vistoria.</p>
-  
-  <!-- Se APP + deságio -->
-  <p>A cobertura de 100% da tabela FIPE prevista para veículos de uso por aplicativo 
-  <strong>não se aplica</strong> a este veículo em razão da categoria de depreciação, 
-  conforme regulamento item 10.4.4.</p>
-</div>
+## Health Check Universal para Todas as Integrações — ✅ Implementado
+
+### O que foi criado
+
+1. **Tabela `integracoes_health_checks`** (genérica):
+   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
+   - Dados existentes do SGA migrados automaticamente
+   - RLS: leitura para autenticados, escrita para service_role
+
+2. **Edge Function `cron-integracoes-health-check`**:
+   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
+   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
+   - Notifica admins (role `diretor`) se qualquer integração falhar
+   - Grava resultado por integração na tabela genérica
+
+3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
+   - Props: `integracao` (slug) e `titulo` (opcional)
+   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
+   - Botão "Testar agora" invoca a edge function para a integração específica
+
+4. **Hook `useIntegracaoHealthCheck(integracao)`**:
+   - Busca histórico filtrado por integração
+   - Mutation `testNow` para teste manual
+   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
+
+5. **Integração nas páginas**:
+   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
+   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
+   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
+
+6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
+   ```sql
+   select cron.schedule(
+     'integracoes-health-check-3x-dia',
+     '0 8,13,18 * * *',
+     $$ select net.http_post(
+       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
+       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
+       body:='{}'::jsonb
+     ) as request_id; $$
+   );
+   ```
+
+### Arquivos criados/modificados
+- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
+- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
+- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
+- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
+- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
+- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
+- `supabase/config.toml` — verify_jwt para nova function
+
+---
+
+## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
+
+### Causas Raiz
+1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
+2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
+3. Triggers de sync sobrescreviam coordenadas válidas com `null`
+
+### Correções Aplicadas
+
+1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
+
+2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
+
+3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
+
+4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
+
+---
+
+## Correção Triggers Enum Mismatch (status_instalacao → status_servico) — ✅ Implementado
+
+### Causa Raiz
+Triggers `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` faziam `status = NEW.status` direto, mas `NEW.status` é `status_instalacao` e `servicos.status` é `status_servico` — erro PostgreSQL 42804 abortava toda atribuição automática.
+
+### Correções Aplicadas
+1. **Função `map_to_status_servico(text)`**: Mapeamento explícito e imutável de qualquer texto para `status_servico`, com fallback seguro.
+2. **Triggers corrigidos**: Ambos agora usam `public.map_to_status_servico(NEW.status::text)` em vez de atribuição direta.
+3. **Observabilidade**: `processar-encaixes-automaticos` agora loga `code/message/details/hint` do erro antes de classificar como concorrência.
+
+---
+
+## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
+
+### Bloqueios de adesão zero removidos
+
+| Arquivo | Correção |
+|---------|----------|
+| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
+| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
+| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
+
+### Geração automática de lançamentos CC vendedor externo
+
+Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
+1. Após criar instalação, busca `vendedor_id` da cotação
+2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
+3. Busca configurações de comissão da tabela `configuracoes`
+4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
+5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
+
+---
+
+## Fluxo Completo Vendedor Externo — Autovistoria até Ativação 360 — ✅ Implementado
+
+### Gaps Corrigidos
+
+| Gap | Arquivo | Correção |
+|-----|---------|----------|
+| Propostas de autovistoria não apareciam no cadastro | `usePropostasPendentes.ts` L523 | Filtro agora permite propostas com `temAutovistoria` ou `temVistoriaBaseRealizada` mesmo sem instalação |
+| Race condition na isenção de adesão | `EtapaPagamentoCotacao.tsx` L245 | Passa `skipPaymentCheck: true` no body da Edge Function |
+| Edge Function falhava para autovistoria sem data | `criar-instalacao-pos-pagamento/index.ts` | Autovistoria sem data: pula instalação, mas gera lançamentos CC normalmente |
+| Aprovação ignorava preferências de agendamento | `usePropostasPendentes.ts` L1538-1590 | Busca `vistoria_completa_*` da cotação para criar instalação com dados do cliente |
+
+### Fluxo Corrigido
+
+```text
+Vendedor externo cria cotação (4 cenários)
+  → Cliente abre link → Plano → Docs → Assinatura → Vistoria → Pagamento/Isenção
+    → Edge Function gera lançamentos CC (mesmo sem data de instalação)
+    → Etapa 5: Cliente preenche preferência de agendamento
+    → Tela "Em Análise Cadastral"
+    → Proposta aparece no cadastro (filtro corrigido)
+    → Analista aprova → cobertura_roubo_furto = true
+    → Instalação criada COM dados de preferência do cliente
+    → Atribuição automática → Instalação → Proteção 360°
 ```
-
-### Arquivos modificados
-
-| Arquivo | Alteração |
-|---|---|
-| `supabase/functions/_shared/termo-afiliacao-utils.ts` | Novas flags em VeiculoData, buscarRegrasDepreciacao(), regrasDepreciacao em TermoAfiliacaoData |
-| `supabase/functions/_shared/termo-afiliacao-template.ts` | Bloco condicional de depreciação na seção 3 |
-| `supabase/functions/autentique-create/index.ts` | Buscar regras e flags do veículo |
-| `supabase/functions/autentique-create-by-token/index.ts` | Idem |
-| `src/types/termo-filiacao.ts` | Flags opcionais em VeiculoData |
-| `src/components/cadastro/TermoFiliacaoTemplate.tsx` | Bloco condicional com useConfiguracaoJson |
-

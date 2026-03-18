@@ -7,7 +7,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { gerarPosicoesAssinatura, buscarPosicoesConfig } from "../_shared/autentique-positions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/termo-afiliacao-template.ts";
-import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa, buscarRegrasVenda } from "../_shared/termo-afiliacao-utils.ts";
+import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa, buscarRegrasVenda, buscarRegrasDepreciacao } from "../_shared/termo-afiliacao-utils.ts";
 import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, generateSecaoAssinatura, markdownParaHTML, hasSignatureArea, sanitizeSignatureBlocks, exigeRastreador, extrairCodigosBeneficios } from "../_shared/template-utils.ts";
 
 const corsHeaders = {
@@ -159,7 +159,21 @@ serve(async (req) => {
     const configRastreador = await buscarConfigRastreador(supabase);
 
     // ============= BUSCAR REGRAS DE VENDA =============
-    const { regras: regrasVenda, faltantes: regrasFaltantes } = await buscarRegrasVenda(supabase);
+    const [{ regras: regrasVenda, faltantes: regrasFaltantes }, regrasDepreciacao] = await Promise.all([
+      buscarRegrasVenda(supabase),
+      buscarRegrasDepreciacao(supabase),
+    ]);
+
+    // ============= BUSCAR VEÍCULO DO BANCO (FLAGS DE DEPRECIAÇÃO) =============
+    let veiculoDB: any = null;
+    if (contrato.veiculo_id) {
+      const { data: veiculoData } = await supabase
+        .from('veiculos')
+        .select('flag_placa_vermelha, flag_ex_taxi, flag_taxi_ativo, flag_chassi_remarcado, flag_ex_ressarcido, flag_avarias_vistoria')
+        .eq('id', contrato.veiculo_id)
+        .maybeSingle();
+      veiculoDB = veiculoData;
+    }
 
     // Obter dados do cliente (associado tem prioridade, depois lead)
     const cliente = contrato.associados || contrato.leads;
@@ -184,9 +198,12 @@ serve(async (req) => {
       contrato.planos,
       empresaConfig,
       contrato.leads,
-      contrato.associados
+      contrato.associados,
+      undefined,
+      veiculoDB
     );
     templateData.configRastreador = configRastreador;
+    templateData.regrasDepreciacao = regrasDepreciacao;
     if (regrasVenda) {
       templateData.regrasVenda = regrasVenda;
     }
