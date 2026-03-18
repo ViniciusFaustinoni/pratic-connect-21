@@ -133,7 +133,7 @@ export function IniciarIndenizacaoModal({
         status_anterior: 'em_recuperacao',
         status_novo: 'aguardando_pagamento',
         usuario_id: user.id,
-        observacao: `Indenização integral iniciada. Valor FIPE: ${formatCurrency(valorBase)}, ${depInfo}${avariasInfo}, Valor final: ${formatCurrency(valorFinal)}. ${observacoes}`,
+        observacao: `Indenização integral iniciada. Valor FIPE: ${formatCurrency(valorBase)}, ${depInfo}${adicionaisInfo}, Valor final: ${formatCurrency(valorFinal)}. ${observacoes}`,
       });
 
       // 3. Criar documentos pendentes de indenização
