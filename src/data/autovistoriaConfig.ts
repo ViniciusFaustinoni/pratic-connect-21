@@ -295,7 +295,7 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
       'Reflexos no painel ou vidro',
       'Foto tremida ou fora de foco',
     ],
-    dicaExtra: 'Esta é a última foto! Após enviar, grave o vídeo 360° para concluir.',
+    dicaExtra: 'Esta é a última foto! Após enviar, conclua a vistoria.',
   },
 ];
 
