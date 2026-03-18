@@ -59,6 +59,7 @@ const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof F
   cnh: { label: 'CNH', icon: User },
   rg: { label: 'RG', icon: User },
   crlv: { label: 'CRLV', icon: Car },
+  nota_fiscal_veiculo: { label: 'Nota Fiscal do Veículo', icon: FileText },
   comprovante_residencia: { label: 'Comprovante de Residência', icon: Home },
   outro: { label: 'Documento', icon: FileText },
 };
@@ -66,7 +67,7 @@ const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof F
 const documentosEsperados = [
   { tipo: 'cnh' as const, label: 'CNH ou RG', alternativa: 'rg' as const },
   { tipo: 'comprovante_residencia' as const, label: 'Comprovante de Residência' },
-  { tipo: 'crlv' as const, label: 'CRLV do Veículo' },
+  { tipo: 'crlv' as const, label: 'CRLV ou Nota Fiscal do Veículo', alternativa: 'nota_fiscal_veiculo' as const },
 ];
 
 const MIME_TYPE_MAP: Record<string, string> = {
