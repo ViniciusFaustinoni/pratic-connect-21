@@ -13,7 +13,7 @@ export default function OficinasRelatorios() {
       </div>
 
       <Tabs defaultValue="geral" className="w-full">
-        <TabsList className="grid w-full grid-cols-4">
+        <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
           <TabsTrigger value="geral">Visão Geral</TabsTrigger>
           <TabsTrigger value="oficinas">Oficinas</TabsTrigger>
           <TabsTrigger value="autocenters">Auto Centers</TabsTrigger>

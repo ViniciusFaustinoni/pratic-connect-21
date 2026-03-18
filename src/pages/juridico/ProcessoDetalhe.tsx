@@ -309,7 +309,7 @@ export default function ProcessoDetalhe() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-7">
+        <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7">
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="andamentos">Andamentos</TabsTrigger>
           <TabsTrigger value="prazos">

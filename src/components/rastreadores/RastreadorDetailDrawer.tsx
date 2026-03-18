@@ -206,7 +206,7 @@ export function RastreadorDetailDrawer({
             </SheetHeader>
 
             <Tabs defaultValue="info" className="mt-6">
-              <TabsList className="grid w-full grid-cols-4">
+              <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
                 <TabsTrigger value="info">Informações</TabsTrigger>
                 <TabsTrigger value="mapa" disabled={!isInstalled}>
                   Rastreamento

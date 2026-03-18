@@ -492,7 +492,7 @@ export default function CasoJuridicoDetalhe() {
 
       {/* Tabs */}
       <Tabs value={activeTab} onValueChange={setActiveTab}>
-        <TabsList className="grid w-full grid-cols-5">
+        <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5">
           <TabsTrigger value="resumo">Resumo</TabsTrigger>
           <TabsTrigger value="parecer">Parecer</TabsTrigger>
           <TabsTrigger value="decisao">Decisão</TabsTrigger>

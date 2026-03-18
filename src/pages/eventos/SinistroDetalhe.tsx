@@ -292,7 +292,7 @@ export default function SinistroDetalhe() {
         {/* Tabs - Left */}
         <div className="lg:col-span-2">
           <Tabs defaultValue="info" className="w-full">
-            <TabsList className="w-full grid grid-cols-5 h-11">
+            <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 h-auto">
               <TabsTrigger value="info" className="text-xs sm:text-sm gap-1">
                 <FileText className="h-3.5 w-3.5 hidden sm:block" /> Informações
               </TabsTrigger>
