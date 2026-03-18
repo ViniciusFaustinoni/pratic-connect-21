@@ -188,23 +188,6 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     e.target.value = '';
   };
 
-  const handleVideoCapture = async (file: File) => {
-    setUploadingVideo(true);
-    try {
-      const result = await uploadMutation.mutateAsync({
-        cotacaoId,
-        fotoId: 'video_360',
-        file,
-      });
-      setVideoUrl(result.url);
-      toast.success('Vídeo 360° enviado com sucesso!');
-    } catch (error) {
-      console.error('[AutovistoriaCotacao] Erro no upload do vídeo:', error);
-      toast.error('Erro ao enviar vídeo. Tente novamente.');
-    } finally {
-      setUploadingVideo(false);
-    }
-  };
   
   const handleFinalizar = async () => {
     // Prevenir duplo clique
