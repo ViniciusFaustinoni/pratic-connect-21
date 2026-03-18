@@ -17,6 +17,7 @@ import {
   Fuel
 } from 'lucide-react';
 import { useCategoriasVeiculo, useObservacoesCategoria } from '@/hooks/useConteudosSistema';
+import { BlocoDepreciacaoCotacao } from './BlocoDepreciacaoCotacao';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { PlanoCardCotacao } from './PlanoCardCotacao';
 import { CurrencyInput } from '@/components/inputs/MaskedInputs';
@@ -242,6 +243,13 @@ export function EtapaResultado({
           </Button>
         )}
       </div>
+
+      {/* Bloco informativo de depreciação */}
+      {categoria && valorFipe && Object.keys({
+        placa_vermelha: 1, ex_taxi: 1, taxi: 1, chassi_remarcado: 1, leilao: 1, ressarcimento_integral: 1,
+      }).includes(categoria) && (
+        <BlocoDepreciacaoCotacao categoria={categoria} valorFipe={valorFipe} />
+      )}
 
       {/* Ações */}
       <Card className="border-border bg-card">
