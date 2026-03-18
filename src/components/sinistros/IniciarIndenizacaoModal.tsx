@@ -127,7 +127,7 @@ export function IniciarIndenizacaoModal({
 
       // 2. Registrar histórico
       const depInfo = maiorDepreciacao > 0 ? `Maior depreciação: ${maiorDepreciacao}%` : 'Sem depreciação';
-      const avariasInfo = hasAvarias ? `, Avarias: -20% adicional` : '';
+      const adicionaisInfo = adicionais.length > 0 ? `, Adicionais: ${adicionais.map(a => `-${a.percentual}%`).join(', ')}` : '';
       await supabase.from('sinistro_historico').insert({
         sinistro_id: sinistroId,
         status_anterior: 'em_recuperacao',
