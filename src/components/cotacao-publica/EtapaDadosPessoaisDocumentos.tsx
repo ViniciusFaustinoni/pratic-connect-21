@@ -448,6 +448,44 @@ export function EtapaDadosPessoaisDocumentos({
             </div>
           </div>
 
+          {/* Correção de CPF inválido */}
+          {cpfExtraidoInvalido && (
+            <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20 space-y-2">
+              <p className="text-sm text-destructive font-medium">
+                ⚠️ O CPF extraído do documento é inválido
+              </p>
+              <p className="text-xs text-muted-foreground">
+                A leitura automática capturou um CPF com dígitos incorretos. Digite o CPF correto abaixo:
+              </p>
+              <Input
+                type="text"
+                placeholder="000.000.000-00"
+                value={cpfManual}
+                onChange={(e) => {
+                  // Aplicar máscara de CPF
+                  const v = e.target.value.replace(/\D/g, '');
+                  const masked = v
+                    .replace(/(\d{3})(\d)/, '$1.$2')
+                    .replace(/(\d{3})(\d)/, '$1.$2')
+                    .replace(/(\d{3})(\d{1,2})/, '$1-$2')
+                    .slice(0, 14);
+                  setCpfManual(masked);
+                }}
+                className={cn(
+                  "text-sm",
+                  cpfManual && cpfValido && "border-success",
+                  cpfManual && !cpfValido && cpfManual.length >= 14 && "border-destructive"
+                )}
+              />
+              {cpfManual && cpfManual.length >= 14 && !cpfValido && (
+                <p className="text-xs text-destructive">CPF ainda inválido. Verifique os dígitos.</p>
+              )}
+              {cpfManual && cpfValido && (
+                <p className="text-xs text-success">✓ CPF válido!</p>
+              )}
+            </div>
+          )}
+
           {/* CRLV ou Nota Fiscal */}
           <div className={cn(
             'flex items-center gap-3 p-3 rounded-lg transition-colors',
