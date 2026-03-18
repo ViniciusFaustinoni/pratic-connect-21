@@ -405,6 +405,18 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Marcas aceitas de motos
   const { data: marcasAceitasMotos } = useMarcasAceitasMotos();
 
+  // Filtrar marcas por tipo e lista aceita (motos)
+  const marcasFiltradas = useMemo(() => {
+    return marcas
+      .filter((m) => m.tipoFipe === tipoFipeSelecionado)
+      .filter((m) => {
+        if (tipoFipeSelecionado !== 'motos') return true;
+        const lista = marcasAceitasMotos ?? [];
+        return lista.some(aceita => m.nome.toLowerCase().includes(aceita.toLowerCase()));
+      })
+      .map((m) => ({ value: `${m.tipoFipe}:${m.codigo}`, label: m.nome }));
+  }, [marcas, tipoFipeSelecionado, marcasAceitasMotos]);
+
 
   const dadosAssociadoValidos = useMemo(() => {
     const nomeValido = nomeAssociado.trim().length >= 3;

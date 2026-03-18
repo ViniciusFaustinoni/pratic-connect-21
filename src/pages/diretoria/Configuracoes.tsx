@@ -276,13 +276,38 @@ export default function ConfiguracoesSistema() {
         if (!Array.isArray(parsed)) return null;
         return (
           <div className="space-y-2">
-            <ValueLabelListEditor
-              rows={(parsed as string[]).map((v, i) => ({ value: v, label: v }))}
-              onChange={(rows) => handleJsonChange(rows.map(r => r.value))}
-              valueLabel="Marca"
-              labelLabel=""
-              hideLabel
-            />
+            <div className="space-y-2">
+              {(parsed as string[]).map((marca, i) => (
+                <div key={i} className="flex items-center gap-2">
+                  <Input
+                    value={marca}
+                    onChange={(e) => {
+                      const updated = [...(parsed as string[])];
+                      updated[i] = e.target.value;
+                      handleJsonChange(updated);
+                    }}
+                    placeholder="Nome da marca"
+                  />
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => {
+                      const updated = (parsed as string[]).filter((_, idx) => idx !== i);
+                      handleJsonChange(updated);
+                    }}
+                  >
+                    ✕
+                  </Button>
+                </div>
+              ))}
+              <Button
+                variant="outline"
+                size="sm"
+                onClick={() => handleJsonChange([...(parsed as string[]), ''])}
+              >
+                + Adicionar marca
+              </Button>
+            </div>
             {saveBtn}
           </div>
         );
