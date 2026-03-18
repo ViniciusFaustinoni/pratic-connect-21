@@ -6,12 +6,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Loader2 } from 'lucide-react';
-
-const cpfRegex = /^\d{3}\.\d{3}\.\d{3}-\d{2}$|^\d{11}$/;
+import { validateCPF } from '@/lib/validations';
 
 const schema = z.object({
   nome: z.string().min(3, 'Nome deve ter pelo menos 3 caracteres'),
-  cpf: z.string().regex(cpfRegex, 'CPF inválido'),
+  cpf: z.string()
+    .min(11, 'CPF inválido')
+    .refine((val) => validateCPF(val), 'CPF inválido — verifique os dígitos'),
   email: z.string().email('E-mail inválido'),
   telefone: z.string().min(10, 'Telefone inválido'),
   data_nascimento: z.string().min(1, 'Data de nascimento é obrigatória'),

@@ -103,8 +103,26 @@ serve(async (req) => {
         { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
       );
     }
+
+    // Validar dígitos verificadores do CPF/CNPJ antes de chamar o Asaas
+    if (cpfCnpj.length === 11) {
+      if (!validarCPF(cpfCnpj)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'CPF inválido — dígitos verificadores incorretos' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    } else if (cpfCnpj.length === 14) {
+      if (!validarCNPJ(cpfCnpj)) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'CNPJ inválido — dígitos verificadores incorretos' }),
+          { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
+      }
+    }
+
     cliente.cpfCnpj = cpfCnpj;
-    console.log(`[asaas-cobranca-adesao] CPF sanitizado: ***${cpfCnpj.slice(-4)}`);
+    console.log(`[asaas-cobranca-adesao] CPF/CNPJ validado: ***${cpfCnpj.slice(-4)}`);
 
     console.log(`[asaas-cobranca-adesao] Iniciando para contrato ${contratoId}, valor recebido: R$ ${valor}, forma: ${formaPagamento || 'UNDEFINED'}`);
 

@@ -185,7 +185,17 @@ export function EtapaPagamentoCotacao({
       setEtapaInterna('aguardando_pagamento');
     } catch (error: any) {
       console.error('[EtapaPagamento] Erro ao criar cobrança:', error);
-      setErro(error.message || 'Erro ao criar cobrança');
+      let mensagem = 'Erro ao criar cobrança';
+      // Extrair mensagem real da edge function (FunctionsHttpError)
+      if (error?.context) {
+        try {
+          const body = await error.context.json();
+          mensagem = body?.error || mensagem;
+        } catch (_) { /* ignore parse error */ }
+      } else if (error?.message) {
+        mensagem = error.message;
+      }
+      setErro(mensagem);
       setEtapaInterna('erro');
     }
   }, [valorAdesao, clienteNome, clienteEmail, clienteCpf]);
