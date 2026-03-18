@@ -21,7 +21,6 @@ import {
   Mail,
   MessageCircle,
   Monitor,
-  Palette,
   Globe,
   MessageSquare,
   AlertTriangle,
