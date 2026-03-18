@@ -445,6 +445,39 @@ export async function buscarConfiguracoesEmpresa(supabase: any): Promise<Record<
   return configs;
 }
 
+// ============= REGRAS DE DEPRECIAÇÃO =============
+
+const DEPRECIACOES_FALLBACK: RegraDepreciacaoData[] = [
+  { flag: 'flag_placa_vermelha', label: 'Placa vermelha', percentual: 25 },
+  { flag: 'flag_ex_taxi', label: 'Ex-táxi', percentual: 25 },
+  { flag: 'flag_taxi_ativo', label: 'Táxi ativo', percentual: 25 },
+  { flag: 'flag_chassi_remarcado', label: 'Chassi remarcado', percentual: 30 },
+  { flag: 'flag_leilao', label: 'Veículo de leilão', percentual: 30 },
+  { flag: 'flag_ex_ressarcido', label: 'Já indenizado anteriormente', percentual: 30 },
+  { flag: 'flag_avarias_vistoria', label: 'Avarias pré-existentes (vistoria)', percentual: 20, adicional: true },
+];
+
+/**
+ * Busca regras de depreciação da tabela configuracoes (chave: regras_depreciacao)
+ */
+export async function buscarRegrasDepreciacao(supabase: any): Promise<RegraDepreciacaoData[]> {
+  try {
+    const { data } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'regras_depreciacao')
+      .maybeSingle();
+    if (data?.valor) {
+      const parsed = typeof data.valor === 'string' ? JSON.parse(data.valor) : data.valor;
+      if (Array.isArray(parsed) && parsed.length > 0) return parsed;
+    }
+    return DEPRECIACOES_FALLBACK;
+  } catch (err) {
+    console.warn('[termo-afiliacao] Erro ao buscar regras_depreciacao, usando fallback:', err);
+    return DEPRECIACOES_FALLBACK;
+  }
+}
+
 // ============= REGRAS DE VENDA =============
 
 const CHAVES_CONFIGURACOES_REGRAS = [
