@@ -15,6 +15,7 @@
 
 import {
   TermoAfiliacaoData,
+  RegraDepreciacaoData,
   formatCPF,
   formatPhone,
   formatCEP,
