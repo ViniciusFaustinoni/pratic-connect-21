@@ -9,12 +9,11 @@ import type { RealtimeChannel } from '@supabase/supabase-js';
 
 type Cotacao = Tables<'cotacoes'>;
 
-const MOTO_KEYWORDS = ['moto', 'motocicleta', 'ciclomotor', 'triciclo', 'nxr', 'cg ', 'cg-', 'bros', 'cb ', 'cb-', 'cbr', 'pcx', 'factor', 'biz', 'pop', 'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr', 'neo', 'fluo', 'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'dl ', 'scooter'];
+import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 
-function detectarCategoriaPorModelo(modelo?: string | null): string {
-  if (!modelo) return 'carro';
-  const m = modelo.toLowerCase();
-  return MOTO_KEYWORDS.some(kw => m.includes(kw)) ? 'moto' : 'carro';
+function detectarCategoriaPorModelo(modelo?: string | null, marca?: string | null): string {
+  const tipo = detectarTipoVeiculo(undefined, modelo, marca);
+  return tipo === 'moto' ? 'moto' : 'carro';
 }
 
 export type StatusContratacao = 
