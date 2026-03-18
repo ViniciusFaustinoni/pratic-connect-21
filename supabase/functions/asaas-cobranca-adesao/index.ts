@@ -133,11 +133,18 @@ serve(async (req) => {
       );
     }
 
-    // Validar dígitos verificadores — apenas warn, sem bloquear (Asaas faz sua própria validação)
-    if (cpfCnpj.length === 11 && !validarCPF(cpfCnpj)) {
-      console.warn(`[asaas-cobranca-adesao] ⚠️ CPF com dígitos verificadores incorretos: ***${cpfCnpj.slice(-4)} — prosseguindo mesmo assim`);
-    } else if (cpfCnpj.length === 14 && !validarCNPJ(cpfCnpj)) {
-      console.warn(`[asaas-cobranca-adesao] ⚠️ CNPJ com dígitos verificadores incorretos: ***${cpfCnpj.slice(-4)} — prosseguindo mesmo assim`);
+    const documentoValido = cpfCnpj.length === 11
+      ? validarCPF(cpfCnpj)
+      : validarCNPJ(cpfCnpj);
+
+    if (!documentoValido) {
+      return new Response(
+        JSON.stringify({
+          success: false,
+          error: 'O CPF informado nesta cotação é inválido. Corrija os dígitos do CPF antes de gerar a cobrança.',
+        }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     cliente.cpfCnpj = cpfCnpj;

@@ -3,6 +3,7 @@ import { CreditCard, QrCode, Loader2, Check, Copy, FileText } from 'lucide-react
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
+import { validateCPF } from '@/lib/validations';
 import { toast } from 'sonner';
 
 interface PagamentoAdesaoProps {
