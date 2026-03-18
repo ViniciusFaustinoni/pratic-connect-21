@@ -13,6 +13,7 @@ import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
 import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { maskPlaca } from '@/lib/validations';
