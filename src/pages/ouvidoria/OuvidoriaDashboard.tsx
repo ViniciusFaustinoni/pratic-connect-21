@@ -101,7 +101,7 @@ export default function OuvidoriaDashboard() {
           <p className="text-muted-foreground text-sm">Selecione o tipo para abrir uma nova manifestação</p>
         </div>
         
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {/* Card Reclamação */}
           <Card 
             className="bg-orange-50 border-2 border-orange-300 hover:border-orange-500 cursor-pointer hover:shadow-lg transition-all"
