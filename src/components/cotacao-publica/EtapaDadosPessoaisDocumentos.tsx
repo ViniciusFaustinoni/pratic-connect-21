@@ -422,7 +422,7 @@ export function EtapaDadosPessoaisDocumentos({
             </div>
           </div>
 
-          {/* CRLV */}
+          {/* CRLV ou Nota Fiscal */}
           <div className={cn(
             'flex items-center gap-3 p-3 rounded-lg transition-colors',
             temCrlv ? 'bg-success/5' : 'bg-muted/30'
@@ -438,7 +438,12 @@ export function EtapaDadosPessoaisDocumentos({
               )}
             </div>
             <div className="flex-1">
-              <p className="text-sm font-medium">CRLV do Veículo</p>
+              <p className="text-sm font-medium">CRLV ou Nota Fiscal do Veículo</p>
+              {dadosExtraidos.origem_documento_veiculo === 'nota_fiscal_veiculo' && (
+                <Badge variant="outline" className="text-xs border-amber-500/30 text-amber-600 mt-1">
+                  Nota Fiscal (substitui CRLV)
+                </Badge>
+              )}
               {temDadosVeiculo && (
                 <div className="grid grid-cols-2 gap-x-4 gap-y-0.5 text-xs text-muted-foreground mt-1">
                   {dadosExtraidos.veiculo_placa && <div><span className="font-medium">Placa:</span> {dadosExtraidos.veiculo_placa}</div>}
@@ -447,6 +452,8 @@ export function EtapaDadosPessoaisDocumentos({
                   {dadosExtraidos.veiculo_cor && <div><span className="font-medium">Cor:</span> {dadosExtraidos.veiculo_cor}</div>}
                   {dadosExtraidos.veiculo_combustivel && <div><span className="font-medium">Combustível:</span> {dadosExtraidos.veiculo_combustivel}</div>}
                   {dadosExtraidos.veiculo_motor && <div><span className="font-medium">Motor:</span> {dadosExtraidos.veiculo_motor}</div>}
+                  {dadosExtraidos.numero_motor && <div><span className="font-medium">Nº Motor:</span> {dadosExtraidos.numero_motor}</div>}
+                  {dadosExtraidos.valor_nota_fiscal && <div><span className="font-medium">Valor NF:</span> R$ {Number(dadosExtraidos.valor_nota_fiscal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</div>}
                   {dadosExtraidos.veiculo_ano_fabricacao && <div><span className="font-medium">Ano:</span> {dadosExtraidos.veiculo_ano_fabricacao}</div>}
                 </div>
               )}
