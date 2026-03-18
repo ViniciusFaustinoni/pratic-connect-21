@@ -400,6 +400,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     const faixa = preferred || matching.sort((a, b) => (b.fipe_max - b.fipe_min) - (a.fipe_max - a.fipe_min))[0];
     return { min: faixa.fipe_min, max: faixa.fipe_max };
   }, [valorFipe, todasFaixas, planosSelecionados]);
+  // Marcas aceitas de motos
+  const { data: marcasAceitasMotos } = useMarcasAceitasMotos();
 
 
   const dadosAssociadoValidos = useMemo(() => {
