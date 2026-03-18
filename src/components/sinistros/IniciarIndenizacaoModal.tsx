@@ -274,7 +274,7 @@ export function IniciarIndenizacaoModal({
             })}
           </div>
 
-          {(maiorDepreciacao > 0 || hasAvarias) && (
+          {(maiorDepreciacao > 0 || adicionais.length > 0) && (
             <div className="p-3 bg-muted rounded-lg space-y-1">
               {maiorDepreciacao > 0 && (
                 <div className="flex justify-between text-sm">
@@ -282,12 +282,12 @@ export function IniciarIndenizacaoModal({
                   <span className="font-medium text-red-600">-{maiorDepreciacao}%</span>
                 </div>
               )}
-              {hasAvarias && (
-                <div className="flex justify-between text-sm">
-                  <span>Avarias (sobre valor já depreciado):</span>
-                  <span className="font-medium text-orange-600">-20%</span>
+              {adicionais.map(ad => (
+                <div key={ad.flag} className="flex justify-between text-sm">
+                  <span>{ad.label} (sobre valor já depreciado):</span>
+                  <span className="font-medium text-orange-600">-{ad.percentual}%</span>
                 </div>
-              )}
+              ))}
             </div>
           )}
 
