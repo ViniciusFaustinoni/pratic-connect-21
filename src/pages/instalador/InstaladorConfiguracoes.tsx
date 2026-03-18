@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings, Bell, MapPin, Palette } from 'lucide-react';
+import { ArrowLeft, Settings, Bell, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
@@ -14,8 +14,6 @@ export default function InstaladorConfiguracoes() {
   const [notifEncaixes, setNotifEncaixes] = useState(true);
   const [gpsAltaPrecisao, setGpsAltaPrecisao] = useState(true);
   const [gpsBackground, setGpsBackground] = useState(true);
-  const [temaEscuro, setTemaEscuro] = useState(true);
-
   return (
     <div className="bg-slate-900">
       <div className="p-4 space-y-4">
@@ -94,28 +92,6 @@ export default function InstaladorConfiguracoes() {
                 id="gps-background"
                 checked={gpsBackground}
                 onCheckedChange={setGpsBackground}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Aparência */}
-        <Card className="border-slate-700 bg-slate-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-slate-300 flex items-center gap-2">
-              <Palette className="h-4 w-4 text-purple-400" />
-              Aparência
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="tema-escuro" className="text-sm text-slate-300">
-                Tema escuro
-              </Label>
-              <Switch 
-                id="tema-escuro"
-                checked={temaEscuro}
-                onCheckedChange={setTemaEscuro}
               />
             </div>
           </CardContent>

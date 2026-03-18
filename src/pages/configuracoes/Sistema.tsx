@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings, Save, Loader2, Moon, Sun, Monitor } from 'lucide-react';
+import { Settings, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -10,7 +10,6 @@ import { toast } from 'sonner';
 export default function Sistema() {
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState({
-    tema: 'dark',
     itensPorPagina: '20',
     formatoData: 'dd/MM/yyyy',
     notificacoesSom: true,
@@ -30,44 +29,6 @@ export default function Sistema() {
         <h1 className="text-2xl font-semibold text-foreground">Sistema</h1>
         <p className="text-sm text-muted-foreground">Preferências gerais do sistema</p>
       </div>
-
-      {/* Aparência */}
-      <Card className="border-border/50">
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <Settings className="w-5 h-5" />
-            Aparência
-          </CardTitle>
-          <CardDescription>Personalize a interface do sistema</CardDescription>
-        </CardHeader>
-        <CardContent className="space-y-6">
-          <div className="space-y-3">
-            <Label>Tema</Label>
-            <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
-              {[
-                { value: 'light', label: 'Claro', icon: Sun },
-                { value: 'dark', label: 'Escuro', icon: Moon },
-                { value: 'system', label: 'Sistema', icon: Monitor },
-              ].map((theme) => (
-                <button
-                  key={theme.value}
-                  onClick={() => setConfig({ ...config, tema: theme.value })}
-                  className={`flex flex-col items-center gap-2 p-4 rounded-lg border transition-colors ${
-                    config.tema === theme.value
-                      ? 'border-primary bg-primary/5'
-                      : 'border-border/50 hover:border-border'
-                  }`}
-                >
-                  <theme.icon className={`w-5 h-5 ${config.tema === theme.value ? 'text-primary' : 'text-muted-foreground'}`} />
-                  <span className={`text-sm ${config.tema === theme.value ? 'text-foreground font-medium' : 'text-muted-foreground'}`}>
-                    {theme.label}
-                  </span>
-                </button>
-              ))}
-            </div>
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Preferências */}
       <Card className="border-border/50">

@@ -21,7 +21,6 @@ import {
   Mail,
   MessageCircle,
   Monitor,
-  Palette,
   Globe,
   MessageSquare,
   AlertTriangle,
@@ -31,8 +30,6 @@ import {
   Gauge,
   Clock,
   BarChart3,
-  Sun,
-  Moon,
   Code,
   ExternalLink,
   Gift
@@ -612,47 +609,6 @@ export default function AppConfiguracoes() {
                 </div>
                 <ChevronRight className="h-5 w-5 text-muted-foreground" />
               </button>
-            </CardContent>
-          </Card>
-        </div>
-
-        {/* Aparência */}
-        <div>
-          <h2 className="text-sm font-semibold text-muted-foreground uppercase tracking-wider mb-3 px-1">
-            Aparência
-          </h2>
-          <Card className="border-0 shadow-sm">
-            <CardContent className="p-4">
-              <div className="flex items-center gap-3 mb-4">
-                <div className="p-2 bg-pink-100 rounded-lg">
-                  <Palette className="h-5 w-5 text-pink-600" />
-                </div>
-                <div>
-                  <div className="font-medium text-foreground">Tema</div>
-                  <div className="text-sm text-muted-foreground">Aparência do aplicativo</div>
-                </div>
-              </div>
-              <div className="flex gap-2">
-                {[
-                  { value: 'light', label: 'Claro', icon: Sun },
-                  { value: 'dark', label: 'Escuro', icon: Moon },
-                  { value: 'system', label: 'Sistema', icon: Monitor },
-                ].map((opt) => {
-                  const Icon = opt.icon;
-                  return (
-                    <Button
-                      key={opt.value}
-                      variant={theme === opt.value ? 'default' : 'outline'}
-                      size="sm"
-                      className="flex-1"
-                      onClick={() => setTheme(opt.value)}
-                    >
-                      <Icon className="h-4 w-4 mr-1" />
-                      {opt.label}
-                    </Button>
-                  );
-                })}
-              </div>
             </CardContent>
           </Card>
         </div>

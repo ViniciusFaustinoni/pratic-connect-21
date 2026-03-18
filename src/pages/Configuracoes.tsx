@@ -11,7 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   User, Lock, Bell, Building, Settings, Loader2, Camera, Trash2, Check,
   Save, Monitor, Smartphone, Mail, MessageCircle, Globe, FileText, Shield,
-  Sun, Moon, Eye, EyeOff, Circle, CheckCircle
+  Eye, EyeOff, Circle, CheckCircle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -834,64 +834,6 @@ export default function Configuracoes() {
                 <h2 className="text-xl font-semibold">Sistema</h2>
                 <p className="text-sm text-muted-foreground">Preferências gerais do sistema</p>
               </div>
-
-              {/* Appearance Card */}
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-base">Aparência</CardTitle>
-                </CardHeader>
-                <CardContent>
-                  {!mounted ? (
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      {[1, 2, 3].map(i => (
-                        <div key={i} className="h-20 rounded-lg bg-muted animate-pulse" />
-                      ))}
-                    </div>
-                  ) : (
-                    <div className="grid gap-3 sm:grid-cols-3">
-                      <button 
-                        onClick={() => setTheme('light')}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                          theme === 'light' 
-                            ? 'border-primary bg-primary/5' 
-                            : 'border-transparent hover:border-primary/30'
-                        }`}
-                      >
-                        <Sun className={`h-6 w-6 ${theme === 'light' ? 'text-primary' : 'text-muted-foreground'}`} />
-                        <span className={`text-sm font-medium ${theme === 'light' ? '' : 'text-muted-foreground'}`}>
-                          Claro
-                        </span>
-                      </button>
-                      <button 
-                        onClick={() => setTheme('dark')}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                          theme === 'dark' 
-                            ? 'border-primary bg-primary/5' 
-                            : 'border-transparent hover:border-primary/30'
-                        }`}
-                      >
-                        <Moon className={`h-6 w-6 ${theme === 'dark' ? 'text-primary' : 'text-muted-foreground'}`} />
-                        <span className={`text-sm font-medium ${theme === 'dark' ? '' : 'text-muted-foreground'}`}>
-                          Escuro
-                        </span>
-                      </button>
-                      <button 
-                        onClick={() => setTheme('system')}
-                        className={`flex flex-col items-center gap-2 p-4 rounded-lg border-2 transition-all ${
-                          theme === 'system' 
-                            ? 'border-primary bg-primary/5' 
-                            : 'border-transparent hover:border-primary/30'
-                        }`}
-                      >
-                        <Monitor className={`h-6 w-6 ${theme === 'system' ? 'text-primary' : 'text-muted-foreground'}`} />
-                        <span className={`text-sm font-medium ${theme === 'system' ? '' : 'text-muted-foreground'}`}>
-                          Sistema
-                        </span>
-                      </button>
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
 
               {/* Language Card */}
               <Card>
