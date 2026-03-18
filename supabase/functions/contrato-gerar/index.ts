@@ -326,7 +326,7 @@ serve(async (req) => {
     let associadoId = null;
     let veiculoId: string | null = null;
     
-    const cpfLimpo = cpfFinal.replace(/\D/g, '');
+    const cpfNormalizado = cpfLimpo;
     const { data: associadoExistente } = await supabase
       .from('associados')
       .select('id, email, telefone')
