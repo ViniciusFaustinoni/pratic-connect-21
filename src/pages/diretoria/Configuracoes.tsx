@@ -28,6 +28,7 @@ import { ValueLabelListEditor } from '@/components/configuracoes/json-editors/Va
 import { CotasTaxasEditor } from '@/components/configuracoes/json-editors/CotasTaxasEditor';
 import { KeyValueEditor } from '@/components/configuracoes/json-editors/KeyValueEditor';
 import { GlossarioEditor } from '@/components/configuracoes/json-editors/GlossarioEditor';
+import { DepreciacaoEditor } from '@/components/configuracoes/json-editors/DepreciacaoEditor';
 
 interface CategoriaConfig {
   label: string;
