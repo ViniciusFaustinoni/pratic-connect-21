@@ -433,11 +433,19 @@ serve(async (req) => {
   } catch (error: unknown) {
     console.error('[asaas-cobranca-adesao] Erro:', error);
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+
+    let friendlyMessage = errorMessage;
+
+    if (errorMessage.includes('O CPF/CNPJ informado é inválido.')) {
+      friendlyMessage = 'O CPF informado nesta cotação está inválido. Corrija o CPF do cliente e tente novamente — não é necessário iniciar uma nova cotação.';
+    } else if (errorMessage.includes('é necessário preencher o CPF ou CNPJ do cliente')) {
+      friendlyMessage = 'O Asaas exige CPF/CNPJ válido para gerar esta cobrança. Corrija o CPF do cliente nesta cotação e tente novamente — não é necessário iniciar uma nova cotação.';
+    }
     
     return new Response(
       JSON.stringify({ 
         success: false, 
-        error: errorMessage 
+        error: friendlyMessage 
       }),
       {
         status: 400,
