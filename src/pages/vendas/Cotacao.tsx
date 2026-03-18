@@ -9,7 +9,7 @@ import { EtapaCriteriosCotacao } from '@/components/cotacao/EtapaCriteriosCotaca
 import { EtapaResultado } from '@/components/cotacao/EtapaResultado';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
 
-import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 
 // ============================================
 // INTERFACES
