@@ -720,6 +720,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         veiculo_procedencia: cotacao.veiculo_procedencia || null,
         uso_aplicativo: cotacao.uso_aplicativo || false,
         vendedor_id: cotacao.vendedor_id || vendedorId || null,
+        tipo_entrada: tipoOperacao,
         // Dados do cliente
         cliente_nome: data.nome || null,
         cliente_cpf: data.cpf || null,
