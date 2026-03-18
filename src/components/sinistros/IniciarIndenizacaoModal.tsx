@@ -58,7 +58,9 @@ export function IniciarIndenizacaoModal({
 }: IniciarIndenizacaoModalProps) {
   const queryClient = useQueryClient();
   const { data: prazoSinistro } = useConfiguracaoNumero('operacional_prazo_sinistro', 60);
-  const [depreciacoes, setDepreciacoes] = useState<Record<string, boolean>>({});
+  const { data: regrasDepreciacao } = useConfiguracaoJson<RegraDepreciacao[]>('regras_depreciacao', DEPRECIACOES_FALLBACK);
+  const DEPRECIACOES = regrasDepreciacao ?? DEPRECIACOES_FALLBACK;
+  const [depreciacoesState, setDepreciacoesState] = useState<Record<string, boolean>>({});
   const [observacoes, setObservacoes] = useState('');
 
   // Fetch vehicle flags to pre-check depreciation switches
