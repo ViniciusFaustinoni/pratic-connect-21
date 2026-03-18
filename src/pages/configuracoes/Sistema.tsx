@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Settings, Save, Loader2, Moon, Sun, Monitor } from 'lucide-react';
+import { Settings, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
