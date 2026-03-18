@@ -221,7 +221,7 @@ export function AgendamentoBase({
           </h3>
 
           {loadingHorarios ? (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {[...Array(8)].map((_, i) => (
                 <Skeleton key={i} className="h-10 w-full" />
               ))}
