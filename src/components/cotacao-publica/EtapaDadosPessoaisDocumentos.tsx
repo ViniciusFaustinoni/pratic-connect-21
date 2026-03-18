@@ -134,7 +134,7 @@ export function EtapaDadosPessoaisDocumentos({
   // Verificar dados extraídos
   const temDadosPessoais = !!(dadosExtraidos.nome && dadosExtraidos.cpf);
   const temEndereco = !!(dadosExtraidos.logradouro && dadosExtraidos.cidade && dadosExtraidos.uf);
-  const temDadosVeiculo = !!(dadosExtraidos.veiculo_placa);
+  const temDadosVeiculo = !!(dadosExtraidos.veiculo_placa || dadosExtraidos.veiculo_chassi);
   const temContato = !!(email && telefone);
   
   const podeAvancar = temDadosPessoais && temEndereco && temDadosVeiculo && temContato;
