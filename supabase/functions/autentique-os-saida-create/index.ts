@@ -383,6 +383,9 @@ serve(async (req) => {
           name: signerName,
           email: signerEmail,
           action: "SIGN",
+          configs: {
+            cpf: (associado.cpf || '').replace(/\D/g, ''),
+          },
           positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
         }],
         file: null,
