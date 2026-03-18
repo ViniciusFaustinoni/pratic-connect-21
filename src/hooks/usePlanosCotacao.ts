@@ -301,8 +301,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           || modeloBanco.startsWith(modeloAPIClean);
         const containsMatch = modeloAPIClean.includes(modeloBanco)
           || modeloBanco.includes(modeloAPIClean);
-        const baseBanco = modeloBanco.split(' ')[0];
-        const baseMatch = baseBanco.length >= 2 && (
+        const palavrasBanco = modeloBanco.split(' ');
+        const baseBanco = palavrasBanco[0];
+        const baseMatch = palavrasBanco.length === 1 && baseBanco.length >= 2 && (
           modeloAPIClean.startsWith(baseBanco + ' ') || modeloAPIClean === baseBanco
         );
         modeloMatch = prefixMatch || containsMatch || baseMatch;
