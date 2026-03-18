@@ -947,7 +947,7 @@ export default function SinistroAnalise() {
                       {linkEvento.dados_etapa1?.arquivos_urls?.length > 0 && (
                         <div>
                           <p className="text-sm font-medium mb-2">Fotos do Veículo ({linkEvento.dados_etapa1.arquivos_urls.length})</p>
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {linkEvento.dados_etapa1.arquivos_urls.map((url: string, idx: number) => {
                               const isVideo = /\.(mp4|webm|mov)$/i.test(url);
                               return isVideo ? (
