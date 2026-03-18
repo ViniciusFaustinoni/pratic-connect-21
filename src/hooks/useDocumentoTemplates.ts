@@ -223,9 +223,13 @@ export function useCreateTemplate() {
       queryClient.invalidateQueries({ queryKey: ['documento-templates'] });
       toast.success('Template criado com sucesso!');
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       console.error('Erro ao criar template:', error);
-      toast.error('Erro ao criar template');
+      if (error?.code === '23505') {
+        toast.error('Já existe um template com este código. Escolha outro.');
+      } else {
+        toast.error('Erro ao criar template');
+      }
     },
   });
 }
@@ -301,9 +305,13 @@ export function useUpdateTemplate() {
       queryClient.invalidateQueries({ queryKey: ['documento-templates'] });
       toast.success('Template atualizado com sucesso!');
     },
-    onError: (error: Error) => {
+    onError: (error: any) => {
       console.error('Erro ao atualizar template:', error);
-      toast.error('Erro ao atualizar template');
+      if (error?.code === '23505') {
+        toast.error('Já existe um template com este código. Escolha outro.');
+      } else {
+        toast.error('Erro ao atualizar template');
+      }
     },
   });
 }
