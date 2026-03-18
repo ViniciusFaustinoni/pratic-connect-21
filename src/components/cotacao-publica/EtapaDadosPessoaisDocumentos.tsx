@@ -197,16 +197,14 @@ export function EtapaDadosPessoaisDocumentos({
       
       // De CRLV: dados do veículo (expandido)
       if (tipoDocumento === 'crlv') {
+        novosDados.origem_documento_veiculo = 'crlv';
         if (dados.placa) novosDados.veiculo_placa = dados.placa;
         if (dados.chassi) novosDados.veiculo_chassi = dados.chassi;
         if (dados.renavam) novosDados.veiculo_renavam = dados.renavam;
-        
-        // NOVOS CAMPOS - Dados do veículo extraídos do CRLV
         if (dados.cor) novosDados.veiculo_cor = dados.cor;
         if (dados.combustivel) novosDados.veiculo_combustivel = dados.combustivel;
         if (dados.motor) novosDados.veiculo_motor = dados.motor;
         
-        // Ano de fabricação e modelo
         if (dados.ano_fabricacao) {
           const anoFab = parseInt(dados.ano_fabricacao);
           if (!isNaN(anoFab)) novosDados.veiculo_ano_fabricacao = anoFab;
@@ -222,6 +220,26 @@ export function EtapaDadosPessoaisDocumentos({
         } else if (dados.ano && dados.ano.includes('/')) {
           const [, mod] = dados.ano.split('/');
           const anoMod = parseInt(mod);
+          if (!isNaN(anoMod)) novosDados.veiculo_ano_modelo = anoMod;
+        }
+      }
+
+      // De Nota Fiscal de Veículo: substituto do CRLV
+      if (tipoDocumento === 'nota_fiscal_veiculo') {
+        novosDados.origem_documento_veiculo = 'nota_fiscal_veiculo';
+        if (dados.chassi) novosDados.veiculo_chassi = dados.chassi;
+        if (dados.numero_motor) novosDados.numero_motor = dados.numero_motor;
+        if (dados.valor_nota_fiscal) novosDados.valor_nota_fiscal = dados.valor_nota_fiscal;
+        if (dados.placa) novosDados.veiculo_placa = dados.placa;
+        if (dados.cor) novosDados.veiculo_cor = dados.cor;
+        if (dados.motor) novosDados.veiculo_motor = dados.motor;
+        
+        if (dados.ano_fabricacao) {
+          const anoFab = parseInt(dados.ano_fabricacao);
+          if (!isNaN(anoFab)) novosDados.veiculo_ano_fabricacao = anoFab;
+        }
+        if (dados.ano_modelo) {
+          const anoMod = parseInt(dados.ano_modelo);
           if (!isNaN(anoMod)) novosDados.veiculo_ano_modelo = anoMod;
         }
       }
