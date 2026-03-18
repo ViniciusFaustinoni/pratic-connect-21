@@ -426,6 +426,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         continue;
       }
 
+      // SELECT EXCLUSIVE: ocultar quando APP + categoria de deságio combinam
+      const isAppComDesagio = params.usoApp && !!categoria && categoria !== 'nenhuma'
+        && categoriasQueSobrepoeApp.includes(categoria);
+      if (isAppComDesagio && (plano.codigo?.toLowerCase().includes('exclusive') || plSlug === 'select-exclusive')) {
+        continue;
+      }
+
       // Filtrar por categorias aceitas no plano (campo categoria do plano)
       const categoriasAceitasPlano = categoriaPlano
         ? categoriaPlano.split(',').map((c: string) => c.trim().toLowerCase()).filter(Boolean)
