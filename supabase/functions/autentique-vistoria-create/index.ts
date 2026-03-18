@@ -253,6 +253,15 @@ serve(async (req) => {
 
     // Criar documento no Autentique via multipart/form-data
     const documentName = `Termo de Vistoria - ${params.veiculoPlaca} - ${new Date().toLocaleDateString('pt-BR')}`;
+
+    // Validar CPF
+    const cpfRaw = (params.clienteCpf || '').replace(/\D/g, '');
+    const cpfOk = cpfRaw.length === 11 && !/^(\d)\1{10}$/.test(cpfRaw) && (() => {
+      for (let t = 9; t < 11; t++) { let d = 0; for (let c = 0; c < t; c++) d += parseInt(cpfRaw[c]) * ((t+1)-c); d = ((10*d)%11)%10; if (parseInt(cpfRaw[t]) !== d) return false; } return true;
+    })();
+    console.log(`[autentique-vistoria-create] CPF: ${cpfRaw} (válido: ${cpfOk})`);
+    const signerObj: any = { name: params.clienteNome, email: params.clienteEmail, action: "SIGN", positions: [{ x: "50", y: "80", z: "1" }] };
+    if (cpfOk) signerObj.configs = { cpf: cpfRaw };
     
     const operations = JSON.stringify({
       query: `
@@ -284,23 +293,7 @@ serve(async (req) => {
         document: {
           name: documentName,
         },
-        signers: [
-          {
-            name: params.clienteNome,
-            email: params.clienteEmail,
-            action: "SIGN",
-            configs: {
-              cpf: (params.clienteCpf || '').replace(/\D/g, ''),
-            },
-            positions: [
-              {
-                x: "50",
-                y: "80",
-                z: "1",
-              }
-            ]
-          }
-        ],
+        signers: [signerObj],
         file: null,
       },
     });
