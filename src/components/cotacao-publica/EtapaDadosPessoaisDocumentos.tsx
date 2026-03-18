@@ -665,7 +665,7 @@ export function EtapaDadosPessoaisDocumentos({
           {!podeAvancar && (
             <p className="text-center text-sm text-muted-foreground">
               {!temDocumentoPessoal && 'Envie CNH ou RG • '}
-              {!temCrlv && 'Envie CRLV • '}
+              {!temCrlv && 'Envie CRLV ou Nota Fiscal • '}
               {!temComprovante && 'Envie Comprovante • '}
               {!temContato && 'Preencha e-mail e telefone'}
             </p>
