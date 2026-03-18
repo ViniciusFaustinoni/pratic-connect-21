@@ -10,7 +10,6 @@ import { toast } from 'sonner';
 export default function Sistema() {
   const [saving, setSaving] = useState(false);
   const [config, setConfig] = useState({
-    tema: 'dark',
     itensPorPagina: '20',
     formatoData: 'dd/MM/yyyy',
     notificacoesSom: true,
