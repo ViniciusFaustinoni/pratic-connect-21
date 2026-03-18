@@ -269,9 +269,10 @@ export function EtapaDadosPessoaisDocumentos({
       return;
     }
     
+    // Usar CPF corrigido manualmente se disponível
     const dados: DadosPessoaisForm = {
       nome: dadosExtraidos.nome || '',
-      cpf: dadosExtraidos.cpf || '',
+      cpf: cpfEfetivo,
       email,
       telefone,
       data_nascimento: dadosExtraidos.data_nascimento || '',
