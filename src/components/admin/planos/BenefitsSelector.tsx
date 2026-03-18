@@ -376,7 +376,7 @@ export function BenefitsSelector({
                               <div className="space-y-3 p-3 bg-muted/30 rounded-lg border">
                                 <Label className="text-xs font-medium">Valor do Benefício (Estruturado)</Label>
                                 
-                                <div className="grid grid-cols-3 gap-2">
+                                <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                                   {/* Prefixo */}
                                   <div className="space-y-1">
                                     <Label className="text-xs text-muted-foreground">Prefixo</Label>

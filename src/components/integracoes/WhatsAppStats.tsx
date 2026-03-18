@@ -75,7 +75,7 @@ export function WhatsAppStats() {
         </CardDescription>
       </CardHeader>
       <CardContent>
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           {/* Recebidas */}
           <div className="text-center p-3 bg-blue-500/10 rounded-lg">
             <div className="flex items-center justify-center mb-2">

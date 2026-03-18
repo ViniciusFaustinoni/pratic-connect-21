@@ -2224,7 +2224,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                       {/* Preview de economia */}
                       <Card className="border-green-500/30 bg-green-50/50 dark:bg-green-950/20">
                         <CardContent className="p-3">
-                          <div className="grid grid-cols-3 gap-3 text-center text-sm">
+                          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center text-sm">
                             <div>
                               <p className="text-xs text-muted-foreground">Faixa Atual</p>
                               <p className="font-medium">{formatCurrency(fipeMenorInfo.faixaAtual.min)} – {formatCurrency(fipeMenorInfo.faixaAtual.max)}</p>

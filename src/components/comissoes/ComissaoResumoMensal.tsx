@@ -35,7 +35,7 @@ export function ComissaoResumoMensal({ resumo, titulo = 'Resumo do Mês' }: Comi
         </div>
 
         {/* Breakdown */}
-        <div className="grid grid-cols-3 gap-2 text-center">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center">
           <div className="p-2 bg-amber-50 dark:bg-amber-950/20 rounded-lg">
             <Clock className="h-4 w-4 mx-auto text-amber-600 mb-1" />
             <div className="text-sm font-semibold text-amber-700 dark:text-amber-500">

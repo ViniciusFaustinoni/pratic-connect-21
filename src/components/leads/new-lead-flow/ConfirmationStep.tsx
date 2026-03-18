@@ -52,7 +52,7 @@ export function ConfirmationStep({ state, updateState, onBack, onSubmit, isSubmi
           )}
         </h3>
 
-        <div className="grid grid-cols-3 gap-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
           <div className="space-y-2">
             <Label>Placa</Label>
             <Input 

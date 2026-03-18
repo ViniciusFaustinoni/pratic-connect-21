@@ -1118,7 +1118,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   {/* Endereço */}
                   <div className="pt-2 border-t">
                     <p className="text-sm font-medium mb-3">Endereço</p>
-                    <div className="grid grid-cols-3 gap-4">
+                    <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
                       <DadoExtraidoEditavel 
                         label="CEP" 
                         campo="cep" 

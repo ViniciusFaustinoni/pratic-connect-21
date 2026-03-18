@@ -287,7 +287,7 @@ export function ProdutosPlanos() {
   };
 
   if (isLoading) {
-    return <div className="grid grid-cols-3 gap-4"><Skeleton className="h-96 col-span-1" /><Skeleton className="h-96 col-span-2" /></div>;
+    return <div className="grid grid-cols-1 lg:grid-cols-3 gap-4"><Skeleton className="h-96 col-span-1" /><Skeleton className="h-96 lg:col-span-2" /></div>;
   }
 
   return (
