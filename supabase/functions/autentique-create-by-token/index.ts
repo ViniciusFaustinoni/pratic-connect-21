@@ -228,6 +228,7 @@ serve(async (req) => {
         );
       }
       // Usar template dinâmico do banco (mesma lógica do autentique-create)
+      const conteudoPreenchido = substituirVariaveis(templateDB.conteudo, templateData);
       let conteudoHTML = markdownParaHTML(conteudoPreenchido);
       // Sanitizar blocos de assinatura manual que possam existir no template
       conteudoHTML = sanitizeSignatureBlocks(conteudoHTML);

@@ -62,6 +62,8 @@ export interface PlanoData {
   carencia?: string;
 }
 
+export type TipoOperacao = 'adesao' | 'migracao' | 'inclusao' | 'troca_titularidade' | 'reativacao' | 'substituicao_placa';
+
 export interface ContratoData {
   numero: string;
   valor_adesao: number;
@@ -70,6 +72,7 @@ export interface ContratoData {
   dia_vencimento: number;
   data_inicio?: string;
   forma_pagamento?: string;
+  tipo_entrada?: TipoOperacao;
 }
 
 export interface EmpresaData {
@@ -371,6 +374,7 @@ export function mapearDadosParaTemplate(
       dia_vencimento: contrato.dia_vencimento || 10,
       data_inicio: contrato.data_inicio || "",
       forma_pagamento: "Boleto Bancário",
+      tipo_entrada: contrato.tipo_entrada || 'adesao',
     },
     empresa: {
       nome: empresa?.empresa_nome || "ABP PraticCar",

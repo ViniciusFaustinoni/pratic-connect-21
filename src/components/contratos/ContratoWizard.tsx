@@ -22,8 +22,10 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { Input } from '@/components/ui/input';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import { Label } from '@/components/ui/label';
 import { CpfInput, TelefoneInput, PlacaInput, CepInput } from '@/components/inputs/MaskedInputs';
 import { useCotacao, useUpdateCotacao } from '@/hooks/useCotacoes';
 import { useCreateContrato } from '@/hooks/useContratos';
@@ -86,6 +88,7 @@ const steps = [
 export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreated }: ContratoWizardProps) {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
+  const [tipoOperacao, setTipoOperacao] = useState<string>('adesao');
   const [buscandoFipe, setBuscandoFipe] = useState(false);
   
   // Documentos uploadados
@@ -717,6 +720,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
         veiculo_procedencia: cotacao.veiculo_procedencia || null,
         uso_aplicativo: cotacao.uso_aplicativo || false,
         vendedor_id: cotacao.vendedor_id || vendedorId || null,
+        tipo_entrada: tipoOperacao,
         // Dados do cliente
         cliente_nome: data.nome || null,
         cliente_cpf: data.cpf || null,
@@ -1062,6 +1066,30 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   <p className="text-xs text-muted-foreground">
                     Todos os campos são editáveis. Corrija se necessário.
                   </p>
+                </div>
+
+                {/* Tipo de Operação */}
+                <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Tipo de Operação
+                  </h4>
+                  <div className="max-w-xs">
+                    <Label className="text-xs text-muted-foreground mb-1 block">Selecione o tipo de operação deste contrato</Label>
+                    <Select value={tipoOperacao} onValueChange={setTipoOperacao}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="adesao">Adesão</SelectItem>
+                        <SelectItem value="migracao">Migração</SelectItem>
+                        <SelectItem value="inclusao">Inclusão</SelectItem>
+                        <SelectItem value="troca_titularidade">Troca de Titularidade</SelectItem>
+                        <SelectItem value="reativacao">Reativação</SelectItem>
+                        <SelectItem value="substituicao_placa">Substituição de Placa</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
                 </div>
 
                 {/* Dados Pessoais */}

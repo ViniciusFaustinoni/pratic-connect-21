@@ -117,6 +117,14 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'sistema.data_atual': formatDate(dataAtual),
     'sistema.data_extenso': formatDateExtended(dataAtual),
 
+    // Tipo de Operação (checkboxes condicionais)
+    'operacao.adesao': dados.contrato.tipo_entrada === 'adesao' ? '(X)' : '( )',
+    'operacao.migracao': dados.contrato.tipo_entrada === 'migracao' ? '(X)' : '( )',
+    'operacao.inclusao': dados.contrato.tipo_entrada === 'inclusao' ? '(X)' : '( )',
+    'operacao.troca_titularidade': dados.contrato.tipo_entrada === 'troca_titularidade' ? '(X)' : '( )',
+    'operacao.reativacao': dados.contrato.tipo_entrada === 'reativacao' ? '(X)' : '( )',
+    'operacao.substituicao_placa': dados.contrato.tipo_entrada === 'substituicao_placa' ? '(X)' : '( )',
+
     // Regras de Venda (dinâmicas da Diretoria)
     ...(dados.regrasVenda ? {
       'regras.taxa_adesao_percentual': `${dados.regrasVenda.taxa_adesao_percentual_fipe}%`,
