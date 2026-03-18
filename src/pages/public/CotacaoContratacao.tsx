@@ -23,8 +23,8 @@ import { formatarMoeda } from '@/utils/format';
 import { motion, AnimatePresence } from 'framer-motion';
 import { useQueryClient } from '@tanstack/react-query';
 
-// Palavras-chave para detectar motos pelo modelo
-const MOTO_KEYWORDS = ['moto', 'motocicleta', 'ciclomotor', 'triciclo', 'nxr', 'cg ', 'cg-', 'bros', 'cb ', 'cb-', 'cbr', 'pcx', 'factor', 'biz', 'pop', 'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr', 'neo', 'fluo', 'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'dl ', 'scooter'];
+import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
+import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 
 function detectarTipoVeiculoDaCotacao(cotacao: any): 'carro' | 'moto' {
   // 1. Verificar categoria explícita
@@ -34,10 +34,9 @@ function detectarTipoVeiculoDaCotacao(cotacao: any): 'carro' | 'moto' {
     if (catLower === 'moto' || catLower.includes('motocicleta') || catLower.includes('ciclomotor')) return 'moto';
     return 'carro';
   }
-  // 2. Analisar modelo do veículo
-  const modelo = (cotacao.veiculo_modelo || '').toLowerCase();
-  if (MOTO_KEYWORDS.some(kw => modelo.includes(kw))) return 'moto';
-  return 'carro';
+  // 2. Fallback: keywords síncrono
+  const tipo = detectarTipoVeiculo(undefined, cotacao.veiculo_modelo, cotacao.veiculo_marca);
+  return tipo === 'moto' ? 'moto' : 'carro';
 }
 
 // NOVO FLUXO: 1-Plano, 2-Docs, 3-Contrato (Autentique), 4-Vistoria, 5-Pagamento

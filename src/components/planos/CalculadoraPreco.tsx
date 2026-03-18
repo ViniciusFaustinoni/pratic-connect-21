@@ -13,6 +13,7 @@ import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
 import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { maskPlaca } from '@/lib/validations';
@@ -143,7 +144,7 @@ function usePlanosComPrecoMap() {
   });
 }
 
-/** Detect vehicle type from plate-lookup response */
+/** Detect vehicle type from plate-lookup response (sync fallback only — hook is used in component) */
 function detectarTipoFromPlaca(dados: VeiculoPlaca): TipoVeiculo {
   const tipoDetectado = detectarTipoVeiculo(undefined, dados.modelo, dados.marca);
   return tipoDetectado === 'moto' ? 'moto' : 'carro';

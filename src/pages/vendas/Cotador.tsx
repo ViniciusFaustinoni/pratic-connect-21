@@ -46,7 +46,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { toast } from 'sonner';
 import { useFipe } from '@/hooks/useFipe';
 import { cn } from '@/lib/utils';
-import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useAllLeads, useUpdateLead } from '@/hooks/useLeads';
 import { useCriarCotacao } from '@/hooks/useCotacao';
 import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hooks/usePlanosCotacao';
@@ -334,11 +334,7 @@ export default function CotadorPage() {
   const { data: leadsData, isLoading: loadingLeads } = useAllLeads();
   
   // Detectar tipo de veículo automaticamente
-  const tipoVeiculoDetectado = useMemo(() => {
-    if (!marca && !modelo) return 'carro' as const;
-    const tipo = detectarTipoVeiculo(undefined, modelo, marca);
-    return tipo === 'moto' ? 'moto' as const : 'carro' as const;
-  }, [marca, modelo]);
+  const { tipoVeiculo: tipoVeiculoDetectado } = useDetectarTipoVeiculo(marca, modelo);
 
   // Hook de planos com filtro por uso (aplicativo vs passeio)
   const parametrosPlanos = useMemo(() => ({

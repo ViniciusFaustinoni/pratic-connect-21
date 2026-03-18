@@ -630,7 +630,7 @@ serve(async (req) => {
       return combustivel.toLowerCase();
     };
 
-    const inferirTipoVeiculo = (categoria: string | null, marca?: string | null, modelo?: string | null): number => {
+    const inferirTipoVeiculo = async (categoria: string | null, marca?: string | null, modelo?: string | null): Promise<number> => {
       if (categoria) {
         const cat = categoria.toUpperCase().trim();
         if (cat.includes('MOTO') || cat.includes('MOTOCICLETA')) return 2;
@@ -640,6 +640,23 @@ serve(async (req) => {
         if (cat.includes('REBOQUE') || cat.includes('SEMI-REBOQUE')) return 6;
       }
       
+      // Consulta dinâmica à plano_elegibilidade_modelos
+      const marcaNorm = (marca || '').trim().toUpperCase();
+      const modeloNorm = (modelo || '').trim().toUpperCase();
+      if (marcaNorm && modeloNorm) {
+        const { data } = await supabase
+          .from('plano_elegibilidade_modelos')
+          .select('linha_slug')
+          .ilike('marca', marcaNorm)
+          .ilike('modelo', `%${modeloNorm}%`)
+          .eq('is_active', true)
+          .limit(5);
+        if (data && data.length > 0) {
+          return data.some((r: any) => r.linha_slug === 'advanced') ? 2 : 1;
+        }
+      }
+
+      // Fallback: keywords
       const MOTO_KEYWORDS = ['nxr', 'bros', 'cg ', 'cg-', 'cb ', 'cb-', 'cbr', 'pcx', 'biz', 'pop', 
         'titan', 'fan', 'xre', 'lander', 'tenere', 'ténéré', 'crosser', 'fazer', 'ybr', 'neo',
         'burgman', 'intruder', 'factor', 'scooter', 'lead', 'sahara', 'transalp', 'africa twin',
@@ -647,7 +664,8 @@ serve(async (req) => {
         'gsx', 'v-strom', 'vstrom', 'dl ', 'boulevard', 'hayabusa', 'ninja', 'versys', 'z900', 'z800', 'z750',
         'duke', 'adventure', 'rc ', 'apache', 'speed', 'street', 'bonneville', 'tiger',
         'sportster', 'iron', 'fat bob', 'softail', 'electra', 'road king',
-        'riva', 'kansas', 'mirage', 'horizon', 'jet', 'citicom', 'citycom'];
+        'riva', 'kansas', 'mirage', 'horizon', 'jet', 'citicom', 'citycom',
+        'elite', 'adv', 'sh ', 'sh-', 'xadv', 'x-adv'];
       if (modelo && MOTO_KEYWORDS.some(kw => modelo.toLowerCase().includes(kw))) return 2;
       
       const MARCAS_MOTO = ['YAMAHA', 'SUZUKI', 'KAWASAKI', 'HARLEY', 'TRIUMPH', 
@@ -1248,7 +1266,7 @@ serve(async (req) => {
     }
 
     const combustivelNormalizado = normalizarCombustivel(veiculo.combustivel);
-    const tipoVeiculoInferido = inferirTipoVeiculo(contrato?.veiculo_categoria, veiculo.marca, veiculo.modelo);
+    const tipoVeiculoInferido = await inferirTipoVeiculo(contrato?.veiculo_categoria, veiculo.marca, veiculo.modelo);
 
     const veiculoPayload = {
       codigo_associado: codigoAssociadoHinova,

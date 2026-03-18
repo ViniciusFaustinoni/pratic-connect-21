@@ -4,7 +4,7 @@ import { useAssociadoSearch } from '@/hooks/useAssociadoSearch';
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
 import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useMigracaoConfig, useObservacoesCategoria } from '@/hooks/useConteudosSistema';
-import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
+import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
 import { zodResolver } from '@hookform/resolvers/zod';
@@ -315,16 +315,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   }, [marcas]);
 
   // Detectar tipo de veículo automaticamente (moto vs carro)
+  const marcaParaDeteccao = veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
+  const modeloParaDeteccao = veiculoEncontrado?.vehicleData?.modelo || '';
+  const { tipoVeiculo: tipoFromHook } = useDetectarTipoVeiculo(marcaParaDeteccao, modeloParaDeteccao);
+  
   const tipoVeiculoDetectado = useMemo(() => {
-    // Se o vendedor selecionou marca manualmente, usar o tipo da marca
+    // Se o vendedor selecionou marca manualmente como moto, usar direto
     if (marcaSelecionada && tipoFipeSelecionado === 'motos') return 'moto' as const;
-    // Fallback para detecção por nome (busca por placa/código)
-    const marca = veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
-    const modelo = veiculoEncontrado?.vehicleData?.modelo || '';
-    if (!marca && !modelo) return 'carro' as const;
-    const tipo = detectarTipoVeiculo(undefined, modelo, marca);
-    return tipo === 'moto' ? 'moto' as const : 'carro' as const;
-  }, [veiculoEncontrado, marcaSelecionada, getMarcaNomeFromCodigo, tipoFipeSelecionado]);
+    return tipoFromHook;
+  }, [marcaSelecionada, tipoFipeSelecionado, tipoFromHook]);
 
   // Resolver marca/modelo para elegibilidade
   const marcaResolvida = useMemo(() => {
