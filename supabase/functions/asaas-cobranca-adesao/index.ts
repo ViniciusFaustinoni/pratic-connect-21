@@ -2,6 +2,35 @@ import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
+function validarCPF(cpf: string): boolean {
+  if (/^(\d)\1+$/.test(cpf)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cpf[i]) * (10 - i);
+  let r = (sum * 10) % 11;
+  if (r === 10 || r === 11) r = 0;
+  if (r !== parseInt(cpf[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cpf[i]) * (11 - i);
+  r = (sum * 10) % 11;
+  if (r === 10 || r === 11) r = 0;
+  return r === parseInt(cpf[10]);
+}
+
+function validarCNPJ(cnpj: string): boolean {
+  if (/^(\d)\1+$/.test(cnpj)) return false;
+  let size = cnpj.length - 2;
+  let numbers = cnpj.substring(0, size);
+  const digits = cnpj.substring(size);
+  let sum = 0, pos = size - 7;
+  for (let i = size; i >= 1; i--) { sum += parseInt(numbers.charAt(size - i)) * pos--; if (pos < 2) pos = 9; }
+  let result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  if (result !== parseInt(digits.charAt(0))) return false;
+  size += 1; numbers = cnpj.substring(0, size); sum = 0; pos = size - 7;
+  for (let i = size; i >= 1; i--) { sum += parseInt(numbers.charAt(size - i)) * pos--; if (pos < 2) pos = 9; }
+  result = sum % 11 < 2 ? 0 : 11 - (sum % 11);
+  return result === parseInt(digits.charAt(1));
+}
+
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
