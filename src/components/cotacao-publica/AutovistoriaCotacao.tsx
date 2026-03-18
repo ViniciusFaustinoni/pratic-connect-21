@@ -13,7 +13,6 @@ import {
   Info,
   X,
   RefreshCw,
-  Video
 } from 'lucide-react';
 import { getFotosAutovistoria, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
 import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao } from '@/hooks/useCotacaoVistoria';
