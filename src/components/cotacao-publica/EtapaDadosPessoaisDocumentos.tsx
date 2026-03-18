@@ -539,7 +539,9 @@ export function EtapaDadosPessoaisDocumentos({
                     <Car className="h-4 w-4 text-success" />
                     <h4 className="font-medium text-sm">Dados do Veículo</h4>
                     <Badge variant="outline" className="text-xs border-success/30 text-success">
-                      Extraído do CRLV
+                      {dadosExtraidos.origem_documento_veiculo === 'nota_fiscal_veiculo' 
+                        ? 'Extraído da Nota Fiscal' 
+                        : 'Extraído do CRLV'}
                     </Badge>
                   </div>
                   <div className="grid grid-cols-2 gap-3 text-sm">
