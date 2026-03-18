@@ -48,6 +48,7 @@ interface CobrancaData {
 type FormaPagamento = 'PIX' | 'CREDIT_CARD';
 
 type EtapaInterna = 'gerando_contrato' | 'criando_cobranca' | 'aguardando_pagamento' | 'pago' | 'erro';
+// NOTA: 'gerando_contrato' agora é apenas "buscando contrato" — não gera mais
 
 export function EtapaPagamentoCotacao({
   cotacaoId,
