@@ -285,21 +285,16 @@ serve(async (req) => {
           name: documentName,
         },
         signers: [
-          {
-            name: params.clienteNome,
-            email: params.clienteEmail,
-            action: "SIGN",
-            configs: {
-              cpf: (params.clienteCpf || '').replace(/\D/g, ''),
-            },
-            positions: [
-              {
-                x: "50",
-                y: "80",
-                z: "1",
-              }
-            ]
-          }
+          (() => {
+            const cpfRaw = (params.clienteCpf || '').replace(/\D/g, '');
+            const cpfOk = cpfRaw.length === 11 && !/^(\d)\1{10}$/.test(cpfRaw) && (() => {
+              for (let t = 9; t < 11; t++) { let d = 0; for (let c = 0; c < t; c++) d += parseInt(cpfRaw[c]) * ((t+1)-c); d = ((10*d)%11)%10; if (parseInt(cpfRaw[t]) !== d) return false; } return true;
+            })();
+            console.log(`[autentique-vistoria-create] CPF: ${cpfRaw} (válido: ${cpfOk})`);
+            const s: any = { name: params.clienteNome, email: params.clienteEmail, action: "SIGN", positions: [{ x: "50", y: "80", z: "1" }] };
+            if (cpfOk) s.configs = { cpf: cpfRaw };
+            return s;
+          })()
         ],
         file: null,
       },
