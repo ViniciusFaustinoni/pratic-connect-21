@@ -3,6 +3,7 @@ import { CreditCard, QrCode, Loader2, Check, Copy, FileText } from 'lucide-react
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { supabase } from '@/integrations/supabase/client';
+import { validateCPF } from '@/lib/validations';
 import { toast } from 'sonner';
 
 interface PagamentoAdesaoProps {
@@ -121,6 +122,11 @@ export function PagamentoAdesao({
 
   const criarCobranca = async () => {
     try {
+      const cpfNormalizado = clienteCpf?.replace(/\D/g, '') || '';
+      if (!validateCPF(cpfNormalizado)) {
+        throw new Error('O CPF informado neste cadastro é inválido. Corrija os dígitos do CPF antes de gerar a cobrança.');
+      }
+
       // Chamar edge function para criar cobrança no Asaas
       const { data, error } = await supabase.functions.invoke('asaas-cobranca-adesao', {
         body: {
@@ -130,7 +136,7 @@ export function PagamentoAdesao({
           cliente: {
             nome: clienteNome,
             email: clienteEmail,
-            cpfCnpj: clienteCpf?.replace(/\D/g, ''),
+            cpfCnpj: cpfNormalizado,
           },
         },
       });

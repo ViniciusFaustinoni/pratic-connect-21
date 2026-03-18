@@ -6,6 +6,31 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 }
 
+function validarCPF(cpf: string): boolean {
+  const cleaned = cpf.replace(/\D/g, '');
+  if (cleaned.length !== 11) return false;
+  if (/^(\d)\1+$/.test(cleaned)) return false;
+
+  let sum = 0;
+  for (let i = 0; i < 9; i++) {
+    sum += Number(cleaned[i]) * (10 - i);
+  }
+
+  let remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+  if (remainder !== Number(cleaned[9])) return false;
+
+  sum = 0;
+  for (let i = 0; i < 10; i++) {
+    sum += Number(cleaned[i]) * (11 - i);
+  }
+
+  remainder = (sum * 10) % 11;
+  if (remainder === 10 || remainder === 11) remainder = 0;
+
+  return remainder === Number(cleaned[10]);
+}
+
 interface GerarContratoPayload {
   cotacao_id: string;
   vendedor_id?: string;
@@ -283,9 +308,14 @@ serve(async (req) => {
     const nomeFinal = clienteNome;
     const emailFinal = clienteEmail;
     const telefoneFinal = clienteTelefone;
+    const cpfLimpo = cpfFinal?.replace(/\D/g, '') || '';
     
-    if (!cpfFinal || cpfFinal.replace(/\D/g, '').length !== 11) {
+    if (!cpfLimpo || cpfLimpo.length !== 11) {
       throw new Error('CPF é obrigatório para gerar o contrato. Complete os dados antes de continuar.');
+    }
+
+    if (!validarCPF(cpfLimpo)) {
+      throw new Error('O CPF informado nesta cotação é inválido. Corrija os dígitos do CPF antes de gerar o contrato.');
     }
 
     if (!nomeFinal || nomeFinal.includes('Cliente Cotação')) {
@@ -296,11 +326,11 @@ serve(async (req) => {
     let associadoId = null;
     let veiculoId: string | null = null;
     
-    const cpfLimpo = cpfFinal.replace(/\D/g, '');
+    const cpfNormalizado = cpfLimpo;
     const { data: associadoExistente } = await supabase
       .from('associados')
       .select('id, email, telefone')
-      .eq('cpf', cpfLimpo)
+      .eq('cpf', cpfNormalizado)
       .maybeSingle();
     
     if (associadoExistente) {
