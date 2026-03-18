@@ -63,6 +63,7 @@ export function useDetectarTipoVeiculo(
         }
 
         // Checar modelos genéricos ("TODOS OS MODELOS NACIONAIS" etc.)
+        // MAS só classificar como moto se a marca NÃO tiver registros em linhas de carro
         const { data: genericData } = await supabase
           .from('plano_elegibilidade_modelos')
           .select('linha_slug, modelo')
@@ -77,7 +78,22 @@ export function useDetectarTipoVeiculo(
             r.modelo?.toUpperCase().includes('NACIONAL') ||
             r.modelo?.toUpperCase().includes('IMPORTAD')
           );
-          if (hasGeneric) return 'moto';
+          if (hasGeneric) {
+            // Verificar se a marca também tem registros em linhas NÃO-advanced (marca mista)
+            const { data: nonAdvanced } = await supabase
+              .from('plano_elegibilidade_modelos')
+              .select('id')
+              .ilike('marca', marcaNorm)
+              .neq('linha_slug', 'advanced')
+              .eq('is_active', true)
+              .limit(1);
+
+            // Só classificar como moto se NÃO houver registros em outras linhas
+            if (!nonAdvanced || nonAdvanced.length === 0) {
+              return 'moto';
+            }
+            // Marca mista com genérico advanced → não conclusivo, segue para fallback
+          }
         }
       }
 
