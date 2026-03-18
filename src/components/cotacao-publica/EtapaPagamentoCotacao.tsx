@@ -154,6 +154,11 @@ export function EtapaPagamentoCotacao({
         return;
       }
 
+      const cpfNormalizado = clienteCpf?.replace(/\D/g, '') || '';
+      if (!validateCPF(cpfNormalizado)) {
+        throw new Error('O CPF informado nesta cotação é inválido. Corrija os dígitos do CPF antes de gerar a cobrança.');
+      }
+
       // Criar nova cobrança via edge function (usar UNDEFINED para permitir múltiplas formas)
       console.log('[EtapaPagamento] Criando nova cobrança...');
       const { data, error } = await publicSupabase.functions.invoke('asaas-cobranca-adesao', {
@@ -164,7 +169,7 @@ export function EtapaPagamentoCotacao({
           cliente: {
             nome: clienteNome,
             email: clienteEmail,
-            cpfCnpj: clienteCpf?.replace(/\D/g, ''),
+            cpfCnpj: cpfNormalizado,
           },
         },
       });

@@ -330,7 +330,7 @@ serve(async (req) => {
     const { data: associadoExistente } = await supabase
       .from('associados')
       .select('id, email, telefone')
-      .eq('cpf', cpfLimpo)
+      .eq('cpf', cpfNormalizado)
       .maybeSingle();
     
     if (associadoExistente) {
