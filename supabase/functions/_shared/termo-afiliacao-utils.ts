@@ -318,6 +318,13 @@ export function mapearDadosParaTemplate(
   empresa: any,
   lead?: any,
   associado?: any,
+  vendedorNome?: string | null,
+  veiculoDB?: any,
+): TermoAfiliacaoData {
+  plano: any,
+  empresa: any,
+  lead?: any,
+  associado?: any,
   vendedorNome?: string | null
 ): TermoAfiliacaoData {
   // Usar dados do associado se existir, senão do lead
