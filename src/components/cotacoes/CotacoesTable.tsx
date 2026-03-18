@@ -507,24 +507,44 @@ export function CotacoesTable({
                   {/* Ações */}
                   <TableCell onClick={(e) => e.stopPropagation()} className="py-3">
                     <div className="flex items-center gap-1">
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <Button
-                            size="icon"
-                            variant="ghost"
-                            className="h-8 w-8 text-green-600 hover:text-green-700 hover:bg-green-500/10"
-                            onClick={() => onCopiarWhatsApp(cotacao)}
-                            disabled={isCopiando || permissions.canSend === false}
-                          >
-                            {isCopiando ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <ClipboardCopy className="h-4 w-4" />
-                            )}
-                          </Button>
-                        </TooltipTrigger>
-                        <TooltipContent>Copiar para WhatsApp</TooltipContent>
-                      </Tooltip>
+                      {cotacao.token_publico && (
+                        <>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 hover:bg-muted"
+                                onClick={() => {
+                                  const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
+                                  window.open(link, '_blank');
+                                }}
+                              >
+                                <ExternalLink className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Acessar Link</TooltipContent>
+                          </Tooltip>
+                          
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <Button
+                                size="icon"
+                                variant="ghost"
+                                className="h-8 w-8 hover:bg-muted"
+                                onClick={() => {
+                                  const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
+                                  navigator.clipboard.writeText(link);
+                                  toast.success('Link copiado!');
+                                }}
+                              >
+                                <Link2 className="h-4 w-4" />
+                              </Button>
+                            </TooltipTrigger>
+                            <TooltipContent>Copiar Link</TooltipContent>
+                          </Tooltip>
+                        </>
+                      )}
                       
                       <Tooltip>
                         <TooltipTrigger asChild>
@@ -553,25 +573,13 @@ export function CotacoesTable({
                             Ver Detalhes
                           </DropdownMenuItem>
                           
-                          {cotacao.token_publico && (
-                            <>
-                              <DropdownMenuItem onClick={() => {
-                                const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-                                window.open(link, '_blank');
-                              }}>
-                                <ExternalLink className="h-4 w-4 mr-2" />
-                                Acessar Link
-                              </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => {
-                                const link = `${window.location.origin}/cotacao/${cotacao.token_publico}`;
-                                navigator.clipboard.writeText(link);
-                                toast.success('Link copiado!');
-                              }}>
-                                <Link2 className="h-4 w-4 mr-2" />
-                                Copiar Link
-                              </DropdownMenuItem>
-                            </>
-                          )}
+                          <DropdownMenuItem 
+                            onClick={() => onCopiarWhatsApp(cotacao)}
+                            disabled={isCopiando || permissions.canSend === false}
+                          >
+                            <ClipboardCopy className="h-4 w-4 mr-2" />
+                            Copiar para WhatsApp
+                          </DropdownMenuItem>
                           
                           {permissions.canDuplicate && (
                             <>
