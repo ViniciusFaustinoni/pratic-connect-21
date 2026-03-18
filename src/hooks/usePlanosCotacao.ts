@@ -394,7 +394,15 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const sortPriority = plProductLine?.sort_priority || 100;
 
       // Filtrar por tipo de uso: passeio vs aplicativo
-      if (params.usoApp && tipoUsoPlano !== 'aplicativo' && tipoUsoPlano !== 'ambos') continue;
+      if (params.usoApp && tipoUsoPlano !== 'aplicativo' && tipoUsoPlano !== 'ambos') {
+        // APP + deságio: planos 'passeio' da linha select passam (preço será de deságio, não APP)
+        const appComDesagioAtivo = !!categoria && categoria !== 'nenhuma'
+          && categoriasQueSobrepoeApp.includes(categoria);
+        const isLinhaSelect = plProductLine?.slug?.toLowerCase()?.startsWith('select');
+        if (!(appComDesagioAtivo && tipoUsoPlano === 'passeio' && isLinhaSelect)) {
+          continue;
+        }
+      }
       if (!params.usoApp && tipoUsoPlano === 'aplicativo') continue;
 
       // Filtrar motos/carros/elétricos usando vehicle_type e linha_slug do banco
