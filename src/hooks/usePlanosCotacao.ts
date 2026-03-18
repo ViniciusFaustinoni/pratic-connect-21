@@ -142,6 +142,21 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
+  // Buscar categorias que sobrepõem APP (deságio anula adicional APP)
+  const { data: categoriasQueSobrepoeApp = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'categorias_que_sobrepoe_app'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'categorias_que_sobrepoe_app')
+        .maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; }
+      catch { return CATEGORIAS_DESAGIO_FALLBACK; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
   // Buscar planos reais do banco de dados com product_lines
   const { data: planosBanco, isLoading } = useQuery({
     queryKey: ['planos_cotacao'],
@@ -411,6 +426,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         continue;
       }
 
+      // SELECT EXCLUSIVE: ocultar quando APP + categoria de deságio combinam
+      const isAppComDesagio = params.usoApp && !!categoria && categoria !== 'nenhuma'
+        && categoriasQueSobrepoeApp.includes(categoria);
+      if (isAppComDesagio && (plano.codigo?.toLowerCase().includes('exclusive') || plSlug === 'select-exclusive')) {
+        continue;
+      }
+
       // Filtrar por categorias aceitas no plano (campo categoria do plano)
       const categoriasAceitasPlano = categoriaPlano
         ? categoriaPlano.split(',').map((c: string) => c.trim().toLowerCase()).filter(Boolean)
@@ -499,13 +521,17 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Deságio: derive flag from category
       const isDesagio = !!categoria && categoriasDesagio.includes(categoria);
 
-      // Bug 1 fix: use valor_desagio as base price for eligible lines
-      if (isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || '')) {
+      // SELECT ONE (coluna dedicada APP): ignorar deságio, usar preço APP direto
+      const temColunaAppDedicada = configApp.linhasComColunaApp.includes(linhaSlug || '');
+
+      // Aplicar valor_desagio apenas para linhas sem coluna APP dedicada
+      if (isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || '') && !temColunaAppDedicada) {
         valorMensal = valorDesagio;
       }
 
-      // Aplicar adicional app se necessário
-      if (linhaSlug && tipoUsoOriginal === 'aplicativo') {
+      // Adicional APP: NÃO aplicar se a categoria está em categorias_que_sobrepoe_app
+      const categoriaAnulaApp = isDesagio && categoriasQueSobrepoeApp.includes(categoria || '');
+      if (linhaSlug && tipoUsoOriginal === 'aplicativo' && !categoriaAnulaApp) {
         valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp, configApp);
       }
 
@@ -618,7 +644,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
         anoMinimo: anoMinimo || undefined,
         elegibilidadeStatus,
-        precoDesagioAplicado: isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || ''),
+        precoDesagioAplicado: isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || '') && !temColunaAppDedicada,
       });
     }
 
@@ -633,7 +659,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     return { planos: sorted, planosNegados: negados };
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading, configApp, cotasCategoriaData]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading, configApp, cotasCategoriaData, categoriasQueSobrepoeApp]);
 
   return {
     planos,
