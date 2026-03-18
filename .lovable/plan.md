@@ -1,167 +1,94 @@
-## Correção SGA Hinova — Sincronização Falhando — ✅ Implementado
 
-### Causas Raiz Identificadas
-1. **`return new Response(...)` dentro de `doBackgroundSync`** — Responses descartadas silenciosamente (background closure, não handler HTTP)
-2. **Loop infinito de CPF duplicado** — CPF existe no Hinova mas busca retorna 404/406, gerando retry infinito
-3. **Código associado inválido em cascata** — códigos de outra conta Hinova causam falha no cadastro de veículo
 
-### Correções Aplicadas
+## Analise Mobile-First: Diagnóstico e Plano de Correção
 
-1. **`sga-hinova-sync/index.ts`**:
-   - Substituídos 11 `return new Response(...)` por `return;` dentro de `doBackgroundSync`
-   - Adicionado **guard de loop infinito** no início do background: se 3+ falhas consecutivas de CPF duplicado, marca como `falha_permanente` e para de retentar
+### Diagnóstico
 
-2. **`cron-sga-retry/index.ts`**:
-   - Adicionada **detecção de loops** antes de reprocessar: se 5+ tentativas com mesmo padrão de erro (CPF duplicado, "não aceitável"), marca como `falha_permanente` e pula o item
+Analisei o sistema inteiro e encontrei **problemas significativos de mobile-first** em diversas áreas. O padrão correto no Tailwind é começar com o layout mobile (sem prefixo) e escalar para cima (`sm:`, `md:`, `lg:`). Muitas telas fazem o oposto ou não adaptam nada.
 
----
+### Problemas encontrados
 
-## Painel de Monitoramento SGA Hinova — ✅ Implementado
+**1. Grids fixos sem breakpoints (problema mais grave)**
+Encontrei **330 ocorrências em 43 arquivos** de `grid grid-cols-X` sem prefixo responsivo, forçando 3-7 colunas mesmo em telas pequenas. Exemplos críticos:
 
-### O que foi criado
+- `OuvidoriaDashboard.tsx` — `grid-cols-5` fixo (5 cards lado a lado no celular)
+- `CobrancasList.tsx` — `grid-cols-4` fixo para KPIs
+- `IndicadoresAtuariais.tsx` — `grid-cols-5` fixo para KPIs
+- `NovaManifestacao.tsx` — `grid-cols-5` fixo para tipos
+- `PlanosConfig.tsx` — `grid-cols-3` e `grid-cols-4` fixos em formulários
+- `ContasBancarias.tsx` — `grid-cols-3` fixo
+- `ReguladorOficina.tsx` — `grid-cols-3` fixo para filtros
+- `ConfigPlataformas.tsx` — `grid-cols-3` fixo para estatísticas
+- Vários modais de oficina, jurídico, marketing com grids fixos
 
-1. **Página `/configuracoes/integracoes/sga-hinova`** com:
-   - Status de conexão com API Hinova (teste em tempo real)
-   - Fila de sincronização com filtros e ações (Reprocessar / Descartar)
-   - Logs recentes dos últimos 50 registros
-   - Veículos pendentes (ativos não sincronizados) com envio individual
-   - Histórico de health checks
+**2. Calendários `grid-cols-7` (aceitável)**
+Os 6 arquivos com `grid-cols-7` são calendários — semanticamente correto ter 7 colunas (dias da semana). Não precisam de correção.
 
-2. **Edge Function `cron-sga-health-check`**: Testa conexão, conta pendências e falhas, armazena resultado em `sga_health_checks`, notifica admins se houver problemas.
+**3. Grids de fotos `grid-cols-3` (parcialmente aceitável)**
+Páginas do instalador e sinistros usam `grid-cols-3` para miniaturas de fotos — funciona em mobile por serem imagens pequenas, mas algumas podem beneficiar de `grid-cols-2 sm:grid-cols-3`.
 
-3. **Tabela `sga_health_checks`**: Armazena resultados dos health checks automáticos.
+**4. Componentes que já estão corretos**
+- `Dashboard.tsx` — `grid-cols-2 lg:grid-cols-4` ✓
+- `AppHeader.tsx` — responsive com `sm:` e `md:` ✓
+- `AppLayout.tsx` — responsive ✓
+- `AppBottomNav.tsx` — mobile-only com `md:hidden` ✓
+- `DiretoriaDashboard.tsx` — `md:grid-cols-4 lg:grid-cols-7` ✓
 
-4. **Cron job**: Precisa ser agendado via SQL Editor do Supabase (3x ao dia: 8h, 13h, 18h).
+### Plano de Correção
 
----
+Vou corrigir os arquivos mais impactantes em **3 lotes** por prioridade:
 
-## Health Check Universal para Todas as Integrações — ✅ Implementado
+**Lote 1 — Dashboards e KPIs (mais visíveis ao usuário)**
 
-### O que foi criado
+| Arquivo | De | Para |
+|---|---|---|
+| `OuvidoriaDashboard.tsx` | `grid-cols-5` | `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5` |
+| `NovaManifestacao.tsx` | `grid-cols-5` | `grid-cols-2 sm:grid-cols-3 lg:grid-cols-5` |
+| `CobrancasList.tsx` | `grid-cols-4` | `grid-cols-2 md:grid-cols-4` |
+| `IndicadoresAtuariais.tsx` | `grid-cols-5` | `grid-cols-2 md:grid-cols-3 lg:grid-cols-5` |
+| `OrdensServicoList.tsx` | `grid-cols-5` | `grid-cols-2 md:grid-cols-3 lg:grid-cols-5` |
+| `ProcessosList.tsx` | `grid-cols-5` | `grid-cols-2 md:grid-cols-3 lg:grid-cols-5` |
+| `SindicanciasList.tsx` | `grid-cols-4` | `grid-cols-2 md:grid-cols-4` |
 
-1. **Tabela `integracoes_health_checks`** (genérica):
-   - Campos: `integracao`, `conexao_ok`, `tempo_resposta_ms`, `detalhes` (JSONB), `erro_mensagem`
-   - Dados existentes do SGA migrados automaticamente
-   - RLS: leitura para autenticados, escrita para service_role
+**Lote 2 — Formulários e Modais**
 
-2. **Edge Function `cron-integracoes-health-check`**:
-   - Testa 8 integrações: ASAAS, WhatsApp, Autentique, SGA Hinova, Softruck, Rede Veículos, Email/Resend, OpenAI
-   - Suporta teste individual (`{ integracao: "asaas" }`) ou todas de uma vez
-   - Notifica admins (role `diretor`) se qualquer integração falhar
-   - Grava resultado por integração na tabela genérica
+| Arquivo | De | Para |
+|---|---|---|
+| `PlanosConfig.tsx` | `grid-cols-3`, `grid-cols-4` | `grid-cols-1 sm:grid-cols-2 lg:grid-cols-3`, etc. |
+| `NovaOficinaModal.tsx` | `grid-cols-3` | `grid-cols-1 sm:grid-cols-3` |
+| `ContasBancarias.tsx` | `grid-cols-3` | `grid-cols-1 sm:grid-cols-3` |
+| `ReguladorOficina.tsx` | `grid-cols-3` filtros | `grid-cols-1 sm:grid-cols-3` |
+| `ProcessosList.tsx` | `grid-cols-6` filtros | `grid-cols-2 md:grid-cols-3 lg:grid-cols-6` |
+| `ConfigPlataformas.tsx` | `grid-cols-3` | `grid-cols-1 sm:grid-cols-3` |
+| `NovaAudienciaModal.tsx` | `grid-cols-3` | `grid-cols-1 sm:grid-cols-3` |
+| `CampanhaComunicacaoModal.tsx` | `grid-cols-3` | `grid-cols-1 sm:grid-cols-3` |
 
-3. **Componente `<IntegracaoHealthPanel />`** (reutilizável):
-   - Props: `integracao` (slug) e `titulo` (opcional)
-   - Exibe: status atual, tempo de resposta, taxa de sucesso, detalhes JSONB, histórico
-   - Botão "Testar agora" invoca a edge function para a integração específica
+**Lote 3 — Fotos e componentes secundários**
 
-4. **Hook `useIntegracaoHealthCheck(integracao)`**:
-   - Busca histórico filtrado por integração
-   - Mutation `testNow` para teste manual
-   - Hook `useAllLatestHealthChecks()` para indicadores nos cards
+| Arquivo | De | Para |
+|---|---|---|
+| `SinistroAnalise.tsx` | `grid-cols-5` fotos | `grid-cols-3 sm:grid-cols-5` |
+| `SindicanteCasoDetalhe.tsx` | `grid-cols-4` fotos | `grid-cols-3 sm:grid-cols-4` |
+| `PrestadorDetalhe.tsx` | `grid-cols-3` layout | `grid-cols-1 lg:grid-cols-3` |
+| `SimulacaoImpactoCard.tsx` | `grid-cols-3` | `grid-cols-1 sm:grid-cols-3` |
+| `SimuladorRateio.tsx` | `grid-cols-4` | `grid-cols-2 md:grid-cols-4` |
+| `IndicadoresDRE.tsx` | `grid-cols-4` | `grid-cols-2 md:grid-cols-4` |
+| `WhatsAppMetaTemplates.tsx` | `grid-cols-4` | `grid-cols-2 md:grid-cols-4` |
+| `FormPacoteFechado.tsx` | `grid-cols-4` | `grid-cols-2 md:grid-cols-4` |
+| `Sistema.tsx` (config) | `grid-cols-3` | `grid-cols-1 sm:grid-cols-3` |
 
-5. **Integração nas páginas**:
-   - `IntegracaoSGAHinova.tsx`: Tab "Health Check" usa `<IntegracaoHealthPanel integracao="hinova" />`
-   - `IntegracaoWhatsApp.tsx`: Nova tab "Health" com `<IntegracaoHealthPanel integracao="whatsapp" />`
-   - `Integracoes.tsx`: Bolinha colorida (verde/vermelha) com tooltip em cada card, mostrando último health check
+**Lote 4 — Outros componentes com grids fixos**
+Restante dos ~113 arquivos de componentes que também usam `grid-cols-X` sem breakpoints.
 
-6. **Cron job**: Deve ser agendado via SQL Editor (substitui o antigo):
-   ```sql
-   select cron.schedule(
-     'integracoes-health-check-3x-dia',
-     '0 8,13,18 * * *',
-     $$ select net.http_post(
-       url:='https://iyxdgmukrrdkffraptsx.supabase.co/functions/v1/cron-integracoes-health-check',
-       headers:='{"Content-Type":"application/json","Authorization":"Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI"}'::jsonb,
-       body:='{}'::jsonb
-     ) as request_id; $$
-   );
-   ```
+### Regra geral aplicada
 
-### Arquivos criados/modificados
-- `supabase/functions/cron-integracoes-health-check/index.ts` — Nova edge function universal
-- `src/hooks/useIntegracaoHealthCheck.ts` — Hook genérico
-- `src/components/integracoes/IntegracaoHealthPanel.tsx` — Componente reutilizável
-- `src/pages/configuracoes/IntegracaoSGAHinova.tsx` — Tab Health usando componente genérico
-- `src/pages/configuracoes/IntegracaoWhatsApp.tsx` — Nova tab Health
-- `src/pages/configuracoes/Integracoes.tsx` — Indicadores de health nos cards
-- `supabase/config.toml` — verify_jwt para nova function
+- `grid-cols-1` como base mobile
+- `grid-cols-2` para KPIs/cards em mobile (quando são cards pequenos)
+- `sm:` / `md:` / `lg:` para escalar progressivamente
+- Calendários (`grid-cols-7`) e grids de fotos pequenas (`grid-cols-3`) mantidos quando fazem sentido visual
 
----
+### Arquivos alterados
+~43 arquivos em `src/pages/` + ~70 em `src/components/` com correções de grid responsivo.
 
-## Correção Atribuição Automática — Geocode + Proteção de Coordenadas — ✅ Implementado
+Dado o volume, sugiro começar pelos **Lotes 1 e 2** (os mais visíveis e impactantes) e depois iterar nos demais.
 
-### Causas Raiz
-1. Serviço criado sem coordenadas (Nominatim 429 rate limit) → `atribuir-proxima-tarefa` retornava `sem_tarefas`
-2. `cron-atribuir-tarefas` atualizava `instalacoes` com colunas erradas (`latitude/longitude` em vez de `endereco_latitude/endereco_longitude`)
-3. Triggers de sync sobrescreviam coordenadas válidas com `null`
-
-### Correções Aplicadas
-
-1. **`atribuir-proxima-tarefa/index.ts`**: Geocodificação on-the-fly para serviços sem coordenadas (Nominatim + fallback bairro/cidade), persistindo em `servicos`, `instalacoes` e `vistorias`
-
-2. **`cron-atribuir-tarefas/index.ts`**: Corrigido nomes de colunas: `{ latitude, longitude }` → `{ endereco_latitude, endereco_longitude }` para updates em `instalacoes`. Adicionado log de erros em todos os updates.
-
-3. **Migration SQL (triggers)**: `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` agora usam `COALESCE(NEW.endereco_latitude, servicos.latitude)` para nunca apagar coordenadas válidas.
-
-4. **`geocode-endereco/index.ts`**: Retry automático em HTTP 429 (respeitando `Retry-After`), campo `reason` no retorno para monitoramento.
-
----
-
-## Correção Triggers Enum Mismatch (status_instalacao → status_servico) — ✅ Implementado
-
-### Causa Raiz
-Triggers `sync_instalacao_update_to_servicos` e `sync_vistoria_update_to_servicos` faziam `status = NEW.status` direto, mas `NEW.status` é `status_instalacao` e `servicos.status` é `status_servico` — erro PostgreSQL 42804 abortava toda atribuição automática.
-
-### Correções Aplicadas
-1. **Função `map_to_status_servico(text)`**: Mapeamento explícito e imutável de qualquer texto para `status_servico`, com fallback seguro.
-2. **Triggers corrigidos**: Ambos agora usam `public.map_to_status_servico(NEW.status::text)` em vez de atribuição direta.
-3. **Observabilidade**: `processar-encaixes-automaticos` agora loga `code/message/details/hint` do erro antes de classificar como concorrência.
-
----
-
-## Fluxo Completo Vendedor Externo — Adesão Zero + CC Automática — ✅ Implementado
-
-### Bloqueios de adesão zero removidos
-
-| Arquivo | Correção |
-|---------|----------|
-| `CotacaoFormDialog.tsx` | Erro visual e botão submit condicionados a `!isCenarioIsento` |
-| `EtapaResultado.tsx` | Nova prop `isCenarioIsento`, botão "Iniciar Cadastro" permite zero |
-| `Cotacao.tsx` | Gate `valorAdesaoFinal <= 0` só bloqueia se `!isVendedorExterno` |
-
-### Geração automática de lançamentos CC vendedor externo
-
-Integrado na Edge Function `criar-instalacao-pos-pagamento` (passo 6.1):
-1. Após criar instalação, busca `vendedor_id` da cotação
-2. Verifica se tem role `vendedor_externo` na tabela `user_roles`
-3. Busca configurações de comissão da tabela `configuracoes`
-4. Gera lançamentos conforme os 4 cenários (crédito adesão, débito volante, parcelas recorrentes)
-5. Proteção contra duplicatas (verifica se já existem lançamentos para o contrato)
-
----
-
-## Fluxo Completo Vendedor Externo — Autovistoria até Ativação 360 — ✅ Implementado
-
-### Gaps Corrigidos
-
-| Gap | Arquivo | Correção |
-|-----|---------|----------|
-| Propostas de autovistoria não apareciam no cadastro | `usePropostasPendentes.ts` L523 | Filtro agora permite propostas com `temAutovistoria` ou `temVistoriaBaseRealizada` mesmo sem instalação |
-| Race condition na isenção de adesão | `EtapaPagamentoCotacao.tsx` L245 | Passa `skipPaymentCheck: true` no body da Edge Function |
-| Edge Function falhava para autovistoria sem data | `criar-instalacao-pos-pagamento/index.ts` | Autovistoria sem data: pula instalação, mas gera lançamentos CC normalmente |
-| Aprovação ignorava preferências de agendamento | `usePropostasPendentes.ts` L1538-1590 | Busca `vistoria_completa_*` da cotação para criar instalação com dados do cliente |
-
-### Fluxo Corrigido
-
-```text
-Vendedor externo cria cotação (4 cenários)
-  → Cliente abre link → Plano → Docs → Assinatura → Vistoria → Pagamento/Isenção
-    → Edge Function gera lançamentos CC (mesmo sem data de instalação)
-    → Etapa 5: Cliente preenche preferência de agendamento
-    → Tela "Em Análise Cadastral"
-    → Proposta aparece no cadastro (filtro corrigido)
-    → Analista aprova → cobertura_roubo_furto = true
-    → Instalação criada COM dados de preferência do cliente
-    → Atribuição automática → Instalação → Proteção 360°
-```
