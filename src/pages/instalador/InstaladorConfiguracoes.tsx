@@ -1,4 +1,4 @@
-import { ArrowLeft, Settings, Bell, MapPin, Palette } from 'lucide-react';
+import { ArrowLeft, Settings, Bell, MapPin } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Switch } from '@/components/ui/switch';
