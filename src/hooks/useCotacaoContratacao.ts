@@ -420,7 +420,11 @@ export function useCotacaoContratacao(token: string | undefined) {
     mutationFn: async (dados: DadosPessoaisForm) => {
       if (!cotacao) throw new Error('Cotação não encontrada');
 
-      // 1. Salvar dados pessoais + dados do veículo extraídos do CRLV
+      // Validar CPF antes de persistir
+      const cpfLimpo = (dados.cpf || '').replace(/\D/g, '');
+      if (cpfLimpo && !validateCPF(cpfLimpo)) {
+        throw new Error('O CPF informado é inválido. Corrija os dígitos antes de continuar.');
+      }
       const { error } = await publicSupabase
         .from('cotacoes')
         .update({

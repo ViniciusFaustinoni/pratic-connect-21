@@ -254,6 +254,14 @@ export function EtapaDadosPessoaisDocumentos({
       toast.error('Envie todos os documentos necessários e preencha email e telefone.');
       return;
     }
+
+    // Validar CPF extraído pelo OCR antes de persistir
+    const cpfExtraido = dadosExtraidos.cpf || '';
+    const cpfLimpo = cpfExtraido.replace(/\D/g, '');
+    if (!cpfLimpo || !validateCPF(cpfLimpo)) {
+      toast.error('O CPF extraído do documento é inválido. Corrija manualmente antes de continuar.');
+      return;
+    }
     
     const dados: DadosPessoaisForm = {
       nome: dadosExtraidos.nome || '',
