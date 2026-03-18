@@ -806,6 +806,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setTelefoneAssociado(cotacaoParaEditar.telefone1_solicitante || '');
       setEmailAssociado(cotacaoParaEditar.email_solicitante || '');
       
+      // Preencher indicação
+      if (cotacaoParaEditar.indicador_id) {
+        setIsIndicacao(true);
+        setIndicadorId(cotacaoParaEditar.indicador_id);
+        setIndicadorNome(cotacaoParaEditar.indicador_nome || '');
+      }
+      
       // Preencher placa
       if (cotacaoParaEditar.veiculo_placa) {
         setPlaca(cotacaoParaEditar.veiculo_placa);
