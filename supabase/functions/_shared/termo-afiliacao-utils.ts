@@ -27,6 +27,13 @@ export interface ClienteData {
   cep: string;
 }
 
+export interface RegraDepreciacaoData {
+  flag: string;
+  label: string;
+  percentual: number;
+  adicional?: boolean;
+}
+
 export interface VeiculoData {
   placa: string;
   chassi?: string;
@@ -48,6 +55,13 @@ export interface VeiculoData {
   portas?: number;
   uso_aplicativo?: boolean;
   leilao?: boolean;
+  // Flags de depreciação
+  flag_placa_vermelha?: boolean;
+  flag_ex_taxi?: boolean;
+  flag_taxi_ativo?: boolean;
+  flag_chassi_remarcado?: boolean;
+  flag_ex_ressarcido?: boolean;
+  flag_avarias_vistoria?: boolean;
 }
 
 export interface PlanoData {

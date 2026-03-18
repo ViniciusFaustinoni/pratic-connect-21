@@ -44,6 +44,15 @@ export interface VeiculoData {
   tipoUso?: string;
   alienado?: boolean;
   financeira?: string;
+  // Flags de depreciação
+  flagPlacaVermelha?: boolean;
+  flagExTaxi?: boolean;
+  flagTaxiAtivo?: boolean;
+  flagChassiRemarcado?: boolean;
+  flagLeilao?: boolean;
+  flagExRessarcido?: boolean;
+  flagAvariaVistoria?: boolean;
+  usoAplicativo?: boolean;
 }
 
 export interface PlanoData {
