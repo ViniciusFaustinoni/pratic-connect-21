@@ -192,7 +192,7 @@ export default function IndicadoresAtuariais() {
       </div>
 
       {/* KPI Cards */}
-      <div className="grid grid-cols-5 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-5 gap-4">
         {/* Sinistralidade */}
         <Card>
           <CardContent className="pt-4">
@@ -420,7 +420,7 @@ export default function IndicadoresAtuariais() {
 
         {/* Tab Crescimento */}
         <TabsContent value="crescimento" className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <CardContent className="pt-4">
                 <p className="text-sm text-muted-foreground">Novos Associados (ano)</p>
@@ -503,7 +503,7 @@ export default function IndicadoresAtuariais() {
 
         {/* Tab Financeiro */}
         <TabsContent value="financeiro" className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <CardContent className="pt-4">
                 <p className="text-sm text-muted-foreground">Receita Bruta (ano)</p>

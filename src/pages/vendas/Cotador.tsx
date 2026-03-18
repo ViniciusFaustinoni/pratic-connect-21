@@ -1615,7 +1615,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
 
                     {/* Preços */}
                     <div className="rounded-lg border bg-muted/30 p-4 space-y-3">
-                      <div className="grid grid-cols-3 gap-4 text-center">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                         <div>
                           <p className="text-xs text-muted-foreground uppercase">Adesão</p>
                           <p className="text-lg font-bold">{formatCurrency(valorAdesaoCustom ?? planoAtual.valorAdesao)}</p>
@@ -1745,7 +1745,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
 
             {/* Box de valores */}
             <div className="rounded-lg border-2 border-primary/30 bg-primary/5 p-4 space-y-3">
-              <div className="grid grid-cols-3 gap-4 text-center">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-center">
                 <div>
                   <p className="text-xs text-muted-foreground uppercase mb-1">Adesão</p>
                   <Input

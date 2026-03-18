@@ -249,7 +249,7 @@ export function RegistrarPagamentoModal({
           </div>
 
           {/* Valores */}
-          <div className="grid grid-cols-3 gap-3 text-center">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 text-center">
             <div className="rounded-lg border p-3">
               <p className="text-xs text-muted-foreground">Valor Aprovado</p>
               <p className="font-semibold">{formatCurrency(valorAprovado)}</p>

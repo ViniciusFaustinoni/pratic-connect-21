@@ -211,7 +211,7 @@ export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: Agend
               <Clock className="h-4 w-4 text-primary" />
               Horário
             </label>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {horariosDisponiveis.map((horario) => {
                 const selecionado = horarioSelecionado === horario;
                 
@@ -261,7 +261,7 @@ export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: Agend
                 </div>
               </div>
               
-              <div className="grid grid-cols-3 gap-2">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                 <div className="col-span-2">
                   <Label htmlFor="logradouro" className="text-xs text-muted-foreground">Logradouro *</Label>
                   <Input

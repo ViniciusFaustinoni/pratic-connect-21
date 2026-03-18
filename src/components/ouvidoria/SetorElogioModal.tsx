@@ -29,7 +29,7 @@ export function SetorElogioModal({ open, onClose, onSelect }: SetorElogioModalPr
           </DialogDescription>
         </DialogHeader>
 
-        <div className="grid grid-cols-3 gap-3 mt-4">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mt-4">
           {setoresElogio.map((setor) => {
             const Icon = setor.icon;
             return (

@@ -454,7 +454,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
         </CardHeader>
         <CardContent className="space-y-4">
           {/* Counters */}
-          <div className="grid grid-cols-4 gap-2 text-center text-sm">
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 text-center text-sm">
             <div><p className="font-bold text-lg">{despacho.total_enviados}</p><p className="text-muted-foreground">Enviados</p></div>
             <div><p className="font-bold text-lg text-green-600">{aceitos.length}</p><p className="text-muted-foreground">Aceitos</p></div>
             <div><p className="font-bold text-lg text-red-600">{recusas}</p><p className="text-muted-foreground">Recusados</p></div>
@@ -728,7 +728,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
 
               {/* Preview das fotos selecionadas */}
               {fotosPreview.length > 0 && (
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {fotosPreview.map((fp, idx) => (
                     <div key={idx} className="relative group">
                       <img

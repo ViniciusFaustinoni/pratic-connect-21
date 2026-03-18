@@ -38,7 +38,7 @@ export function CustosReparosTable({ ano }: Props) {
   return (
     <div className="space-y-6">
       {/* Cards de Resumo */}
-      <div className="grid grid-cols-4 gap-4">
+      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
         {categorias.map(cat => {
           const config = CATEGORIA_CONFIG[cat.tipo];
           const Icon = config?.icon || Cog;

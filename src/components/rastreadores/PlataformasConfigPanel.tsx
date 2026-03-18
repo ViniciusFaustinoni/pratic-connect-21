@@ -279,7 +279,7 @@ export function PlataformasConfigPanel() {
                   </div>
 
                   {/* Estatísticas */}
-                  <div className="grid grid-cols-3 gap-2 rounded-lg bg-muted/50 p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-lg bg-muted/50 p-3">
                     <div className="text-center">
                       <p className="text-2xl font-bold">{stats.total}</p>
                       <p className="text-xs text-muted-foreground">Total</p>

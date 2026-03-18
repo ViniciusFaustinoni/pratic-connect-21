@@ -947,7 +947,7 @@ export default function SinistroAnalise() {
                       {linkEvento.dados_etapa1?.arquivos_urls?.length > 0 && (
                         <div>
                           <p className="text-sm font-medium mb-2">Fotos do Veículo ({linkEvento.dados_etapa1.arquivos_urls.length})</p>
-                          <div className="grid grid-cols-3 gap-2">
+                          <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                             {linkEvento.dados_etapa1.arquivos_urls.map((url: string, idx: number) => {
                               const isVideo = /\.(mp4|webm|mov)$/i.test(url);
                               return isVideo ? (
@@ -1149,7 +1149,7 @@ export default function SinistroAnalise() {
                         </CardHeader>
                         <CardContent>
                           {todasFotos.length > 0 ? (
-                            <div className="grid grid-cols-3 gap-2">
+                            <div className="grid grid-cols-2 sm:grid-cols-3 gap-2">
                               {todasFotos.map((foto, idx) => (
                                 <div
                                   key={foto.id}
@@ -1213,7 +1213,7 @@ export default function SinistroAnalise() {
                                   <Separator />
                                   <div>
                                     <p className="text-sm font-semibold mb-2">📸 Fotos do Regulador ({fotosRegulador.length})</p>
-                                    <div className="grid grid-cols-5 gap-2">
+                                    <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
                                       {fotosRegulador.map((url, i) => (
                                         <img
                                           key={i}

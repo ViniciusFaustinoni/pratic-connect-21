@@ -140,7 +140,7 @@ export function UploadFotosButton({
 
       {/* Selected files grid */}
       {selectedFiles.length > 0 && (
-        <div className="grid grid-cols-4 gap-2">
+        <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
           {selectedFiles.map((sf) => (
             <div key={sf.id} className="relative aspect-square">
               <img

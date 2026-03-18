@@ -258,7 +258,7 @@ export default function ComissoesConfig() {
 
         {/* Tabs */}
         <Tabs value={abaAtiva} onValueChange={setAbaAtiva}>
-          <TabsList className="grid w-full grid-cols-7 h-auto">
+          <TabsList className="grid w-full grid-cols-4 sm:grid-cols-7 h-auto">
             <TabsTrigger value="adesao" className="flex flex-col gap-1 py-2">
               <DollarSign className="h-4 w-4" />
               <span className="text-xs">Adesão</span>

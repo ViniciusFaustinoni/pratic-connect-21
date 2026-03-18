@@ -195,7 +195,7 @@ export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: Pla
         <CollapsibleContent>
           <CardContent className="pt-0 pb-4 space-y-4">
             {/* Cotas */}
-            <div className="grid grid-cols-3 gap-4 text-sm">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 text-sm">
               {plan.cota_passeio_percent && (
                 <div className="bg-muted/50 p-3 rounded-lg">
                   <p className="text-muted-foreground text-xs">Passeio</p>

@@ -301,7 +301,7 @@ export function AbrirManutencaoModal({
                     value={logradouro}
                     onChange={(e) => setLogradouro(e.target.value)}
                   />
-                  <div className="grid grid-cols-3 gap-2">
+                   <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <Input
                       placeholder="Número"
                       value={numero}
@@ -314,7 +314,7 @@ export function AbrirManutencaoModal({
                       className="col-span-2"
                     />
                   </div>
-                  <div className="grid grid-cols-3 gap-2">
+                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
                     <Input
                       placeholder="Cidade"
                       value={cidade}

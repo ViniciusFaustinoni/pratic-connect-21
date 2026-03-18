@@ -198,7 +198,7 @@ export default function AppSinistros() {
 
         {/* Tabs de Filtro */}
         <Tabs value={filtroAtivo} onValueChange={setFiltroAtivo} className="w-full">
-          <TabsList className="w-full grid grid-cols-5 h-auto p-1 bg-muted/50">
+          <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 h-auto p-1 bg-muted/50">
             <TabsTrigger value="todos" className="text-xs py-2 px-1 data-[state=active]:bg-background">
               Todos
               {contadores.todos > 0 && (

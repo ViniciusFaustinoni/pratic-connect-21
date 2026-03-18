@@ -22,9 +22,9 @@ export function CardAcessoRapido({
   const navigate = useNavigate();
 
   const gridCols = {
-    3: 'grid-cols-3',
-    4: 'grid-cols-4',
-    5: 'grid-cols-5'
+    3: 'grid-cols-2 sm:grid-cols-3',
+    4: 'grid-cols-2 sm:grid-cols-4',
+    5: 'grid-cols-2 sm:grid-cols-3 lg:grid-cols-5'
   };
 
   return (

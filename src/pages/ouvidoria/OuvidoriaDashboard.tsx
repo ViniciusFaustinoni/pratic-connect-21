@@ -101,7 +101,7 @@ export default function OuvidoriaDashboard() {
           <p className="text-muted-foreground text-sm">Selecione o tipo para abrir uma nova manifestação</p>
         </div>
         
-        <div className="grid grid-cols-5 gap-4">
+        <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-4">
           {/* Card Reclamação */}
           <Card 
             className="bg-orange-50 border-2 border-orange-300 hover:border-orange-500 cursor-pointer hover:shadow-lg transition-all"
@@ -352,13 +352,13 @@ export default function OuvidoriaDashboard() {
         </CardHeader>
         <CardContent>
           {isLoadingElogios ? (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <Skeleton className="h-16" />
               <Skeleton className="h-16" />
               <Skeleton className="h-16" />
             </div>
           ) : (
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               {/* Total de elogios */}
               <div className="text-center">
                 <div className="text-3xl font-bold text-green-700">

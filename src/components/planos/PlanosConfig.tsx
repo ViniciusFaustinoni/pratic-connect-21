@@ -340,7 +340,7 @@ export function PlanosConfig() {
           
           <form onSubmit={handleSubmit} className="space-y-6">
             {/* Identificação */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="codigo">Código *</Label>
                 <Input
@@ -375,7 +375,7 @@ export function PlanosConfig() {
             </div>
 
             {/* Configurações */}
-            <div className="grid grid-cols-4 gap-4">
+            <div className="grid grid-cols-2 sm:grid-cols-4 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="linha">Linha</Label>
                 <Select 
@@ -499,7 +499,7 @@ export function PlanosConfig() {
             </div>
 
             {/* Opções */}
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div className="space-y-2">
                 <Label htmlFor="ordem">Ordem de exibição</Label>
                 <Input

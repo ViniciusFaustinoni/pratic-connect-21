@@ -41,7 +41,7 @@ export function SimulacaoImpactoCard({ simulacao, isLoading }: SimulacaoImpactoC
       </CardHeader>
       <CardContent className="space-y-4">
         {/* Métricas principais */}
-        <div className="grid grid-cols-3 gap-3">
+        <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
           <div className="bg-background rounded-lg p-3 border">
             <div className="text-xs text-muted-foreground flex items-center gap-1">
               <DollarSign className="h-3 w-3" />

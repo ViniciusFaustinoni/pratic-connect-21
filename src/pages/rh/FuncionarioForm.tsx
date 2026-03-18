@@ -344,7 +344,7 @@ export default function FuncionarioForm() {
 
       <form onSubmit={handleSubmit(onSubmit)}>
         <Tabs defaultValue="pessoais" className="space-y-6">
-          <TabsList className="grid w-full grid-cols-5">
+          <TabsList className="grid w-full grid-cols-3 sm:grid-cols-5">
             <TabsTrigger value="pessoais" className="flex items-center gap-2">
               <User className="h-4 w-4" />
               <span className="hidden sm:inline">Dados Pessoais</span>

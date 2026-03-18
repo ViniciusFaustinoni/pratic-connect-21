@@ -173,7 +173,7 @@ export function RegistrarContatoModal({ open, onClose, associadoId, cobrancaId }
             <RadioGroup
               value={tipo}
               onValueChange={(v) => setTipo(v as TipoContato)}
-              className="grid grid-cols-4 gap-2"
+              className="grid grid-cols-2 sm:grid-cols-4 gap-2"
             >
               {tiposContato.map((t) => (
                 <div key={t.value}>

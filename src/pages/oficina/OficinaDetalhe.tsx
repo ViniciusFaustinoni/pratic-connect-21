@@ -184,7 +184,7 @@ export default function OficinaDetalhe() {
     return (
       <div className="space-y-6 p-6">
         <Skeleton className="h-10 w-64" />
-        <div className="grid grid-cols-3 gap-6">
+        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           <Skeleton className="col-span-2 h-64" />
           <Skeleton className="h-64" />
         </div>

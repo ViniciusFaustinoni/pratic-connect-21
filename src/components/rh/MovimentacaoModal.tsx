@@ -127,7 +127,7 @@ export function MovimentacaoModal({ open, onClose, funcionario }: MovimentacaoMo
           <Card className="bg-muted/50">
             <CardContent className="p-4">
               <p className="font-medium mb-2">{funcionario.nome_completo}</p>
-              <div className="grid grid-cols-3 gap-2 text-sm">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-sm">
                 <div>
                   <span className="text-muted-foreground">Cargo:</span>
                   <p>{funcionario.cargo?.nome || 'Não informado'}</p>

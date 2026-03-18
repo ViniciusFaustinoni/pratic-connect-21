@@ -504,7 +504,7 @@ export default function AppAssistenciaNova() {
                 />
               </div>
 
-              <div className="grid grid-cols-3 gap-3">
+              <div className="grid grid-cols-1 sm:grid-cols-3 gap-3">
                 <div className="col-span-2">
                   <Label htmlFor="cidade">Cidade *</Label>
                   <Input
