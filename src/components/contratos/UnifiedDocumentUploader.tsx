@@ -22,7 +22,7 @@ import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 
 
-export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'comprovante_residencia' | 'outro';
+export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'nota_fiscal_veiculo' | 'comprovante_residencia' | 'outro';
 
 export interface OcrResultadoUnificado {
   tipo_detectado: TipoDocumentoDetectado;
