@@ -11,7 +11,7 @@ import { useAuth } from '@/contexts/AuthContext';
 import { 
   User, Lock, Bell, Building, Settings, Loader2, Camera, Trash2, Check,
   Save, Monitor, Smartphone, Mail, MessageCircle, Globe, FileText, Shield,
-  Sun, Moon, Eye, EyeOff, Circle, CheckCircle
+  Eye, EyeOff, Circle, CheckCircle
 } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
