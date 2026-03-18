@@ -144,7 +144,7 @@ function usePlanosComPrecoMap() {
   });
 }
 
-/** Detect vehicle type from plate-lookup response */
+/** Detect vehicle type from plate-lookup response (sync fallback only — hook is used in component) */
 function detectarTipoFromPlaca(dados: VeiculoPlaca): TipoVeiculo {
   const tipoDetectado = detectarTipoVeiculo(undefined, dados.modelo, dados.marca);
   return tipoDetectado === 'moto' ? 'moto' : 'carro';
