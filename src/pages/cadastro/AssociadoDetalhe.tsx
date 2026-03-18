@@ -302,7 +302,7 @@ export default function AssociadoDetalhe() {
         <Skeleton className="h-8 w-48" />
         <Skeleton className="h-36 w-full rounded-xl" />
         <Skeleton className="h-10 w-full" />
-        <div className="grid grid-cols-4 gap-3">
+        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           {[1,2,3,4].map(i => <Skeleton key={i} className="h-20 rounded-lg" />)}
         </div>
       </div>

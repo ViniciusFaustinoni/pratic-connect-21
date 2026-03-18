@@ -182,7 +182,7 @@ export function MapaRastreador({
 
             {/* Info Panel */}
             <div className="p-4 border-t bg-muted/30">
-              <div className="grid grid-cols-4 gap-4 text-center">
+              <div className="grid grid-cols-2 md:grid-cols-4 gap-4 text-center">
                 <div className="flex flex-col items-center gap-1">
                   <Gauge className="h-5 w-5 text-blue-500" />
                   <span className="text-lg font-semibold">{posicao.velocidade}</span>

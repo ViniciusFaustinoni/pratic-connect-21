@@ -103,7 +103,7 @@ export function RelatorioTarefasModal({
         ) : (
           <>
             {/* Estatísticas */}
-            <div className="grid grid-cols-3 gap-4 py-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 py-4">
               <div className="rounded-lg border bg-card p-4 text-center">
                 <CheckCircle2 className="mx-auto h-6 w-6 text-primary mb-2" />
                 <p className="text-2xl font-bold">{data?.estatisticas.totalTarefas || 0}</p>

@@ -318,7 +318,7 @@ export function VistoriaEventoOrcamento({
                 className="hidden"
                 onChange={handleFotoUpload}
               />
-              <div className="grid grid-cols-4 gap-2">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                 {fotos.map((foto, i) => (
                   <div key={i} className="relative aspect-square rounded border overflow-hidden group">
                     <img src={foto.preview} alt="" className="w-full h-full object-cover" />

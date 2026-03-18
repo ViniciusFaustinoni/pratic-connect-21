@@ -180,7 +180,7 @@ export function VistoriaEventoDados({ associado, veiculo, sinistro, linkEvento, 
           {fotosAutoVistoria.length > 0 && (
             <div>
               <p className="text-xs text-muted-foreground mb-2">Fotos da auto vistoria ({fotosAutoVistoria.length}):</p>
-              <div className="grid grid-cols-4 gap-1">
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-1">
                 {fotosAutoVistoria.map((f, i) => (
                   <button
                     key={i}

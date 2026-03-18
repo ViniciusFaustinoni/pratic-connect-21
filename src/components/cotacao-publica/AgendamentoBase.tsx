@@ -235,7 +235,7 @@ export function AgendamentoBase({
               </AlertDescription>
             </Alert>
           ) : (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {slotsHorario.map((horario) => {
                 const { disponivel, ocupados } = getDisponibilidade(horario);
                 const isSelected = horarioSelecionado === horario;

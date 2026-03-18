@@ -97,7 +97,7 @@ export function FotosReboquistaUploadModal({ open, onClose, chamadoId }: Props) 
 
           {/* Previews */}
           {previews.length > 0 && (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {previews.map((src, i) => (
                 <div key={i} className="relative group">
                   {files[i]?.type.startsWith('video/') ? (

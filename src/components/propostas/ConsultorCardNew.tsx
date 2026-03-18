@@ -105,7 +105,7 @@ export function ConsultorCardNew({ consultor, ranking, onClick }: ConsultorCardN
         </div>
 
         {/* Metrics grid */}
-        <div className="grid grid-cols-4 gap-1.5 mb-3">
+        <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 mb-3">
           {[
             { value: consultor.cotacoesRealizadas, label: 'Cotações', color: consultor.cotacoesRealizadas > 0 ? 'text-purple-600' : '' },
             { value: consultor.emCotacao, label: 'Abertas', color: consultor.emCotacao > 0 ? 'text-yellow-600' : '' },

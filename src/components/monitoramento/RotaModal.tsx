@@ -511,7 +511,7 @@ export function RotaModal({
                 {capacidadeProfissional && (
                   <Card>
                     <CardContent className="p-3">
-                      <div className="grid grid-cols-3 gap-2 text-center text-sm">
+                      <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 text-center text-sm">
                         <div>
                           <p className="text-muted-foreground">Capacidade</p>
                           <p className="font-semibold">

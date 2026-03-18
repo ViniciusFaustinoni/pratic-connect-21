@@ -168,7 +168,7 @@ export default function EventoAgendamento({ token, onAgendado }: Props) {
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
             </div>
           ) : (
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {slots.map((slot) => (
                 <Button
                   key={slot.horario}

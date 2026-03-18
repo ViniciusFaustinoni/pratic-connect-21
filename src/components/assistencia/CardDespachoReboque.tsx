@@ -728,7 +728,7 @@ export function CardDespachoReboque({ chamadoId, chamadoStatus }: Props) {
 
               {/* Preview das fotos selecionadas */}
               {fotosPreview.length > 0 && (
-                <div className="grid grid-cols-4 gap-2">
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
                   {fotosPreview.map((fp, idx) => (
                     <div key={idx} className="relative group">
                       <img

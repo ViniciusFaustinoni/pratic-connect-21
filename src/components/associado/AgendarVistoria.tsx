@@ -99,7 +99,7 @@ export function AgendarVistoria({ contratoId, associadoId, veiculoId, readOnly, 
               <Clock className="h-4 w-4" />
               Selecione um horário para {format(dataSelecionada, "dd 'de' MMMM", { locale: ptBR })}
             </h4>
-            <div className="grid grid-cols-4 gap-2">
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
               {horariosDisponiveis.map((horario) => (
                 <Button
                   key={horario}
