@@ -217,7 +217,6 @@ export function EtapaPagamentoCotacao({
       if (valorAdesao <= 0) {
         console.log('[EtapaPagamento] Adesão zerada — pulando cobrança ASAAS');
 
-        // Buscar mensagem configurada
         const { data: configMsg } = await publicSupabase
           .from('configuracoes')
           .select('valor')
@@ -227,17 +226,15 @@ export function EtapaPagamentoCotacao({
         const msg = configMsg?.valor || 'Parabéns! Sua adesão foi isenta. Bem-vindo à Praticcar!';
         setMsgAdesaoZerada(msg);
 
-        // Gerar contrato normalmente
-        const idContrato = await gerarContrato();
+        // Buscar contrato existente (não gera novo)
+        const idContrato = await buscarContrato();
         if (!idContrato) return;
 
-        // Marcar adesão como paga (nada a cobrar)
         await publicSupabase
           .from('contratos')
           .update({ adesao_paga: true })
           .eq('id', idContrato);
 
-        // Criar instalação pós-adesão zerada
         try {
           await publicSupabase.functions.invoke('criar-instalacao-pos-pagamento', {
             body: { cotacaoId, skipPaymentCheck: true },
@@ -248,20 +245,18 @@ export function EtapaPagamentoCotacao({
 
         setAdesaoZerada(true);
         setEtapaInterna('pago');
-
-        // Avançar após breve delay
         setTimeout(() => onPagamentoConfirmado(), 1500);
         return;
       }
 
-      // Se não está pago, continuar fluxo normal
-      const idContrato = await gerarContrato();
+      // Se não está pago, buscar contrato existente e criar cobrança
+      const idContrato = await buscarContrato();
       if (idContrato) {
         await criarCobranca(idContrato);
       }
     };
     inicializar();
-  }, [cotacaoId, gerarContrato, criarCobranca, valorAdesao, onPagamentoConfirmado]);
+  }, [cotacaoId, buscarContrato, criarCobranca, valorAdesao, onPagamentoConfirmado]);
 
   // 4. Polling automático para verificar pagamento - consulta diretamente na API do Asaas
   useEffect(() => {
