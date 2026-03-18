@@ -343,6 +343,34 @@ serve(async (req) => {
       throw new Error("Dados do signatário não encontrados. Preencha nome e email do cliente no contrato.");
     }
     
+    // Validar CPF antes de enviar ao Autentique
+    const cpfRaw = (clienteCpf || contrato.cliente_cpf || contrato.associados?.cpf || contrato.leads?.cpf || '').replace(/\D/g, '');
+    
+    function validarCpfDigitos(cpf: string): boolean {
+      if (cpf.length !== 11 || /^(\d)\1{10}$/.test(cpf)) return false;
+      for (let t = 9; t < 11; t++) {
+        let d = 0;
+        for (let c = 0; c < t; c++) d += parseInt(cpf[c]) * ((t + 1) - c);
+        d = ((10 * d) % 11) % 10;
+        if (parseInt(cpf[t]) !== d) return false;
+      }
+      return true;
+    }
+
+    const cpfValido = cpfRaw.length === 11 && validarCpfDigitos(cpfRaw);
+    console.log(`[autentique-create] CPF extraído: ${cpfRaw} (válido: ${cpfValido})`);
+
+    // Montar signer: só incluir configs.cpf se for válido
+    const signerObj: any = {
+      name: signerName || undefined,
+      email: signerEmail,
+      action: "SIGN",
+      positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
+    };
+    if (cpfValido) {
+      signerObj.configs = { cpf: cpfRaw };
+    }
+
     // Preparar operations JSON
     const operations = {
       query: mutation,
@@ -350,17 +378,7 @@ serve(async (req) => {
         document: {
           name: documentName,
         },
-        signers: [
-          {
-            name: signerName || undefined,
-            email: signerEmail,
-            action: "SIGN",
-            configs: {
-              cpf: (clienteCpf || contrato.cliente_cpf || contrato.associados?.cpf || contrato.leads?.cpf || '').replace(/\D/g, ''),
-            },
-            positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
-          },
-        ],
+        signers: [signerObj],
         file: null,
       },
     };
