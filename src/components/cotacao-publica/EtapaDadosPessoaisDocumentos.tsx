@@ -43,7 +43,7 @@ interface DadosExtraidos {
   bairro?: string;
   cidade?: string;
   uf?: string;
-  // Veículo (de CRLV)
+  // Veículo (de CRLV ou Nota Fiscal)
   veiculo_placa?: string;
   veiculo_chassi?: string;
   veiculo_renavam?: string;
@@ -52,6 +52,11 @@ interface DadosExtraidos {
   veiculo_motor?: string;
   veiculo_ano_fabricacao?: number;
   veiculo_ano_modelo?: number;
+  // Nota Fiscal
+  valor_nota_fiscal?: string;
+  numero_motor?: string;
+  // Flag de origem do documento
+  origem_documento_veiculo?: 'crlv' | 'nota_fiscal_veiculo';
 }
 
 // Opções para selects
