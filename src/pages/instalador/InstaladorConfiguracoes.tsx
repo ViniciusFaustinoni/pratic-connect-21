@@ -97,28 +97,6 @@ export default function InstaladorConfiguracoes() {
           </CardContent>
         </Card>
 
-        {/* Aparência */}
-        <Card className="border-slate-700 bg-slate-800">
-          <CardHeader className="pb-3">
-            <CardTitle className="text-sm font-medium text-slate-300 flex items-center gap-2">
-              <Palette className="h-4 w-4 text-purple-400" />
-              Aparência
-            </CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div className="flex items-center justify-between">
-              <Label htmlFor="tema-escuro" className="text-sm text-slate-300">
-                Tema escuro
-              </Label>
-              <Switch 
-                id="tema-escuro"
-                checked={temaEscuro}
-                onCheckedChange={setTemaEscuro}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
         {/* Versão */}
         <p className="text-center text-xs text-slate-500 pt-4">
           PRATIC Instalador v1.0.0
