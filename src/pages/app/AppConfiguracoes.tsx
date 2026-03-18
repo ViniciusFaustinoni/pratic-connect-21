@@ -31,7 +31,6 @@ import {
   Clock,
   BarChart3,
   Code,
-  Code,
   ExternalLink,
   Gift
 } from 'lucide-react';
