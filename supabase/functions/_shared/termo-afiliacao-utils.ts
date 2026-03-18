@@ -62,6 +62,8 @@ export interface PlanoData {
   carencia?: string;
 }
 
+export type TipoOperacao = 'adesao' | 'migracao' | 'inclusao' | 'troca_titularidade' | 'reativacao' | 'substituicao_placa';
+
 export interface ContratoData {
   numero: string;
   valor_adesao: number;
@@ -70,6 +72,7 @@ export interface ContratoData {
   dia_vencimento: number;
   data_inicio?: string;
   forma_pagamento?: string;
+  tipo_entrada?: TipoOperacao;
 }
 
 export interface EmpresaData {
