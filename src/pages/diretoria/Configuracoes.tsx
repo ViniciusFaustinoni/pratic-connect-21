@@ -55,6 +55,7 @@ const FALLBACK_HINTS: Record<string, string> = {
   marcas_modelos_fallback: 'Marcas e modelos usados quando a consulta à tabela FIPE falha. Serve como alternativa de entrada manual.',
   motos_aceitas: 'Regras de aceitação de motos por marca. Cada plano pode ter regras próprias de elegibilidade.',
   observacoes_categoria: 'Textos explicativos exibidos ao selecionar cada categoria de veículo na cotação.',
+  regras_depreciacao: 'Percentuais de depreciação aplicados no cálculo de indenização. Concorrentes: usa-se o maior. Adicionais: aplicam-se de forma composta sobre o valor já depreciado.',
 };
 
 type ConfigRow = {
