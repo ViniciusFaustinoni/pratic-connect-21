@@ -308,9 +308,14 @@ serve(async (req) => {
     const nomeFinal = clienteNome;
     const emailFinal = clienteEmail;
     const telefoneFinal = clienteTelefone;
+    const cpfLimpo = cpfFinal?.replace(/\D/g, '') || '';
     
-    if (!cpfFinal || cpfFinal.replace(/\D/g, '').length !== 11) {
+    if (!cpfLimpo || cpfLimpo.length !== 11) {
       throw new Error('CPF é obrigatório para gerar o contrato. Complete os dados antes de continuar.');
+    }
+
+    if (!validarCPF(cpfLimpo)) {
+      throw new Error('O CPF informado nesta cotação é inválido. Corrija os dígitos do CPF antes de gerar o contrato.');
     }
 
     if (!nomeFinal || nomeFinal.includes('Cliente Cotação')) {
