@@ -244,6 +244,13 @@ export function EtapaResultado({
         )}
       </div>
 
+      {/* Bloco informativo de depreciação */}
+      {categoria && valorFipe && Object.keys({
+        placa_vermelha: 1, ex_taxi: 1, taxi: 1, chassi_remarcado: 1, leilao: 1, ressarcimento_integral: 1,
+      }).includes(categoria) && (
+        <BlocoDepreciacaoCotacao categoria={categoria} valorFipe={valorFipe} />
+      )}
+
       {/* Ações */}
       <Card className="border-border bg-card">
         <CardContent className="pt-6 space-y-4">
