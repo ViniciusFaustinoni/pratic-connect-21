@@ -169,6 +169,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [telefoneAssociado, setTelefoneAssociado] = useState('');
   const [emailAssociado, setEmailAssociado] = useState('');
   
+  // Estados para indicação
+  const [isIndicacao, setIsIndicacao] = useState(false);
+  const [indicadorId, setIndicadorId] = useState<string | null>(null);
+  const [indicadorNome, setIndicadorNome] = useState('');
+  const [buscaIndicador, setBuscaIndicador] = useState('');
+  const { data: resultadosIndicador = [], isLoading: buscandoIndicador } = useAssociadoSearch(buscaIndicador);
+  
   // Estado para uso do veículo (passeio ou aplicativo)
   const [usoVeiculo, setUsoVeiculo] = useState<'particular' | 'aplicativo'>('particular');
   
