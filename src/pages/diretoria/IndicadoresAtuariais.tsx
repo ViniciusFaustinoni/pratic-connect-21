@@ -420,7 +420,7 @@ export default function IndicadoresAtuariais() {
 
         {/* Tab Crescimento */}
         <TabsContent value="crescimento" className="space-y-4">
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <Card>
               <CardContent className="pt-4">
                 <p className="text-sm text-muted-foreground">Novos Associados (ano)</p>
