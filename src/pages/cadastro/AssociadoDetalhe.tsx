@@ -600,6 +600,7 @@ export default function AssociadoDetalhe() {
                         </div>
                       </div>
                     </CardContent>
+                    <BlocoDepreciacaoVeiculo veiculo={v} />
                   </Card>
                 ))}
               </div>
