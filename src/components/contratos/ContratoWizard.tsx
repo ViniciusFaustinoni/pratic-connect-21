@@ -1068,6 +1068,30 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   </p>
                 </div>
 
+                {/* Tipo de Operação */}
+                <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Tipo de Operação
+                  </h4>
+                  <div className="max-w-xs">
+                    <Label className="text-xs text-muted-foreground mb-1 block">Selecione o tipo de operação deste contrato</Label>
+                    <Select value={tipoOperacao} onValueChange={setTipoOperacao}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="adesao">Adesão</SelectItem>
+                        <SelectItem value="migracao">Migração</SelectItem>
+                        <SelectItem value="inclusao">Inclusão</SelectItem>
+                        <SelectItem value="troca_titularidade">Troca de Titularidade</SelectItem>
+                        <SelectItem value="reativacao">Reativação</SelectItem>
+                        <SelectItem value="substituicao_placa">Substituição de Placa</SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+                </div>
+
                 {/* Dados Pessoais */}
                 <div className="p-4 bg-muted/50 rounded-lg space-y-4">
                   <h4 className="font-medium flex items-center gap-2">
