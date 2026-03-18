@@ -17,6 +17,7 @@ import {
   Fuel
 } from 'lucide-react';
 import { useCategoriasVeiculo, useObservacoesCategoria } from '@/hooks/useConteudosSistema';
+import { BlocoDepreciacaoCotacao } from './BlocoDepreciacaoCotacao';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { PlanoCardCotacao } from './PlanoCardCotacao';
 import { CurrencyInput } from '@/components/inputs/MaskedInputs';
