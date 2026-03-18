@@ -2,6 +2,7 @@ import { useState, useCallback, useMemo, useEffect } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
+import { validateCPF } from '@/lib/validations';
 import type { Tables } from '@/integrations/supabase/types';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import type { PlanoOpcao } from '@/components/cotacao-publica/EscolhaPlano';
