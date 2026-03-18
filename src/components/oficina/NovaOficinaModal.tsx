@@ -359,7 +359,7 @@ export function NovaOficinaModal({ open, onClose, onSuccess }: NovaOficinaModalP
 
           {/* TAB ENDEREÇO */}
           <TabsContent value="endereco" className="space-y-4 mt-4">
-            <div className="grid grid-cols-3 gap-4">
+            <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
               <div>
                 <Label htmlFor="cep">CEP</Label>
                 <CepInput
