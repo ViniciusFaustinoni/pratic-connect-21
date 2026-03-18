@@ -50,6 +50,8 @@ export function TermoFiliacaoTemplate({
   aditivos = [] 
 }: TermoFiliacaoTemplateProps) {
   const { cliente, veiculo, plano, contrato, empresa } = dados;
+  const { data: regrasDepreciacao } = useConfiguracaoJson<RegraDepreciacao[]>('regras_depreciacao', DEPRECIACOES_FALLBACK);
+  const regras = regrasDepreciacao ?? DEPRECIACOES_FALLBACK;
   
   const cotaParticipacao = calcularCotaParticipacao(
     veiculo.valorFipe, 
@@ -58,6 +60,30 @@ export function TermoFiliacaoTemplate({
   const primeiraMensalidade = calcularPrimeiraMensalidade(contrato.diaVencimento);
   const dataAssinatura = formatDateExtended(new Date().toISOString());
   const localAssinatura = `${cliente.endereco.cidade}/${cliente.endereco.estado}`;
+
+  // Calcular depreciação
+  const flagsAtivas: string[] = [];
+  if (veiculo.flagPlacaVermelha) flagsAtivas.push('flag_placa_vermelha');
+  if (veiculo.flagExTaxi) flagsAtivas.push('flag_ex_taxi');
+  if (veiculo.flagTaxiAtivo) flagsAtivas.push('flag_taxi_ativo');
+  if (veiculo.flagChassiRemarcado) flagsAtivas.push('flag_chassi_remarcado');
+  if (veiculo.flagLeilao) flagsAtivas.push('flag_leilao');
+  if (veiculo.flagExRessarcido) flagsAtivas.push('flag_ex_ressarcido');
+
+  const regrasConcorrentes = regras.filter(r => !r.adicional && flagsAtivas.includes(r.flag));
+  const regraMaior = regrasConcorrentes.length > 0
+    ? regrasConcorrentes.reduce((a, b) => a.percentual >= b.percentual ? a : b)
+    : null;
+  const temAvarias = !!veiculo.flagAvariaVistoria;
+  const regraAvarias = temAvarias ? regras.find(r => r.flag === 'flag_avarias_vistoria' && r.adicional) : null;
+
+  let valorEstimadoDepreciacao: number | null = null;
+  if (regraMaior) {
+    valorEstimadoDepreciacao = veiculo.valorFipe * (1 - regraMaior.percentual / 100);
+    if (regraAvarias) {
+      valorEstimadoDepreciacao = valorEstimadoDepreciacao * (1 - regraAvarias.percentual / 100);
+    }
+  }
 
   return (
     <div 
