@@ -425,6 +425,8 @@ export function useCotacaoContratacao(token: string | undefined) {
       if (cpfLimpo && !validateCPF(cpfLimpo)) {
         throw new Error('O CPF informado é inválido. Corrija os dígitos antes de continuar.');
       }
+
+      // 1. Salvar dados pessoais + dados do veículo extraídos do CRLV
       const { error } = await publicSupabase
         .from('cotacoes')
         .update({
