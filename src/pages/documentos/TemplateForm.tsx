@@ -99,6 +99,7 @@ export default function TemplateForm() {
   // Gerar código automaticamente baseado no nome
   const handleNomeChange = (nome: string) => {
     if (!isEditing && !form.getValues('codigo')) {
+      const suffix = Math.random().toString(36).substring(2, 5).toUpperCase();
       const codigo = nome
         .toUpperCase()
         .normalize('NFD')
@@ -106,7 +107,7 @@ export default function TemplateForm() {
         .replace(/[^A-Z0-9\s]/g, '')
         .replace(/\s+/g, '_')
         .slice(0, 20)
-        + '_V1';
+        + '_' + suffix;
       form.setValue('codigo', codigo);
     }
   };
