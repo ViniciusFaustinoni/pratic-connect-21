@@ -20,7 +20,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
-import { VideoCapture } from '@/components/instalador/VideoCapture';
+
 
 interface AutovistoriaCotacaoProps {
   cotacaoId: string;
