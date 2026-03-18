@@ -272,6 +272,21 @@ export default function ConfiguracoesSistema() {
           </div>
         );
 
+      case 'marcas_aceitas_motos':
+        if (!Array.isArray(parsed)) return null;
+        return (
+          <div className="space-y-2">
+            <ValueLabelListEditor
+              rows={(parsed as string[]).map((v, i) => ({ value: v, label: v }))}
+              onChange={(rows) => handleJsonChange(rows.map(r => r.value))}
+              valueLabel="Marca"
+              labelLabel=""
+              hideLabel
+            />
+            {saveBtn}
+          </div>
+        );
+
       default:
         return null;
     }
