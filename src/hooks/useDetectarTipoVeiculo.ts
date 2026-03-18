@@ -5,10 +5,10 @@ import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 type TipoVeiculoResult = 'carro' | 'moto';
 
 /**
- * Detecção dinâmica de tipo de veículo via plano_elegibilidade_modelos.
- * Se a marca+modelo tem registros com linha_slug = 'advanced' → moto.
- * Se tem registros com outras linhas → carro.
- * Fallback: keywords hardcoded (detectarTipoVeiculo síncrono).
+ * Detecção dinâmica de tipo de veículo em 3 regras:
+ * 1. Marca exclusiva de moto (config `marcas_exclusivas_moto` da tabela `configuracoes`)
+ * 2. Marca mista (Honda, Yamaha etc.) → consulta `plano_elegibilidade_modelos` por linha_slug = 'advanced'
+ * 3. Fallback síncrono via MOTO_KEYWORDS
  */
 export function useDetectarTipoVeiculo(
   marca: string | undefined | null,
@@ -22,7 +22,33 @@ export function useDetectarTipoVeiculo(
     queryFn: async (): Promise<TipoVeiculoResult | null> => {
       if (!marcaNorm) return null;
 
-      // Query 1: buscar por marca + modelo (mais preciso)
+      // ── Regra 1: Marcas exclusivas de moto (tabela configuracoes) ──
+      const { data: configData } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'marcas_exclusivas_moto')
+        .maybeSingle();
+
+      if (configData?.valor) {
+        try {
+          // Suporta formato JSON array ["BMW","SUZUKI"] ou CSV "BMW,SUZUKI"
+          let marcasList: string[] = [];
+          const raw = configData.valor.trim();
+          if (raw.startsWith('[')) {
+            marcasList = JSON.parse(raw).map((m: string) => m.toUpperCase().trim());
+          } else {
+            marcasList = raw.split(',').map((m: string) => m.toUpperCase().trim());
+          }
+
+          if (marcasList.some(m => marcaNorm.includes(m) || m.includes(marcaNorm))) {
+            return 'moto';
+          }
+        } catch {
+          // Ignora parse error, segue para regra 2
+        }
+      }
+
+      // ── Regra 2: Marca mista → consulta plano_elegibilidade_modelos ──
       if (modeloNorm) {
         const { data } = await supabase
           .from('plano_elegibilidade_modelos')
@@ -33,12 +59,29 @@ export function useDetectarTipoVeiculo(
           .limit(5);
 
         if (data && data.length > 0) {
-          const hasAdvanced = data.some(r => r.linha_slug === 'advanced');
-          return hasAdvanced ? 'moto' : 'carro';
+          return data.some(r => r.linha_slug === 'advanced') ? 'moto' : 'carro';
+        }
+
+        // Checar modelos genéricos ("TODOS OS MODELOS NACIONAIS" etc.)
+        const { data: genericData } = await supabase
+          .from('plano_elegibilidade_modelos')
+          .select('linha_slug, modelo')
+          .ilike('marca', marcaNorm)
+          .eq('linha_slug', 'advanced')
+          .eq('is_active', true)
+          .limit(10);
+
+        if (genericData && genericData.length > 0) {
+          const hasGeneric = genericData.some(r =>
+            r.modelo?.toUpperCase().includes('TODOS') ||
+            r.modelo?.toUpperCase().includes('NACIONAL') ||
+            r.modelo?.toUpperCase().includes('IMPORTAD')
+          );
+          if (hasGeneric) return 'moto';
         }
       }
 
-      // Query 2: buscar só por marca (fallback parcial)
+      // Regra 2b: Só marca, sem modelo — se TODOS registros da marca são advanced → moto
       const { data: byMarca } = await supabase
         .from('plano_elegibilidade_modelos')
         .select('linha_slug')
@@ -47,23 +90,19 @@ export function useDetectarTipoVeiculo(
         .limit(50);
 
       if (byMarca && byMarca.length > 0) {
-        // Se TODOS os registros da marca são 'advanced', é uma marca exclusiva de moto
         const allAdvanced = byMarca.every(r => r.linha_slug === 'advanced');
         if (allAdvanced) return 'moto';
-
-        // Se tem mix, não podemos decidir só pela marca — retornar null para cair no fallback
-        return null;
       }
 
-      // Nenhum registro encontrado — fallback
+      // Nenhuma regra conclusiva → fallback
       return null;
     },
     enabled: !!marcaNorm,
-    staleTime: 1000 * 60 * 10, // 10 min
+    staleTime: 1000 * 60 * 10,
     gcTime: 1000 * 60 * 30,
   });
 
-  // Fallback síncrono por keywords
+  // Regra 3: Fallback síncrono por keywords (último recurso)
   const tipoVeiculo: TipoVeiculoResult = (() => {
     if (tipoFromDb) return tipoFromDb;
     if (!marca && !modelo) return 'carro';
@@ -81,6 +120,5 @@ export function useDetectarTipoVeiculoPublico(
   marca: string | undefined | null,
   modelo: string | undefined | null
 ) {
-  // Reutiliza a mesma lógica — plano_elegibilidade_modelos é acessível via anon
   return useDetectarTipoVeiculo(marca, modelo);
 }

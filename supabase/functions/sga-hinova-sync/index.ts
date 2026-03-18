@@ -640,9 +640,31 @@ serve(async (req) => {
         if (cat.includes('REBOQUE') || cat.includes('SEMI-REBOQUE')) return 6;
       }
       
-      // Consulta dinâmica à plano_elegibilidade_modelos
       const marcaNorm = (marca || '').trim().toUpperCase();
       const modeloNorm = (modelo || '').trim().toUpperCase();
+
+      // Regra 1: Marcas exclusivas de moto (tabela configuracoes)
+      if (marcaNorm) {
+        const { data: configData } = await supabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'marcas_exclusivas_moto')
+          .maybeSingle();
+
+        if (configData?.valor) {
+          try {
+            const raw = configData.valor.trim();
+            const marcasList: string[] = raw.startsWith('[')
+              ? JSON.parse(raw).map((m: string) => m.toUpperCase().trim())
+              : raw.split(',').map((m: string) => m.toUpperCase().trim());
+            if (marcasList.some(m => marcaNorm.includes(m) || m.includes(marcaNorm))) {
+              return 2;
+            }
+          } catch { /* ignora parse error */ }
+        }
+      }
+
+      // Regra 2: Marca mista → consulta plano_elegibilidade_modelos
       if (marcaNorm && modeloNorm) {
         const { data } = await supabase
           .from('plano_elegibilidade_modelos')
@@ -656,8 +678,8 @@ serve(async (req) => {
         }
       }
 
-      // Fallback: keywords
-      const MOTO_KEYWORDS = ['nxr', 'bros', 'cg ', 'cg-', 'cb ', 'cb-', 'cbr', 'pcx', 'biz', 'pop', 
+      // Regra 3: Fallback — keywords de modelo apenas (sem marcas hardcoded)
+      const MOTO_MODEL_KEYWORDS = ['nxr', 'bros', 'cg ', 'cg-', 'cb ', 'cb-', 'cbr', 'pcx', 'biz', 'pop', 
         'titan', 'fan', 'xre', 'lander', 'tenere', 'ténéré', 'crosser', 'fazer', 'ybr', 'neo',
         'burgman', 'intruder', 'factor', 'scooter', 'lead', 'sahara', 'transalp', 'africa twin',
         'xtz', 'xt ', 'xj6', 'mt-', 'mt ', 'nmax', 'fluo', 'next', 'crypton', 'yes',
@@ -666,18 +688,7 @@ serve(async (req) => {
         'sportster', 'iron', 'fat bob', 'softail', 'electra', 'road king',
         'riva', 'kansas', 'mirage', 'horizon', 'jet', 'citicom', 'citycom',
         'elite', 'adv', 'sh ', 'sh-', 'xadv', 'x-adv'];
-      if (modelo && MOTO_KEYWORDS.some(kw => modelo.toLowerCase().includes(kw))) return 2;
-      
-      const MARCAS_MOTO = ['YAMAHA', 'SUZUKI', 'KAWASAKI', 'HARLEY', 'TRIUMPH', 
-        'DUCATI', 'KTM', 'DAFRA', 'SHINERAY', 'KASINSKI', 'ROYAL ENFIELD', 'BMW MOTORRAD',
-        'BAJAJ', 'BENELLI', 'MV AGUSTA', 'HUSQVARNA', 'INDIAN'];
-      if (marca && MARCAS_MOTO.some(m => marca.toUpperCase().includes(m))) return 2;
-      
-      if (marca?.toUpperCase().includes('HONDA') && modelo) {
-        const HONDA_CARROS = ['civic', 'fit', 'city', 'hr-v', 'hrv', 'cr-v', 'crv', 'accord', 'wr-v', 'wrv', 'zr-v'];
-        const isHondaCarro = HONDA_CARROS.some(c => modelo.toLowerCase().includes(c));
-        if (!isHondaCarro) return 2;
-      }
+      if (modelo && MOTO_MODEL_KEYWORDS.some(kw => modelo.toLowerCase().includes(kw))) return 2;
       
       return 1;
     };
