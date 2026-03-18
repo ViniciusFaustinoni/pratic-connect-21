@@ -1,5 +1,5 @@
 // Configuração das fotos obrigatórias para autovistoria
-// Espelha as 31 fotos do instalador (vistoriaConfigCompleta.ts) excluindo local_rastreador
+// Associado: 15 fotos (carro) | 7 fotos (moto) — fotos técnicas são do instalador
 
 export interface FotoAutovistoria {
   id: string;
