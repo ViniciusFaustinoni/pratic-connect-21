@@ -100,6 +100,7 @@ export function EtapaDadosPessoaisDocumentos({
 }: EtapaDadosPessoaisDocumentosProps) {
   const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
   const [dadosExtraidos, setDadosExtraidos] = useState<DadosExtraidos>({});
+  const [cpfManual, setCpfManual] = useState(''); // Para correção manual quando OCR extrai CPF inválido
   
   // Campos manuais (não podem ser extraídos de documentos)
   const [email, setEmail] = useState(defaultValues?.email || '');
