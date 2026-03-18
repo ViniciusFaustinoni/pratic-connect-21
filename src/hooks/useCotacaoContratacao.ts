@@ -451,7 +451,7 @@ export function useCotacaoContratacao(token: string | undefined) {
           veiculo_combustivel: truncar(dados.veiculo_combustivel, 50),
           veiculo_ano_fabricacao: dados.veiculo_ano_fabricacao || null,
           // Persistir categoria se ainda não definida
-          ...((!cotacao.categoria) ? { categoria: detectarCategoriaPorModelo(cotacao.veiculo_modelo) } : {}),
+          ...((!cotacao.categoria) ? { categoria: detectarCategoriaPorModelo(cotacao.veiculo_modelo, cotacao.veiculo_marca) } : {}),
         })
         .eq('id', cotacao.id);
 
