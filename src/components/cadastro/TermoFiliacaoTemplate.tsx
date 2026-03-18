@@ -11,6 +11,34 @@ import {
   calcularPrimeiraMensalidade,
 } from '@/types/termo-filiacao';
 import { type TermoAditivo } from '@/hooks/useAditivos';
+import { useConfiguracaoJson } from '@/hooks/useConteudosSistema';
+import { formatarMoeda } from '@/utils/format';
+
+interface RegraDepreciacao {
+  flag: string;
+  label: string;
+  percentual: number;
+  adicional?: boolean;
+}
+
+const DEPRECIACOES_FALLBACK: RegraDepreciacao[] = [
+  { flag: 'flag_placa_vermelha', label: 'Placa vermelha', percentual: 25 },
+  { flag: 'flag_ex_taxi', label: 'Ex-táxi', percentual: 25 },
+  { flag: 'flag_taxi_ativo', label: 'Táxi ativo', percentual: 25 },
+  { flag: 'flag_chassi_remarcado', label: 'Chassi remarcado', percentual: 30 },
+  { flag: 'flag_leilao', label: 'Veículo de leilão', percentual: 30 },
+  { flag: 'flag_ex_ressarcido', label: 'Já indenizado anteriormente', percentual: 30 },
+  { flag: 'flag_avarias_vistoria', label: 'Avarias pré-existentes (vistoria)', percentual: 20, adicional: true },
+];
+
+const FLAG_MAP: Record<string, string> = {
+  flagPlacaVermelha: 'flag_placa_vermelha',
+  flagExTaxi: 'flag_ex_taxi',
+  flagTaxiAtivo: 'flag_taxi_ativo',
+  flagChassiRemarcado: 'flag_chassi_remarcado',
+  flagLeilao: 'flag_leilao',
+  flagExRessarcido: 'flag_ex_ressarcido',
+};
 
 interface TermoFiliacaoTemplateProps {
   dados: DadosTermoFiliacao;
