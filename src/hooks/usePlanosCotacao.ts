@@ -521,13 +521,17 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Deságio: derive flag from category
       const isDesagio = !!categoria && categoriasDesagio.includes(categoria);
 
-      // Bug 1 fix: use valor_desagio as base price for eligible lines
-      if (isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || '')) {
+      // SELECT ONE (coluna dedicada APP): ignorar deságio, usar preço APP direto
+      const temColunaAppDedicada = configApp.linhasComColunaApp.includes(linhaSlug || '');
+
+      // Aplicar valor_desagio apenas para linhas sem coluna APP dedicada
+      if (isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || '') && !temColunaAppDedicada) {
         valorMensal = valorDesagio;
       }
 
-      // Aplicar adicional app se necessário
-      if (linhaSlug && tipoUsoOriginal === 'aplicativo') {
+      // Adicional APP: NÃO aplicar se a categoria está em categorias_que_sobrepoe_app
+      const categoriaAnulaApp = isDesagio && categoriasQueSobrepoeApp.includes(categoria || '');
+      if (linhaSlug && tipoUsoOriginal === 'aplicativo' && !categoriaAnulaApp) {
         valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp, configApp);
       }
 
