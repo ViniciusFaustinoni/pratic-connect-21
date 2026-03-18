@@ -1082,6 +1082,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Região selecionada
         regiao: regiaoSelecionada || null,
         uso_aplicativo: usoVeiculo === 'aplicativo',
+        // Indicação
+        indicador_id: indicadorId || null,
+        indicador_nome: indicadorNome || null,
         // Tipo de instalação (somente vendedor externo)
         ...(isVendedorExterno && cenarioExterno ? {
           tipo_instalacao: cenarioExterno.includes('rota') ? 'rota' as const : 'base' as const,
