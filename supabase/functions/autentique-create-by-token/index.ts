@@ -159,7 +159,21 @@ serve(async (req) => {
     const configRastreador = await buscarConfigRastreador(supabase);
 
     // ============= BUSCAR REGRAS DE VENDA =============
-    const { regras: regrasVenda, faltantes: regrasFaltantes } = await buscarRegrasVenda(supabase);
+    const [{ regras: regrasVenda, faltantes: regrasFaltantes }, regrasDepreciacao] = await Promise.all([
+      buscarRegrasVenda(supabase),
+      buscarRegrasDepreciacao(supabase),
+    ]);
+
+    // ============= BUSCAR VEÍCULO DO BANCO (FLAGS DE DEPRECIAÇÃO) =============
+    let veiculoDB: any = null;
+    if (contrato.veiculo_id) {
+      const { data: veiculoData } = await supabase
+        .from('veiculos')
+        .select('flag_placa_vermelha, flag_ex_taxi, flag_taxi_ativo, flag_chassi_remarcado, flag_ex_ressarcido, flag_avarias_vistoria')
+        .eq('id', contrato.veiculo_id)
+        .maybeSingle();
+      veiculoDB = veiculoData;
+    }
 
     // Obter dados do cliente (associado tem prioridade, depois lead)
     const cliente = contrato.associados || contrato.leads;
@@ -184,9 +198,12 @@ serve(async (req) => {
       contrato.planos,
       empresaConfig,
       contrato.leads,
-      contrato.associados
+      contrato.associados,
+      undefined,
+      veiculoDB
     );
     templateData.configRastreador = configRastreador;
+    templateData.regrasDepreciacao = regrasDepreciacao;
     if (regrasVenda) {
       templateData.regrasVenda = regrasVenda;
     }
