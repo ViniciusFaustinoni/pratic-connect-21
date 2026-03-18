@@ -375,6 +375,13 @@ export function mapearDadosParaTemplate(
       portas: inferirPortas(contrato.veiculo_categoria || veiculo.veiculo_categoria),
       uso_aplicativo: contrato.uso_aplicativo || false,
       leilao: ehLeilao(contrato.veiculo_categoria || veiculo.veiculo_categoria, contrato.veiculo_procedencia || veiculo.veiculo_procedencia),
+      // Flags de depreciação (vindas do registro do veículo no banco)
+      flag_placa_vermelha: veiculoDB?.flag_placa_vermelha || false,
+      flag_ex_taxi: veiculoDB?.flag_ex_taxi || false,
+      flag_taxi_ativo: veiculoDB?.flag_taxi_ativo || false,
+      flag_chassi_remarcado: veiculoDB?.flag_chassi_remarcado || false,
+      flag_ex_ressarcido: veiculoDB?.flag_ex_ressarcido || false,
+      flag_avarias_vistoria: veiculoDB?.flag_avarias_vistoria || false,
     },
     plano: {
       nome: plano?.nome || "Plano Padrão",
