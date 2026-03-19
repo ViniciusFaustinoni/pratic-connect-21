@@ -67,6 +67,7 @@ interface IniciarSubstituicaoParams {
   veiculo_antigo_fipe: number;
   mensalidade_antiga: number;
   cota_participacao_antiga: number;
+  consultor_id?: string | null;
   observacoes?: string;
 }
 
