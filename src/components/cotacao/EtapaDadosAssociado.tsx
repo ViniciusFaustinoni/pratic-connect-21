@@ -72,10 +72,16 @@ export function EtapaDadosAssociado({
   indicadorNome,
   setIndicadorNome,
   onNext,
+  onSubstituicao,
 }: EtapaDadosAssociadoProps) {
   const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedores();
   const [buscaIndicador, setBuscaIndicador] = useState('');
   const { data: resultadosBusca = [], isLoading: isSearching } = useAssociadoSearch(buscaIndicador);
+
+  // CPF para verificação de veículo ativo
+  const [cpfBusca, setCpfBusca] = useState('');
+  const { data: veiculoAtivoCpf, isLoading: verificandoCpf } = useVerificarVeiculoAtivoCpf(cpfBusca);
+  const [showDialogTipo, setShowDialogTipo] = useState(false);
   
   // Pode avançar se Nome, Telefone e Consultor estão preenchidos
   const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
