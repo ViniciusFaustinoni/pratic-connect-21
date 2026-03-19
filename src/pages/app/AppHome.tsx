@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Car, Receipt, MapPin, Phone, AlertTriangle, FileText, Loader2, Lock } from 'lucide-react';
+import { Car, Receipt, MapPin, Phone, AlertTriangle, FileText, Loader2, Lock, ShieldCheck, ShieldOff, Ban } from 'lucide-react';
 import { useAssociado } from '@/contexts/AssociadoContext';
 import { useResumoApp } from '@/hooks/useAppAssociado';
 import { useMinhasCoberturas } from '@/hooks/useMinhasCoberturasApp';
