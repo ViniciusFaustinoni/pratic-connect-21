@@ -13,6 +13,7 @@ import { StepRastreador } from '@/components/substituicao/StepRastreador';
 import { StepNovoVeiculo } from '@/components/substituicao/StepNovoVeiculo';
 import { StepBeneficios } from '@/components/substituicao/StepBeneficios';
 import { StepFinanceiro } from '@/components/substituicao/StepFinanceiro';
+import { StepConclusao } from '@/components/substituicao/StepConclusao';
 import { useIniciarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
@@ -154,7 +155,12 @@ export default function SubstituicaoVeiculoPage() {
   // Step 6 -> confirmar (Financeiro -> Aprovação)
   const handleFinanceiroConfirmar = () => {
     completeStep(6);
+    setCurrentStep(7);
     toast.success('Substituição enviada para aprovação!');
+  };
+
+  const handleRetry = () => {
+    setCurrentStep(6);
   };
 
   if (loadingAssociado || loadingVeiculo) {
@@ -313,10 +319,20 @@ export default function SubstituicaoVeiculoPage() {
         />
       )}
 
-      {currentStep >= 7 && (
+      {currentStep >= 7 && substituicaoId && (
+        <StepConclusao
+          substituicaoId={substituicaoId}
+          associadoId={associadoId!}
+          associadoNome={associado.nome}
+          veiculoAntigoPlaca={veiculoAntigoResumo.placa}
+          onRetry={handleRetry}
+        />
+      )}
+
+      {currentStep >= 7 && !substituicaoId && (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">O step de Aprovação será implementado na próxima fase.</p>
+            <p className="text-muted-foreground">Erro: substituição não encontrada.</p>
           </CardContent>
         </Card>
       )}
