@@ -19,6 +19,19 @@ import { useQuery } from '@tanstack/react-query';
 import { maskPlaca } from '@/lib/validations';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
 
+const CATEGORIAS_DESAGIO_FALLBACK = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
+const LINHAS_COM_DESAGIO_FALLBACK = ['select', 'lancamento'];
+
+const CATEGORIAS_VEICULO_CALC = [
+  { value: 'nenhuma', label: 'Nenhuma' },
+  { value: 'leilao', label: 'Leilão' },
+  { value: 'ex_taxi', label: 'Ex-táxi' },
+  { value: 'taxi', label: 'Táxi' },
+  { value: 'chassi_remarcado', label: 'Chassi Remarcado' },
+  { value: 'placa_vermelha', label: 'Placa Vermelha' },
+  { value: 'ressarcimento_integral', label: 'Ressarcimento Integral' },
+] as const;
+
 interface ResultadoPlano {
   key: string;
   planoNome: string;
@@ -33,6 +46,7 @@ interface ResultadoPlano {
   cotaMinima: number;
   coberturaFipe: number;
   coberturas: string[];
+  precoDesagioAplicado?: boolean;
 }
 
 interface ResultadoCalc {
