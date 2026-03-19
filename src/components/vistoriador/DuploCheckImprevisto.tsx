@@ -118,14 +118,13 @@ export function DuploCheckImprevisto({
 
       if (error) throw error;
 
-      // Enviar link de reagendamento (não crítico)
-      try {
-        await supabase.functions.invoke('enviar-link-reagendamento', {
-          body: { servico_id: tarefaId },
-        });
-      } catch (e) {
-        console.warn('Erro ao enviar link de reagendamento (não crítico):', e);
-      }
+      // PONTO B: Enviar link de reagendamento (idempotente - não reenvia se já foi)
+      supabase.functions.invoke('enviar-link-reagendamento', {
+        body: { servico_id: tarefaId },
+      }).then(({ error: linkErr }) => {
+        if (linkErr) console.warn('[DuploCheck] Erro ao enviar link (Ponto B, não crítico):', linkErr);
+        else console.log('[DuploCheck] Link de reagendamento disparado (Ponto B)');
+      }).catch(e => console.warn('[DuploCheck] Falha no Ponto B:', e));
 
       toast.success('Duplo check confirmado.');
       setEtapa('sucesso');

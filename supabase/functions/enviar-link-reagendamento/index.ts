@@ -21,11 +21,20 @@ Deno.serve(async (req) => {
     // Buscar serviço com dados do associado
     const { data: servico, error: sErr } = await supabase
       .from("servicos")
-      .select("id, reagendamento_token, associado_id, tipo")
+      .select("id, reagendamento_token, associado_id, tipo, reagendamento_enviado_em")
       .eq("id", servico_id)
       .single();
 
     if (sErr || !servico) throw new Error("Serviço não encontrado");
+
+    // Guard de idempotência: se já enviou, não reenvia
+    if (servico.reagendamento_enviado_em) {
+      console.log(`[enviar-link-reagendamento] Link já enviado em ${servico.reagendamento_enviado_em}, skip.`);
+      return new Response(
+        JSON.stringify({ success: true, skipped: true, reason: "já enviado" }),
+        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
 
     // Buscar associado
     const { data: associado } = await supabase
