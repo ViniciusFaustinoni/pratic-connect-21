@@ -78,6 +78,7 @@ export default function SolicitacoesMigracao() {
         solicitacaoId: selected.id,
         consultorUserId: (selected as any).consultor?.user_id || '',
         cotacaoId: (selected as any).cotacao_id || undefined,
+        consultorProfileId: (selected as any).consultor_id || undefined,
       });
       toast.success('Solicitação aprovada com sucesso');
       setShowApproveDialog(false);
