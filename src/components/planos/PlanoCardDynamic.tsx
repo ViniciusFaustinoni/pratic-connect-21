@@ -36,7 +36,7 @@ const formatCurrency = (value: number) => {
 
 export function PlanoCardDynamic({ plan }: PlanoCardDynamicProps) {
   const [expanded, setExpanded] = useState(false);
-  const BENEFICIOS_VISIVEIS = 4;
+  const BENEFICIOS_VISIVEIS = 3;
 
   // Ordenar benefícios: highlighted primeiro, depois por display_order
   const sortedBenefits = [...(plan.plan_benefits || [])].sort((a, b) => {
