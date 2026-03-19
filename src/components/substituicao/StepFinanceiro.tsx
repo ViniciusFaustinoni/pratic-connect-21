@@ -73,9 +73,13 @@ export function StepFinanceiro({
   const atualizarSubstituicao = useAtualizarSubstituicao();
   const { precosMap, terceirosMap } = useBeneficiosSeparados();
   const { data: taxaSubstituicao = 50 } = useTaxaSubstituicao();
+  const { data: taxaRepasseVolante = 50 } = useTaxaRepasseVolante();
   const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
   const { data: valorCotaParticipacao = 200 } = useConfiguracaoNumero('atuarial_valor_cota_participacao', 200);
+
+  const valorRepasse = tipoAtendimento === 'volante' ? taxaRepasseVolante : 0;
+  const totalCobranca = taxaSubstituicao + valorRepasse;
 
   // Cotação dinâmica para mensalidade do novo veículo
   const { calcular, resultado: resultadoCotacao } = useCalcularCotacao();
