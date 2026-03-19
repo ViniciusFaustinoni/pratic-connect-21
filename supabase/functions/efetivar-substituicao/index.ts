@@ -213,7 +213,14 @@ Deno.serve(async (req) => {
 
     // ─── STEP 8: Gerar proposta Autentique ───
     try {
-      if (associado) {
+      if (associado && novoContratoId) {
+        await supabase.functions.invoke('autentique-create', {
+          body: {
+            contratoId: novoContratoId,
+          },
+        })
+      } else if (associado) {
+        // Fallback: dados inline caso contrato não tenha sido criado
         await supabase.functions.invoke('autentique-create', {
           body: {
             template: 'CONTRATO_ADESAO_V1',
@@ -230,6 +237,8 @@ Deno.serve(async (req) => {
               mensalidade: substituicao.mensalidade_nova,
               cota_participacao: substituicao.cota_participacao_nova,
             },
+          },
+        })
           },
         })
       }
