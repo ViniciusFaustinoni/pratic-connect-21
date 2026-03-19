@@ -70,6 +70,7 @@ const MIGRACAO_DEFAULTS: MigracaoConfig = {
   migracao_prazo_resposta_horas: 48,
   migracao_canal_oficial: 'e-mail',
   migracao_isentar_carencia: true,
+  migracao_prazo_max_comprovante_meses: 3,
 };
 
 const CAMPOS_BLOCO1: { chave: keyof PontuacaoConfig; label: string }[] = [
