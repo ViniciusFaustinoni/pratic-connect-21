@@ -300,26 +300,30 @@ Deno.serve(async (req) => {
           }
         }
 
-        const chaveParam = pagamentoIntegral ? 'pontos_substituicao_placa' : 'pontos_substituicao_placa_parcial';
-        const fallback = pagamentoIntegral ? 0.5 : 0;
-        const pontosConsultor = await getParametroPontuacao(supabase, chaveParam, fallback);
+        // Se pagamento parcial, NÃO gera pontuação (regra do negócio)
+        let pontosConsultor = 0;
+        if (pagamentoIntegral) {
+          pontosConsultor = await getParametroPontuacao(supabase, 'pontos_substituicao_placa', 0.5);
+        }
 
         await supabase
           .from('substituicoes_veiculo')
-          .update({ comissao_creditada: true, pontos_consultor: pontosConsultor })
+          .update({ comissao_creditada: pagamentoIntegral, pontos_consultor: pontosConsultor })
           .eq('id', substituicao_id)
 
-        // Registrar evento de pontuação
-        await registrarEventoPontuacao(supabase, {
-          vendedor_id: substituicao.consultor_id,
-          tipo_operacao: 'substituicao_placa',
-          pontos: pontosConsultor,
-          contrato_id: substituicao.contrato_id,
-          referencia_tipo: 'substituicao',
-          referencia_id: substituicao.id,
-        });
+        // Registrar evento de pontuação apenas se integral
+        if (pagamentoIntegral && pontosConsultor > 0) {
+          await registrarEventoPontuacao(supabase, {
+            vendedor_id: substituicao.consultor_id,
+            tipo_operacao: 'substituicao_placa',
+            pontos: pontosConsultor,
+            contrato_id: substituicao.contrato_id,
+            referencia_tipo: 'substituicao',
+            referencia_id: substituicao.id,
+          });
+        }
 
-        console.log(`[efetivar-substituicao] Pontuação: ${pontosConsultor} (${pagamentoIntegral ? 'integral' : 'parcial'}) para ${substituicao.consultor_id}`);
+        console.log(`[efetivar-substituicao] Pontuação: ${pontosConsultor} (${pagamentoIntegral ? 'integral' : 'parcial - sem pontos'}) para ${substituicao.consultor_id}`);
       }
       results.push({ step: 12, name: 'Creditar consultor', success: true })
     } catch (e) {
