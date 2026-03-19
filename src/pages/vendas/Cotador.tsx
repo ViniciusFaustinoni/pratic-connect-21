@@ -481,7 +481,7 @@ export default function CotadorPage() {
       proposta.migracao = {
         aprovada: migracaoData.status === 'aprovada',
         associacaoOrigem: migracaoData.associacao_origem || '',
-        carenciaIsenta: migracaoData.status === 'aprovada',
+        carenciaIsenta: migracaoData.status === 'aprovada' && migracaoConfig?.isentar_carencia === true,
         dataAprovacao: migracaoData.aprovado_em || '',
       };
     }
