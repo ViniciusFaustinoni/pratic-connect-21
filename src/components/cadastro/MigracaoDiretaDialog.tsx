@@ -93,16 +93,24 @@ export function MigracaoDiretaDialog({ open, onOpenChange, cpfInicial, consultor
   const cpfValido = cpfLimpo.length === 11;
 
   const resetForm = () => {
-    setCpf('');
+    setCpf(cpfInicial || '');
     setNome('');
     setPlaca('');
     setAssociacaoOrigem('');
-    setConsultorId('sem_consultor');
+    setConsultorId(consultorIdInicial || 'sem_consultor');
     setComprovantes([]);
     setBoleto(null);
     setValidationErrors([]);
     setDeclaracaoCancelamento(false);
   };
+
+  // Sync props when dialog opens
+  useEffect(() => {
+    if (open) {
+      if (cpfInicial) setCpf(cpfInicial);
+      if (consultorIdInicial) setConsultorId(consultorIdInicial);
+    }
+  }, [open, cpfInicial, consultorIdInicial]);
 
   const uploadFile = async (file: File, tipo: string): Promise<string> => {
     const timestamp = Date.now();
