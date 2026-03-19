@@ -556,6 +556,12 @@ export default function AssociadoDetalhe() {
                             <Badge className={cn('text-[10px]', STATUS_VEICULO_COLORS[(v.status as StatusVeiculo) || 'em_analise'])}>
                               {STATUS_VEICULO_LABELS[(v.status as StatusVeiculo) || 'em_analise']}
                             </Badge>
+                            {/* Tipo de entrada badge */}
+                            {(v as any).tipo_entrada && TIPO_ENTRADA_SHORT_LABELS[(v as any).tipo_entrada] && (
+                              <Badge variant="outline" className="text-[10px] font-normal">
+                                {TIPO_ENTRADA_SHORT_LABELS[(v as any).tipo_entrada]}
+                              </Badge>
+                            )}
                             {/* Per-vehicle coverage badge */}
                             {(() => {
                               const veicInad = situacao.veiculosInadimplentes.find(vi => vi.veiculoId === v.id);
