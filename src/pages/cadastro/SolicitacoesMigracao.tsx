@@ -34,7 +34,7 @@ const statusConfig = {
   reprovada: { label: 'Reprovada', icon: XCircle, className: 'bg-destructive/10 text-destructive border-destructive/30' },
 };
 
-export default function SolicitacoesMigracao() {
+export function MigracoesTab() {
   const permissions = usePermissions();
   const canAccess = permissions.isGerencia || permissions.isDiretor || permissions.isAdminMaster || permissions.isDesenvolvedor;
 
