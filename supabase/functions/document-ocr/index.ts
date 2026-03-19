@@ -569,9 +569,23 @@ INSTRUÇÕES:
                     console.log('[OCR] CPF válido extraído na segunda tentativa:', cpfResult.cpf);
                     result.dados.cpf = cpfResult.cpf;
                   } else {
-                    console.log('[OCR] CPF da segunda tentativa também inválido:', cpfResult.cpf, '→ marcando como ilegível');
-                    result.dados.cpf = 'ilegivel';
-                    result.motivo = (result.motivo || '') + ' CPF não pôde ser lido com precisão (dígito verificador inválido em ambas tentativas).';
+                    console.log('[OCR] CPF da segunda tentativa também inválido:', cpfResult.cpf, '→ tentando correção por permutação');
+                    // Tentar corrigir por permutação de dígitos confusos
+                    const cpfCorrigido = tryFixCPFByPermutation(cpfResult.cpf);
+                    if (cpfCorrigido) {
+                      console.log(`[OCR] CPF corrigido por permutação: ${cpfResult.cpf} → ${cpfCorrigido}`);
+                      result.dados.cpf = cpfCorrigido;
+                    } else {
+                      // Tentar também com o CPF da primeira tentativa (pode ser diferente)
+                      const cpfCorrigido1 = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
+                      if (cpfCorrigido1) {
+                        console.log(`[OCR] CPF corrigido por permutação (1ª tentativa): ${cpfExtraido} → ${cpfCorrigido1}`);
+                        result.dados.cpf = cpfCorrigido1;
+                      } else {
+                        result.dados.cpf = 'ilegivel';
+                        result.motivo = (result.motivo || '') + ' CPF não pôde ser lido com precisão (dígito verificador inválido em ambas tentativas).';
+                      }
+                    }
                   }
                 } else {
                   console.log('[OCR] CPF marcado como ilegível na segunda tentativa');
