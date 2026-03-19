@@ -1,129 +1,79 @@
 
 
-# Fluxo de Migração no ContratoWizard
+# Solicitações de Migração — Fila de Análise
 
 ## Resumo
 
-Quando o consultor seleciona "Migração" como tipo de operação no Step 3 do `ContratoWizard`, o sistema deve: (1) verificar bloqueios por CPF (débitos anteriores e vínculo ativo), (2) exibir formulário de migração com upload de comprovantes e boleto, (3) validar documentos via OCR, e (4) criar uma solicitação pendente que bloqueia o avanço até aprovação.
+Nova página `/cadastro/migracoes` no módulo Cadastro, acessível apenas para gerência/diretoria/admin. Lista todas as solicitações de migração com status, prazos, e painel lateral para análise e decisão (aprovar/reprovar).
 
-## Mudanças no banco de dados
+## Banco de dados
 
-### Nova tabela: `solicitacoes_migracao`
+### Migration SQL
 
-```sql
-create table public.solicitacoes_migracao (
-  id uuid primary key default gen_random_uuid(),
-  cotacao_id uuid references cotacoes(id) not null,
-  associado_cpf text not null,
-  associado_nome text,
-  veiculo_placa text,
-  associacao_origem text not null,
-  consultor_id text references profiles(id),
-  status text not null default 'pendente' check (status in ('pendente','aprovada','reprovada')),
-  motivo_reprovacao text,
-  aprovado_por text references profiles(id),
-  aprovado_em timestamptz,
-  prazo_resposta_horas int not null default 48,
-  created_at timestamptz default now(),
-  updated_at timestamptz default now()
-);
+1. **Tabela `migracao_decisoes_historico`** — registro imutável de cada decisão:
+   - `id`, `solicitacao_id` (FK), `decisao` (aprovada/reprovada), `motivo`, `analista_id` (FK profiles), `created_at`
+   - RLS: somente leitura para authenticated
 
-alter table public.solicitacoes_migracao enable row level security;
-```
+2. **RLS na `solicitacoes_migracao`**: policy de UPDATE para roles com permissão `canManageCadastro` (gerência, diretoria, admin) — permitir alterar `status`, `aprovado_por`, `aprovado_em`, `motivo_reprovacao`
 
-### Nova tabela: `solicitacoes_migracao_documentos`
+3. **RLS na `solicitacoes_migracao`**: policy de SELECT para authenticated (consultores veem as suas, gerência vê todas)
 
-```sql
-create table public.solicitacoes_migracao_documentos (
-  id uuid primary key default gen_random_uuid(),
-  solicitacao_id uuid references solicitacoes_migracao(id) on delete cascade not null,
-  tipo text not null check (tipo in ('comprovante_pagamento','boleto_referencia')),
-  arquivo_url text not null,
-  nome_arquivo text,
-  cpf_detectado text,
-  placa_detectada text,
-  legivel boolean default true,
-  validacao_ok boolean,
-  validacao_erro text,
-  created_at timestamptz default now()
-);
-```
+## Frontend
 
-RLS: authenticated users can read/insert their own solicitações (by `consultor_id`); admins can read/update all.
+### 1. Nova página: `src/pages/cadastro/SolicitacoesMigracao.tsx`
 
-## Mudanças no frontend
+- Guard: `usePermissions()` — requer `isGerencia || isDiretor || isAdminMaster || isDesenvolvedor`
+- Query: `solicitacoes_migracao` com join em `documentos`, `profiles` (consultor)
+- **Lista/tabela** com colunas: Nome, CPF, Placa, Associação Origem, Data Envio, Tempo Decorrido, Prazo Restante, Status, Consultor
+- **Prazo restante**: calculado como `created_at + prazo_resposta_horas - now()`. Destaque amarelo/laranja < 4h, destaque vermelho quando vencido
+- **Filtros**: por status (pendente/aprovada/reprovada/todos), ordenação padrão por prazo mais urgente
+- Ao clicar em uma solicitação pendente, abre `Sheet` lateral com detalhes
 
-### 1. Mover seleção de tipo de operação para o Step 1
+### 2. Painel lateral (Sheet)
 
-Atualmente o select de tipo de operação fica no Step 3 (Revisão). Para migração funcionar, precisa ser escolhido **antes** do Step 2 (Documentos), pois o formulário de migração aparece entre Steps 1 e 2.
+- Dados completos da solicitação
+- **Abas (Tabs)**: uma aba por comprovante + aba "Boleto de Referência"
+- Cada aba mostra o documento inline (imagem ou PDF via `<iframe>`/`<img>`)
+- Resultado da validação automática por documento: CPF detectado, placa detectada, legível, erro
+- Indicadores visuais de inconsistências (CPF/placa não batem)
 
-**Arquivo:** `src/components/contratos/ContratoWizard.tsx`
-- Mover o `<Select>` de `tipoOperacao` para dentro do Step 1, abaixo do resumo da cotação
-- Quando `tipoOperacao === 'migracao'`, inserir um novo step intermediário (Step "Migração") entre os steps atuais
+### 3. Ações de decisão
 
-### 2. Novo componente: `MigracaoStepForm`
+- **Aprovar**: Dialog de confirmação simples → mutation:
+  - Update `solicitacoes_migracao` com `status = 'aprovada'`, `aprovado_por`, `aprovado_em`
+  - Insert em `migracao_decisoes_historico`
+  - Insert notificação na tabela `notificacoes` para o `consultor_id`
+  - Invalidar queries
 
-**Arquivo:** `src/components/contratos/MigracaoStepForm.tsx`
+- **Reprovar**: Dialog com textarea obrigatória para motivo → mutation:
+  - Update `solicitacoes_migracao` com `status = 'reprovada'`, `motivo_reprovacao`
+  - Insert em `migracao_decisoes_historico`
+  - Insert notificação com motivo para o consultor
 
-Fluxo interno:
-1. **Verificação automática de bloqueios** (ao montar, usando o CPF da cotação/lead):
-   - Query `associados` por CPF com `status = 'ativo'` → bloqueia se encontrar ("vínculo ativo existente")
-   - Query `cobrancas` por CPF com status `vencido` → bloqueia se encontrar ("débitos pendentes")
-   - Se bloqueado: exibe Alert com mensagem específica, botão "Próximo" desabilitado
+### 4. Hook: `src/hooks/useSolicitacoesMigracaoAdmin.ts`
 
-2. **Formulário de migração** (se sem bloqueio):
-   - Campo texto: "Associação de origem"
-   - Upload de comprovantes de pagamento (mínimo lido de `useMigracaoConfig().comprovantes`)
-   - Contador: "X de Y comprovantes enviados"
-   - Upload de boleto de referência (1 obrigatório)
-   - Cada upload envia para o storage `documentos` e chama `document-ocr` para extrair CPF e placa
+- `useSolicitacoesMigracaoList(filtroStatus)` — lista todas com join
+- `useAprovarMigracao()` — mutation de aprovação
+- `useReprovarMigracao()` — mutation de reprovação
 
-3. **Validação automática** ao clicar "Validar e Enviar":
-   - Quantidade de comprovantes >= config
-   - Todos os comprovantes com CPF detectado === CPF do formulário
-   - Todos os comprovantes com placa detectada === placa do veículo
-   - Boleto presente e legível
-   - Se falha: exibe qual documento tem problema e o que corrigir
-   - Se sucesso: cria registro em `solicitacoes_migracao` + documentos em `solicitacoes_migracao_documentos`
+### 5. Integração no layout
 
-4. **Status em tempo real** (após envio):
-   - Subscribe via realtime ou polling na `solicitacoes_migracao` pelo `cotacao_id`
-   - Exibe badge: Pendente (amarelo), Aprovada (verde), Reprovada (vermelho)
-   - Enquanto `pendente`: botão "Próximo" desabilitado
-   - Se `aprovada`: libera avanço, tipoOperacao permanece 'migracao'
-   - Se `reprovada`: exibe motivo, permite reenviar
-
-### 3. Hook: `useSolicitacaoMigracao`
-
-**Arquivo:** `src/hooks/useSolicitacaoMigracao.ts`
-
-- `useVerificarBloqueiosMigracao(cpf)` — verifica débitos e vínculo ativo
-- `useCriarSolicitacaoMigracao()` — mutation para inserir solicitação + documentos
-- `useSolicitacaoMigracaoByCotacao(cotacaoId)` — query com refetch interval para status em tempo real
-
-### 4. Ajuste no wizard steps
-
-O wizard passa de 3 steps para 4 quando `tipoOperacao === 'migracao'`:
-1. Cotação + Tipo de Operação
-2. **Migração** (novo — só aparece se migração)
-3. Documentos (CNH, CRLV, etc.)
-4. Revisão
-
-## Arquivos a criar/modificar
-
-| Arquivo | Ação |
-|---------|------|
-| `src/components/contratos/MigracaoStepForm.tsx` | Criar |
-| `src/hooks/useSolicitacaoMigracao.ts` | Criar |
-| `src/components/contratos/ContratoWizard.tsx` | Modificar (mover select, adicionar step condicional) |
-| Migration SQL | Criar tabelas + RLS |
+- **`AppSidebar.tsx`**: adicionar item "Migrações" no grupo Cadastro (`/cadastro/migracoes`)
+- **`App.tsx`**: adicionar `<Route path="/cadastro/migracoes" element={<SolicitacoesMigracao />} />`
+- **`GlobalBreadcrumb.tsx`**: adicionar entrada para `/cadastro/migracoes`
 
 ## Valores dinâmicos
 
-Todos os valores lidos via `useMigracaoConfig()`:
-- `comprovantes` (qtd mínima de comprovantes)
-- `prazo_horas` (prazo de resposta para a análise)
-- `isentar_carencia` (se migração aprovada isenta carência)
+O prazo de resposta vem do campo `prazo_resposta_horas` de cada solicitação (que por sua vez foi preenchido via `useMigracaoConfig()` no momento da criação). Nenhum valor fixo.
 
-Nenhum valor fixo no código.
+## Arquivos
+
+| Arquivo | Ação |
+|---------|------|
+| `src/pages/cadastro/SolicitacoesMigracao.tsx` | Criar |
+| `src/hooks/useSolicitacoesMigracaoAdmin.ts` | Criar |
+| `src/App.tsx` | Adicionar rota |
+| `src/components/layout/AppSidebar.tsx` | Adicionar item menu |
+| `src/components/layout/GlobalBreadcrumb.tsx` | Adicionar breadcrumb |
+| Migration SQL | Criar tabela histórico + RLS policies |
 
