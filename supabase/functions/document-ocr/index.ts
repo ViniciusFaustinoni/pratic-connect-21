@@ -453,60 +453,95 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
     console.log('OCR result:', result);
 
-    // Se for CNH e CPF veio null, fazer uma segunda tentativa focada apenas no CPF
-    if (result.tipo_detectado === 'cnh' && (!result.dados?.cpf || result.dados?.cpf === null)) {
-      console.log('CPF não encontrado na CNH, tentando extração específica...');
+    // Validar CPF extraído por checksum quando for CNH
+    if (result.tipo_detectado === 'cnh' && result.dados) {
+      const cpfExtraido = result.dados.cpf;
+      const precisaRetry = !cpfExtraido || cpfExtraido === null || 
+        (cpfExtraido !== 'ilegivel' && !validateCPF(cpfExtraido.replace(/\D/g, '')));
       
-      try {
-        const retryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
-          method: 'POST',
-          headers: {
-            'Authorization': `Bearer ${LOVABLE_API_KEY}`,
-            'Content-Type': 'application/json',
-          },
-          body: JSON.stringify({
-            model: 'google/gemini-2.5-flash',
-            messages: [
-              { role: 'system', content: cpfRetryPrompt },
-              {
-                role: 'user',
-                content: [
-                  { type: 'text', text: 'Extraia o CPF desta CNH.' },
-                  contentParts[1],
-                ],
-              },
-            ],
-            max_tokens: 200,
-            temperature: 0.1,
-          }),
-        });
+      if (precisaRetry) {
+        const motivoRetry = !cpfExtraido || cpfExtraido === null 
+          ? 'CPF não encontrado na CNH' 
+          : `CPF extraído (${cpfExtraido}) falhou na validação de dígito verificador`;
+        console.log(`[OCR] ${motivoRetry}, tentando extração específica...`);
+        
+        // Prompt corretivo com feedback sobre o erro
+        const retryPromptCorretivo = cpfExtraido && cpfExtraido !== null
+          ? `TAREFA ÚNICA: Re-leia o CPF desta CNH brasileira.
 
-        if (retryResponse.ok) {
-          const retryData = await retryResponse.json();
-          const retryContent = retryData.choices?.[0]?.message?.content;
-          
-          if (retryContent) {
-            try {
-              const cleanRetryContent = retryContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-              const cpfResult = JSON.parse(cleanRetryContent);
-              
-              if (cpfResult.cpf && cpfResult.cpf !== 'ilegivel') {
-                console.log('CPF extraído na segunda tentativa:', cpfResult.cpf);
-                result.dados = result.dados || {};
-                result.dados.cpf = cpfResult.cpf;
-              } else if (cpfResult.cpf === 'ilegivel') {
-                console.log('CPF marcado como ilegível na segunda tentativa');
-                result.dados = result.dados || {};
+A leitura anterior retornou "${cpfExtraido}", mas este CPF é MATEMATICAMENTE INVÁLIDO (falha no dígito verificador).
+
+INSTRUÇÕES:
+1. Localize o campo "CPF" ou "CPF/MF" no documento
+2. Leia CADA DÍGITO individualmente, da esquerda para a direita
+3. Preste atenção especial aos dígitos que podem ser confundidos: 1/7, 3/8, 5/6, 0/8, 4/9
+4. Se não tiver certeza absoluta de algum dígito, retorne: {"cpf": "ilegivel"}
+5. Se tiver certeza, retorne: {"cpf": "XXX.XXX.XXX-XX"}`
+          : cpfRetryPrompt;
+
+        try {
+          const retryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
+            method: 'POST',
+            headers: {
+              'Authorization': `Bearer ${LOVABLE_API_KEY}`,
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({
+              model: 'google/gemini-2.5-flash',
+              messages: [
+                { role: 'system', content: retryPromptCorretivo },
+                {
+                  role: 'user',
+                  content: [
+                    { type: 'text', text: 'Extraia o CPF desta CNH.' },
+                    contentParts[1],
+                  ],
+                },
+              ],
+              max_tokens: 200,
+              temperature: 0,
+            }),
+          });
+
+          if (retryResponse.ok) {
+            const retryData = await retryResponse.json();
+            const retryContent = retryData.choices?.[0]?.message?.content;
+            
+            if (retryContent) {
+              try {
+                const cleanRetryContent = retryContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
+                const cpfResult = JSON.parse(cleanRetryContent);
+                
+                if (cpfResult.cpf && cpfResult.cpf !== 'ilegivel') {
+                  // Validar o CPF da segunda tentativa também
+                  if (validateCPF(cpfResult.cpf.replace(/\D/g, ''))) {
+                    console.log('[OCR] CPF válido extraído na segunda tentativa:', cpfResult.cpf);
+                    result.dados.cpf = cpfResult.cpf;
+                  } else {
+                    console.log('[OCR] CPF da segunda tentativa também inválido:', cpfResult.cpf, '→ marcando como ilegível');
+                    result.dados.cpf = 'ilegivel';
+                    result.motivo = (result.motivo || '') + ' CPF não pôde ser lido com precisão (dígito verificador inválido em ambas tentativas).';
+                  }
+                } else {
+                  console.log('[OCR] CPF marcado como ilegível na segunda tentativa');
+                  result.dados.cpf = 'ilegivel';
+                  result.motivo = (result.motivo || '') + ' CPF não pôde ser lido (documento danificado ou cortado).';
+                }
+              } catch (retryParseError) {
+                console.error('[OCR] Falha ao parsear resultado do retry de CPF:', retryContent);
                 result.dados.cpf = 'ilegivel';
-                result.motivo = (result.motivo || '') + ' CPF não pôde ser lido (documento danificado ou cortado).';
               }
-            } catch (retryParseError) {
-              console.error('Falha ao parsear resultado do retry de CPF:', retryContent);
             }
           }
+        } catch (retryError) {
+          console.error('[OCR] Erro no retry de extração de CPF:', retryError);
+          // Manter o CPF original se o retry falhar por erro de rede
+          if (cpfExtraido && cpfExtraido !== null && !validateCPF(cpfExtraido.replace(/\D/g, ''))) {
+            result.dados.cpf = 'ilegivel';
+          }
         }
-      } catch (retryError) {
-        console.error('Erro no retry de extração de CPF:', retryError);
+      } else if (cpfExtraido && cpfExtraido !== 'ilegivel') {
+        console.log('[OCR] CPF extraído validado com sucesso:', cpfExtraido);
       }
     }
 
