@@ -55,14 +55,13 @@ export function DialogTipoOperacao({
   const temDebito = debitos?.temDebito ?? false;
 
   // Auto-prosseguir quando verificação concluída sem débitos
-  if (debitosCarregados && !temDebito && mostrarVerificacao) {
-    // Usar setTimeout para evitar update durante render
-    setTimeout(() => {
+  useEffect(() => {
+    if (debitosCarregados && !temDebito && mostrarVerificacao) {
       setMostrarVerificacao(false);
       onInclusao();
       onOpenChange(false);
-    }, 0);
-  }
+    }
+  }, [debitosCarregados, temDebito, mostrarVerificacao, onInclusao, onOpenChange]);
 
   const handleProsseguirComAviso = () => {
     setMostrarVerificacao(false);
