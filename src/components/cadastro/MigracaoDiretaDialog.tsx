@@ -112,13 +112,13 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
     return urlData.publicUrl;
   };
 
-  const validateWithOCR = async (url: string): Promise<{ cpf?: string; placa?: string; legivel: boolean }> => {
+  const validateWithOCR = async (url: string): Promise<{ cpf?: string; placa?: string; data_documento?: string; legivel: boolean }> => {
     try {
       const { data, error } = await supabase.functions.invoke('document-ocr', {
         body: { url, tipoEsperado: 'comprovante_pagamento' },
       });
       if (error) return { legivel: false };
-      return { cpf: data?.cpf, placa: data?.placa, legivel: data?.legivel !== false };
+      return { cpf: data?.cpf, placa: data?.placa, data_documento: data?.data_documento, legivel: data?.legivel !== false };
     } catch {
       return { legivel: false };
     }
