@@ -11,10 +11,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Clock, CheckCircle, XCircle, AlertTriangle, FileText, Eye, ShieldAlert } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, AlertTriangle, FileText, Eye, ShieldAlert, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { differenceInHours, differenceInMinutes, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { MigracaoDiretaDialog } from '@/components/cadastro/MigracaoDiretaDialog';
 
 function calcPrazo(createdAt: string, prazoHoras: number) {
   const deadline = new Date(new Date(createdAt).getTime() + prazoHoras * 60 * 60 * 1000);
