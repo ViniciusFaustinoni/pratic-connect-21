@@ -107,7 +107,7 @@ export function AssociadoResumoTab({
       {/* Situação do Associado */}
       {situacao && <AssociadoSituacaoCard situacao={situacao} />}
 
-      {/* Origem do Cadastro */}
+      {/* Tipo de Entrada */}
       {associado?.id && <OrigemCadastroCard associadoId={associado.id} canLinkToAssociado={canLinkToAssociado} />}
 
       {/* Info Grid */}
