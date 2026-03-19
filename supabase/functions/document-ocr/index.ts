@@ -7,6 +7,23 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
+// Validação de CPF por dígito verificador (mesmo algoritmo do frontend)
+function validateCPF(cpf: string): boolean {
+  const cleaned = cpf.replace(/\D/g, '');
+  if (cleaned.length !== 11) return false;
+  if (/^(\d)\1+$/.test(cleaned)) return false;
+  let sum = 0;
+  for (let i = 0; i < 9; i++) sum += parseInt(cleaned[i]) * (10 - i);
+  let r = (sum * 10) % 11;
+  if (r === 10 || r === 11) r = 0;
+  if (r !== parseInt(cleaned[9])) return false;
+  sum = 0;
+  for (let i = 0; i < 10; i++) sum += parseInt(cleaned[i]) * (11 - i);
+  r = (sum * 10) % 11;
+  if (r === 10 || r === 11) r = 0;
+  return r === parseInt(cleaned[10]);
+}
+
 const systemPrompt = `Analista de documentos brasileiros. Detecte o tipo e extraia dados.
 
 ## Tipos e campos obrigatórios:
@@ -16,6 +33,7 @@ nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígito
 - CPF SEMPRE existe na CNH: campo "CPF"/"CPF/MF", próximo ao nome/foto. Procure sequências de 11 dígitos.
 - NÃO confunda com RENACH (tem letras), registro CNH ou RG.
 - NUNCA retorne cpf:null. Se ilegível: cpf:"ilegivel"
+- LEIA CADA DÍGITO DO CPF INDIVIDUALMENTE, DA ESQUERDA PARA A DIREITA. O CPF possui dígitos verificadores matemáticos — se tiver dúvida em qualquer dígito, retorne cpf:"ilegivel" em vez de adivinhar.
 
 ### RG
 nome, rg, cpf (se presente), data_nascimento, data_expedicao
