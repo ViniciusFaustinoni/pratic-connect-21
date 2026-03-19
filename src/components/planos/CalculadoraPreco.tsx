@@ -287,7 +287,24 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const configApp = useConfigAdicionalAppCalc(tabelas);
   const { cotaDefault, cotaMinimaDefault } = useCotaDefaults();
   const desagioConfig = useDesagioConfig();
+  const { data: limites } = useConfigLimitesVeiculo();
 
+  // Elegibilidade query (same as cotador)
+  const { data: elegibilidadeData } = useQuery({
+    queryKey: ['plano_elegibilidade_modelos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('plano_elegibilidade_modelos')
+        .select('plano_id, marca, modelo, ano_min, ano_max, combustivel, status, observacao, cobertura_fipe')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // State for FIPE-below-minimum alert
+  const [fipeBloqueado, setFipeBloqueado] = useState(false);
   // Vencimento
   const [opcao1, opcao2] = calcularOpcoesVencimento(new Date().getDate());
 
