@@ -37,6 +37,7 @@ interface EtapaDadosAssociadoProps {
   
   // Navegação
   onNext: () => void;
+  onSubstituicao?: (associadoId: string) => void;
 }
 
 const formatPhone = (value: string): string => {
