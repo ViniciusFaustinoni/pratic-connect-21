@@ -65,31 +65,31 @@ export function useAprovarMigracao() {
 
       // Insert histórico
       const { error: histError } = await supabase
-        .from('migracao_decisoes_historico')
+        .from('migracao_decisoes_historico' as any)
         .insert({
           solicitacao_id: solicitacaoId,
           decisao: 'aprovada',
           analista_id: profile.id,
           analista_nome: profile.nome,
-        });
+        } as any);
 
       if (histError) throw histError;
 
       // Notificar consultor
-      const { error: notifError } = await supabase
-        .from('notificacoes')
-        .insert({
-          user_id: consultorUserId,
-          titulo: 'Migração Aprovada',
-          mensagem: `Sua solicitação de migração foi aprovada por ${profile.nome}.`,
-          tipo: 'migracao',
-          modulo: 'cadastro',
-          referencia_tipo: 'solicitacao_migracao',
-          referencia_id: solicitacaoId,
-          link: '/vendas/cotacoes',
-        });
-
-      if (notifError) console.error('Erro ao notificar:', notifError);
+      if (consultorUserId) {
+        await supabase
+          .from('notificacoes')
+          .insert({
+            user_id: consultorUserId,
+            titulo: 'Migração Aprovada',
+            mensagem: `Sua solicitação de migração foi aprovada por ${profile.nome}.`,
+            tipo: 'migracao',
+            modulo: 'cadastro',
+            referencia_tipo: 'solicitacao_migracao',
+            referencia_id: solicitacaoId,
+            link: '/vendas/cotacoes',
+          });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['solicitacoes-migracao-admin'] });
@@ -134,32 +134,32 @@ export function useReprovarMigracao() {
 
       // Insert histórico
       const { error: histError } = await supabase
-        .from('migracao_decisoes_historico')
+        .from('migracao_decisoes_historico' as any)
         .insert({
           solicitacao_id: solicitacaoId,
           decisao: 'reprovada',
           motivo,
           analista_id: profile.id,
           analista_nome: profile.nome,
-        });
+        } as any);
 
       if (histError) throw histError;
 
       // Notificar consultor
-      const { error: notifError } = await supabase
-        .from('notificacoes')
-        .insert({
-          user_id: consultorUserId,
-          titulo: 'Migração Reprovada',
-          mensagem: `Sua solicitação de migração foi reprovada. Motivo: ${motivo}`,
-          tipo: 'migracao',
-          modulo: 'cadastro',
-          referencia_tipo: 'solicitacao_migracao',
-          referencia_id: solicitacaoId,
-          link: '/vendas/cotacoes',
-        });
-
-      if (notifError) console.error('Erro ao notificar:', notifError);
+      if (consultorUserId) {
+        await supabase
+          .from('notificacoes')
+          .insert({
+            user_id: consultorUserId,
+            titulo: 'Migração Reprovada',
+            mensagem: `Sua solicitação de migração foi reprovada. Motivo: ${motivo}`,
+            tipo: 'migracao',
+            modulo: 'cadastro',
+            referencia_tipo: 'solicitacao_migracao',
+            referencia_id: solicitacaoId,
+            link: '/vendas/cotacoes',
+          });
+      }
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['solicitacoes-migracao-admin'] });
