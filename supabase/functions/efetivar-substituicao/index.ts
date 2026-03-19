@@ -379,7 +379,7 @@ Deno.serve(async (req) => {
             vendedor_id: substituicao.consultor_id,
             tipo_operacao: 'substituicao_placa',
             pontos: pontosConsultor,
-            contrato_id: substituicao.contrato_id,
+            contrato_id: novoContratoId || substituicao.contrato_id,
             referencia_tipo: 'substituicao',
             referencia_id: substituicao.id,
           });
