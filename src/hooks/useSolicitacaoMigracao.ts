@@ -184,6 +184,76 @@ export function useCriarSolicitacaoMigracao() {
 }
 
 // ============================================
+// Criar solicitação de migração direta (sem cotação)
+// ============================================
+
+export function useCriarSolicitacaoMigracaoDireta() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (data: CriarSolicitacaoDiretaData) => {
+      // Get current user profile id (the operator)
+      const { data: userData } = await supabase.auth.getUser();
+      if (!userData?.user) throw new Error('Usuário não autenticado');
+
+      const { data: profile } = await supabase
+        .from('profiles')
+        .select('id')
+        .eq('user_id', userData.user.id)
+        .single();
+
+      if (!profile) throw new Error('Perfil não encontrado');
+
+      // Create solicitação without cotacao_id
+      const { data: solicitacao, error: solError } = await supabase
+        .from('solicitacoes_migracao')
+        .insert({
+          cotacao_id: null as any,
+          associado_cpf: data.associado_cpf,
+          associado_nome: data.associado_nome || null,
+          veiculo_placa: data.veiculo_placa || null,
+          associacao_origem: data.associacao_origem,
+          consultor_id: data.consultor_id || null,
+          prazo_resposta_horas: data.prazo_resposta_horas,
+          status: 'pendente',
+          origem_entrada: 'direta',
+        } as any)
+        .select('id')
+        .single();
+
+      if (solError) throw solError;
+
+      // Insert documents
+      if (data.documentos.length > 0) {
+        const docs = data.documentos.map(doc => ({
+          solicitacao_id: solicitacao.id,
+          tipo: doc.tipo,
+          arquivo_url: doc.arquivo_url,
+          nome_arquivo: doc.nome_arquivo,
+          cpf_detectado: doc.cpf_detectado || null,
+          placa_detectada: doc.placa_detectada || null,
+          legivel: doc.legivel ?? true,
+          validacao_ok: doc.validacao_ok ?? null,
+          validacao_erro: doc.validacao_erro || null,
+        }));
+
+        const { error: docError } = await supabase
+          .from('solicitacoes_migracao_documentos')
+          .insert(docs);
+
+        if (docError) throw docError;
+      }
+
+      return solicitacao;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['solicitacao-migracao'] });
+      queryClient.invalidateQueries({ queryKey: ['solicitacoes-migracao-admin'] });
+    },
+  });
+}
+
+// ============================================
 // Buscar solicitação de migração por cotação (polling)
 // ============================================
 

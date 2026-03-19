@@ -213,6 +213,13 @@ export function useReprovarMigracao() {
 
       if (histError) throw histError;
 
+      // Auto-resolver alertas de prazo vencido
+      await supabase
+        .from('notificacoes')
+        .update({ lida: true })
+        .eq('referencia_tipo', 'migracao_prazo_vencido')
+        .eq('referencia_id', solicitacaoId);
+
       // Notificar consultor
       if (consultorUserId) {
         await supabase
