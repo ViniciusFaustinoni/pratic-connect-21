@@ -64,7 +64,7 @@ const getTituloEvento = (tipo: string) => {
 };
 
 export function AssociadoResumoTab({
-  stats, resumoFinanceiro, contrato, associado, historico, isLoadingHistorico, situacao,
+  stats, resumoFinanceiro, contrato, associado, historico, isLoadingHistorico, situacao, canLinkToAssociado = false,
 }: AssociadoResumoTabProps) {
   const emAtraso = resumoFinanceiro?.emAtraso && resumoFinanceiro.emAtraso > 0;
 
