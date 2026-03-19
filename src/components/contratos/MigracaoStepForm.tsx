@@ -82,9 +82,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
     return (
       <Alert variant="destructive" className="my-4">
         <AlertCircle className="h-5 w-5" />
-        <AlertTitle>
-          {bloqueio.tipo === 'vinculo_ativo' ? 'Vínculo Ativo Existente' : 'Débitos Pendentes'}
-        </AlertTitle>
+        <AlertTitle>Vínculo Ativo Existente</AlertTitle>
         <AlertDescription className="mt-2">{bloqueio.mensagem}</AlertDescription>
       </Alert>
     );
