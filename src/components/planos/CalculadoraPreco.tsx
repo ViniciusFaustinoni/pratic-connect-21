@@ -548,6 +548,11 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
       valor <= Number(t.fipe_max)
     ) : undefined;
 
+    const categoriaAtivaSel = tipoVeiculo === 'carro' && categoria !== 'nenhuma' ? categoria : null;
+    const catLabel = categoriaAtivaSel
+      ? CATEGORIAS_VEICULO_CALC.find(c => c.value === categoriaAtivaSel)?.label || null
+      : null;
+
     setResultado({
       planos: resultadosPlano,
       faixaFipe: primeiraFaixa
@@ -557,6 +562,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
       regiaoLabel: REGIOES.find(r => r.value === regiao)?.label || regiao,
       tipoUsoLabel: tipoUso === 'aplicativo' ? 'Aplicativo / Trabalho' : 'Particular',
       tipoVeiculoLabel: TIPO_VEICULO_LABELS[tipoVeiculo],
+      categoriaLabel: catLabel,
     });
     setSemResultado(false);
   };
