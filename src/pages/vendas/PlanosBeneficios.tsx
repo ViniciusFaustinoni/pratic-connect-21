@@ -110,6 +110,8 @@ function SeFecharHojeButton() {
 export default function PlanosBeneficios() {
   const [activeTab, setActiveTab] = useState('visao-geral');
   const [searchTerm, setSearchTerm] = useState('');
+  const [cotacaoDialogOpen, setCotacaoDialogOpen] = useState(false);
+  const [cotacaoBase, setCotacaoBase] = useState<CotacaoBaseParaFormulario | null>(null);
   const { isDiretor, isDesenvolvedor, isGerente, isSupervisor, isAdminMaster } = usePermissions();
   const podeVerConfigAvancada = isDiretor || isGerente || isSupervisor || isDesenvolvedor || isAdminMaster;
 
