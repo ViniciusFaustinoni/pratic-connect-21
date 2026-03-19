@@ -68,12 +68,12 @@ function formatCPF(value: string) {
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 }
 
-export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
-  const [cpf, setCpf] = useState('');
+export function MigracaoDiretaDialog({ open, onOpenChange, cpfInicial, consultorIdInicial }: Props) {
+  const [cpf, setCpf] = useState(cpfInicial || '');
   const [nome, setNome] = useState('');
   const [placa, setPlaca] = useState('');
   const [associacaoOrigem, setAssociacaoOrigem] = useState('');
-  const [consultorId, setConsultorId] = useState<string>('sem_consultor');
+  const [consultorId, setConsultorId] = useState<string>(consultorIdInicial || 'sem_consultor');
   const [comprovantes, setComprovantes] = useState<DocEntry[]>([]);
   const [boleto, setBoleto] = useState<DocEntry | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
