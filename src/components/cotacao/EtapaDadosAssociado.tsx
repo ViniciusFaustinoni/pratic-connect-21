@@ -138,6 +138,44 @@ export function EtapaDadosAssociado({
             />
           </div>
 
+          {/* CPF (opcional - para verificar veículo ativo) */}
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="cpf">
+              CPF do cliente (opcional)
+            </Label>
+            <Input
+              id="cpf"
+              value={cpfBusca}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, '');
+                if (digits.length <= 11) {
+                  setCpfBusca(formatCPF(digits));
+                }
+              }}
+              placeholder="000.000.000-00"
+              maxLength={14}
+            />
+            {verificandoCpf && (
+              <p className="text-xs text-muted-foreground">Verificando CPF...</p>
+            )}
+            {veiculoAtivoCpf && !showDialogTipo && (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 text-sm">
+                <User className="h-4 w-4 text-primary flex-shrink-0" />
+                <span className="flex-1">
+                  <strong>{veiculoAtivoCpf.associado_nome}</strong> já possui veículo ativo ({veiculoAtivoCpf.veiculo_marca} {veiculoAtivoCpf.veiculo_modelo} - {veiculoAtivoCpf.veiculo_placa})
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDialogTipo(true)}
+                >
+                  Escolher operação
+                </Button>
+              </div>
+            )}
+          </div>
+
           {/* E-mail */}
           <div className="space-y-2 md:col-span-2">
             <Label htmlFor="email">E-mail (opcional)</Label>
