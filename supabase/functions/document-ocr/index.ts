@@ -594,7 +594,14 @@ INSTRUÇÕES:
                 }
               } catch (retryParseError) {
                 console.error('[OCR] Falha ao parsear resultado do retry de CPF:', retryContent);
-                result.dados.cpf = 'ilegivel';
+                // Mesmo com erro de parse, tentar permutação com o CPF da 1ª tentativa
+                const cpfCorrigido = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
+                if (cpfCorrigido) {
+                  console.log(`[OCR] CPF corrigido por permutação após erro de parse: ${cpfExtraido} → ${cpfCorrigido}`);
+                  result.dados.cpf = cpfCorrigido;
+                } else {
+                  result.dados.cpf = 'ilegivel';
+                }
               }
             }
           }
