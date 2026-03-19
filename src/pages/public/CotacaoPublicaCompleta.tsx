@@ -464,6 +464,24 @@ export default function CotacaoPublicaCompleta() {
     }
   };
 
+  const handleUploadVideo360 = useCallback(async (file: File) => {
+    if (!cotacao?.id) return;
+    setUploadingVideo(true);
+    try {
+      const result = await uploadFotoVistoria.mutateAsync({
+        cotacaoId: cotacao.id,
+        tipo: 'video_360',
+        file,
+      });
+      setVideoVistoriaUrl(result.url);
+      toast.success('Vídeo 360° enviado!');
+    } catch {
+      toast.error('Erro ao enviar vídeo');
+    } finally {
+      setUploadingVideo(false);
+    }
+  }, [cotacao?.id, uploadFotoVistoria]);
+
   const handleConcluirVistoria = async () => {
     if (!token || isSubmittingRef.current || loading) return;
     
@@ -471,6 +489,10 @@ export default function CotacaoPublicaCompleta() {
       const enviadas = fotosVistoria.filter(f => f.status === 'enviado').length;
       if (enviadas < 10) {
         toast.error('Envie pelo menos 10 fotos da vistoria');
+        return;
+      }
+      if (!videoVistoriaUrl) {
+        toast.error('Grave o vídeo 360° do veículo');
         return;
       }
     }
