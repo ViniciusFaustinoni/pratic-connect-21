@@ -107,7 +107,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
   };
 
   // OCR validation
-  const validateWithOCR = async (url: string): Promise<{ cpf?: string; placa?: string; legivel: boolean }> => {
+  const validateWithOCR = async (url: string): Promise<{ cpf?: string; placa?: string; data_documento?: string; legivel: boolean }> => {
     try {
       const { data, error } = await supabase.functions.invoke('document-ocr', {
         body: { url, tipoEsperado: 'comprovante_pagamento' },
@@ -116,6 +116,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
       return {
         cpf: data?.cpf || undefined,
         placa: data?.placa || undefined,
+        data_documento: data?.data_documento || undefined,
         legivel: data?.legivel !== false,
       };
     } catch {
