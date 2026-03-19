@@ -1031,7 +1031,19 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
             </div>
           )}
 
-          {semResultado && (
+          {fipeBloqueado && (
+            <Alert variant="destructive" className="mt-2">
+              <Ban className="h-4 w-4" />
+              <AlertDescription>
+                <p className="font-medium">Veículo fora do perfil aceito</p>
+                <p className="text-xs mt-1">
+                  FIPE abaixo do mínimo de {formatarMoeda(limites?.fipeMinimo ?? 15000)}. Este veículo não é elegível para proteção.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {semResultado && !fipeBloqueado && (
             <div className="text-center py-4">
               <p className="text-sm font-medium text-muted-foreground">
                 Consulte um consultor
