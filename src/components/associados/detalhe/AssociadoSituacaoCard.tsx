@@ -1,11 +1,12 @@
 import {
   Shield, ShieldAlert, ShieldCheck, ShieldOff, Clock, AlertTriangle,
-  CheckCircle, UserCheck, Star, Truck,
+  CheckCircle, UserCheck, Star, Truck, Car, Ban,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { cn } from '@/lib/utils';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import type { SituacaoAssociado } from '@/hooks/useAssociadoSituacao';
 
 const formatCurrency = (v: number) =>
@@ -92,12 +93,27 @@ export function AssociadoSituacaoCard({ situacao }: Props) {
             </div>
             <span className={cn('text-sm font-medium', inadConfig.color)}>{inadConfig.label}</span>
           </div>
-          {situacao.diasAtraso > 0 && (
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Dias em atraso</span>
-              <span className="font-medium text-destructive">{situacao.diasAtraso} dias</span>
+
+          {/* Per-vehicle inadimplência details */}
+          {situacao.veiculosInadimplentes.length > 0 && (
+            <div className="space-y-1.5 pt-1">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Veículos inadimplentes</p>
+              {situacao.veiculosInadimplentes.map(v => (
+                <div key={v.veiculoId} className="flex items-center justify-between text-xs bg-destructive/5 rounded px-2 py-1.5">
+                  <div className="flex items-center gap-1.5">
+                    <Car className="h-3 w-3 text-destructive" />
+                    <span className="font-mono font-medium">{v.placa}</span>
+                    <span className="text-muted-foreground">{v.marca} {v.modelo}</span>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <span className="text-destructive font-medium">{v.diasAtraso}d</span>
+                    <span className="text-destructive font-medium">{formatCurrency(v.totalDevido)}</span>
+                  </div>
+                </div>
+              ))}
             </div>
           )}
+
           {situacao.coberturasSuspensas && (
             <Badge variant="destructive" className="text-[10px]">
               <ShieldOff className="h-3 w-3 mr-1" /> Coberturas suspensas
@@ -105,6 +121,22 @@ export function AssociadoSituacaoCard({ situacao }: Props) {
           )}
         </CardContent>
       </Card>
+
+      {/* Benefícios adicionais suspensos */}
+      {situacao.beneficiosAdicionaisSuspensos && (
+        <Card className="border-amber-400/40 sm:col-span-2">
+          <CardContent className="p-4">
+            <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+              <Ban className="h-4 w-4 text-amber-600" />
+              <AlertDescription className="text-amber-800 dark:text-amber-300 text-xs">
+                <strong>Benefícios adicionais suspensos</strong> — Há inadimplência em um dos veículos. 
+                Benefícios como proteção de vidros, danos a terceiros e carro reserva ficam suspensos 
+                em todos os veículos até que todos estejam em dia.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Multa rastreador */}
       {situacao.pendenciaRastreador && (

@@ -3,29 +3,50 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 
+export interface CoberturaVeiculo {
+  veiculoId: string;
+  placa: string;
+  modelo: string;
+  marca: string;
+  inadimplente: boolean;
+  temCoberturaRouboFurto: boolean;
+  temCoberturaTotal: boolean;
+  podeAssistencia: boolean;
+  podeRastreamento: boolean;
+  tiposSinistroPermitidos: string[];
+}
+
 /**
- * Hook para verificar as coberturas ativas do associado
- * Usado para controlar quais funcionalidades estão disponíveis no app
- * Agora considera inadimplência para suspender coberturas dinamicamente
- * e isenção de carência por migração aprovada
+ * Hook para verificar as coberturas ativas do associado.
+ * Cobertura principal é por veículo; benefícios adicionais suspensos globalmente
+ * se qualquer veículo estiver inadimplente.
  */
 export function useMinhasCoberturas() {
   const { data: veiculos, isLoading } = useVeiculosApp();
   const { user } = useAuth();
 
-  // Verificar se há cobranças vencidas (inadimplente)
-  const { data: inadimplente = false } = useQuery({
-    queryKey: ['app-inadimplencia', user?.id],
+  // Buscar cobranças vencidas agrupadas por veiculo_id
+  const { data: veiculosInadimplentes = [] } = useQuery({
+    queryKey: ['app-inadimplencia-por-veiculo', user?.id],
     queryFn: async () => {
-      if (!user?.id) return false;
+      if (!user?.id) return [];
+      // Get associado id
+      const { data: assoc } = await supabase
+        .from('associados')
+        .select('id')
+        .eq('user_id', user.id)
+        .maybeSingle();
+      if (!assoc) return [];
+
       const { data, error } = await supabase
         .from('cobrancas')
-        .select('id')
-        .eq('associado_id', user.id)
+        .select('veiculo_id')
+        .eq('associado_id', assoc.id)
         .in('status', ['vencido'])
-        .limit(1);
-      if (error) return false;
-      return (data?.length || 0) > 0;
+        .not('veiculo_id', 'is', null);
+
+      if (error) return [];
+      return [...new Set((data || []).map(d => d.veiculo_id!))];
     },
     enabled: !!user?.id,
     staleTime: 1000 * 60 * 5,
@@ -52,24 +73,45 @@ export function useMinhasCoberturas() {
   });
 
   const carenciaIsenta = contratoCarencia?.carencia_isenta || false;
+  const beneficiosAdicionaisSuspensos = veiculosInadimplentes.length > 0;
 
-  // Considera o primeiro veículo (principal)
-  const veiculo = veiculos?.[0];
-  
-  const temCoberturaRouboFurto = !inadimplente && (veiculo?.cobertura_roubo_furto || false);
-  const temCoberturaTotal = !inadimplente && (veiculo?.cobertura_total || false);
-  
-  // Assistência 24h e rastreamento requerem cobertura total (instalação concluída)
-  const podeAssistencia = temCoberturaTotal;
-  const podeRastreamento = temCoberturaTotal && (veiculo?.rastreador_ativo || false);
-  
-  // Tipos de sinistro permitidos baseado na cobertura
-  const tiposSinistroPermitidos: string[] = inadimplente
-    ? []
-    : temCoberturaTotal 
-      ? ['colisao', 'roubo', 'furto', 'incendio', 'fenomeno_natural', 'vandalismo', 'outro']
-      : ['roubo', 'furto'];
-  
+  // Build per-vehicle coverage
+  const coberturasPorVeiculo: CoberturaVeiculo[] = (veiculos || []).map(v => {
+    const inadimplente = veiculosInadimplentes.includes(v.id);
+    const temCoberturaRouboFurto = !inadimplente && (v.cobertura_roubo_furto || false);
+    const temCoberturaTotal = !inadimplente && (v.cobertura_total || false);
+    const podeAssistencia = temCoberturaTotal;
+    const podeRastreamento = temCoberturaTotal && (v.rastreador_ativo || false);
+
+    const tiposSinistroPermitidos: string[] = inadimplente
+      ? []
+      : temCoberturaTotal
+        ? ['colisao', 'roubo', 'furto', 'incendio', 'fenomeno_natural', 'vandalismo', 'outro']
+        : ['roubo', 'furto'];
+
+    return {
+      veiculoId: v.id,
+      placa: v.placa || '',
+      modelo: v.modelo || '',
+      marca: v.marca || '',
+      inadimplente,
+      temCoberturaRouboFurto,
+      temCoberturaTotal,
+      podeAssistencia,
+      podeRastreamento,
+      tiposSinistroPermitidos,
+    };
+  });
+
+  // Backward compat: principal vehicle (first)
+  const principal = coberturasPorVeiculo[0];
+  const inadimplente = principal?.inadimplente || false;
+  const temCoberturaRouboFurto = principal?.temCoberturaRouboFurto || false;
+  const temCoberturaTotal = principal?.temCoberturaTotal || false;
+  const podeAssistencia = principal?.podeAssistencia || false;
+  const podeRastreamento = principal?.podeRastreamento || false;
+  const tiposSinistroPermitidos = principal?.tiposSinistroPermitidos || [];
+
   return {
     isLoading,
     inadimplente,
@@ -79,13 +121,23 @@ export function useMinhasCoberturas() {
     podeAssistencia,
     podeRastreamento,
     tiposSinistroPermitidos,
-    // Mensagem para exibir ao usuário quando cobertura é parcial
+    beneficiosAdicionaisSuspensos,
+    coberturasPorVeiculo,
     mensagemCoberturaParcial: inadimplente
-      ? 'Suas coberturas estão suspensas devido a inadimplência. Regularize sua situação para reativá-las.'
+      ? 'A cobertura principal deste veículo está suspensa por inadimplência. Regularize para reativá-la.'
       : carenciaIsenta
         ? 'Suas coberturas estão ativas sem período de carência — origem: migração aprovada.'
         : temCoberturaRouboFurto && !temCoberturaTotal
           ? 'Sua cobertura atual é apenas para roubo e furto. Após a instalação do rastreador, você terá Proteção 360º incluindo assistência 24h.'
           : null,
   };
+}
+
+/**
+ * Get coverage for a specific vehicle by id.
+ */
+export function useCoberturaVeiculo(veiculoId: string | undefined) {
+  const { coberturasPorVeiculo, beneficiosAdicionaisSuspensos, isLoading } = useMinhasCoberturas();
+  const cobertura = coberturasPorVeiculo.find(c => c.veiculoId === veiculoId);
+  return { cobertura, beneficiosAdicionaisSuspensos, isLoading };
 }

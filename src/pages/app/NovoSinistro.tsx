@@ -180,12 +180,25 @@ export default function NovoSinistro() {
   const navigate = useNavigate();
   const createSinistro = useCreateSinistro();
   const { data: veiculos, isLoading: loadingVeiculos } = useMyVehicles();
-  const { tiposSinistroPermitidos, temCoberturaTotal, mensagemCoberturaParcial } = useMinhasCoberturas();
+  const { coberturasPorVeiculo, beneficiosAdicionaisSuspensos, mensagemCoberturaParcial } = useMinhasCoberturas();
   
-  // Filtrar tipos de sinistro baseado na cobertura
+  // Selected vehicle's coverage (will be set when user picks a vehicle in step 1)
+  const [veiculoSelecionadoId, setVeiculoSelecionadoId] = useState<string | null>(null);
+  const coberturaVeiculoSelecionado = coberturasPorVeiculo.find(c => c.veiculoId === veiculoSelecionadoId);
+  const tiposSinistroPermitidos = coberturaVeiculoSelecionado?.tiposSinistroPermitidos || [];
+  const temCoberturaTotal = coberturaVeiculoSelecionado?.temCoberturaTotal || false;
+  
+  // Filtrar tipos de sinistro baseado na cobertura do veículo selecionado
   const tiposDisponiveis = TIPOS_SINISTRO.filter(tipo => 
     tiposSinistroPermitidos.includes(tipo.id)
   );
+
+  // Auto-select first vehicle for coverage check
+  useEffect(() => {
+    if (veiculos?.length && !veiculoSelecionadoId) {
+      setVeiculoSelecionadoId(veiculos[0].id);
+    }
+  }, [veiculos, veiculoSelecionadoId]);
   
   // Wizard state
   const [etapa, setEtapa] = useState(1);

@@ -5,7 +5,7 @@ import {
   FileCheck, FileText, Clock, AlertTriangle,
   Receipt, CheckCircle, XCircle, Send, MapPin, MessageCircle, Mail,
   Wifi, WifiOff, Calendar, Camera, Radio, DollarSign, CreditCard, Shield,
-  Pencil, Check, X,
+  Pencil, Check, X, ShieldOff, ShieldCheck,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -555,6 +555,25 @@ export default function AssociadoDetalhe() {
                             <Badge className={cn('text-[10px]', STATUS_VEICULO_COLORS[(v.status as StatusVeiculo) || 'em_analise'])}>
                               {STATUS_VEICULO_LABELS[(v.status as StatusVeiculo) || 'em_analise']}
                             </Badge>
+                            {/* Per-vehicle coverage badge */}
+                            {(() => {
+                              const veicInad = situacao.veiculosInadimplentes.find(vi => vi.veiculoId === v.id);
+                              if (veicInad) {
+                                return (
+                                  <Badge variant="destructive" className="text-[10px]">
+                                    <ShieldOff className="h-3 w-3 mr-1" /> Cobertura Suspensa ({veicInad.diasAtraso}d)
+                                  </Badge>
+                                );
+                              }
+                              if (v.status === 'ativo') {
+                                return (
+                                  <Badge className="text-[10px] bg-emerald-500/10 text-emerald-700 border-0">
+                                    <ShieldCheck className="h-3 w-3 mr-1" /> Cobertura Ativa
+                                  </Badge>
+                                );
+                              }
+                              return null;
+                            })()}
                           </div>
                           <div className="grid grid-cols-2 sm:grid-cols-4 gap-3 text-sm">
                             <DataField label="Placa" value={v.placa} mono />

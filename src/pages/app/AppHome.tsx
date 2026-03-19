@@ -2,7 +2,7 @@ import { Link, useNavigate } from 'react-router-dom';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Car, Receipt, MapPin, Phone, AlertTriangle, FileText, Loader2, Lock } from 'lucide-react';
+import { Car, Receipt, MapPin, Phone, AlertTriangle, FileText, Loader2, Lock, ShieldCheck, ShieldOff, Ban } from 'lucide-react';
 import { useAssociado } from '@/contexts/AssociadoContext';
 import { useResumoApp } from '@/hooks/useAppAssociado';
 import { useMinhasCoberturas } from '@/hooks/useMinhasCoberturasApp';
@@ -64,7 +64,7 @@ export default function AppHome() {
   const navigate = useNavigate();
   const { revistoria } = useAssociado();
   const { associado, veiculos, boletoPendente, isLoading } = useResumoApp();
-  const { temCoberturaTotal, podeAssistencia, mensagemCoberturaParcial } = useMinhasCoberturas();
+  const { temCoberturaTotal, podeAssistencia, mensagemCoberturaParcial, coberturasPorVeiculo, beneficiosAdicionaisSuspensos } = useMinhasCoberturas();
   
   // Verificar se há cotação cancelada por falta de pagamento
   const { data: cotacaoCancelada } = useCotacaoCanceladaPorPagamento(associado?.id);
@@ -119,34 +119,55 @@ export default function AppHome() {
         />
       )}
 
-      {/* CARD DO VEÍCULO PRINCIPAL */}
-      {veiculoPrincipal && (
-        <Card className="bg-white shadow-sm">
-          <CardContent className="p-4">
-            <div className="flex items-center gap-4">
-              {/* Ícone de carro */}
-              <div className="flex h-12 w-12 items-center justify-center rounded-full bg-blue-100">
-                <Car className="h-6 w-6 text-blue-600" />
+      {/* CARDS DOS VEÍCULOS COM STATUS INDIVIDUAL */}
+      {veiculos.length > 0 && veiculos.map((veiculo) => {
+        const cobertura = coberturasPorVeiculo.find(c => c.veiculoId === veiculo.id);
+        const isInadimplente = cobertura?.inadimplente || false;
+        return (
+          <Card key={veiculo.id} className="bg-white shadow-sm">
+            <CardContent className="p-4">
+              <div className="flex items-center gap-4">
+                <div className={`flex h-12 w-12 items-center justify-center rounded-full ${isInadimplente ? 'bg-red-100' : 'bg-blue-100'}`}>
+                  <Car className={`h-6 w-6 ${isInadimplente ? 'text-red-600' : 'text-blue-600'}`} />
+                </div>
+                <div className="flex-1 min-w-0">
+                  <p className="font-mono text-lg font-bold text-gray-900">
+                    {veiculo.placa}
+                  </p>
+                  <p className="text-sm text-gray-500 truncate">
+                    {veiculo.marca} {veiculo.modelo}
+                  </p>
+                </div>
+                <div className="flex flex-col items-end gap-1">
+                  <Badge className={getStatusColor(statusAssociado)}>
+                    {getStatusLabel(statusAssociado)}
+                  </Badge>
+                  {isInadimplente ? (
+                    <Badge variant="destructive" className="text-[10px]">
+                      <ShieldOff className="h-2.5 w-2.5 mr-1" /> Cobertura Suspensa
+                    </Badge>
+                  ) : veiculo.status === 'ativo' ? (
+                    <Badge className="text-[10px] bg-emerald-100 text-emerald-700 border-0">
+                      <ShieldCheck className="h-2.5 w-2.5 mr-1" /> Protegido
+                    </Badge>
+                  ) : null}
+                </div>
               </div>
-              
-              <div className="flex-1 min-w-0">
-                {/* Placa em destaque */}
-                <p className="font-mono text-lg font-bold text-gray-900">
-                  {veiculoPrincipal.placa}
-                </p>
-                {/* Modelo */}
-                <p className="text-sm text-gray-500 truncate">
-                  {veiculoPrincipal.marca} {veiculoPrincipal.modelo}
-                </p>
-              </div>
-              
-              {/* Badge de status */}
-              <Badge className={getStatusColor(statusAssociado)}>
-                {getStatusLabel(statusAssociado)}
-              </Badge>
-            </div>
-          </CardContent>
-        </Card>
+            </CardContent>
+          </Card>
+        );
+      })}
+
+      {/* ALERTA BENEFÍCIOS ADICIONAIS SUSPENSOS */}
+      {beneficiosAdicionaisSuspensos && (
+        <Alert className="border-amber-200 bg-amber-50">
+          <Ban className="h-4 w-4 text-amber-600" />
+          <AlertDescription className="text-amber-800 text-sm">
+            <strong>Benefícios adicionais suspensos</strong> — Há inadimplência em um dos veículos. 
+            Benefícios como proteção de vidros, danos a terceiros e carro reserva ficam suspensos 
+            em todos os veículos até que todos estejam em dia.
+          </AlertDescription>
+        </Alert>
       )}
 
       {/* CARD PRÓXIMO BOLETO */}
