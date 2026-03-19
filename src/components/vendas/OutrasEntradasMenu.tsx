@@ -200,7 +200,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     if (!selectedAssociadoId) return;
     if (selectedTipo === 'substituicao') {
       onOpenChange(false);
-      navigate(`/cadastro/substituicao-veiculo/${selectedAssociadoId}`);
+      navigate(`/cadastro/associados/${selectedAssociadoId}/substituicao`);
     } else if (selectedTipo === 'inclusao') {
       onOpenChange(false);
       navigate(`/vendas/cotacoes?novo=true`);

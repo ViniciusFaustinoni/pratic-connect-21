@@ -360,7 +360,7 @@ export default function CotacaoPage() {
             setIndicadorNome={setIndicadorNome}
             onNext={handleEtapa1Next}
             onSubstituicao={(associadoId) => {
-              navigate(`/cadastro/substituicao-veiculo/${associadoId}`);
+              navigate(`/cadastro/associados/${associadoId}/substituicao`);
             }}
           />
         )}
