@@ -447,6 +447,13 @@ export default function PlanosBeneficios() {
           <ContatosInline />
         </TabsContent>
       </Tabs>
+
+      {/* CotacaoFormDialog pré-preenchido pela calculadora */}
+      <CotacaoFormDialog
+        open={cotacaoDialogOpen}
+        onOpenChange={setCotacaoDialogOpen}
+        cotacaoBase={cotacaoBase}
+      />
     </div>
   );
 }
