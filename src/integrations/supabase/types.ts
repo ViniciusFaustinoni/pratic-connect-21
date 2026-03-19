@@ -24007,9 +24007,11 @@ export type Database = {
           status: string
           taxa_substituicao: number | null
           termo_desistencia_evento_url: string | null
+          tipo_atendimento: string | null
           tipo_evento_bloqueante: string | null
           updated_at: string | null
           valor_prorata: number | null
+          valor_repasse: number | null
           veiculo_antigo_fipe: number | null
           veiculo_antigo_id: string
           veiculo_antigo_modelo: string | null
@@ -24054,9 +24056,11 @@ export type Database = {
           status?: string
           taxa_substituicao?: number | null
           termo_desistencia_evento_url?: string | null
+          tipo_atendimento?: string | null
           tipo_evento_bloqueante?: string | null
           updated_at?: string | null
           valor_prorata?: number | null
+          valor_repasse?: number | null
           veiculo_antigo_fipe?: number | null
           veiculo_antigo_id: string
           veiculo_antigo_modelo?: string | null
@@ -24101,9 +24105,11 @@ export type Database = {
           status?: string
           taxa_substituicao?: number | null
           termo_desistencia_evento_url?: string | null
+          tipo_atendimento?: string | null
           tipo_evento_bloqueante?: string | null
           updated_at?: string | null
           valor_prorata?: number | null
+          valor_repasse?: number | null
           veiculo_antigo_fipe?: number | null
           veiculo_antigo_id?: string
           veiculo_antigo_modelo?: string | null
