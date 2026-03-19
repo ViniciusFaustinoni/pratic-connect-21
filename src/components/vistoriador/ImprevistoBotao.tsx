@@ -63,6 +63,7 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
         .update({
           imprevisto_registrado_em: new Date().toISOString(),
           imprevisto_motivo: motivoCompleto,
+          status: 'imprevisto_pendente',
           updated_at: new Date().toISOString(),
         } as any)
         .eq('id', tarefaId);

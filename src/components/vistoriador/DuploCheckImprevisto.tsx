@@ -111,6 +111,7 @@ export function DuploCheckImprevisto({
           imprevisto_duplo_check: true,
           imprevisto_duplo_check_em: new Date().toISOString(),
           status: 'nao_compareceu',
+          profissional_id: null,
           updated_at: new Date().toISOString(),
         } as any)
         .eq('id', tarefaId);

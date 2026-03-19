@@ -28,6 +28,35 @@ export function InstaladorGuard({ children }: InstaladorGuardProps) {
     lastUserIdRef.current = user?.id ?? null;
   }, [user?.id, queryClient]);
 
+  // Timeout de loading para evitar tela branca infinita
+  const [loadingTooLong, setLoadingTooLong] = useState(false);
+
+  useEffect(() => {
+    if (!loading) {
+      setLoadingTooLong(false);
+      return;
+    }
+
+    const timer = setTimeout(async () => {
+      console.warn('[InstaladorGuard] Loading > 10s, tentando refresh da sessão...');
+      try {
+        const { error } = await supabase.auth.refreshSession();
+        if (error) {
+          console.error('[InstaladorGuard] Refresh falhou:', error);
+          setLoadingTooLong(true);
+        }
+      } catch {
+        setLoadingTooLong(true);
+      }
+    }, 10000);
+
+    return () => clearTimeout(timer);
+  }, [loading]);
+
+  if (loading && loadingTooLong) {
+    return <Navigate to="/instalador/login" replace />;
+  }
+
   if (loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-slate-900">

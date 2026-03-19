@@ -37,6 +37,7 @@ export function InstaladorLayout() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isRetrying, setIsRetrying] = useState(false);
 
+  useAppResume();
   const { isBase: isVistoriadorBase } = useAlocacaoDiaria();
   const { geoState } = useIniciarServico();
   const { data: tarefaAtual } = useTarefaAtual();

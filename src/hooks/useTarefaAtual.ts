@@ -72,6 +72,7 @@ export function useTarefaAtual() {
           `)
           .eq('profissional_id', profissionalId)
           .in('status', ['em_andamento', 'em_analise', 'em_rota', 'agendada'])
+          .not('status', 'in', '("imprevisto_pendente","nao_compareceu")')
           .is('imprevisto_registrado_em', null)
           .order('data_agendada', { ascending: true })
           .limit(1)
