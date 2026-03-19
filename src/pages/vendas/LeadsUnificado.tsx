@@ -17,6 +17,7 @@ import { LeadSignatureListener } from '@/components/leads/LeadSignatureToast';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
+import { LeadsDevGuard } from '@/components/leads/LeadsDevGuard';
 import { useAllLeads } from '@/hooks/useLeads';
 import { useVendedores } from '@/hooks/useVendedores';
 import { useLeadActions } from '@/hooks/useLeadActions';

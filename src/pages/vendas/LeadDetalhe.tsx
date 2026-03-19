@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useLead } from '@/hooks/useLeads';
+import { LeadsDevGuard } from '@/components/leads/LeadsDevGuard';
 import { useCotacoesByLead } from '@/hooks/useCotacoesByLead';
 import { ETAPA_LABELS, ORIGEM_LABELS, ETAPA_COLORS, type EtapaLead } from '@/types/vendas';
 import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';

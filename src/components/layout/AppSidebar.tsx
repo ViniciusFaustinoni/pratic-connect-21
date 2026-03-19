@@ -170,7 +170,7 @@ const menuConfig: {
         { title: 'Aprovações Elegibilidade', url: '/aprovacoes-elegibilidade', icon: ShieldCheck, permission: 'canManageConsultores' },
         { title: 'Equipe Comercial', url: '/vendas/equipe-comercial', icon: FileText, permission: 'canManageConsultores' },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
-        { title: 'Leads', url: '/vendas/leads', icon: UserPlus },
+        { title: 'Leads', url: '/vendas/leads', icon: UserPlus, badge: 'Dev' },
       ],
     },
     {
