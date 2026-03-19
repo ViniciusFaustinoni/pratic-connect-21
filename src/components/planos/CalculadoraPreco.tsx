@@ -274,6 +274,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const [categoria, setCategoria] = useState<string>('nenhuma');
   const [resultado, setResultado] = useState<ResultadoCalc | null>(null);
   const [semResultado, setSemResultado] = useState(false);
+  const jaCalculouRef = useRef(false);
 
   // Placa lookup
   const [placa, setPlaca] = useState('');
