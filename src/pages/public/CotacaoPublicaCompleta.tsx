@@ -120,6 +120,8 @@ export default function CotacaoPublicaCompleta() {
   );
   const [termosAceitos, setTermosAceitos] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [videoVistoriaUrl, setVideoVistoriaUrl] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   
   // Ref para prevenir duplo clique
   const isSubmittingRef = useRef(false);
