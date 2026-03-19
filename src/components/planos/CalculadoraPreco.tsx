@@ -265,6 +265,7 @@ interface CalculadoraPrecoProps {
 
 export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const [open, setOpen] = useState(false);
+  const [modo, setModo] = useState<'placa' | 'manual' | null>(null);
   const [valorFipe, setValorFipe] = useState<string>('');
   const [tipoUso, setTipoUso] = useState<TipoUso>('particular');
   const [tipoVeiculo, setTipoVeiculo] = useState<TipoVeiculo>('carro');
@@ -686,6 +687,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   };
 
   const limpar = () => {
+    setModo(null);
     setValorFipe('');
     setTipoUso('particular');
     setTipoVeiculo('carro');
@@ -717,6 +719,12 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setOpen(false);
   };
 
+  // Derived visibility flags for progressive disclosure
+  const fipeNumerico = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
+  const temFipe = fipeNumerico > 0;
+  const temPlacaConsultada = modo === 'placa' && veiculoPlaca !== null;
+  const temDadosVeiculo = temPlacaConsultada || (modo === 'manual' && temFipe);
+
   return (
     <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
@@ -734,122 +742,214 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         </DialogHeader>
 
         <div className="space-y-4">
-          {/* Placa (optional) */}
+          {/* ═══ STEP 1: Modo de busca ═══ */}
           <div className="space-y-2">
-            <Label htmlFor="placa" className="flex items-center gap-1.5">
-              <Search className="h-3.5 w-3.5" />
-              Placa <span className="text-xs text-muted-foreground">(opcional)</span>
-            </Label>
-            <div className="flex gap-2">
-              <Input
-                id="placa"
-                placeholder="ABC1D23 ou ABC-1234"
-                value={placa}
-                onChange={(e) => setPlaca(maskPlaca(e.target.value))}
-                onKeyDown={handlePlacaKeyDown}
-                className="uppercase font-mono tracking-wider flex-1"
-                maxLength={8}
-                disabled={placaLoading}
-              />
-              <Button
-                variant="secondary"
-                size="sm"
-                onClick={consultarPlaca}
-                disabled={placaLoading || placa.replace(/[^A-Za-z0-9]/g, '').length < 7}
-                className="shrink-0"
+            <Label className="text-xs text-muted-foreground uppercase tracking-wide">Como deseja buscar?</Label>
+            <div className="grid grid-cols-2 gap-2">
+              <button
+                type="button"
+                onClick={() => { setModo('placa'); setValorFipe(''); setVeiculoPlaca(null); setCombustivelDetectado(null); setPlaca(''); }}
+                className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-4 transition-all ${
+                  modo === 'placa'
+                    ? 'border-primary bg-primary/5 shadow-sm'
+                    : 'border-border hover:border-primary/40 hover:bg-muted/50'
+                }`}
               >
-                {placaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
-              </Button>
+                <Search className="h-5 w-5 text-primary" />
+                <span className="text-sm font-medium">Pela Placa</span>
+                <span className="text-[10px] text-muted-foreground">Preenche tudo automático</span>
+              </button>
+              <button
+                type="button"
+                onClick={() => { setModo('manual'); setVeiculoPlaca(null); setCombustivelDetectado(null); setPlaca(''); }}
+                className={`flex flex-col items-center gap-1.5 rounded-lg border-2 p-4 transition-all ${
+                  modo === 'manual'
+                    ? 'border-primary bg-primary/5 shadow-sm'
+                    : 'border-border hover:border-primary/40 hover:bg-muted/50'
+                }`}
+              >
+                <Calculator className="h-5 w-5 text-primary" />
+                <span className="text-sm font-medium">Digitar FIPE</span>
+                <span className="text-[10px] text-muted-foreground">Informar dados manualmente</span>
+              </button>
             </div>
+          </div>
 
-            {veiculoPlaca && (
-              <div className="flex flex-wrap items-center gap-1.5 text-xs">
-                <Badge variant="secondary" className="font-mono">
-                  {veiculoPlaca.placa}
-                </Badge>
-                <span className="text-muted-foreground">
-                  {veiculoPlaca.marca} {veiculoPlaca.modelo}
-                </span>
-                {veiculoPlaca.ano && (
-                  <Badge variant="outline" className="text-xs">{veiculoPlaca.ano}</Badge>
-                )}
-                {veiculoPlaca.cor && (
-                  <Badge variant="outline" className="text-xs">{veiculoPlaca.cor}</Badge>
-                )}
-                {veiculoPlaca.combustivel && (
-                  <Badge variant="outline" className="text-xs">{veiculoPlaca.combustivel}</Badge>
-                )}
+          {/* ═══ STEP 2a: Placa ═══ */}
+          {modo === 'placa' && (
+            <div className="space-y-2 animate-fade-in">
+              <Label htmlFor="placa" className="flex items-center gap-1.5">
+                <Search className="h-3.5 w-3.5" />
+                Placa do veículo
+              </Label>
+              <div className="flex gap-2">
+                <Input
+                  id="placa"
+                  placeholder="ABC1D23 ou ABC-1234"
+                  value={placa}
+                  onChange={(e) => setPlaca(maskPlaca(e.target.value))}
+                  onKeyDown={handlePlacaKeyDown}
+                  className="uppercase font-mono tracking-wider flex-1"
+                  maxLength={8}
+                  disabled={placaLoading}
+                  autoFocus
+                />
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  onClick={consultarPlaca}
+                  disabled={placaLoading || placa.replace(/[^A-Za-z0-9]/g, '').length < 7}
+                  className="shrink-0"
+                >
+                  {placaLoading ? <Loader2 className="h-4 w-4 animate-spin" /> : <Search className="h-4 w-4" />}
+                </Button>
               </div>
-            )}
-          </div>
 
-          {/* Valor FIPE */}
-          <div className="space-y-2">
-            <Label htmlFor="valorFipe">Valor FIPE</Label>
-            <Input
-              id="valorFipe"
-              placeholder="R$ 0,00"
-              value={valorFipe}
-              onChange={handleValorChange}
-            />
-          </div>
+              {veiculoPlaca && (
+                <div className="animate-fade-in rounded-lg border bg-muted/30 p-3 space-y-2">
+                  <div className="flex flex-wrap items-center gap-1.5 text-xs">
+                    <Badge variant="secondary" className="font-mono">
+                      {veiculoPlaca.placa}
+                    </Badge>
+                    <span className="text-muted-foreground">
+                      {veiculoPlaca.marca} {veiculoPlaca.modelo}
+                    </span>
+                    {veiculoPlaca.ano && (
+                      <Badge variant="outline" className="text-xs">{veiculoPlaca.ano}</Badge>
+                    )}
+                    {veiculoPlaca.cor && (
+                      <Badge variant="outline" className="text-xs">{veiculoPlaca.cor}</Badge>
+                    )}
+                    {veiculoPlaca.combustivel && (
+                      <Badge variant="outline" className="text-xs">{veiculoPlaca.combustivel}</Badge>
+                    )}
+                  </div>
+                  {temFipe && (
+                    <p className="text-sm font-semibold text-primary">{valorFipe}</p>
+                  )}
+                </div>
+              )}
+            </div>
+          )}
 
-          {/* Ano do Veículo */}
-          <div className="space-y-2">
-            <Label htmlFor="anoVeiculo">
-              Ano do Veículo <span className="text-xs text-muted-foreground">(opcional)</span>
-            </Label>
-            <Input
-              id="anoVeiculo"
-              placeholder="Ex: 2020"
-              value={anoVeiculo}
-              onChange={(e) => {
-                const v = e.target.value.replace(/\D/g, '').slice(0, 4);
-                setAnoVeiculo(v);
-              }}
-              maxLength={4}
-              inputMode="numeric"
-            />
-          </div>
+          {/* ═══ STEP 2b: Valor FIPE manual ═══ */}
+          {modo === 'manual' && (
+            <div className="space-y-2 animate-fade-in">
+              <Label htmlFor="valorFipe">Valor FIPE</Label>
+              <Input
+                id="valorFipe"
+                placeholder="R$ 0,00"
+                value={valorFipe}
+                onChange={handleValorChange}
+                autoFocus
+              />
+            </div>
+          )}
 
-          {/* Tipo de Veículo */}
-          <div className="space-y-2">
-            <Label>Tipo de Veículo</Label>
-            <ToggleGroup
-              type="single"
-              value={tipoVeiculo}
-              onValueChange={(v) => v && setTipoVeiculo(v as TipoVeiculo)}
-              className="justify-start"
-            >
-              <ToggleGroupItem value="carro" aria-label="Carro" className="flex-1 gap-1.5">
-                <Car className="h-4 w-4" />
-                Carro
-              </ToggleGroupItem>
-              <ToggleGroupItem value="moto" aria-label="Moto" className="flex-1 gap-1.5">
-                <Bike className="h-4 w-4" />
-                Moto
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
+          {/* ═══ STEP 3: Tipo Veículo (manual only — placa auto-detecta) ═══ */}
+          {modo === 'manual' && temFipe && (
+            <div className="space-y-2 animate-fade-in">
+              <Label>Tipo de Veículo</Label>
+              <ToggleGroup
+                type="single"
+                value={tipoVeiculo}
+                onValueChange={(v) => v && setTipoVeiculo(v as TipoVeiculo)}
+                className="justify-start"
+              >
+                <ToggleGroupItem value="carro" aria-label="Carro" className="flex-1 gap-1.5">
+                  <Car className="h-4 w-4" />
+                  Carro
+                </ToggleGroupItem>
+                <ToggleGroupItem value="moto" aria-label="Moto" className="flex-1 gap-1.5">
+                  <Bike className="h-4 w-4" />
+                  Moto
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          )}
 
-          {/* Região */}
-          <div className="space-y-2">
-            <Label>Região</Label>
-            <Select value={regiao} onValueChange={setRegiao}>
-              <SelectTrigger>
-                <SelectValue placeholder="Selecione a região" />
-              </SelectTrigger>
-              <SelectContent>
-                {REGIOES.map(r => (
-                  <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
-                ))}
-              </SelectContent>
-            </Select>
-          </div>
+          {/* ═══ STEP 4: Ano (manual only — placa auto-preenche) ═══ */}
+          {modo === 'manual' && temFipe && (
+            <div className="space-y-2 animate-fade-in">
+              <Label htmlFor="anoVeiculo">
+                Ano do Veículo <span className="text-xs text-muted-foreground">(opcional)</span>
+              </Label>
+              <Input
+                id="anoVeiculo"
+                placeholder="Ex: 2020"
+                value={anoVeiculo}
+                onChange={(e) => {
+                  const v = e.target.value.replace(/\D/g, '').slice(0, 4);
+                  setAnoVeiculo(v);
+                }}
+                maxLength={4}
+                inputMode="numeric"
+              />
+            </div>
+          )}
 
-          {/* Combustível selector — only for cars without plate */}
-          {tipoVeiculo === 'carro' && !combustivelDetectado && (
-            <div className="space-y-2">
+          {/* ═══ STEP 5: Região ═══ */}
+          {temDadosVeiculo && (
+            <div className="space-y-2 animate-fade-in">
+              <Label>Região</Label>
+              <Select value={regiao} onValueChange={setRegiao}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione a região" />
+                </SelectTrigger>
+                <SelectContent>
+                  {REGIOES.map(r => (
+                    <SelectItem key={r.value} value={r.value}>{r.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* ═══ STEP 6: Tipo de Uso ═══ */}
+          {temDadosVeiculo && (
+            <div className="space-y-2 animate-fade-in">
+              <Label>Tipo de Uso</Label>
+              <ToggleGroup
+                type="single"
+                value={tipoUso}
+                onValueChange={(v) => v && setTipoUso(v as TipoUso)}
+                className="justify-start"
+              >
+                <ToggleGroupItem value="particular" aria-label="Particular" className="flex-1 gap-1.5">
+                  <Car className="h-4 w-4" />
+                  Particular
+                </ToggleGroupItem>
+                <ToggleGroupItem value="aplicativo" aria-label="Aplicativo/Trabalho" className="flex-1 gap-1.5">
+                  <Briefcase className="h-4 w-4" />
+                  Aplicativo
+                </ToggleGroupItem>
+              </ToggleGroup>
+            </div>
+          )}
+
+          {/* ═══ STEP 7: Categoria (somente carros) ═══ */}
+          {temDadosVeiculo && tipoVeiculo === 'carro' && (
+            <div className="space-y-2 animate-fade-in">
+              <Label className="flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Categoria <span className="text-xs text-muted-foreground">(opcional)</span>
+              </Label>
+              <Select value={categoria} onValueChange={setCategoria}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Nenhuma" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIAS_VEICULO_CALC.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
+
+          {/* ═══ STEP 8: Combustível (manual + carro + sem detecção) ═══ */}
+          {temDadosVeiculo && tipoVeiculo === 'carro' && !combustivelDetectado && modo === 'manual' && (
+            <div className="space-y-2 animate-fade-in">
               <Label className="flex items-center gap-1.5">
                 <Fuel className="h-3.5 w-3.5" />
                 Combustível
@@ -870,58 +970,21 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
             </div>
           )}
 
-          {/* Tipo de Uso */}
-          <div className="space-y-2">
-            <Label>Tipo de Uso</Label>
-            <ToggleGroup
-              type="single"
-              value={tipoUso}
-              onValueChange={(v) => v && setTipoUso(v as TipoUso)}
-              className="justify-start"
-            >
-              <ToggleGroupItem value="particular" aria-label="Particular" className="flex-1 gap-1.5">
-                <Car className="h-4 w-4" />
-                Particular
-              </ToggleGroupItem>
-              <ToggleGroupItem value="aplicativo" aria-label="Aplicativo/Trabalho" className="flex-1 gap-1.5">
-                <Briefcase className="h-4 w-4" />
-                Aplicativo
-              </ToggleGroupItem>
-            </ToggleGroup>
-          </div>
-
-          {/* Categoria do Veículo (só carros) */}
-          {tipoVeiculo === 'carro' && (
-            <div className="space-y-2">
-              <Label className="flex items-center gap-1.5">
-                <AlertTriangle className="h-3.5 w-3.5" />
-                Categoria <span className="text-xs text-muted-foreground">(opcional)</span>
-              </Label>
-              <Select value={categoria} onValueChange={setCategoria}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Nenhuma" />
-                </SelectTrigger>
-                <SelectContent>
-                  {CATEGORIAS_VEICULO_CALC.map(cat => (
-                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+          {/* ═══ Botões ═══ */}
+          {temDadosVeiculo && (
+            <div className="flex gap-2 animate-fade-in">
+              <Button onClick={() => { calcular(); jaCalculouRef.current = true; }} className="flex-1">
+                Calcular
+              </Button>
+              <Button variant="outline" onClick={limpar}>
+                Limpar
+              </Button>
             </div>
           )}
-          {/* Botões */}
-          <div className="flex gap-2">
-            <Button onClick={() => { calcular(); jaCalculouRef.current = true; }} className="flex-1">
-              Calcular
-            </Button>
-            <Button variant="outline" onClick={limpar}>
-              Limpar
-            </Button>
-          </div>
 
-          {/* Resultado */}
+          {/* ═══ Resultado ═══ */}
           {resultado && (
-            <div className="space-y-4 pt-4 border-t">
+            <div className="space-y-4 pt-4 border-t animate-fade-in">
               <div className="text-sm text-muted-foreground">
                 <p>Veículo {formatarMoeda(resultado.valorFipeInformado)}</p>
                 <p className="text-xs">Faixa: {resultado.faixaFipe}</p>
@@ -930,19 +993,19 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
               {/* Critérios */}
               <div className="flex flex-wrap gap-2 text-xs">
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted">
-                  <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  <Check className="h-3 w-3 text-primary" />
                   {resultado.tipoVeiculoLabel}
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted">
-                  <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  <Check className="h-3 w-3 text-primary" />
                   {resultado.regiaoLabel}
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted">
-                  <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
+                  <Check className="h-3 w-3 text-primary" />
                   {resultado.tipoUsoLabel}
                 </span>
                 {resultado.categoriaLabel && (
-                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-destructive/10 text-destructive">
                     <AlertTriangle className="h-3 w-3" />
                     {resultado.categoriaLabel}
                   </span>
@@ -969,7 +1032,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                         {(plano.adicionalMensal > 0 || plano.descontoPercentual > 0 || plano.precoDesagioAplicado) && (
                           <div className="flex gap-1 mt-0.5">
                             {plano.precoDesagioAplicado && (
-                              <Badge variant="outline" className="text-[10px] px-1 py-0 border-amber-500/40 text-amber-600 dark:text-amber-400">
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 border-destructive/40 text-destructive">
                                 Deságio
                               </Badge>
                             )}
@@ -1021,7 +1084,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                         <div className="flex flex-wrap gap-1">
                           {plano.coberturas.map((cob, i) => (
                             <span key={i} className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
-                              <Shield className="h-2.5 w-2.5 text-emerald-500" />
+                              <Shield className="h-2.5 w-2.5 text-primary" />
                               {cob}
                               {i < plano.coberturas.length - 1 && <span className="mx-0.5">·</span>}
                             </span>
@@ -1055,7 +1118,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
           )}
 
           {fipeBloqueado && (
-            <Alert variant="destructive" className="mt-2">
+            <Alert variant="destructive" className="mt-2 animate-fade-in">
               <Ban className="h-4 w-4" />
               <AlertDescription>
                 <p className="font-medium">Veículo fora do perfil aceito</p>
@@ -1067,7 +1130,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
           )}
 
           {semResultado && !fipeBloqueado && (
-            <div className="text-center py-4">
+            <div className="text-center py-4 animate-fade-in">
               <p className="text-sm font-medium text-muted-foreground">
                 Consulte um consultor
               </p>
