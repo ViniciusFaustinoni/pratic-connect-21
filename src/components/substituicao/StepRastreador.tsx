@@ -63,13 +63,13 @@ export function StepRastreador({
     refetchInterval: (query) => {
       // Poll every 10s if there's a pending service
       const data = query.state.data;
-      if (data && data.status !== 'concluido') return 10_000;
+      if (data && data.status !== 'concluida') return 10_000;
       return false;
     },
   });
 
   const semRastreador = !loadingRastreador && !rastreador;
-  const rastreadorRetirado = servicoRetirada?.status === 'concluido';
+  const rastreadorRetirado = servicoRetirada?.status === 'concluida';
   const canProceed = semRastreador || rastreadorRetirado;
 
   // Auto-skip if no tracker
