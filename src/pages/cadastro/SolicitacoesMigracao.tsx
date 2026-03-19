@@ -147,9 +147,10 @@ export default function SolicitacoesMigracao() {
         <div className="rounded-md border">
           <Table>
             <TableHeader>
-              <TableRow>
+             <TableRow>
                 <TableHead>Nome / CPF</TableHead>
                 <TableHead>Placa</TableHead>
+                <TableHead>Origem</TableHead>
                 <TableHead>Associação Origem</TableHead>
                 <TableHead>Enviado em</TableHead>
                 <TableHead>Prazo</TableHead>
