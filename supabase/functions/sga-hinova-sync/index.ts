@@ -1013,7 +1013,7 @@ serve(async (req) => {
             const { data: logsInvalidados } = await supabase
               .from('sga_sync_logs')
               .select('request_payload')
-              .eq('associado_id', _aid)
+              .or(`associado_id.eq.${_aid},veiculo_id.eq.${_vid}`)
               .eq('action', 'invalidar_codigo_associado')
               .order('created_at', { ascending: false })
               .limit(50);
