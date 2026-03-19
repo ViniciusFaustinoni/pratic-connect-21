@@ -1,34 +1,40 @@
 
 
-# Implementar Step 7 — Conclusão do Wizard de Substituição
+# Bloqueio de Mudança de Linha (Carro ↔ Moto) na Substituição
 
 ## Problema
-O step 7 (Aprovação) é um stub estático. Após enviar para aprovação, o consultor não recebe feedback nem acompanhamento em tempo real.
+O `StepNovoVeiculo` permite que o associado substitua um carro por uma moto (ou vice-versa) sem nenhuma verificação. Isso viola a regra de "mudança de linha de produto" configurada em Regras de Venda (chave `restricao_mudanca_linha` na tabela `configuracoes`).
 
 ## Solução
 
-### 1. Criar `src/components/substituicao/StepConclusao.tsx`
-Componente funcional com:
+### Arquivo: `src/components/substituicao/StepNovoVeiculo.tsx`
 
-- **Polling automático**: `useQuery` com `refetchInterval: 10000` buscando o registro da substituição pelo `substituicaoId` na tabela `substituicoes_veiculo` (campos `status`, `motivo_rejeicao`, `veiculo_novo_placa`, `veiculo_novo_modelo`, `taxa_substituicao`, `veiculo_antigo_placa`, `data_fim_carencia`)
-- **Indicador visual**: ícone animado de sucesso (CheckCircle2 verde), loading (Loader2 spinning), ou erro (XCircle vermelho) conforme status
-- **Resumo da operação**: card com nome do associado, placa antiga → placa/modelo novo, taxa paga
-- **Status em tempo real** mapeado assim:
-  - `aguardando_aprovacao` → "Aguardando processamento" (spinner)
-  - `aprovada` → "Em processamento" (spinner)
-  - `efetivada` → "Concluída com sucesso" (check verde)
-  - `rejeitada` → "Falha no processamento" (X vermelho + motivo_rejeicao)
-- **Alerta de cobertura**: se `data_fim_carencia` está no futuro, exibir Alert amarelo destacado "Veículo em período de carência até DD/MM/YYYY"
-- **Botões condicionais**:
-  - Status `efetivada`: "Ver ficha do associado" (navigate para `/cadastro/associados/:id`) + "Nova operação" (navigate para `/cadastro/associados`)
-  - Status `rejeitada`: "Tentar novamente" (volta ao step 6)
-- O polling para quando status é `efetivada`, `rejeitada` ou `cancelada_pelo_associado`
+Após a consulta FIPE retornar os dados do novo veículo (marca/modelo preenchidos):
 
-Props: `substituicaoId`, `associadoId`, `associadoNome`, `veiculoAntigoPlaca`, `onRetry` (volta ao step 6)
+1. **Detectar tipo do veículo antigo** usando `useDetectarTipoVeiculo(veiculoAntigo.marca, veiculoAntigo.modelo)`
+2. **Detectar tipo do veículo novo** usando `useDetectarTipoVeiculo(dados.marca, dados.modelo)`
+3. **Buscar config** `restricao_mudanca_linha` da tabela `configuracoes` (já existe o pattern em `useConteudosSistema.ts` com `useRestricoesAbsolutas`)
+4. **Comparar tipos** — se diferem (carro→moto ou moto→carro):
+   - Se `restricao_mudanca_linha === true`: exibir Alert destrutivo com mensagem de bloqueio absoluto e desabilitar botão "Próximo"
+   - Se `restricao_mudanca_linha === false`: exibir Alert de aviso (amarelo) mas permitir prosseguir
 
-### 2. Atualizar `src/pages/cadastro/SubstituicaoVeiculoPage.tsx`
-- Importar `StepConclusao`
-- No `handleFinanceiroConfirmar`: adicionar `setCurrentStep(7)` após `completeStep(6)`
-- Substituir o stub do step 7 pela renderização de `<StepConclusao>` passando as props necessárias
-- Adicionar handler `handleRetry` que volta ao step 6
+### Mensagem de bloqueio
+> "Mudança de linha de produto não é permitida no processo de substituição. O veículo atual é um **[carro/moto]** e o novo é um **[moto/carro]**. Para trocar de linha, é necessário cancelar o veículo atual e realizar uma nova adesão."
+
+### Mensagem de aviso (quando config desativada)
+> "Atenção: o veículo atual é um **[carro/moto]** e o novo é um **[moto/carro]**. Mudança de linha detectada, mas a restrição está desativada nas configurações."
+
+### Impacto no botão "Próximo"
+A variável `camposObrigatorios` (linha 108) será complementada com a verificação:
+```
+const bloqueioMudancaLinha = tiposDiferentes && restricaoAtiva;
+// Botão disabled quando bloqueioMudancaLinha === true
+```
+
+### Hooks reutilizados (sem alteração)
+- `useDetectarTipoVeiculo` — já existe em `src/hooks/useDetectarTipoVeiculo.ts`
+- `useRestricoesAbsolutas` — já existe em `src/hooks/useConteudosSistema.ts`, retorna `{ mudanca_linha: boolean }`
+
+### Nenhuma migration necessária
+A chave `restricao_mudanca_linha` já existe na tabela `configuracoes`.
 
