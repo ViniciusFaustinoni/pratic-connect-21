@@ -104,6 +104,45 @@ export function useAprovarMigracao() {
         }
       }
 
+      // Pontuação do consultor (se houver)
+      if (consultorProfileId) {
+        // Buscar parâmetro de pontuação
+        const { data: paramPontos } = await supabase
+          .from('comissoes_parametros')
+          .select('valor')
+          .eq('chave', 'pontos_migracao_aprovada')
+          .eq('ativo', true)
+          .maybeSingle();
+
+        const pontos = paramPontos ? parseFloat(paramPontos.valor) : 1.0;
+
+        // Verificar duplicata
+        const { data: existente } = await supabase
+          .from('pontuacao_eventos')
+          .select('id')
+          .eq('referencia_tipo', 'solicitacao_migracao')
+          .eq('referencia_id', solicitacaoId)
+          .maybeSingle();
+
+        if (!existente) {
+          await supabase.from('pontuacao_eventos').insert({
+            vendedor_id: consultorProfileId,
+            tipo_operacao: 'migracao_aprovada',
+            pontos,
+            referencia_tipo: 'solicitacao_migracao',
+            referencia_id: solicitacaoId,
+            conta_ranking: true,
+          });
+        }
+      }
+
+      // Auto-resolver alertas de prazo vencido
+      await supabase
+        .from('notificacoes')
+        .update({ lida: true })
+        .eq('referencia_tipo', 'migracao_prazo_vencido')
+        .eq('referencia_id', solicitacaoId);
+
       // Notificar consultor
       if (consultorUserId) {
         await supabase
