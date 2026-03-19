@@ -28,7 +28,7 @@ import { BadgeIndicador } from '@/components/beneficios/IndicadorSaude';
 // Componentes
 import { TabelaPrecosCarros, TabelaPrecosMotos } from '@/components/planos/TabelaPrecos';
 import { VeiculosAceitosCarros, VeiculosAceitosMotos } from '@/components/planos/VeiculosAceitos';
-import { CalculadoraPreco } from '@/components/planos/CalculadoraPreco';
+import { CalculadoraPreco, type DadosParaCotacao } from '@/components/planos/CalculadoraPreco';
 import { GlossarioTermos, RegrasImportantes, TabelaCotasTaxas } from '@/components/planos/GlossarioSection';
 import { ContatosInline } from '@/components/planos/ContatosRapidos';
 import { BuscaPlanos } from '@/components/planos/BuscaPlanos';
@@ -36,6 +36,7 @@ import { ComparadorNiveisSelect, ComparadorNiveisMotos } from '@/components/plan
 import { RankingVendedores } from '@/components/planos/RankingVendedores';
 import { RegioesConfig } from '@/components/planos/RegioesConfig';
 import { PlanoLineSection } from '@/components/planos/PlanoLineSection';
+import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
@@ -109,6 +110,8 @@ function SeFecharHojeButton() {
 export default function PlanosBeneficios() {
   const [activeTab, setActiveTab] = useState('visao-geral');
   const [searchTerm, setSearchTerm] = useState('');
+  const [cotacaoDialogOpen, setCotacaoDialogOpen] = useState(false);
+  const [cotacaoBase, setCotacaoBase] = useState<CotacaoBaseParaFormulario | null>(null);
   const { isDiretor, isDesenvolvedor, isGerente, isSupervisor, isAdminMaster } = usePermissions();
   const podeVerConfigAvancada = isDiretor || isGerente || isSupervisor || isDesenvolvedor || isAdminMaster;
 
@@ -135,6 +138,35 @@ export default function PlanosBeneficios() {
 
   const handleSearch = (term: string) => {
     setSearchTerm(term.toLowerCase());
+  };
+
+  // Região mapping: calculadora usa slugs curtos, cotador usa slugs longos
+  const REGIAO_CALC_TO_COTADOR: Record<string, string> = {
+    rj: 'rio_de_janeiro',
+    lagos: 'regiao_lagos',
+    sp: 'sao_paulo',
+  };
+
+  const handleIrParaCotacao = (dados: DadosParaCotacao) => {
+    setCotacaoBase({
+      valor_fipe: dados.valorFipe,
+      valor_adicional: null,
+      valor_adesao: null,
+      validade_dias: null,
+      veiculo_marca: dados.marca || null,
+      veiculo_modelo: dados.modelo || null,
+      veiculo_ano: dados.ano || null,
+      veiculo_placa: dados.placa || null,
+      codigo_fipe: null,
+      categoria: null,
+      regiao: REGIAO_CALC_TO_COTADOR[dados.regiao] || dados.regiao,
+      nome_solicitante: null,
+      telefone1_solicitante: null,
+      email_solicitante: null,
+      lead_id: null,
+      plano_id: dados.planoId || null,
+    });
+    setCotacaoDialogOpen(true);
   };
 
   // Filtrar benefícios adicionais
@@ -187,7 +219,7 @@ export default function PlanosBeneficios() {
         </div>
         <div className="flex items-center gap-2">
           <BuscaPlanos onSearch={handleSearch} />
-          <CalculadoraPreco />
+          <CalculadoraPreco onIrParaCotacao={handleIrParaCotacao} />
           <SeFecharHojeButton />
         </div>
       </div>
@@ -415,6 +447,13 @@ export default function PlanosBeneficios() {
           <ContatosInline />
         </TabsContent>
       </Tabs>
+
+      {/* CotacaoFormDialog pré-preenchido pela calculadora */}
+      <CotacaoFormDialog
+        open={cotacaoDialogOpen}
+        onOpenChange={setCotacaoDialogOpen}
+        cotacaoBase={cotacaoBase}
+      />
     </div>
   );
 }

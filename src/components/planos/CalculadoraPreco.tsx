@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Badge } from '@/components/ui/badge';
-import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Fuel } from 'lucide-react';
+import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Fuel, ArrowRight, Shield, CalendarCheck } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { formatarMoeda } from '@/utils/format';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
@@ -17,6 +17,7 @@ import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { maskPlaca } from '@/lib/validations';
+import { calcularOpcoesVencimento } from '@/utils/vencimento';
 
 interface ResultadoPlano {
   key: string;
@@ -26,6 +27,12 @@ interface ResultadoPlano {
   adicionalMensal: number;
   descontoPercentual: number;
   sortPriority: number;
+  // New fields
+  valorAdesao: number;
+  cotaPercentual: number;
+  cotaMinima: number;
+  coberturaFipe: number;
+  coberturas: string[];
 }
 
 interface ResultadoCalc {
@@ -44,6 +51,16 @@ interface VeiculoPlaca {
   cor: string;
   combustivel: string;
   placa: string;
+}
+
+export interface DadosParaCotacao {
+  valorFipe: number;
+  marca?: string;
+  modelo?: string;
+  ano?: number;
+  placa?: string;
+  regiao: string;
+  planoId?: string;
 }
 
 type TipoUso = 'particular' | 'aplicativo';
@@ -115,15 +132,15 @@ function useConfigAdicionalAppCalc(tabelas: any[] | undefined) {
   }), [regioesRaw, productLinesData, tabelas]);
 }
 
-/** Fetch planos + plano_preco_map + product_lines for calculator */
+/** Fetch planos + plano_preco_map + product_lines for calculator — includes extra fields */
 function usePlanosComPrecoMap() {
   return useQuery({
-    queryKey: ['calculadora-planos-preco-map-v2'],
+    queryKey: ['calculadora-planos-preco-map-v3'],
     queryFn: async () => {
       const [planosRes, mapRes, plRes] = await Promise.all([
         supabase
           .from('planos')
-          .select('id, nome, slug, adicional_mensal, desconto_percentual, visivel_gestao, ativo, categoria, fipe_minima, fipe_maxima, tipo_uso, ano_minimo, ano_minimo_veiculo, ano_fabricacao_minimo')
+          .select(`id, nome, slug, adicional_mensal, desconto_percentual, visivel_gestao, ativo, categoria, fipe_minima, fipe_maxima, tipo_uso, ano_minimo, ano_minimo_veiculo, ano_fabricacao_minimo, valor_adesao, cota_participacao, cota_minima, cobertura_fipe, planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name))`)
           .eq('ativo', true)
           .eq('visivel_gestao', true)
           .order('ordem', { ascending: true }),
@@ -150,7 +167,33 @@ function detectarTipoFromPlaca(dados: VeiculoPlaca): TipoVeiculo {
   return tipoDetectado === 'moto' ? 'moto' : 'carro';
 }
 
-export function CalculadoraPreco() {
+// Defaults for cota
+function useCotaDefaults() {
+  const { data: cotaDefault = 6 } = useQuery({
+    queryKey: ['configuracoes', 'cota_participacao_default'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_participacao_default').maybeSingle();
+      return parseFloat(data?.valor || '6') || 6;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+  const { data: cotaMinimaDefault = 1200 } = useQuery({
+    queryKey: ['configuracoes', 'cota_minima_default'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_minima_default').maybeSingle();
+      return parseFloat(data?.valor || '1200') || 1200;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+  return { cotaDefault, cotaMinimaDefault };
+}
+
+interface CalculadoraPrecoProps {
+  onIrParaCotacao?: (dados: DadosParaCotacao) => void;
+}
+
+export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
+  const [open, setOpen] = useState(false);
   const [valorFipe, setValorFipe] = useState<string>('');
   const [tipoUso, setTipoUso] = useState<TipoUso>('particular');
   const [tipoVeiculo, setTipoVeiculo] = useState<TipoVeiculo>('carro');
@@ -170,6 +213,10 @@ export function CalculadoraPreco() {
   const { data: adicionalApp = 35.90 } = useAdicionalApp();
   const { data: planosData } = usePlanosComPrecoMap();
   const configApp = useConfigAdicionalAppCalc(tabelas);
+  const { cotaDefault, cotaMinimaDefault } = useCotaDefaults();
+
+  // Vencimento
+  const [opcao1, opcao2] = calcularOpcoesVencimento(new Date().getDate());
 
   // Build product_lines lookup maps
   const plMaps = useMemo(() => {
@@ -194,7 +241,6 @@ export function CalculadoraPreco() {
   const linhaMatchesTipo = (linhaSlug: string): boolean => {
     const vt = plMaps.vehicleType[linhaSlug];
     if (tipoVeiculo === 'moto') return vt === 'motorcycle';
-    // carro: anything that's not motorcycle
     return vt !== 'motorcycle';
   };
 
@@ -216,7 +262,6 @@ export function CalculadoraPreco() {
       const v = data.vehicleData;
       setVeiculoPlaca(v);
 
-      // Auto-fill FIPE value
       if (data.fipeData?.valor) {
         const fipeVal = typeof data.fipeData.valor === 'string'
           ? parseFloat(data.fipeData.valor.replace(/[^\d.,]/g, '').replace(',', '.'))
@@ -226,11 +271,9 @@ export function CalculadoraPreco() {
         }
       }
 
-      // Auto-detect vehicle type
       const tipo = detectarTipoFromPlaca(v);
       setTipoVeiculo(tipo);
 
-      // Auto-fill ano
       if (v.ano) {
         const anoNum = parseInt(String(v.ano).replace(/\D.*$/, ''), 10);
         if (anoNum > 1900 && anoNum < 2100) {
@@ -238,7 +281,6 @@ export function CalculadoraPreco() {
         }
       }
 
-      // Store combustivel for filtering
       setCombustivelDetectado(v.combustivel || null);
     } catch (err: any) {
       console.error('[CalculadoraPreco] Erro placa:', err);
@@ -265,7 +307,6 @@ export function CalculadoraPreco() {
     const anoAtual = new Date().getFullYear();
     const anoNum = anoVeiculo ? parseInt(anoVeiculo, 10) : null;
 
-    // Determine combustivel for pricing
     const combustivelPricing = combustivelDetectado
       ? normalizarCombustivelParaPricing(combustivelDetectado)
       : combustivelManual;
@@ -273,55 +314,42 @@ export function CalculadoraPreco() {
     const resultadosPlano: ResultadoPlano[] = [];
 
     for (const plano of planos) {
-      // --- FILTER: exclude internal "aplicativo" variants ---
       const catLower = (plano.categoria || '').toLowerCase();
       const tipoUsoPlano = (plano.tipo_uso || '').toLowerCase();
       if (catLower === 'aplicativo' || tipoUsoPlano === 'aplicativo') continue;
 
-      // Find mapping for this plan
       const mapping = mappings.find(m => m.plano_id === plano.id);
       if (!mapping?.linha_slug) continue;
 
       const linhaSlug = mapping.linha_slug;
 
-      // --- FILTER: vehicle type ---
       if (!linhaMatchesTipo(linhaSlug)) continue;
-
-      // --- FILTER: supports_app (when user selected aplicativo) ---
       if (tipoUso === 'aplicativo' && !plMaps.supportsApp[linhaSlug]) continue;
-
-      // --- FILTER: FIPE limits on the plan itself ---
       if (plano.fipe_minima && valor < Number(plano.fipe_minima)) continue;
       if (plano.fipe_maxima && valor > Number(plano.fipe_maxima)) continue;
 
-      // --- FILTER: ano mínimo do plano ---
       if (anoNum) {
         const anoMinPlano = Number(plano.ano_minimo || plano.ano_minimo_veiculo || plano.ano_fabricacao_minimo || 0);
         if (anoMinPlano > 0 && anoNum < anoMinPlano) continue;
       }
 
-      // --- FILTER: requires_recent_year da product_line ---
       if (plMaps.requiresRecent[linhaSlug] && anoNum) {
         if (anoNum < anoAtual - 1) continue;
       }
 
-      // --- FILTER: blocked_categories ---
       const blocked = plMaps.blockedCats[linhaSlug] || [];
       if (blocked.length > 0 && catLower && blocked.some(b => b.toLowerCase() === catLower)) continue;
 
-      // Determine tipo_uso for table lookup
       const isMotoLine = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
       const tipoUsoPricing = isMotoLine
         ? mapping.tipo_uso
         : resolverTipoUsoQuery(linhaSlug, regiao, tipoUso, configApp);
 
-      // Skip car lines that don't match user's selected tipo_uso
       if (!isMotoLine) {
         const expectedTipoUso = resolverTipoUsoQuery(linhaSlug, regiao, tipoUso, configApp);
         if (tipoUsoPricing !== expectedTipoUso) continue;
       }
 
-      // Find matching price row
       const faixa = tabelas.find(t => {
         if (t.linha_slug !== linhaSlug) return false;
         if (t.regiao !== regiao) return false;
@@ -335,20 +363,31 @@ export function CalculadoraPreco() {
 
       let valorMensal = Number(faixa.valor_mensal);
 
-      // Apply app surcharge if needed
       if (!isMotoLine && tipoUso === 'aplicativo') {
         valorMensal = resolverPrecoApp(linhaSlug, regiao, tipoUso, valorMensal, adicionalApp, configApp);
       }
 
-      // Apply adicional_mensal (Premium +30, Exclusive +60, etc.)
       const adicionalMensal = Number(plano.adicional_mensal || 0);
       valorMensal += adicionalMensal;
 
-      // Apply desconto_percentual (ex: 5% OFF)
       const descontoPerc = Number(plano.desconto_percentual || 0);
       if (descontoPerc > 0) {
         valorMensal *= (1 - descontoPerc / 100);
       }
+
+      // Extract extra info
+      const valorAdesao = Number(plano.valor_adesao || 0);
+      const cotaPercentual = plano.cota_participacao != null ? Number(plano.cota_participacao) : cotaDefault;
+      const cotaMinima = plano.cota_minima != null ? Number(plano.cota_minima) : cotaMinimaDefault;
+      const coberturaFipe = Number(plano.cobertura_fipe || 100);
+
+      // Extract coberturas from planos_beneficios
+      const beneficios = (plano as any).planos_beneficios || [];
+      const coberturas = beneficios
+        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
+        .map((pb: any) => pb.custom_text || pb.benefits?.name || '')
+        .filter(Boolean)
+        .slice(0, 6); // Show max 6 for brevity
 
       resultadosPlano.push({
         key: plano.id,
@@ -358,6 +397,11 @@ export function CalculadoraPreco() {
         adicionalMensal,
         descontoPercentual: descontoPerc,
         sortPriority: plMaps.sortPriority[linhaSlug] ?? 99,
+        valorAdesao: Math.round(valorAdesao * 100) / 100,
+        cotaPercentual,
+        cotaMinima,
+        coberturaFipe,
+        coberturas,
       });
     }
 
@@ -367,13 +411,11 @@ export function CalculadoraPreco() {
       return;
     }
 
-    // Sort by product_line sort_priority, then by price
     resultadosPlano.sort((a, b) => {
       if (a.sortPriority !== b.sortPriority) return a.sortPriority - b.sortPriority;
       return a.valorMensal - b.valorMensal;
     });
 
-    // Faixa description from first result
     const primeiroMapping = mappings.find(m => m.plano_id === resultadosPlano[0].key);
     const primeiraFaixa = primeiroMapping ? tabelas.find(t =>
       t.linha_slug === primeiroMapping.linha_slug &&
@@ -415,8 +457,23 @@ export function CalculadoraPreco() {
     setCombustivelDetectado(null);
   };
 
+  const handleIrParaCotacao = (planoId: string) => {
+    if (!resultado || !onIrParaCotacao) return;
+    const anoNum = anoVeiculo ? parseInt(anoVeiculo, 10) : undefined;
+    onIrParaCotacao({
+      valorFipe: resultado.valorFipeInformado,
+      marca: veiculoPlaca?.marca,
+      modelo: veiculoPlaca?.modelo,
+      ano: anoNum,
+      placa: veiculoPlaca?.placa,
+      regiao,
+      planoId,
+    });
+    setOpen(false);
+  };
+
   return (
-    <Dialog>
+    <Dialog open={open} onOpenChange={setOpen}>
       <DialogTrigger asChild>
         <Button variant="outline" size="sm">
           <Calculator className="h-4 w-4 mr-2" />
@@ -427,7 +484,7 @@ export function CalculadoraPreco() {
         <DialogHeader>
           <DialogTitle>Calculadora de Preço</DialogTitle>
           <DialogDescription>
-            Simule rapidamente a mensalidade por plano
+            Simule rapidamente a mensalidade, adesão e cota por plano
           </DialogDescription>
         </DialogHeader>
 
@@ -460,7 +517,6 @@ export function CalculadoraPreco() {
               </Button>
             </div>
 
-            {/* Vehicle info chip */}
             {veiculoPlaca && (
               <div className="flex flex-wrap items-center gap-1.5 text-xs">
                 <Badge variant="secondary" className="font-mono">
@@ -623,41 +679,105 @@ export function CalculadoraPreco() {
                 </span>
               </div>
 
+              {/* Vencimento rápido */}
+              <div className="flex items-center gap-2 text-xs text-muted-foreground">
+                <CalendarCheck className="h-3.5 w-3.5" />
+                <span>Vencimento: <strong>dia {opcao1}</strong> ou <strong>dia {opcao2}</strong></span>
+              </div>
+
               {/* Preços por plano */}
-              <div className="space-y-2">
+              <div className="space-y-3">
                 {resultado.planos.map((plano) => (
                   <div
                     key={plano.key}
-                    className="flex items-center justify-between p-3 rounded-lg bg-primary/5 border border-primary/10"
+                    className="rounded-lg bg-primary/5 border border-primary/10 overflow-hidden"
                   >
-                    <div>
-                      <span className="text-sm font-medium">{plano.planoNome}</span>
-                      {(plano.adicionalMensal > 0 || plano.descontoPercentual > 0) && (
-                        <div className="flex gap-1 mt-0.5">
-                          {plano.adicionalMensal > 0 && (
-                            <Badge variant="outline" className="text-[10px] px-1 py-0">
-                              +{formatarMoeda(plano.adicionalMensal)}
-                            </Badge>
-                          )}
-                          {plano.descontoPercentual > 0 && (
-                            <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                              -{plano.descontoPercentual}%
-                            </Badge>
-                          )}
-                        </div>
-                      )}
+                    {/* Header: nome + preço */}
+                    <div className="flex items-center justify-between p-3">
+                      <div>
+                        <span className="text-sm font-semibold">{plano.planoNome}</span>
+                        {(plano.adicionalMensal > 0 || plano.descontoPercentual > 0) && (
+                          <div className="flex gap-1 mt-0.5">
+                            {plano.adicionalMensal > 0 && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0">
+                                +{formatarMoeda(plano.adicionalMensal)}
+                              </Badge>
+                            )}
+                            {plano.descontoPercentual > 0 && (
+                              <Badge variant="secondary" className="text-[10px] px-1 py-0">
+                                -{plano.descontoPercentual}%
+                              </Badge>
+                            )}
+                          </div>
+                        )}
+                      </div>
+                      <div className="text-right">
+                        <span className="text-lg font-bold text-primary">
+                          {formatarMoeda(plano.valorMensal)}
+                        </span>
+                        <span className="text-xs text-muted-foreground">/mês</span>
+                      </div>
                     </div>
-                    <div className="text-right">
-                      <span className="text-lg font-bold text-primary">
-                        {formatarMoeda(plano.valorMensal)}
-                      </span>
-                      <span className="text-xs text-muted-foreground">/mês</span>
-                      {plano.valorDesagio != null && (
+
+                    {/* Details grid */}
+                    <div className="px-3 pb-2 grid grid-cols-3 gap-2 text-xs">
+                      <div className="bg-background rounded p-1.5">
+                        <span className="text-muted-foreground block">Adesão</span>
+                        <span className="font-semibold">{formatarMoeda(plano.valorAdesao)}</span>
+                      </div>
+                      <div className="bg-background rounded p-1.5">
+                        <span className="text-muted-foreground block">Cota</span>
+                        <span className="font-semibold">
+                          {plano.cotaPercentual}%
+                          {plano.cotaMinima > 0 && (
+                            <span className="text-muted-foreground font-normal"> mín {formatarMoeda(plano.cotaMinima)}</span>
+                          )}
+                        </span>
+                      </div>
+                      <div className="bg-background rounded p-1.5">
+                        <span className="text-muted-foreground block">Cobertura</span>
+                        <span className="font-semibold">{plano.coberturaFipe}% FIPE</span>
+                      </div>
+                    </div>
+
+                    {/* Coberturas resumidas */}
+                    {plano.coberturas.length > 0 && (
+                      <div className="px-3 pb-2">
+                        <div className="flex flex-wrap gap-1">
+                          {plano.coberturas.map((cob, i) => (
+                            <span key={i} className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
+                              <Shield className="h-2.5 w-2.5 text-emerald-500" />
+                              {cob}
+                              {i < plano.coberturas.length - 1 && <span className="mx-0.5">·</span>}
+                            </span>
+                          ))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Deságio */}
+                    {plano.valorDesagio != null && (
+                      <div className="px-3 pb-2">
                         <p className="text-xs text-muted-foreground">
                           Deságio: {formatarMoeda(plano.valorDesagio)}
                         </p>
-                      )}
-                    </div>
+                      </div>
+                    )}
+
+                    {/* Botão Ir para Cotação */}
+                    {onIrParaCotacao && (
+                      <div className="px-3 pb-3">
+                        <Button
+                          variant="ghost"
+                          size="sm"
+                          className="w-full text-xs gap-1.5 h-8"
+                          onClick={() => handleIrParaCotacao(plano.key)}
+                        >
+                          Criar Cotação
+                          <ArrowRight className="h-3 w-3" />
+                        </Button>
+                      </div>
+                    )}
                   </div>
                 ))}
               </div>
