@@ -386,6 +386,7 @@ export function RegrasVendaContent() {
       await updateParametro.mutateAsync({ chave: 'migracao_prazo_resposta_horas', valor: String(migracao.migracao_prazo_resposta_horas) });
       await updateParametro.mutateAsync({ chave: 'migracao_canal_oficial', valor: migracao.migracao_canal_oficial });
       await updateParametro.mutateAsync({ chave: 'migracao_isentar_carencia', valor: String(migracao.migracao_isentar_carencia) });
+      await updateParametro.mutateAsync({ chave: 'migracao_prazo_max_comprovante_meses', valor: String(migracao.migracao_prazo_max_comprovante_meses) });
       toast.success('Configurações de migração salvas com sucesso!');
     } catch {
       // error handled by mutation
