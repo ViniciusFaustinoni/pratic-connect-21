@@ -265,6 +265,16 @@ export default function SolicitacoesMigracao() {
                   <span className="text-muted-foreground">Consultor:</span>
                   <p className="font-medium">{(selected as any).consultor?.nome || '—'}</p>
                 </div>
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">Cancelamento na concorrente:</span>
+                  <p className="font-medium">
+                    {(selected as any).declaracao_cancelamento_concorrente ? (
+                      <span className="text-primary flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" /> Declarado pelo operador</span>
+                    ) : (
+                      <span className="text-muted-foreground">Não declarado</span>
+                    )}
+                  </p>
+                </div>
               </div>
 
               {/* Status */}
