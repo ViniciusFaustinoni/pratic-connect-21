@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useEffect, useRef } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -274,6 +274,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const [categoria, setCategoria] = useState<string>('nenhuma');
   const [resultado, setResultado] = useState<ResultadoCalc | null>(null);
   const [semResultado, setSemResultado] = useState(false);
+  const jaCalculouRef = useRef(false);
 
   // Placa lookup
   const [placa, setPlaca] = useState('');
@@ -429,6 +430,14 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     return { status: 'aprovado' as const, coberturaFipe: cobFipe };
   };
 
+  // Auto-recalcular quando inputs mudam após primeiro cálculo
+  useEffect(() => {
+    if (jaCalculouRef.current) {
+      calcular();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipoUso, tipoVeiculo, categoria, combustivelManual, anoVeiculo, valorFipe, veiculoPlaca, regiao]);
+
   const calcular = () => {
     const valor = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
 
@@ -467,7 +476,6 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     for (const plano of planos) {
       const catLower = (plano.categoria || '').toLowerCase();
       const tipoUsoPlano = (plano.tipo_uso || '').toLowerCase();
-      
 
       const mapping = mappings.find(m => m.plano_id === plano.id);
       if (!mapping?.linha_slug) continue;
@@ -691,6 +699,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setPlaca('');
     setVeiculoPlaca(null);
     setCombustivelDetectado(null);
+    jaCalculouRef.current = false;
   };
 
   const handleIrParaCotacao = (planoId: string) => {
@@ -902,7 +911,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
           )}
           {/* Botões */}
           <div className="flex gap-2">
-            <Button onClick={calcular} className="flex-1">
+            <Button onClick={() => { calcular(); jaCalculouRef.current = true; }} className="flex-1">
               Calcular
             </Button>
             <Button variant="outline" onClick={limpar}>
