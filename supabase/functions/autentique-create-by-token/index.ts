@@ -208,6 +208,24 @@ serve(async (req) => {
       templateData.regrasVenda = regrasVenda;
     }
 
+    // Fetch migration data if applicable
+    if (contrato.tipo_entrada === 'migracao' && contrato.cotacao_id) {
+      const { data: solMigracao } = await supabase
+        .from('solicitacoes_migracao')
+        .select('associacao_origem, aprovado_em, status')
+        .eq('cotacao_id', contrato.cotacao_id)
+        .eq('status', 'aprovada')
+        .maybeSingle();
+      if (solMigracao) {
+        templateData.migracao = {
+          aprovada: true,
+          associacao_origem: solMigracao.associacao_origem,
+          data_aprovacao: solMigracao.aprovado_em || '',
+          carencia_isenta: contrato.carencia_isenta || false,
+        };
+      }
+    }
+
     // ============= BUSCAR TEMPLATE DO BANCO =============
     const { data: templatesDB, error: templateError } = await supabase
       .from("documento_templates")
