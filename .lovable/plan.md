@@ -1,47 +1,51 @@
 
 
-# Correção: Migração Direta — Isenção de Carência e Ficha do Associado
+# Correção: Proposta de Filiação — Migração no PDF e Bloqueio de Pendente
 
 ## Resumo
 
-Dois bugs onde migrações diretas (sem cotação) são ignoradas: (1) a aprovação não registra isenção de carência, e (2) a ficha do associado não reconhece a migração.
+Dois problemas: (1) a proposta de filiação (tanto o PDF do Cotador quanto o documento Autentique) não exibe dados de migração quando a entrada é direta (sem cotação); (2) não há bloqueio real que impeça gerar a proposta enquanto a migração está pendente de aprovação.
+
+## Contexto técnico
+
+- O **PDF do Cotador** (`useGerarProposta.ts`) já tem lógica para renderizar seção "MIGRAÇÃO" (linhas 324-341), mas o `dadosProposta` montado em `Cotador.tsx` nunca popula o campo `migracao`
+- O **BotaoGerarProposta** já bloqueia quando `dados.migracao && !dados.migracao.aprovada`, mas isso depende de dados estáticos passados pelo pai — não consulta o banco
+- O **Autentique** (`autentique-create/index.ts` linha 274) busca migração apenas por `cotacao_id`, ignorando migrações diretas
+- O **Autentique by token** (`autentique-create-by-token/index.ts`) tem o mesmo padrão
 
 ## Alterações
 
-### 1. `src/hooks/useSolicitacoesMigracaoAdmin.ts` — `useAprovarMigracao`
+### 1. `supabase/functions/autentique-create/index.ts` — Fallback por CPF
 
-No bloco de isenção de carência (linhas 91-105), adicionar fallback para migração direta:
+Na busca de migração (linhas 273-289), adicionar fallback: quando `tipo_entrada === 'migracao'` mas não há `cotacao_id` (migração direta), buscar em `solicitacoes_migracao` pelo CPF do associado vinculado ao contrato, com `status = 'aprovada'`.
 
-- Manter a lógica existente: se `cotacaoId` existe, buscar contrato por `cotacao_id`
-- Adicionar `else`: quando não há `cotacaoId`, buscar o CPF da solicitação na tabela `solicitacoes_migracao`, depois buscar o associado pelo CPF na tabela `associados` (status `ativo`), e finalmente localizar o contrato ativo mais recente desse associado
-- Aplicar o mesmo `update` de `carencia_isenta`, `carencia_motivo_isencao`, etc., respeitando a config `migracao_isentar_carencia` (já lida pela função `fetchMigracaoIsentarCarencia`)
+### 2. `supabase/functions/autentique-create-by-token/index.ts` — Mesmo fallback
 
-```text
-Fluxo:
-  cotacaoId existe? → update contrato via cotacao_id (como hoje)
-  cotacaoId não existe?
-    → buscar solicitação pelo solicitacaoId → pegar associado_cpf
-    → buscar associado ativo com esse CPF
-    → buscar contrato ativo mais recente desse associado
-    → aplicar isenção (se config ativa)
-```
+Aplicar a mesma lógica de fallback por CPF do associado.
 
-### 2. `src/components/associados/detalhe/OrigemCadastroCard.tsx` — `useOrigemCadastro`
+### 3. `src/pages/vendas/Cotador.tsx` — Popular `migracao` no `dadosProposta`
 
-No bloco de migração (linhas 143-168), o código só filtra por `cotacao_id`. Adicionar fallback por CPF:
+No `useMemo` que monta `dadosProposta` (linhas 425-459), quando houver uma cotação salva com `tipo_entrada === 'migracao'`, buscar a solicitação de migração aprovada vinculada (por `cotacao_id`) e popular o campo `migracao` do `DadosProposta`. Isso requer uma query reativa (`useQuery`) que busca a solicitação quando a cotação tem tipo migração.
 
-- Após a query existente (por `cotacao_id`), se não encontrou resultado E o `tipoEntradaRaw` é `'migracao'` (ou mesmo se não é — para cobrir migrações diretas que podem não ter `tipo_entrada` setado):
-  - Buscar o CPF do associado na tabela `associados`
-  - Buscar em `solicitacoes_migracao` por `associado_cpf` + `status = 'aprovada'`
-  - Se encontrar, preencher `result.migracao` e atualizar `tipoEntradaKey` para `'migracao'`
-- Também ajustar a detecção inicial de `tipoEntradaKey`: antes de cair em `'adesao'` por padrão, verificar se existe solicitação de migração aprovada pelo CPF do associado
+### 4. `src/components/vendas/BotaoGerarProposta.tsx` — Bloqueio dinâmico por consulta ao banco
 
-A busca do CPF do associado será feita com uma query adicional a `associados.cpf` usando o `associadoId` já disponível.
+Adicionar uma prop opcional `cotacaoId?: string`. Quando fornecida e o tipo de entrada for migração:
+- Buscar em `solicitacoes_migracao` por `cotacao_id` com status diferente de `aprovada`
+- Se encontrar pendente → bloquear botão com tooltip "Aguardando aprovação da migração"
+- Se não encontrar ou status aprovada → liberar normalmente
+
+Manter a lógica estática existente (`dados.migracao && !dados.migracao.aprovada`) como fallback.
+
+### 5. `src/types/proposta.ts` — Ajustar tipo `migracao`
+
+O tipo atual já tem `aprovada`, `associacaoOrigem`, `carenciaIsenta`, `dataAprovacao`. Verificar se está completo para os dados que o PDF precisa renderizar. Sem mudança se já estiver ok.
 
 ## Arquivos afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/hooks/useSolicitacoesMigracaoAdmin.ts` | Fallback para encontrar contrato por CPF quando não há `cotacaoId` |
-| `src/components/associados/detalhe/OrigemCadastroCard.tsx` | Fallback para detectar migração direta por CPF do associado |
+| `supabase/functions/autentique-create/index.ts` | Fallback busca migração por CPF do associado |
+| `supabase/functions/autentique-create-by-token/index.ts` | Mesmo fallback |
+| `src/pages/vendas/Cotador.tsx` | Popular campo `migracao` no `dadosProposta` |
+| `src/components/vendas/BotaoGerarProposta.tsx` | Bloqueio dinâmico via query ao banco |
 
