@@ -163,8 +163,6 @@ export function StepElegibilidade({ associadoId, onNext }: StepElegibilidadeProp
         <Button onClick={handleNext} disabled={!canProceed}>
           Próximo
         </Button>
-          Próximo
-        </Button>
       </div>
     </div>
   );
