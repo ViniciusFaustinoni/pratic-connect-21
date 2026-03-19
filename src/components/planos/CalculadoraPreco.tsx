@@ -430,6 +430,14 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     return { status: 'aprovado' as const, coberturaFipe: cobFipe };
   };
 
+  // Auto-recalcular quando inputs mudam após primeiro cálculo
+  useEffect(() => {
+    if (jaCalculouRef.current) {
+      calcular();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipoUso, tipoVeiculo, categoria, combustivelManual, anoVeiculo, valorFipe, veiculoPlaca, regiao]);
+
   const calcular = () => {
     const valor = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
 
