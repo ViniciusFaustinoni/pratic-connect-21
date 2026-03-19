@@ -152,6 +152,7 @@ export default function SolicitacoesMigracao() {
                 <TableHead>Placa</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead>Associação Origem</TableHead>
+                <TableHead>Cancelamento</TableHead>
                 <TableHead>Enviado em</TableHead>
                 <TableHead>Prazo</TableHead>
                 <TableHead>Status</TableHead>
