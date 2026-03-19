@@ -1079,7 +1079,7 @@ export default function CotacaoPublicaCompleta() {
                 <Alert>
                   <Camera className="h-4 w-4" />
                   <AlertDescription>
-                    Tire fotos em local bem iluminado. {fotosVistoria.filter(f => f.status === 'enviado').length} de {FOTOS_VISTORIA_CONFIG.length} fotos • Vídeo 360°: {videoVistoriaUrl ? '✓' : 'pendente'}
+                    Tire fotos em local bem iluminado. {fotosVistoria.filter(f => f.status === 'enviado').length} de {fotosVistoriaConfig.length} fotos • Vídeo 360°: {videoVistoriaUrl ? '✓' : 'pendente'}{!veiculoPrecisaRastreador && ' (vistoria completa — sem rastreador)'}
                   </AlertDescription>
                 </Alert>
 
