@@ -58,6 +58,7 @@ interface CriarSolicitacaoData {
   veiculo_placa?: string;
   associacao_origem: string;
   prazo_resposta_horas: number;
+  declaracao_cancelamento_concorrente: boolean;
   documentos: Array<{
     tipo: 'comprovante_pagamento' | 'boleto_referencia';
     arquivo_url: string;
