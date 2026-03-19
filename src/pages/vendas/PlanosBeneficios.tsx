@@ -28,7 +28,7 @@ import { BadgeIndicador } from '@/components/beneficios/IndicadorSaude';
 // Componentes
 import { TabelaPrecosCarros, TabelaPrecosMotos } from '@/components/planos/TabelaPrecos';
 import { VeiculosAceitosCarros, VeiculosAceitosMotos } from '@/components/planos/VeiculosAceitos';
-import { CalculadoraPreco } from '@/components/planos/CalculadoraPreco';
+import { CalculadoraPreco, type DadosParaCotacao } from '@/components/planos/CalculadoraPreco';
 import { GlossarioTermos, RegrasImportantes, TabelaCotasTaxas } from '@/components/planos/GlossarioSection';
 import { ContatosInline } from '@/components/planos/ContatosRapidos';
 import { BuscaPlanos } from '@/components/planos/BuscaPlanos';
@@ -36,6 +36,7 @@ import { ComparadorNiveisSelect, ComparadorNiveisMotos } from '@/components/plan
 import { RankingVendedores } from '@/components/planos/RankingVendedores';
 import { RegioesConfig } from '@/components/planos/RegioesConfig';
 import { PlanoLineSection } from '@/components/planos/PlanoLineSection';
+import { CotacaoFormDialog, type CotacaoBaseParaFormulario } from '@/components/cotacoes/CotacaoFormDialog';
 
 const formatCurrency = (value: number) => {
   return new Intl.NumberFormat('pt-BR', {
