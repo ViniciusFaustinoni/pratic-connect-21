@@ -1,64 +1,63 @@
 
 
-# Renomear "Origem do Cadastro" para "Tipo de Entrada" e adicionar tipo Inclusão
+# Botão "Outras Entradas" no módulo de Vendas
 
 ## Resumo
 
-Renomear a seção "Origem do Cadastro" para "Tipo de Entrada" em todo o sistema, adicionar o tipo "Inclusão de Veículo" ao card, e exibir o tipo de entrada de cada veículo na listagem do associado.
+Adicionar um botão "Outras Entradas" ao lado de "Nova Cotação" na página de Cotações. Ao clicar, abre um painel/dropdown com 4 opções (Substituição, Troca Titularidade, Migração, Inclusão), cada uma com busca contextual e redirecionamento ao fluxo correspondente.
 
 ## Alterações
 
-### 1. `src/components/associados/detalhe/OrigemCadastroCard.tsx`
+### 1. Novo componente: `src/components/vendas/OutrasEntradasMenu.tsx`
 
-- Renomear título de "Origem do Cadastro" para "Tipo de Entrada" (linha 492)
-- Adicionar `'inclusao'` ao tipo `TipoEntradaKey`
-- Adicionar label `'Inclusão de Veículo'` em `TIPO_ENTRADA_LABELS`
-- Adicionar badge style e ícone (usar `Plus` ou `CarFront`) para inclusão em `BADGE_STYLES` e `ICONS`
-- Adicionar campos na interface `OrigemData` para inclusão: `{ veiculoPrincipal: { placa, modelo, marca } | null, consultorNome, dataInclusao, carenciaInicio, carenciaFim }`
-- Na query: quando `tipo_entrada === 'inclusao'`, buscar o veículo mais antigo do associado (veículo principal) e dados de carência do contrato
-- Criar `RenderInclusao` que exibe:
-  - Veículo principal (marca modelo — placa)
-  - Consultor responsável
-  - Data da inclusão
-  - Carência do veículo incluído (início e fim, 120 dias)
-- Adicionar case `'inclusao'` no switch de `renderContent()`
-- Mostrar carência também para tipo `inclusao`
+Componente que renderiza um `Popover` (ou `DropdownMenu`) com:
 
-### 2. `src/components/associados/detalhe/AssociadoResumoTab.tsx`
+- **4 cards/opções** com ícone, título e descrição curta:
+  - `ArrowLeftRight` — Substituição de Placa — "O associado trocou de carro e quer passar a proteção para o novo veículo."
+  - `Users` — Troca de Titularidade — "O veículo foi vendido e o novo dono quer manter a proteção."
+  - `FileInput` — Migração — "O cliente está em outra associação e quer vir para a Praticcar sem perder a carência."
+  - `PlusCircle` — Inclusão de Veículo — "O associado já tem um veículo protegido e quer incluir um segundo."
 
-- Alterar comentário de `{/* Origem do Cadastro */}` para `{/* Tipo de Entrada */}`
+- Ao clicar numa opção, exibe um **campo de busca inline** dentro do popover.
 
-### 3. `src/hooks/useAssociados.ts` — `useVeiculosDoAssociado`
+- **Busca contextual**:
+  - Substituição e Troca Titularidade: usa `useAssociadoSearch` (associados ativos) — busca por nome, CPF, telefone. Adicionar busca por placa via query separada em `veiculos`.
+  - Migração: busca em leads (nome/CPF) ou qualquer CPF — criar query simples em `leads` + fallback de CPF livre.
+  - Inclusão: usa `useAssociadoSearch` (associados ativos).
 
-- Adicionar join com `contratos` para trazer `tipo_entrada` de cada veículo:
-  ```
-  contratos!contratos_veiculo_id_fkey(tipo_entrada)
-  ```
-- Expor `tipo_entrada` no objeto retornado de cada veículo
+- **Ao selecionar resultado**:
+  - Substituição → `navigate(/cadastro/substituicao-veiculo/${associadoId})`
+  - Troca Titularidade → abre `TrocaTitularidadeDialog` com o `associadoId` selecionado
+  - Migração → abre `MigracaoDiretaDialog` (já existente, recebe CPF pré-preenchido)
+  - Inclusão → verifica débitos via `useVerificarDebitosAssociado`. Se ok, navega para cotação com flag de inclusão. Se bloqueado, exibe alerta inline.
 
-### 4. `src/pages/cadastro/AssociadoDetalhe.tsx` — Listagem de veículos
+- **Bloqueio de Substituição**: ao selecionar associado para substituição, verificar inadimplência via `useVerificarDebitosAssociado`. Se inadimplente, exibir bloqueio com cálculo de Repasse Maior (buscar config `regra_repasse_maior` das configurações).
 
-- Ao lado do badge de status de cada veículo, exibir um badge secundário com o tipo de entrada: "Nova Adesão", "Inclusão", "Substituição", etc., usando o `tipo_entrada` do contrato vinculado ao veículo
-- Badge discreto (outline, text-xs) para não competir com o status
+### 2. Atualizar `src/pages/vendas/Cotacoes.tsx`
 
-### 5. Constantes compartilhadas
+- Importar `OutrasEntradasMenu`
+- Renderizar ao lado do botão "Nova Cotação", dentro de um `PermissionGate` com permissão `cotacao.canCreate` (mesma do botão Nova Cotação — vendedores CLT, externos e gerência já possuem essa permissão)
+- O botão usa `variant="outline"` para se distinguir visualmente do botão principal
 
-- Criar um mapa `TIPO_ENTRADA_SHORT_LABELS` no `OrigemCadastroCard.tsx` (ou exportar de lá) para uso na listagem:
-  - `adesao` → "Nova Adesão"
-  - `inclusao` → "Inclusão"
-  - `migracao` → "Migração"
-  - `substituicao_placa` → "Substituição"
-  - `troca_titularidade` → "Troca Titular"
-  - `reativacao` → "Reativação"
+### 3. Novo hook: `src/hooks/useBuscaPlaca.ts`
+
+Hook simples que busca em `veiculos` por placa e retorna o `associado_id` vinculado:
+```typescript
+const { data } = await supabase
+  .from('veiculos')
+  .select('id, placa, modelo, marca, associado_id, associados(id, nome, cpf, status)')
+  .ilike('placa', `%${termo}%`)
+  .eq('status', 'ativo')
+  .limit(5);
+```
 
 ## Arquivos afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/associados/detalhe/OrigemCadastroCard.tsx` | Renomear título, adicionar tipo `inclusao` com dados e render |
-| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Atualizar comentário |
-| `src/hooks/useAssociados.ts` | Join com contratos para trazer `tipo_entrada` por veículo |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Badge de tipo de entrada em cada veículo na listagem |
+| `src/components/vendas/OutrasEntradasMenu.tsx` | **Novo** — menu com 4 opções + busca + redirecionamento |
+| `src/hooks/useBuscaPlaca.ts` | **Novo** — busca de veículos por placa |
+| `src/pages/vendas/Cotacoes.tsx` | Adicionar botão "Outras Entradas" ao header |
 
-Nenhuma alteração de schema necessária.
+Nenhuma alteração de schema necessária. Reutiliza hooks existentes (`useAssociadoSearch`, `useVerificarDebitosAssociado`, `useInclusaoBloqueioDebito`) e dialogs existentes (`TrocaTitularidadeDialog`, `MigracaoDiretaDialog`).
 
