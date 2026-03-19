@@ -276,10 +276,16 @@ Deno.serve(async (req) => {
         executado_por: aprovado_por,
         metadata: {
           substituicao_id: substituicao.id,
+          contrato_novo_id: novoContratoId,
+          placa_anterior: substituicao.veiculo_antigo_placa || null,
+          placa_nova: substituicao.veiculo_novo_placa || null,
+          veiculo_antigo_id: substituicao.veiculo_antigo_id,
+          veiculo_novo_id: substituicao.veiculo_novo_id,
           mensalidade_antiga: substituicao.mensalidade_antiga,
           mensalidade_nova: substituicao.mensalidade_nova,
           fipe_antiga: substituicao.veiculo_antigo_fipe,
           fipe_nova: substituicao.veiculo_novo_fipe,
+          rastreador_devolvido: !!substituicao.servico_retirada_id,
         },
       })
       results.push({ step: 11, name: 'Registrar no histórico', success: true })
