@@ -468,8 +468,6 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
       const catLower = (plano.categoria || '').toLowerCase();
       const tipoUsoPlano = (plano.tipo_uso || '').toLowerCase();
 
-  const jaCalculouRef = useRef(false);
-
       const mapping = mappings.find(m => m.plano_id === plano.id);
       if (!mapping?.linha_slug) continue;
 
