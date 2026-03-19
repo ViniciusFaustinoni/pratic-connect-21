@@ -674,6 +674,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setCategoria('nenhuma');
     setResultado(null);
     setSemResultado(false);
+    setFipeBloqueado(false);
     setPlaca('');
     setVeiculoPlaca(null);
     setCombustivelDetectado(null);
