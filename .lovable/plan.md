@@ -1,27 +1,55 @@
 
 
-# Correção: carenciaIsenta no PDF deve respeitar configuração de Regras de Venda
+# Correção: Calculadora de Preço deve aplicar os mesmos filtros do motor de cotação
 
 ## Problema
 
-Em `src/pages/vendas/Cotador.tsx` (linha 484), o campo `carenciaIsenta` é definido como `migracaoData.status === 'aprovada'` — ou seja, sempre `true` quando aprovada, ignorando a configuração `migracao_isentar_carencia` das Regras de Venda.
+A Calculadora (`CalculadoraPreco.tsx`) não aplica dois filtros críticos que o Cotador (`usePlanosCotacao.ts`) aplica:
 
-O PDF (em `useGerarProposta.ts` linha 336) usa esse valor diretamente para decidir se exibe "Dispensada" ou "Período padrão".
+1. **Hard Gate de elegibilidade** — No cotador (linhas 481-484), quando um plano tem regras de elegibilidade (whitelist) configuradas mas não há dados de marca/modelo disponíveis, o plano é **negado**. Na calculadora (linhas 502-516), a elegibilidade só é verificada quando há dados de placa (`veiculoPlaca`). Sem placa, planos com whitelist (como "Especial") aparecem livremente.
 
-## Alteração
+2. **Filtro de categorias aceitas do plano** — No cotador (linhas 444-454), o campo `plano.categoria` é verificado contra a categoria do veículo selecionada. Se o plano define categorias aceitas e a categoria do veículo não está entre elas, o plano é excluído. A calculadora não faz essa verificação.
 
-### `src/pages/vendas/Cotador.tsx`
+## Alterações
 
-1. Importar o hook `useMigracaoConfig` (de `useConteudosSistema`) que já existe e retorna `{ isentar_carencia: boolean, ... }`
-2. No `useMemo` que monta `dadosProposta` (linha 484), mudar de:
-   ```
-   carenciaIsenta: migracaoData.status === 'aprovada'
-   ```
-   para:
-   ```
-   carenciaIsenta: migracaoData.status === 'aprovada' && migracaoConfig?.isentar_carencia === true
-   ```
-3. Adicionar `migracaoConfig` às dependências do `useMemo`
+### `src/components/planos/CalculadoraPreco.tsx`
 
-Apenas 1 arquivo, ~3 linhas alteradas.
+**1. Hard Gate de elegibilidade (após linha ~516):**
+Quando existem regras de elegibilidade para a linha do plano mas não há dados de marca/modelo (sem consulta de placa), aplicar a mesma política do cotador: **negar o plano**. Só permitir passagem quando não há regras configuradas.
+
+```
+// Atual (só verifica com placa):
+if (veiculoPlaca?.marca && veiculoPlaca?.modelo && anoNum) {
+  if (temRegras) { ... if negado → continue }
+}
+
+// Corrigido (hard gate sem placa):
+if (temRegras) {
+  if (veiculoPlaca?.marca && veiculoPlaca?.modelo && anoNum) {
+    // verificar elegibilidade normalmente
+  } else {
+    continue; // hard gate: sem dados → negar
+  }
+}
+```
+
+**2. Filtro de categorias aceitas do plano (após blocked categories, ~linha 520):**
+Adicionar a mesma verificação do cotador para `plano.categoria`:
+
+```typescript
+const categoriasAceitasPlano = (plano.categoria || '')
+  .split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
+if (categoriasAceitasPlano.length > 0 && categoriaAtiva) {
+  if (!categoriasAceitasPlano.includes(categoriaAtiva) 
+      && !categoriasAceitasPlano.includes('todos')) {
+    continue;
+  }
+}
+```
+
+## Arquivos afetados
+
+| Arquivo | Mudança |
+|---------|---------|
+| `src/components/planos/CalculadoraPreco.tsx` | Hard gate + filtro categorias aceitas |
 
