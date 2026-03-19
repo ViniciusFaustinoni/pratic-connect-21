@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Badge } from '@/components/ui/badge';
-import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Fuel, ArrowRight, Shield, CalendarCheck } from 'lucide-react';
+import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Fuel, ArrowRight, Shield, CalendarCheck, AlertTriangle } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { formatarMoeda } from '@/utils/format';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
