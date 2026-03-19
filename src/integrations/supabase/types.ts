@@ -24018,6 +24018,7 @@ export type Database = {
           veiculo_novo_id: string | null
           veiculo_novo_modelo: string | null
           veiculo_novo_placa: string | null
+          verificacoes_resultado: Json | null
         }
         Insert: {
           aprovado_em?: string | null
@@ -24064,6 +24065,7 @@ export type Database = {
           veiculo_novo_id?: string | null
           veiculo_novo_modelo?: string | null
           veiculo_novo_placa?: string | null
+          verificacoes_resultado?: Json | null
         }
         Update: {
           aprovado_em?: string | null
@@ -24110,6 +24112,7 @@ export type Database = {
           veiculo_novo_id?: string | null
           veiculo_novo_modelo?: string | null
           veiculo_novo_placa?: string | null
+          verificacoes_resultado?: Json | null
         }
         Relationships: [
           {
