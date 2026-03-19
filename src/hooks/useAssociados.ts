@@ -314,7 +314,8 @@ export function useVeiculosDoAssociado(associadoId: string | undefined) {
         .from('veiculos')
         .select(`
           *,
-          rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status, ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao)
+          rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status, ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao),
+          contratos!contratos_veiculo_id_fkey(tipo_entrada)
         `)
         .eq('associado_id', associadoId)
         .order('created_at', { ascending: false });
@@ -322,12 +323,19 @@ export function useVeiculosDoAssociado(associadoId: string | undefined) {
       if (error) throw error;
       
       // Transformar array em objeto único (pegar primeiro rastreador de cada veículo)
-      const veiculosTransformados = (data || []).map(v => ({
-        ...v,
-        rastreador: Array.isArray(v.rastreador) && v.rastreador.length > 0 
-          ? v.rastreador[0] 
-          : (v.rastreador || null)
-      }));
+      const veiculosTransformados = (data || []).map(v => {
+        const contratos = (v as any).contratos;
+        const tipoEntrada = Array.isArray(contratos) && contratos.length > 0
+          ? contratos[contratos.length - 1]?.tipo_entrada || null
+          : contratos?.tipo_entrada || null;
+        return {
+          ...v,
+          rastreador: Array.isArray(v.rastreador) && v.rastreador.length > 0 
+            ? v.rastreador[0] 
+            : (v.rastreador || null),
+          tipo_entrada: tipoEntrada,
+        };
+      });
       
       return veiculosTransformados as unknown as VeiculoComRelacoes[];
     },

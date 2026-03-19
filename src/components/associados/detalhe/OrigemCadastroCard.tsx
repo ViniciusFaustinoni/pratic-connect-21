@@ -6,7 +6,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
 import {
   UserPlus, ExternalLink, ShieldCheck, Building2, CalendarCheck,
-  RefreshCw, ArrowRightLeft, Car, Users,
+  RefreshCw, ArrowRightLeft, Car, Users, Plus,
 } from 'lucide-react';
 
 interface Props {
@@ -18,7 +18,7 @@ interface Props {
 // TIPOS
 // ============================================
 
-type TipoEntradaKey = 'adesao' | 'migracao' | 'indicacao' | 'reativacao' | 'troca_titularidade' | 'substituicao_placa';
+type TipoEntradaKey = 'adesao' | 'migracao' | 'indicacao' | 'reativacao' | 'troca_titularidade' | 'substituicao_placa' | 'inclusao';
 
 interface OrigemData {
   tipoEntrada: string;
@@ -65,6 +65,14 @@ interface OrigemData {
     dataSubstituicao: string | null;
     consultorNome: string | null;
   } | null;
+  // Inclusão de veículo
+  inclusao: {
+    veiculoPrincipal: { placa: string; modelo: string; marca: string } | null;
+    consultorNome: string | null;
+    dataInclusao: string | null;
+    carenciaInicio: string | null;
+    carenciaFim: string | null;
+  } | null;
   // Carência
   carencia: {
     isenta: boolean;
@@ -85,7 +93,7 @@ function useOrigemCadastro(associadoId: string) {
       // 1. Contract
       const { data: contrato } = await supabase
         .from('contratos')
-        .select('id, created_at, vendedor_id, tipo_entrada, cotacao_id, carencia_isenta, carencia_motivo_isencao, data_carencia_inicio, data_carencia_fim, origem_troca_titularidade_id, profiles:vendedor_id(nome)')
+        .select('id, created_at, vendedor_id, tipo_entrada, cotacao_id, carencia_isenta, carencia_motivo_isencao, data_carencia_inicio, data_carencia_fim, origem_troca_titularidade_id, veiculo_id, profiles:vendedor_id(nome)')
         .eq('associado_id', associadoId)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -105,6 +113,7 @@ function useOrigemCadastro(associadoId: string) {
       // Determine entry type key
       let tipoEntradaKey: TipoEntradaKey = 'adesao';
       if (tipoEntradaRaw === 'migracao') tipoEntradaKey = 'migracao';
+      else if (tipoEntradaRaw === 'inclusao') tipoEntradaKey = 'inclusao';
       else if (tipoEntradaRaw === 'reativacao') tipoEntradaKey = 'reativacao';
       else if (tipoEntradaRaw === 'troca_titularidade') tipoEntradaKey = 'troca_titularidade';
       else if (tipoEntradaRaw === 'substituicao_placa') tipoEntradaKey = 'substituicao_placa';
@@ -121,6 +130,7 @@ function useOrigemCadastro(associadoId: string) {
         reativacao: null,
         trocaTitularidade: null,
         substituicaoPlaca: null,
+        inclusao: null,
         carencia: {
           isenta: contrato?.carencia_isenta || false,
           motivoIsencao: contrato?.carencia_motivo_isencao || null,
@@ -284,6 +294,28 @@ function useOrigemCadastro(associadoId: string) {
         };
       }
 
+      if (tipoEntradaKey === 'inclusao') {
+        // Buscar veículo principal (mais antigo do associado, diferente do veículo deste contrato)
+        const { data: veiculoMaisAntigo } = await supabase
+          .from('veiculos')
+          .select('id, placa, modelo, marca')
+          .eq('associado_id', associadoId)
+          .neq('id', contrato?.veiculo_id || '')
+          .order('created_at', { ascending: true })
+          .limit(1)
+          .maybeSingle();
+
+        result.inclusao = {
+          veiculoPrincipal: veiculoMaisAntigo
+            ? { placa: veiculoMaisAntigo.placa || '', modelo: veiculoMaisAntigo.modelo || '', marca: veiculoMaisAntigo.marca || '' }
+            : null,
+          consultorNome: consultorNome,
+          dataInclusao: contrato?.created_at || null,
+          carenciaInicio: contrato?.data_carencia_inicio || null,
+          carenciaFim: contrato?.data_carencia_fim || null,
+        };
+      }
+
       return result;
     },
     staleTime: 1000 * 60 * 5,
@@ -301,6 +333,18 @@ const TIPO_ENTRADA_LABELS: Record<TipoEntradaKey, string> = {
   reativacao: 'Reativação',
   troca_titularidade: 'Troca de Titularidade',
   substituicao_placa: 'Substituição de Placa',
+  inclusao: 'Inclusão de Veículo',
+};
+
+/** Labels curtos para uso em listagens */
+export const TIPO_ENTRADA_SHORT_LABELS: Record<string, string> = {
+  adesao: 'Nova Adesão',
+  inclusao: 'Inclusão',
+  migracao: 'Migração',
+  substituicao_placa: 'Substituição',
+  troca_titularidade: 'Troca Titular',
+  reativacao: 'Reativação',
+  indicacao: 'Indicação',
 };
 
 const BADGE_STYLES: Record<TipoEntradaKey, string> = {
@@ -310,6 +354,7 @@ const BADGE_STYLES: Record<TipoEntradaKey, string> = {
   reativacao: 'bg-amber-100 text-amber-800 border-amber-200 dark:bg-amber-900/30 dark:text-amber-400',
   troca_titularidade: 'bg-purple-100 text-purple-800 border-purple-200 dark:bg-purple-900/30 dark:text-purple-400',
   substituicao_placa: 'bg-orange-100 text-orange-800 border-orange-200 dark:bg-orange-900/30 dark:text-orange-400',
+  inclusao: 'bg-cyan-100 text-cyan-800 border-cyan-200 dark:bg-cyan-900/30 dark:text-cyan-400',
 };
 
 const ICONS: Record<TipoEntradaKey, typeof UserPlus> = {
@@ -319,6 +364,7 @@ const ICONS: Record<TipoEntradaKey, typeof UserPlus> = {
   reativacao: RefreshCw,
   troca_titularidade: ArrowRightLeft,
   substituicao_placa: Car,
+  inclusao: Plus,
 };
 
 // ============================================
@@ -457,6 +503,36 @@ function RenderSubstituicaoPlaca({ data }: { data: OrigemData }) {
   );
 }
 
+function RenderInclusao({ data }: { data: OrigemData }) {
+  const inc = data.inclusao;
+  if (!inc) return <RenderNovaAdesao data={data} />;
+
+  return (
+    <>
+      {inc.veiculoPrincipal && (
+        <InfoField
+          label="Veículo principal"
+          value={`${inc.veiculoPrincipal.marca} ${inc.veiculoPrincipal.modelo} — ${inc.veiculoPrincipal.placa}`}
+          icon={<Car className="h-3 w-3" />}
+        />
+      )}
+      {inc.consultorNome && <InfoField label="Consultor responsável" value={inc.consultorNome} />}
+      <InfoField label="Data da inclusão" value={formatDate(inc.dataInclusao)} />
+      {inc.carenciaInicio && inc.carenciaFim && (
+        <div className="col-span-2">
+          <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+            <ShieldCheck className="h-3 w-3" />
+            Carência do veículo incluído (120 dias)
+          </span>
+          <p className="text-xs font-medium mt-0.5">
+            {formatDate(inc.carenciaInicio)} a {formatDate(inc.carenciaFim)}
+          </p>
+        </div>
+      )}
+    </>
+  );
+}
+
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
@@ -480,6 +556,7 @@ export function OrigemCadastroCard({ associadoId, canLinkToAssociado = false }: 
       case 'reativacao': return <RenderReativacao data={data} />;
       case 'troca_titularidade': return <RenderTrocaTitularidade data={data} />;
       case 'substituicao_placa': return <RenderSubstituicaoPlaca data={data} />;
+      case 'inclusao': return <RenderInclusao data={data} />;
       default: return <RenderNovaAdesao data={data} />;
     }
   };
@@ -489,7 +566,7 @@ export function OrigemCadastroCard({ associadoId, canLinkToAssociado = false }: 
       <CardContent className="p-4 space-y-3">
         <div className="flex items-center gap-2 mb-1">
           <Icon className="h-4 w-4 text-primary" />
-          <span className="text-sm font-semibold">Origem do Cadastro</span>
+          <span className="text-sm font-semibold">Tipo de Entrada</span>
         </div>
 
         <div className="grid grid-cols-2 gap-x-4 gap-y-2 text-sm">
@@ -505,7 +582,7 @@ export function OrigemCadastroCard({ associadoId, canLinkToAssociado = false }: 
 
           {renderContent()}
 
-          {/* Carência — show for migration and reativação nova adesão */}
+          {/* Carência — show for migration, inclusão and reativação nova adesão */}
           {(data.tipoEntradaKey === 'migracao' || (data.tipoEntradaKey === 'reativacao' && !data.reativacao?.novaCarencia)) && (
             <div className="col-span-2">
               <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
