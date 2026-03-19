@@ -219,7 +219,7 @@ export default function PlanosBeneficios() {
         </div>
         <div className="flex items-center gap-2">
           <BuscaPlanos onSearch={handleSearch} />
-          <CalculadoraPreco />
+          <CalculadoraPreco onIrParaCotacao={handleIrParaCotacao} />
           <SeFecharHojeButton />
         </div>
       </div>
