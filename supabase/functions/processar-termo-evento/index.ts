@@ -229,6 +229,7 @@ serve(async (req) => {
             cpfCnpj: associado.cpf?.replace(/\D/g, ""),
             email: associado.email,
             phone: associado.telefone,
+            notificationDisabled: true,
           }),
         });
         const customerData = await customerRes.json();
