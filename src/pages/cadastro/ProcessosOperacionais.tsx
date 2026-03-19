@@ -422,7 +422,7 @@ export default function ProcessosOperacionais() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Processos Operacionais</h1>
         <p className="text-muted-foreground">
-          Central de gestão de trocas de titularidade, reativações e substituições de veículo.
+          Central de gestão de trocas de titularidade, reativações, substituições e migrações.
         </p>
       </div>
 
