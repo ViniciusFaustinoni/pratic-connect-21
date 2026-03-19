@@ -140,6 +140,35 @@ export default function PlanosBeneficios() {
     setSearchTerm(term.toLowerCase());
   };
 
+  // Região mapping: calculadora usa slugs curtos, cotador usa slugs longos
+  const REGIAO_CALC_TO_COTADOR: Record<string, string> = {
+    rj: 'rio_de_janeiro',
+    lagos: 'regiao_lagos',
+    sp: 'sao_paulo',
+  };
+
+  const handleIrParaCotacao = (dados: DadosParaCotacao) => {
+    setCotacaoBase({
+      valor_fipe: dados.valorFipe,
+      valor_adicional: null,
+      valor_adesao: null,
+      validade_dias: null,
+      veiculo_marca: dados.marca || null,
+      veiculo_modelo: dados.modelo || null,
+      veiculo_ano: dados.ano || null,
+      veiculo_placa: dados.placa || null,
+      codigo_fipe: null,
+      categoria: null,
+      regiao: REGIAO_CALC_TO_COTADOR[dados.regiao] || dados.regiao,
+      nome_solicitante: null,
+      telefone1_solicitante: null,
+      email_solicitante: null,
+      lead_id: null,
+      plano_id: dados.planoId || null,
+    });
+    setCotacaoDialogOpen(true);
+  };
+
   // Filtrar benefícios adicionais
   const beneficiosFiltrados = beneficiosAdicionais?.filter(b => 
     searchTerm === '' || 
