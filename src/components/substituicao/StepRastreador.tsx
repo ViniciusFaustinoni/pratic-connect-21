@@ -93,7 +93,7 @@ export function StepRastreador({
       const { data: servico, error } = await supabase
         .from('servicos')
         .insert({
-          tipo: 'retirada',
+          tipo: 'vistoria_retirada',
           veiculo_id: veiculoAntigoId,
           associado_id: associadoId,
           status: 'pendente',
