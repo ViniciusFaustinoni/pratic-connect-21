@@ -1,6 +1,6 @@
 import { useState, useMemo, useEffect } from 'react';
 import { format, addDays, differenceInDays } from 'date-fns';
-import { Loader2, Receipt, ArrowLeftRight, Calculator, Shield, CheckCircle2, AlertTriangle, CreditCard, QrCode, FileText } from 'lucide-react';
+import { Loader2, Receipt, ArrowLeftRight, Calculator, Shield, CheckCircle2, AlertTriangle, CreditCard, QrCode, FileText, MapPin } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -9,11 +9,12 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Input } from '@/components/ui/input';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { useAsaas } from '@/hooks/useAsaas';
 import { useCotasPorFipe } from '@/hooks/useFaixasCotas';
 import { useAtualizarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
 import { useBeneficiosSeparados } from '@/hooks/useBeneficiosAdicionaisCotacao';
-import { useTaxaSubstituicao, useCotaParticipacaoDefault, useCotaMinimaDefault, useCarenciaDiasPadrao, useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
+import { useTaxaSubstituicao, useTaxaRepasseVolante, useCotaParticipacaoDefault, useCotaMinimaDefault, useCarenciaDiasPadrao, useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import { useCalcularCotacao } from '@/hooks/useCalcularCotacao';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
@@ -61,6 +62,7 @@ export function StepFinanceiro({
   onIniciarSubstituicao,
 }: StepFinanceiroProps) {
   const [formaPagamento, setFormaPagamento] = useState<'PIX' | 'BOLETO' | 'UNDEFINED'>('PIX');
+  const [tipoAtendimento, setTipoAtendimento] = useState<'base' | 'volante'>('base');
   const [cobrancaGerada, setCobrancaGerada] = useState<Record<string, unknown> | null>(null);
   const [gerandoCobranca, setGerandoCobranca] = useState(false);
   const [confirmado, setConfirmado] = useState(false);
@@ -71,9 +73,13 @@ export function StepFinanceiro({
   const atualizarSubstituicao = useAtualizarSubstituicao();
   const { precosMap, terceirosMap } = useBeneficiosSeparados();
   const { data: taxaSubstituicao = 50 } = useTaxaSubstituicao();
+  const { data: taxaRepasseVolante = 50 } = useTaxaRepasseVolante();
   const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinimaDefault = 1200 } = useCotaMinimaDefault();
   const { data: valorCotaParticipacao = 200 } = useConfiguracaoNumero('atuarial_valor_cota_participacao', 200);
+
+  const valorRepasse = tipoAtendimento === 'volante' ? taxaRepasseVolante : 0;
+  const totalCobranca = taxaSubstituicao + valorRepasse;
 
   // Cotação dinâmica para mensalidade do novo veículo
   const { calcular, resultado: resultadoCotacao } = useCalcularCotacao();
@@ -205,9 +211,9 @@ export function StepFinanceiro({
       const dueDate = format(addDays(new Date(), 3), 'yyyy-MM-dd');
       const result = await criarCobranca.mutateAsync({
         billingType: formaPagamento,
-        value: taxaSubstituicao,
+        value: totalCobranca,
         dueDate,
-        description: `Taxa de substituição de veículo - Placa ${dadosNovoVeiculo.placa || 'N/A'}`,
+        description: `Taxa de substituição de veículo${tipoAtendimento === 'volante' ? ' + repasse volante' : ''} - Placa ${dadosNovoVeiculo.placa || 'N/A'}`,
         tipo: 'taxa_substituicao',
         associado_id: associadoId,
       });
@@ -236,7 +242,7 @@ export function StepFinanceiro({
         status: 'aguardando_aprovacao',
         mensalidade_nova: totalMensalNovo,
         cota_participacao_nova: cotaNovaValor,
-        taxa_substituicao: taxaSubstituicao,
+        taxa_substituicao: totalCobranca,
         valor_prorata: proRata.diferenca,
         diferenca_mensalidade: diferencaMensal,
         beneficios_novos: beneficiosSelecionados,
@@ -247,6 +253,8 @@ export function StepFinanceiro({
         data_fim_carencia: format(dataFimCarencia, 'yyyy-MM-dd'),
         carencia_dias: carenciaDias,
         cobranca_taxa_asaas_id: (cobrancaGerada as Record<string, unknown>)?.cobranca_id || null,
+        tipo_atendimento: tipoAtendimento,
+        valor_repasse: valorRepasse,
       });
 
       toast.success('Substituição enviada para aprovação da diretoria!');
@@ -309,7 +317,7 @@ export function StepFinanceiro({
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xl font-bold text-primary">{formatCurrency(taxaSubstituicao)}</p>
+              <p className="text-2xl font-bold text-primary">{formatCurrency(totalCobranca)}</p>
               <p className="text-xs text-muted-foreground">Taxa administrativa obrigatória (Regulamento 2.1.6)</p>
             </div>
             {cobrancaGerada && (
@@ -319,6 +327,60 @@ export function StepFinanceiro({
               </Badge>
             )}
           </div>
+
+          {/* Tipo de atendimento */}
+          {!cobrancaGerada && (
+            <div className="space-y-3 pt-2 border-t">
+              <Label className="text-sm flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Tipo de atendimento
+              </Label>
+              <RadioGroup
+                value={tipoAtendimento}
+                onValueChange={(v) => setTipoAtendimento(v as 'base' | 'volante')}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+              >
+                <label className={cn(
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  tipoAtendimento === 'base' && "border-primary bg-primary/5"
+                )}>
+                  <RadioGroupItem value="base" />
+                  <div>
+                    <p className="text-sm font-medium">Base Administrativa</p>
+                    <p className="text-xs text-muted-foreground">Sem repasse</p>
+                  </div>
+                </label>
+                <label className={cn(
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  tipoAtendimento === 'volante' && "border-primary bg-primary/5"
+                )}>
+                  <RadioGroupItem value="volante" />
+                  <div>
+                    <p className="text-sm font-medium">Instalação Volante</p>
+                    <p className="text-xs text-muted-foreground">+{formatCurrency(taxaRepasseVolante)} repasse</p>
+                  </div>
+                </label>
+              </RadioGroup>
+
+              {/* Detalhamento do valor */}
+              <div className="rounded-lg bg-muted/50 p-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taxa de substituição</span>
+                  <span>{formatCurrency(taxaSubstituicao)}</span>
+                </div>
+                {tipoAtendimento === 'volante' && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Repasse volante</span>
+                    <span>{formatCurrency(taxaRepasseVolante)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-semibold border-t pt-1">
+                  <span>Total a cobrar</span>
+                  <span className="text-primary">{formatCurrency(totalCobranca)}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {!cobrancaGerada ? (
             <div className="space-y-3">
@@ -354,7 +416,7 @@ export function StepFinanceiro({
               {formaPagamento === 'PIX' && (cobrancaGerada as Record<string, unknown>)?.pix_copia_cola && (
                 <PixQRCode
                   copiaCola={(cobrancaGerada as Record<string, unknown>).pix_copia_cola as string}
-                  valor={taxaSubstituicao}
+                  valor={totalCobranca}
                   descricao="Taxa de substituição de veículo"
                 />
               )}
@@ -555,6 +617,18 @@ export function StepFinanceiro({
               <span>Taxa de substituição</span>
               <div className="flex items-center gap-2">
                 <span className="font-medium">{formatCurrency(taxaSubstituicao)}</span>
+              </div>
+            </div>
+            {valorRepasse > 0 && (
+              <div className="flex justify-between">
+                <span>Repasse volante</span>
+                <span className="font-medium">{formatCurrency(valorRepasse)}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="font-semibold">Total cobrança</span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-primary">{formatCurrency(totalCobranca)}</span>
                 <Badge variant={cobrancaGerada ? 'default' : 'secondary'} className={cn(cobrancaGerada && 'bg-green-600', 'text-xs')}>
                   {cobrancaGerada ? 'Gerada' : 'Pendente'}
                 </Badge>

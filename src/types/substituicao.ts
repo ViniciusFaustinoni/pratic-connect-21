@@ -84,6 +84,10 @@ export interface SubstituicaoVeiculo {
   autentique_documento_id: string | null;
   autentique_status: string | null;
 
+  // Atendimento
+  tipo_atendimento?: 'base' | 'volante';
+  valor_repasse?: number;
+
   // Metadata
   observacoes: string | null;
   criado_por: string | null;
