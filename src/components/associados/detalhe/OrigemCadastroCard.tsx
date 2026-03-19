@@ -33,8 +33,9 @@ function useOrigemCadastro(associadoId: string) {
 
       // If migration, fetch solicitação details
       let migracao = null;
-      if (contrato?.tipo_entrada === 'migracao' && contrato?.cotacao_id) {
-        const { data: solicitacao } = await supabase
+      if (contrato?.tipo_entrada === 'migracao') {
+        // Try by cotacao_id first, then by CPF for direct entries
+        let solicitacaoQuery = supabase
           .from('solicitacoes_migracao')
           .select(`
             id,
@@ -43,12 +44,17 @@ function useOrigemCadastro(associadoId: string) {
             aprovado_por,
             consultor_id,
             status,
+            origem_entrada,
             analista:profiles!solicitacoes_migracao_aprovado_por_fkey(nome),
             consultor:profiles!solicitacoes_migracao_consultor_id_fkey(nome)
           `)
-          .eq('cotacao_id', contrato.cotacao_id)
-          .eq('status', 'aprovada')
-          .maybeSingle();
+          .eq('status', 'aprovada');
+
+        if (contrato.cotacao_id) {
+          solicitacaoQuery = solicitacaoQuery.eq('cotacao_id', contrato.cotacao_id);
+        }
+
+        const { data: solicitacao } = await solicitacaoQuery.maybeSingle();
 
         if (solicitacao) {
           migracao = {
@@ -56,6 +62,7 @@ function useOrigemCadastro(associadoId: string) {
             aprovadoEm: (solicitacao as any).aprovado_em,
             analistaNome: (solicitacao.analista as any)?.nome || null,
             consultorNome: (solicitacao.consultor as any)?.nome || null,
+            origemEntrada: (solicitacao as any).origem_entrada || 'consultor',
           };
         }
       }
@@ -63,7 +70,11 @@ function useOrigemCadastro(associadoId: string) {
       // Determine entry type
       let tipoEntrada = 'Nova adesão';
       if (contrato?.tipo_entrada === 'migracao') {
-        tipoEntrada = migracao ? 'Migração Aprovada' : 'Migração';
+        if (migracao?.origemEntrada === 'direta') {
+          tipoEntrada = 'Migração Direta';
+        } else {
+          tipoEntrada = migracao ? 'Migração Aprovada' : 'Migração';
+        }
       } else if (contrato?.tipo_entrada === 'reativacao') {
         tipoEntrada = 'Reativação';
       } else if (indicacao) {

@@ -152,3 +152,6 @@ verify_jwt = false
 
 [functions.delete-associado]
 verify_jwt = false
+
+[functions.cron-migracao-prazo-vencido]
+verify_jwt = false

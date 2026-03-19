@@ -11,10 +11,11 @@ import { Textarea } from '@/components/ui/textarea';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
-import { Clock, CheckCircle, XCircle, AlertTriangle, FileText, Eye, ShieldAlert } from 'lucide-react';
+import { Clock, CheckCircle, XCircle, AlertTriangle, FileText, Eye, ShieldAlert, Plus } from 'lucide-react';
 import { toast } from 'sonner';
 import { differenceInHours, differenceInMinutes, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { MigracaoDiretaDialog } from '@/components/cadastro/MigracaoDiretaDialog';
 
 function calcPrazo(createdAt: string, prazoHoras: number) {
   const deadline = new Date(new Date(createdAt).getTime() + prazoHoras * 60 * 60 * 1000);
@@ -42,6 +43,7 @@ export default function SolicitacoesMigracao() {
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [motivoReprovacao, setMotivoReprovacao] = useState('');
+  const [showNovaDialog, setShowNovaDialog] = useState(false);
 
   const { data: solicitacoes, isLoading } = useSolicitacoesMigracaoList(filtroStatus);
   const aprovarMutation = useAprovarMigracao();
@@ -76,6 +78,7 @@ export default function SolicitacoesMigracao() {
         solicitacaoId: selected.id,
         consultorUserId: (selected as any).consultor?.user_id || '',
         cotacaoId: (selected as any).cotacao_id || undefined,
+        consultorProfileId: (selected as any).consultor_id || undefined,
       });
       toast.success('Solicitação aprovada com sucesso');
       setShowApproveDialog(false);
@@ -105,24 +108,30 @@ export default function SolicitacoesMigracao() {
   const comprovantes = selected?.documentos?.filter((d: any) => d.tipo === 'comprovante_pagamento') || [];
   const boletos = selected?.documentos?.filter((d: any) => d.tipo === 'boleto_referencia') || [];
 
-  return (
+    return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Solicitações de Migração</h1>
           <p className="text-muted-foreground text-sm">Fila de análise de solicitações de migração</p>
         </div>
-        <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-          <SelectTrigger className="w-48">
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="todos">Todos</SelectItem>
-            <SelectItem value="pendente">Pendentes</SelectItem>
-            <SelectItem value="aprovada">Aprovadas</SelectItem>
-            <SelectItem value="reprovada">Reprovadas</SelectItem>
-          </SelectContent>
-        </Select>
+        <div className="flex items-center gap-3">
+          <Button onClick={() => setShowNovaDialog(true)} size="sm">
+            <Plus className="h-4 w-4 mr-1" />
+            Nova Solicitação
+          </Button>
+          <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+            <SelectTrigger className="w-48">
+              <SelectValue />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="todos">Todos</SelectItem>
+              <SelectItem value="pendente">Pendentes</SelectItem>
+              <SelectItem value="aprovada">Aprovadas</SelectItem>
+              <SelectItem value="reprovada">Reprovadas</SelectItem>
+            </SelectContent>
+          </Select>
+        </div>
       </div>
 
       {isLoading ? (
@@ -138,9 +147,10 @@ export default function SolicitacoesMigracao() {
         <div className="rounded-md border">
           <Table>
             <TableHeader>
-              <TableRow>
+             <TableRow>
                 <TableHead>Nome / CPF</TableHead>
                 <TableHead>Placa</TableHead>
+                <TableHead>Origem</TableHead>
                 <TableHead>Associação Origem</TableHead>
                 <TableHead>Enviado em</TableHead>
                 <TableHead>Prazo</TableHead>
@@ -166,6 +176,11 @@ export default function SolicitacoesMigracao() {
                       <div className="text-xs text-muted-foreground">{s.associado_cpf}</div>
                     </TableCell>
                     <TableCell className="font-mono text-sm">{s.veiculo_placa || '—'}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={`text-xs ${(s as any).origem_entrada === 'direta' ? 'border-amber-400 text-amber-700 bg-amber-50' : ''}`}>
+                        {(s as any).origem_entrada === 'direta' ? 'Direta' : 'Consultor'}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-sm">{s.associacao_origem}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(s.created_at!), "dd/MM/yy HH:mm", { locale: ptBR })}
@@ -351,6 +366,9 @@ export default function SolicitacoesMigracao() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog Nova Solicitação Direta */}
+      <MigracaoDiretaDialog open={showNovaDialog} onOpenChange={setShowNovaDialog} />
     </div>
   );
 }
