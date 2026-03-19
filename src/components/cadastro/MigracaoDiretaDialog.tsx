@@ -342,6 +342,19 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Declaração de cancelamento */}
+              <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
+                <Checkbox
+                  id="declaracao-cancelamento-direta"
+                  checked={declaracaoCancelamento}
+                  onCheckedChange={(checked) => setDeclaracaoCancelamento(checked === true)}
+                  className="mt-0.5"
+                />
+                <label htmlFor="declaracao-cancelamento-direta" className="text-sm leading-relaxed cursor-pointer">
+                  Declaro que o associado está cancelando ou já cancelou o vínculo com a associação anterior antes de ingressar na Praticcar.
+                </label>
+              </div>
             </>
           )}
 
@@ -360,7 +373,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
 
           <Button
             onClick={handleSubmit}
-            disabled={isValidating || criarSolicitacao.isPending || !cpfValido || !nome.trim() || !associacaoOrigem.trim() || comprovantesDone < comprovantesExigidos || !boletoReady || bloqueio?.bloqueado}
+            disabled={isValidating || criarSolicitacao.isPending || !cpfValido || !nome.trim() || !associacaoOrigem.trim() || comprovantesDone < comprovantesExigidos || !boletoReady || bloqueio?.bloqueado || !declaracaoCancelamento}
             className="w-full"
             size="lg"
           >

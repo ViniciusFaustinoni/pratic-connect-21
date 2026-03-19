@@ -347,6 +347,19 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
         </CardContent>
       </Card>
 
+      {/* Declaração de cancelamento */}
+      <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
+        <Checkbox
+          id="declaracao-cancelamento"
+          checked={declaracaoCancelamento}
+          onCheckedChange={(checked) => setDeclaracaoCancelamento(checked === true)}
+          className="mt-0.5"
+        />
+        <label htmlFor="declaracao-cancelamento" className="text-sm leading-relaxed cursor-pointer">
+          Declaro que o associado está cancelando ou já cancelou o vínculo com a associação anterior antes de ingressar na Praticcar.
+        </label>
+      </div>
+
       {/* Validation errors */}
       {validationErrors.length > 0 && (
         <Alert variant="destructive">
@@ -365,7 +378,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
       {/* Submit button */}
       <Button
         onClick={handleValidateAndSubmit}
-        disabled={isValidating || criarSolicitacao.isPending || !associacaoOrigem.trim() || comprovantesDone < comprovantesExigidos || !boletoReady}
+        disabled={isValidating || criarSolicitacao.isPending || !associacaoOrigem.trim() || comprovantesDone < comprovantesExigidos || !boletoReady || !declaracaoCancelamento}
         className="w-full"
         size="lg"
       >
