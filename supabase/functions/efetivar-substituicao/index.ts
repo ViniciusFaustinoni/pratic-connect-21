@@ -70,6 +70,7 @@ Deno.serve(async (req) => {
           data_inativacao: new Date().toISOString(),
           motivo_inativacao: 'substituicao',
           substituicao_id: substituicao.id,
+          substituido_por: substituicao.veiculo_novo_id || null,
         })
         .eq('id', substituicao.veiculo_antigo_id)
 
@@ -103,6 +104,52 @@ Deno.serve(async (req) => {
       } catch (e) {
         results.push({ step: 2, name: 'Ativar veículo novo', success: false, error: (e as Error).message })
         criticalFailure = true
+      }
+    }
+
+    // ─── STEP 2.5: Criar contrato do novo veículo ───
+    let novoContratoId: string | null = null
+    if (!criticalFailure && substituicao.veiculo_novo_id) {
+      try {
+        const dataInicio = new Date()
+        const dataFimCarencia = new Date()
+        dataFimCarencia.setDate(dataFimCarencia.getDate() + carenciaDias)
+        const numeroContrato = `SUB-${Date.now()}`
+
+        const { data: novoContrato, error: contratoErr } = await supabase
+          .from('contratos')
+          .insert({
+            numero: numeroContrato,
+            associado_id: substituicao.associado_id,
+            veiculo_id: substituicao.veiculo_novo_id,
+            plano_id: associado?.plano_id || null,
+            tipo_entrada: 'substituicao_placa',
+            valor_mensal: substituicao.mensalidade_nova || 0,
+            cota_participacao: substituicao.cota_participacao_nova || 0,
+            valor_adesao: substituicao.taxa_substituicao || 0,
+            vendedor_id: substituicao.consultor_id || null,
+            data_inicio: dataInicio.toISOString(),
+            data_carencia_inicio: dataInicio.toISOString(),
+            data_carencia_fim: dataFimCarencia.toISOString(),
+            status: 'ativo',
+          })
+          .select('id')
+          .single()
+
+        if (contratoErr) throw contratoErr
+        novoContratoId = novoContrato.id
+
+        // Vincular contrato à substituição
+        await supabase
+          .from('substituicoes_veiculo')
+          .update({ contrato_novo_id: novoContratoId })
+          .eq('id', substituicao_id)
+
+        results.push({ step: 2.5, name: 'Criar contrato do novo veículo', success: true })
+      } catch (e) {
+        results.push({ step: 2.5, name: 'Criar contrato do novo veículo', success: false, error: (e as Error).message })
+        // Não é critical failure — pode continuar sem contrato
+        console.error('[efetivar-substituicao] Erro ao criar contrato:', (e as Error).message)
       }
     }
 
@@ -166,7 +213,14 @@ Deno.serve(async (req) => {
 
     // ─── STEP 8: Gerar proposta Autentique ───
     try {
-      if (associado) {
+      if (associado && novoContratoId) {
+        await supabase.functions.invoke('autentique-create', {
+          body: {
+            contratoId: novoContratoId,
+          },
+        })
+      } else if (associado) {
+        // Fallback: dados inline caso contrato não tenha sido criado
         await supabase.functions.invoke('autentique-create', {
           body: {
             template: 'CONTRATO_ADESAO_V1',
@@ -220,10 +274,16 @@ Deno.serve(async (req) => {
         executado_por: aprovado_por,
         metadata: {
           substituicao_id: substituicao.id,
+          contrato_novo_id: novoContratoId,
+          placa_anterior: substituicao.veiculo_antigo_placa || null,
+          placa_nova: substituicao.veiculo_novo_placa || null,
+          veiculo_antigo_id: substituicao.veiculo_antigo_id,
+          veiculo_novo_id: substituicao.veiculo_novo_id,
           mensalidade_antiga: substituicao.mensalidade_antiga,
           mensalidade_nova: substituicao.mensalidade_nova,
           fipe_antiga: substituicao.veiculo_antigo_fipe,
           fipe_nova: substituicao.veiculo_novo_fipe,
+          rastreador_devolvido: !!substituicao.servico_retirada_id,
         },
       })
       results.push({ step: 11, name: 'Registrar no histórico', success: true })
@@ -317,7 +377,7 @@ Deno.serve(async (req) => {
             vendedor_id: substituicao.consultor_id,
             tipo_operacao: 'substituicao_placa',
             pontos: pontosConsultor,
-            contrato_id: substituicao.contrato_id,
+            contrato_id: novoContratoId || substituicao.contrato_id,
             referencia_tipo: 'substituicao',
             referencia_id: substituicao.id,
           });
