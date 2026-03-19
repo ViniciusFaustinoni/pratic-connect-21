@@ -1,20 +1,42 @@
 
 
-# Adicionar tooltips explicativos nas abas de Aprovações
+# Bloqueio de inclusão de veículo com débito pendente
 
 ## O que muda
 
-Cada aba ("FIPE Menor", "Alto Valor", "Elegibilidade") receberá um pequeno ícone de ajuda (`HelpCircle`) ao lado do nome, com um tooltip explicando o propósito daquela seção.
+Quando o operador escolhe "Incluir segundo veículo" no dialog de tipo de operação, o sistema verifica débitos em aberto em **todos** os veículos do associado antes de liberar o fluxo. O comportamento (bloqueio ou aviso) é configurável via toggle em Regras de Venda.
 
-## Alteração
+## Alterações
 
-**Arquivo**: `src/pages/vendas/AprovacoesFipeMenor.tsx`
+| Arquivo | Mudança |
+|---------|---------|
+| `src/hooks/useVerificarDebitosAssociado.ts` | **Novo hook**. Recebe `associado_id`, consulta `cobrancas` com status `vencido` ou `aguardando_pagamento` + join com `veiculos` para retornar lista de débitos por veículo (placa, modelo, valor total em aberto) |
+| `src/hooks/useConteudosSistema.ts` | Novo hook `useInclusaoBloqueioDebito()` que lê a chave `inclusao_bloquear_debito_outro_veiculo` da tabela `configuracoes` (default `true`) |
+| `src/components/cotacao/DialogTipoOperacao.tsx` | Ao clicar "Incluir segundo veículo": chamar o hook de débitos. Se houver débito e toggle ativo → bloquear com alert vermelho (veículo + valor pendente), botão desabilitado. Se toggle desativado → exibir aviso amarelo mas permitir prosseguir |
+| `src/components/gestao-comercial/RegrasVendaContent.tsx` | Na aba "Taxas": adicionar nova chave `inclusao_bloquear_debito_outro_veiculo` em `TAXAS_CHAVES` e `TAXAS_DEFAULTS` (default `'true'`). Renderizar Card com Switch + descrição após o Card de Troca de Titularidade |
 
-- Importar `HelpCircle` do lucide-react e `Tooltip`/`TooltipProvider`/`TooltipTrigger`/`TooltipContent` de `@/components/ui/tooltip`
-- Dentro de cada `TabsTrigger`, adicionar um `<Tooltip>` com `<HelpCircle className="h-3 w-3" />` e o texto explicativo:
-  - **FIPE Menor**: "Solicitações para enquadrar veículos em faixa FIPE inferior à original, reduzindo o valor mensal"
-  - **Alto Valor**: "Veículos com FIPE acima do limite permitido pelo plano que precisam de autorização especial"
-  - **Elegibilidade**: "Veículos fora da whitelist de aceitação do plano que necessitam aprovação manual para inclusão"
+## Detalhes técnicos
 
-Nenhum outro arquivo é alterado.
+### Hook `useVerificarDebitosAssociado`
+```typescript
+// Consulta cobranças vencidas/abertas agrupadas por veículo
+const { data } = await supabase
+  .from('cobrancas')
+  .select('valor, veiculo_id, veiculos(placa, modelo, marca)')
+  .eq('associado_id', associadoId)
+  .in('status', ['vencido', 'aguardando_pagamento']);
+```
+Retorna `{ temDebito: boolean, debitosPorVeiculo: Array<{ placa, modelo, total }> }`.
+
+### Fluxo no DialogTipoOperacao
+1. Usuário clica "Incluir segundo veículo"
+2. Sistema consulta débitos do `associado_id` do veículo ativo encontrado
+3. Se `temDebito && bloqueioAtivo` → mostra alert de bloqueio, não fecha o dialog
+4. Se `temDebito && !bloqueioAtivo` → mostra aviso, permite prosseguir
+5. Se `!temDebito` → `onInclusao()` normalmente
+
+### Toggle em Regras de Venda
+Chave: `inclusao_bloquear_debito_outro_veiculo`
+Label: "Bloquear inclusão de veículo com débito em outro veículo do mesmo associado"
+Descrição: "Quando ativado, impede a inclusão de novos veículos se houver débito pendente em qualquer veículo vinculado ao CPF. Quando desativado, exibe apenas um aviso."
 
