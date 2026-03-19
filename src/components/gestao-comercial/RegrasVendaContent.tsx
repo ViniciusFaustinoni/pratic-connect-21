@@ -99,6 +99,7 @@ const TAXAS_CHAVES = [
   'multa_rastreador',
   'troca_titularidade_dispensa_vistoria_ativa',
   'troca_titularidade_prazo_dispensa_vistoria',
+  'inclusao_bloquear_debito_outro_veiculo',
 ] as const;
 
 type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
