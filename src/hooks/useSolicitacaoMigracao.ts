@@ -82,6 +82,7 @@ interface CriarSolicitacaoDiretaData {
   associacao_origem: string;
   prazo_resposta_horas: number;
   consultor_id?: string;
+  declaracao_cancelamento_concorrente: boolean;
   documentos: Array<{
     tipo: 'comprovante_pagamento' | 'boleto_referencia';
     arquivo_url: string;
