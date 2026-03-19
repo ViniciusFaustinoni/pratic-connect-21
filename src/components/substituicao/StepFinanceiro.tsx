@@ -62,6 +62,7 @@ export function StepFinanceiro({
   onIniciarSubstituicao,
 }: StepFinanceiroProps) {
   const [formaPagamento, setFormaPagamento] = useState<'PIX' | 'BOLETO' | 'UNDEFINED'>('PIX');
+  const [tipoAtendimento, setTipoAtendimento] = useState<'base' | 'volante'>('base');
   const [cobrancaGerada, setCobrancaGerada] = useState<Record<string, unknown> | null>(null);
   const [gerandoCobranca, setGerandoCobranca] = useState(false);
   const [confirmado, setConfirmado] = useState(false);

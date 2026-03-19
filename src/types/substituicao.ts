@@ -85,8 +85,8 @@ export interface SubstituicaoVeiculo {
   autentique_status: string | null;
 
   // Atendimento
-  tipo_atendimento: 'base' | 'volante';
-  valor_repasse: number;
+  tipo_atendimento?: 'base' | 'volante';
+  valor_repasse?: number;
 
   // Metadata
   observacoes: string | null;
