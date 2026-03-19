@@ -263,6 +263,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
         veiculo_placa: placa,
         associacao_origem: associacaoOrigem.trim(),
         prazo_resposta_horas: prazoHoras,
+        declaracao_cancelamento_concorrente: declaracaoCancelamento,
         documentos: allDocs,
       });
 
