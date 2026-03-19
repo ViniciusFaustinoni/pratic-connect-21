@@ -211,9 +211,9 @@ export function StepFinanceiro({
       const dueDate = format(addDays(new Date(), 3), 'yyyy-MM-dd');
       const result = await criarCobranca.mutateAsync({
         billingType: formaPagamento,
-        value: taxaSubstituicao,
+        value: totalCobranca,
         dueDate,
-        description: `Taxa de substituição de veículo - Placa ${dadosNovoVeiculo.placa || 'N/A'}`,
+        description: `Taxa de substituição de veículo${tipoAtendimento === 'volante' ? ' + repasse volante' : ''} - Placa ${dadosNovoVeiculo.placa || 'N/A'}`,
         tipo: 'taxa_substituicao',
         associado_id: associadoId,
       });
