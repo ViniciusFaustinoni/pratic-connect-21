@@ -1215,18 +1215,23 @@ serve(async (req) => {
             console.log(`[SGA Sync] Código existente recuperado: ${codigoAssociadoHinova}`);
           } else {
             // ⛔ CPF duplicado mas NENHUMA estratégia encontrou código → falha permanente
-            console.log('[SGA Sync] ⛔ CPF duplicado sem recovery possível - marcando como falha permanente');
+            // Detectar deadlock específico: CPF existe mas busca retorna 406 (indisponível/deletado no Hinova)
+            const isDeadlock = codigosInvalidados.size > 0;
+            const deadlockMsg = isDeadlock
+              ? `DEADLOCK HINOVA: CPF existe no Hinova mas está indisponível/deletado (código ${[...codigosInvalidados].join(',')} invalidado). Requer reativação manual no painel Hinova.`
+              : 'CPF duplicado no Hinova mas nenhuma estratégia de recovery encontrou código válido. Requer intervenção manual.';
+            console.log(`[SGA Sync] ⛔ ${deadlockMsg}`);
             await supabase
               .from('sga_sync_queue')
               .update({ 
                 status: 'falha_permanente', 
-                erro_ultimo: 'CPF duplicado no Hinova mas nenhuma estratégia de recovery encontrou código válido. Requer intervenção manual.',
+                erro_ultimo: deadlockMsg,
                 ultima_tentativa_em: new Date().toISOString()
               })
               .eq('veiculo_id', _vid)
               .eq('associado_id', _aid);
-            await logSync(_vid, _aid, 'cpf_duplicado_sem_recovery', 'error', null, null, 
-              'CPF duplicado no Hinova sem recovery. Marcado como falha permanente.');
+            await logSync(_vid, _aid, 'cpf_duplicado_sem_recovery', 'error', 
+              { codigos_invalidados: [...codigosInvalidados], is_deadlock: isDeadlock }, null, deadlockMsg);
             await supabase.from('veiculos').update({ status_sga: 'erro_sincronizacao' }).eq('id', _vid);
             return;
           }
