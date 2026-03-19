@@ -20,6 +20,7 @@ import { useTarefaAtual } from '@/hooks/useTarefaAtual';
 import { toast } from 'sonner';
 import { PWAInstallPromptProfissional } from '@/components/pwa/PWAInstallPromptProfissional';
 import { PushNotificationBanner } from './PushNotificationBanner';
+import { useAppResume } from '@/hooks/useAppResume';
 import logoFullDark from '@/assets/logos/logo-full-dark.png';
 
 const NAV_ITEMS = [
@@ -36,6 +37,7 @@ export function InstaladorLayout() {
   const [isOnline, setIsOnline] = useState(navigator.onLine);
   const [isRetrying, setIsRetrying] = useState(false);
 
+  useAppResume();
   const { isBase: isVistoriadorBase } = useAlocacaoDiaria();
   const { geoState } = useIniciarServico();
   const { data: tarefaAtual } = useTarefaAtual();
