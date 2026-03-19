@@ -176,6 +176,11 @@ export default function SolicitacoesMigracao() {
                       <div className="text-xs text-muted-foreground">{s.associado_cpf}</div>
                     </TableCell>
                     <TableCell className="font-mono text-sm">{s.veiculo_placa || '—'}</TableCell>
+                    <TableCell>
+                      <Badge variant="outline" className={`text-xs ${(s as any).origem_entrada === 'direta' ? 'border-amber-400 text-amber-700 bg-amber-50' : ''}`}>
+                        {(s as any).origem_entrada === 'direta' ? 'Direta' : 'Consultor'}
+                      </Badge>
+                    </TableCell>
                     <TableCell className="text-sm">{s.associacao_origem}</TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(s.created_at!), "dd/MM/yy HH:mm", { locale: ptBR })}
