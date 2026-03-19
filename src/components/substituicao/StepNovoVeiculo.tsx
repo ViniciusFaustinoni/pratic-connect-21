@@ -105,7 +105,7 @@ export function StepNovoVeiculo({
   };
 
   const fipeConsultada = !!dados.valor_fipe && dados.valor_fipe > 0;
-  const camposObrigatorios = dados.placa && dados.marca && dados.modelo && dados.cor && dados.combustivel && fipeConsultada && !(dados.blindado && limites?.blindadoPolicy === 'bloquear');
+  const camposObrigatorios = dados.placa && dados.marca && dados.modelo && dados.cor && dados.combustivel && fipeConsultada && !dados.blindado;
 
   // Criar veículo no banco e avançar
   const handleCriarVeiculoEAvancar = useCallback(async () => {
