@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2, ShieldOff, Shield } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2, ShieldOff, Shield, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PainelAprovacoesElegibilidade } from '@/components/aprovacoes/PainelAprovacoesElegibilidade';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
