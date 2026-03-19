@@ -6,7 +6,7 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Badge } from '@/components/ui/badge';
-import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Fuel, ArrowRight, Shield, CalendarCheck } from 'lucide-react';
+import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Fuel, ArrowRight, Shield, CalendarCheck, AlertTriangle } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { formatarMoeda } from '@/utils/format';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
@@ -18,6 +18,19 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { maskPlaca } from '@/lib/validations';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
+
+const CATEGORIAS_DESAGIO_FALLBACK = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
+const LINHAS_COM_DESAGIO_FALLBACK = ['select', 'lancamento'];
+
+const CATEGORIAS_VEICULO_CALC = [
+  { value: 'nenhuma', label: 'Nenhuma' },
+  { value: 'leilao', label: 'Leilão' },
+  { value: 'ex_taxi', label: 'Ex-táxi' },
+  { value: 'taxi', label: 'Táxi' },
+  { value: 'chassi_remarcado', label: 'Chassi Remarcado' },
+  { value: 'placa_vermelha', label: 'Placa Vermelha' },
+  { value: 'ressarcimento_integral', label: 'Ressarcimento Integral' },
+] as const;
 
 interface ResultadoPlano {
   key: string;
@@ -33,6 +46,7 @@ interface ResultadoPlano {
   cotaMinima: number;
   coberturaFipe: number;
   coberturas: string[];
+  precoDesagioAplicado?: boolean;
 }
 
 interface ResultadoCalc {
@@ -42,6 +56,7 @@ interface ResultadoCalc {
   regiaoLabel: string;
   tipoUsoLabel: string;
   tipoVeiculoLabel: string;
+  categoriaLabel: string | null;
 }
 
 interface VeiculoPlaca {
@@ -140,7 +155,7 @@ function usePlanosComPrecoMap() {
       const [planosRes, mapRes, plRes] = await Promise.all([
         supabase
           .from('planos')
-          .select(`id, nome, slug, adicional_mensal, desconto_percentual, visivel_gestao, ativo, categoria, fipe_minima, fipe_maxima, tipo_uso, ano_minimo, ano_minimo_veiculo, ano_fabricacao_minimo, valor_adesao, cota_participacao, cota_minima, cobertura_fipe, planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name))`)
+          .select(`id, nome, slug, codigo, adicional_mensal, desconto_percentual, visivel_gestao, ativo, categoria, fipe_minima, fipe_maxima, tipo_uso, ano_minimo, ano_minimo_veiculo, ano_fabricacao_minimo, valor_adesao, cota_participacao, cota_minima, cota_desagio, cota_minima_desagio, cobertura_fipe, linha, planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name))`)
           .eq('ativo', true)
           .eq('visivel_gestao', true)
           .order('ordem', { ascending: true }),
@@ -188,6 +203,60 @@ function useCotaDefaults() {
   return { cotaDefault, cotaMinimaDefault };
 }
 
+// Deságio config queries (reuse same queryKeys as cotador)
+function useDesagioConfig() {
+  const { data: categoriasDesagio = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'categorias_desagio'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'categorias_desagio').maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; } catch { return CATEGORIAS_DESAGIO_FALLBACK; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+  const { data: linhasComDesagio = LINHAS_COM_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'linhas_com_desagio'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'linhas_com_desagio').maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; } catch { return LINHAS_COM_DESAGIO_FALLBACK; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+  const { data: categoriasQueSobrepoeApp = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'categorias_que_sobrepoe_app'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'categorias_que_sobrepoe_app').maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; } catch { return CATEGORIAS_DESAGIO_FALLBACK; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+  const { data: cotaDesagioDefault = 8 } = useQuery({
+    queryKey: ['configuracoes', 'cota_desagio_default'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_desagio_default').maybeSingle();
+      return parseFloat(data?.valor || '8') || 8;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+  const { data: cotaMinimaDesagioDefault = 2000 } = useQuery({
+    queryKey: ['configuracoes', 'cota_minima_desagio_default'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_minima_desagio_default').maybeSingle();
+      return parseFloat(data?.valor || '2000') || 2000;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+  const { data: cotasCategoriaData } = useQuery({
+    queryKey: ['planos_cotas_categoria'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('planos_cotas_categoria').select('plano_id, categoria_veiculo, cota_percentual, cota_minima_valor');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+  return { categoriasDesagio, linhasComDesagio, categoriasQueSobrepoeApp, cotaDesagioDefault, cotaMinimaDesagioDefault, cotasCategoriaData };
+}
+
 interface CalculadoraPrecoProps {
   onIrParaCotacao?: (dados: DadosParaCotacao) => void;
 }
@@ -200,6 +269,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const [regiao, setRegiao] = useState<string>('rj');
   const [combustivelManual, setCombustivelManual] = useState<'gasolina' | 'diesel'>('gasolina');
   const [anoVeiculo, setAnoVeiculo] = useState<string>('');
+  const [categoria, setCategoria] = useState<string>('nenhuma');
   const [resultado, setResultado] = useState<ResultadoCalc | null>(null);
   const [semResultado, setSemResultado] = useState(false);
 
@@ -214,6 +284,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const { data: planosData } = usePlanosComPrecoMap();
   const configApp = useConfigAdicionalAppCalc(tabelas);
   const { cotaDefault, cotaMinimaDefault } = useCotaDefaults();
+  const desagioConfig = useDesagioConfig();
 
   // Vencimento
   const [opcao1, opcao2] = calcularOpcoesVencimento(new Date().getDate());
@@ -313,6 +384,11 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
 
     const resultadosPlano: ResultadoPlano[] = [];
 
+    const { categoriasDesagio, linhasComDesagio, categoriasQueSobrepoeApp, cotaDesagioDefault, cotaMinimaDesagioDefault, cotasCategoriaData } = desagioConfig;
+    const categoriaAtiva = tipoVeiculo === 'carro' && categoria !== 'nenhuma' ? categoria : null;
+    const isDesagio = !!categoriaAtiva && categoriasDesagio.includes(categoriaAtiva);
+    const isAppComDesagio = tipoUso === 'aplicativo' && isDesagio && categoriasQueSobrepoeApp.includes(categoriaAtiva || '');
+
     for (const plano of planos) {
       const catLower = (plano.categoria || '').toLowerCase();
       const tipoUsoPlano = (plano.tipo_uso || '').toLowerCase();
@@ -322,8 +398,19 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
       if (!mapping?.linha_slug) continue;
 
       const linhaSlug = mapping.linha_slug;
+      const plSlug = linhaSlug.toLowerCase();
 
       if (!linhaMatchesTipo(linhaSlug)) continue;
+
+      // Filtro tipo_uso: APP + deságio permite planos 'passeio' da linha Select
+      if (tipoUso === 'aplicativo' && tipoUsoPlano !== 'aplicativo' && tipoUsoPlano !== 'ambos') {
+        const isLinhaSelect = plSlug.startsWith('select');
+        if (!(isAppComDesagio && tipoUsoPlano === 'passeio' && isLinhaSelect)) {
+          continue;
+        }
+      }
+      if (tipoUso !== 'aplicativo' && tipoUsoPlano === 'aplicativo') continue;
+
       if (tipoUso === 'aplicativo' && !plMaps.supportsApp[linhaSlug]) continue;
       if (plano.fipe_minima && valor < Number(plano.fipe_minima)) continue;
       if (plano.fipe_maxima && valor > Number(plano.fipe_maxima)) continue;
@@ -337,8 +424,14 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         if (anoNum < anoAtual - 1) continue;
       }
 
+      // Blocked categories (from product_line)
       const blocked = plMaps.blockedCats[linhaSlug] || [];
-      if (blocked.length > 0 && catLower && blocked.some(b => b.toLowerCase() === catLower)) continue;
+      if (blocked.length > 0 && categoriaAtiva && blocked.includes(categoriaAtiva)) continue;
+
+      // Select Exclusive: ocultar quando APP + deságio combinam
+      if (isAppComDesagio && (plSlug === 'select-exclusive' || (plano as any).codigo?.toLowerCase().includes('exclusive'))) {
+        continue;
+      }
 
       const isMotoLine = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
       const tipoUsoPricing = isMotoLine
@@ -362,8 +455,19 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
       if (!faixa || Number(faixa.valor_mensal) <= 0) continue;
 
       let valorMensal = Number(faixa.valor_mensal);
+      const valorDesagioFaixa = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
+      let precoDesagioAplicado = false;
 
-      if (!isMotoLine && tipoUso === 'aplicativo') {
+      // Aplicar deságio: usar valor_desagio se a categoria é deságio e a linha suporta
+      const temColunaAppDedicada = configApp.linhasComColunaApp.includes(linhaSlug);
+      if (isDesagio && valorDesagioFaixa != null && linhasComDesagio.includes(linhaSlug) && !temColunaAppDedicada) {
+        valorMensal = valorDesagioFaixa;
+        precoDesagioAplicado = true;
+      }
+
+      // Adicional APP: NÃO aplicar se a categoria anula (deságio sobrepõe APP)
+      const categoriaAnulaApp = isDesagio && categoriasQueSobrepoeApp.includes(categoriaAtiva || '');
+      if (!isMotoLine && tipoUso === 'aplicativo' && !categoriaAnulaApp) {
         valorMensal = resolverPrecoApp(linhaSlug, regiao, tipoUso, valorMensal, adicionalApp, configApp);
       }
 
@@ -375,10 +479,29 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         valorMensal *= (1 - descontoPerc / 100);
       }
 
-      // Extract extra info
+      // Cota — cascata: planos_cotas_categoria → plano fields → defaults
+      const cotaBase = plano.cota_participacao != null ? Number(plano.cota_participacao) : cotaDefault;
+      const cotaMinBase = plano.cota_minima != null ? Number(plano.cota_minima) : cotaMinimaDefault;
+      let cotaPercentual = cotaBase;
+      let cotaMinima = cotaMinBase;
+
+      let cotaCategoriaLookup = categoriaAtiva || 'passeio';
+      if (tipoUso === 'aplicativo') cotaCategoriaLookup = 'aplicativo';
+      if (isDesagio) cotaCategoriaLookup = 'desagio';
+
+      const cotaOverride = cotasCategoriaData?.find(
+        cc => cc.plano_id === plano.id && cc.categoria_veiculo === cotaCategoriaLookup
+      );
+
+      if (cotaOverride) {
+        cotaPercentual = cotaOverride.cota_percentual != null ? Number(cotaOverride.cota_percentual) : cotaBase;
+        cotaMinima = cotaOverride.cota_minima_valor != null ? Number(cotaOverride.cota_minima_valor) : cotaMinBase;
+      } else if (tipoUso === 'aplicativo' || isDesagio) {
+        cotaPercentual = (plano as any).cota_desagio != null ? Number((plano as any).cota_desagio) : cotaDesagioDefault;
+        cotaMinima = (plano as any).cota_minima_desagio != null ? Number((plano as any).cota_minima_desagio) : cotaMinimaDesagioDefault;
+      }
+
       const valorAdesao = Number(plano.valor_adesao || 0);
-      const cotaPercentual = plano.cota_participacao != null ? Number(plano.cota_participacao) : cotaDefault;
-      const cotaMinima = plano.cota_minima != null ? Number(plano.cota_minima) : cotaMinimaDefault;
       const coberturaFipe = Number(plano.cobertura_fipe || 100);
 
       // Extract coberturas from planos_beneficios
@@ -387,13 +510,13 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
         .map((pb: any) => pb.custom_text || pb.benefits?.name || '')
         .filter(Boolean)
-        .slice(0, 6); // Show max 6 for brevity
+        .slice(0, 6);
 
       resultadosPlano.push({
         key: plano.id,
         planoNome: plano.nome,
         valorMensal: Math.round(valorMensal * 100) / 100,
-        valorDesagio: faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null,
+        valorDesagio: valorDesagioFaixa,
         adicionalMensal,
         descontoPercentual: descontoPerc,
         sortPriority: plMaps.sortPriority[linhaSlug] ?? 99,
@@ -402,6 +525,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         cotaMinima,
         coberturaFipe,
         coberturas,
+        precoDesagioAplicado,
       });
     }
 
@@ -424,6 +548,11 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
       valor <= Number(t.fipe_max)
     ) : undefined;
 
+    const categoriaAtivaSel = tipoVeiculo === 'carro' && categoria !== 'nenhuma' ? categoria : null;
+    const catLabel = categoriaAtivaSel
+      ? CATEGORIAS_VEICULO_CALC.find(c => c.value === categoriaAtivaSel)?.label || null
+      : null;
+
     setResultado({
       planos: resultadosPlano,
       faixaFipe: primeiraFaixa
@@ -433,6 +562,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
       regiaoLabel: REGIOES.find(r => r.value === regiao)?.label || regiao,
       tipoUsoLabel: tipoUso === 'aplicativo' ? 'Aplicativo / Trabalho' : 'Particular',
       tipoVeiculoLabel: TIPO_VEICULO_LABELS[tipoVeiculo],
+      categoriaLabel: catLabel,
     });
     setSemResultado(false);
   };
@@ -450,6 +580,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setRegiao('rj');
     setCombustivelManual('gasolina');
     setAnoVeiculo('');
+    setCategoria('nenhuma');
     setResultado(null);
     setSemResultado(false);
     setPlaca('');
@@ -645,6 +776,25 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
             </ToggleGroup>
           </div>
 
+          {/* Categoria do Veículo (só carros) */}
+          {tipoVeiculo === 'carro' && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Categoria <span className="text-xs text-muted-foreground">(opcional)</span>
+              </Label>
+              <Select value={categoria} onValueChange={setCategoria}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Nenhuma" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIAS_VEICULO_CALC.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {/* Botões */}
           <div className="flex gap-2">
             <Button onClick={calcular} className="flex-1">
@@ -677,6 +827,12 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                   <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                   {resultado.tipoUsoLabel}
                 </span>
+                {resultado.categoriaLabel && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="h-3 w-3" />
+                    {resultado.categoriaLabel}
+                  </span>
+                )}
               </div>
 
               {/* Vencimento rápido */}
@@ -696,8 +852,13 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                     <div className="flex items-center justify-between p-3">
                       <div>
                         <span className="text-sm font-semibold">{plano.planoNome}</span>
-                        {(plano.adicionalMensal > 0 || plano.descontoPercentual > 0) && (
+                        {(plano.adicionalMensal > 0 || plano.descontoPercentual > 0 || plano.precoDesagioAplicado) && (
                           <div className="flex gap-1 mt-0.5">
+                            {plano.precoDesagioAplicado && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 border-amber-500/40 text-amber-600 dark:text-amber-400">
+                                Deságio
+                              </Badge>
+                            )}
                             {plano.adicionalMensal > 0 && (
                               <Badge variant="outline" className="text-[10px] px-1 py-0">
                                 +{formatarMoeda(plano.adicionalMensal)}
@@ -752,15 +913,6 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                             </span>
                           ))}
                         </div>
-                      </div>
-                    )}
-
-                    {/* Deságio */}
-                    {plano.valorDesagio != null && (
-                      <div className="px-3 pb-2">
-                        <p className="text-xs text-muted-foreground">
-                          Deságio: {formatarMoeda(plano.valorDesagio)}
-                        </p>
                       </div>
                     )}
 
