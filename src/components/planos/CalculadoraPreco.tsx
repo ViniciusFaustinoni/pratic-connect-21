@@ -56,6 +56,7 @@ interface ResultadoCalc {
   regiaoLabel: string;
   tipoUsoLabel: string;
   tipoVeiculoLabel: string;
+  categoriaLabel: string | null;
 }
 
 interface VeiculoPlaca {
