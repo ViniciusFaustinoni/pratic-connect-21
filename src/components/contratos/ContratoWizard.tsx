@@ -1376,11 +1376,14 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                 Voltar
               </Button>
 
-              {step < 3 ? (
+              {step < totalSteps ? (
                 <Button 
                   type="button" 
                   onClick={handleNext}
-                  disabled={step === 2 && !hasMinimumDocs}
+                  disabled={
+                    (step === STEP_DOCUMENTOS && !hasMinimumDocs) ||
+                    (step === STEP_MIGRACAO && isMigracao && !migracaoAprovada)
+                  }
                 >
                   Próximo
                   <ChevronRight className="w-4 h-4 ml-2" />
