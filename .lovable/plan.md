@@ -1,45 +1,53 @@
 
 
-# Corrigir fluxo de Migração no "Outras Entradas"
+# Unificar "Nova Cotação" e "Outras Entradas" em um único ponto de entrada
 
 ## Resumo
 
-Substituir a busca por leads no fluxo de Migração por um campo de entrada de CPF com validação automática (vínculo ativo e débitos), e ao confirmar, abrir o `MigracaoDiretaDialog` com CPF pré-preenchido/bloqueado e consultor logado auto-selecionado.
+Remover o botão "Outras Entradas" e transformar o botão "Nova Cotação" no único ponto de entrada. Ao clicar, abre um Dialog com 5 opções (Nova Cotação + as 4 existentes). Toda a lógica já implementada no `OutrasEntradasMenu` é preservada.
 
 ## Alterações
 
-### 1. `src/components/vendas/OutrasEntradasMenu.tsx`
+### 1. `src/components/vendas/OutrasEntradasMenu.tsx` → Refatorar para Dialog
 
-- Remover a query de busca de leads (`leadResults`) e toda a UI de resultados de leads
-- Quando `selectedTipo === 'migracao'`, renderizar no lugar do campo de busca genérico:
-  - Título: "CPF do cliente"
-  - Instrução: "Digite o CPF do cliente para verificar se ele pode ser migrado."
-  - Input com máscara de CPF (usar `maskCPF` de validations)
-  - Ao atingir 11 dígitos (14 chars com máscara), disparar verificação automática
-- Verificação (queries inline com `useQuery`):
-  - Buscar em `associados` por CPF: se encontrar com `status = 'ativo'` → alerta "Cliente já é associado ativo. Não é possível iniciar migração." + botão desabilitado
-  - Se encontrar com débitos (usar `useVerificarDebitosAssociado` pelo id encontrado) → alerta "Há débitos pendentes que precisam ser quitados antes de qualquer nova filiação."
-  - Se não encontrar ou encontrar apenas cancelado sem débitos → badge verde "Cliente elegível para migração" + botão "Iniciar Migração" habilitado
-- Ao clicar "Iniciar Migração": fechar popover, abrir `MigracaoDiretaDialog` passando `cpfPreenchido` e `consultorIdPreenchido`
-- Remover `useBuscaPlaca` e `useAssociadoSearch` do fluxo de migração (já está assim)
+- Renomear componente para `NovaEntradaDialog` (ou manter o arquivo, apenas mudar a interface)
+- Trocar de `Popover` para `Dialog` (mais espaço, melhor UX para o fluxo multi-step)
+- Receber props `open` e `onOpenChange` (controle externo pelo Cotacoes.tsx)
+- Receber callback `onNovaCotacao` para quando o usuário escolher "Nova Cotação" (dispara `setShowCotacaoForm(true)` no pai)
+- Adicionar **Opção 1 — Nova Cotação** como primeiro item na lista, com destaque visual:
+  - Ícone: `Plus`
+  - Descrição: "Cliente novo ou lead que quer se associar."
+  - Estilo: borda colorida ou fundo primary/10 para destacar como opção principal
+- Ao clicar "Nova Cotação": fecha o dialog e chama `onNovaCotacao()`
+- As 4 opções restantes permanecem com a mesma lógica, busca, validações e redirecionamentos já implementados
+- Manter o botão "Voltar" (ArrowLeft) para retornar à tela de seleção a partir de qualquer sub-fluxo
 
-### 2. `src/components/cadastro/MigracaoDiretaDialog.tsx`
+### 2. `src/pages/vendas/Cotacoes.tsx`
 
-- Adicionar props opcionais à interface `Props`:
-  - `cpfInicial?: string` — pré-preenche e bloqueia o campo CPF (`disabled` ou `readOnly`)
-  - `consultorIdInicial?: string` — pré-seleciona o consultor no dropdown
-- No `useEffect` de abertura ou no `useState` inicial, setar `cpf` e `consultorId` a partir das props quando fornecidos
-- Campo CPF: se `cpfInicial` fornecido, renderizar com `readOnly` e estilo visual de campo bloqueado
-
-### 3. Limpeza
-
-- Remover `handleSelectLead` do OutrasEntradasMenu
-- Remover referências a `leadResults`, `loadingLeads` e a query de leads
+- Remover a importação e uso de `<OutrasEntradasMenu />`
+- Remover o `PermissionGate` que envolvia o `OutrasEntradasMenu`
+- O botão "Nova Cotação" passa a abrir o dialog unificado em vez de `setShowCotacaoForm(true)` diretamente:
+  ```tsx
+  const [showNovaEntrada, setShowNovaEntrada] = useState(false);
+  
+  <Button onClick={() => setShowNovaEntrada(true)}>
+    <Plus /> Nova Cotação
+  </Button>
+  
+  <NovaEntradaDialog
+    open={showNovaEntrada}
+    onOpenChange={setShowNovaEntrada}
+    onNovaCotacao={() => setShowCotacaoForm(true)}
+  />
+  ```
+- Manter o `PermissionGate` com `cotacao.canCreate` apenas no botão
 
 ## Arquivos afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/vendas/OutrasEntradasMenu.tsx` | Substituir busca de leads por input CPF + verificação |
-| `src/components/cadastro/MigracaoDiretaDialog.tsx` | Adicionar props `cpfInicial` e `consultorIdInicial` |
+| `src/components/vendas/OutrasEntradasMenu.tsx` | Refatorar de Popover para Dialog; adicionar opção "Nova Cotação"; receber props externas |
+| `src/pages/vendas/Cotacoes.tsx` | Remover botão separado; conectar "Nova Cotação" ao dialog unificado |
+
+Nenhuma lógica de negócio é alterada — apenas a estrutura visual e o ponto de entrada mudam.
 
