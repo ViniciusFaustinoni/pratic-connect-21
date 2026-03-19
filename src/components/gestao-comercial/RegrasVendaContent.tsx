@@ -41,6 +41,7 @@ interface MigracaoConfig {
   migracao_prazo_resposta_horas: number;
   migracao_canal_oficial: string;
   migracao_isentar_carencia: boolean;
+  migracao_prazo_max_comprovante_meses: number;
 }
 
 const PONTUACAO_DEFAULTS: PontuacaoConfig = {
