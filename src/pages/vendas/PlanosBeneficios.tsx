@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -6,9 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
 import {
-  AlertTriangle, MapPin, Settings, Loader2, Info
+  AlertTriangle, MapPin, Settings, Loader2, Info, CalendarCheck
 } from 'lucide-react';
+import { calcularOpcoesVencimento } from '@/utils/vencimento';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCotaDesagioDefault, useCotaMinimaDesagioDefault } from '@/hooks/useConteudosSistema';
 import { formatarMoeda } from '@/utils/format';
@@ -54,6 +59,50 @@ function PlanosSkeleton() {
         </section>
       ))}
     </div>
+  );
+}
+
+function SeFecharHojeButton() {
+  const hoje = new Date();
+  const diaHoje = hoje.getDate();
+  const [opcao1, opcao2] = calcularOpcoesVencimento(diaHoje);
+  const dataFormatada = format(hoje, "dd 'de' MMMM 'de' yyyy", { locale: ptBR });
+
+  return (
+    <Popover>
+      <PopoverTrigger asChild>
+        <Button variant="outline" size="sm" className="gap-2">
+          <CalendarCheck className="h-4 w-4" />
+          <span className="hidden sm:inline">Se fechar hoje?</span>
+        </Button>
+      </PopoverTrigger>
+      <PopoverContent className="w-80" align="end">
+        <div className="space-y-3">
+          <div className="flex items-center gap-2">
+            <CalendarCheck className="h-5 w-5 text-primary" />
+            <h4 className="font-semibold text-sm">Se fechar hoje?</h4>
+          </div>
+          <p className="text-xs text-muted-foreground">
+            {dataFormatada}
+          </p>
+          <div className="rounded-lg border bg-muted/50 p-3 space-y-2">
+            <p className="text-sm font-medium">Opções de vencimento:</p>
+            <div className="flex gap-2">
+              <Badge variant="secondary" className="text-base px-4 py-1.5 font-bold">
+                Dia {opcao1}
+              </Badge>
+              <span className="text-muted-foreground self-center text-sm">ou</span>
+              <Badge variant="secondary" className="text-base px-4 py-1.5 font-bold">
+                Dia {opcao2}
+              </Badge>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground leading-relaxed">
+            Se o associado fechar hoje, o vencimento da mensalidade será no <strong>dia {opcao1}</strong> ou <strong>dia {opcao2}</strong>.
+          </p>
+        </div>
+      </PopoverContent>
+    </Popover>
   );
 }
 
@@ -139,6 +188,7 @@ export default function PlanosBeneficios() {
         <div className="flex items-center gap-2">
           <BuscaPlanos onSearch={handleSearch} />
           <CalculadoraPreco />
+          <SeFecharHojeButton />
         </div>
       </div>
 
