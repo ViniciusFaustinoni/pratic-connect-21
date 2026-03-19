@@ -191,6 +191,14 @@ const formatPlacaForDisplay = (placa: string | null) => {
 // COMPONENTE PRINCIPAL
 // ============================================
 export default function LeadEditar() {
+  return (
+    <LeadsDevGuard>
+      <LeadEditarContent />
+    </LeadsDevGuard>
+  );
+}
+
+function LeadEditarContent() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   
