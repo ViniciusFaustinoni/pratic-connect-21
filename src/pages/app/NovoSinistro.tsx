@@ -192,6 +192,13 @@ export default function NovoSinistro() {
   const tiposDisponiveis = TIPOS_SINISTRO.filter(tipo => 
     tiposSinistroPermitidos.includes(tipo.id)
   );
+
+  // Auto-select first vehicle for coverage check
+  useEffect(() => {
+    if (veiculos?.length && !veiculoSelecionadoId) {
+      setVeiculoSelecionadoId(veiculos[0].id);
+    }
+  }, [veiculos, veiculoSelecionadoId]);
   
   // Wizard state
   const [etapa, setEtapa] = useState(1);
