@@ -1,4 +1,4 @@
-import { useState, useCallback } from 'react';
+import { useState, useCallback, useEffect } from 'react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -32,6 +32,8 @@ interface DocEntry {
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  cpfInicial?: string;
+  consultorIdInicial?: string;
 }
 
 function useConsultoresDisponiveis() {
@@ -66,12 +68,12 @@ function formatCPF(value: string) {
   return `${digits.slice(0, 3)}.${digits.slice(3, 6)}.${digits.slice(6, 9)}-${digits.slice(9)}`;
 }
 
-export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
-  const [cpf, setCpf] = useState('');
+export function MigracaoDiretaDialog({ open, onOpenChange, cpfInicial, consultorIdInicial }: Props) {
+  const [cpf, setCpf] = useState(cpfInicial || '');
   const [nome, setNome] = useState('');
   const [placa, setPlaca] = useState('');
   const [associacaoOrigem, setAssociacaoOrigem] = useState('');
-  const [consultorId, setConsultorId] = useState<string>('sem_consultor');
+  const [consultorId, setConsultorId] = useState<string>(consultorIdInicial || 'sem_consultor');
   const [comprovantes, setComprovantes] = useState<DocEntry[]>([]);
   const [boleto, setBoleto] = useState<DocEntry | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
@@ -91,16 +93,24 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
   const cpfValido = cpfLimpo.length === 11;
 
   const resetForm = () => {
-    setCpf('');
+    setCpf(cpfInicial || '');
     setNome('');
     setPlaca('');
     setAssociacaoOrigem('');
-    setConsultorId('sem_consultor');
+    setConsultorId(consultorIdInicial || 'sem_consultor');
     setComprovantes([]);
     setBoleto(null);
     setValidationErrors([]);
     setDeclaracaoCancelamento(false);
   };
+
+  // Sync props when dialog opens
+  useEffect(() => {
+    if (open) {
+      if (cpfInicial) setCpf(cpfInicial);
+      if (consultorIdInicial) setConsultorId(consultorIdInicial);
+    }
+  }, [open, cpfInicial, consultorIdInicial]);
 
   const uploadFile = async (file: File, tipo: string): Promise<string> => {
     const timestamp = Date.now();
@@ -278,6 +288,8 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
                 value={cpf}
                 onChange={e => setCpf(formatCPF(e.target.value))}
                 maxLength={14}
+                readOnly={!!cpfInicial}
+                className={cpfInicial ? 'bg-muted cursor-not-allowed' : ''}
               />
             </div>
             <div className="space-y-1.5">
