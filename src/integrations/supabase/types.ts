@@ -23775,10 +23775,11 @@ export type Database = {
           associado_cpf: string
           associado_nome: string | null
           consultor_id: string | null
-          cotacao_id: string
+          cotacao_id: string | null
           created_at: string | null
           id: string
           motivo_reprovacao: string | null
+          origem_entrada: string
           prazo_resposta_horas: number
           status: string
           updated_at: string | null
@@ -23791,10 +23792,11 @@ export type Database = {
           associado_cpf: string
           associado_nome?: string | null
           consultor_id?: string | null
-          cotacao_id: string
+          cotacao_id?: string | null
           created_at?: string | null
           id?: string
           motivo_reprovacao?: string | null
+          origem_entrada?: string
           prazo_resposta_horas?: number
           status?: string
           updated_at?: string | null
@@ -23807,10 +23809,11 @@ export type Database = {
           associado_cpf?: string
           associado_nome?: string | null
           consultor_id?: string | null
-          cotacao_id?: string
+          cotacao_id?: string | null
           created_at?: string | null
           id?: string
           motivo_reprovacao?: string | null
+          origem_entrada?: string
           prazo_resposta_horas?: number
           status?: string
           updated_at?: string | null
