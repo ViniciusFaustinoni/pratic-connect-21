@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { ArrowRightLeft, RotateCcw, RefreshCw, Eye, User, Calendar, Search, ArrowRight, AlertTriangle } from 'lucide-react';
+import { ArrowRightLeft, RotateCcw, RefreshCw, Eye, User, Calendar, Search, ArrowRight, AlertTriangle, FileInput } from 'lucide-react';
+import { MigracoesTab } from '@/pages/cadastro/SolicitacoesMigracao';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
