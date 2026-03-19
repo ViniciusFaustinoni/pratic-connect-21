@@ -136,7 +136,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
         const url = await uploadFile(entry.file, 'comprovante');
         setComprovantes(prev => prev.map(c => c.id === entry.id ? { ...c, status: 'validating', arquivo_url: url } : c));
         const ocr = await validateWithOCR(url);
-        setComprovantes(prev => prev.map(c => c.id === entry.id ? { ...c, status: 'done', cpf_detectado: ocr.cpf, placa_detectada: ocr.placa, legivel: ocr.legivel } : c));
+        setComprovantes(prev => prev.map(c => c.id === entry.id ? { ...c, status: 'done', cpf_detectado: ocr.cpf, placa_detectada: ocr.placa, data_documento: ocr.data_documento, legivel: ocr.legivel } : c));
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erro desconhecido';
         setComprovantes(prev => prev.map(c => c.id === entry.id ? { ...c, status: 'error', erro: msg } : c));
