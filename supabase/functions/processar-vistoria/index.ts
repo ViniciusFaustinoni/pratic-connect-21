@@ -256,6 +256,52 @@ serve(async (req) => {
         }
       }
 
+      // === VERIFICAR SE É VISTORIA DE TROCA DE TITULARIDADE (Cenário B) ===
+      try {
+        const { data: servicoTroca } = await supabase
+          .from("servicos")
+          .select("id, solicitacao_id")
+          .eq("veiculo_id", vistoria.veiculo_id)
+          .eq("origem", "troca_titularidade")
+          .eq("status", "pendente")
+          .not("solicitacao_id", "is", null)
+          .order("created_at", { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (servicoTroca?.solicitacao_id) {
+          console.log(`[processar-vistoria] Troca de titularidade detectada! Serviço: ${servicoTroca.id}, Solicitação: ${servicoTroca.solicitacao_id}`);
+
+          // Marcar serviço como concluído
+          await supabase
+            .from("servicos")
+            .update({ status: "concluido", concluida_em: new Date().toISOString() })
+            .eq("id", servicoTroca.id);
+
+          // Chamar efetivação da troca (Cenário B — pós-vistoria)
+          const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+          const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
+
+          const efetResp = await fetch(`${supabaseUrl}/functions/v1/efetivar-troca-titularidade`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${serviceKey}`,
+            },
+            body: JSON.stringify({ solicitacao_id: servicoTroca.solicitacao_id, cenario_override: "B" }),
+          });
+          const efetData = await efetResp.json();
+
+          if (efetData.success) {
+            console.log(`[processar-vistoria] Efetivação Cenário B concluída: contrato ${efetData.novo_contrato_numero}`);
+          } else {
+            console.error("[processar-vistoria] Erro na efetivação Cenário B:", efetData.error);
+          }
+        }
+      } catch (trocaErr) {
+        console.error("[processar-vistoria] Erro ao verificar troca de titularidade (não bloqueante):", trocaErr);
+      }
+
     } else {
       // === VISTORIA REPROVADA ===
       console.log('[processar-vistoria] Processando reprovação...');
