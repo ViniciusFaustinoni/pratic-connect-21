@@ -202,6 +202,60 @@ function useCotaDefaults() {
   return { cotaDefault, cotaMinimaDefault };
 }
 
+// Deságio config queries (reuse same queryKeys as cotador)
+function useDesagioConfig() {
+  const { data: categoriasDesagio = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'categorias_desagio'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'categorias_desagio').maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; } catch { return CATEGORIAS_DESAGIO_FALLBACK; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+  const { data: linhasComDesagio = LINHAS_COM_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'linhas_com_desagio'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'linhas_com_desagio').maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; } catch { return LINHAS_COM_DESAGIO_FALLBACK; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+  const { data: categoriasQueSobrepoeApp = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
+    queryKey: ['configuracoes', 'categorias_que_sobrepoe_app'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'categorias_que_sobrepoe_app').maybeSingle();
+      try { return JSON.parse(data?.valor || '[]') as string[]; } catch { return CATEGORIAS_DESAGIO_FALLBACK; }
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+  const { data: cotaDesagioDefault = 8 } = useQuery({
+    queryKey: ['configuracoes', 'cota_desagio_default'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_desagio_default').maybeSingle();
+      return parseFloat(data?.valor || '8') || 8;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+  const { data: cotaMinimaDesagioDefault = 2000 } = useQuery({
+    queryKey: ['configuracoes', 'cota_minima_desagio_default'],
+    queryFn: async () => {
+      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_minima_desagio_default').maybeSingle();
+      return parseFloat(data?.valor || '2000') || 2000;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+  const { data: cotasCategoriaData } = useQuery({
+    queryKey: ['planos_cotas_categoria'],
+    queryFn: async () => {
+      const { data, error } = await supabase.from('planos_cotas_categoria').select('plano_id, categoria_veiculo, cota_percentual, cota_minima_valor');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+  return { categoriasDesagio, linhasComDesagio, categoriasQueSobrepoeApp, cotaDesagioDefault, cotaMinimaDesagioDefault, cotasCategoriaData };
+}
+
 interface CalculadoraPrecoProps {
   onIrParaCotacao?: (dados: DadosParaCotacao) => void;
 }
@@ -214,6 +268,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const [regiao, setRegiao] = useState<string>('rj');
   const [combustivelManual, setCombustivelManual] = useState<'gasolina' | 'diesel'>('gasolina');
   const [anoVeiculo, setAnoVeiculo] = useState<string>('');
+  const [categoria, setCategoria] = useState<string>('nenhuma');
   const [resultado, setResultado] = useState<ResultadoCalc | null>(null);
   const [semResultado, setSemResultado] = useState(false);
 
