@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
+import { precisaRastreador } from '@/hooks/useConfigRastreador';
 
 type Contrato = Database['public']['Tables']['contratos']['Row'];
 type Associado = Database['public']['Tables']['associados']['Row'];
