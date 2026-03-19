@@ -120,6 +120,10 @@ export default function AprovacoesFipeMenor() {
             <Shield className="h-4 w-4" />
             Alto Valor
           </TabsTrigger>
+          <TabsTrigger value="elegibilidade" className="gap-1.5">
+            <ShieldCheck className="h-4 w-4" />
+            Elegibilidade
+          </TabsTrigger>
         </TabsList>
 
         {/* ===== FIPE MENOR ===== */}
