@@ -146,6 +146,16 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
       'regras.repasse_valor_reduzido': formatCurrency(Number(dados.regrasVenda.repasse_maior_valor_reduzido)),
       'regras.repasse_corte_boletos': dados.regrasVenda.repasse_maior_corte_boletos,
     } : {}),
+
+    // Migração (quando aplicável)
+    ...(dados.migracao ? {
+      'migracao.aprovada': dados.migracao.aprovada ? 'Sim' : 'Não',
+      'migracao.associacao_origem': dados.migracao.associacao_origem || '—',
+      'migracao.data_aprovacao': dados.migracao.data_aprovacao ? formatDate(dados.migracao.data_aprovacao) : '—',
+      'migracao.carencia_status': dados.migracao.carencia_isenta
+        ? 'Dispensada — migração aprovada'
+        : 'Período padrão',
+    } : {}),
   };
 }
 
