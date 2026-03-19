@@ -1566,7 +1566,8 @@ export function useAprovarProposta() {
         // Criar INSTALAÇÃO APENAS se:
         // - NÃO existir instalação concluída para este contrato
         // - NÃO existir instalação ativa para este veículo (evita duplicatas)
-        if (!jaTemInstalacaoConcluida && !jaTemInstalacaoAtiva) {
+        // - Veículo PRECISA de rastreador (FIPE >= limite)
+        if (!jaTemInstalacaoConcluida && !jaTemInstalacaoAtiva && veiculoPrecisaRastreador) {
           const associadoData = contrato.associado as any;
           
           // Buscar preferências de agendamento preenchidas pelo cliente na cotação
