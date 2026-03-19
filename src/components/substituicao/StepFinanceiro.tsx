@@ -242,7 +242,7 @@ export function StepFinanceiro({
         status: 'aguardando_aprovacao',
         mensalidade_nova: totalMensalNovo,
         cota_participacao_nova: cotaNovaValor,
-        taxa_substituicao: taxaSubstituicao,
+        taxa_substituicao: totalCobranca,
         valor_prorata: proRata.diferenca,
         diferenca_mensalidade: diferencaMensal,
         beneficios_novos: beneficiosSelecionados,
@@ -253,6 +253,8 @@ export function StepFinanceiro({
         data_fim_carencia: format(dataFimCarencia, 'yyyy-MM-dd'),
         carencia_dias: carenciaDias,
         cobranca_taxa_asaas_id: (cobrancaGerada as Record<string, unknown>)?.cobranca_id || null,
+        tipo_atendimento: tipoAtendimento,
+        valor_repasse: valorRepasse,
       });
 
       toast.success('Substituição enviada para aprovação da diretoria!');
