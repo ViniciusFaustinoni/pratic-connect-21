@@ -51,7 +51,7 @@ export function useAprovarMigracao() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ solicitacaoId, consultorUserId, cotacaoId }: { solicitacaoId: string; consultorUserId: string; cotacaoId?: string }) => {
+    mutationFn: async ({ solicitacaoId, consultorUserId, cotacaoId, consultorProfileId }: { solicitacaoId: string; consultorUserId: string; cotacaoId?: string; consultorProfileId?: string }) => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) throw new Error('Não autenticado');
 
