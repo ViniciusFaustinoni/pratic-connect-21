@@ -249,6 +249,27 @@ serve(async (req) => {
       }
     }
 
+    // ============= BUSCAR DADOS DE SUBSTITUIÇÃO (quando aplicável) =============
+    if (contrato.tipo_entrada === 'substituicao_placa' && contrato.associado_id && contrato.veiculo_id) {
+      const { data: subst } = await supabase
+        .from('substituicoes_veiculo')
+        .select('veiculo_antigo_placa, veiculo_antigo_modelo, veiculo_antigo_fipe')
+        .eq('associado_id', contrato.associado_id)
+        .eq('veiculo_novo_id', contrato.veiculo_id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (subst) {
+        templateData.substituicao = {
+          placa_anterior: subst.veiculo_antigo_placa || '',
+          modelo_anterior: subst.veiculo_antigo_modelo || '',
+          fipe_anterior: subst.veiculo_antigo_fipe || 0,
+        };
+        console.log('[autentique-create-by-token] Dados de substituição encontrados:', subst.veiculo_antigo_placa);
+      }
+    }
+
     // ============= BUSCAR TEMPLATE DO BANCO =============
     const { data: templatesDB, error: templateError } = await supabase
       .from("documento_templates")
