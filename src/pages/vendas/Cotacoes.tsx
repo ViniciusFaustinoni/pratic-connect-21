@@ -602,15 +602,20 @@ export default function Cotacoes() {
             )}
           </p>
         </div>
-        <PermissionGate permission="cotacao.canCreate">
-          <Button 
-            className="gap-2 shadow-md hover:shadow-lg transition-all" 
-            onClick={() => setShowCotacaoForm(true)}
-          >
-            <Plus className="h-4 w-4" />
-            Nova Cotação
-          </Button>
-        </PermissionGate>
+        <div className="flex items-center gap-2">
+          <PermissionGate permission="cotacao.canCreate">
+            <OutrasEntradasMenu />
+          </PermissionGate>
+          <PermissionGate permission="cotacao.canCreate">
+            <Button 
+              className="gap-2 shadow-md hover:shadow-lg transition-all" 
+              onClick={() => setShowCotacaoForm(true)}
+            >
+              <Plus className="h-4 w-4" />
+              Nova Cotação
+            </Button>
+          </PermissionGate>
+        </div>
       </div>
 
       {/* Stats Bar - Pills flutuantes */}
