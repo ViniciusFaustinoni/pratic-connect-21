@@ -34,6 +34,7 @@ export default function AppPlano() {
   const navigate = useNavigate();
   const { data: associado, isLoading } = useMyAssociado();
   const { telefone0800, telefone0800Link } = useConfig0800();
+  const { beneficiosAdicionaisSuspensos } = useMinhasCoberturas();
 
   const plano = associado?.planos;
   const contrato = associado?.contratos?.find(c => c.status === 'ativo') || associado?.contratos?.[0];
