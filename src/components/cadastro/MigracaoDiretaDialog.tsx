@@ -305,7 +305,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
           {bloqueio?.bloqueado && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>{bloqueio.tipo === 'vinculo_ativo' ? 'Vínculo Ativo' : 'Débitos Pendentes'}</AlertTitle>
+              <AlertTitle>Vínculo Ativo</AlertTitle>
               <AlertDescription>{bloqueio.mensagem}</AlertDescription>
             </Alert>
           )}
