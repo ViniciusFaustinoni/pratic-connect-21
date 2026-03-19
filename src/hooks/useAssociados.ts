@@ -314,7 +314,8 @@ export function useVeiculosDoAssociado(associadoId: string | undefined) {
         .from('veiculos')
         .select(`
           *,
-          rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status, ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao)
+          rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, numero_serie, imei, plataforma, plataforma_device_id, status, ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao),
+          contratos!contratos_veiculo_id_fkey(tipo_entrada)
         `)
         .eq('associado_id', associadoId)
         .order('created_at', { ascending: false });
