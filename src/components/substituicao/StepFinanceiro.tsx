@@ -617,6 +617,18 @@ export function StepFinanceiro({
               <span>Taxa de substituição</span>
               <div className="flex items-center gap-2">
                 <span className="font-medium">{formatCurrency(taxaSubstituicao)}</span>
+              </div>
+            </div>
+            {valorRepasse > 0 && (
+              <div className="flex justify-between">
+                <span>Repasse volante</span>
+                <span className="font-medium">{formatCurrency(valorRepasse)}</span>
+              </div>
+            )}
+            <div className="flex justify-between">
+              <span className="font-semibold">Total cobrança</span>
+              <div className="flex items-center gap-2">
+                <span className="font-semibold text-primary">{formatCurrency(totalCobranca)}</span>
                 <Badge variant={cobrancaGerada ? 'default' : 'secondary'} className={cn(cobrancaGerada && 'bg-green-600', 'text-xs')}>
                   {cobrancaGerada ? 'Gerada' : 'Pendente'}
                 </Badge>
