@@ -1,46 +1,56 @@
 
 
-# Fix: Capturar consultor_id no wizard de substituição
+# Fix: Gravar tipo de entrada e rastreabilidade na substituição
 
 ## Problema
-O campo `consultor_id` nunca é preenchido ao criar a substituição. A Edge Function `efetivar-substituicao` já verifica `substituicao.consultor_id` para creditar pontos (Step 12), mas ele é sempre `null`.
+Quando a substituição é efetivada, o veículo novo não recebe um contrato com `tipo_entrada: 'substituicao_placa'`. A ficha do associado e a proposta não conseguem identificar que o veículo entrou por substituição. O veículo antigo também não registra por qual veículo foi substituído.
 
-## Solução
+## Análise
 
-### 1. `src/hooks/useSubstituicaoVeiculo.ts` — `useIniciarSubstituicao`
-- Adicionar parâmetro opcional `consultor_id` em `IniciarSubstituicaoParams`
-- No `mutationFn`, incluir `consultor_id` no insert
+- O campo `tipo_entrada` vive na tabela `contratos`, não em `veiculos`
+- A coluna `substituido_por` já existe na tabela `veiculos` mas nunca é preenchida
+- O Step 8 do `efetivar-substituicao` chama `autentique-create` com dados inline em vez de um `contratoId` — ignorando o fluxo de template que resolve `{{operacao.substituicao_placa}}`
+- A `OrigemCadastroCard` já trata `substituicao_placa` como tipo de entrada (linha 119) e exibe dados de substituição (linhas 305-346) — só falta o contrato existir
 
-### 2. `src/pages/cadastro/SubstituicaoVeiculoPage.tsx`
-- Importar `useAuth` para obter `profile` e `perfis` (ou `isVendedor()`)
-- Derivar `consultorId`: se o usuário logado tem role comercial (`vendedor_clt`, `vendedor_externo`, `supervisor_vendas`), usar `profile.id`; senão, `null`
-- Passar `consultor_id` para `handleIniciarSubstituicao`
-- Exibir badge informativo no header do wizard: "Consultor: Nome do Vendedor" ou "Sem consultor vinculado" (read-only, sem edição)
+## Correções — 1 arquivo
 
-### 3. Arquivos inalterados
-- `efetivar-substituicao/index.ts` — já lê `substituicao.consultor_id` e pontua corretamente
-- `pontuacao-helper.ts` — já funciona
-- `SubstituicaoStepper.tsx` — sem mudança
+### `supabase/functions/efetivar-substituicao/index.ts`
+
+**Step 1 — Inativar veículo antigo**: adicionar `substituido_por: substituicao.veiculo_novo_id` no update, para que o veículo antigo registre a placa do novo.
+
+**Novo Step (entre 2 e 3) — Criar contrato do novo veículo**: inserir um registro em `contratos` com:
+- `tipo_entrada: 'substituicao_placa'`
+- `associado_id`, `veiculo_id: veiculo_novo_id`
+- `plano_id` do associado
+- `valor_mensal: mensalidade_nova`, `cota_participacao: cota_participacao_nova`
+- `valor_adesao: taxa_substituicao`
+- `vendedor_id: consultor_id`
+- `data_carencia_inicio/fim` calculadas
+- `status: 'ativo'`
+
+Salvar o ID gerado e fazer update em `substituicoes_veiculo.contrato_novo_id`.
+
+**Step 8 — Autentique**: mudar a chamada para usar `{ contratoId: novoContratoId }` em vez de dados inline. Isso faz o template resolver `{{operacao.substituicao_placa}}` como `(X)` automaticamente, via `template-utils.ts` (linha 126).
+
+**Step 11 — Histórico**: adicionar `placa_anterior` e `rastreador_devolvido` no `metadata` para que `OrigemCadastroCard` encontre esses dados no fallback de histórico (linhas 323-338).
+
+## Impacto downstream (zero mudanças necessárias)
+
+- `OrigemCadastroCard` já busca contrato com `tipo_entrada === 'substituicao_placa'` e exibe os dados ✓
+- `template-utils.ts` já resolve `operacao.substituicao_placa` via `dados.contrato.tipo_entrada` ✓  
+- `AssociadoDetalhe` já exibe badge `tipo_entrada` por veículo via join com `contratos` ✓
+- `useAssociadoSituacao` já lê carência do contrato ✓
 
 ## Detalhes técnicos
 
-**Detecção do consultor (Page):**
-```typescript
-const { profile, isVendedor } = useAuth();
-const consultorId = isVendedor() ? profile?.id : null;
-const consultorNome = isVendedor() ? profile?.nome : null;
+```text
+efetivar-substituicao/index.ts
+├── Step 1: + substituido_por: substituicao.veiculo_novo_id
+├── Step 2: (sem mudança)
+├── NEW Step 2.5: INSERT contratos → contrato_novo_id
+├── Step 8: autentique-create({ contratoId }) em vez de dados inline
+└── Step 11: + placa_anterior, rastreador_devolvido no metadata
 ```
 
-**Passagem ao hook:**
-```typescript
-const result = await iniciarSubstituicao.mutateAsync({
-  ...params,
-  consultor_id: consultorId,
-});
-```
-
-**Badge no header (read-only):**
-Abaixo da linha "Associado: X — Veículo atual: Y", exibir um badge:
-- Verde com nome se consultor detectado
-- Cinza "Sem consultor vinculado" se perfil administrativo
+O `plano_id` para o novo contrato será buscado do associado (campo `plano_id` da tabela `associados`). O número do contrato segue o padrão existente com prefixo `SUB-` + timestamp.
 
