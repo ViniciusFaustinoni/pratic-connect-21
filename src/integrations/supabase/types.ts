@@ -27784,6 +27784,7 @@ export type Database = {
         | "reagendada"
         | "cancelada"
         | "nao_compareceu"
+        | "imprevisto_pendente"
       status_sinistro:
         | "em_analise"
         | "aprovado"
@@ -28202,6 +28203,7 @@ export const Constants = {
         "reagendada",
         "cancelada",
         "nao_compareceu",
+        "imprevisto_pendente",
       ],
       status_sinistro: [
         "em_analise",
