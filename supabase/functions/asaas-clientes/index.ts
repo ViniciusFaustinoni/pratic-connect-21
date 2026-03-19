@@ -263,6 +263,7 @@ serve(async (req) => {
             province: associado.bairro,
             postalCode: associado.cep?.replace(/\D/g, ''),
             externalReference: associado_id,
+            notificationDisabled: true,
           });
 
           await supabase
