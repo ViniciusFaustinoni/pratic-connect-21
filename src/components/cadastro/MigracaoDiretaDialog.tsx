@@ -75,6 +75,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
   const [boleto, setBoleto] = useState<DocEntry | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isValidating, setIsValidating] = useState(false);
+  const [declaracaoCancelamento, setDeclaracaoCancelamento] = useState(false);
 
   const { data: migracaoConfig, isLoading: loadingConfig } = useMigracaoConfig();
   const { data: bloqueio, isLoading: loadingBloqueio } = useVerificarBloqueiosMigracao(cpf);
