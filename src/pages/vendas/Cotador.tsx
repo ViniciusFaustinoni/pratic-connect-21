@@ -481,13 +481,13 @@ export default function CotadorPage() {
       proposta.migracao = {
         aprovada: migracaoData.status === 'aprovada',
         associacaoOrigem: migracaoData.associacao_origem || '',
-        carenciaIsenta: migracaoData.status === 'aprovada',
+        carenciaIsenta: migracaoData.status === 'aprovada' && migracaoConfig?.isentar_carencia === true,
         dataAprovacao: migracaoData.aprovado_em || '',
       };
     }
 
     return proposta;
-  }, [cotacaoCalculada, planoFinalSelecionado, valorFipe, leadSelecionado, nomeAssociado, marca, modelo, ano, veiculoEncontrado, placaBusca, cor, valorExtra, cotacaoSalva, valorAdesaoCustom, migracaoData]);
+  }, [cotacaoCalculada, planoFinalSelecionado, valorFipe, leadSelecionado, nomeAssociado, marca, modelo, ano, veiculoEncontrado, placaBusca, cor, valorExtra, cotacaoSalva, valorAdesaoCustom, migracaoData, migracaoConfig]);
 
   // Verificar se pode calcular
   const podeCalcular = (modo === 'busca_placa' 
