@@ -283,6 +283,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const { data: planosData } = usePlanosComPrecoMap();
   const configApp = useConfigAdicionalAppCalc(tabelas);
   const { cotaDefault, cotaMinimaDefault } = useCotaDefaults();
+  const desagioConfig = useDesagioConfig();
 
   // Vencimento
   const [opcao1, opcao2] = calcularOpcoesVencimento(new Date().getDate());
