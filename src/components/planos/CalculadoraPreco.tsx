@@ -687,6 +687,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   };
 
   const limpar = () => {
+    setModo(null);
     setValorFipe('');
     setTipoUso('particular');
     setTipoVeiculo('carro');
