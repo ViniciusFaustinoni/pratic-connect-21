@@ -250,6 +250,33 @@ export function StepNovoVeiculo({
         </CardContent>
       </Card>
 
+      {/* Alerta de mudança de linha de produto */}
+      {tiposDiferentes && (
+        <Alert variant={bloqueioMudancaLinha ? 'destructive' : 'default'} className={cn(
+          bloqueioMudancaLinha
+            ? ''
+            : 'border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/30 [&>svg]:text-yellow-600'
+        )}>
+          <ShieldAlert className="h-4 w-4" />
+          <AlertDescription className="text-sm">
+            {bloqueioMudancaLinha ? (
+              <>
+                <strong>Mudança de linha de produto não é permitida no processo de substituição.</strong>{' '}
+                O veículo atual é um <strong>{tipoAntigo === 'moto' ? 'moto' : 'carro'}</strong> e o novo é um{' '}
+                <strong>{tipoNovo === 'moto' ? 'moto' : 'carro'}</strong>. Para trocar de linha, é necessário
+                cancelar o veículo atual e realizar uma nova adesão.
+              </>
+            ) : (
+              <>
+                <strong>Atenção:</strong> o veículo atual é um <strong>{tipoAntigo === 'moto' ? 'moto' : 'carro'}</strong>{' '}
+                e o novo é um <strong>{tipoNovo === 'moto' ? 'moto' : 'carro'}</strong>. Mudança de linha detectada,
+                mas a restrição está desativada nas configurações.
+              </>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Dados adicionais */}
       <Card>
         <CardHeader>
