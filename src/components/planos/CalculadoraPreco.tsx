@@ -573,6 +573,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setRegiao('rj');
     setCombustivelManual('gasolina');
     setAnoVeiculo('');
+    setCategoria('nenhuma');
     setResultado(null);
     setSemResultado(false);
     setPlaca('');
