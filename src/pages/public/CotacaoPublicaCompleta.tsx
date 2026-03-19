@@ -110,6 +110,21 @@ export default function CotacaoPublicaCompleta() {
   const uploadFotoVistoria = useUploadFotoVistoria();
   const { data: fotosExistentes } = useFotosVistoria(cotacao?.id);
   const { calcular, resultado } = useCalcularCotacao();
+  const { data: fipeMinRastreador } = useConfigFipeRastreador();
+  const { data: fipeMinRastreadorMoto } = useConfigFipeRastreadorMoto();
+
+  // Determinar se veículo precisa de rastreador (FIPE >= limite)
+  const veiculoPrecisaRastreador = precisaRastreador(
+    cotacao?.valor_fipe ? Number(cotacao.valor_fipe) : null,
+    fipeMinRastreador ?? 30000,
+    'automovel',
+    fipeMinRastreadorMoto ?? 9000
+  );
+
+  // Lista de fotos da vistoria: 31 fotos completas se não precisa de rastreador, 18 padrão caso contrário
+  const fotosVistoriaConfig = veiculoPrecisaRastreador
+    ? FOTOS_VISTORIA_CONFIG.map(f => ({ ...f }))
+    : FOTOS_VISTORIA_COMPLETA_CLIENTE;
 
   // Estados da jornada
   const [step, setStep] = useState<JornadaStep>('uso');
