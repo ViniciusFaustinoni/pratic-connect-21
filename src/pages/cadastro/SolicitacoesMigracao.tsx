@@ -43,6 +43,7 @@ export default function SolicitacoesMigracao() {
   const [showApproveDialog, setShowApproveDialog] = useState(false);
   const [showRejectDialog, setShowRejectDialog] = useState(false);
   const [motivoReprovacao, setMotivoReprovacao] = useState('');
+  const [showNovaDialog, setShowNovaDialog] = useState(false);
 
   const { data: solicitacoes, isLoading } = useSolicitacoesMigracaoList(filtroStatus);
   const aprovarMutation = useAprovarMigracao();
