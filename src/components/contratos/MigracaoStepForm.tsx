@@ -53,6 +53,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
 
   const comprovantesExigidos = migracaoConfig?.comprovantes ?? 3;
   const prazoHoras = migracaoConfig?.prazo_horas ?? 48;
+  const prazoMaxComprovanteMeses = migracaoConfig?.prazo_max_comprovante_meses ?? 3;
 
   // Notify parent about advance capability
   const canAdvance = solicitacaoExistente?.status === 'aprovada';
