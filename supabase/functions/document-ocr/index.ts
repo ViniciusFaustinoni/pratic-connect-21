@@ -24,6 +24,57 @@ function validateCPF(cpf: string): boolean {
   return r === parseInt(cleaned[10]);
 }
 
+// Mapa de dígitos comumente confundidos por modelos de visão
+const DIGIT_CONFUSIONS: Record<number, number[]> = {
+  0: [8, 6],
+  1: [7, 4],
+  3: [8],
+  4: [6, 9],
+  5: [6, 8],
+  6: [4, 5, 8, 0],
+  7: [1],
+  8: [3, 0, 6],
+  9: [4, 7],
+};
+
+/**
+ * Tenta corrigir um CPF inválido trocando um único dígito por alternativas
+ * visualmente similares e validando o checksum. Retorna o CPF corrigido
+ * apenas se houver exatamente UMA permutação válida (sem ambiguidade).
+ */
+function tryFixCPFByPermutation(cpf: string): string | null {
+  const digits = cpf.replace(/\D/g, '').split('').map(Number);
+  if (digits.length !== 11) return null;
+
+  const validResults: string[] = [];
+
+  for (let pos = 0; pos < 11; pos++) {
+    const originalDigit = digits[pos];
+    const alternatives = DIGIT_CONFUSIONS[originalDigit];
+    if (!alternatives) continue;
+
+    for (const alt of alternatives) {
+      const candidate = [...digits];
+      candidate[pos] = alt;
+      const candidateStr = candidate.join('');
+      if (validateCPF(candidateStr)) {
+        // Formatar como XXX.XXX.XXX-XX
+        const formatted = candidateStr.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+        if (!validResults.includes(formatted)) {
+          validResults.push(formatted);
+        }
+      }
+    }
+  }
+
+  if (validResults.length === 1) {
+    return validResults[0];
+  }
+
+  // Ambíguo (múltiplos) ou nenhum encontrado
+  return null;
+}
+
 const systemPrompt = `Analista de documentos brasileiros. Detecte o tipo e extraia dados.
 
 ## Tipos e campos obrigatórios:
@@ -487,7 +538,7 @@ INSTRUÇÕES:
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'google/gemini-2.5-flash',
+              model: 'google/gemini-2.5-pro',
               messages: [
                 { role: 'system', content: retryPromptCorretivo },
                 {
@@ -518,9 +569,23 @@ INSTRUÇÕES:
                     console.log('[OCR] CPF válido extraído na segunda tentativa:', cpfResult.cpf);
                     result.dados.cpf = cpfResult.cpf;
                   } else {
-                    console.log('[OCR] CPF da segunda tentativa também inválido:', cpfResult.cpf, '→ marcando como ilegível');
-                    result.dados.cpf = 'ilegivel';
-                    result.motivo = (result.motivo || '') + ' CPF não pôde ser lido com precisão (dígito verificador inválido em ambas tentativas).';
+                    console.log('[OCR] CPF da segunda tentativa também inválido:', cpfResult.cpf, '→ tentando correção por permutação');
+                    // Tentar corrigir por permutação de dígitos confusos
+                    const cpfCorrigido = tryFixCPFByPermutation(cpfResult.cpf);
+                    if (cpfCorrigido) {
+                      console.log(`[OCR] CPF corrigido por permutação: ${cpfResult.cpf} → ${cpfCorrigido}`);
+                      result.dados.cpf = cpfCorrigido;
+                    } else {
+                      // Tentar também com o CPF da primeira tentativa (pode ser diferente)
+                      const cpfCorrigido1 = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
+                      if (cpfCorrigido1) {
+                        console.log(`[OCR] CPF corrigido por permutação (1ª tentativa): ${cpfExtraido} → ${cpfCorrigido1}`);
+                        result.dados.cpf = cpfCorrigido1;
+                      } else {
+                        result.dados.cpf = 'ilegivel';
+                        result.motivo = (result.motivo || '') + ' CPF não pôde ser lido com precisão (dígito verificador inválido em ambas tentativas).';
+                      }
+                    }
                   }
                 } else {
                   console.log('[OCR] CPF marcado como ilegível na segunda tentativa');
@@ -529,15 +594,28 @@ INSTRUÇÕES:
                 }
               } catch (retryParseError) {
                 console.error('[OCR] Falha ao parsear resultado do retry de CPF:', retryContent);
-                result.dados.cpf = 'ilegivel';
+                // Mesmo com erro de parse, tentar permutação com o CPF da 1ª tentativa
+                const cpfCorrigido = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
+                if (cpfCorrigido) {
+                  console.log(`[OCR] CPF corrigido por permutação após erro de parse: ${cpfExtraido} → ${cpfCorrigido}`);
+                  result.dados.cpf = cpfCorrigido;
+                } else {
+                  result.dados.cpf = 'ilegivel';
+                }
               }
             }
           }
         } catch (retryError) {
           console.error('[OCR] Erro no retry de extração de CPF:', retryError);
-          // Manter o CPF original se o retry falhar por erro de rede
-          if (cpfExtraido && cpfExtraido !== null && !validateCPF(cpfExtraido.replace(/\D/g, ''))) {
-            result.dados.cpf = 'ilegivel';
+          // Tentar permutação mesmo quando retry falha por erro de rede
+          if (cpfExtraido && cpfExtraido !== 'ilegivel' && !validateCPF(cpfExtraido.replace(/\D/g, ''))) {
+            const cpfCorrigido = tryFixCPFByPermutation(cpfExtraido);
+            if (cpfCorrigido) {
+              console.log(`[OCR] CPF corrigido por permutação após erro de rede: ${cpfExtraido} → ${cpfCorrigido}`);
+              result.dados.cpf = cpfCorrigido;
+            } else {
+              result.dados.cpf = 'ilegivel';
+            }
           }
         }
       } else if (cpfExtraido && cpfExtraido !== 'ilegivel') {
