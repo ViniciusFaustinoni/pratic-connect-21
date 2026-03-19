@@ -1,0 +1,1 @@
+ALTER TYPE status_servico ADD VALUE IF NOT EXISTS 'imprevisto_pendente';

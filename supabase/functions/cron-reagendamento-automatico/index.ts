@@ -29,12 +29,12 @@ Deno.serve(async (req) => {
     console.log(`[cron-reagendamento] Executando para data: ${hoje}`);
 
     // ===== PARTE 1: Recuperar imprevistos órfãos =====
-    // Serviços com imprevisto registrado há mais de 30 min mas ainda em status ativo
+    // Serviços com imprevisto registrado há mais de 30 min mas ainda em status ativo ou imprevisto_pendente
     const threshold30min = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
 
     const { data: orfaos, error: orfaosError } = await supabase
       .from("servicos")
-      .select("id")
+      .select("id, status, reagendamento_enviado_em")
       .not("imprevisto_registrado_em", "is", null)
       .lt("imprevisto_registrado_em", threshold30min)
       .in("status", ["em_andamento", "em_rota", "agendada", "imprevisto_pendente"]);

@@ -70,6 +70,14 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
 
       if (error) throw error;
 
+      // PONTO A: Disparar link de reagendamento em background (não bloqueia o fluxo)
+      supabase.functions.invoke('enviar-link-reagendamento', {
+        body: { servico_id: tarefaId },
+      }).then(({ error: linkErr }) => {
+        if (linkErr) console.warn('[ImprevistoBotao] Erro ao enviar link (Ponto A, não crítico):', linkErr);
+        else console.log('[ImprevistoBotao] Link de reagendamento disparado (Ponto A)');
+      }).catch(e => console.warn('[ImprevistoBotao] Falha no Ponto A:', e));
+
       toast.success('Imprevisto registrado');
       setOpen(false);
       setShowDuploCheck(true);
