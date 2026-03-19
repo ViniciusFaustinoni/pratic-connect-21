@@ -769,6 +769,25 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
             </ToggleGroup>
           </div>
 
+          {/* Categoria do Veículo (só carros) */}
+          {tipoVeiculo === 'carro' && (
+            <div className="space-y-2">
+              <Label className="flex items-center gap-1.5">
+                <AlertTriangle className="h-3.5 w-3.5" />
+                Categoria <span className="text-xs text-muted-foreground">(opcional)</span>
+              </Label>
+              <Select value={categoria} onValueChange={setCategoria}>
+                <SelectTrigger>
+                  <SelectValue placeholder="Nenhuma" />
+                </SelectTrigger>
+                <SelectContent>
+                  {CATEGORIAS_VEICULO_CALC.map(cat => (
+                    <SelectItem key={cat.value} value={cat.value}>{cat.label}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </div>
+          )}
           {/* Botões */}
           <div className="flex gap-2">
             <Button onClick={calcular} className="flex-1">
