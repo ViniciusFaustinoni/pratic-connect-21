@@ -1,15 +1,20 @@
 import { useState, useMemo } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Card, CardContent } from '@/components/ui/card';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { ArrowRightLeft, RotateCcw, RefreshCw, Eye, User, Calendar, Search, ArrowRight, AlertTriangle, FileInput } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { ArrowRightLeft, RotateCcw, RefreshCw, Eye, User, Calendar, Search, ArrowRight, AlertTriangle, FileInput, CheckCircle, XCircle, Loader2, ShieldCheck, ClipboardList } from 'lucide-react';
 import { MigracoesTab } from '@/pages/cadastro/SolicitacoesMigracao';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
@@ -18,6 +23,8 @@ import { useSubstituicoes } from '@/hooks/useSubstituicaoVeiculo';
 import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { STATUS_SUBSTITUICAO_LABELS, STATUS_SUBSTITUICAO_CORES } from '@/types/substituicao';
 import type { StatusSubstituicao } from '@/types/substituicao';
+import { usePermissions } from '@/hooks/usePermissions';
+import { toast } from 'sonner';
 
 // ============================================
 // TROCA DE TITULARIDADE TAB
@@ -25,6 +32,13 @@ import type { StatusSubstituicao } from '@/types/substituicao';
 
 function TrocaTitularidadeTab() {
   const navigate = useNavigate();
+  const queryClient = useQueryClient();
+  const { isGerencia } = usePermissions();
+
+  const [aprovarId, setAprovarId] = useState<string | null>(null);
+  const [rejeitarId, setRejeitarId] = useState<string | null>(null);
+  const [motivoRejeicao, setMotivoRejeicao] = useState('');
+  const [cenarioResultado, setCenarioResultado] = useState<Record<string, string>>({});
 
   const { data: solicitacoes, isLoading } = useQuery({
     queryKey: ['processos-troca-titularidade'],
@@ -40,6 +54,53 @@ function TrocaTitularidadeTab() {
 
       if (error) throw error;
       return data || [];
+    },
+  });
+
+  const aprovarMutation = useMutation({
+    mutationFn: async (solicitacaoId: string) => {
+      const { data, error } = await supabase.functions.invoke('aprovar-solicitacao-ia', {
+        body: { solicitacao_id: solicitacaoId, acao: 'aprovar' },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data, solicitacaoId) => {
+      if (data?.cenario) {
+        setCenarioResultado(prev => ({ ...prev, [solicitacaoId]: data.cenario }));
+      }
+      queryClient.invalidateQueries({ queryKey: ['processos-troca-titularidade'] });
+      queryClient.invalidateQueries({ queryKey: ['processos-counts'] });
+      toast.success(
+        data?.cenario === 'A'
+          ? 'Aprovado — Cenário A: vistoria dispensada'
+          : 'Aprovado — Cenário B: vistoria agendada'
+      );
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Erro ao aprovar solicitação');
+    },
+  });
+
+  const rejeitarMutation = useMutation({
+    mutationFn: async ({ solicitacaoId, motivo }: { solicitacaoId: string; motivo: string }) => {
+      const { data, error } = await supabase.functions.invoke('aprovar-solicitacao-ia', {
+        body: { solicitacao_id: solicitacaoId, acao: 'rejeitar', motivo },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['processos-troca-titularidade'] });
+      queryClient.invalidateQueries({ queryKey: ['processos-counts'] });
+      toast.success('Solicitação rejeitada');
+      setRejeitarId(null);
+      setMotivoRejeicao('');
+    },
+    onError: (err: Error) => {
+      toast.error(err.message || 'Erro ao rejeitar solicitação');
     },
   });
 
@@ -71,16 +132,36 @@ function TrocaTitularidadeTab() {
         const novoTitular = sol.dados_novo_titular as any;
         const cfg = statusConfig[sol.status] || statusConfig.pendente;
         const associado = sol.associado as any;
+        const isPendente = sol.status === 'pendente';
+        const isAprovado = sol.status === 'aprovado';
+        const isRejeitado = sol.status === 'rejeitado';
+        const cenario = cenarioResultado[sol.id] || (
+          sol.resultado_id && sol.status === 'aprovado'
+            ? (sol.resultado_id === sol.id ? 'A' : 'B')
+            : null
+        );
 
         return (
           <Card key={sol.id} className="hover:shadow-md transition-shadow">
             <CardContent className="p-4">
               <div className="flex items-start justify-between gap-4">
                 <div className="flex-1 space-y-2">
-                  <div className="flex items-center gap-2">
+                  <div className="flex items-center gap-2 flex-wrap">
                     <User className="h-4 w-4 text-muted-foreground" />
                     <span className="font-semibold">{associado?.nome || 'Associado não encontrado'}</span>
                     <Badge className={cfg.className}>{cfg.label}</Badge>
+                    {isAprovado && cenario === 'A' && (
+                      <Badge className="bg-green-100 text-green-800 border-green-200">
+                        <ShieldCheck className="h-3 w-3 mr-1" />
+                        Vistoria dispensada
+                      </Badge>
+                    )}
+                    {isAprovado && cenario === 'B' && (
+                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                        <ClipboardList className="h-3 w-3 mr-1" />
+                        Vistoria agendada
+                      </Badge>
+                    )}
                   </div>
                   <div className="text-sm text-muted-foreground space-y-1">
                     {associado?.cpf && <p>CPF: {associado.cpf}</p>}
@@ -91,29 +172,119 @@ function TrocaTitularidadeTab() {
                       </p>
                     )}
                     {dados?.motivo && <p>Motivo: {dados.motivo}</p>}
+                    {isRejeitado && sol.motivo_rejeicao && (
+                      <p className="text-destructive font-medium">Motivo da rejeição: {sol.motivo_rejeicao}</p>
+                    )}
                   </div>
                   <div className="flex items-center gap-1 text-xs text-muted-foreground">
                     <Calendar className="h-3 w-3" />
                     {format(new Date(sol.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
                   </div>
                 </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  onClick={() => navigate(`/cadastro/associados/${sol.associado_id}`)}
-                >
-                  <Eye className="h-4 w-4 mr-1" />
-                  Ver Ficha
-                </Button>
+                <div className="flex flex-col sm:flex-row gap-2">
+                  {isPendente && isGerencia && (
+                    <>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-green-700 border-green-300 hover:bg-green-50"
+                        onClick={() => setAprovarId(sol.id)}
+                        disabled={aprovarMutation.isPending}
+                      >
+                        {aprovarMutation.isPending && aprovarMutation.variables === sol.id
+                          ? <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                          : <CheckCircle className="h-4 w-4 mr-1" />
+                        }
+                        Aprovar
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="text-red-700 border-red-300 hover:bg-red-50"
+                        onClick={() => setRejeitarId(sol.id)}
+                        disabled={rejeitarMutation.isPending}
+                      >
+                        <XCircle className="h-4 w-4 mr-1" />
+                        Rejeitar
+                      </Button>
+                    </>
+                  )}
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => navigate(`/cadastro/associados/${sol.associado_id}`)}
+                  >
+                    <Eye className="h-4 w-4 mr-1" />
+                    Ver Ficha
+                  </Button>
+                </div>
               </div>
             </CardContent>
           </Card>
         );
       })}
+
+      {/* Dialog de confirmação de aprovação */}
+      <AlertDialog open={!!aprovarId} onOpenChange={(open) => !open && setAprovarId(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar aprovação</AlertDialogTitle>
+            <AlertDialogDescription>
+              O sistema determinará automaticamente se é Cenário A (vistoria dispensada) ou Cenário B (vistoria obrigatória) com base nas configurações salvas.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={aprovarMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (aprovarId) aprovarMutation.mutate(aprovarId);
+                setAprovarId(null);
+              }}
+              disabled={aprovarMutation.isPending}
+              className="bg-green-600 hover:bg-green-700"
+            >
+              {aprovarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <CheckCircle className="h-4 w-4 mr-1" />}
+              Confirmar Aprovação
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
+
+      {/* Dialog de rejeição com motivo */}
+      <AlertDialog open={!!rejeitarId} onOpenChange={(open) => { if (!open) { setRejeitarId(null); setMotivoRejeicao(''); } }}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Rejeitar solicitação</AlertDialogTitle>
+            <AlertDialogDescription>
+              Informe o motivo da rejeição. O associado será notificado.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <Textarea
+            placeholder="Motivo da rejeição (obrigatório)..."
+            value={motivoRejeicao}
+            onChange={(e) => setMotivoRejeicao(e.target.value)}
+            className="min-h-[80px]"
+          />
+          <AlertDialogFooter>
+            <AlertDialogCancel disabled={rejeitarMutation.isPending}>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={() => {
+                if (rejeitarId && motivoRejeicao.trim()) {
+                  rejeitarMutation.mutate({ solicitacaoId: rejeitarId, motivo: motivoRejeicao.trim() });
+                }
+              }}
+              disabled={rejeitarMutation.isPending || !motivoRejeicao.trim()}
+              className="bg-destructive hover:bg-destructive/90"
+            >
+              {rejeitarMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <XCircle className="h-4 w-4 mr-1" />}
+              Confirmar Rejeição
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
-
 // ============================================
 // REATIVAÇÕES TAB
 // ============================================
