@@ -34,7 +34,7 @@ const statusConfig = {
   reprovada: { label: 'Reprovada', icon: XCircle, className: 'bg-destructive/10 text-destructive border-destructive/30' },
 };
 
-export default function SolicitacoesMigracao() {
+export function MigracoesTab() {
   const permissions = usePermissions();
   const canAccess = permissions.isGerencia || permissions.isDiretor || permissions.isAdminMaster || permissions.isDesenvolvedor;
 
@@ -110,28 +110,22 @@ export default function SolicitacoesMigracao() {
 
     return (
     <div className="space-y-6">
-      <div className="flex items-center justify-between">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground">Solicitações de Migração</h1>
-          <p className="text-muted-foreground text-sm">Fila de análise de solicitações de migração</p>
-        </div>
-        <div className="flex items-center gap-3">
-          <Button onClick={() => setShowNovaDialog(true)} size="sm">
-            <Plus className="h-4 w-4 mr-1" />
-            Nova Solicitação
-          </Button>
-          <Select value={filtroStatus} onValueChange={setFiltroStatus}>
-            <SelectTrigger className="w-48">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="todos">Todos</SelectItem>
-              <SelectItem value="pendente">Pendentes</SelectItem>
-              <SelectItem value="aprovada">Aprovadas</SelectItem>
-              <SelectItem value="reprovada">Reprovadas</SelectItem>
-            </SelectContent>
-          </Select>
-        </div>
+      <div className="flex items-center justify-end gap-3">
+        <Button onClick={() => setShowNovaDialog(true)} size="sm">
+          <Plus className="h-4 w-4 mr-1" />
+          Nova Solicitação
+        </Button>
+        <Select value={filtroStatus} onValueChange={setFiltroStatus}>
+          <SelectTrigger className="w-48">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos</SelectItem>
+            <SelectItem value="pendente">Pendentes</SelectItem>
+            <SelectItem value="aprovada">Aprovadas</SelectItem>
+            <SelectItem value="reprovada">Reprovadas</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {isLoading ? (
@@ -394,6 +388,10 @@ export default function SolicitacoesMigracao() {
       <MigracaoDiretaDialog open={showNovaDialog} onOpenChange={setShowNovaDialog} />
     </div>
   );
+}
+
+export default function SolicitacoesMigracao() {
+  return <MigracoesTab />;
 }
 
 // ============================================

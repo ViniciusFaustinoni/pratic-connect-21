@@ -9,7 +9,8 @@ import { Input } from '@/components/ui/input';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
-import { ArrowRightLeft, RotateCcw, RefreshCw, Eye, User, Calendar, Search, ArrowRight, AlertTriangle } from 'lucide-react';
+import { ArrowRightLeft, RotateCcw, RefreshCw, Eye, User, Calendar, Search, ArrowRight, AlertTriangle, FileInput } from 'lucide-react';
+import { MigracoesTab } from '@/pages/cadastro/SolicitacoesMigracao';
 import { useNavigate } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -378,7 +379,7 @@ function useProcessosCounts() {
   return useQuery({
     queryKey: ['processos-counts'],
     queryFn: async () => {
-      const [titularidade, reativacao, substituicoes] = await Promise.all([
+      const [titularidade, reativacao, substituicoes, migracoes] = await Promise.all([
         supabase
           .from('chat_solicitacoes_ia')
           .select('id', { count: 'exact', head: true })
@@ -393,12 +394,17 @@ function useProcessosCounts() {
           .from('substituicoes_veiculo')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'aguardando_aprovacao'),
+        supabase
+          .from('solicitacoes_migracao')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pendente'),
       ]);
 
       return {
         titularidade: titularidade.count || 0,
         reativacao: reativacao.count || 0,
         substituicoes: substituicoes.count || 0,
+        migracoes: migracoes.count || 0,
       };
     },
   });
@@ -416,12 +422,12 @@ export default function ProcessosOperacionais() {
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Processos Operacionais</h1>
         <p className="text-muted-foreground">
-          Central de gestão de trocas de titularidade, reativações e substituições de veículo.
+          Central de gestão de trocas de titularidade, reativações, substituições e migrações.
         </p>
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
@@ -455,11 +461,22 @@ export default function ProcessosOperacionais() {
             </div>
           </CardContent>
         </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-100 text-purple-700">
+              <FileInput className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{counts?.migracoes ?? '—'}</p>
+              <p className="text-xs text-muted-foreground">Migrações pendentes</p>
+            </div>
+          </CardContent>
+        </Card>
       </div>
 
       {/* Tabs */}
       <Tabs defaultValue="titularidade" className="w-full">
-        <TabsList className="w-full grid grid-cols-3">
+        <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="titularidade" className="text-xs sm:text-sm">
             <ArrowRightLeft className="h-4 w-4 mr-1 hidden sm:inline" />
             Titularidade
@@ -481,6 +498,13 @@ export default function ProcessosOperacionais() {
               <Badge className="ml-1.5 bg-amber-600 text-white text-[10px] px-1.5 py-0">{counts?.substituicoes}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="migracoes" className="text-xs sm:text-sm">
+            <FileInput className="h-4 w-4 mr-1 hidden sm:inline" />
+            Migrações
+            {(counts?.migracoes ?? 0) > 0 && (
+              <Badge className="ml-1.5 bg-purple-600 text-white text-[10px] px-1.5 py-0">{counts?.migracoes}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="titularidade">
@@ -491,6 +515,9 @@ export default function ProcessosOperacionais() {
         </TabsContent>
         <TabsContent value="substituicoes">
           <SubstituicoesTab />
+        </TabsContent>
+        <TabsContent value="migracoes">
+          <MigracoesTab />
         </TabsContent>
       </Tabs>
     </div>
