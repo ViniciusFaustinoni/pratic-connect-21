@@ -155,3 +155,6 @@ verify_jwt = false
 
 [functions.cron-migracao-prazo-vencido]
 verify_jwt = false
+
+[functions.efetivar-troca-titularidade]
+verify_jwt = false
