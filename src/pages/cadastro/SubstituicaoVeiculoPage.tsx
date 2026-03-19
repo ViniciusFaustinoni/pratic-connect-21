@@ -11,6 +11,7 @@ import { StepElegibilidade } from '@/components/substituicao/StepElegibilidade';
 import { StepEventoAtivo } from '@/components/substituicao/StepEventoAtivo';
 import { StepRastreador } from '@/components/substituicao/StepRastreador';
 import { StepNovoVeiculo } from '@/components/substituicao/StepNovoVeiculo';
+import { StepVistoria } from '@/components/substituicao/StepVistoria';
 import { StepBeneficios } from '@/components/substituicao/StepBeneficios';
 import { StepFinanceiro } from '@/components/substituicao/StepFinanceiro';
 import { StepConclusao } from '@/components/substituicao/StepConclusao';
@@ -24,7 +25,6 @@ export default function SubstituicaoVeiculoPage() {
   const navigate = useNavigate();
   const { profile, isVendedor } = useAuth();
 
-  // Auto-detect consultor: only commercial roles get linked
   const consultorId = isVendedor() ? profile?.id ?? null : null;
   const consultorNome = isVendedor() ? profile?.nome ?? null : null;
 
@@ -32,19 +32,14 @@ export default function SubstituicaoVeiculoPage() {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [skippedSteps, setSkippedSteps] = useState<number[]>([]);
   const [substituicaoId, setSubstituicaoId] = useState<string | null>(null);
+  const [veiculoNovoId, setVeiculoNovoId] = useState<string | null>(null);
 
-  // Evento ativo data
   const [eventoAtivo, setEventoAtivo] = useState<{ id: string; tipo: string } | null>(null);
-
-  // Step 4 data
   const [dadosNovoVeiculo, setDadosNovoVeiculo] = useState<Partial<DadosNovoVeiculo>>({});
-
-  // Step 5 data
   const [beneficiosSelecionados, setBeneficiosSelecionados] = useState<Record<string, boolean | string>>({});
 
   const iniciarSubstituicao = useIniciarSubstituicao();
 
-  // Buscar associado
   const { data: associado, isLoading: loadingAssociado } = useQuery({
     queryKey: ['associados', 'detail', associadoId],
     queryFn: async () => {
@@ -59,7 +54,6 @@ export default function SubstituicaoVeiculoPage() {
     enabled: !!associadoId,
   });
 
-  // Buscar veículo ativo
   const { data: veiculoAtivo, isLoading: loadingVeiculo } = useQuery({
     queryKey: ['veiculos', 'ativo', associadoId],
     queryFn: async () => {
@@ -115,7 +109,7 @@ export default function SubstituicaoVeiculoPage() {
     return result.id;
   };
 
-  // Step 1 -> next
+  // Step 1 → 2 or 3
   const handleElegibilidadeNext = (hasEventoProprio: boolean, evento?: { id: string; tipo: string }) => {
     completeStep(1);
     if (hasEventoProprio && evento) {
@@ -124,43 +118,50 @@ export default function SubstituicaoVeiculoPage() {
     } else {
       setSkippedSteps((prev) => [...prev, 2]);
       completeStep(2);
-      setCurrentStep(3); // Go to Rastreador
+      setCurrentStep(3);
     }
   };
 
-  // Step 2 -> next (Evento -> Rastreador)
+  // Step 2 → 3
   const handleEventoNext = () => {
     completeStep(2);
     setCurrentStep(3);
   };
 
-  // Step 3 -> next (Rastreador -> Novo Veículo)
+  // Step 3 → 4
   const handleRastreadorNext = () => {
     completeStep(3);
     setCurrentStep(4);
   };
 
-  // Step 4 -> next (Novo Veículo -> Benefícios)
-  const handleNovoVeiculoNext = (_veiculoNovoId?: string) => {
+  // Step 4 → 5 (Novo Veículo → Vistoria)
+  const handleNovoVeiculoNext = (novoVeiculoId?: string) => {
+    if (novoVeiculoId) setVeiculoNovoId(novoVeiculoId);
     completeStep(4);
     setCurrentStep(5);
   };
 
-  // Step 5 -> next (Benefícios -> Financeiro)
-  const handleBeneficiosNext = () => {
+  // Step 5 → 6 (Vistoria → Benefícios)
+  const handleVistoriaNext = () => {
     completeStep(5);
     setCurrentStep(6);
   };
 
-  // Step 6 -> confirmar (Financeiro -> Aprovação)
-  const handleFinanceiroConfirmar = () => {
+  // Step 6 → 7 (Benefícios → Financeiro)
+  const handleBeneficiosNext = () => {
     completeStep(6);
     setCurrentStep(7);
+  };
+
+  // Step 7 → 8 (Financeiro → Conclusão)
+  const handleFinanceiroConfirmar = () => {
+    completeStep(7);
+    setCurrentStep(8);
     toast.success('Substituição enviada para aprovação!');
   };
 
   const handleRetry = () => {
-    setCurrentStep(6);
+    setCurrentStep(7);
   };
 
   if (loadingAssociado || loadingVeiculo) {
@@ -295,17 +296,29 @@ export default function SubstituicaoVeiculoPage() {
       )}
 
       {currentStep === 5 && (
+        <StepVistoria
+          associadoId={associadoId!}
+          veiculoNovoId={veiculoNovoId}
+          substituicaoId={substituicaoId}
+          dadosNovoVeiculo={dadosNovoVeiculo}
+          onNext={handleVistoriaNext}
+          onBack={() => setCurrentStep(4)}
+          onIniciarSubstituicao={handleIniciarSubstituicao}
+        />
+      )}
+
+      {currentStep === 6 && (
         <StepBeneficios
           veiculoAntigo={veiculoAntigoResumo}
           dadosNovoVeiculo={dadosNovoVeiculo}
           beneficiosSelecionados={beneficiosSelecionados}
           setBeneficiosSelecionados={setBeneficiosSelecionados}
           onNext={handleBeneficiosNext}
-          onBack={() => setCurrentStep(4)}
+          onBack={() => setCurrentStep(5)}
         />
       )}
 
-      {currentStep === 6 && (
+      {currentStep === 7 && (
         <StepFinanceiro
           substituicaoId={substituicaoId}
           associadoId={associadoId!}
@@ -314,12 +327,12 @@ export default function SubstituicaoVeiculoPage() {
           dadosNovoVeiculo={dadosNovoVeiculo}
           beneficiosSelecionados={beneficiosSelecionados}
           onConfirmar={handleFinanceiroConfirmar}
-          onBack={() => setCurrentStep(5)}
+          onBack={() => setCurrentStep(6)}
           onIniciarSubstituicao={handleIniciarSubstituicao}
         />
       )}
 
-      {currentStep >= 7 && substituicaoId && (
+      {currentStep >= 8 && substituicaoId && (
         <StepConclusao
           substituicaoId={substituicaoId}
           associadoId={associadoId!}
@@ -329,7 +342,7 @@ export default function SubstituicaoVeiculoPage() {
         />
       )}
 
-      {currentStep >= 7 && !substituicaoId && (
+      {currentStep >= 8 && !substituicaoId && (
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">Erro: substituição não encontrada.</p>
