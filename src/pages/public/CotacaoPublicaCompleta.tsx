@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { formatarMoeda } from '@/utils/format';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
+import { FOTOS_VISTORIA_COMPLETA } from '@/data/vistoriaConfigCompleta';
+import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 
 import { 
   useCotacaoPublica, 
@@ -35,6 +37,11 @@ import {
   FOTOS_VISTORIA_CONFIG,
   STATUS_COTACAO_PUBLICA_LABELS,
 } from '@/types/cotacaoPublica';
+
+// Fotos da vistoria completa (31 fotos) para veículos sem rastreador, excluindo fotos de instalação
+const FOTOS_VISTORIA_COMPLETA_CLIENTE = FOTOS_VISTORIA_COMPLETA
+  .filter(f => f.categoria !== 'instalacao')
+  .map(f => ({ tipo: f.id, nome: f.nome, descricao: f.nome }));
 
 // Cores dinâmicas para planos — baseadas no índice do plano
 const CORES_PLANO_DINAMICAS = [
@@ -103,6 +110,21 @@ export default function CotacaoPublicaCompleta() {
   const uploadFotoVistoria = useUploadFotoVistoria();
   const { data: fotosExistentes } = useFotosVistoria(cotacao?.id);
   const { calcular, resultado } = useCalcularCotacao();
+  const { data: fipeMinRastreador } = useConfigFipeRastreador();
+  const { data: fipeMinRastreadorMoto } = useConfigFipeRastreadorMoto();
+
+  // Determinar se veículo precisa de rastreador (FIPE >= limite)
+  const veiculoPrecisaRastreador = precisaRastreador(
+    cotacao?.valor_fipe ? Number(cotacao.valor_fipe) : null,
+    fipeMinRastreador ?? 30000,
+    'automovel',
+    fipeMinRastreadorMoto ?? 9000
+  );
+
+  // Lista de fotos da vistoria: 31 fotos completas se não precisa de rastreador, 18 padrão caso contrário
+  const fotosVistoriaConfig = veiculoPrecisaRastreador
+    ? FOTOS_VISTORIA_CONFIG.map(f => ({ ...f }))
+    : FOTOS_VISTORIA_COMPLETA_CLIENTE;
 
   // Estados da jornada
   const [step, setStep] = useState<JornadaStep>('uso');
@@ -185,6 +207,21 @@ export default function CotacaoPublicaCompleta() {
       });
     }
   }, [cotacao?.valor_fipe, tipoUso, calcular]);
+
+  // Reinicializar lista de fotos quando a configuração de rastreador mudar
+  useEffect(() => {
+    setFotosVistoria(prev => {
+      const novaConfig = fotosVistoriaConfig;
+      // Preservar fotos já enviadas ao trocar configuração
+      return novaConfig.map(f => {
+        const existente = prev.find(p => p.tipo === f.tipo);
+        if (existente && existente.status === 'enviado') {
+          return { ...f, url: existente.url, status: 'enviado' as const };
+        }
+        return { ...f, status: 'pendente' as const };
+      });
+    });
+  }, [veiculoPrecisaRastreador]);
 
   // Sincronizar fotos existentes e vídeo
   useEffect(() => {
@@ -1042,7 +1079,7 @@ export default function CotacaoPublicaCompleta() {
                 <Alert>
                   <Camera className="h-4 w-4" />
                   <AlertDescription>
-                    Tire fotos em local bem iluminado. {fotosVistoria.filter(f => f.status === 'enviado').length} de {FOTOS_VISTORIA_CONFIG.length} fotos • Vídeo 360°: {videoVistoriaUrl ? '✓' : 'pendente'}
+                    Tire fotos em local bem iluminado. {fotosVistoria.filter(f => f.status === 'enviado').length} de {fotosVistoriaConfig.length} fotos • Vídeo 360°: {videoVistoriaUrl ? '✓' : 'pendente'}{!veiculoPrecisaRastreador && ' (vistoria completa — sem rastreador)'}
                   </AlertDescription>
                 </Alert>
 
@@ -1097,7 +1134,7 @@ export default function CotacaoPublicaCompleta() {
 
                 <Button
                   onClick={handleConcluirVistoria}
-                  disabled={fotosVistoria.filter(f => f.status === 'enviado').length < 10 || !videoVistoriaUrl || loading}
+                  disabled={fotosVistoria.filter(f => f.status === 'enviado').length < Math.min(10, fotosVistoriaConfig.length) || !videoVistoriaUrl || loading}
                   className="w-full h-12"
                 >
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Concluir Vistoria'}

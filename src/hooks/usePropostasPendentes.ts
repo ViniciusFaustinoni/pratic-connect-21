@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
+import { precisaRastreador } from '@/hooks/useConfigRastreador';
 
 type Contrato = Database['public']['Tables']['contratos']['Row'];
 type Associado = Database['public']['Tables']['associados']['Row'];
@@ -1434,16 +1435,46 @@ export function useAprovarProposta() {
       }
 
       // 6. Atualizar VEÍCULO e criar instalação SE NECESSÁRIO
+      let protecao360SemRastreador = false;
       if (veiculos && veiculos.length > 0) {
         const veiculoId = veiculos[0].id;
         
-        // Status do veículo depende se instalação foi concluída
-        // Se já tem instalação concluída, veículo vai para 'ativo' com cobertura_total
-        const statusVeiculo = jaTemInstalacaoConcluida ? 'ativo' : 'instalacao_pendente';
+        // Buscar valor_fipe do veículo para verificar se precisa de rastreador
+        const { data: veiculoFipeData } = await supabase
+          .from('veiculos')
+          .select('valor_fipe')
+          .eq('id', veiculoId)
+          .single();
         
-        // Se instalação já está concluída, ativar cobertura total imediatamente
-        // Caso contrário, aguardar instalação para ativar
-        const coberturaTotal = jaTemInstalacaoConcluida;
+        const valorFipe = veiculoFipeData?.valor_fipe || 0;
+        
+        // Buscar limites de FIPE para rastreador da configuração
+        let fipeMinRastreador = 30000;
+        let fipeMinRastreadorMoto = 9000;
+        const { data: configRastreador } = await supabase
+          .from('configuracoes')
+          .select('chave, valor')
+          .in('chave', ['operacional_fipe_minimo_rastreador', 'operacional_fipe_minimo_rastreador_moto']);
+        
+        if (configRastreador) {
+          for (const cfg of configRastreador) {
+            if (cfg.chave === 'operacional_fipe_minimo_rastreador') fipeMinRastreador = Number(cfg.valor) || 30000;
+            if (cfg.chave === 'operacional_fipe_minimo_rastreador_moto') fipeMinRastreadorMoto = Number(cfg.valor) || 9000;
+          }
+        }
+        
+        const veiculoPrecisaRastreador = precisaRastreador(valorFipe, fipeMinRastreador, 'automovel', fipeMinRastreadorMoto);
+        
+        // Status do veículo depende se instalação foi concluída OU se não precisa de rastreador
+        // Veículos sem rastreador recebem proteção 360° direto pela autovistoria completa
+        const ativarProtecao360 = jaTemInstalacaoConcluida || !veiculoPrecisaRastreador;
+        const statusVeiculo = ativarProtecao360 ? 'ativo' : 'instalacao_pendente';
+        const coberturaTotal = ativarProtecao360;
+        
+        if (!veiculoPrecisaRastreador) {
+          protecao360SemRastreador = true;
+          console.log(`[useAprovarProposta] Veículo FIPE R$${valorFipe} < limite R$${fipeMinRastreador} — Proteção 360° ativada sem rastreador`);
+        }
         
         const { error: veiculoError } = await supabase
           .from('veiculos')
@@ -1537,7 +1568,8 @@ export function useAprovarProposta() {
         // Criar INSTALAÇÃO APENAS se:
         // - NÃO existir instalação concluída para este contrato
         // - NÃO existir instalação ativa para este veículo (evita duplicatas)
-        if (!jaTemInstalacaoConcluida && !jaTemInstalacaoAtiva) {
+        // - Veículo PRECISA de rastreador (FIPE >= limite)
+        if (!jaTemInstalacaoConcluida && !jaTemInstalacaoAtiva && veiculoPrecisaRastreador) {
           const associadoData = contrato.associado as any;
           
           // Buscar preferências de agendamento preenchidas pelo cliente na cotação
@@ -1641,6 +1673,27 @@ export function useAprovarProposta() {
           console.log(`[useAprovarProposta] Instalação criada com preferências do cliente: data=${dataAgendada}, periodo=${periodoPreferido}`);
         } else if (jaTemInstalacaoAtiva) {
           console.log(`Instalação já existe para o veículo ${veiculoId}. Aprovação prossegue sem criar nova instalação.`);
+        } else if (!veiculoPrecisaRastreador) {
+          console.log(`[useAprovarProposta] Veículo não precisa de rastreador (FIPE R$${valorFipe}). Proteção 360° ativada diretamente.`);
+          
+          // Notificar associado sobre Proteção 360° (sem rastreador)
+          const { data: veiculoInfo360 } = await supabase
+            .from('veiculos')
+            .select('placa, marca, modelo')
+            .eq('id', veiculoId)
+            .single();
+
+          supabase.functions.invoke('notificar-cliente', {
+            body: {
+              tipo: 'cobertura_total_ativada',
+              associado_id: associadoId,
+              dados: {
+                placa: veiculoInfo360?.placa || '',
+                marca: veiculoInfo360?.marca || '',
+                modelo: veiculoInfo360?.modelo || '',
+              },
+            },
+          }).catch(err => console.warn('[useAprovarProposta] Erro ao notificar cobertura 360 sem rastreador (não crítico):', err));
         }
 
         // Criar acesso do associado mesmo sem instalação concluída (roubo/furto)
@@ -1663,7 +1716,9 @@ export function useAprovarProposta() {
       // 7. Registrar histórico com mensagem apropriada
       const mensagemHistorico = jaTemInstalacaoConcluida
         ? 'Proposta aprovada pelo analista de cadastro. Instalação já concluída. Proteção 360º ativada.'
-        : 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.';
+        : protecao360SemRastreador
+          ? 'Proposta aprovada pelo analista de cadastro. Proteção 360° ativada (veículo sem necessidade de rastreador).'
+          : 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.';
       
       await supabase
         .from('associados_historico')
