@@ -353,5 +353,6 @@ export function EtapaDadosAssociado({
         </div>
       </CardContent>
     </Card>
+    </>
   );
 }
