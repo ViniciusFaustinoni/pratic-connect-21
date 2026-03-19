@@ -224,7 +224,19 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
       }
     }
 
-    // 5. Boleto
+    // 5. Prazo de antiguidade dos comprovantes
+    const limiteData = new Date();
+    limiteData.setMonth(limiteData.getMonth() - prazoMaxComprovanteMeses);
+    for (const comp of comprovantesDone) {
+      if (comp.data_documento) {
+        const dataDoc = new Date(comp.data_documento);
+        if (!isNaN(dataDoc.getTime()) && dataDoc < limiteData) {
+          errors.push(`Comprovante "${comp.file.name}": documento fora do prazo aceito (máximo ${prazoMaxComprovanteMeses} meses).`);
+        }
+      }
+    }
+
+    // 6. Boleto
     if (!boleto || boleto.status !== 'done') {
       errors.push('O boleto de referência é obrigatório.');
     } else if (boleto.legivel === false) {
