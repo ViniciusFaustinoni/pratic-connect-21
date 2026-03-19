@@ -1462,7 +1462,7 @@ export function useAprovarProposta() {
           }
         }
         
-        const veiculoPrecisaRastreador = precisaRastreador(valorFipe, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto);
+        const veiculoPrecisaRastreador = precisaRastreador(valorFipe, fipeMinRastreador, 'automovel', fipeMinRastreadorMoto);
         
         // Status do veículo depende se instalação foi concluída OU se não precisa de rastreador
         // Veículos sem rastreador recebem proteção 360° direto pela autovistoria completa
@@ -1471,7 +1471,7 @@ export function useAprovarProposta() {
         const coberturaTotal = ativarProtecao360;
         
         if (!veiculoPrecisaRastreador) {
-          console.log(`[useAprovarProposta] Veículo FIPE R$${valorFipe} < limite R$${tipoVeiculo === 'moto' ? fipeMinRastreadorMoto : fipeMinRastreador} — Proteção 360° ativada sem rastreador`);
+          console.log(`[useAprovarProposta] Veículo FIPE R$${valorFipe} < limite R$${fipeMinRastreador} — Proteção 360° ativada sem rastreador`);
         }
         
         const { error: veiculoError } = await supabase
