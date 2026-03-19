@@ -130,6 +130,7 @@ interface MenuItem {
   permission?: PermissionKey;
   color?: string;
   hideForDiretor?: boolean;
+  badge?: string;
 }
 
 interface MenuGroup {
