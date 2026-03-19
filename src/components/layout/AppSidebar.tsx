@@ -858,6 +858,11 @@ export function AppSidebar() {
                                   style={{ color: isActive(item.url) ? 'inherit' : group.color }}
                                 />
                                 <span>{item.title}</span>
+                                {item.badge && (
+                                  <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                    {item.badge}
+                                  </span>
+                                )}
                               </NavLink>
                             </SidebarMenuButton>
                           </SidebarMenuItem>
