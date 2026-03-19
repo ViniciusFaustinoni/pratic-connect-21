@@ -1,63 +1,45 @@
 
 
-# Botão "Outras Entradas" no módulo de Vendas
+# Corrigir fluxo de Migração no "Outras Entradas"
 
 ## Resumo
 
-Adicionar um botão "Outras Entradas" ao lado de "Nova Cotação" na página de Cotações. Ao clicar, abre um painel/dropdown com 4 opções (Substituição, Troca Titularidade, Migração, Inclusão), cada uma com busca contextual e redirecionamento ao fluxo correspondente.
+Substituir a busca por leads no fluxo de Migração por um campo de entrada de CPF com validação automática (vínculo ativo e débitos), e ao confirmar, abrir o `MigracaoDiretaDialog` com CPF pré-preenchido/bloqueado e consultor logado auto-selecionado.
 
 ## Alterações
 
-### 1. Novo componente: `src/components/vendas/OutrasEntradasMenu.tsx`
+### 1. `src/components/vendas/OutrasEntradasMenu.tsx`
 
-Componente que renderiza um `Popover` (ou `DropdownMenu`) com:
+- Remover a query de busca de leads (`leadResults`) e toda a UI de resultados de leads
+- Quando `selectedTipo === 'migracao'`, renderizar no lugar do campo de busca genérico:
+  - Título: "CPF do cliente"
+  - Instrução: "Digite o CPF do cliente para verificar se ele pode ser migrado."
+  - Input com máscara de CPF (usar `maskCPF` de validations)
+  - Ao atingir 11 dígitos (14 chars com máscara), disparar verificação automática
+- Verificação (queries inline com `useQuery`):
+  - Buscar em `associados` por CPF: se encontrar com `status = 'ativo'` → alerta "Cliente já é associado ativo. Não é possível iniciar migração." + botão desabilitado
+  - Se encontrar com débitos (usar `useVerificarDebitosAssociado` pelo id encontrado) → alerta "Há débitos pendentes que precisam ser quitados antes de qualquer nova filiação."
+  - Se não encontrar ou encontrar apenas cancelado sem débitos → badge verde "Cliente elegível para migração" + botão "Iniciar Migração" habilitado
+- Ao clicar "Iniciar Migração": fechar popover, abrir `MigracaoDiretaDialog` passando `cpfPreenchido` e `consultorIdPreenchido`
+- Remover `useBuscaPlaca` e `useAssociadoSearch` do fluxo de migração (já está assim)
 
-- **4 cards/opções** com ícone, título e descrição curta:
-  - `ArrowLeftRight` — Substituição de Placa — "O associado trocou de carro e quer passar a proteção para o novo veículo."
-  - `Users` — Troca de Titularidade — "O veículo foi vendido e o novo dono quer manter a proteção."
-  - `FileInput` — Migração — "O cliente está em outra associação e quer vir para a Praticcar sem perder a carência."
-  - `PlusCircle` — Inclusão de Veículo — "O associado já tem um veículo protegido e quer incluir um segundo."
+### 2. `src/components/cadastro/MigracaoDiretaDialog.tsx`
 
-- Ao clicar numa opção, exibe um **campo de busca inline** dentro do popover.
+- Adicionar props opcionais à interface `Props`:
+  - `cpfInicial?: string` — pré-preenche e bloqueia o campo CPF (`disabled` ou `readOnly`)
+  - `consultorIdInicial?: string` — pré-seleciona o consultor no dropdown
+- No `useEffect` de abertura ou no `useState` inicial, setar `cpf` e `consultorId` a partir das props quando fornecidos
+- Campo CPF: se `cpfInicial` fornecido, renderizar com `readOnly` e estilo visual de campo bloqueado
 
-- **Busca contextual**:
-  - Substituição e Troca Titularidade: usa `useAssociadoSearch` (associados ativos) — busca por nome, CPF, telefone. Adicionar busca por placa via query separada em `veiculos`.
-  - Migração: busca em leads (nome/CPF) ou qualquer CPF — criar query simples em `leads` + fallback de CPF livre.
-  - Inclusão: usa `useAssociadoSearch` (associados ativos).
+### 3. Limpeza
 
-- **Ao selecionar resultado**:
-  - Substituição → `navigate(/cadastro/substituicao-veiculo/${associadoId})`
-  - Troca Titularidade → abre `TrocaTitularidadeDialog` com o `associadoId` selecionado
-  - Migração → abre `MigracaoDiretaDialog` (já existente, recebe CPF pré-preenchido)
-  - Inclusão → verifica débitos via `useVerificarDebitosAssociado`. Se ok, navega para cotação com flag de inclusão. Se bloqueado, exibe alerta inline.
-
-- **Bloqueio de Substituição**: ao selecionar associado para substituição, verificar inadimplência via `useVerificarDebitosAssociado`. Se inadimplente, exibir bloqueio com cálculo de Repasse Maior (buscar config `regra_repasse_maior` das configurações).
-
-### 2. Atualizar `src/pages/vendas/Cotacoes.tsx`
-
-- Importar `OutrasEntradasMenu`
-- Renderizar ao lado do botão "Nova Cotação", dentro de um `PermissionGate` com permissão `cotacao.canCreate` (mesma do botão Nova Cotação — vendedores CLT, externos e gerência já possuem essa permissão)
-- O botão usa `variant="outline"` para se distinguir visualmente do botão principal
-
-### 3. Novo hook: `src/hooks/useBuscaPlaca.ts`
-
-Hook simples que busca em `veiculos` por placa e retorna o `associado_id` vinculado:
-```typescript
-const { data } = await supabase
-  .from('veiculos')
-  .select('id, placa, modelo, marca, associado_id, associados(id, nome, cpf, status)')
-  .ilike('placa', `%${termo}%`)
-  .eq('status', 'ativo')
-  .limit(5);
-```
+- Remover `handleSelectLead` do OutrasEntradasMenu
+- Remover referências a `leadResults`, `loadingLeads` e a query de leads
 
 ## Arquivos afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/components/vendas/OutrasEntradasMenu.tsx` | **Novo** — menu com 4 opções + busca + redirecionamento |
-| `src/hooks/useBuscaPlaca.ts` | **Novo** — busca de veículos por placa |
-| `src/pages/vendas/Cotacoes.tsx` | Adicionar botão "Outras Entradas" ao header |
-
-Nenhuma alteração de schema necessária. Reutiliza hooks existentes (`useAssociadoSearch`, `useVerificarDebitosAssociado`, `useInclusaoBloqueioDebito`) e dialogs existentes (`TrocaTitularidadeDialog`, `MigracaoDiretaDialog`).
+| `src/components/vendas/OutrasEntradasMenu.tsx` | Substituir busca de leads por input CPF + verificação |
+| `src/components/cadastro/MigracaoDiretaDialog.tsx` | Adicionar props `cpfInicial` e `consultorIdInicial` |
 
