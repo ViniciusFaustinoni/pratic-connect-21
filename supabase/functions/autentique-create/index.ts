@@ -271,13 +271,36 @@ serve(async (req) => {
     }
 
     // Fetch migration data if applicable
-    if (contrato.tipo_entrada === 'migracao' && contrato.cotacao_id) {
-      const { data: solMigracao } = await supabase
-        .from('solicitacoes_migracao')
-        .select('associacao_origem, aprovado_em, status')
-        .eq('cotacao_id', contrato.cotacao_id)
-        .eq('status', 'aprovada')
-        .maybeSingle();
+    if (contrato.tipo_entrada === 'migracao') {
+      let solMigracao = null;
+
+      // Primeiro: buscar por cotacao_id (fluxo padrão)
+      if (contrato.cotacao_id) {
+        const { data } = await supabase
+          .from('solicitacoes_migracao')
+          .select('associacao_origem, aprovado_em, status')
+          .eq('cotacao_id', contrato.cotacao_id)
+          .eq('status', 'aprovada')
+          .maybeSingle();
+        solMigracao = data;
+      }
+
+      // Fallback: migração direta (sem cotação) — buscar pelo CPF do associado
+      if (!solMigracao && contrato.associados?.cpf) {
+        const { data } = await supabase
+          .from('solicitacoes_migracao')
+          .select('associacao_origem, aprovado_em, status')
+          .eq('associado_cpf', contrato.associados.cpf)
+          .eq('status', 'aprovada')
+          .order('aprovado_em', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        solMigracao = data;
+        if (solMigracao) {
+          console.log('[autentique-create] Migração direta encontrada via CPF:', contrato.associados.cpf);
+        }
+      }
+
       if (solMigracao) {
         templateData.migracao = {
           aprovada: true,

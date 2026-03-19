@@ -1851,6 +1851,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                   dados={dadosProposta}
                   disabled={!planoFinalSelecionado}
                   variant="outline"
+                  cotacaoId={cotacaoSalvaId}
                 />
               )}
               <Button
