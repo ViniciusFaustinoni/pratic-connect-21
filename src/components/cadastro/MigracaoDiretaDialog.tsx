@@ -24,6 +24,7 @@ interface DocEntry {
   arquivo_url?: string;
   cpf_detectado?: string;
   placa_detectada?: string;
+  data_documento?: string;
   legivel?: boolean;
   erro?: string;
 }
