@@ -103,9 +103,9 @@ export default function AprovacoesFipeMenor() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Aprovações FIPE</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Aprovações</h1>
         <p className="text-muted-foreground">
-          Solicitações de FIPE menor e autorizações de veículos de alto valor
+          Solicitações de FIPE menor, alto valor e elegibilidade de veículos
         </p>
       </div>
 
