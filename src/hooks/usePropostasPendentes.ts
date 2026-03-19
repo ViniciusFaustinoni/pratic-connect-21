@@ -1435,6 +1435,7 @@ export function useAprovarProposta() {
       }
 
       // 6. Atualizar VEÍCULO e criar instalação SE NECESSÁRIO
+      let protecao360SemRastreador = false;
       if (veiculos && veiculos.length > 0) {
         const veiculoId = veiculos[0].id;
         
