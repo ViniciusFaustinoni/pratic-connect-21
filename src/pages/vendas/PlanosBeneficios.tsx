@@ -18,6 +18,7 @@ import { ptBR } from 'date-fns/locale';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCotaDesagioDefault, useCotaMinimaDesagioDefault } from '@/hooks/useConteudosSistema';
 import { formatarMoeda } from '@/utils/format';
+import { LeadsDevGuard } from '@/components/leads/LeadsDevGuard';
 
 // Hooks para dados do Supabase
 import { useProductLines, usePlans, useMainCoverages } from '@/hooks/usePlans';
