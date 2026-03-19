@@ -36,6 +36,14 @@ export interface DadosProposta {
     vendedor: string;
     observacoes?: string;
   };
+
+  // Dados de Migração (quando aplicável)
+  migracao?: {
+    aprovada: boolean;
+    associacaoOrigem: string;
+    carenciaIsenta: boolean;
+    dataAprovacao: string;
+  };
 }
 
 export interface ConfiguracaoPDF {

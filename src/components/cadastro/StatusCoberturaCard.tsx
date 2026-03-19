@@ -10,6 +10,8 @@ interface StatusCoberturaCardProps {
   rastreadorImei?: string | null;
   rastreadorCodigo?: string | null;
   instalacaoStatus?: string | null;
+  carenciaIsenta?: boolean;
+  carenciaMotivoIsencao?: string | null;
   className?: string;
 }
 
@@ -20,9 +22,15 @@ export function StatusCoberturaCard({
   rastreadorImei,
   rastreadorCodigo,
   instalacaoStatus,
+  carenciaIsenta,
+  carenciaMotivoIsencao,
   className,
 }: StatusCoberturaCardProps) {
   const aguardandoAtivacao = coberturaRouboFurto && !coberturaTotal && rastreadorVinculado;
+
+  const carenciaLabel = carenciaIsenta
+    ? `Sem carência — ${carenciaMotivoIsencao || 'migração aprovada'}`
+    : null;
 
   return (
     <Card className={cn('border-border bg-card', className)}>
@@ -49,6 +57,9 @@ export function StatusCoberturaCard({
               <p className="text-sm text-muted-foreground">
                 Proteção contra roubo e furto do veículo
               </p>
+              {coberturaRouboFurto && carenciaLabel && (
+                <p className="text-xs text-success mt-0.5">{carenciaLabel}</p>
+              )}
             </div>
           </div>
           <Badge
@@ -80,6 +91,9 @@ export function StatusCoberturaCard({
                   ? 'Rastreador precisa ser ativado na plataforma'
                   : 'Proteção completa com rastreamento ativo'}
               </p>
+              {coberturaTotal && carenciaLabel && (
+                <p className="text-xs text-success mt-0.5">{carenciaLabel}</p>
+              )}
             </div>
           </div>
           <Badge
