@@ -434,6 +434,7 @@ export default function AssociadoDetalhe() {
             historico={historico}
             isLoadingHistorico={isLoadingHistorico}
             situacao={situacao}
+            canLinkToAssociado={isDiretor || isGerencia || isAnalistaCadastroOnly || isDesenvolvedor || isAdminMaster}
           />
         )}
 

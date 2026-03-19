@@ -18,6 +18,7 @@ interface AssociadoResumoTabProps {
   historico: any[] | undefined;
   isLoadingHistorico: boolean;
   situacao?: SituacaoAssociado;
+  canLinkToAssociado?: boolean;
 }
 
 const formatDate = (d: string | null | undefined) =>
@@ -63,7 +64,7 @@ const getTituloEvento = (tipo: string) => {
 };
 
 export function AssociadoResumoTab({
-  stats, resumoFinanceiro, contrato, associado, historico, isLoadingHistorico, situacao,
+  stats, resumoFinanceiro, contrato, associado, historico, isLoadingHistorico, situacao, canLinkToAssociado = false,
 }: AssociadoResumoTabProps) {
   const emAtraso = resumoFinanceiro?.emAtraso && resumoFinanceiro.emAtraso > 0;
 
@@ -107,7 +108,7 @@ export function AssociadoResumoTab({
       {situacao && <AssociadoSituacaoCard situacao={situacao} />}
 
       {/* Origem do Cadastro */}
-      {associado?.id && <OrigemCadastroCard associadoId={associado.id} />}
+      {associado?.id && <OrigemCadastroCard associadoId={associado.id} canLinkToAssociado={canLinkToAssociado} />}
 
       {/* Info Grid */}
       <div className="grid sm:grid-cols-2 gap-3">
