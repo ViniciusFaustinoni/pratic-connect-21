@@ -17,6 +17,7 @@ import { LeadSignatureListener } from '@/components/leads/LeadSignatureToast';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 
+import { LeadsDevGuard } from '@/components/leads/LeadsDevGuard';
 import { useAllLeads } from '@/hooks/useLeads';
 import { useVendedores } from '@/hooks/useVendedores';
 import { useLeadActions } from '@/hooks/useLeadActions';
@@ -219,6 +220,7 @@ export default function LeadsUnificado() {
   };
 
   return (
+    <LeadsDevGuard>
     <div className="flex flex-col h-full bg-background">
       {/* Fixed Header Section with subtle gradient */}
       <div className="shrink-0 z-10 bg-gradient-to-b from-muted/50 to-background border-b border-border/50">
@@ -348,5 +350,6 @@ export default function LeadsUnificado() {
         </AlertDialogContent>
       </AlertDialog>
     </div>
+    </LeadsDevGuard>
   );
 }

@@ -27,6 +27,7 @@ import {
   FormMessage,
 } from '@/components/ui/form';
 import { ArrowLeft, Save, User, Car, Settings, AlertCircle } from 'lucide-react';
+import { LeadsDevGuard } from '@/components/leads/LeadsDevGuard';
 import { ORIGEM_LABELS, ETAPA_LABELS } from '@/types/database';
 import type { OrigemLead, EtapaLead } from '@/types/database';
 
@@ -190,6 +191,14 @@ const formatPlacaForDisplay = (placa: string | null) => {
 // COMPONENTE PRINCIPAL
 // ============================================
 export default function LeadEditar() {
+  return (
+    <LeadsDevGuard>
+      <LeadEditarContent />
+    </LeadsDevGuard>
+  );
+}
+
+function LeadEditarContent() {
   const { id } = useParams<{ id: string }>();
   const navigate = useNavigate();
   

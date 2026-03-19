@@ -28,6 +28,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { useLead } from '@/hooks/useLeads';
+import { LeadsDevGuard } from '@/components/leads/LeadsDevGuard';
 import { useCotacoesByLead } from '@/hooks/useCotacoesByLead';
 import { ETAPA_LABELS, ORIGEM_LABELS, ETAPA_COLORS, type EtapaLead } from '@/types/vendas';
 import { useChangeLeadEtapa } from '@/hooks/useLeadHistorico';
@@ -93,6 +94,14 @@ const formatDateTime = (dateStr: string) =>
   format(new Date(dateStr), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 
 export default function LeadDetalhe() {
+  return (
+    <LeadsDevGuard>
+      <LeadDetalheContent />
+    </LeadsDevGuard>
+  );
+}
+
+function LeadDetalheContent() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: lead, isLoading } = useLead(id);
