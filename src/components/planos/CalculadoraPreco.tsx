@@ -827,6 +827,12 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                   <Check className="h-3 w-3 text-emerald-600 dark:text-emerald-400" />
                   {resultado.tipoUsoLabel}
                 </span>
+                {resultado.categoriaLabel && (
+                  <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-amber-500/10 text-amber-700 dark:text-amber-400">
+                    <AlertTriangle className="h-3 w-3" />
+                    {resultado.categoriaLabel}
+                  </span>
+                )}
               </div>
 
               {/* Vencimento rápido */}
