@@ -115,6 +115,25 @@ export default function VistoriaCompletaAnalise() {
     enabled: !!id && !!instalacao,
   });
 
+  // Query para buscar dados de carência do contrato vinculado ao associado
+  const associadoId = instalacao?.associados?.id;
+  const { data: contratoCarencia } = useQuery({
+    queryKey: ['contrato-carencia-vistoria', associadoId],
+    queryFn: async () => {
+      if (!associadoId) return null;
+      const { data } = await supabase
+        .from('contratos')
+        .select('carencia_isenta, carencia_motivo_isencao')
+        .eq('associado_id', associadoId)
+        .in('status', ['ativo'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!associadoId,
+  });
+
   const temRecusaPendente = servicoRecusa?.decisao_instalador === 'negado';
 
   const handleAtivarRastreador = () => {
@@ -387,6 +406,8 @@ export default function VistoriaCompletaAnalise() {
             rastreadorImei={rastreadores?.imei}
             rastreadorCodigo={rastreadores?.codigo}
             instalacaoStatus={instalacao.status}
+            carenciaIsenta={contratoCarencia?.carencia_isenta || false}
+            carenciaMotivoIsencao={contratoCarencia?.carencia_motivo_isencao}
           />
 
           {/* Ações */}

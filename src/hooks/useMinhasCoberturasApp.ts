@@ -7,6 +7,7 @@ import { useAuth } from '@/contexts/AuthContext';
  * Hook para verificar as coberturas ativas do associado
  * Usado para controlar quais funcionalidades estão disponíveis no app
  * Agora considera inadimplência para suspender coberturas dinamicamente
+ * e isenção de carência por migração aprovada
  */
 export function useMinhasCoberturas() {
   const { data: veiculos, isLoading } = useVeiculosApp();
@@ -30,6 +31,28 @@ export function useMinhasCoberturas() {
     staleTime: 1000 * 60 * 5,
   });
 
+  // Buscar dados de carência do contrato ativo
+  const { data: contratoCarencia } = useQuery({
+    queryKey: ['app-contrato-carencia', user?.id],
+    queryFn: async () => {
+      if (!user?.id) return null;
+      const { data, error } = await supabase
+        .from('contratos')
+        .select('carencia_isenta, carencia_motivo_isencao')
+        .eq('associado_id', user.id)
+        .in('status', ['ativo'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) return null;
+      return data;
+    },
+    enabled: !!user?.id,
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const carenciaIsenta = contratoCarencia?.carencia_isenta || false;
+
   // Considera o primeiro veículo (principal)
   const veiculo = veiculos?.[0];
   
@@ -50,6 +73,7 @@ export function useMinhasCoberturas() {
   return {
     isLoading,
     inadimplente,
+    carenciaIsenta,
     temCoberturaRouboFurto,
     temCoberturaTotal,
     podeAssistencia,
@@ -58,8 +82,10 @@ export function useMinhasCoberturas() {
     // Mensagem para exibir ao usuário quando cobertura é parcial
     mensagemCoberturaParcial: inadimplente
       ? 'Suas coberturas estão suspensas devido a inadimplência. Regularize sua situação para reativá-las.'
-      : temCoberturaRouboFurto && !temCoberturaTotal
-        ? 'Sua cobertura atual é apenas para roubo e furto. Após a instalação do rastreador, você terá Proteção 360º incluindo assistência 24h.'
-        : null,
+      : carenciaIsenta
+        ? 'Suas coberturas estão ativas sem período de carência — origem: migração aprovada.'
+        : temCoberturaRouboFurto && !temCoberturaTotal
+          ? 'Sua cobertura atual é apenas para roubo e furto. Após a instalação do rastreador, você terá Proteção 360º incluindo assistência 24h.'
+          : null,
   };
 }

@@ -1,5 +1,6 @@
 import { Button } from '@/components/ui/button';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { FileText, Download, ExternalLink, Loader2, ChevronDown } from 'lucide-react';
 import { useGerarProposta } from '@/hooks/useGerarProposta';
 import { DadosProposta } from '@/types/proposta';
@@ -15,6 +16,9 @@ interface BotaoGerarPropostaProps {
 export function BotaoGerarProposta({ dados, disabled, variant = 'default', className }: BotaoGerarPropostaProps) {
   const { gerarProposta, gerando, progresso } = useGerarProposta();
 
+  // Bloquear se é migração e ainda não foi aprovada
+  const migracaoPendente = dados.migracao && !dados.migracao.aprovada;
+
   const handleGerar = async (modo: 'baixar' | 'abrir') => {
     await gerarProposta(dados, { modo });
   };
@@ -28,6 +32,26 @@ export function BotaoGerarProposta({ dados, disabled, variant = 'default', class
         </Button>
         <Progress value={progresso} className="h-1" />
       </div>
+    );
+  }
+
+  if (migracaoPendente) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <span className={className}>
+              <Button variant={variant} disabled className="w-full">
+                <FileText className="h-4 w-4 mr-2" />
+                Gerar Proposta
+              </Button>
+            </span>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Aguardando aprovação da migração</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
     );
   }
 

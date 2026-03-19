@@ -129,6 +129,13 @@ export interface RegrasVendaData {
   repasse_maior_corte_boletos: string;
 }
 
+export interface MigracaoData {
+  associacao_origem: string;
+  data_aprovacao: string;
+  carencia_isenta: boolean;
+  aprovada: boolean;
+}
+
 export interface TermoAfiliacaoData {
   cliente: ClienteData;
   veiculo: VeiculoData;
@@ -142,6 +149,7 @@ export interface TermoAfiliacaoData {
   };
   regrasVenda?: RegrasVendaData;
   regrasDepreciacao?: RegraDepreciacaoData[];
+  migracao?: MigracaoData;
 }
 
 // ============= FORMATADORES =============

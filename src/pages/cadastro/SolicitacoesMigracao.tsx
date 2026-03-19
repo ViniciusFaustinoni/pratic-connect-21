@@ -75,6 +75,7 @@ export default function SolicitacoesMigracao() {
       await aprovarMutation.mutateAsync({
         solicitacaoId: selected.id,
         consultorUserId: (selected as any).consultor?.user_id || '',
+        cotacaoId: (selected as any).cotacao_id || undefined,
       });
       toast.success('Solicitação aprovada com sucesso');
       setShowApproveDialog(false);
