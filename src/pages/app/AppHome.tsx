@@ -64,7 +64,7 @@ export default function AppHome() {
   const navigate = useNavigate();
   const { revistoria } = useAssociado();
   const { associado, veiculos, boletoPendente, isLoading } = useResumoApp();
-  const { temCoberturaTotal, podeAssistencia, mensagemCoberturaParcial } = useMinhasCoberturas();
+  const { temCoberturaTotal, podeAssistencia, mensagemCoberturaParcial, coberturasPorVeiculo, beneficiosAdicionaisSuspensos } = useMinhasCoberturas();
   
   // Verificar se há cotação cancelada por falta de pagamento
   const { data: cotacaoCancelada } = useCotacaoCanceladaPorPagamento(associado?.id);
