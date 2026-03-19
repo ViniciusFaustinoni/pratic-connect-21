@@ -224,6 +224,11 @@ const menuConfig: {
           icon: AlertTriangle,
         },
         {
+          title: 'Imprevistos',
+          url: '/monitoramento/imprevistos',
+          icon: AlertTriangle,
+        },
+        {
           title: 'Aprovação de Associados',
           url: '/monitoramento/aprovacao-associados',
           icon: ShieldAlert,
