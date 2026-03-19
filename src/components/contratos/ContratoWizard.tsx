@@ -557,16 +557,21 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
   const hasMinimumDocs = temDocPessoal && temCrlv;
 
   const handleNext = async () => {
-    if (step === 3) {
+    if (step === STEP_REVISAO) {
       const result = await form.trigger();
       if (!result) return;
     }
-    if (step < 3) setStep(step + 1);
+    if (step < totalSteps) setStep(step + 1);
   };
 
   const handleBack = () => {
     if (step > 1) setStep(step - 1);
   };
+
+  // Handle migration step blocking
+  const handleMigracaoStatusChange = useCallback((canAdvance: boolean) => {
+    setMigracaoAprovada(canAdvance);
+  }, []);
 
   const onSubmit = async (data: WizardFormData) => {
     if (!cotacao) return;
