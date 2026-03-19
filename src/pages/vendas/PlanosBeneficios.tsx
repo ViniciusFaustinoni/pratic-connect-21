@@ -18,6 +18,7 @@ import { ptBR } from 'date-fns/locale';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCotaDesagioDefault, useCotaMinimaDesagioDefault } from '@/hooks/useConteudosSistema';
 import { formatarMoeda } from '@/utils/format';
+import { LeadsDevGuard } from '@/components/leads/LeadsDevGuard';
 
 // Hooks para dados do Supabase
 import { useProductLines, usePlans, useMainCoverages } from '@/hooks/usePlans';
@@ -253,7 +254,10 @@ export default function PlanosBeneficios() {
             Comparador
           </TabsTrigger>
           {podeVerConfigAvancada && (
-            <TabsTrigger value="adicionais">Adicionais</TabsTrigger>
+            <TabsTrigger value="adicionais" className="gap-1.5">
+              Adicionais
+              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/20 text-[10px] px-1.5 py-0">Dev</Badge>
+            </TabsTrigger>
           )}
           <TabsTrigger value="ranking">Ranking</TabsTrigger>
           {podeVerConfigAvancada && (
@@ -435,6 +439,7 @@ export default function PlanosBeneficios() {
         {/* Tab Adicionais - Apenas para gestores */}
         {podeVerConfigAvancada && (
         <TabsContent value="adicionais" className="space-y-4">
+          <LeadsDevGuard>
           {isDiretor && (
             <ResumoSaudeCard
               superavit={resumoSaude?.superavit || 0}
@@ -494,6 +499,7 @@ export default function PlanosBeneficios() {
               )}
             </CardContent>
           </Card>
+          </LeadsDevGuard>
         </TabsContent>
         )}
 
