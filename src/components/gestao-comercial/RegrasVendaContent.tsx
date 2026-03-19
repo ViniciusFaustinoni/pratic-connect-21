@@ -1205,6 +1205,7 @@ export function RegrasVendaContent() {
               />
             </div>
           </CardContent>
+        </Card>
 
         <div className="flex justify-end">
           <Button onClick={handleSaveTaxas} disabled={savingTaxas} className="gap-2">
