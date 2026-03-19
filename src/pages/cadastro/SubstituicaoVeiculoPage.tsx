@@ -2,9 +2,10 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, ArrowLeft, Home, ChevronRight } from 'lucide-react';
+import { Loader2, ArrowLeft, Home, ChevronRight, UserCheck, UserX } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { SubstituicaoStepper } from '@/components/substituicao/SubstituicaoStepper';
 import { StepElegibilidade } from '@/components/substituicao/StepElegibilidade';
 import { StepEventoAtivo } from '@/components/substituicao/StepEventoAtivo';
@@ -13,12 +14,18 @@ import { StepNovoVeiculo } from '@/components/substituicao/StepNovoVeiculo';
 import { StepBeneficios } from '@/components/substituicao/StepBeneficios';
 import { StepFinanceiro } from '@/components/substituicao/StepFinanceiro';
 import { useIniciarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
+import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
 import type { DadosNovoVeiculo } from '@/types/substituicao';
 
 export default function SubstituicaoVeiculoPage() {
   const { associadoId } = useParams<{ associadoId: string }>();
   const navigate = useNavigate();
+  const { profile, isVendedor } = useAuth();
+
+  // Auto-detect consultor: only commercial roles get linked
+  const consultorId = isVendedor() ? profile?.id ?? null : null;
+  const consultorNome = isVendedor() ? profile?.nome ?? null : null;
 
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
@@ -100,6 +107,7 @@ export default function SubstituicaoVeiculoPage() {
       veiculo_antigo_fipe: veiculoAtivo.valor_fipe || 0,
       mensalidade_antiga: 0,
       cota_participacao_antiga: 0,
+      consultor_id: consultorId,
     });
 
     setSubstituicaoId(result.id);
@@ -198,6 +206,19 @@ export default function SubstituicaoVeiculoPage() {
           <p className="text-sm text-muted-foreground">
             Associado: {associado.nome} — Veículo atual: {veiculoAtivo.marca} {veiculoAtivo.modelo} ({veiculoAtivo.placa})
           </p>
+          <div className="mt-1">
+            {consultorNome ? (
+              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1">
+                <UserCheck className="h-3 w-3" />
+                Consultor: {consultorNome}
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1">
+                <UserX className="h-3 w-3" />
+                Sem consultor vinculado
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
 
