@@ -136,6 +136,12 @@ export interface MigracaoData {
   aprovada: boolean;
 }
 
+export interface SubstituicaoData {
+  placa_anterior: string;
+  modelo_anterior: string;
+  fipe_anterior: number;
+}
+
 export interface TermoAfiliacaoData {
   cliente: ClienteData;
   veiculo: VeiculoData;
@@ -150,6 +156,7 @@ export interface TermoAfiliacaoData {
   regrasVenda?: RegrasVendaData;
   regrasDepreciacao?: RegraDepreciacaoData[];
   migracao?: MigracaoData;
+  substituicao?: SubstituicaoData;
 }
 
 // ============= FORMATADORES =============

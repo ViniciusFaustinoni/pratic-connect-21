@@ -156,6 +156,16 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
         ? 'Dispensada — migração aprovada'
         : 'Período padrão',
     } : {}),
+
+    // Substituição de Placa (quando aplicável)
+    ...(dados.substituicao ? {
+      'substituicao.placa_anterior': dados.substituicao.placa_anterior || '—',
+      'substituicao.modelo_anterior': dados.substituicao.modelo_anterior || '—',
+      'substituicao.fipe_anterior': formatCurrency(dados.substituicao.fipe_anterior),
+      'substituicao.tipo_operacao': 'Substituição de Placa',
+    } : {
+      'substituicao.tipo_operacao': dados.contrato.tipo_entrada === 'substituicao_placa' ? 'Substituição de Placa' : 'Nova Adesão',
+    }),
   };
 }
 
