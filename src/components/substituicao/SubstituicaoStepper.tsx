@@ -12,9 +12,10 @@ const STEPS: Step[] = [
   { id: 2, title: 'Eventos', description: 'Tratamento' },
   { id: 3, title: 'Rastreador', description: 'Retirada' },
   { id: 4, title: 'Novo Veículo', description: 'Dados e FIPE' },
-  { id: 5, title: 'Benefícios', description: 'Adicionais' },
-  { id: 6, title: 'Financeiro', description: 'Taxas e valores' },
-  { id: 7, title: 'Aprovação', description: 'Diretoria' },
+  { id: 5, title: 'Vistoria', description: 'Fotos e vídeo' },
+  { id: 6, title: 'Benefícios', description: 'Adicionais' },
+  { id: 7, title: 'Financeiro', description: 'Taxas e valores' },
+  { id: 8, title: 'Conclusão', description: 'Acompanhamento' },
 ];
 
 interface SubstituicaoStepperProps {
