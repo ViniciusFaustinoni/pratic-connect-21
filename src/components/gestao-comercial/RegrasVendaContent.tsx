@@ -117,6 +117,7 @@ const TAXAS_DEFAULTS: TaxasConfig = {
   multa_rastreador: '400',
   troca_titularidade_dispensa_vistoria_ativa: 'true',
   troca_titularidade_prazo_dispensa_vistoria: '0',
+  inclusao_bloquear_debito_outro_veiculo: 'true',
 };
 
 const AUTORIZACOES_CHAVES = [
