@@ -1,4 +1,4 @@
-import { useEffect, useState, useRef } from 'react';
+import { useEffect, useState, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { 
   Loader2, Car, Shield, CheckCircle2, Clock, AlertTriangle,
@@ -18,6 +18,7 @@ import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { formatarMoeda } from '@/utils/format';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 import { 
   useCotacaoPublica, 
@@ -119,6 +120,8 @@ export default function CotacaoPublicaCompleta() {
   );
   const [termosAceitos, setTermosAceitos] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [videoVistoriaUrl, setVideoVistoriaUrl] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   
   // Ref para prevenir duplo clique
   const isSubmittingRef = useRef(false);
@@ -183,7 +186,7 @@ export default function CotacaoPublicaCompleta() {
     }
   }, [cotacao?.valor_fipe, tipoUso, calcular]);
 
-  // Sincronizar fotos existentes
+  // Sincronizar fotos existentes e vídeo
   useEffect(() => {
     if (fotosExistentes && fotosExistentes.length > 0) {
       setFotosVistoria(prev => prev.map(foto => {
@@ -193,6 +196,11 @@ export default function CotacaoPublicaCompleta() {
         }
         return foto;
       }));
+      // Reidratar vídeo 360°
+      const videoExistente = fotosExistentes.find((f: { tipo: string; url: string }) => f.tipo === 'video_360');
+      if (videoExistente) {
+        setVideoVistoriaUrl(videoExistente.url);
+      }
     }
   }, [fotosExistentes]);
 
@@ -456,6 +464,24 @@ export default function CotacaoPublicaCompleta() {
     }
   };
 
+  const handleUploadVideo360 = useCallback(async (file: File) => {
+    if (!cotacao?.id) return;
+    setUploadingVideo(true);
+    try {
+      const result = await uploadFotoVistoria.mutateAsync({
+        cotacaoId: cotacao.id,
+        tipo: 'video_360',
+        file,
+      });
+      setVideoVistoriaUrl(result.url);
+      toast.success('Vídeo 360° enviado!');
+    } catch {
+      toast.error('Erro ao enviar vídeo');
+    } finally {
+      setUploadingVideo(false);
+    }
+  }, [cotacao?.id, uploadFotoVistoria]);
+
   const handleConcluirVistoria = async () => {
     if (!token || isSubmittingRef.current || loading) return;
     
@@ -463,6 +489,10 @@ export default function CotacaoPublicaCompleta() {
       const enviadas = fotosVistoria.filter(f => f.status === 'enviado').length;
       if (enviadas < 10) {
         toast.error('Envie pelo menos 10 fotos da vistoria');
+        return;
+      }
+      if (!videoVistoriaUrl) {
+        toast.error('Grave o vídeo 360° do veículo');
         return;
       }
     }
@@ -1012,7 +1042,7 @@ export default function CotacaoPublicaCompleta() {
                 <Alert>
                   <Camera className="h-4 w-4" />
                   <AlertDescription>
-                    Tire fotos em local bem iluminado. {fotosVistoria.filter(f => f.status === 'enviado').length} de {FOTOS_VISTORIA_CONFIG.length} fotos
+                    Tire fotos em local bem iluminado. {fotosVistoria.filter(f => f.status === 'enviado').length} de {FOTOS_VISTORIA_CONFIG.length} fotos • Vídeo 360°: {videoVistoriaUrl ? '✓' : 'pendente'}
                   </AlertDescription>
                 </Alert>
 
@@ -1052,9 +1082,22 @@ export default function CotacaoPublicaCompleta() {
                   ))}
                 </div>
 
+                {/* Vídeo 360° obrigatório */}
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-foreground mb-2">Vídeo 360° (obrigatório)</h3>
+                  <VideoCapture
+                    onCapture={handleUploadVideo360}
+                    onReset={() => setVideoVistoriaUrl(null)}
+                    videoUrl={videoVistoriaUrl || undefined}
+                    uploading={uploadingVideo}
+                    maxDuration={120}
+                    label="Grave um vídeo de 360° ao redor do veículo"
+                  />
+                </div>
+
                 <Button
                   onClick={handleConcluirVistoria}
-                  disabled={fotosVistoria.filter(f => f.status === 'enviado').length < 10 || loading}
+                  disabled={fotosVistoria.filter(f => f.status === 'enviado').length < 10 || !videoVistoriaUrl || loading}
                   className="w-full h-12"
                 >
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Concluir Vistoria'}
