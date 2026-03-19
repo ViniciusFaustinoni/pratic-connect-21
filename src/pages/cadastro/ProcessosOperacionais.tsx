@@ -379,7 +379,7 @@ function useProcessosCounts() {
   return useQuery({
     queryKey: ['processos-counts'],
     queryFn: async () => {
-      const [titularidade, reativacao, substituicoes] = await Promise.all([
+      const [titularidade, reativacao, substituicoes, migracoes] = await Promise.all([
         supabase
           .from('chat_solicitacoes_ia')
           .select('id', { count: 'exact', head: true })
@@ -394,12 +394,17 @@ function useProcessosCounts() {
           .from('substituicoes_veiculo')
           .select('id', { count: 'exact', head: true })
           .eq('status', 'aguardando_aprovacao'),
+        supabase
+          .from('solicitacoes_migracao')
+          .select('id', { count: 'exact', head: true })
+          .eq('status', 'pendente'),
       ]);
 
       return {
         titularidade: titularidade.count || 0,
         reativacao: reativacao.count || 0,
         substituicoes: substituicoes.count || 0,
+        migracoes: migracoes.count || 0,
       };
     },
   });
