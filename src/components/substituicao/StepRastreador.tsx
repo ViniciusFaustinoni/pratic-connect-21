@@ -52,8 +52,8 @@ export function StepRastreador({
         .from('servicos')
         .select('id, status, tipo')
         .eq('veiculo_id', veiculoAntigoId)
-        .eq('tipo', 'retirada')
-        .in('status', ['pendente', 'agendado', 'em_andamento', 'concluido'])
+        .eq('tipo', 'vistoria_retirada')
+        .in('status', ['pendente', 'agendada', 'em_andamento', 'concluida'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
