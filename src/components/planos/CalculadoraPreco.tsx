@@ -383,6 +383,11 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
 
     const resultadosPlano: ResultadoPlano[] = [];
 
+    const { categoriasDesagio, linhasComDesagio, categoriasQueSobrepoeApp, cotaDesagioDefault, cotaMinimaDesagioDefault, cotasCategoriaData } = desagioConfig;
+    const categoriaAtiva = tipoVeiculo === 'carro' && categoria !== 'nenhuma' ? categoria : null;
+    const isDesagio = !!categoriaAtiva && categoriasDesagio.includes(categoriaAtiva);
+    const isAppComDesagio = tipoUso === 'aplicativo' && isDesagio && categoriasQueSobrepoeApp.includes(categoriaAtiva || '');
+
     for (const plano of planos) {
       const catLower = (plano.categoria || '').toLowerCase();
       const tipoUsoPlano = (plano.tipo_uso || '').toLowerCase();
@@ -392,8 +397,19 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
       if (!mapping?.linha_slug) continue;
 
       const linhaSlug = mapping.linha_slug;
+      const plSlug = linhaSlug.toLowerCase();
 
       if (!linhaMatchesTipo(linhaSlug)) continue;
+
+      // Filtro tipo_uso: APP + deságio permite planos 'passeio' da linha Select
+      if (tipoUso === 'aplicativo' && tipoUsoPlano !== 'aplicativo' && tipoUsoPlano !== 'ambos') {
+        const isLinhaSelect = plSlug.startsWith('select');
+        if (!(isAppComDesagio && tipoUsoPlano === 'passeio' && isLinhaSelect)) {
+          continue;
+        }
+      }
+      if (tipoUso !== 'aplicativo' && tipoUsoPlano === 'aplicativo') continue;
+
       if (tipoUso === 'aplicativo' && !plMaps.supportsApp[linhaSlug]) continue;
       if (plano.fipe_minima && valor < Number(plano.fipe_minima)) continue;
       if (plano.fipe_maxima && valor > Number(plano.fipe_maxima)) continue;
@@ -407,8 +423,14 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         if (anoNum < anoAtual - 1) continue;
       }
 
+      // Blocked categories (from product_line)
       const blocked = plMaps.blockedCats[linhaSlug] || [];
-      if (blocked.length > 0 && catLower && blocked.some(b => b.toLowerCase() === catLower)) continue;
+      if (blocked.length > 0 && categoriaAtiva && blocked.includes(categoriaAtiva)) continue;
+
+      // Select Exclusive: ocultar quando APP + deságio combinam
+      if (isAppComDesagio && (plSlug === 'select-exclusive' || (plano as any).codigo?.toLowerCase().includes('exclusive'))) {
+        continue;
+      }
 
       const isMotoLine = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
       const tipoUsoPricing = isMotoLine
@@ -432,8 +454,19 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
       if (!faixa || Number(faixa.valor_mensal) <= 0) continue;
 
       let valorMensal = Number(faixa.valor_mensal);
+      const valorDesagioFaixa = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
+      let precoDesagioAplicado = false;
 
-      if (!isMotoLine && tipoUso === 'aplicativo') {
+      // Aplicar deságio: usar valor_desagio se a categoria é deságio e a linha suporta
+      const temColunaAppDedicada = configApp.linhasComColunaApp.includes(linhaSlug);
+      if (isDesagio && valorDesagioFaixa != null && linhasComDesagio.includes(linhaSlug) && !temColunaAppDedicada) {
+        valorMensal = valorDesagioFaixa;
+        precoDesagioAplicado = true;
+      }
+
+      // Adicional APP: NÃO aplicar se a categoria anula (deságio sobrepõe APP)
+      const categoriaAnulaApp = isDesagio && categoriasQueSobrepoeApp.includes(categoriaAtiva || '');
+      if (!isMotoLine && tipoUso === 'aplicativo' && !categoriaAnulaApp) {
         valorMensal = resolverPrecoApp(linhaSlug, regiao, tipoUso, valorMensal, adicionalApp, configApp);
       }
 
@@ -445,10 +478,29 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         valorMensal *= (1 - descontoPerc / 100);
       }
 
-      // Extract extra info
+      // Cota — cascata: planos_cotas_categoria → plano fields → defaults
+      const cotaBase = plano.cota_participacao != null ? Number(plano.cota_participacao) : cotaDefault;
+      const cotaMinBase = plano.cota_minima != null ? Number(plano.cota_minima) : cotaMinimaDefault;
+      let cotaPercentual = cotaBase;
+      let cotaMinima = cotaMinBase;
+
+      let cotaCategoriaLookup = categoriaAtiva || 'passeio';
+      if (tipoUso === 'aplicativo') cotaCategoriaLookup = 'aplicativo';
+      if (isDesagio) cotaCategoriaLookup = 'desagio';
+
+      const cotaOverride = cotasCategoriaData?.find(
+        cc => cc.plano_id === plano.id && cc.categoria_veiculo === cotaCategoriaLookup
+      );
+
+      if (cotaOverride) {
+        cotaPercentual = cotaOverride.cota_percentual != null ? Number(cotaOverride.cota_percentual) : cotaBase;
+        cotaMinima = cotaOverride.cota_minima_valor != null ? Number(cotaOverride.cota_minima_valor) : cotaMinBase;
+      } else if (tipoUso === 'aplicativo' || isDesagio) {
+        cotaPercentual = (plano as any).cota_desagio != null ? Number((plano as any).cota_desagio) : cotaDesagioDefault;
+        cotaMinima = (plano as any).cota_minima_desagio != null ? Number((plano as any).cota_minima_desagio) : cotaMinimaDesagioDefault;
+      }
+
       const valorAdesao = Number(plano.valor_adesao || 0);
-      const cotaPercentual = plano.cota_participacao != null ? Number(plano.cota_participacao) : cotaDefault;
-      const cotaMinima = plano.cota_minima != null ? Number(plano.cota_minima) : cotaMinimaDefault;
       const coberturaFipe = Number(plano.cobertura_fipe || 100);
 
       // Extract coberturas from planos_beneficios
@@ -457,13 +509,13 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
         .map((pb: any) => pb.custom_text || pb.benefits?.name || '')
         .filter(Boolean)
-        .slice(0, 6); // Show max 6 for brevity
+        .slice(0, 6);
 
       resultadosPlano.push({
         key: plano.id,
         planoNome: plano.nome,
         valorMensal: Math.round(valorMensal * 100) / 100,
-        valorDesagio: faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null,
+        valorDesagio: valorDesagioFaixa,
         adicionalMensal,
         descontoPercentual: descontoPerc,
         sortPriority: plMaps.sortPriority[linhaSlug] ?? 99,
@@ -472,6 +524,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         cotaMinima,
         coberturaFipe,
         coberturas,
+        precoDesagioAplicado,
       });
     }
 
