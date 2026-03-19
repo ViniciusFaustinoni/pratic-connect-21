@@ -65,6 +65,7 @@ import PropostaAnalise from "./pages/cadastro/PropostaAnalise";
 import VistoriaCompletaAnalise from "./pages/cadastro/VistoriaCompletaAnalise";
 import RecusasInstalador from "./pages/cadastro/RecusasInstalador";
 import ProcessosOperacionais from "./pages/cadastro/ProcessosOperacionais";
+import SolicitacoesMigracao from "./pages/cadastro/SolicitacoesMigracao";
 import SinistrosList from "./pages/eventos/SinistrosList";
 import EventosPreAnalise from "./pages/eventos/EventosPreAnalise";
 import SinistroAnalise from "./pages/eventos/SinistroAnalise";
@@ -477,6 +478,7 @@ const App = () => (
               <Route path="/cadastro/processos" element={<ProcessosOperacionais />} />
               <Route path="/cadastro/recusas-instalador" element={<RecusasInstalador />} />
               <Route path="/cadastro/gerar-termo" element={<GerarTermo />} />
+              <Route path="/cadastro/migracoes" element={<SolicitacoesMigracao />} />
               
               {/* Eventos */}
               <Route path="/eventos/dashboard" element={<SinistrosDashboard />} />

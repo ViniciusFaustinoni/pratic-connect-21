@@ -14468,6 +14468,44 @@ export type Database = {
           },
         ]
       }
+      migracao_decisoes_historico: {
+        Row: {
+          analista_id: string
+          analista_nome: string | null
+          created_at: string | null
+          decisao: string
+          id: string
+          motivo: string | null
+          solicitacao_id: string
+        }
+        Insert: {
+          analista_id: string
+          analista_nome?: string | null
+          created_at?: string | null
+          decisao: string
+          id?: string
+          motivo?: string | null
+          solicitacao_id: string
+        }
+        Update: {
+          analista_id?: string
+          analista_nome?: string | null
+          created_at?: string | null
+          decisao?: string
+          id?: string
+          motivo?: string | null
+          solicitacao_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "migracao_decisoes_historico_solicitacao_id_fkey"
+            columns: ["solicitacao_id"]
+            isOneToOne: false
+            referencedRelation: "solicitacoes_migracao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       movimentacoes_bancarias: {
         Row: {
           categoria: string | null
