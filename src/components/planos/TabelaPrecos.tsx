@@ -1,8 +1,11 @@
 import { useState } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
+import { ChevronDown } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
+import { useProductLines } from '@/hooks/usePlans';
 import { formatarMoeda } from '@/utils/format';
 
 interface TabelaPrecosProps {
@@ -16,18 +19,20 @@ const REGIOES = [
   { value: 'sp', label: 'São Paulo' },
 ];
 
-const LINHA_LABELS: Record<string, string> = {
-  select: 'Select',
-  lancamento: 'Lançamento',
-  especial: 'Especial',
-  advanced: 'Advanced',
-  eletrico: 'Elétrico',
-};
+const ITEMS_PER_PAGE = 20;
 
 function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
   const { data: tabelas, isLoading } = useTabelasPreco();
+  const { data: productLines } = useProductLines();
   const [regiaoFiltro, setRegiaoFiltro] = useState('todas');
   const [linhaFiltro, setLinhaFiltro] = useState('todas');
+  const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+
+  // Build dynamic line labels from product_lines
+  const linhaLabels: Record<string, string> = {};
+  productLines?.forEach(pl => {
+    if (pl.slug) linhaLabels[pl.slug] = pl.name;
+  });
 
   if (isLoading) {
     return (
@@ -57,6 +62,10 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
     return true;
   });
 
+  // Paginar
+  const tabelasVisiveis = tabelasFiltradas.slice(0, visibleCount);
+  const temMais = tabelasFiltradas.length > visibleCount;
+
   if (tabelasOrdenadas.length === 0) {
     return (
       <Card>
@@ -70,15 +79,17 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
 
   return (
     <Card>
-      <CardHeader>
-        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
+      <CardHeader className="pb-3">
+        <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <CardTitle>{titulo || 'Tabela de Preços'}</CardTitle>
-            <CardDescription>Valores mensais por faixa FIPE</CardDescription>
+            <CardTitle className="text-base">{titulo || 'Tabela de Preços'}</CardTitle>
+            <CardDescription className="text-xs">
+              Valores mensais por faixa FIPE • {tabelasFiltradas.length} faixas
+            </CardDescription>
           </div>
           <div className="flex gap-2">
-            <Select value={regiaoFiltro} onValueChange={setRegiaoFiltro}>
-              <SelectTrigger className="w-[160px]">
+            <Select value={regiaoFiltro} onValueChange={(v) => { setRegiaoFiltro(v); setVisibleCount(ITEMS_PER_PAGE); }}>
+              <SelectTrigger className="w-[150px] h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -87,15 +98,15 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={linhaFiltro} onValueChange={setLinhaFiltro}>
-              <SelectTrigger className="w-[140px]">
+            <Select value={linhaFiltro} onValueChange={(v) => { setLinhaFiltro(v); setVisibleCount(ITEMS_PER_PAGE); }}>
+              <SelectTrigger className="w-[140px] h-8 text-xs">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem value="todas">Todas as linhas</SelectItem>
                 {linhasDisponiveis.map(slug => (
                   <SelectItem key={slug} value={slug}>
-                    {LINHA_LABELS[slug] || slug}
+                    {linhaLabels[slug] || slug}
                   </SelectItem>
                 ))}
               </SelectContent>
@@ -103,52 +114,68 @@ function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
           </div>
         </div>
       </CardHeader>
-      <CardContent>
+      <CardContent className="pt-0">
         {tabelasFiltradas.length === 0 ? (
-          <p className="text-sm text-muted-foreground text-center py-8">
+          <p className="text-sm text-muted-foreground text-center py-6">
             Nenhum resultado para os filtros selecionados.
           </p>
         ) : (
-          <div className="overflow-x-auto">
-            <table className="w-full text-sm">
-              <thead>
-                <tr className="border-b">
-                  <th className="text-left py-2 px-3">Faixa FIPE</th>
-                  <th className="text-left py-2 px-3">Linha</th>
-                  <th className="text-left py-2 px-3">Região</th>
-                  <th className="text-right py-2 px-3">Valor Mensal</th>
-                  <th className="text-right py-2 px-3">Valor Deságio</th>
-                </tr>
-              </thead>
-              <tbody>
-                {tabelasFiltradas.map((tabela) => {
-                  const valorMensal = Number(tabela.valor_mensal);
+          <>
+            <div className="overflow-x-auto">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="border-b">
+                    <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Faixa FIPE</th>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Linha</th>
+                    <th className="text-left py-2 px-3 text-xs font-medium text-muted-foreground">Região</th>
+                    <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Mensal</th>
+                    <th className="text-right py-2 px-3 text-xs font-medium text-muted-foreground">Deságio</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {tabelasVisiveis.map((tabela) => {
+                    const valorMensal = Number(tabela.valor_mensal);
+                    return (
+                      <tr key={tabela.id} className="border-b hover:bg-muted/50">
+                        <td className="py-1.5 px-3 text-xs">
+                          {formatarMoeda(Number(tabela.fipe_min))} - {formatarMoeda(Number(tabela.fipe_max))}
+                        </td>
+                        <td className="py-1.5 px-3 text-xs">
+                          {linhaLabels[tabela.linha_slug || ''] || tabela.linha_slug || '-'}
+                        </td>
+                        <td className="py-1.5 px-3 text-xs">
+                          {tabela.regiao?.toUpperCase() || '-'}
+                        </td>
+                        <td className="text-right py-1.5 px-3 text-xs font-medium">
+                          {valorMensal > 0 ? formatarMoeda(valorMensal) : (
+                            <span className="text-muted-foreground italic">Consulte</span>
+                          )}
+                        </td>
+                        <td className="text-right py-1.5 px-3 text-xs">
+                          {tabela.valor_desagio ? formatarMoeda(Number(tabela.valor_desagio)) : '-'}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
 
-                  return (
-                    <tr key={tabela.id} className="border-b hover:bg-muted/50">
-                      <td className="py-2 px-3">
-                        {formatarMoeda(Number(tabela.fipe_min))} - {formatarMoeda(Number(tabela.fipe_max))}
-                      </td>
-                      <td className="py-2 px-3">
-                        {LINHA_LABELS[tabela.linha_slug || ''] || tabela.linha_slug || '-'}
-                      </td>
-                      <td className="py-2 px-3">
-                        {tabela.regiao?.toUpperCase() || '-'}
-                      </td>
-                      <td className="text-right py-2 px-3 font-medium">
-                        {valorMensal > 0 ? formatarMoeda(valorMensal) : (
-                          <span className="text-xs text-muted-foreground italic">Consulte um consultor</span>
-                        )}
-                      </td>
-                      <td className="text-right py-2 px-3">
-                        {tabela.valor_desagio ? formatarMoeda(Number(tabela.valor_desagio)) : '-'}
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
+            {/* Mostrar mais */}
+            {temMais && (
+              <div className="flex justify-center pt-3">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="text-xs gap-1"
+                  onClick={() => setVisibleCount(prev => prev + ITEMS_PER_PAGE)}
+                >
+                  <ChevronDown className="h-3 w-3" />
+                  Mostrar mais ({tabelasFiltradas.length - visibleCount} restantes)
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </CardContent>
     </Card>

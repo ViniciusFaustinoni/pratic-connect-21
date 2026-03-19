@@ -34,7 +34,8 @@ export function PlanoLineSection({ productLine, plans }: PlanoLineSectionProps) 
   const getGridCols = () => {
     if (plans.length === 1) return 'md:grid-cols-1 max-w-xl';
     if (plans.length === 2) return 'md:grid-cols-2';
-    return 'md:grid-cols-3';
+    if (plans.length === 3) return 'md:grid-cols-3';
+    return 'md:grid-cols-3 xl:grid-cols-4';
   };
 
   return (

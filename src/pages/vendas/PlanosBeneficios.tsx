@@ -8,8 +8,9 @@ import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
 import { Button } from '@/components/ui/button';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
-  AlertTriangle, MapPin, Settings, Loader2, Info, CalendarCheck
+  AlertTriangle, MapPin, Settings, Loader2, Info, CalendarCheck, ChevronDown, Car, Bike, GitCompare
 } from 'lucide-react';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
 import { format } from 'date-fns';
@@ -49,12 +50,12 @@ const formatCurrency = (value: number) => {
 function PlanosSkeleton() {
   return (
     <div className="space-y-8">
-      {[1, 2, 3].map((section) => (
+      {[1, 2].map((section) => (
         <section key={section}>
           <Skeleton className="h-7 w-48 mb-4" />
           <div className="grid gap-4 md:grid-cols-3">
             {[1, 2, 3].map((card) => (
-              <Skeleton key={card} className="h-64 rounded-lg" />
+              <Skeleton key={card} className="h-48 rounded-lg" />
             ))}
           </div>
         </section>
@@ -108,11 +109,12 @@ function SeFecharHojeButton() {
 }
 
 export default function PlanosBeneficios() {
-  const [activeTab, setActiveTab] = useState('visao-geral');
+  const [activeTab, setActiveTab] = useState('carros');
   const [searchTerm, setSearchTerm] = useState('');
   const [cotacaoDialogOpen, setCotacaoDialogOpen] = useState(false);
   const [cotacaoBase, setCotacaoBase] = useState<CotacaoBaseParaFormulario | null>(null);
-  const { isDiretor, isDesenvolvedor, isGerente, isSupervisor, isAdminMaster } = usePermissions();
+  const [comparadorTipo, setComparadorTipo] = useState<'carros' | 'motos'>('carros');
+  const { isDiretor, isDesenvolvedor, isGerente, isSupervisor, isAdminMaster, isVendedorClt, isVendedorExterno } = usePermissions();
   const podeVerConfigAvancada = isDiretor || isGerente || isSupervisor || isDesenvolvedor || isAdminMaster;
 
   // Config dinâmica de deságio
@@ -183,22 +185,14 @@ export default function PlanosBeneficios() {
     if (!searchTerm) return linePlans;
     
     return linePlans.filter(plan => {
-      // Buscar no nome do plano
       if (plan.name?.toLowerCase().includes(searchTerm)) return true;
       if (plan.nome?.toLowerCase().includes(searchTerm)) return true;
-      
-      // Buscar na descrição
       if (plan.descricao?.toLowerCase().includes(searchTerm)) return true;
-      
-      // Buscar no badge
       if (plan.badge_text?.toLowerCase().includes(searchTerm)) return true;
-      
-      // Buscar nos benefícios
       if (plan.plan_benefits?.some(b => 
         b.benefits?.name?.toLowerCase().includes(searchTerm) || 
         b.custom_text?.toLowerCase().includes(searchTerm)
       )) return true;
-      
       return false;
     });
   };
@@ -206,6 +200,9 @@ export default function PlanosBeneficios() {
   // Filtrar linhas por tipo de veículo
   const carLines = productLines?.filter(line => line.vehicle_type === 'car') || [];
   const motoLines = productLines?.filter(line => line.vehicle_type === 'motorcycle') || [];
+
+  // Calcular número de tabs
+  const tabCount = 4 + (podeVerConfigAvancada ? 2 : 0) + 1; // carros, motos, comparador, ranking + adicionais + regioes + glossário
 
   return (
     <div className="container mx-auto p-6 space-y-6 pb-20">
@@ -241,17 +238,26 @@ export default function PlanosBeneficios() {
       <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-6">
         <TabsList className={cn(
           "grid w-full lg:w-auto",
-          podeVerConfigAvancada ? "grid-cols-4 lg:grid-cols-7" : "grid-cols-5"
+          podeVerConfigAvancada ? "grid-cols-4 lg:grid-cols-7" : "grid-cols-4 lg:grid-cols-5"
         )}>
-          <TabsTrigger value="visao-geral">Visão Geral</TabsTrigger>
-          <TabsTrigger value="carros">Carros</TabsTrigger>
-          <TabsTrigger value="motos">Motos</TabsTrigger>
+          <TabsTrigger value="carros" className="gap-1.5">
+            <Car className="h-3.5 w-3.5" />
+            Carros
+          </TabsTrigger>
+          <TabsTrigger value="motos" className="gap-1.5">
+            <Bike className="h-3.5 w-3.5" />
+            Motos
+          </TabsTrigger>
+          <TabsTrigger value="comparador" className="gap-1.5">
+            <GitCompare className="h-3.5 w-3.5" />
+            Comparador
+          </TabsTrigger>
           {podeVerConfigAvancada && (
             <TabsTrigger value="adicionais">Adicionais</TabsTrigger>
           )}
           <TabsTrigger value="ranking">Ranking</TabsTrigger>
           {podeVerConfigAvancada && (
-            <TabsTrigger value="regioes" className="flex items-center gap-1">
+            <TabsTrigger value="regioes" className="gap-1.5">
               <MapPin className="h-3.5 w-3.5" />
               Regiões
             </TabsTrigger>
@@ -259,12 +265,10 @@ export default function PlanosBeneficios() {
           <TabsTrigger value="glossario">Glossário</TabsTrigger>
         </TabsList>
 
-        {/* Tab Visão Geral */}
-        <TabsContent value="visao-geral" className="space-y-8">
-          {/* Estado de Loading */}
+        {/* Tab Carros (default) */}
+        <TabsContent value="carros" className="space-y-6">
           {isLoading && <PlanosSkeleton />}
 
-          {/* Estado de Erro */}
           {hasError && (
             <Alert variant="destructive">
               <AlertTriangle className="h-4 w-4" />
@@ -274,15 +278,14 @@ export default function PlanosBeneficios() {
             </Alert>
           )}
 
-          {/* Estado Vazio */}
-          {!isLoading && !hasError && (!productLines?.length || !plans?.length) && (
+          {!isLoading && !hasError && carLines.length === 0 && (
             <div className="text-center py-12 text-muted-foreground">
-              Nenhum plano disponível no momento.
+              Nenhum plano de carro disponível no momento.
             </div>
           )}
 
-          {/* Planos por Linha de Produto (dinâmico do Supabase) */}
-          {!isLoading && !hasError && productLines?.map((line) => (
+          {/* Planos por Linha */}
+          {!isLoading && !hasError && carLines.map((line) => (
             <PlanoLineSection
               key={line.id}
               productLine={line}
@@ -290,7 +293,7 @@ export default function PlanosBeneficios() {
             />
           ))}
 
-          {/* Coberturas Principais (do Supabase) */}
+          {/* Coberturas Principais */}
           {!loadingCoverages && mainCoverages && mainCoverages.length > 0 && (
             <section>
               <h2 className="text-xl font-semibold mb-4">Coberturas Principais</h2>
@@ -316,32 +319,43 @@ export default function PlanosBeneficios() {
             </AlertDescription>
           </Alert>
 
-          <ContatosInline />
-        </TabsContent>
+          {/* Tabela de Preços (colapsável) */}
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between gap-2">
+                <span className="font-medium">📋 Tabela de Preços — Carros</span>
+                <ChevronDown className="h-4 w-4 transition-transform duration-200 [[data-state=open]>svg&]:rotate-180" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3">
+              <TabelaPrecosCarros />
+            </CollapsibleContent>
+          </Collapsible>
 
-        {/* Tab Carros */}
-        <TabsContent value="carros" className="space-y-8">
-          {/* Planos de Carros (dinâmico do Supabase) */}
-          {isLoading && <PlanosSkeleton />}
-          
-          {!isLoading && !hasError && carLines.map((line) => (
-            <PlanoLineSection
-              key={line.id}
-              productLine={line}
-              plans={getPlansByLineId(line.id)}
-            />
-          ))}
-
-          <ComparadorNiveisSelect />
-          <TabelaPrecosCarros titulo="Tabela de Preços - Linha Select" />
-          <VeiculosAceitosCarros />
+          {/* Veículos Aceitos (colapsável) */}
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between gap-2">
+                <span className="font-medium">🚗 Veículos Aceitos — Carros</span>
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3">
+              <VeiculosAceitosCarros />
+            </CollapsibleContent>
+          </Collapsible>
         </TabsContent>
 
         {/* Tab Motos */}
-        <TabsContent value="motos" className="space-y-8">
-          {/* Planos de Motos (dinâmico do Supabase) */}
+        <TabsContent value="motos" className="space-y-6">
           {isLoading && <PlanosSkeleton />}
           
+          {!isLoading && !hasError && motoLines.length === 0 && (
+            <div className="text-center py-12 text-muted-foreground">
+              Nenhum plano de moto disponível no momento.
+            </div>
+          )}
+
           {!isLoading && !hasError && motoLines.map((line) => (
             <PlanoLineSection
               key={line.id}
@@ -350,16 +364,77 @@ export default function PlanosBeneficios() {
             />
           ))}
 
-          <ComparadorNiveisMotos />
-          <TabelaPrecosMotos />
-          <VeiculosAceitosMotos />
+          {/* Coberturas Principais */}
+          {!loadingCoverages && mainCoverages && mainCoverages.length > 0 && (
+            <section>
+              <h2 className="text-xl font-semibold mb-4">Coberturas Principais</h2>
+              <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
+                {mainCoverages.map((coverage) => (
+                  <Card key={coverage.id} className="text-center p-4 hover:shadow-md transition-shadow">
+                    <div className="text-3xl mb-2">{coverage.icon}</div>
+                    <p className="font-medium text-sm">{coverage.name}</p>
+                    <p className="text-xs text-muted-foreground">{coverage.subtitle}</p>
+                  </Card>
+                ))}
+              </div>
+            </section>
+          )}
+
+          {/* Tabela de Preços (colapsável) */}
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between gap-2">
+                <span className="font-medium">📋 Tabela de Preços — Motos</span>
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3">
+              <TabelaPrecosMotos />
+            </CollapsibleContent>
+          </Collapsible>
+
+          {/* Veículos Aceitos (colapsável) */}
+          <Collapsible>
+            <CollapsibleTrigger asChild>
+              <Button variant="outline" className="w-full justify-between gap-2">
+                <span className="font-medium">🏍️ Veículos Aceitos — Motos</span>
+                <ChevronDown className="h-4 w-4" />
+              </Button>
+            </CollapsibleTrigger>
+            <CollapsibleContent className="mt-3">
+              <VeiculosAceitosMotos />
+            </CollapsibleContent>
+          </Collapsible>
         </TabsContent>
 
+        {/* Tab Comparador */}
+        <TabsContent value="comparador" className="space-y-6">
+          <div className="flex items-center gap-2 mb-2">
+            <Button
+              variant={comparadorTipo === 'carros' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setComparadorTipo('carros')}
+              className="gap-1.5"
+            >
+              <Car className="h-4 w-4" />
+              Carros
+            </Button>
+            <Button
+              variant={comparadorTipo === 'motos' ? 'default' : 'outline'}
+              size="sm"
+              onClick={() => setComparadorTipo('motos')}
+              className="gap-1.5"
+            >
+              <Bike className="h-4 w-4" />
+              Motos
+            </Button>
+          </div>
+          {comparadorTipo === 'carros' ? <ComparadorNiveisSelect /> : <ComparadorNiveisMotos />}
+        </TabsContent>
 
         {/* Tab Adicionais - Apenas para gestores */}
         {podeVerConfigAvancada && (
         <TabsContent value="adicionais" className="space-y-4">
-          {/* Resumo de Saúde Financeira - apenas visualização para diretor */}
           {isDiretor && (
             <ResumoSaudeCard
               superavit={resumoSaude?.superavit || 0}
@@ -400,7 +475,6 @@ export default function PlanosBeneficios() {
                           <Badge variant="outline" className="text-xs">
                             {beneficio.categoria}
                           </Badge>
-                          {/* Badge de indicador de saúde (visível para Diretor) */}
                           {isDiretor && custosPorBeneficio[beneficio.id] && (
                             <BadgeIndicador 
                               indicador={custosPorBeneficio[beneficio.id].indicador} 
