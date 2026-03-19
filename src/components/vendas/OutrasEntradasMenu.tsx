@@ -279,9 +279,9 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
             </div>
           ) : (
             // Step 2: Search or CPF input
-            <div className="flex flex-col">
+            <div className="flex flex-col overflow-hidden">
               {/* Header */}
-              <div className="flex items-center gap-2 px-4 py-3 border-b">
+              <div className="flex items-center gap-2 px-4 py-3 pr-10 border-b">
                 <Button
                   variant="ghost"
                   size="icon"
@@ -291,8 +291,8 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="min-w-0">
-                  <p className="text-sm font-semibold truncate">{opcaoAtual?.label}</p>
-                  <p className="text-xs text-muted-foreground truncate">{opcaoAtual?.description}</p>
+                  <p className="text-sm font-semibold">{opcaoAtual?.label}</p>
+                  <p className="text-xs text-muted-foreground">{opcaoAtual?.description}</p>
                 </div>
               </div>
 
