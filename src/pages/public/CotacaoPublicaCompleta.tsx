@@ -1134,7 +1134,7 @@ export default function CotacaoPublicaCompleta() {
 
                 <Button
                   onClick={handleConcluirVistoria}
-                  disabled={fotosVistoria.filter(f => f.status === 'enviado').length < 10 || !videoVistoriaUrl || loading}
+                  disabled={fotosVistoria.filter(f => f.status === 'enviado').length < Math.min(10, fotosVistoriaConfig.length) || !videoVistoriaUrl || loading}
                   className="w-full h-12"
                 >
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Concluir Vistoria'}
