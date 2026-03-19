@@ -13,6 +13,7 @@ import { StepRastreador } from '@/components/substituicao/StepRastreador';
 import { StepNovoVeiculo } from '@/components/substituicao/StepNovoVeiculo';
 import { StepBeneficios } from '@/components/substituicao/StepBeneficios';
 import { StepFinanceiro } from '@/components/substituicao/StepFinanceiro';
+import { StepConclusao } from '@/components/substituicao/StepConclusao';
 import { useIniciarSubstituicao } from '@/hooks/useSubstituicaoVeiculo';
 import { useAuth } from '@/contexts/AuthContext';
 import { toast } from 'sonner';
