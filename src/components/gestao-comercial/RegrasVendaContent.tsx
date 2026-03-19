@@ -99,6 +99,7 @@ const TAXAS_CHAVES = [
   'multa_rastreador',
   'troca_titularidade_dispensa_vistoria_ativa',
   'troca_titularidade_prazo_dispensa_vistoria',
+  'inclusao_bloquear_debito_outro_veiculo',
 ] as const;
 
 type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
@@ -116,6 +117,7 @@ const TAXAS_DEFAULTS: TaxasConfig = {
   multa_rastreador: '400',
   troca_titularidade_dispensa_vistoria_ativa: 'true',
   troca_titularidade_prazo_dispensa_vistoria: '0',
+  inclusao_bloquear_debito_outro_veiculo: 'true',
 };
 
 const AUTORIZACOES_CHAVES = [
@@ -1173,6 +1175,35 @@ export function RegrasVendaContent() {
                 <strong>Cenário B:</strong> Caso contrário, nova vistoria é obrigatória e o rastreador é verificado.
               </AlertDescription>
             </Alert>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <UserPlus className="h-5 w-5" />
+              Inclusão de segundo veículo
+            </CardTitle>
+            <CardDescription>
+              Configure o comportamento do sistema quando um associado deseja incluir um segundo veículo no mesmo CPF.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <Label htmlFor="inclusao_bloqueio_debito" className="text-sm font-medium">
+                  Bloquear inclusão de veículo com débito em outro veículo do mesmo associado
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Quando ativado, impede a inclusão de novos veículos se houver débito pendente em qualquer veículo vinculado ao CPF. Quando desativado, exibe apenas um aviso.
+                </p>
+              </div>
+              <Switch
+                id="inclusao_bloqueio_debito"
+                checked={taxas.inclusao_bloquear_debito_outro_veiculo === 'true'}
+                onCheckedChange={(checked) => handleTaxaChange('inclusao_bloquear_debito_outro_veiculo', String(checked))}
+              />
+            </div>
           </CardContent>
         </Card>
 
