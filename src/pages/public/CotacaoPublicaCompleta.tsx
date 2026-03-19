@@ -1042,7 +1042,7 @@ export default function CotacaoPublicaCompleta() {
                 <Alert>
                   <Camera className="h-4 w-4" />
                   <AlertDescription>
-                    Tire fotos em local bem iluminado. {fotosVistoria.filter(f => f.status === 'enviado').length} de {FOTOS_VISTORIA_CONFIG.length} fotos
+                    Tire fotos em local bem iluminado. {fotosVistoria.filter(f => f.status === 'enviado').length} de {FOTOS_VISTORIA_CONFIG.length} fotos • Vídeo 360°: {videoVistoriaUrl ? '✓' : 'pendente'}
                   </AlertDescription>
                 </Alert>
 
@@ -1082,9 +1082,22 @@ export default function CotacaoPublicaCompleta() {
                   ))}
                 </div>
 
+                {/* Vídeo 360° obrigatório */}
+                <div className="mt-4">
+                  <h3 className="text-sm font-medium text-foreground mb-2">Vídeo 360° (obrigatório)</h3>
+                  <VideoCapture
+                    onCapture={handleUploadVideo360}
+                    onReset={() => setVideoVistoriaUrl(null)}
+                    videoUrl={videoVistoriaUrl || undefined}
+                    uploading={uploadingVideo}
+                    maxDuration={120}
+                    label="Grave um vídeo de 360° ao redor do veículo"
+                  />
+                </div>
+
                 <Button
                   onClick={handleConcluirVistoria}
-                  disabled={fotosVistoria.filter(f => f.status === 'enviado').length < 10 || loading}
+                  disabled={fotosVistoria.filter(f => f.status === 'enviado').length < 10 || !videoVistoriaUrl || loading}
                   className="w-full h-12"
                 >
                   {loading ? <Loader2 className="h-5 w-5 animate-spin" /> : 'Concluir Vistoria'}
