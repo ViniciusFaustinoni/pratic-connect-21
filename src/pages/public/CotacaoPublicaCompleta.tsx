@@ -19,6 +19,8 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { formatarMoeda } from '@/utils/format';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
+import { FOTOS_VISTORIA_COMPLETA } from '@/data/vistoriaConfigCompleta';
+import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
 
 import { 
   useCotacaoPublica, 
@@ -35,6 +37,11 @@ import {
   FOTOS_VISTORIA_CONFIG,
   STATUS_COTACAO_PUBLICA_LABELS,
 } from '@/types/cotacaoPublica';
+
+// Fotos da vistoria completa (31 fotos) para veículos sem rastreador, excluindo fotos de instalação
+const FOTOS_VISTORIA_COMPLETA_CLIENTE = FOTOS_VISTORIA_COMPLETA
+  .filter(f => f.categoria !== 'instalacao')
+  .map(f => ({ tipo: f.id, nome: f.nome, descricao: f.nome }));
 
 // Cores dinâmicas para planos — baseadas no índice do plano
 const CORES_PLANO_DINAMICAS = [
