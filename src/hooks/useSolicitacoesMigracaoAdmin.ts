@@ -31,6 +31,19 @@ export function useSolicitacoesMigracaoList(filtroStatus: string) {
 }
 
 // ============================================
+// Buscar configuração de isenção de carência
+// ============================================
+
+async function fetchMigracaoIsentarCarencia(): Promise<boolean> {
+  const { data } = await supabase
+    .from('comissoes_parametros')
+    .select('valor')
+    .eq('chave', 'migracao_isentar_carencia')
+    .maybeSingle();
+  return data?.valor === 'true';
+}
+
+// ============================================
 // Aprovar migração
 // ============================================
 
@@ -38,7 +51,7 @@ export function useAprovarMigracao() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async ({ solicitacaoId, consultorUserId }: { solicitacaoId: string; consultorUserId: string }) => {
+    mutationFn: async ({ solicitacaoId, consultorUserId, cotacaoId }: { solicitacaoId: string; consultorUserId: string; cotacaoId?: string }) => {
       const { data: userData } = await supabase.auth.getUser();
       if (!userData?.user) throw new Error('Não autenticado');
 
@@ -74,6 +87,22 @@ export function useAprovarMigracao() {
         } as any);
 
       if (histError) throw histError;
+
+      // Registrar isenção de carência no contrato vinculado (se config permitir)
+      if (cotacaoId) {
+        const isentarCarencia = await fetchMigracaoIsentarCarencia();
+        if (isentarCarencia) {
+          await supabase
+            .from('contratos')
+            .update({
+              carencia_isenta: true,
+              carencia_motivo_isencao: 'Migração aprovada',
+              data_carencia_inicio: null,
+              data_carencia_fim: null,
+            })
+            .eq('cotacao_id', cotacaoId);
+        }
+      }
 
       // Notificar consultor
       if (consultorUserId) {
