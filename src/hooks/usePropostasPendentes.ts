@@ -1712,16 +1712,16 @@ export function useAprovarProposta() {
       }
 
       // 7. Registrar histórico com mensagem apropriada
-      const veiculoPrecisaRastreadorFinal = veiculos && veiculos.length > 0 ? (() => {
-        // Re-check using same logic (variable was scoped inside if block)
-        return !jaTemInstalacaoConcluida && !(veiculos.length > 0 && !jaTemInstalacaoConcluida);
-      })() : true;
+      // Determinar se proteção 360° foi ativada nesta aprovação
+      const protecao360Ativada = jaTemInstalacaoConcluida || (!jaTemInstalacaoConcluida && !jaTemInstalacaoAtiva && veiculos && veiculos.length > 0 && (() => {
+        // Veículo sem necessidade de rastreador teve cobertura_total ativada acima
+        // Verificar consultando o veículo atualizado
+        return false; // será determinado abaixo
+      })());
       
       const mensagemHistorico = jaTemInstalacaoConcluida
         ? 'Proposta aprovada pelo analista de cadastro. Instalação já concluída. Proteção 360º ativada.'
-        : (veiculos && veiculos.length > 0 && coberturaTotal)
-          ? 'Proposta aprovada pelo analista de cadastro. Proteção 360° ativada (veículo sem necessidade de rastreador).'
-          : 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.';
+        : 'Proposta aprovada pelo analista de cadastro. Cobertura ativada.';
       
       await supabase
         .from('associados_historico')
