@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { ArrowLeftRight, PlusCircle, Car, AlertTriangle, Ban } from 'lucide-react';
 import {
   AlertDialog,
