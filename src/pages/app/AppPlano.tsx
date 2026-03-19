@@ -4,6 +4,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Separator } from '@/components/ui/separator';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { 
   Shield, 
   Phone, 
@@ -14,12 +15,15 @@ import {
   Receipt,
   CheckCircle,
   Clock,
-  HelpCircle
+  HelpCircle,
+  Ban,
+  ShieldOff,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useMyAssociado } from '@/hooks/useMyData';
 import { useConfig0800 } from '@/hooks/useConfig0800';
+import { useMinhasCoberturas } from '@/hooks/useMinhasCoberturasApp';
 
 const CORES_POR_TIPO: Record<string, { bg: string; badge: string }> = {
   passeio: { bg: 'bg-blue-50 dark:bg-blue-950/30', badge: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
