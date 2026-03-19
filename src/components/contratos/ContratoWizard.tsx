@@ -1023,8 +1023,8 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
               />
             )}
 
-            {/* Step 2: Upload Unificado de Documentos */}
-            {step === 2 && (
+            {/* Step Documentos */}
+            {step === STEP_DOCUMENTOS && (
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-semibold flex items-center gap-2">
