@@ -1,81 +1,64 @@
 
 
-# Inadimplência por veículo e suspensão de benefícios adicionais
+# Renomear "Origem do Cadastro" para "Tipo de Entrada" e adicionar tipo Inclusão
 
 ## Resumo
 
-Atualmente o sistema verifica inadimplência no nível do **associado** (qualquer cobrança vencida suspende tudo). Precisa mudar para: cobertura principal suspensa **por veículo** e benefícios adicionais suspensos **globalmente** se qualquer veículo estiver inadimplente.
-
-## Problemas no código atual
-
-1. **`useMinhasCoberturasApp.ts`** (App): consulta cobranças pelo `associado_id` sem filtrar `veiculo_id`, suspende tudo globalmente. Além disso, só considera o primeiro veículo (`veiculos?.[0]`).
-2. **`useAssociadoSituacao.ts`** (Painel admin): consulta cobranças pelo `associado_id` sem distinguir veículos — `coberturasSuspensas` é um flag global.
-3. **Ficha do associado** (aba Veículos): não mostra status de cobertura por veículo.
-4. **App**: não mostra lista de veículos com status individual.
+Renomear a seção "Origem do Cadastro" para "Tipo de Entrada" em todo o sistema, adicionar o tipo "Inclusão de Veículo" ao card, e exibir o tipo de entrada de cada veículo na listagem do associado.
 
 ## Alterações
 
-### 1. Novo hook: `useInadimplenciaPorVeiculo.ts`
-Consulta `cobrancas` com status `vencido` agrupando por `veiculo_id`. Retorna:
-- `inadimplenciaPorVeiculo`: `Record<string, { diasAtraso: number, total: number }>` — quais veículos estão inadimplentes
-- `algumVeiculoInadimplente`: boolean — para controle dos benefícios adicionais
-- `beneficiosAdicionaisSuspensos`: boolean (= `algumVeiculoInadimplente`)
+### 1. `src/components/associados/detalhe/OrigemCadastroCard.tsx`
 
-### 2. Refatorar `useMinhasCoberturasApp.ts`
-- Ao invés de um flag `inadimplente` global, consultar cobranças por `veiculo_id`
-- Retornar array de coberturas por veículo em vez de um único objeto flat
-- Cada veículo terá: `{ veiculoId, inadimplente, temCoberturaRouboFurto, temCoberturaTotal, podeAssistencia, podeRastreamento, tiposSinistroPermitidos }`
-- Adicionar campo `beneficiosAdicionaisSuspensos` (true se qualquer veículo inadimplente)
-- Manter compatibilidade: exportar também o veículo principal para não quebrar `AppHome` e `NovoSinistro`
+- Renomear título de "Origem do Cadastro" para "Tipo de Entrada" (linha 492)
+- Adicionar `'inclusao'` ao tipo `TipoEntradaKey`
+- Adicionar label `'Inclusão de Veículo'` em `TIPO_ENTRADA_LABELS`
+- Adicionar badge style e ícone (usar `Plus` ou `CarFront`) para inclusão em `BADGE_STYLES` e `ICONS`
+- Adicionar campos na interface `OrigemData` para inclusão: `{ veiculoPrincipal: { placa, modelo, marca } | null, consultorNome, dataInclusao, carenciaInicio, carenciaFim }`
+- Na query: quando `tipo_entrada === 'inclusao'`, buscar o veículo mais antigo do associado (veículo principal) e dados de carência do contrato
+- Criar `RenderInclusao` que exibe:
+  - Veículo principal (marca modelo — placa)
+  - Consultor responsável
+  - Data da inclusão
+  - Carência do veículo incluído (início e fim, 120 dias)
+- Adicionar case `'inclusao'` no switch de `renderContent()`
+- Mostrar carência também para tipo `inclusao`
 
-### 3. Refatorar `useAssociadoSituacao.ts`
-- A query de dias de atraso não muda (continua buscando a cobrança mais antiga vencida do associado), mas adicionar campo `veiculosInadimplentes` listando quais veículos têm débito
-- Manter `coberturasSuspensas` como flag geral mas adicionar `coberturaPorVeiculo: Array<{ veiculoId, placa, modelo, coberturasSuspensas, diasAtraso }>`
-- Adicionar `beneficiosAdicionaisSuspensos: boolean`
+### 2. `src/components/associados/detalhe/AssociadoResumoTab.tsx`
 
-### 4. Atualizar `AssociadoSituacaoCard.tsx` (Ficha admin)
-- Na seção "Situação Financeira", se houver múltiplos veículos, mostrar lista indicando quais estão inadimplentes e quais estão em dia
-- Adicionar indicador de benefícios adicionais suspensos quando aplicável
+- Alterar comentário de `{/* Origem do Cadastro */}` para `{/* Tipo de Entrada */}`
 
-### 5. Atualizar aba Veículos em `AssociadoDetalhe.tsx`
-- Cada card de veículo ganha um badge de cobertura: "Cobertura Ativa" (verde) ou "Cobertura Suspensa" (vermelho) baseado na inadimplência daquele veículo específico
+### 3. `src/hooks/useAssociados.ts` — `useVeiculosDoAssociado`
 
-### 6. Atualizar `AppHome.tsx` (App do associado)
-- Quando houver múltiplos veículos, mostrar cards para cada veículo com status individual
-- Exibir alerta de benefícios adicionais suspensos quando algum veículo estiver inadimplente, com mensagem explicativa
+- Adicionar join com `contratos` para trazer `tipo_entrada` de cada veículo:
+  ```
+  contratos!contratos_veiculo_id_fkey(tipo_entrada)
+  ```
+- Expor `tipo_entrada` no objeto retornado de cada veículo
 
-### 7. Atualizar `AppPlano.tsx` (App - tela do plano)
-- Na lista de benefícios, quando `beneficiosAdicionaisSuspensos`, renderizar benefícios adicionais com ícone de suspensão e mensagem: "Benefícios adicionais suspensos — há inadimplência em um dos veículos. Regularize para reativar."
+### 4. `src/pages/cadastro/AssociadoDetalhe.tsx` — Listagem de veículos
+
+- Ao lado do badge de status de cada veículo, exibir um badge secundário com o tipo de entrada: "Nova Adesão", "Inclusão", "Substituição", etc., usando o `tipo_entrada` do contrato vinculado ao veículo
+- Badge discreto (outline, text-xs) para não competir com o status
+
+### 5. Constantes compartilhadas
+
+- Criar um mapa `TIPO_ENTRADA_SHORT_LABELS` no `OrigemCadastroCard.tsx` (ou exportar de lá) para uso na listagem:
+  - `adesao` → "Nova Adesão"
+  - `inclusao` → "Inclusão"
+  - `migracao` → "Migração"
+  - `substituicao_placa` → "Substituição"
+  - `troca_titularidade` → "Troca Titular"
+  - `reativacao` → "Reativação"
 
 ## Arquivos afetados
 
 | Arquivo | Mudança |
 |---------|---------|
-| `src/hooks/useInadimplenciaPorVeiculo.ts` | **Novo** — query de cobranças vencidas agrupadas por veiculo_id |
-| `src/hooks/useMinhasCoberturasApp.ts` | Refatorar para coberturas por veículo + flag benefícios suspensos |
-| `src/hooks/useAssociadoSituacao.ts` | Adicionar lista de veículos inadimplentes + benefícios adicionais suspensos |
-| `src/components/associados/detalhe/AssociadoSituacaoCard.tsx` | Exibir inadimplência por veículo + banner de benefícios adicionais |
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Badge de cobertura por veículo na aba Veículos |
-| `src/pages/app/AppHome.tsx` | Cards de veículos com status individual + alerta benefícios |
-| `src/pages/app/AppPlano.tsx` | Benefícios adicionais marcados como suspensos quando aplicável |
-| `src/pages/app/NovoSinistro.tsx` | Verificar cobertura do veículo selecionado (não global) |
+| `src/components/associados/detalhe/OrigemCadastroCard.tsx` | Renomear título, adicionar tipo `inclusao` com dados e render |
+| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Atualizar comentário |
+| `src/hooks/useAssociados.ts` | Join com contratos para trazer `tipo_entrada` por veículo |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Badge de tipo de entrada em cada veículo na listagem |
 
-## Detalhes técnicos
-
-### Query de inadimplência por veículo
-```sql
-SELECT veiculo_id, MIN(data_vencimento) as vencimento_mais_antigo
-FROM cobrancas
-WHERE associado_id = $1
-  AND status IN ('vencido')
-  AND veiculo_id IS NOT NULL
-GROUP BY veiculo_id
-```
-
-### Lógica de benefícios adicionais
-```typescript
-const beneficiosAdicionaisSuspensos = veiculosInadimplentes.length > 0;
-```
-
-Nenhuma alteração de schema é necessária — `cobrancas.veiculo_id` já existe.
+Nenhuma alteração de schema necessária.
 
