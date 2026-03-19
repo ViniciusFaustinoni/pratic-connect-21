@@ -97,6 +97,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
     setComprovantes([]);
     setBoleto(null);
     setValidationErrors([]);
+    setDeclaracaoCancelamento(false);
   };
 
   const uploadFile = async (file: File, tipo: string): Promise<string> => {
