@@ -8,7 +8,7 @@ import { useMigracaoConfig } from './useConteudosSistema';
 
 interface BloqueioResult {
   bloqueado: boolean;
-  tipo?: 'debito' | 'vinculo_ativo';
+  tipo?: 'vinculo_ativo';
   mensagem?: string;
 }
 
@@ -24,7 +24,7 @@ export function useVerificarBloqueiosMigracao(cpf: string | undefined) {
       // Formatar CPF para busca (XXX.XXX.XXX-XX)
       const cpfFormatado = `${cpfLimpo.slice(0, 3)}.${cpfLimpo.slice(3, 6)}.${cpfLimpo.slice(6, 9)}-${cpfLimpo.slice(9)}`;
 
-      // 1. Verificar vínculo ativo
+      // Verificar vínculo ativo (único bloqueio restante)
       const { data: associadoAtivo } = await supabase
         .from('associados')
         .select('id, nome')
@@ -38,32 +38,6 @@ export function useVerificarBloqueiosMigracao(cpf: string | undefined) {
           tipo: 'vinculo_ativo',
           mensagem: `Este CPF já possui um vínculo ativo na Praticcar (${associadoAtivo.nome}). Não é possível abrir uma migração para um associado já ativo. Verifique se o caso se enquadra em outra operação (Inclusão de veículo, Troca de titularidade, etc.).`,
         };
-      }
-
-      // 2. Verificar débitos pendentes (buscar associado inativo/cancelado com débitos)
-      const { data: associadosAnteriores } = await supabase
-        .from('associados')
-        .select('id')
-        .eq('cpf', cpfFormatado)
-        .neq('status', 'ativo');
-
-      if (associadosAnteriores && associadosAnteriores.length > 0) {
-        const ids = associadosAnteriores.map(a => a.id);
-        
-        const { data: debitos } = await supabase
-          .from('cobrancas')
-          .select('id')
-          .in('associado_id', ids)
-          .eq('status', 'vencido')
-          .limit(1);
-
-        if (debitos && debitos.length > 0) {
-          return {
-            bloqueado: true,
-            tipo: 'debito',
-            mensagem: 'Este CPF possui débitos pendentes com a Praticcar que precisam ser quitados antes de qualquer nova filiação. Oriente o cliente a regularizar a situação financeira.',
-          };
-        }
       }
 
       return { bloqueado: false };
@@ -84,6 +58,7 @@ interface CriarSolicitacaoData {
   veiculo_placa?: string;
   associacao_origem: string;
   prazo_resposta_horas: number;
+  declaracao_cancelamento_concorrente: boolean;
   documentos: Array<{
     tipo: 'comprovante_pagamento' | 'boleto_referencia';
     arquivo_url: string;
@@ -107,6 +82,7 @@ interface CriarSolicitacaoDiretaData {
   associacao_origem: string;
   prazo_resposta_horas: number;
   consultor_id?: string;
+  declaracao_cancelamento_concorrente: boolean;
   documentos: Array<{
     tipo: 'comprovante_pagamento' | 'boleto_referencia';
     arquivo_url: string;
@@ -147,6 +123,7 @@ export function useCriarSolicitacaoMigracao() {
           associacao_origem: data.associacao_origem,
           consultor_id: profile.id,
           prazo_resposta_horas: data.prazo_resposta_horas,
+          declaracao_cancelamento_concorrente: data.declaracao_cancelamento_concorrente,
           status: 'pendente',
         })
         .select('id')
@@ -215,6 +192,7 @@ export function useCriarSolicitacaoMigracaoDireta() {
           associacao_origem: data.associacao_origem,
           consultor_id: data.consultor_id || null,
           prazo_resposta_horas: data.prazo_resposta_horas,
+          declaracao_cancelamento_concorrente: data.declaracao_cancelamento_concorrente,
           status: 'pendente',
           origem_entrada: 'direta',
         } as any)

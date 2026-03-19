@@ -152,6 +152,7 @@ export default function SolicitacoesMigracao() {
                 <TableHead>Placa</TableHead>
                 <TableHead>Origem</TableHead>
                 <TableHead>Associação Origem</TableHead>
+                <TableHead>Cancelamento</TableHead>
                 <TableHead>Enviado em</TableHead>
                 <TableHead>Prazo</TableHead>
                 <TableHead>Status</TableHead>
@@ -182,6 +183,18 @@ export default function SolicitacoesMigracao() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm">{s.associacao_origem}</TableCell>
+                    <TableCell>
+                      {(s as any).declaracao_cancelamento_concorrente ? (
+                        <Badge variant="outline" className="text-xs border-primary/30 text-primary bg-primary/5">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Declarado
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs border-muted-foreground/30 text-muted-foreground">
+                          Não declarado
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(s.created_at!), "dd/MM/yy HH:mm", { locale: ptBR })}
                     </TableCell>
@@ -251,6 +264,16 @@ export default function SolicitacoesMigracao() {
                 <div>
                   <span className="text-muted-foreground">Consultor:</span>
                   <p className="font-medium">{(selected as any).consultor?.nome || '—'}</p>
+                </div>
+                <div className="col-span-2">
+                  <span className="text-muted-foreground">Cancelamento na concorrente:</span>
+                  <p className="font-medium">
+                    {(selected as any).declaracao_cancelamento_concorrente ? (
+                      <span className="text-primary flex items-center gap-1"><CheckCircle className="h-3.5 w-3.5" /> Declarado pelo operador</span>
+                    ) : (
+                      <span className="text-muted-foreground">Não declarado</span>
+                    )}
+                  </p>
                 </div>
               </div>
 

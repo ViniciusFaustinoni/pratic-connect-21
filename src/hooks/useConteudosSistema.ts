@@ -456,6 +456,7 @@ export interface MigracaoConfig {
   prazo_horas: number;
   canal: string;
   isentar_carencia: boolean;
+  prazo_max_comprovante_meses: number;
 }
 
 export function useMigracaoConfig() {
@@ -470,6 +471,7 @@ export function useMigracaoConfig() {
           'migracao_prazo_resposta_horas',
           'migracao_canal_oficial',
           'migracao_isentar_carencia',
+          'migracao_prazo_max_comprovante_meses',
         ]);
 
       if (error) throw error;
@@ -480,6 +482,7 @@ export function useMigracaoConfig() {
         prazo_horas: parseInt(map.migracao_prazo_resposta_horas) || 48,
         canal: map.migracao_canal_oficial || 'e-mail',
         isentar_carencia: map.migracao_isentar_carencia === 'true',
+        prazo_max_comprovante_meses: parseInt(map.migracao_prazo_max_comprovante_meses) || 3,
       } as MigracaoConfig;
     },
     staleTime: 1000 * 60 * 10,

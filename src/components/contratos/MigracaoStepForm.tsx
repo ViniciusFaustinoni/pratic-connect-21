@@ -1,6 +1,7 @@
 import { useState, useCallback } from 'react';
 import { AlertCircle, CheckCircle, Clock, FileUp, Loader2, Upload, XCircle, Building2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
@@ -24,6 +25,7 @@ interface DocEntry {
   arquivo_url?: string;
   cpf_detectado?: string;
   placa_detectada?: string;
+  data_documento?: string;
   legivel?: boolean;
   erro?: string;
 }
@@ -42,6 +44,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
   const [boleto, setBoleto] = useState<DocEntry | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isValidating, setIsValidating] = useState(false);
+  const [declaracaoCancelamento, setDeclaracaoCancelamento] = useState(false);
 
   const { data: migracaoConfig, isLoading: loadingConfig } = useMigracaoConfig();
   const { data: bloqueio, isLoading: loadingBloqueio } = useVerificarBloqueiosMigracao(cpf);
@@ -50,6 +53,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
 
   const comprovantesExigidos = migracaoConfig?.comprovantes ?? 3;
   const prazoHoras = migracaoConfig?.prazo_horas ?? 48;
+  const prazoMaxComprovanteMeses = migracaoConfig?.prazo_max_comprovante_meses ?? 3;
 
   // Notify parent about advance capability
   const canAdvance = solicitacaoExistente?.status === 'aprovada';
@@ -80,9 +84,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
     return (
       <Alert variant="destructive" className="my-4">
         <AlertCircle className="h-5 w-5" />
-        <AlertTitle>
-          {bloqueio.tipo === 'vinculo_ativo' ? 'Vínculo Ativo Existente' : 'Débitos Pendentes'}
-        </AlertTitle>
+        <AlertTitle>Vínculo Ativo Existente</AlertTitle>
         <AlertDescription className="mt-2">{bloqueio.mensagem}</AlertDescription>
       </Alert>
     );
@@ -105,7 +107,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
   };
 
   // OCR validation
-  const validateWithOCR = async (url: string): Promise<{ cpf?: string; placa?: string; legivel: boolean }> => {
+  const validateWithOCR = async (url: string): Promise<{ cpf?: string; placa?: string; data_documento?: string; legivel: boolean }> => {
     try {
       const { data, error } = await supabase.functions.invoke('document-ocr', {
         body: { url, tipoEsperado: 'comprovante_pagamento' },
@@ -114,6 +116,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
       return {
         cpf: data?.cpf || undefined,
         placa: data?.placa || undefined,
+        data_documento: data?.data_documento || undefined,
         legivel: data?.legivel !== false,
       };
     } catch {
@@ -144,6 +147,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
           status: 'done',
           cpf_detectado: ocr.cpf,
           placa_detectada: ocr.placa,
+          data_documento: ocr.data_documento,
           legivel: ocr.legivel,
         } : c));
       } catch (err) {
@@ -220,7 +224,19 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
       }
     }
 
-    // 5. Boleto
+    // 5. Prazo de antiguidade dos comprovantes
+    const limiteData = new Date();
+    limiteData.setMonth(limiteData.getMonth() - prazoMaxComprovanteMeses);
+    for (const comp of comprovantesDone) {
+      if (comp.data_documento) {
+        const dataDoc = new Date(comp.data_documento);
+        if (!isNaN(dataDoc.getTime()) && dataDoc < limiteData) {
+          errors.push(`Comprovante "${comp.file.name}": documento fora do prazo aceito (máximo ${prazoMaxComprovanteMeses} meses).`);
+        }
+      }
+    }
+
+    // 6. Boleto
     if (!boleto || boleto.status !== 'done') {
       errors.push('O boleto de referência é obrigatório.');
     } else if (boleto.legivel === false) {
@@ -263,6 +279,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
         veiculo_placa: placa,
         associacao_origem: associacaoOrigem.trim(),
         prazo_resposta_horas: prazoHoras,
+        declaracao_cancelamento_concorrente: declaracaoCancelamento,
         documentos: allDocs,
       });
 
@@ -346,6 +363,19 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
         </CardContent>
       </Card>
 
+      {/* Declaração de cancelamento */}
+      <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
+        <Checkbox
+          id="declaracao-cancelamento"
+          checked={declaracaoCancelamento}
+          onCheckedChange={(checked) => setDeclaracaoCancelamento(checked === true)}
+          className="mt-0.5"
+        />
+        <label htmlFor="declaracao-cancelamento" className="text-sm leading-relaxed cursor-pointer">
+          Declaro que o associado está cancelando ou já cancelou o vínculo com a associação anterior antes de ingressar na Praticcar.
+        </label>
+      </div>
+
       {/* Validation errors */}
       {validationErrors.length > 0 && (
         <Alert variant="destructive">
@@ -364,7 +394,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
       {/* Submit button */}
       <Button
         onClick={handleValidateAndSubmit}
-        disabled={isValidating || criarSolicitacao.isPending || !associacaoOrigem.trim() || comprovantesDone < comprovantesExigidos || !boletoReady}
+        disabled={isValidating || criarSolicitacao.isPending || !associacaoOrigem.trim() || comprovantesDone < comprovantesExigidos || !boletoReady || !declaracaoCancelamento}
         className="w-full"
         size="lg"
       >

@@ -41,6 +41,7 @@ interface MigracaoConfig {
   migracao_prazo_resposta_horas: number;
   migracao_canal_oficial: string;
   migracao_isentar_carencia: boolean;
+  migracao_prazo_max_comprovante_meses: number;
 }
 
 const PONTUACAO_DEFAULTS: PontuacaoConfig = {
@@ -69,6 +70,7 @@ const MIGRACAO_DEFAULTS: MigracaoConfig = {
   migracao_prazo_resposta_horas: 48,
   migracao_canal_oficial: 'e-mail',
   migracao_isentar_carencia: true,
+  migracao_prazo_max_comprovante_meses: 3,
 };
 
 const CAMPOS_BLOCO1: { chave: keyof PontuacaoConfig; label: string }[] = [
@@ -329,6 +331,9 @@ export function RegrasVendaContent() {
       if (p.chave === 'migracao_isentar_carencia') {
         nextMigracao.migracao_isentar_carencia = p.valor === 'true';
       }
+      if (p.chave === 'migracao_prazo_max_comprovante_meses') {
+        nextMigracao.migracao_prazo_max_comprovante_meses = parseInt(p.valor) || 3;
+      }
     }
     setPontuacao(nextPontuacao);
     setRepasse(nextRepasse);
@@ -381,6 +386,7 @@ export function RegrasVendaContent() {
       await updateParametro.mutateAsync({ chave: 'migracao_prazo_resposta_horas', valor: String(migracao.migracao_prazo_resposta_horas) });
       await updateParametro.mutateAsync({ chave: 'migracao_canal_oficial', valor: migracao.migracao_canal_oficial });
       await updateParametro.mutateAsync({ chave: 'migracao_isentar_carencia', valor: String(migracao.migracao_isentar_carencia) });
+      await updateParametro.mutateAsync({ chave: 'migracao_prazo_max_comprovante_meses', valor: String(migracao.migracao_prazo_max_comprovante_meses) });
       toast.success('Configurações de migração salvas com sucesso!');
     } catch {
       // error handled by mutation
@@ -756,7 +762,7 @@ export function RegrasVendaContent() {
               Define quantos comprovantes de pagamento da associação anterior o consultor deve apresentar para solicitar migração.
             </CardDescription>
           </CardHeader>
-          <CardContent>
+          <CardContent className="space-y-4">
             <div className="flex items-center justify-between gap-4">
               <Label htmlFor="comprovantes_exigidos" className="flex-1 text-sm">
                 Quantidade de comprovantes exigidos
@@ -776,6 +782,28 @@ export function RegrasVendaContent() {
                 }
               />
             </div>
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="prazo_max_comprovante" className="flex-1 text-sm">
+                Prazo máximo de antiguidade dos comprovantes (meses)
+              </Label>
+              <Input
+                id="prazo_max_comprovante"
+                type="number"
+                min="1"
+                step="1"
+                className="w-24 text-right"
+                value={migracao.migracao_prazo_max_comprovante_meses}
+                onChange={(e) =>
+                  setMigracao((prev) => ({
+                    ...prev,
+                    migracao_prazo_max_comprovante_meses: e.target.value === '' ? 0 : parseInt(e.target.value),
+                  }))
+                }
+              />
+            </div>
+            <p className="text-xs text-muted-foreground leading-relaxed">
+              Comprovantes com data superior ao prazo configurado serão rejeitados automaticamente na validação OCR.
+            </p>
           </CardContent>
         </Card>
 

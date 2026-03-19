@@ -6,6 +6,7 @@ import { Label } from '@/components/ui/label';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { useDropzone } from 'react-dropzone';
 import { AlertCircle, CheckCircle, Clock, FileUp, Loader2, Upload, XCircle, Building2 } from 'lucide-react';
@@ -23,6 +24,7 @@ interface DocEntry {
   arquivo_url?: string;
   cpf_detectado?: string;
   placa_detectada?: string;
+  data_documento?: string;
   legivel?: boolean;
   erro?: string;
 }
@@ -74,6 +76,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
   const [boleto, setBoleto] = useState<DocEntry | null>(null);
   const [validationErrors, setValidationErrors] = useState<string[]>([]);
   const [isValidating, setIsValidating] = useState(false);
+  const [declaracaoCancelamento, setDeclaracaoCancelamento] = useState(false);
 
   const { data: migracaoConfig, isLoading: loadingConfig } = useMigracaoConfig();
   const { data: bloqueio, isLoading: loadingBloqueio } = useVerificarBloqueiosMigracao(cpf);
@@ -82,6 +85,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
 
   const comprovantesExigidos = migracaoConfig?.comprovantes ?? 3;
   const prazoHoras = migracaoConfig?.prazo_horas ?? 48;
+  const prazoMaxComprovanteMeses = migracaoConfig?.prazo_max_comprovante_meses ?? 3;
 
   const cpfLimpo = cpf.replace(/\D/g, '');
   const cpfValido = cpfLimpo.length === 11;
@@ -95,6 +99,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
     setComprovantes([]);
     setBoleto(null);
     setValidationErrors([]);
+    setDeclaracaoCancelamento(false);
   };
 
   const uploadFile = async (file: File, tipo: string): Promise<string> => {
@@ -107,13 +112,13 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
     return urlData.publicUrl;
   };
 
-  const validateWithOCR = async (url: string): Promise<{ cpf?: string; placa?: string; legivel: boolean }> => {
+  const validateWithOCR = async (url: string): Promise<{ cpf?: string; placa?: string; data_documento?: string; legivel: boolean }> => {
     try {
       const { data, error } = await supabase.functions.invoke('document-ocr', {
         body: { url, tipoEsperado: 'comprovante_pagamento' },
       });
       if (error) return { legivel: false };
-      return { cpf: data?.cpf, placa: data?.placa, legivel: data?.legivel !== false };
+      return { cpf: data?.cpf, placa: data?.placa, data_documento: data?.data_documento, legivel: data?.legivel !== false };
     } catch {
       return { legivel: false };
     }
@@ -131,7 +136,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
         const url = await uploadFile(entry.file, 'comprovante');
         setComprovantes(prev => prev.map(c => c.id === entry.id ? { ...c, status: 'validating', arquivo_url: url } : c));
         const ocr = await validateWithOCR(url);
-        setComprovantes(prev => prev.map(c => c.id === entry.id ? { ...c, status: 'done', cpf_detectado: ocr.cpf, placa_detectada: ocr.placa, legivel: ocr.legivel } : c));
+        setComprovantes(prev => prev.map(c => c.id === entry.id ? { ...c, status: 'done', cpf_detectado: ocr.cpf, placa_detectada: ocr.placa, data_documento: ocr.data_documento, legivel: ocr.legivel } : c));
       } catch (err) {
         const msg = err instanceof Error ? err.message : 'Erro desconhecido';
         setComprovantes(prev => prev.map(c => c.id === entry.id ? { ...c, status: 'error', erro: msg } : c));
@@ -184,6 +189,18 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
       errors.push('O boleto não está legível. Envie uma imagem com melhor qualidade.');
     }
 
+    // Prazo de antiguidade dos comprovantes
+    const limiteData = new Date();
+    limiteData.setMonth(limiteData.getMonth() - prazoMaxComprovanteMeses);
+    for (const comp of comprovantesDone) {
+      if (comp.data_documento) {
+        const dataDoc = new Date(comp.data_documento);
+        if (!isNaN(dataDoc.getTime()) && dataDoc < limiteData) {
+          errors.push(`Comprovante "${comp.file.name}": documento fora do prazo aceito (máximo ${prazoMaxComprovanteMeses} meses).`);
+        }
+      }
+    }
+
     if (errors.length > 0) {
       setValidationErrors(errors);
       setIsValidating(false);
@@ -219,6 +236,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
         associacao_origem: associacaoOrigem.trim(),
         prazo_resposta_horas: prazoHoras,
         consultor_id: consultorId !== 'sem_consultor' ? consultorId : undefined,
+        declaracao_cancelamento_concorrente: declaracaoCancelamento,
         documentos: allDocs,
       });
 
@@ -301,7 +319,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
           {bloqueio?.bloqueado && (
             <Alert variant="destructive">
               <AlertCircle className="h-4 w-4" />
-              <AlertTitle>{bloqueio.tipo === 'vinculo_ativo' ? 'Vínculo Ativo' : 'Débitos Pendentes'}</AlertTitle>
+              <AlertTitle>Vínculo Ativo</AlertTitle>
               <AlertDescription>{bloqueio.mensagem}</AlertDescription>
             </Alert>
           )}
@@ -338,6 +356,19 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
                   )}
                 </CardContent>
               </Card>
+
+              {/* Declaração de cancelamento */}
+              <div className="flex items-start gap-3 p-4 rounded-lg border bg-muted/30">
+                <Checkbox
+                  id="declaracao-cancelamento-direta"
+                  checked={declaracaoCancelamento}
+                  onCheckedChange={(checked) => setDeclaracaoCancelamento(checked === true)}
+                  className="mt-0.5"
+                />
+                <label htmlFor="declaracao-cancelamento-direta" className="text-sm leading-relaxed cursor-pointer">
+                  Declaro que o associado está cancelando ou já cancelou o vínculo com a associação anterior antes de ingressar na Praticcar.
+                </label>
+              </div>
             </>
           )}
 
@@ -356,7 +387,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
 
           <Button
             onClick={handleSubmit}
-            disabled={isValidating || criarSolicitacao.isPending || !cpfValido || !nome.trim() || !associacaoOrigem.trim() || comprovantesDone < comprovantesExigidos || !boletoReady || bloqueio?.bloqueado}
+            disabled={isValidating || criarSolicitacao.isPending || !cpfValido || !nome.trim() || !associacaoOrigem.trim() || comprovantesDone < comprovantesExigidos || !boletoReady || bloqueio?.bloqueado || !declaracaoCancelamento}
             className="w-full"
             size="lg"
           >
