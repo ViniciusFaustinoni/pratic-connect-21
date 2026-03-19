@@ -1,73 +1,58 @@
 
 
-# Migração Sem Consultor + Pontuação + Alerta de Prazo
+# Expandir Seção "Origem do Cadastro" para Todos os Tipos de Entrada
 
-## PARTE 1 — Entrada Direta de Migração (sem cotação/consultor)
+## Resumo
 
-### Problema
-A tabela `solicitacoes_migracao` exige `cotacao_id NOT NULL`. Entrada direta não possui cotação. Além disso, o hook `useCriarSolicitacaoMigracao` força `consultor_id` como o perfil logado.
+Refatorar o `OrigemCadastroCard` para exibir informações contextuais baseadas no `tipo_entrada` do contrato: `adesao`, `migracao`, `reativacao`, `troca_titularidade`, `substituicao_placa`, e indicação (via tabela `indicacoes`).
 
-### Mudanças no banco
-1. **ALTER `solicitacoes_migracao`**: tornar `cotacao_id` nullable e adicionar coluna `origem_entrada` (text, default `'consultor'`, valores: `'consultor'` | `'direta'`).
+## Fontes de dados existentes
 
-### Mudanças no código
+| Tipo | Fonte principal | Dados disponíveis |
+|------|----------------|-------------------|
+| **Nova Adesão** | `contratos` | `vendedor_id` (consultor), `created_at` |
+| **Migração** | `solicitacoes_migracao` | Já implementado — manter |
+| **Indicação** | `indicacoes` + `contratos` | `indicador_id`, `data_conversao`, `vendedor_id` |
+| **Reativação** | `associados_historico` (tipo=`status_alterado`, dados com `caminho`) | `caminho` (1/2/3), `diasAtraso`, `created_at`, carência se caminho 3 |
+| **Troca Titularidade** | `contratos.origem_troca_titularidade_id` + `chat_solicitacoes_ia` | cenário (A/B via `dados`), titular anterior, `created_at` |
+| **Substituição Placa** | `associados_historico` + `chat_solicitacoes_ia` | placa anterior (via `dados_anteriores`), rastreador devolvido, `created_at` |
 
-**Novo componente: `src/components/cadastro/MigracaoDiretaDialog.tsx`**
-- Dialog/Sheet acessível a partir da tela `SolicitacoesMigracao.tsx` (botão "Nova Solicitação" no header).
-- Formulário com: CPF (com máscara), Nome, Placa, Associação de Origem, Consultor (Select opcional buscando profiles com role de vendedor).
-- Reutiliza o mesmo fluxo de upload de documentos do `MigracaoStepForm` (comprovantes + boleto + OCR).
-- Reutiliza `useVerificarBloqueiosMigracao` para bloquear CPFs com débito/vínculo ativo.
-- Ao submeter, insere em `solicitacoes_migracao` com `cotacao_id: null`, `origem_entrada: 'direta'`, `consultor_id: opcional`.
+## Implementação
 
-**Hook: `src/hooks/useSolicitacaoMigracao.ts`**
-- Criar nova mutation `useCriarSolicitacaoMigracaoDireta` que aceita `consultor_id` opcional e `cotacao_id` nulo.
+### 1. Refatorar hook `useOrigemCadastro` em `OrigemCadastroCard.tsx`
 
-**Tela: `src/pages/cadastro/SolicitacoesMigracao.tsx`**
-- Adicionar botão "Nova Solicitação" no header (visível para gerência+).
-- Coluna "Origem" na tabela da fila mostrando badge "Consultor" ou "Direta".
+Expandir o hook para buscar dados adicionais conforme o `tipo_entrada`:
 
-**Ficha do associado: `src/components/associados/detalhe/OrigemCadastroCard.tsx`**
-- Exibir "Entrada Direta" quando `origem_entrada === 'direta'`.
+- **Reativação**: buscar em `associados_historico` o registro mais recente com `tipo = 'status_alterado'` e `descricao LIKE '%Reativação%'` para extrair `caminho` e `diasAtraso` de `dados_anteriores`. Se caminho 3, usar `data_carencia_inicio/fim` do contrato.
+- **Troca de titularidade**: usar `origem_troca_titularidade_id` do contrato para buscar o contrato anterior e obter nome do titular anterior. Buscar em `chat_solicitacoes_ia` (tipo=`troca_titularidade`, associado_id) para cenário (dados).
+- **Substituição de placa**: buscar em `associados_historico` ou `chat_solicitacoes_ia` registros de substituição para obter placa anterior e info de rastreador.
+- **Indicação**: já parcialmente implementado — adicionar verificação de permissão para link clicável.
 
----
+O hook retorna um objeto tipado com todos os campos possíveis, preenchidos conforme o tipo.
 
-## PARTE 2 — Pontuação do Consultor na Aprovação
+### 2. Refatorar componente `OrigemCadastroCard`
 
-### Mudança no hook `useAprovarMigracao`
+Substituir a renderização condicional atual por seções dedicadas por tipo:
 
-Após aprovar com sucesso, se a solicitação tem `consultor_id`:
-1. Buscar parâmetro de pontuação `pontos_migracao_aprovada` de `comissoes_parametros` (fallback: 1.0).
-2. Verificar se já existe evento em `pontuacao_eventos` com `referencia_tipo = 'solicitacao_migracao'` e `referencia_id = solicitacao.id` para evitar duplicata.
-3. Se não existe, inserir evento com `tipo_operacao: 'migracao_aprovada'`, `vendedor_id: consultor_id`, `referencia_tipo: 'solicitacao_migracao'`, `referencia_id: solicitacao.id`.
+- Extrair sub-componentes internos (funções) para cada tipo: `renderNovaAdesao`, `renderMigracao`, `renderIndicacao`, `renderReativacao`, `renderTrocaTitularidade`, `renderSubstituicaoPlaca`.
+- Cada seção exibe apenas os campos relevantes àquele tipo.
+- Badge colorido por tipo (verde=ativo/migração, azul=indicação, amber=reativação, purple=troca, orange=substituição).
 
-Nenhuma edge function necessária — a lógica roda no client ao aprovar.
+### 3. Link condicional na indicação
 
----
+Receber uma prop ou usar contexto de permissão para determinar se o link para a ficha do indicador deve ser clicável. O componente pai (`AssociadoResumoTab`) não usa auth atualmente, então passar a info via prop `canLinkToAssociado` derivada das permissões do usuário no `AssociadoDetalhe.tsx`.
 
-## PARTE 3 — Alerta de Prazo Vencido
+### 4. Fallback
 
-### Novo cron edge function: `supabase/functions/cron-migracao-prazo-vencido/index.ts`
-- Executado periodicamente (a cada 15 minutos via cron do Supabase).
-- Busca solicitações com `status = 'pendente'` cujo `created_at + prazo_resposta_horas` < `now()`.
-- Para cada solicitação vencida, verifica se já existe notificação com `referencia_tipo = 'migracao_prazo_vencido'` e `referencia_id = solicitacao.id` — se sim, ignora (uma única vez por solicitação).
-- Busca todos os profiles com roles `diretor` ou `gerente_comercial`.
-- Insere notificação para cada um com: título "Migrações em Atraso", mensagem com contagem e tempo da mais antiga, `referencia_tipo: 'migracao_prazo_vencido'`, `referencia_id: solicitação_mais_antiga.id`.
+Se `tipo_entrada` é nulo ou não reconhecido, exibir como "Nova Adesão" (comportamento padrão).
 
-### Auto-resolução
-No `useAprovarMigracao` e `useReprovarMigracao`, após decisão, marcar como lida (`lida = true`) as notificações com `referencia_tipo = 'migracao_prazo_vencido'` e `referencia_id = solicitacao.id`.
-
----
-
-## Resumo de arquivos
+## Arquivos modificados
 
 | Arquivo | Ação |
 |---------|------|
-| **Migration SQL** | `cotacao_id` nullable, add `origem_entrada` |
-| `src/components/cadastro/MigracaoDiretaDialog.tsx` | Novo — formulário de entrada direta |
-| `src/hooks/useSolicitacaoMigracao.ts` | Nova mutation para criação direta |
-| `src/pages/cadastro/SolicitacoesMigracao.tsx` | Botão "Nova Solicitação", coluna "Origem" |
-| `src/hooks/useSolicitacoesMigracaoAdmin.ts` | Pontuação na aprovação, auto-resolver alertas |
-| `src/components/associados/detalhe/OrigemCadastroCard.tsx` | Exibir origem direta |
-| `supabase/functions/cron-migracao-prazo-vencido/index.ts` | Novo — alerta automático de prazo |
-| `supabase/config.toml` | Registro do cron |
+| `src/components/associados/detalhe/OrigemCadastroCard.tsx` | Refatorar hook e componente completo |
+| `src/components/associados/detalhe/AssociadoResumoTab.tsx` | Passar prop `canLinkToAssociado` |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Derivar e passar permissão de acesso ao cadastro |
+
+Nenhuma mudança de banco necessária — todos os dados já existem nas tabelas atuais.
 
