@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Check, User, Car, FileText, CheckCircle, Upload, AlertCircle, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react';
+import { Loader2, Check, User, Car, FileText, CheckCircle, Upload, AlertCircle, ChevronLeft, ChevronRight, DollarSign, Building2 } from 'lucide-react';
 import { buscarCep } from '@/lib/cep';
+import { MigracaoStepForm } from './MigracaoStepForm';
 import { useFipe } from '@/hooks/useFipe';
 import { Button } from '@/components/ui/button';
 import {
@@ -79,17 +80,43 @@ interface ContratoWizardProps {
   onContratoCreated?: (contratoId: string) => void;
 }
 
-const steps = [
+const BASE_STEPS = [
   { id: 1, title: 'Cotação', icon: FileText },
   { id: 2, title: 'Documentos', icon: Upload },
   { id: 3, title: 'Revisão', icon: CheckCircle },
 ];
+
+const MIGRATION_STEP = { id: 2, title: 'Migração', icon: Building2 };
+
+
 
 export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreated }: ContratoWizardProps) {
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tipoOperacao, setTipoOperacao] = useState<string>('adesao');
   const [buscandoFipe, setBuscandoFipe] = useState(false);
+  const [migracaoAprovada, setMigracaoAprovada] = useState(false);
+  
+  // Dynamic steps based on tipoOperacao
+  const isMigracao = tipoOperacao === 'migracao';
+  const steps = useMemo(() => {
+    if (isMigracao) {
+      return [
+        { id: 1, title: 'Cotação', icon: FileText },
+        { id: 2, title: 'Migração', icon: Building2 },
+        { id: 3, title: 'Documentos', icon: Upload },
+        { id: 4, title: 'Revisão', icon: CheckCircle },
+      ];
+    }
+    return BASE_STEPS;
+  }, [isMigracao]);
+  
+  const totalSteps = steps.length;
+  // Map logical step names to current step numbers
+  const STEP_COTACAO = 1;
+  const STEP_MIGRACAO = isMigracao ? 2 : -1;
+  const STEP_DOCUMENTOS = isMigracao ? 3 : 2;
+  const STEP_REVISAO = isMigracao ? 4 : 3;
   
   // Documentos uploadados
   const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
@@ -530,16 +557,21 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
   const hasMinimumDocs = temDocPessoal && temCrlv;
 
   const handleNext = async () => {
-    if (step === 3) {
+    if (step === STEP_REVISAO) {
       const result = await form.trigger();
       if (!result) return;
     }
-    if (step < 3) setStep(step + 1);
+    if (step < totalSteps) setStep(step + 1);
   };
 
   const handleBack = () => {
     if (step > 1) setStep(step - 1);
   };
+
+  // Handle migration step blocking
+  const handleMigracaoStatusChange = useCallback((canAdvance: boolean) => {
+    setMigracaoAprovada(canAdvance);
+  }, []);
 
   const onSubmit = async (data: WizardFormData) => {
     if (!cotacao) return;
@@ -913,45 +945,86 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Step 1: Cotação */}
-            {step === 1 && cotacao && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Resumo da Cotação</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Número:</span>
-                      <p className="font-mono">{cotacao.numero}</p>
+            {/* Step 1: Cotação + Tipo de Operação */}
+            {step === STEP_COTACAO && cotacao && (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Resumo da Cotação</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Número:</span>
+                        <p className="font-mono">{cotacao.numero}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Cliente:</span>
+                        <p>{cotacao.leads?.nome || 'Não informado'}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Plano:</span>
+                        <p>{cotacao.planos?.nome}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Valor FIPE:</span>
+                        <p>{formatCurrency(cotacao.valor_fipe)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Mensal:</span>
+                        <p className="font-medium text-primary">{formatCurrency(cotacao.valor_total_mensal)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Filiação:</span>
+                        <p>{formatCurrency(cotacao.valor_adesao)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-muted-foreground">Cliente:</span>
-                      <p>{cotacao.leads?.nome || 'Não informado'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Plano:</span>
-                      <p>{cotacao.planos?.nome}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Valor FIPE:</span>
-                      <p>{formatCurrency(cotacao.valor_fipe)}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Mensal:</span>
-                      <p className="font-medium text-primary">{formatCurrency(cotacao.valor_total_mensal)}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Filiação:</span>
-                      <p>{formatCurrency(cotacao.valor_adesao)}</p>
-                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Tipo de Operação - agora no Step 1 */}
+                <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Tipo de Operação
+                  </h4>
+                  <div className="max-w-xs">
+                    <Label className="text-xs text-muted-foreground mb-1 block">Selecione o tipo de operação deste contrato</Label>
+                    <Select value={tipoOperacao} onValueChange={(val) => {
+                      setTipoOperacao(val);
+                      // Reset migration state when changing type
+                      if (val !== 'migracao') setMigracaoAprovada(false);
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="adesao">Adesão</SelectItem>
+                        <SelectItem value="migracao">Migração</SelectItem>
+                        <SelectItem value="inclusao">Inclusão</SelectItem>
+                        <SelectItem value="troca_titularidade">Troca de Titularidade</SelectItem>
+                        <SelectItem value="reativacao">Reativação</SelectItem>
+                        <SelectItem value="substituicao_placa">Substituição de Placa</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
             )}
 
-            {/* Step 2: Upload Unificado de Documentos */}
-            {step === 2 && (
+            {/* Step Migração (condicional) */}
+            {step === STEP_MIGRACAO && isMigracao && (
+              <MigracaoStepForm
+                cotacaoId={cotacaoId}
+                cpf={form.getValues('cpf') || cotacao?.leads?.cpf || ''}
+                nome={form.getValues('nome') || cotacao?.leads?.nome}
+                placa={form.getValues('placa') || cotacao?.leads?.veiculo_placa || cotacao?.veiculo_placa}
+                onStatusChange={handleMigracaoStatusChange}
+              />
+            )}
+
+            {/* Step Documentos */}
+            {step === STEP_DOCUMENTOS && (
               <div className="space-y-6">
                 <div>
                   <h3 className="text-lg font-semibold flex items-center gap-2">
@@ -1058,8 +1131,8 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
               </div>
             )}
 
-            {/* Step 3: Revisão e Confirmação */}
-            {step === 3 && (
+            {/* Step Revisão */}
+            {step === STEP_REVISAO && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Revisão dos Dados</h3>
@@ -1068,27 +1141,19 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   </p>
                 </div>
 
-                {/* Tipo de Operação */}
-                <div className="p-4 bg-muted/50 rounded-lg space-y-3">
-                  <h4 className="font-medium flex items-center gap-2">
+                {/* Tipo de operação (somente leitura) */}
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4" />
-                    Tipo de Operação
-                  </h4>
-                  <div className="max-w-xs">
-                    <Label className="text-xs text-muted-foreground mb-1 block">Selecione o tipo de operação deste contrato</Label>
-                    <Select value={tipoOperacao} onValueChange={setTipoOperacao}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="adesao">Adesão</SelectItem>
-                        <SelectItem value="migracao">Migração</SelectItem>
-                        <SelectItem value="inclusao">Inclusão</SelectItem>
-                        <SelectItem value="troca_titularidade">Troca de Titularidade</SelectItem>
-                        <SelectItem value="reativacao">Reativação</SelectItem>
-                        <SelectItem value="substituicao_placa">Substituição de Placa</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <span className="font-medium">Tipo de Operação:</span>
+                    <Badge variant="outline">
+                      {tipoOperacao === 'adesao' ? 'Adesão' :
+                       tipoOperacao === 'migracao' ? 'Migração' :
+                       tipoOperacao === 'inclusao' ? 'Inclusão' :
+                       tipoOperacao === 'troca_titularidade' ? 'Troca de Titularidade' :
+                       tipoOperacao === 'reativacao' ? 'Reativação' :
+                       tipoOperacao === 'substituicao_placa' ? 'Substituição de Placa' : tipoOperacao}
+                    </Badge>
                   </div>
                 </div>
 
@@ -1311,11 +1376,14 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                 Voltar
               </Button>
 
-              {step < 3 ? (
+              {step < totalSteps ? (
                 <Button 
                   type="button" 
                   onClick={handleNext}
-                  disabled={step === 2 && !hasMinimumDocs}
+                  disabled={
+                    (step === STEP_DOCUMENTOS && !hasMinimumDocs) ||
+                    (step === STEP_MIGRACAO && isMigracao && !migracaoAprovada)
+                  }
                 >
                   Próximo
                   <ChevronRight className="w-4 h-4 ml-2" />

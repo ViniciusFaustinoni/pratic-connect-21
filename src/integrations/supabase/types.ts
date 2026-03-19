@@ -23729,6 +23729,157 @@ export type Database = {
           },
         ]
       }
+      solicitacoes_migracao: {
+        Row: {
+          aprovado_em: string | null
+          aprovado_por: string | null
+          associacao_origem: string
+          associado_cpf: string
+          associado_nome: string | null
+          consultor_id: string | null
+          cotacao_id: string
+          created_at: string | null
+          id: string
+          motivo_reprovacao: string | null
+          prazo_resposta_horas: number
+          status: string
+          updated_at: string | null
+          veiculo_placa: string | null
+        }
+        Insert: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          associacao_origem: string
+          associado_cpf: string
+          associado_nome?: string | null
+          consultor_id?: string | null
+          cotacao_id: string
+          created_at?: string | null
+          id?: string
+          motivo_reprovacao?: string | null
+          prazo_resposta_horas?: number
+          status?: string
+          updated_at?: string | null
+          veiculo_placa?: string | null
+        }
+        Update: {
+          aprovado_em?: string | null
+          aprovado_por?: string | null
+          associacao_origem?: string
+          associado_cpf?: string
+          associado_nome?: string | null
+          consultor_id?: string | null
+          cotacao_id?: string
+          created_at?: string | null
+          id?: string
+          motivo_reprovacao?: string | null
+          prazo_resposta_horas?: number
+          status?: string
+          updated_at?: string | null
+          veiculo_placa?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitacoes_migracao_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_migracao_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_migracao_aprovado_por_fkey"
+            columns: ["aprovado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_migracao_consultor_id_fkey"
+            columns: ["consultor_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_migracao_consultor_id_fkey"
+            columns: ["consultor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_migracao_consultor_id_fkey"
+            columns: ["consultor_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "solicitacoes_migracao_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
+      solicitacoes_migracao_documentos: {
+        Row: {
+          arquivo_url: string
+          cpf_detectado: string | null
+          created_at: string | null
+          id: string
+          legivel: boolean | null
+          nome_arquivo: string | null
+          placa_detectada: string | null
+          solicitacao_id: string
+          tipo: string
+          validacao_erro: string | null
+          validacao_ok: boolean | null
+        }
+        Insert: {
+          arquivo_url: string
+          cpf_detectado?: string | null
+          created_at?: string | null
+          id?: string
+          legivel?: boolean | null
+          nome_arquivo?: string | null
+          placa_detectada?: string | null
+          solicitacao_id: string
+          tipo: string
+          validacao_erro?: string | null
+          validacao_ok?: boolean | null
+        }
+        Update: {
+          arquivo_url?: string
+          cpf_detectado?: string | null
+          created_at?: string | null
+          id?: string
+          legivel?: boolean | null
+          nome_arquivo?: string | null
+          placa_detectada?: string | null
+          solicitacao_id?: string
+          tipo?: string
+          validacao_erro?: string | null
+          validacao_ok?: boolean | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "solicitacoes_migracao_documentos_solicitacao_id_fkey"
+            columns: ["solicitacao_id"]
+            isOneToOne: false
+            referencedRelation: "solicitacoes_migracao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       solicitacoes_permissao: {
         Row: {
           aprovado_em: string | null
