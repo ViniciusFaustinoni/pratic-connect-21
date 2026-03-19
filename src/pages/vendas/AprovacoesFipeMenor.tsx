@@ -1,7 +1,8 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2, ShieldOff, Shield, ShieldCheck } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2, ShieldOff, Shield, ShieldCheck, HelpCircle } from 'lucide-react';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PainelAprovacoesElegibilidade } from '@/components/aprovacoes/PainelAprovacoesElegibilidade';
 import { Button } from '@/components/ui/button';
@@ -111,20 +112,46 @@ export default function AprovacoesFipeMenor() {
 
       {/* Section tabs */}
       <Tabs value={section} onValueChange={(v) => { setSection(v as SectionTab); setTab('pendente'); }}>
-        <TabsList>
-          <TabsTrigger value="fipe_menor" className="gap-1.5">
-            <TrendingDown className="h-4 w-4" />
-            FIPE Menor
-          </TabsTrigger>
-          <TabsTrigger value="alto_valor" className="gap-1.5">
-            <Shield className="h-4 w-4" />
-            Alto Valor
-          </TabsTrigger>
-          <TabsTrigger value="elegibilidade" className="gap-1.5">
-            <ShieldCheck className="h-4 w-4" />
-            Elegibilidade
-          </TabsTrigger>
-        </TabsList>
+        <TooltipProvider delayDuration={200}>
+          <TabsList>
+            <TabsTrigger value="fipe_menor" className="gap-1.5">
+              <TrendingDown className="h-4 w-4" />
+              FIPE Menor
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Solicitações para enquadrar veículos em faixa FIPE inferior à original, reduzindo o valor mensal
+                </TooltipContent>
+              </Tooltip>
+            </TabsTrigger>
+            <TabsTrigger value="alto_valor" className="gap-1.5">
+              <Shield className="h-4 w-4" />
+              Alto Valor
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Veículos com FIPE acima do limite permitido pelo plano que precisam de autorização especial
+                </TooltipContent>
+              </Tooltip>
+            </TabsTrigger>
+            <TabsTrigger value="elegibilidade" className="gap-1.5">
+              <ShieldCheck className="h-4 w-4" />
+              Elegibilidade
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Veículos fora da whitelist de aceitação do plano que necessitam aprovação manual para inclusão
+                </TooltipContent>
+              </Tooltip>
+            </TabsTrigger>
+          </TabsList>
+        </TooltipProvider>
 
         {/* ===== FIPE MENOR ===== */}
         <TabsContent value="fipe_menor" className="space-y-4">
