@@ -416,7 +416,7 @@ export function StepFinanceiro({
               {formaPagamento === 'PIX' && (cobrancaGerada as Record<string, unknown>)?.pix_copia_cola && (
                 <PixQRCode
                   copiaCola={(cobrancaGerada as Record<string, unknown>).pix_copia_cola as string}
-                  valor={taxaSubstituicao}
+                  valor={totalCobranca}
                   descricao="Taxa de substituição de veículo"
                 />
               )}
