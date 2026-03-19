@@ -188,21 +188,37 @@ export default function AppPlano() {
             </CardTitle>
           </CardHeader>
           <CardContent className="space-y-4">
-            {beneficiosDoBanco.map((beneficio) => (
-              <div key={beneficio.id} className="flex gap-3">
-                <div className="flex h-8 w-8 shrink-0 items-center justify-center rounded-full bg-green-100 dark:bg-green-900/30">
-                  <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+            {beneficiosAdicionaisSuspensos && (
+              <Alert className="border-amber-200 bg-amber-50 dark:bg-amber-950/20 dark:border-amber-800">
+                <Ban className="h-4 w-4 text-amber-600" />
+                <AlertDescription className="text-amber-800 dark:text-amber-300 text-xs">
+                  <strong>Benefícios adicionais suspensos</strong> — Há inadimplência em um dos veículos. Regularize para reativar.
+                </AlertDescription>
+              </Alert>
+            )}
+            {beneficiosDoBanco.map((beneficio) => {
+              // Benefícios adicionais (não cobertura principal) ficam suspensos
+              const isSuspenso = beneficiosAdicionaisSuspensos;
+              return (
+                <div key={beneficio.id} className={`flex gap-3 ${isSuspenso ? 'opacity-50' : ''}`}>
+                  <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${isSuspenso ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
+                    {isSuspenso ? (
+                      <ShieldOff className="h-4 w-4 text-amber-600 dark:text-amber-400" />
+                    ) : (
+                      <CheckCircle className="h-4 w-4 text-green-600 dark:text-green-400" />
+                    )}
+                  </div>
+                  <div className="flex-1">
+                    <p className="font-medium text-foreground">
+                      {beneficio.benefits?.name || beneficio.beneficio}
+                    </p>
+                    <p className="text-sm text-muted-foreground">
+                      {beneficio.benefits?.description || beneficio.descricao || ''}
+                    </p>
+                  </div>
                 </div>
-                <div className="flex-1">
-                  <p className="font-medium text-foreground">
-                    {beneficio.benefits?.name || beneficio.beneficio}
-                  </p>
-                  <p className="text-sm text-muted-foreground">
-                    {beneficio.benefits?.description || beneficio.descricao || ''}
-                  </p>
-                </div>
-              </div>
-            ))}
+              );
+            })}
           </CardContent>
         </Card>
       )}
