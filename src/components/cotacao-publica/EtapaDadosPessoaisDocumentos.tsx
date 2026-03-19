@@ -170,7 +170,15 @@ export function EtapaDadosPessoaisDocumentos({
       // De CNH ou RG: dados pessoais + dados de documentos
       if (tipoDocumento === 'cnh' || tipoDocumento === 'rg') {
         if (dados.nome) novosDados.nome = dados.nome;
-        if (dados.cpf) novosDados.cpf = dados.cpf;
+        if (dados.cpf) {
+          novosDados.cpf = dados.cpf;
+          // Se OCR retornou "ilegivel" ou CPF inválido, notificar o usuário
+          if (dados.cpf === 'ilegivel') {
+            toast.warning('CPF não pôde ser lido do documento. Digite manualmente.');
+          } else if (!validateCPF(dados.cpf.replace(/\D/g, ''))) {
+            toast.warning('CPF extraído é inválido. Corrija manualmente.');
+          }
+        }
         if (dados.rg) novosDados.rg = dados.rg;
         if (dados.data_nascimento) novosDados.data_nascimento = dados.data_nascimento;
         
