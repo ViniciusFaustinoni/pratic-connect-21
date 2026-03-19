@@ -94,6 +94,14 @@ const formatDateTime = (dateStr: string) =>
   format(new Date(dateStr), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR });
 
 export default function LeadDetalhe() {
+  return (
+    <LeadsDevGuard>
+      <LeadDetalheContent />
+    </LeadsDevGuard>
+  );
+}
+
+function LeadDetalheContent() {
   const { id } = useParams();
   const navigate = useNavigate();
   const { data: lead, isLoading } = useLead(id);
