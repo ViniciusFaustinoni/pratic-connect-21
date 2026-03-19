@@ -239,8 +239,6 @@ Deno.serve(async (req) => {
             },
           },
         })
-          },
-        })
       }
       results.push({ step: 8, name: 'Gerar proposta Autentique', success: true })
     } catch (e) {
