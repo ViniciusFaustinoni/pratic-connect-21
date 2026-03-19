@@ -387,7 +387,7 @@ function DocumentPreview({ doc, cpfEsperado, placaEsperada }: { doc: any; cpfEsp
         </div>
         <div className="flex items-center gap-2">
           {placaOk ? (
-            <CheckCircle className="h-4 w-4 text-green-600" />
+            <CheckCircle className="h-4 w-4 text-primary" />
           ) : (
             <AlertTriangle className="h-4 w-4 text-destructive" />
           )}
