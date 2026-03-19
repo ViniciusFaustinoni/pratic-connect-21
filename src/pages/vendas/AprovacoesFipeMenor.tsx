@@ -152,8 +152,6 @@ export default function AprovacoesFipeMenor() {
             </TabsTrigger>
           </TabsList>
         </TooltipProvider>
-          </TabsTrigger>
-        </TabsList>
 
         {/* ===== FIPE MENOR ===== */}
         <TabsContent value="fipe_menor" className="space-y-4">
