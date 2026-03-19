@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
+import { useRestricoesAbsolutas } from '@/hooks/useConteudosSistema';
+import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Search, AlertTriangle, Loader2, Car } from 'lucide-react';
+import { Search, AlertTriangle, Loader2, Car, ShieldAlert } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -50,6 +52,9 @@ export function StepNovoVeiculo({
 }: StepNovoVeiculoProps) {
   const fipe = useFipe();
   const { data: limites } = useConfigLimitesVeiculo();
+  const { data: restricoes } = useRestricoesAbsolutas();
+  const { tipoVeiculo: tipoAntigo } = useDetectarTipoVeiculo(veiculoAntigo.marca, veiculoAntigo.modelo);
+  const { tipoVeiculo: tipoNovo } = useDetectarTipoVeiculo(dadosNovoVeiculo.marca, dadosNovoVeiculo.modelo);
   const [placaExiste, setPlacaExiste] = useState(false);
   const [verificandoPlaca, setVerificandoPlaca] = useState(false);
   const [consultandoFipe, setConsultandoFipe] = useState(false);
@@ -58,6 +63,10 @@ export function StepNovoVeiculo({
   const [renavam, setRenavam] = useState('');
 
   const dados = dadosNovoVeiculo;
+
+  const tiposDiferentes = !!(dados.marca && dados.modelo && tipoAntigo !== tipoNovo);
+  const restricaoMudancaLinhaAtiva = restricoes?.mudanca_linha !== false;
+  const bloqueioMudancaLinha = tiposDiferentes && restricaoMudancaLinhaAtiva;
 
   const updateDados = (partial: Partial<DadosNovoVeiculo>) => {
     setDadosNovoVeiculo({ ...dados, ...partial });
@@ -105,7 +114,7 @@ export function StepNovoVeiculo({
   };
 
   const fipeConsultada = !!dados.valor_fipe && dados.valor_fipe > 0;
-  const camposObrigatorios = dados.placa && dados.marca && dados.modelo && dados.cor && dados.combustivel && fipeConsultada && !dados.blindado;
+  const camposObrigatorios = dados.placa && dados.marca && dados.modelo && dados.cor && dados.combustivel && fipeConsultada && !dados.blindado && !bloqueioMudancaLinha;
 
   // Criar veículo no banco e avançar
   const handleCriarVeiculoEAvancar = useCallback(async () => {
@@ -240,6 +249,33 @@ export function StepNovoVeiculo({
           )}
         </CardContent>
       </Card>
+
+      {/* Alerta de mudança de linha de produto */}
+      {tiposDiferentes && (
+        <Alert variant={bloqueioMudancaLinha ? 'destructive' : 'default'} className={cn(
+          bloqueioMudancaLinha
+            ? ''
+            : 'border-yellow-500/50 bg-yellow-50 dark:bg-yellow-950/30 [&>svg]:text-yellow-600'
+        )}>
+          <ShieldAlert className="h-4 w-4" />
+          <AlertDescription className="text-sm">
+            {bloqueioMudancaLinha ? (
+              <>
+                <strong>Mudança de linha de produto não é permitida no processo de substituição.</strong>{' '}
+                O veículo atual é um <strong>{tipoAntigo === 'moto' ? 'moto' : 'carro'}</strong> e o novo é um{' '}
+                <strong>{tipoNovo === 'moto' ? 'moto' : 'carro'}</strong>. Para trocar de linha, é necessário
+                cancelar o veículo atual e realizar uma nova adesão.
+              </>
+            ) : (
+              <>
+                <strong>Atenção:</strong> o veículo atual é um <strong>{tipoAntigo === 'moto' ? 'moto' : 'carro'}</strong>{' '}
+                e o novo é um <strong>{tipoNovo === 'moto' ? 'moto' : 'carro'}</strong>. Mudança de linha detectada,
+                mas a restrição está desativada nas configurações.
+              </>
+            )}
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Dados adicionais */}
       <Card>
