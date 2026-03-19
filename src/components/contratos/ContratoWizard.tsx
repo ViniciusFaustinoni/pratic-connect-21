@@ -94,7 +94,29 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tipoOperacao, setTipoOperacao] = useState<string>('adesao');
+  const [buscandoFipe, setBuscandoFipe] = useState(false);
   const [migracaoAprovada, setMigracaoAprovada] = useState(false);
+  
+  // Dynamic steps based on tipoOperacao
+  const isMigracao = tipoOperacao === 'migracao';
+  const steps = useMemo(() => {
+    if (isMigracao) {
+      return [
+        { id: 1, title: 'Cotação', icon: FileText },
+        { id: 2, title: 'Migração', icon: Building2 },
+        { id: 3, title: 'Documentos', icon: Upload },
+        { id: 4, title: 'Revisão', icon: CheckCircle },
+      ];
+    }
+    return BASE_STEPS;
+  }, [isMigracao]);
+  
+  const totalSteps = steps.length;
+  // Map logical step names to current step numbers
+  const STEP_COTACAO = 1;
+  const STEP_MIGRACAO = isMigracao ? 2 : -1;
+  const STEP_DOCUMENTOS = isMigracao ? 3 : 2;
+  const STEP_REVISAO = isMigracao ? 4 : 3;
   
   // Documentos uploadados
   const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
