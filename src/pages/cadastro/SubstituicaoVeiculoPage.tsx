@@ -21,6 +21,11 @@ import type { DadosNovoVeiculo } from '@/types/substituicao';
 export default function SubstituicaoVeiculoPage() {
   const { associadoId } = useParams<{ associadoId: string }>();
   const navigate = useNavigate();
+  const { profile, isVendedor } = useAuth();
+
+  // Auto-detect consultor: only commercial roles get linked
+  const consultorId = isVendedor() ? profile?.id ?? null : null;
+  const consultorNome = isVendedor() ? profile?.nome ?? null : null;
 
   const [currentStep, setCurrentStep] = useState(1);
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);

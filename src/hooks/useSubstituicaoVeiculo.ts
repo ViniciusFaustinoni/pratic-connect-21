@@ -78,13 +78,15 @@ export function useIniciarSubstituicao() {
   return useMutation({
     mutationFn: async (params: IniciarSubstituicaoParams) => {
       const { data: userData } = await supabase.auth.getUser();
+      const { consultor_id, ...restParams } = params;
 
       const { data, error } = await supabase
         .from('substituicoes_veiculo')
         .insert({
-          ...params,
+          ...restParams,
           status: 'iniciada' as string,
           criado_por: userData.user?.id,
+          ...(consultor_id ? { consultor_id } : {}),
         })
         .select()
         .single();
