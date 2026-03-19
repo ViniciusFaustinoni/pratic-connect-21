@@ -1131,8 +1131,8 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
               </div>
             )}
 
-            {/* Step 3: Revisão e Confirmação */}
-            {step === 3 && (
+            {/* Step Revisão */}
+            {step === STEP_REVISAO && (
               <div className="space-y-6">
                 <div className="flex items-center justify-between">
                   <h3 className="text-lg font-semibold">Revisão dos Dados</h3>
@@ -1141,27 +1141,19 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   </p>
                 </div>
 
-                {/* Tipo de Operação */}
-                <div className="p-4 bg-muted/50 rounded-lg space-y-3">
-                  <h4 className="font-medium flex items-center gap-2">
+                {/* Tipo de operação (somente leitura) */}
+                <div className="p-4 bg-muted/50 rounded-lg">
+                  <div className="flex items-center gap-2">
                     <FileText className="h-4 w-4" />
-                    Tipo de Operação
-                  </h4>
-                  <div className="max-w-xs">
-                    <Label className="text-xs text-muted-foreground mb-1 block">Selecione o tipo de operação deste contrato</Label>
-                    <Select value={tipoOperacao} onValueChange={setTipoOperacao}>
-                      <SelectTrigger>
-                        <SelectValue placeholder="Selecione..." />
-                      </SelectTrigger>
-                      <SelectContent>
-                        <SelectItem value="adesao">Adesão</SelectItem>
-                        <SelectItem value="migracao">Migração</SelectItem>
-                        <SelectItem value="inclusao">Inclusão</SelectItem>
-                        <SelectItem value="troca_titularidade">Troca de Titularidade</SelectItem>
-                        <SelectItem value="reativacao">Reativação</SelectItem>
-                        <SelectItem value="substituicao_placa">Substituição de Placa</SelectItem>
-                      </SelectContent>
-                    </Select>
+                    <span className="font-medium">Tipo de Operação:</span>
+                    <Badge variant="outline">
+                      {tipoOperacao === 'adesao' ? 'Adesão' :
+                       tipoOperacao === 'migracao' ? 'Migração' :
+                       tipoOperacao === 'inclusao' ? 'Inclusão' :
+                       tipoOperacao === 'troca_titularidade' ? 'Troca de Titularidade' :
+                       tipoOperacao === 'reativacao' ? 'Reativação' :
+                       tipoOperacao === 'substituicao_placa' ? 'Substituição de Placa' : tipoOperacao}
+                    </Badge>
                   </div>
                 </div>
 
