@@ -70,7 +70,11 @@ function useOrigemCadastro(associadoId: string) {
       // Determine entry type
       let tipoEntrada = 'Nova adesão';
       if (contrato?.tipo_entrada === 'migracao') {
-        tipoEntrada = migracao ? 'Migração Aprovada' : 'Migração';
+        if (migracao?.origemEntrada === 'direta') {
+          tipoEntrada = 'Migração Direta';
+        } else {
+          tipoEntrada = migracao ? 'Migração Aprovada' : 'Migração';
+        }
       } else if (contrato?.tipo_entrada === 'reativacao') {
         tipoEntrada = 'Reativação';
       } else if (indicacao) {

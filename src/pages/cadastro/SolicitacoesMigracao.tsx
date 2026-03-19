@@ -366,6 +366,9 @@ export default function SolicitacoesMigracao() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog Nova Solicitação Direta */}
+      <MigracaoDiretaDialog open={showNovaDialog} onOpenChange={setShowNovaDialog} />
     </div>
   );
 }
