@@ -155,7 +155,7 @@ function usePlanosComPrecoMap() {
       const [planosRes, mapRes, plRes] = await Promise.all([
         supabase
           .from('planos')
-          .select(`id, nome, slug, adicional_mensal, desconto_percentual, visivel_gestao, ativo, categoria, fipe_minima, fipe_maxima, tipo_uso, ano_minimo, ano_minimo_veiculo, ano_fabricacao_minimo, valor_adesao, cota_participacao, cota_minima, cobertura_fipe, planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name))`)
+          .select(`id, nome, slug, codigo, adicional_mensal, desconto_percentual, visivel_gestao, ativo, categoria, fipe_minima, fipe_maxima, tipo_uso, ano_minimo, ano_minimo_veiculo, ano_fabricacao_minimo, valor_adesao, cota_participacao, cota_minima, cota_desagio, cota_minima_desagio, cobertura_fipe, linha, planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name))`)
           .eq('ativo', true)
           .eq('visivel_gestao', true)
           .order('ordem', { ascending: true }),
