@@ -5,7 +5,7 @@ import {
   FileCheck, FileText, Clock, AlertTriangle,
   Receipt, CheckCircle, XCircle, Send, MapPin, MessageCircle, Mail,
   Wifi, WifiOff, Calendar, Camera, Radio, DollarSign, CreditCard, Shield,
-  Pencil, Check, X,
+  Pencil, Check, X, ShieldOff, ShieldCheck,
 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { usePermissions } from '@/hooks/usePermissions';
