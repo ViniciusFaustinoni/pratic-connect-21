@@ -220,6 +220,7 @@ export default function LeadsUnificado() {
   };
 
   return (
+    <LeadsDevGuard>
     <div className="flex flex-col h-full bg-background">
       {/* Fixed Header Section with subtle gradient */}
       <div className="shrink-0 z-10 bg-gradient-to-b from-muted/50 to-background border-b border-border/50">
