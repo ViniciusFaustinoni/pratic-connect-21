@@ -406,6 +406,8 @@ export default function VistoriaCompletaAnalise() {
             rastreadorImei={rastreadores?.imei}
             rastreadorCodigo={rastreadores?.codigo}
             instalacaoStatus={instalacao.status}
+            carenciaIsenta={contratoCarencia?.carencia_isenta || false}
+            carenciaMotivoIsencao={contratoCarencia?.carencia_motivo_isencao}
           />
 
           {/* Ações */}
