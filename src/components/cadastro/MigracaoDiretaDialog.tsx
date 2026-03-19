@@ -189,6 +189,18 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
       errors.push('O boleto não está legível. Envie uma imagem com melhor qualidade.');
     }
 
+    // Prazo de antiguidade dos comprovantes
+    const limiteData = new Date();
+    limiteData.setMonth(limiteData.getMonth() - prazoMaxComprovanteMeses);
+    for (const comp of comprovantesDone) {
+      if (comp.data_documento) {
+        const dataDoc = new Date(comp.data_documento);
+        if (!isNaN(dataDoc.getTime()) && dataDoc < limiteData) {
+          errors.push(`Comprovante "${comp.file.name}": documento fora do prazo aceito (máximo ${prazoMaxComprovanteMeses} meses).`);
+        }
+      }
+    }
+
     if (errors.length > 0) {
       setValidationErrors(errors);
       setIsValidating(false);
