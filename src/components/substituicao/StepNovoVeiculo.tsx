@@ -52,11 +52,19 @@ export function StepNovoVeiculo({
 }: StepNovoVeiculoProps) {
   const fipe = useFipe();
   const { data: limites } = useConfigLimitesVeiculo();
+  const { data: restricoes } = useRestricoesAbsolutas();
+  const { tipoVeiculo: tipoAntigo } = useDetectarTipoVeiculo(veiculoAntigo.marca, veiculoAntigo.modelo);
+  const { tipoVeiculo: tipoNovo } = useDetectarTipoVeiculo(dados.marca, dados.modelo);
   const [placaExiste, setPlacaExiste] = useState(false);
   const [verificandoPlaca, setVerificandoPlaca] = useState(false);
   const [consultandoFipe, setConsultandoFipe] = useState(false);
   const [criandoVeiculo, setCriandoVeiculo] = useState(false);
   const [chassi, setChassi] = useState('');
+  const [renavam, setRenavam] = useState('');
+
+  const tiposDiferentes = !!(dados.marca && dados.modelo && tipoAntigo !== tipoNovo);
+  const restricaoMudancaLinhaAtiva = restricoes?.mudanca_linha !== false;
+  const bloqueioMudancaLinha = tiposDiferentes && restricaoMudancaLinhaAtiva;
   const [renavam, setRenavam] = useState('');
 
   const dados = dadosNovoVeiculo;
