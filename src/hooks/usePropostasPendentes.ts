@@ -1671,6 +1671,27 @@ export function useAprovarProposta() {
           console.log(`[useAprovarProposta] Instalação criada com preferências do cliente: data=${dataAgendada}, periodo=${periodoPreferido}`);
         } else if (jaTemInstalacaoAtiva) {
           console.log(`Instalação já existe para o veículo ${veiculoId}. Aprovação prossegue sem criar nova instalação.`);
+        } else if (!veiculoPrecisaRastreador) {
+          console.log(`[useAprovarProposta] Veículo não precisa de rastreador (FIPE R$${valorFipe}). Proteção 360° ativada diretamente.`);
+          
+          // Notificar associado sobre Proteção 360° (sem rastreador)
+          const { data: veiculoInfo360 } = await supabase
+            .from('veiculos')
+            .select('placa, marca, modelo')
+            .eq('id', veiculoId)
+            .single();
+
+          supabase.functions.invoke('notificar-cliente', {
+            body: {
+              tipo: 'cobertura_total_ativada',
+              associado_id: associadoId,
+              dados: {
+                placa: veiculoInfo360?.placa || '',
+                marca: veiculoInfo360?.marca || '',
+                modelo: veiculoInfo360?.modelo || '',
+              },
+            },
+          }).catch(err => console.warn('[useAprovarProposta] Erro ao notificar cobertura 360 sem rastreador (não crítico):', err));
         }
 
         // Criar acesso do associado mesmo sem instalação concluída (roubo/furto)
@@ -1691,9 +1712,16 @@ export function useAprovarProposta() {
       }
 
       // 7. Registrar histórico com mensagem apropriada
+      const veiculoPrecisaRastreadorFinal = veiculos && veiculos.length > 0 ? (() => {
+        // Re-check using same logic (variable was scoped inside if block)
+        return !jaTemInstalacaoConcluida && !(veiculos.length > 0 && !jaTemInstalacaoConcluida);
+      })() : true;
+      
       const mensagemHistorico = jaTemInstalacaoConcluida
         ? 'Proposta aprovada pelo analista de cadastro. Instalação já concluída. Proteção 360º ativada.'
-        : 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.';
+        : (veiculos && veiculos.length > 0 && coberturaTotal)
+          ? 'Proposta aprovada pelo analista de cadastro. Proteção 360° ativada (veículo sem necessidade de rastreador).'
+          : 'Proposta aprovada pelo analista de cadastro. Cobertura Roubo/Furto ativada. Aguardando instalação para Proteção 360º.';
       
       await supabase
         .from('associados_historico')
