@@ -1,41 +1,36 @@
 
 
-# Diagnóstico: Link de Reagendamento Não Chega ao Associado
+# Painel de Imprevistos no Monitoramento
 
-## Causa Raiz Identificada
+## O que será construído
 
-O log da edge function `enviar-link-reagendamento` mostra:
+Uma nova página `/monitoramento/imprevistos` com tabela listando todos os serviços que tiveram imprevisto registrado, com filtros por motivo, data e instalador, e ações de gestão.
 
-```text
-ERROR: Serviço não encontrado
-```
+## Arquivos
 
-A query falha na linha que busca o serviço por `id`. Isso acontece porque:
+### 1. Nova página: `src/pages/monitoramento/ImprevistosPainel.tsx`
+- Tabela com colunas: Data/Hora, Associado, Instalador, Motivo, Status (pendente/concluído), Duplo Check, Reagendamento enviado
+- Filtros:
+  - **Motivo**: Select com os 5 motivos do `MOTIVOS_IMPREVISTO` (Associado ausente, Endereço incorreto, etc.)
+  - **Data**: DatePickerWithRange para filtrar por período de `imprevisto_registrado_em`
+  - **Instalador**: Select alimentado pela lista de profissionais
+- Badges coloridos para status (`imprevisto_pendente` vs `nao_compareceu`)
+- Indicadores visuais de duplo check e envio de reagendamento
+- Query na tabela `servicos` filtrando `imprevisto_registrado_em IS NOT NULL`, com join em `associados` e `profissionais`
 
-1. **A edge function pode estar desatualizada** — o código foi editado no repositório mas precisa ser **redeployado** no Supabase para as mudanças entrarem em vigor.
-2. **O `servico_id` passado pode ter sido inválido** — se o status `imprevisto_pendente` não estava no enum quando o imprevisto foi registrado, o update falhava silenciosamente e o fluxo passava um ID de um serviço que não existia ou cujo estado era inconsistente.
+### 2. Hook: `src/hooks/useImprevistos.ts`
+- Query Supabase: `servicos` where `imprevisto_registrado_em` is not null
+- Select: campos de imprevisto + associado nome/telefone + profissional nome
+- Filtros aplicados via `.ilike`, `.eq`, `.gte/.lte` conforme parâmetros
 
-A boa notícia: o enum `imprevisto_pendente` **já existe** no banco (confirmado). Mas as edge functions editadas (`enviar-link-reagendamento` e `cron-reagendamento-automatico`) precisam ser redeployadas.
+### 3. Rota em `src/App.tsx`
+- Adicionar `<Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />`
 
-## Plano de Correção
+### 4. Menu em `src/components/layout/AppSidebar.tsx`
+- Adicionar item "Imprevistos" com ícone `AlertTriangle` no grupo Monitoramento
 
-### 1. Redeployar edge functions atualizadas
-Deployar `enviar-link-reagendamento` e `cron-reagendamento-automatico` com o código atualizado (guard de idempotência + recuperação de órfãos).
+### 5. Breadcrumb em `src/components/layout/GlobalBreadcrumb.tsx`
+- Adicionar entrada `/monitoramento/imprevistos: { label: 'Imprevistos' }`
 
-### 2. Adicionar logging detalhado na edge function
-Melhorar o log de `enviar-link-reagendamento` para registrar o `servico_id` recebido e detalhes do erro da query, facilitando debug futuro.
-
-### 3. Adicionar fallback com retry no `ImprevistoBotao`
-Se a chamada ao `enviar-link-reagendamento` falhar no Ponto A, tentar novamente após 3 segundos. Se falhar de novo, o Ponto B (DuploCheck) e o Ponto C (CRON) servem como backup.
-
-### 4. Testar a edge function após deploy
-Invocar a função com um `servico_id` real para validar que o fluxo funciona ponta a ponta.
-
-## Arquivos Modificados
-
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/enviar-link-reagendamento/index.ts` | Logging detalhado do servico_id e erro |
-| `src/components/vistoriador/ImprevistoBotao.tsx` | Retry com delay no Ponto A |
-| Deploy | `enviar-link-reagendamento` + `cron-reagendamento-automatico` |
+Nenhuma alteração de banco necessária -- todos os campos já existem na tabela `servicos`.
 
