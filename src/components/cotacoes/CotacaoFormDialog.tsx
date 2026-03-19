@@ -229,15 +229,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Função para calcular opções de vencimento baseado no dia atual
   const opcoesVencimento = useMemo((): [number, number] => {
     const hoje = new Date().getDate();
-    
-    if (hoje >= 30 || hoje <= 4) return [5, 10];
-    if (hoje >= 5 && hoje <= 9) return [10, 15];
-    if (hoje >= 10 && hoje <= 14) return [15, 20];
-    if (hoje >= 15 && hoje <= 19) return [20, 25];
-    if (hoje >= 20 && hoje <= 24) return [25, 30];
-    if (hoje >= 25 && hoje <= 29) return [30, 5];
-    
-    return [5, 10]; // fallback
+    return calcularOpcoesVencimento(hoje);
   }, []);
   
   // Loading states
