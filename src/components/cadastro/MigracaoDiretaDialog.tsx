@@ -32,6 +32,8 @@ interface DocEntry {
 interface Props {
   open: boolean;
   onOpenChange: (open: boolean) => void;
+  cpfInicial?: string;
+  consultorIdInicial?: string;
 }
 
 function useConsultoresDisponiveis() {
