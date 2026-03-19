@@ -857,12 +857,18 @@ serve(async (req) => {
       : solicitacao.tipo === "troca_titularidade" ? "Troca de Titularidade"
       : solicitacao.tipo;
 
+    // Determinar cenário para troca de titularidade
+    const cenarioResponse = solicitacao.tipo === "troca_titularidade"
+      ? (resultado_protocolo?.startsWith("TRC-DISP-") ? "A" : "B")
+      : undefined;
+
     return new Response(
       JSON.stringify({
         success: true,
         message: `${tipoLabel} processado com sucesso`,
         resultado_id,
         protocolo: resultado_protocolo,
+        ...(cenarioResponse && { cenario: cenarioResponse }),
       }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
