@@ -113,7 +113,7 @@ serve(async (req) => {
           province: dados.province,
           postalCode: dados.postalCode?.replace(/\D/g, ''),
           externalReference: associado_id,
-          notificationDisabled: false,
+          notificationDisabled: true,
         });
 
         console.log(`[asaas-clientes] Cliente criado: ${asaasCliente.id}`);
