@@ -81,6 +81,7 @@ export default function Cotacoes() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
+  const [showNovaEntrada, setShowNovaEntrada] = useState(false);
   const [showContratoWizard, setShowContratoWizard] = useState(false);
   const [selectedCotacaoId, setSelectedCotacaoId] = useState<string>('');
   const [showEmailModal, setShowEmailModal] = useState(false);
