@@ -80,11 +80,15 @@ interface ContratoWizardProps {
   onContratoCreated?: (contratoId: string) => void;
 }
 
-const steps = [
+const BASE_STEPS = [
   { id: 1, title: 'Cotação', icon: FileText },
   { id: 2, title: 'Documentos', icon: Upload },
   { id: 3, title: 'Revisão', icon: CheckCircle },
 ];
+
+const MIGRATION_STEP = { id: 2, title: 'Migração', icon: Building2 };
+
+
 
 export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreated }: ContratoWizardProps) {
   const [step, setStep] = useState(1);
