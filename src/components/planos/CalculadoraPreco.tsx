@@ -467,7 +467,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     for (const plano of planos) {
       const catLower = (plano.categoria || '').toLowerCase();
       const tipoUsoPlano = (plano.tipo_uso || '').toLowerCase();
-      if (catLower === 'aplicativo' || tipoUsoPlano === 'aplicativo') continue;
+      
 
       const mapping = mappings.find(m => m.plano_id === plano.id);
       if (!mapping?.linha_slug) continue;
