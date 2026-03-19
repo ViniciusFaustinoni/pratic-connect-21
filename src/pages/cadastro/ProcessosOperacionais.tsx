@@ -427,7 +427,7 @@ export default function ProcessosOperacionais() {
       </div>
 
       {/* Summary Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
         <Card>
           <CardContent className="p-4 flex items-center gap-3">
             <div className="p-2 rounded-lg bg-blue-100 text-blue-700">
@@ -458,6 +458,17 @@ export default function ProcessosOperacionais() {
             <div>
               <p className="text-2xl font-bold">{counts?.substituicoes ?? '—'}</p>
               <p className="text-xs text-muted-foreground">Substituições pendentes</p>
+            </div>
+          </CardContent>
+        </Card>
+        <Card>
+          <CardContent className="p-4 flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-purple-100 text-purple-700">
+              <FileInput className="h-5 w-5" />
+            </div>
+            <div>
+              <p className="text-2xl font-bold">{counts?.migracoes ?? '—'}</p>
+              <p className="text-xs text-muted-foreground">Migrações pendentes</p>
             </div>
           </CardContent>
         </Card>
