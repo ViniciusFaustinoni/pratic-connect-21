@@ -499,6 +499,22 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         if (anoNum < anoAtual - 1) continue;
       }
 
+      // ── Whitelist eligibility check (when marca/modelo known from plate lookup) ──
+      if (veiculoPlaca?.marca && veiculoPlaca?.modelo && anoNum) {
+        const linhaPlano = (plano.linha || '').toLowerCase() || null;
+        const temRegras = elegibilidadeData?.some(e => {
+          const planosNaLinha = linhaPlano
+            ? (planosData?.planos || []).filter(p => (p.linha || '').toLowerCase() === linhaPlano).map(p => p.id)
+            : [plano.id];
+          return planosNaLinha.includes(e.plano_id);
+        });
+        if (temRegras) {
+          const combForElig = combustivelDetectado || combustivelManual;
+          const eleg = verificarElegibilidade(plano.id, linhaPlano, veiculoPlaca.marca, veiculoPlaca.modelo, anoNum, combForElig);
+          if (eleg.status === 'negado') continue;
+        }
+      }
+
       // Blocked categories (from product_line)
       const blocked = plMaps.blockedCats[linhaSlug] || [];
       if (blocked.length > 0 && categoriaAtiva && blocked.includes(categoriaAtiva)) continue;
