@@ -155,7 +155,12 @@ export default function SubstituicaoVeiculoPage() {
   // Step 6 -> confirmar (Financeiro -> Aprovação)
   const handleFinanceiroConfirmar = () => {
     completeStep(6);
+    setCurrentStep(7);
     toast.success('Substituição enviada para aprovação!');
+  };
+
+  const handleRetry = () => {
+    setCurrentStep(6);
   };
 
   if (loadingAssociado || loadingVeiculo) {
