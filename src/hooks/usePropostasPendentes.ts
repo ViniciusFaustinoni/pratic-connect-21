@@ -1472,6 +1472,7 @@ export function useAprovarProposta() {
         const coberturaTotal = ativarProtecao360;
         
         if (!veiculoPrecisaRastreador) {
+          protecao360SemRastreador = true;
           console.log(`[useAprovarProposta] Veículo FIPE R$${valorFipe} < limite R$${fipeMinRastreador} — Proteção 360° ativada sem rastreador`);
         }
         
