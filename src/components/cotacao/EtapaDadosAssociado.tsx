@@ -107,6 +107,19 @@ export function EtapaDadosAssociado({
   };
 
   return (
+    <>
+    {veiculoAtivoCpf && (
+      <DialogTipoOperacao
+        open={showDialogTipo}
+        onOpenChange={setShowDialogTipo}
+        veiculoAtivo={veiculoAtivoCpf}
+        onSubstituicao={(associadoId) => onSubstituicao?.(associadoId)}
+        onInclusao={() => {
+          // Continue normal flow
+          setShowDialogTipo(false);
+        }}
+      />
+    )}
     <Card className="border-border bg-card">
       <CardHeader className="pb-4">
         <div className="flex items-center gap-3">
