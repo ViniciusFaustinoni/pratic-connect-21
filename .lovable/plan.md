@@ -1,55 +1,23 @@
 
 
-# Correção: Calculadora de Preço deve aplicar os mesmos filtros do motor de cotação
+# Fix: Calculator ignores tipo_uso toggle (particular vs aplicativo)
 
-## Problema
+## Root cause
 
-A Calculadora (`CalculadoraPreco.tsx`) não aplica dois filtros críticos que o Cotador (`usePlanosCotacao.ts`) aplica:
+Line 470 in `CalculadoraPreco.tsx`:
+```javascript
+if (catLower === 'aplicativo' || tipoUsoPlano === 'aplicativo') continue;
+```
 
-1. **Hard Gate de elegibilidade** — No cotador (linhas 481-484), quando um plano tem regras de elegibilidade (whitelist) configuradas mas não há dados de marca/modelo disponíveis, o plano é **negado**. Na calculadora (linhas 502-516), a elegibilidade só é verificada quando há dados de placa (`veiculoPlaca`). Sem placa, planos com whitelist (como "Especial") aparecem livremente.
+This unconditionally skips every plan with `tipo_uso = 'aplicativo'`, regardless of the user's selected toggle. The correct bidirectional filter already exists on lines 481-487 but never gets reached for aplicativo plans.
 
-2. **Filtro de categorias aceitas do plano** — No cotador (linhas 444-454), o campo `plano.categoria` é verificado contra a categoria do veículo selecionada. Se o plano define categorias aceitas e a categoria do veículo não está entre elas, o plano é excluído. A calculadora não faz essa verificação.
-
-## Alterações
+## Fix
 
 ### `src/components/planos/CalculadoraPreco.tsx`
 
-**1. Hard Gate de elegibilidade (após linha ~516):**
-Quando existem regras de elegibilidade para a linha do plano mas não há dados de marca/modelo (sem consulta de placa), aplicar a mesma política do cotador: **negar o plano**. Só permitir passagem quando não há regras configuradas.
+**Remove line 470.** The existing filter block (lines 481-487) already handles both directions correctly:
+- When user selects "aplicativo": show aplicativo + ambos plans (+ passeio/select with deságio override)
+- When user selects "particular": hide aplicativo plans
 
-```
-// Atual (só verifica com placa):
-if (veiculoPlaca?.marca && veiculoPlaca?.modelo && anoNum) {
-  if (temRegras) { ... if negado → continue }
-}
-
-// Corrigido (hard gate sem placa):
-if (temRegras) {
-  if (veiculoPlaca?.marca && veiculoPlaca?.modelo && anoNum) {
-    // verificar elegibilidade normalmente
-  } else {
-    continue; // hard gate: sem dados → negar
-  }
-}
-```
-
-**2. Filtro de categorias aceitas do plano (após blocked categories, ~linha 520):**
-Adicionar a mesma verificação do cotador para `plano.categoria`:
-
-```typescript
-const categoriasAceitasPlano = (plano.categoria || '')
-  .split(',').map(c => c.trim().toLowerCase()).filter(Boolean);
-if (categoriasAceitasPlano.length > 0 && categoriaAtiva) {
-  if (!categoriasAceitasPlano.includes(categoriaAtiva) 
-      && !categoriasAceitasPlano.includes('todos')) {
-    continue;
-  }
-}
-```
-
-## Arquivos afetados
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/components/planos/CalculadoraPreco.tsx` | Hard gate + filtro categorias aceitas |
+One line deleted. No other changes needed.
 
