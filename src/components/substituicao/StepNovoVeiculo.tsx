@@ -1,8 +1,10 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
+import { useRestricoesAbsolutas } from '@/hooks/useConteudosSistema';
+import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Search, AlertTriangle, Loader2, Car } from 'lucide-react';
+import { Search, AlertTriangle, Loader2, Car, ShieldAlert } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
