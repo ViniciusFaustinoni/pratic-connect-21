@@ -147,6 +147,7 @@ export function MigracaoStepForm({ cotacaoId, cpf, nome, placa, onStatusChange }
           status: 'done',
           cpf_detectado: ocr.cpf,
           placa_detectada: ocr.placa,
+          data_documento: ocr.data_documento,
           legivel: ocr.legivel,
         } : c));
       } catch (err) {
