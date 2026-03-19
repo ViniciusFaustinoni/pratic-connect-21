@@ -439,6 +439,7 @@ export default function PlanosBeneficios() {
         {/* Tab Adicionais - Apenas para gestores */}
         {podeVerConfigAvancada && (
         <TabsContent value="adicionais" className="space-y-4">
+          <LeadsDevGuard>
           {isDiretor && (
             <ResumoSaudeCard
               superavit={resumoSaude?.superavit || 0}
@@ -498,6 +499,7 @@ export default function PlanosBeneficios() {
               )}
             </CardContent>
           </Card>
+          </LeadsDevGuard>
         </TabsContent>
         )}
 
