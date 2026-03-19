@@ -903,15 +903,6 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                       </div>
                     )}
 
-                    {/* Deságio */}
-                    {plano.valorDesagio != null && (
-                      <div className="px-3 pb-2">
-                        <p className="text-xs text-muted-foreground">
-                          Deságio: {formatarMoeda(plano.valorDesagio)}
-                        </p>
-                      </div>
-                    )}
-
                     {/* Botão Ir para Cotação */}
                     {onIrParaCotacao && (
                       <div className="px-3 pb-3">
