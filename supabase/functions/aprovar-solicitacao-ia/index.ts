@@ -672,6 +672,26 @@ serve(async (req) => {
         resultado_protocolo = `TRC-DISP-${solicitacao.id.substring(0, 8).toUpperCase()}`;
         resultado_id = solicitacao.id;
 
+        // Chamar efetivação da troca (Cenário A — imediata)
+        try {
+          const efetResp = await fetch(`${SUPABASE_URL}/functions/v1/efetivar-troca-titularidade`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+            },
+            body: JSON.stringify({ solicitacao_id, cenario_override: "A" }),
+          });
+          const efetData = await efetResp.json();
+          if (efetData.success) {
+            console.log(`[aprovar-solicitacao-ia] Efetivação Cenário A concluída: contrato ${efetData.novo_contrato_numero}`);
+          } else {
+            console.error("[aprovar-solicitacao-ia] Erro na efetivação Cenário A:", efetData.error);
+          }
+        } catch (efetErr) {
+          console.error("[aprovar-solicitacao-ia] Erro ao chamar efetivar-troca-titularidade:", efetErr);
+        }
+
       } else {
         // CENÁRIO B — Exige vistoria
         console.log("[aprovar-solicitacao-ia] Cenário B: vistoria obrigatória.");
@@ -687,7 +707,7 @@ serve(async (req) => {
           });
         }
 
-        // Criar serviço de vistoria para troca
+        // Criar serviço de vistoria para troca (com solicitacao_id para rastreabilidade)
         const { data: servico, error: servError } = await supabaseAdmin
           .from("servicos")
           .insert({
@@ -697,6 +717,7 @@ serve(async (req) => {
             associado_id: solicitacao.associado_id,
             veiculo_id: veiculoId,
             origem: "troca_titularidade",
+            solicitacao_id: solicitacao_id,
             observacoes: `Troca de titularidade via IA. Novo titular: ${dadosNovoTitular?.nome || "N/I"} (CPF: ${dadosNovoTitular?.cpf || "N/I"}). Cenário B: vistoria obrigatória.`,
           })
           .select("id")

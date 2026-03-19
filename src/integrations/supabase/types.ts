@@ -21115,6 +21115,7 @@ export type Database = {
           retirada_video_360_url: string | null
           rota_id: string | null
           sinistro_id: string | null
+          solicitacao_id: string | null
           solicitado_por_modulo: string | null
           status: Database["public"]["Enums"]["status_servico"]
           sub_tipo_retirada: string | null
@@ -21225,6 +21226,7 @@ export type Database = {
           retirada_video_360_url?: string | null
           rota_id?: string | null
           sinistro_id?: string | null
+          solicitacao_id?: string | null
           solicitado_por_modulo?: string | null
           status?: Database["public"]["Enums"]["status_servico"]
           sub_tipo_retirada?: string | null
@@ -21335,6 +21337,7 @@ export type Database = {
           retirada_video_360_url?: string | null
           rota_id?: string | null
           sinistro_id?: string | null
+          solicitacao_id?: string | null
           solicitado_por_modulo?: string | null
           status?: Database["public"]["Enums"]["status_servico"]
           sub_tipo_retirada?: string | null
@@ -21550,6 +21553,13 @@ export type Database = {
             columns: ["sinistro_id"]
             isOneToOne: false
             referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_solicitacao_id_fkey"
+            columns: ["solicitacao_id"]
+            isOneToOne: false
+            referencedRelation: "chat_solicitacoes_ia"
             referencedColumns: ["id"]
           },
           {
