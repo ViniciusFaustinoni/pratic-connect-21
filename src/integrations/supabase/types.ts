@@ -23777,6 +23777,7 @@ export type Database = {
           consultor_id: string | null
           cotacao_id: string | null
           created_at: string | null
+          declaracao_cancelamento_concorrente: boolean | null
           id: string
           motivo_reprovacao: string | null
           origem_entrada: string
@@ -23794,6 +23795,7 @@ export type Database = {
           consultor_id?: string | null
           cotacao_id?: string | null
           created_at?: string | null
+          declaracao_cancelamento_concorrente?: boolean | null
           id?: string
           motivo_reprovacao?: string | null
           origem_entrada?: string
@@ -23811,6 +23813,7 @@ export type Database = {
           consultor_id?: string | null
           cotacao_id?: string | null
           created_at?: string | null
+          declaracao_cancelamento_concorrente?: boolean | null
           id?: string
           motivo_reprovacao?: string | null
           origem_entrada?: string
