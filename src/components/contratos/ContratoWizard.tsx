@@ -94,7 +94,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
   const [step, setStep] = useState(1);
   const [isSubmitting, setIsSubmitting] = useState(false);
   const [tipoOperacao, setTipoOperacao] = useState<string>('adesao');
-  const [buscandoFipe, setBuscandoFipe] = useState(false);
+  const [migracaoAprovada, setMigracaoAprovada] = useState(false);
   
   // Documentos uploadados
   const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
