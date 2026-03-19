@@ -254,7 +254,10 @@ export default function PlanosBeneficios() {
             Comparador
           </TabsTrigger>
           {podeVerConfigAvancada && (
-            <TabsTrigger value="adicionais">Adicionais</TabsTrigger>
+            <TabsTrigger value="adicionais" className="gap-1.5">
+              Adicionais
+              <Badge className="bg-amber-500/20 text-amber-400 border-amber-500/30 hover:bg-amber-500/20 text-[10px] px-1.5 py-0">Dev</Badge>
+            </TabsTrigger>
           )}
           <TabsTrigger value="ranking">Ranking</TabsTrigger>
           {podeVerConfigAvancada && (
