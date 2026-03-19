@@ -183,6 +183,18 @@ export default function SolicitacoesMigracao() {
                       </Badge>
                     </TableCell>
                     <TableCell className="text-sm">{s.associacao_origem}</TableCell>
+                    <TableCell>
+                      {(s as any).declaracao_cancelamento_concorrente ? (
+                        <Badge variant="outline" className="text-xs border-primary/30 text-primary bg-primary/5">
+                          <CheckCircle className="h-3 w-3 mr-1" />
+                          Declarado
+                        </Badge>
+                      ) : (
+                        <Badge variant="outline" className="text-xs border-muted-foreground/30 text-muted-foreground">
+                          Não declarado
+                        </Badge>
+                      )}
+                    </TableCell>
                     <TableCell className="text-sm text-muted-foreground">
                       {format(new Date(s.created_at!), "dd/MM/yy HH:mm", { locale: ptBR })}
                     </TableCell>
