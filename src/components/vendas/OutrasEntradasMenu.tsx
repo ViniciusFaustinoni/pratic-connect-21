@@ -1,11 +1,11 @@
 import { useState, useEffect } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
-import { ArrowLeftRight, Users, FileInput, PlusCircle, ChevronRight, Search, Loader2, AlertTriangle, ArrowLeft, Car, CheckCircle2, XCircle } from 'lucide-react';
+import { ArrowLeftRight, Users, FileInput, PlusCircle, Search, Loader2, AlertTriangle, ArrowLeft, Car, CheckCircle2, XCircle, Plus } from 'lucide-react';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
 import { useBuscaPlaca } from '@/hooks/useBuscaPlaca';
 import { useVerificarDebitosAssociado } from '@/hooks/useVerificarDebitosAssociado';
@@ -58,10 +58,15 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-export function OutrasEntradasMenu() {
+interface NovaEntradaDialogProps {
+  open: boolean;
+  onOpenChange: (open: boolean) => void;
+  onNovaCotacao: () => void;
+}
+
+export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEntradaDialogProps) {
   const navigate = useNavigate();
   const { profile } = useAuth();
-  const [open, setOpen] = useState(false);
   const [selectedTipo, setSelectedTipo] = useState<EntradaTipo | null>(null);
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAssociadoId, setSelectedAssociadoId] = useState<string | null>(null);
@@ -106,7 +111,6 @@ export function OutrasEntradasMenu() {
   const migracaoCpfLimpo = migracaoCpf.replace(/\D/g, '');
   const migracaoCpfCompleto = migracaoCpfLimpo.length === 11;
 
-  // Check if CPF exists as active associado
   const { data: migracaoAssociado, isLoading: loadingMigracaoCheck } = useQuery({
     queryKey: ['migracao-cpf-check', migracaoCpfLimpo],
     queryFn: async () => {
@@ -121,7 +125,6 @@ export function OutrasEntradasMenu() {
     enabled: migracaoCpfCompleto,
   });
 
-  // Check debts for the found associado (if any)
   const migracaoAssociadoId = migracaoAssociado?.id;
   const { data: migracaoDebitos, isLoading: loadingMigracaoDebitos } = useVerificarDebitosAssociado(
     migracaoAssociadoId || undefined
@@ -129,7 +132,6 @@ export function OutrasEntradasMenu() {
 
   const migracaoLoading = loadingMigracaoCheck || (!!migracaoAssociadoId && loadingMigracaoDebitos);
 
-  // Determine migration eligibility
   const migracaoStatus = (() => {
     if (!migracaoCpfCompleto) return null;
     if (migracaoLoading) return 'loading';
@@ -157,7 +159,7 @@ export function OutrasEntradasMenu() {
     setMigracaoCpf('');
   }, [selectedTipo]);
 
-  // Merge associado + placa results (dedup by associadoId)
+  // Merge associado + placa results
   const mergedAssociadoResults = (() => {
     if (selectedTipo === 'migracao') return [];
     const map = new Map<string, AssociadoSearchResult>();
@@ -183,29 +185,33 @@ export function OutrasEntradasMenu() {
     } else if (selectedTipo === 'troca_titularidade') {
       setSelectedAssociadoId(associado.id);
       setSelectedAssociadoNome(associado.nome);
-      setOpen(false);
+      onOpenChange(false);
       setShowTrocaTitularidade(true);
     }
   };
 
   const handleIniciarMigracao = () => {
     setMigracaoCpfParaDialog(migracaoCpf);
-    setOpen(false);
+    onOpenChange(false);
     setShowMigracao(true);
   };
 
   const handleProsseguir = () => {
     if (!selectedAssociadoId) return;
     if (selectedTipo === 'substituicao') {
-      setOpen(false);
+      onOpenChange(false);
       navigate(`/cadastro/substituicao-veiculo/${selectedAssociadoId}`);
     } else if (selectedTipo === 'inclusao') {
-      setOpen(false);
+      onOpenChange(false);
       navigate(`/vendas/cotacoes?novo=true`);
     }
   };
 
-  // Check if can proceed
+  const handleNovaCotacao = () => {
+    onOpenChange(false);
+    onNovaCotacao();
+  };
+
   const temDebitos = debitosData?.temDebito === true;
   const bloqueado = selectedAssociadoId && (
     (selectedTipo === 'inclusao' && bloqueioInclusaoAtivo && temDebitos) ||
@@ -217,30 +223,51 @@ export function OutrasEntradasMenu() {
 
   return (
     <>
-      <Popover open={open} onOpenChange={setOpen}>
-        <PopoverTrigger asChild>
-          <Button variant="outline" className="gap-2 shadow-sm">
-            <ChevronRight className="h-4 w-4" />
-            Outras Entradas
-          </Button>
-        </PopoverTrigger>
-        <PopoverContent className="w-[420px] p-0" align="end" sideOffset={8}>
+      <Dialog open={open} onOpenChange={onOpenChange}>
+        <DialogContent className="sm:max-w-[480px] p-0 gap-0">
           {!selectedTipo ? (
             // Step 1: Choose type
-            <div className="p-2">
-              <p className="text-xs text-muted-foreground px-3 pt-2 pb-3 font-medium">Selecione o tipo de entrada</p>
-              <div className="space-y-1">
+            <div className="p-5">
+              <DialogHeader className="pb-4">
+                <DialogTitle className="text-lg">O que você deseja fazer?</DialogTitle>
+              </DialogHeader>
+              <div className="space-y-2">
+                {/* Nova Cotação — highlighted */}
+                <button
+                  onClick={handleNovaCotacao}
+                  className={cn(
+                    "w-full flex items-start gap-3 px-4 py-4 rounded-xl text-left",
+                    "border-2 border-primary/30 bg-primary/5 hover:bg-primary/10 transition-colors group"
+                  )}
+                >
+                  <div className="h-10 w-10 rounded-xl bg-primary/15 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-primary/25 transition-colors">
+                    <Plus className="h-5 w-5 text-primary" />
+                  </div>
+                  <div className="min-w-0">
+                    <p className="text-sm font-semibold text-foreground">Nova Cotação</p>
+                    <p className="text-xs text-muted-foreground mt-0.5 leading-relaxed">Cliente novo ou lead que quer se associar.</p>
+                  </div>
+                </button>
+
+                {/* Separator */}
+                <div className="flex items-center gap-3 py-1">
+                  <div className="flex-1 h-px bg-border" />
+                  <span className="text-[10px] text-muted-foreground font-medium uppercase tracking-wider">Outras entradas</span>
+                  <div className="flex-1 h-px bg-border" />
+                </div>
+
+                {/* Other options */}
                 {OPCOES.map((opcao) => (
                   <button
                     key={opcao.key}
                     onClick={() => setSelectedTipo(opcao.key)}
                     className={cn(
-                      "w-full flex items-start gap-3 px-3 py-3 rounded-lg text-left",
-                      "hover:bg-accent/50 transition-colors group"
+                      "w-full flex items-start gap-3 px-4 py-3 rounded-xl text-left",
+                      "hover:bg-accent/50 transition-colors group border border-transparent hover:border-border/50"
                     )}
                   >
-                    <div className="h-9 w-9 rounded-lg bg-primary/10 flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-primary/20 transition-colors">
-                      <opcao.icon className="h-4.5 w-4.5 text-primary" />
+                    <div className="h-9 w-9 rounded-lg bg-muted flex items-center justify-center shrink-0 mt-0.5 group-hover:bg-accent transition-colors">
+                      <opcao.icon className="h-4 w-4 text-muted-foreground group-hover:text-foreground transition-colors" />
                     </div>
                     <div className="min-w-0">
                       <p className="text-sm font-medium text-foreground">{opcao.label}</p>
@@ -254,23 +281,24 @@ export function OutrasEntradasMenu() {
             // Step 2: Search or CPF input
             <div className="flex flex-col">
               {/* Header */}
-              <div className="flex items-center gap-2 px-3 py-2.5 border-b">
+              <div className="flex items-center gap-2 px-4 py-3 border-b">
                 <Button
                   variant="ghost"
                   size="icon"
-                  className="h-7 w-7 shrink-0"
+                  className="h-8 w-8 shrink-0"
                   onClick={() => setSelectedTipo(null)}
                 >
                   <ArrowLeft className="h-4 w-4" />
                 </Button>
                 <div className="min-w-0">
-                  <p className="text-sm font-medium truncate">{opcaoAtual?.label}</p>
+                  <p className="text-sm font-semibold truncate">{opcaoAtual?.label}</p>
+                  <p className="text-xs text-muted-foreground truncate">{opcaoAtual?.description}</p>
                 </div>
               </div>
 
               {selectedTipo === 'migracao' ? (
                 // === Migração: CPF input + verification ===
-                <div className="p-3 space-y-3">
+                <div className="p-4 space-y-3">
                   <div className="space-y-1.5">
                     <p className="text-sm font-medium text-foreground">CPF do cliente</p>
                     <p className="text-xs text-muted-foreground">
@@ -285,7 +313,6 @@ export function OutrasEntradasMenu() {
                     />
                   </div>
 
-                  {/* Verification results */}
                   {migracaoCpfCompleto && (
                     <div className="space-y-3">
                       {migracaoStatus === 'loading' && (
@@ -340,7 +367,6 @@ export function OutrasEntradasMenu() {
               ) : (
                 // === Other types: associado search ===
                 <>
-                  {/* Search input */}
                   <div className="p-3 border-b">
                     <div className="relative">
                       <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
@@ -357,7 +383,6 @@ export function OutrasEntradasMenu() {
                     </div>
                   </div>
 
-                  {/* Results / Debt check */}
                   <div className="max-h-[320px] overflow-y-auto">
                     {selectedAssociadoId && (selectedTipo === 'substituicao' || selectedTipo === 'inclusao') ? (
                       <div className="p-3 space-y-3">
@@ -407,7 +432,6 @@ export function OutrasEntradasMenu() {
                         )}
                       </div>
                     ) : (
-                      // Search results
                       <div className="p-1">
                         {isSearching && searchTerm.length >= 2 && (
                           <div className="flex items-center justify-center py-6">
@@ -447,8 +471,8 @@ export function OutrasEntradasMenu() {
               )}
             </div>
           )}
-        </PopoverContent>
-      </Popover>
+        </DialogContent>
+      </Dialog>
 
       {/* Troca Titularidade Dialog */}
       {selectedAssociadoId && (
@@ -475,4 +499,9 @@ export function OutrasEntradasMenu() {
       />
     </>
   );
+}
+
+// Keep backward-compatible export
+export function OutrasEntradasMenu() {
+  return null;
 }

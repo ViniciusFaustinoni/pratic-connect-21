@@ -39,7 +39,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useQueryClient } from '@tanstack/react-query';
 import { cn } from '@/lib/utils';
 import { useCotacoesRealtime } from '@/hooks/useCotacoesRealtime';
-import { OutrasEntradasMenu } from '@/components/vendas/OutrasEntradasMenu';
+import { NovaEntradaDialog } from '@/components/vendas/OutrasEntradasMenu';
 
 // Categorização dinâmica — fallback por termos quando benefits.category não está disponível
 const categorizarPorTermo = (cobLower: string): 'cobertura' | 'assistencia' | 'extra' => {
@@ -81,6 +81,7 @@ export default function Cotacoes() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [showCotacaoForm, setShowCotacaoForm] = useState(false);
+  const [showNovaEntrada, setShowNovaEntrada] = useState(false);
   const [showContratoWizard, setShowContratoWizard] = useState(false);
   const [selectedCotacaoId, setSelectedCotacaoId] = useState<string>('');
   const [showEmailModal, setShowEmailModal] = useState(false);
@@ -605,17 +606,19 @@ export default function Cotacoes() {
         </div>
         <div className="flex items-center gap-2">
           <PermissionGate permission="cotacao.canCreate">
-            <OutrasEntradasMenu />
-          </PermissionGate>
-          <PermissionGate permission="cotacao.canCreate">
             <Button 
               className="gap-2 shadow-md hover:shadow-lg transition-all" 
-              onClick={() => setShowCotacaoForm(true)}
+              onClick={() => setShowNovaEntrada(true)}
             >
               <Plus className="h-4 w-4" />
               Nova Cotação
             </Button>
           </PermissionGate>
+          <NovaEntradaDialog
+            open={showNovaEntrada}
+            onOpenChange={setShowNovaEntrada}
+            onNovaCotacao={() => setShowCotacaoForm(true)}
+          />
         </div>
       </div>
 
