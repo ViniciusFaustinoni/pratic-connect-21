@@ -123,30 +123,27 @@ export function PlanoCardDynamic({ plan }: PlanoCardDynamicProps) {
         </div>
       </CardHeader>
 
-      <CardContent className="space-y-3 text-sm flex-1 flex flex-col">
-        {/* Cota Passeio */}
-        {plan.cota_passeio_percent && (
-          <div>
-            <p className="text-xs text-muted-foreground">Cota Passeio:</p>
-            <p className="font-medium">
-              {plan.cota_passeio_percent}% (mín {formatCurrency(plan.cota_passeio_min || 0)})
-            </p>
-            {/* Cota com Deságio */}
-            {plan.cota_desagio_percent && (
-              <p className="text-xs text-green-600 dark:text-green-400">
-                Com Deságio: {plan.cota_desagio_percent}% (mín {formatCurrency(plan.cota_desagio_min || 0)})
-              </p>
+      <CardContent className="space-y-2 text-sm flex-1 flex flex-col">
+        {/* Cotas em linha compacta */}
+        {(plan.cota_passeio_percent || plan.cota_app_percent) && (
+          <div className="flex flex-wrap gap-x-4 gap-y-1 text-xs">
+            {plan.cota_passeio_percent && (
+              <span>
+                <span className="text-muted-foreground">Cota:</span>{' '}
+                <strong>{plan.cota_passeio_percent}%</strong> (mín {formatCurrency(plan.cota_passeio_min || 0)})
+                {plan.cota_desagio_percent && (
+                  <span className="text-green-600 dark:text-green-400 ml-1">
+                    • Deságio: {plan.cota_desagio_percent}%
+                  </span>
+                )}
+              </span>
             )}
-          </div>
-        )}
-
-        {/* Cota APP */}
-        {plan.cota_app_percent && (
-          <div>
-            <p className="text-xs text-muted-foreground">Cota APP:</p>
-            <p className="font-medium">
-              {plan.cota_app_percent}% (mín {formatCurrency(plan.cota_app_min || 0)})
-            </p>
+            {plan.cota_app_percent && (
+              <span>
+                <span className="text-muted-foreground">APP:</span>{' '}
+                <strong>{plan.cota_app_percent}%</strong> (mín {formatCurrency(plan.cota_app_min || 0)})
+              </span>
+            )}
           </div>
         )}
 
