@@ -1438,13 +1438,42 @@ export function useAprovarProposta() {
       if (veiculos && veiculos.length > 0) {
         const veiculoId = veiculos[0].id;
         
-        // Status do veículo depende se instalação foi concluída
-        // Se já tem instalação concluída, veículo vai para 'ativo' com cobertura_total
-        const statusVeiculo = jaTemInstalacaoConcluida ? 'ativo' : 'instalacao_pendente';
+        // Buscar valor_fipe do veículo para verificar se precisa de rastreador
+        const { data: veiculoFipeData } = await supabase
+          .from('veiculos')
+          .select('valor_fipe, tipo')
+          .eq('id', veiculoId)
+          .single();
         
-        // Se instalação já está concluída, ativar cobertura total imediatamente
-        // Caso contrário, aguardar instalação para ativar
-        const coberturaTotal = jaTemInstalacaoConcluida;
+        const valorFipe = veiculoFipeData?.valor_fipe || 0;
+        const tipoVeiculo = (veiculoFipeData?.tipo as 'automovel' | 'moto') || 'automovel';
+        
+        // Buscar limites de FIPE para rastreador da configuração
+        let fipeMinRastreador = 30000;
+        let fipeMinRastreadorMoto = 9000;
+        const { data: configRastreador } = await supabase
+          .from('configuracoes')
+          .select('chave, valor')
+          .in('chave', ['operacional_fipe_minimo_rastreador', 'operacional_fipe_minimo_rastreador_moto']);
+        
+        if (configRastreador) {
+          for (const cfg of configRastreador) {
+            if (cfg.chave === 'operacional_fipe_minimo_rastreador') fipeMinRastreador = Number(cfg.valor) || 30000;
+            if (cfg.chave === 'operacional_fipe_minimo_rastreador_moto') fipeMinRastreadorMoto = Number(cfg.valor) || 9000;
+          }
+        }
+        
+        const veiculoPrecisaRastreador = precisaRastreador(valorFipe, fipeMinRastreador, tipoVeiculo, fipeMinRastreadorMoto);
+        
+        // Status do veículo depende se instalação foi concluída OU se não precisa de rastreador
+        // Veículos sem rastreador recebem proteção 360° direto pela autovistoria completa
+        const ativarProtecao360 = jaTemInstalacaoConcluida || !veiculoPrecisaRastreador;
+        const statusVeiculo = ativarProtecao360 ? 'ativo' : 'instalacao_pendente';
+        const coberturaTotal = ativarProtecao360;
+        
+        if (!veiculoPrecisaRastreador) {
+          console.log(`[useAprovarProposta] Veículo FIPE R$${valorFipe} < limite R$${tipoVeiculo === 'moto' ? fipeMinRastreadorMoto : fipeMinRastreador} — Proteção 360° ativada sem rastreador`);
+        }
         
         const { error: veiculoError } = await supabase
           .from('veiculos')
