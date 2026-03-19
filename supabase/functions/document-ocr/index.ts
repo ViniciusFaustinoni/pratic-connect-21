@@ -607,9 +607,15 @@ INSTRUÇÕES:
           }
         } catch (retryError) {
           console.error('[OCR] Erro no retry de extração de CPF:', retryError);
-          // Manter o CPF original se o retry falhar por erro de rede
-          if (cpfExtraido && cpfExtraido !== null && !validateCPF(cpfExtraido.replace(/\D/g, ''))) {
-            result.dados.cpf = 'ilegivel';
+          // Tentar permutação mesmo quando retry falha por erro de rede
+          if (cpfExtraido && cpfExtraido !== 'ilegivel' && !validateCPF(cpfExtraido.replace(/\D/g, ''))) {
+            const cpfCorrigido = tryFixCPFByPermutation(cpfExtraido);
+            if (cpfCorrigido) {
+              console.log(`[OCR] CPF corrigido por permutação após erro de rede: ${cpfExtraido} → ${cpfCorrigido}`);
+              result.dados.cpf = cpfCorrigido;
+            } else {
+              result.dados.cpf = 'ilegivel';
+            }
           }
         }
       } else if (cpfExtraido && cpfExtraido !== 'ilegivel') {
