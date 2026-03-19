@@ -1,23 +1,46 @@
 
 
-# Fix: Calculator ignores tipo_uso toggle (particular vs aplicativo)
+# Auto-recalcular ao mudar inputs na Calculadora
 
-## Root cause
+## Problema
 
-Line 470 in `CalculadoraPreco.tsx`:
-```javascript
-if (catLower === 'aplicativo' || tipoUsoPlano === 'aplicativo') continue;
-```
+Hoje o usuário precisa clicar "Calcular" toda vez que muda qualquer campo (tipo de uso, categoria, combustível, etc.). O comportamento esperado é: após o primeiro cálculo, qualquer mudança nos inputs deve recalcular automaticamente.
 
-This unconditionally skips every plan with `tipo_uso = 'aplicativo'`, regardless of the user's selected toggle. The correct bidirectional filter already exists on lines 481-487 but never gets reached for aplicativo plans.
-
-## Fix
+## Solução
 
 ### `src/components/planos/CalculadoraPreco.tsx`
 
-**Remove line 470.** The existing filter block (lines 481-487) already handles both directions correctly:
-- When user selects "aplicativo": show aplicativo + ambos plans (+ passeio/select with deságio override)
-- When user selects "particular": hide aplicativo plans
+1. **Adicionar um estado `jaCalculou`** (`boolean`, default `false`) — setado `true` quando o usuário clica "Calcular" pela primeira vez.
 
-One line deleted. No other changes needed.
+2. **Adicionar um `useEffect`** que observa todas as dependências relevantes (`tipoUso`, `tipoVeiculo`, `categoria`, `combustivelManual`, `anoVeiculo`, `valorFipe`, `veiculoPlaca`, `regiao`) e, **se `jaCalculou` for `true`**, chama `calcular()` automaticamente.
+
+3. **Na função `limpar`**, resetar `jaCalculou` para `false`.
+
+4. O botão "Calcular" continua existindo para o primeiro disparo (e para recalcular manualmente se desejado).
+
+### Detalhes técnicos
+
+```typescript
+const [jaCalculou, setJaCalculou] = useState(false);
+
+// No onClick do botão Calcular:
+const handleCalcular = () => {
+  calcular();
+  setJaCalculou(true);
+};
+
+// Auto-recalcular quando inputs mudam após primeiro cálculo
+useEffect(() => {
+  if (jaCalculou) {
+    calcular();
+  }
+}, [tipoUso, tipoVeiculo, categoria, combustivelManual, anoVeiculo, valorFipe, veiculoPlaca, regiao]);
+
+// No limpar:
+setJaCalculou(false);
+```
+
+| Arquivo | Mudança |
+|---------|---------|
+| `CalculadoraPreco.tsx` | +1 estado, +1 useEffect, ajuste no botão e no limpar |
 
