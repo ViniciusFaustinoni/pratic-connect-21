@@ -206,6 +206,19 @@ export default function SubstituicaoVeiculoPage() {
           <p className="text-sm text-muted-foreground">
             Associado: {associado.nome} — Veículo atual: {veiculoAtivo.marca} {veiculoAtivo.modelo} ({veiculoAtivo.placa})
           </p>
+          <div className="mt-1">
+            {consultorNome ? (
+              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1">
+                <UserCheck className="h-3 w-3" />
+                Consultor: {consultorNome}
+              </Badge>
+            ) : (
+              <Badge variant="secondary" className="gap-1">
+                <UserX className="h-3 w-3" />
+                Sem consultor vinculado
+              </Badge>
+            )}
+          </div>
         </div>
       </div>
 
