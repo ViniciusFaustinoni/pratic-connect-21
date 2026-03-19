@@ -208,6 +208,21 @@ export default function CotacaoPublicaCompleta() {
     }
   }, [cotacao?.valor_fipe, tipoUso, calcular]);
 
+  // Reinicializar lista de fotos quando a configuração de rastreador mudar
+  useEffect(() => {
+    setFotosVistoria(prev => {
+      const novaConfig = fotosVistoriaConfig;
+      // Preservar fotos já enviadas ao trocar configuração
+      return novaConfig.map(f => {
+        const existente = prev.find(p => p.tipo === f.tipo);
+        if (existente && existente.status === 'enviado') {
+          return { ...f, url: existente.url, status: 'enviado' as const };
+        }
+        return { ...f, status: 'pendente' as const };
+      });
+    });
+  }, [veiculoPrecisaRastreador]);
+
   // Sincronizar fotos existentes e vídeo
   useEffect(() => {
     if (fotosExistentes && fotosExistentes.length > 0) {
