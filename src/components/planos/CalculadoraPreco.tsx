@@ -839,8 +839,13 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                     <div className="flex items-center justify-between p-3">
                       <div>
                         <span className="text-sm font-semibold">{plano.planoNome}</span>
-                        {(plano.adicionalMensal > 0 || plano.descontoPercentual > 0) && (
+                        {(plano.adicionalMensal > 0 || plano.descontoPercentual > 0 || plano.precoDesagioAplicado) && (
                           <div className="flex gap-1 mt-0.5">
+                            {plano.precoDesagioAplicado && (
+                              <Badge variant="outline" className="text-[10px] px-1 py-0 border-amber-500/40 text-amber-600 dark:text-amber-400">
+                                Deságio
+                              </Badge>
+                            )}
                             {plano.adicionalMensal > 0 && (
                               <Badge variant="outline" className="text-[10px] px-1 py-0">
                                 +{formatarMoeda(plano.adicionalMensal)}
