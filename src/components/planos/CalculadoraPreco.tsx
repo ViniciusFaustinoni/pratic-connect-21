@@ -384,14 +384,70 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     if (e.key === 'Enter') consultarPlaca();
   };
 
+  // Marca aliases (same as cotador)
+  const MARCA_ALIASES: Record<string, string> = {
+    'VW': 'VOLKSWAGEN', 'GM': 'CHEVROLET', 'MERCEDES': 'MERCEDES-BENZ',
+    'CHERY': 'CAOA CHERY', 'CITROËN': 'CITROEN',
+  };
+  const normalizarMarca = (m: string) => { const u = m.trim().toUpperCase(); return MARCA_ALIASES[u] || u; };
+
+  /** Verificar elegibilidade (whitelist) — replica lógica do cotador */
+  const verificarElegibilidade = (planoId: string, linha: string | null, marca: string, modelo: string, ano: number, combustivel: string) => {
+    const planosNaLinha = linha
+      ? (planosData?.planos || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
+      : [planoId];
+    const regras = elegibilidadeData?.filter(e => planosNaLinha.includes(e.plano_id)) ?? [];
+    if (regras.length === 0) return { status: 'aprovado' as const, coberturaFipe: 100 };
+
+    const marcaNorm = normalizarMarca(marca);
+    const modeloUp = modelo.trim().toUpperCase().replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    const combustivelNorm = combustivel.trim().toLowerCase();
+
+    const regrasOrd = [...regras].sort((a, b) => b.modelo.length - a.modelo.length);
+    const regra = regrasOrd.find(r => {
+      const marcaBanco = normalizarMarca(r.marca);
+      const marcaMatch = marcaBanco === marcaNorm || r.marca.trim().toUpperCase() === marca.trim().toUpperCase();
+      const modeloBanco = r.modelo.trim().toUpperCase().replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+      let modeloMatch = false;
+      if (modeloBanco.startsWith('TODOS')) { modeloMatch = true; }
+      else {
+        const prefixMatch = modeloUp.startsWith(modeloBanco) || modeloBanco.startsWith(modeloUp);
+        const containsMatch = modeloUp.includes(modeloBanco) || modeloBanco.includes(modeloUp);
+        const palavras = modeloBanco.split(' ');
+        const baseMatch = palavras.length === 1 && palavras[0].length >= 2 && (modeloUp.startsWith(palavras[0] + ' ') || modeloUp === palavras[0]);
+        modeloMatch = prefixMatch || containsMatch || baseMatch;
+      }
+      const anoMatch = ano >= r.ano_min && (r.ano_max === null || ano <= r.ano_max);
+      const combMatch = r.combustivel === 'qualquer' || r.combustivel === combustivelNorm;
+      return marcaMatch && modeloMatch && anoMatch && combMatch;
+    });
+
+    if (!regra) return { status: 'negado' as const, coberturaFipe: 0 };
+    if (regra.status === 'negado') return { status: 'negado' as const, coberturaFipe: 0 };
+    const cobFipe = (regra as any).cobertura_fipe ?? 100;
+    if (regra.status === 'limitado') return { status: 'limitado' as const, coberturaFipe: cobFipe };
+    return { status: 'aprovado' as const, coberturaFipe: cobFipe };
+  };
+
   const calcular = () => {
     const valor = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
 
     if (!valor || !tabelas || tabelas.length === 0 || !planosData) {
       setResultado(null);
       setSemResultado(!!valor);
+      setFipeBloqueado(false);
       return;
     }
+
+    // ── Guard: FIPE mínimo global ──
+    const fipeMinimo = limites?.fipeMinimo ?? 15000;
+    if (valor < fipeMinimo) {
+      setResultado(null);
+      setSemResultado(false);
+      setFipeBloqueado(true);
+      return;
+    }
+    setFipeBloqueado(false);
 
     const { planos, mappings } = planosData;
     const anoAtual = new Date().getFullYear();
