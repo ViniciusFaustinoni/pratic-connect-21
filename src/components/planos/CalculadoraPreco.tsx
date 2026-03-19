@@ -6,7 +6,8 @@ import { Dialog, DialogContent, DialogDescription, DialogHeader, DialogTitle, Di
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Badge } from '@/components/ui/badge';
-import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Fuel, ArrowRight, Shield, CalendarCheck, AlertTriangle } from 'lucide-react';
+import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Fuel, ArrowRight, Shield, CalendarCheck, AlertTriangle, Ban } from 'lucide-react';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { formatarMoeda } from '@/utils/format';
 import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
@@ -14,6 +15,7 @@ import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
+import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 import { maskPlaca } from '@/lib/validations';
@@ -285,7 +287,24 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const configApp = useConfigAdicionalAppCalc(tabelas);
   const { cotaDefault, cotaMinimaDefault } = useCotaDefaults();
   const desagioConfig = useDesagioConfig();
+  const { data: limites } = useConfigLimitesVeiculo();
 
+  // Elegibilidade query (same as cotador)
+  const { data: elegibilidadeData } = useQuery({
+    queryKey: ['plano_elegibilidade_modelos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('plano_elegibilidade_modelos')
+        .select('plano_id, marca, modelo, ano_min, ano_max, combustivel, status, observacao, cobertura_fipe')
+        .eq('is_active', true);
+      if (error) throw error;
+      return data ?? [];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // State for FIPE-below-minimum alert
+  const [fipeBloqueado, setFipeBloqueado] = useState(false);
   // Vencimento
   const [opcao1, opcao2] = calcularOpcoesVencimento(new Date().getDate());
 
@@ -365,14 +384,70 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     if (e.key === 'Enter') consultarPlaca();
   };
 
+  // Marca aliases (same as cotador)
+  const MARCA_ALIASES: Record<string, string> = {
+    'VW': 'VOLKSWAGEN', 'GM': 'CHEVROLET', 'MERCEDES': 'MERCEDES-BENZ',
+    'CHERY': 'CAOA CHERY', 'CITROËN': 'CITROEN',
+  };
+  const normalizarMarca = (m: string) => { const u = m.trim().toUpperCase(); return MARCA_ALIASES[u] || u; };
+
+  /** Verificar elegibilidade (whitelist) — replica lógica do cotador */
+  const verificarElegibilidade = (planoId: string, linha: string | null, marca: string, modelo: string, ano: number, combustivel: string) => {
+    const planosNaLinha = linha
+      ? (planosData?.planos || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
+      : [planoId];
+    const regras = elegibilidadeData?.filter(e => planosNaLinha.includes(e.plano_id)) ?? [];
+    if (regras.length === 0) return { status: 'aprovado' as const, coberturaFipe: 100 };
+
+    const marcaNorm = normalizarMarca(marca);
+    const modeloUp = modelo.trim().toUpperCase().replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+    const combustivelNorm = combustivel.trim().toLowerCase();
+
+    const regrasOrd = [...regras].sort((a, b) => b.modelo.length - a.modelo.length);
+    const regra = regrasOrd.find(r => {
+      const marcaBanco = normalizarMarca(r.marca);
+      const marcaMatch = marcaBanco === marcaNorm || r.marca.trim().toUpperCase() === marca.trim().toUpperCase();
+      const modeloBanco = r.modelo.trim().toUpperCase().replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
+      let modeloMatch = false;
+      if (modeloBanco.startsWith('TODOS')) { modeloMatch = true; }
+      else {
+        const prefixMatch = modeloUp.startsWith(modeloBanco) || modeloBanco.startsWith(modeloUp);
+        const containsMatch = modeloUp.includes(modeloBanco) || modeloBanco.includes(modeloUp);
+        const palavras = modeloBanco.split(' ');
+        const baseMatch = palavras.length === 1 && palavras[0].length >= 2 && (modeloUp.startsWith(palavras[0] + ' ') || modeloUp === palavras[0]);
+        modeloMatch = prefixMatch || containsMatch || baseMatch;
+      }
+      const anoMatch = ano >= r.ano_min && (r.ano_max === null || ano <= r.ano_max);
+      const combMatch = r.combustivel === 'qualquer' || r.combustivel === combustivelNorm;
+      return marcaMatch && modeloMatch && anoMatch && combMatch;
+    });
+
+    if (!regra) return { status: 'negado' as const, coberturaFipe: 0 };
+    if (regra.status === 'negado') return { status: 'negado' as const, coberturaFipe: 0 };
+    const cobFipe = (regra as any).cobertura_fipe ?? 100;
+    if (regra.status === 'limitado') return { status: 'limitado' as const, coberturaFipe: cobFipe };
+    return { status: 'aprovado' as const, coberturaFipe: cobFipe };
+  };
+
   const calcular = () => {
     const valor = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
 
     if (!valor || !tabelas || tabelas.length === 0 || !planosData) {
       setResultado(null);
       setSemResultado(!!valor);
+      setFipeBloqueado(false);
       return;
     }
+
+    // ── Guard: FIPE mínimo global ──
+    const fipeMinimo = limites?.fipeMinimo ?? 15000;
+    if (valor < fipeMinimo) {
+      setResultado(null);
+      setSemResultado(false);
+      setFipeBloqueado(true);
+      return;
+    }
+    setFipeBloqueado(false);
 
     const { planos, mappings } = planosData;
     const anoAtual = new Date().getFullYear();
@@ -422,6 +497,22 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
 
       if (plMaps.requiresRecent[linhaSlug] && anoNum) {
         if (anoNum < anoAtual - 1) continue;
+      }
+
+      // ── Whitelist eligibility check (when marca/modelo known from plate lookup) ──
+      if (veiculoPlaca?.marca && veiculoPlaca?.modelo && anoNum) {
+        const linhaPlano = (plano.linha || '').toLowerCase() || null;
+        const temRegras = elegibilidadeData?.some(e => {
+          const planosNaLinha = linhaPlano
+            ? (planosData?.planos || []).filter(p => (p.linha || '').toLowerCase() === linhaPlano).map(p => p.id)
+            : [plano.id];
+          return planosNaLinha.includes(e.plano_id);
+        });
+        if (temRegras) {
+          const combForElig = combustivelDetectado || combustivelManual;
+          const eleg = verificarElegibilidade(plano.id, linhaPlano, veiculoPlaca.marca, veiculoPlaca.modelo, anoNum, combForElig);
+          if (eleg.status === 'negado') continue;
+        }
       }
 
       // Blocked categories (from product_line)
@@ -583,6 +674,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setCategoria('nenhuma');
     setResultado(null);
     setSemResultado(false);
+    setFipeBloqueado(false);
     setPlaca('');
     setVeiculoPlaca(null);
     setCombustivelDetectado(null);
@@ -940,7 +1032,19 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
             </div>
           )}
 
-          {semResultado && (
+          {fipeBloqueado && (
+            <Alert variant="destructive" className="mt-2">
+              <Ban className="h-4 w-4" />
+              <AlertDescription>
+                <p className="font-medium">Veículo fora do perfil aceito</p>
+                <p className="text-xs mt-1">
+                  FIPE abaixo do mínimo de {formatarMoeda(limites?.fipeMinimo ?? 15000)}. Este veículo não é elegível para proteção.
+                </p>
+              </AlertDescription>
+            </Alert>
+          )}
+
+          {semResultado && !fipeBloqueado && (
             <div className="text-center py-4">
               <p className="text-sm font-medium text-muted-foreground">
                 Consulte um consultor
