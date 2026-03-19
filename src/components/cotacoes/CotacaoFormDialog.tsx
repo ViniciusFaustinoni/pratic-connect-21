@@ -1,4 +1,5 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { calcularOpcoesVencimento } from '@/utils/vencimento';
 import { useAssociadoSearch } from '@/hooks/useAssociadoSearch';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
