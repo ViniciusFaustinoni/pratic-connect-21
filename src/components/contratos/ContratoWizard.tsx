@@ -945,41 +945,82 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
 
         <Form {...form}>
           <form onSubmit={form.handleSubmit(onSubmit)} className="space-y-4">
-            {/* Step 1: Cotação */}
-            {step === 1 && cotacao && (
-              <Card>
-                <CardHeader>
-                  <CardTitle className="text-lg">Resumo da Cotação</CardTitle>
-                </CardHeader>
-                <CardContent className="space-y-3">
-                  <div className="grid grid-cols-2 gap-4 text-sm">
-                    <div>
-                      <span className="text-muted-foreground">Número:</span>
-                      <p className="font-mono">{cotacao.numero}</p>
+            {/* Step 1: Cotação + Tipo de Operação */}
+            {step === STEP_COTACAO && cotacao && (
+              <div className="space-y-4">
+                <Card>
+                  <CardHeader>
+                    <CardTitle className="text-lg">Resumo da Cotação</CardTitle>
+                  </CardHeader>
+                  <CardContent className="space-y-3">
+                    <div className="grid grid-cols-2 gap-4 text-sm">
+                      <div>
+                        <span className="text-muted-foreground">Número:</span>
+                        <p className="font-mono">{cotacao.numero}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Cliente:</span>
+                        <p>{cotacao.leads?.nome || 'Não informado'}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Plano:</span>
+                        <p>{cotacao.planos?.nome}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Valor FIPE:</span>
+                        <p>{formatCurrency(cotacao.valor_fipe)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Mensal:</span>
+                        <p className="font-medium text-primary">{formatCurrency(cotacao.valor_total_mensal)}</p>
+                      </div>
+                      <div>
+                        <span className="text-muted-foreground">Filiação:</span>
+                        <p>{formatCurrency(cotacao.valor_adesao)}</p>
+                      </div>
                     </div>
-                    <div>
-                      <span className="text-muted-foreground">Cliente:</span>
-                      <p>{cotacao.leads?.nome || 'Não informado'}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Plano:</span>
-                      <p>{cotacao.planos?.nome}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Valor FIPE:</span>
-                      <p>{formatCurrency(cotacao.valor_fipe)}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Mensal:</span>
-                      <p className="font-medium text-primary">{formatCurrency(cotacao.valor_total_mensal)}</p>
-                    </div>
-                    <div>
-                      <span className="text-muted-foreground">Filiação:</span>
-                      <p>{formatCurrency(cotacao.valor_adesao)}</p>
-                    </div>
+                  </CardContent>
+                </Card>
+
+                {/* Tipo de Operação - agora no Step 1 */}
+                <div className="p-4 bg-muted/50 rounded-lg space-y-3">
+                  <h4 className="font-medium flex items-center gap-2">
+                    <FileText className="h-4 w-4" />
+                    Tipo de Operação
+                  </h4>
+                  <div className="max-w-xs">
+                    <Label className="text-xs text-muted-foreground mb-1 block">Selecione o tipo de operação deste contrato</Label>
+                    <Select value={tipoOperacao} onValueChange={(val) => {
+                      setTipoOperacao(val);
+                      // Reset migration state when changing type
+                      if (val !== 'migracao') setMigracaoAprovada(false);
+                    }}>
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="adesao">Adesão</SelectItem>
+                        <SelectItem value="migracao">Migração</SelectItem>
+                        <SelectItem value="inclusao">Inclusão</SelectItem>
+                        <SelectItem value="troca_titularidade">Troca de Titularidade</SelectItem>
+                        <SelectItem value="reativacao">Reativação</SelectItem>
+                        <SelectItem value="substituicao_placa">Substituição de Placa</SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
-                </CardContent>
-              </Card>
+                </div>
+              </div>
+            )}
+
+            {/* Step Migração (condicional) */}
+            {step === STEP_MIGRACAO && isMigracao && (
+              <MigracaoStepForm
+                cotacaoId={cotacaoId}
+                cpf={form.getValues('cpf') || cotacao?.leads?.cpf || ''}
+                nome={form.getValues('nome') || cotacao?.leads?.nome}
+                placa={form.getValues('placa') || cotacao?.leads?.veiculo_placa || cotacao?.veiculo_placa}
+                onStatusChange={handleMigracaoStatusChange}
+              />
             )}
 
             {/* Step 2: Upload Unificado de Documentos */}
