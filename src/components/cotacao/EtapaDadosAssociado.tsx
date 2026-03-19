@@ -9,6 +9,8 @@ import { User, ArrowRight, Phone, UserPlus, X } from 'lucide-react';
 import { useVendedores } from '@/hooks/useVendedores';
 import { useState } from 'react';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
+import { useVerificarVeiculoAtivoCpf } from '@/hooks/useVerificarVeiculoAtivoCpf';
+import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
