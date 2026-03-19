@@ -50,6 +50,7 @@ import { ExcluirAssociadoDialog, type TipoExclusao } from '@/components/cadastro
 import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastreador';
 import { supabase } from '@/integrations/supabase/client';
 import { SubstituicaoStatusCard } from '@/components/substituicao/SubstituicaoStatusCard';
+import { TIPO_ENTRADA_SHORT_LABELS } from '@/components/associados/detalhe/OrigemCadastroCard';
 import { ReativacaoWizard } from '@/components/associados/reativacao/ReativacaoWizard';
 import { TrocaTitularidadeDialog } from '@/components/associados/TrocaTitularidadeDialog';
 
