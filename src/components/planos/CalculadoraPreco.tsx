@@ -265,6 +265,7 @@ interface CalculadoraPrecoProps {
 
 export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const [open, setOpen] = useState(false);
+  const [modo, setModo] = useState<'placa' | 'manual' | null>(null);
   const [valorFipe, setValorFipe] = useState<string>('');
   const [tipoUso, setTipoUso] = useState<TipoUso>('particular');
   const [tipoVeiculo, setTipoVeiculo] = useState<TipoVeiculo>('carro');
