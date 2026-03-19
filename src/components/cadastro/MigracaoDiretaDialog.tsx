@@ -85,6 +85,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
 
   const comprovantesExigidos = migracaoConfig?.comprovantes ?? 3;
   const prazoHoras = migracaoConfig?.prazo_horas ?? 48;
+  const prazoMaxComprovanteMeses = migracaoConfig?.prazo_max_comprovante_meses ?? 3;
 
   const cpfLimpo = cpf.replace(/\D/g, '');
   const cpfValido = cpfLimpo.length === 11;
