@@ -1,4 +1,5 @@
 import { useState, useMemo, useEffect } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { formatarMoeda } from '@/utils/format';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -421,11 +422,29 @@ export default function CotadorPage() {
     }
   }, [planos]);
 
+  // Buscar dados de migração quando cotação salva tem tipo_entrada migração
+  const cotacaoSalvaId = cotacaoSalva?.id;
+  const { data: migracaoData } = useQuery({
+    queryKey: ['migracao-cotacao', cotacaoSalvaId],
+    queryFn: async () => {
+      if (!cotacaoSalvaId) return null;
+      const { data } = await supabase
+        .from('solicitacoes_migracao')
+        .select('associacao_origem, aprovado_em, status, associado_cpf')
+        .eq('cotacao_id', cotacaoSalvaId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!cotacaoSalvaId,
+  });
+
   // Dados para geração de proposta PDF
   const dadosProposta: DadosProposta | null = useMemo(() => {
     if (!cotacaoCalculada || !planoFinalSelecionado || !valorFipe) return null;
     
-    return {
+    const proposta: DadosProposta = {
       cliente: {
         nome: leadSelecionado?.nome || nomeAssociado || 'Cliente',
         cpf: leadSelecionado?.cpf || '000.000.000-00',
@@ -456,7 +475,19 @@ export default function CotadorPage() {
         observacoes: undefined,
       },
     };
-  }, [cotacaoCalculada, planoFinalSelecionado, valorFipe, leadSelecionado, nomeAssociado, marca, modelo, ano, veiculoEncontrado, placaBusca, cor, valorExtra, cotacaoSalva, valorAdesaoCustom]);
+
+    // Popular dados de migração se existirem
+    if (migracaoData) {
+      proposta.migracao = {
+        aprovada: migracaoData.status === 'aprovada',
+        associacaoOrigem: migracaoData.associacao_origem || '',
+        carenciaIsenta: migracaoData.status === 'aprovada',
+        dataAprovacao: migracaoData.aprovado_em || '',
+      };
+    }
+
+    return proposta;
+  }, [cotacaoCalculada, planoFinalSelecionado, valorFipe, leadSelecionado, nomeAssociado, marca, modelo, ano, veiculoEncontrado, placaBusca, cor, valorExtra, cotacaoSalva, valorAdesaoCustom, migracaoData]);
 
   // Verificar se pode calcular
   const podeCalcular = (modo === 'busca_placa' 
@@ -1821,6 +1852,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                   dados={dadosProposta}
                   disabled={!planoFinalSelecionado}
                   variant="outline"
+                  cotacaoId={cotacaoSalvaId}
                 />
               )}
               <Button

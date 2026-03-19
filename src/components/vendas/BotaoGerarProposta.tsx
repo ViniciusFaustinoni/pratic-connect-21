@@ -5,19 +5,39 @@ import { FileText, Download, ExternalLink, Loader2, ChevronDown } from 'lucide-r
 import { useGerarProposta } from '@/hooks/useGerarProposta';
 import { DadosProposta } from '@/types/proposta';
 import { Progress } from '@/components/ui/progress';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 
 interface BotaoGerarPropostaProps {
   dados: DadosProposta;
   disabled?: boolean;
   variant?: 'default' | 'outline' | 'secondary';
   className?: string;
+  cotacaoId?: string;
 }
 
-export function BotaoGerarProposta({ dados, disabled, variant = 'default', className }: BotaoGerarPropostaProps) {
+export function BotaoGerarProposta({ dados, disabled, variant = 'default', className, cotacaoId }: BotaoGerarPropostaProps) {
   const { gerarProposta, gerando, progresso } = useGerarProposta();
 
-  // Bloquear se é migração e ainda não foi aprovada
-  const migracaoPendente = dados.migracao && !dados.migracao.aprovada;
+  // Consulta dinâmica: verificar se há migração pendente vinculada à cotação
+  const { data: migracaoPendenteDB } = useQuery({
+    queryKey: ['migracao-pendente', cotacaoId],
+    queryFn: async () => {
+      if (!cotacaoId) return null;
+      const { data } = await supabase
+        .from('solicitacoes_migracao')
+        .select('id, status')
+        .eq('cotacao_id', cotacaoId)
+        .neq('status', 'aprovada')
+        .neq('status', 'rejeitada')
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!cotacaoId,
+  });
+
+  // Bloquear se é migração e ainda não foi aprovada (estática ou dinâmica)
+  const migracaoPendente = (dados.migracao && !dados.migracao.aprovada) || !!migracaoPendenteDB;
 
   const handleGerar = async (modo: 'baixar' | 'abrir') => {
     await gerarProposta(dados, { modo });
