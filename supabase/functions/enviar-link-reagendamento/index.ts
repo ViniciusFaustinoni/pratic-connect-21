@@ -18,6 +18,8 @@ Deno.serve(async (req) => {
     const { servico_id } = await req.json();
     if (!servico_id) throw new Error("servico_id obrigatório");
 
+    console.log(`[enviar-link-reagendamento] Recebido servico_id: ${servico_id}`);
+
     // Buscar serviço com dados do associado
     const { data: servico, error: sErr } = await supabase
       .from("servicos")
@@ -25,7 +27,11 @@ Deno.serve(async (req) => {
       .eq("id", servico_id)
       .single();
 
-    if (sErr || !servico) throw new Error("Serviço não encontrado");
+    if (sErr) {
+      console.error(`[enviar-link-reagendamento] Erro na query (servico_id=${servico_id}):`, sErr.message, sErr.code, sErr.details);
+      throw new Error(`Serviço não encontrado: ${sErr.message}`);
+    }
+    if (!servico) throw new Error("Serviço não encontrado (null)");
 
     // Guard de idempotência: se já enviou, não reenvia
     if (servico.reagendamento_enviado_em) {
