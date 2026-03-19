@@ -107,6 +107,7 @@ export default function SubstituicaoVeiculoPage() {
       veiculo_antigo_fipe: veiculoAtivo.valor_fipe || 0,
       mensalidade_antiga: 0,
       cota_participacao_antiga: 0,
+      consultor_id: consultorId,
     });
 
     setSubstituicaoId(result.id);
