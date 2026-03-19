@@ -479,7 +479,7 @@ const App = () => (
               <Route path="/cadastro/processos" element={<ProcessosOperacionais />} />
               <Route path="/cadastro/recusas-instalador" element={<RecusasInstalador />} />
               <Route path="/cadastro/gerar-termo" element={<GerarTermo />} />
-              <Route path="/cadastro/migracoes" element={<SolicitacoesMigracao />} />
+              <Route path="/cadastro/migracoes" element={<ProcessosOperacionais />} />
               
               {/* Eventos */}
               <Route path="/eventos/dashboard" element={<SinistrosDashboard />} />

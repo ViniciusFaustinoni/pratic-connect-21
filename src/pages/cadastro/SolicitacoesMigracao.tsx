@@ -390,6 +390,10 @@ export function MigracoesTab() {
   );
 }
 
+export default function SolicitacoesMigracao() {
+  return <MigracoesTab />;
+}
+
 // ============================================
 // Document preview sub-component
 // ============================================

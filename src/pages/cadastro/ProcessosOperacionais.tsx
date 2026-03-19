@@ -476,7 +476,7 @@ export default function ProcessosOperacionais() {
 
       {/* Tabs */}
       <Tabs defaultValue="titularidade" className="w-full">
-        <TabsList className="w-full grid grid-cols-3">
+        <TabsList className="w-full grid grid-cols-4">
           <TabsTrigger value="titularidade" className="text-xs sm:text-sm">
             <ArrowRightLeft className="h-4 w-4 mr-1 hidden sm:inline" />
             Titularidade
@@ -498,6 +498,13 @@ export default function ProcessosOperacionais() {
               <Badge className="ml-1.5 bg-amber-600 text-white text-[10px] px-1.5 py-0">{counts?.substituicoes}</Badge>
             )}
           </TabsTrigger>
+          <TabsTrigger value="migracoes" className="text-xs sm:text-sm">
+            <FileInput className="h-4 w-4 mr-1 hidden sm:inline" />
+            Migrações
+            {(counts?.migracoes ?? 0) > 0 && (
+              <Badge className="ml-1.5 bg-purple-600 text-white text-[10px] px-1.5 py-0">{counts?.migracoes}</Badge>
+            )}
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="titularidade">
@@ -508,6 +515,9 @@ export default function ProcessosOperacionais() {
         </TabsContent>
         <TabsContent value="substituicoes">
           <SubstituicoesTab />
+        </TabsContent>
+        <TabsContent value="migracoes">
+          <MigracoesTab />
         </TabsContent>
       </Tabs>
     </div>
