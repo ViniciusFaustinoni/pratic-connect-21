@@ -319,10 +319,20 @@ export default function SubstituicaoVeiculoPage() {
         />
       )}
 
-      {currentStep >= 7 && (
+      {currentStep >= 7 && substituicaoId && (
+        <StepConclusao
+          substituicaoId={substituicaoId}
+          associadoId={associadoId!}
+          associadoNome={associado.nome}
+          veiculoAntigoPlaca={veiculoAntigoResumo.placa}
+          onRetry={handleRetry}
+        />
+      )}
+
+      {currentStep >= 7 && !substituicaoId && (
         <Card>
           <CardContent className="py-12 text-center">
-            <p className="text-muted-foreground">O step de Aprovação será implementado na próxima fase.</p>
+            <p className="text-muted-foreground">Erro: substituição não encontrada.</p>
           </CardContent>
         </Card>
       )}
