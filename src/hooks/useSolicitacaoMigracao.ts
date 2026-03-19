@@ -192,6 +192,7 @@ export function useCriarSolicitacaoMigracaoDireta() {
           associacao_origem: data.associacao_origem,
           consultor_id: data.consultor_id || null,
           prazo_resposta_horas: data.prazo_resposta_horas,
+          declaracao_cancelamento_concorrente: data.declaracao_cancelamento_concorrente,
           status: 'pendente',
           origem_entrada: 'direta',
         } as any)
