@@ -903,7 +903,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
           )}
           {/* Botões */}
           <div className="flex gap-2">
-            <Button onClick={calcular} className="flex-1">
+            <Button onClick={() => { calcular(); jaCalculouRef.current = true; }} className="flex-1">
               Calcular
             </Button>
             <Button variant="outline" onClick={limpar}>
