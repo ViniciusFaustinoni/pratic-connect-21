@@ -317,7 +317,7 @@ export function StepFinanceiro({
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div>
-              <p className="text-2xl font-bold text-primary">{formatCurrency(taxaSubstituicao)}</p>
+              <p className="text-2xl font-bold text-primary">{formatCurrency(totalCobranca)}</p>
               <p className="text-xs text-muted-foreground">Taxa administrativa obrigatória (Regulamento 2.1.6)</p>
             </div>
             {cobrancaGerada && (
@@ -327,6 +327,60 @@ export function StepFinanceiro({
               </Badge>
             )}
           </div>
+
+          {/* Tipo de atendimento */}
+          {!cobrancaGerada && (
+            <div className="space-y-3 pt-2 border-t">
+              <Label className="text-sm flex items-center gap-2">
+                <MapPin className="h-4 w-4" />
+                Tipo de atendimento
+              </Label>
+              <RadioGroup
+                value={tipoAtendimento}
+                onValueChange={(v) => setTipoAtendimento(v as 'base' | 'volante')}
+                className="grid grid-cols-1 sm:grid-cols-2 gap-3"
+              >
+                <label className={cn(
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  tipoAtendimento === 'base' && "border-primary bg-primary/5"
+                )}>
+                  <RadioGroupItem value="base" />
+                  <div>
+                    <p className="text-sm font-medium">Base Administrativa</p>
+                    <p className="text-xs text-muted-foreground">Sem repasse</p>
+                  </div>
+                </label>
+                <label className={cn(
+                  "flex items-center gap-3 rounded-lg border p-3 cursor-pointer transition-colors",
+                  tipoAtendimento === 'volante' && "border-primary bg-primary/5"
+                )}>
+                  <RadioGroupItem value="volante" />
+                  <div>
+                    <p className="text-sm font-medium">Instalação Volante</p>
+                    <p className="text-xs text-muted-foreground">+{formatCurrency(taxaRepasseVolante)} repasse</p>
+                  </div>
+                </label>
+              </RadioGroup>
+
+              {/* Detalhamento do valor */}
+              <div className="rounded-lg bg-muted/50 p-3 space-y-1 text-sm">
+                <div className="flex justify-between">
+                  <span className="text-muted-foreground">Taxa de substituição</span>
+                  <span>{formatCurrency(taxaSubstituicao)}</span>
+                </div>
+                {tipoAtendimento === 'volante' && (
+                  <div className="flex justify-between">
+                    <span className="text-muted-foreground">Repasse volante</span>
+                    <span>{formatCurrency(taxaRepasseVolante)}</span>
+                  </div>
+                )}
+                <div className="flex justify-between font-semibold border-t pt-1">
+                  <span>Total a cobrar</span>
+                  <span className="text-primary">{formatCurrency(totalCobranca)}</span>
+                </div>
+              </div>
+            </div>
+          )}
 
           {!cobrancaGerada ? (
             <div className="space-y-3">
