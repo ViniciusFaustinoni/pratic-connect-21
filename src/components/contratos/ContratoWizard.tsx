@@ -1,9 +1,10 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo, useCallback } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2, Check, User, Car, FileText, CheckCircle, Upload, AlertCircle, ChevronLeft, ChevronRight, DollarSign } from 'lucide-react';
+import { Loader2, Check, User, Car, FileText, CheckCircle, Upload, AlertCircle, ChevronLeft, ChevronRight, DollarSign, Building2 } from 'lucide-react';
 import { buscarCep } from '@/lib/cep';
+import { MigracaoStepForm } from './MigracaoStepForm';
 import { useFipe } from '@/hooks/useFipe';
 import { Button } from '@/components/ui/button';
 import {
