@@ -1,32 +1,42 @@
 
 
-# Adicionar Vídeo 360° na Autovistoria do Link Público (CotacaoPublicaCompleta)
+# Proteção 360° para Veículos sem Rastreador (via Autovistoria Completa)
 
 ## Problema
 
-O fluxo de autovistoria em `CotacaoPublicaCompleta.tsx` exige apenas fotos (18 itens via `FOTOS_VISTORIA_CONFIG`). O vídeo 360° não é solicitado, diferente do fluxo em `CotacaoContratacao.tsx` que já usa o componente `Autovistoria` com vídeo integrado.
+Hoje, ao aprovar uma proposta, o sistema sempre define `cobertura_roubo_furto: true` e `cobertura_total: false` quando não há instalação concluída — aguardando o instalador ativar a proteção 360°. Porém, veículos com FIPE abaixo do limite de rastreador (R$30k padrão) **nunca terão instalador**. Para esses casos, a autovistoria completa (31 fotos + vídeo 360°) feita pelo associado substitui a vistoria do instalador, e o cadastro analisa e libera a proteção 360° diretamente.
 
-## Solução
+## Mudanças
 
-Adicionar captura de vídeo 360° após a grade de fotos no step de vistoria auto, reutilizando o componente `VideoCapture` já existente.
+### 1. Aprovação da proposta — `src/hooks/usePropostasPendentes.ts`
 
-### Mudanças em `src/pages/public/CotacaoPublicaCompleta.tsx`
+Na mutation `useAprovarProposta`, após buscar o veículo, verificar se ele precisa de rastreador usando `precisaRastreador(valorFipe, fipeMinimo)`:
 
-1. **Novo estado**: `videoVistoriaUrl` e `uploadingVideo` para controlar o vídeo.
+- **Se NÃO precisa de rastreador**: definir `cobertura_roubo_furto: true`, `cobertura_total: true`, `status: 'ativo'`. Não criar instalação. Mensagem: "Proteção 360° ativada (sem rastreador)."
+- **Se precisa de rastreador**: manter fluxo atual (roubo/furto → aguardar instalação).
 
-2. **Handler de upload**: Reutilizar `useUploadFotoVistoria` com tipo `video_360` para fazer upload do vídeo para o mesmo bucket `cotacoes-docs`.
+Buscar `valor_fipe` do veículo (já disponível na tabela `veiculos`) e os limites de configuração (`operacional_fipe_minimo_rastreador`).
 
-3. **UI**: Após a grade de fotos (linha ~1053), adicionar o componente `VideoCapture` com label "Vídeo 360° (obrigatório)".
+### 2. Autovistoria completa no link público — `src/pages/public/CotacaoPublicaCompleta.tsx`
 
-4. **Validação**: Alterar a condição do botão "Concluir Vistoria" de `fotos >= 10` para `fotos >= 10 && videoUrl presente`. Mesma verificação no `handleConcluirVistoria`.
+Condicionar a lista de fotos exigida:
+- Se `!precisaRastreador(valor_fipe, fipeMin)`: usar `FOTOS_VISTORIA_COMPLETA` (31 fotos, excluindo categoria `instalacao`) + vídeo 360° obrigatório.
+- Se precisa de rastreador: manter as 18 fotos atuais (`FOTOS_VISTORIA_CONFIG`) + vídeo 360° obrigatório.
 
-5. **Contador**: Atualizar o texto do Alert para incluir status do vídeo: "X de 18 fotos • Vídeo: ✓/pendente".
+### 3. Autovistoria no fluxo interno — `src/components/cotacao-publica/AutovistoriaCotacao.tsx` e `EtapaVistoria.tsx`
 
-6. **Reidratação**: Se o usuário voltar à página, verificar nas `fotosExistentes` se já há um registro com tipo `video_360` e restaurar o estado.
+Aceitar prop `precisaRastreador` e condicionar fotos da mesma forma.
+
+### 4. Hook de coberturas — `src/hooks/useMinhasCoberturasApp.ts`
+
+Atualizar a `mensagemCoberturaParcial`: quando `temCoberturaRouboFurto && !temCoberturaTotal`, a mensagem atual menciona "instalação do rastreador". Para veículos sem rastreador, essa mensagem não deveria aparecer — mas como `cobertura_total` já será `true` na aprovação, isso se resolve automaticamente.
+
+## Resumo de arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `src/pages/public/CotacaoPublicaCompleta.tsx` | Import VideoCapture, estados de vídeo, handler, UI, validação |
-
-Nenhuma mudança de banco necessária — o upload usa a mesma tabela `cotacoes_publicas_fotos` com tipo `video_360`.
+| `src/hooks/usePropostasPendentes.ts` | Buscar `valor_fipe` do veículo, verificar `precisaRastreador`, condicionar cobertura e skip de instalação |
+| `src/pages/public/CotacaoPublicaCompleta.tsx` | Condicionar fotos 31 vs 18 baseado em FIPE/rastreador |
+| `src/components/cotacao-publica/AutovistoriaCotacao.tsx` | Prop `precisaRastreador`, fotos completas quando sem rastreador |
+| `src/components/cotacao-publica/EtapaVistoria.tsx` | Repassar prop |
 
