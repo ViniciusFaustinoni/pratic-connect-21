@@ -1,8 +1,9 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2, ShieldOff, Shield } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2, ShieldOff, Shield, ShieldCheck } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { PainelAprovacoesElegibilidade } from '@/components/aprovacoes/PainelAprovacoesElegibilidade';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -36,7 +37,7 @@ const STATUS_CONFIG = {
   recusado: { label: 'Recusado', color: 'bg-red-100 text-red-800', icon: XCircle },
 };
 
-type SectionTab = 'fipe_menor' | 'alto_valor';
+type SectionTab = 'fipe_menor' | 'alto_valor' | 'elegibilidade';
 
 export default function AprovacoesFipeMenor() {
   const [section, setSection] = useState<SectionTab>('fipe_menor');
@@ -102,9 +103,9 @@ export default function AprovacoesFipeMenor() {
   return (
     <div className="space-y-6">
       <div>
-        <h1 className="text-2xl font-bold tracking-tight">Aprovações FIPE</h1>
+        <h1 className="text-2xl font-bold tracking-tight">Aprovações</h1>
         <p className="text-muted-foreground">
-          Solicitações de FIPE menor e autorizações de veículos de alto valor
+          Solicitações de FIPE menor, alto valor e elegibilidade de veículos
         </p>
       </div>
 
@@ -118,6 +119,10 @@ export default function AprovacoesFipeMenor() {
           <TabsTrigger value="alto_valor" className="gap-1.5">
             <Shield className="h-4 w-4" />
             Alto Valor
+          </TabsTrigger>
+          <TabsTrigger value="elegibilidade" className="gap-1.5">
+            <ShieldCheck className="h-4 w-4" />
+            Elegibilidade
           </TabsTrigger>
         </TabsList>
 
@@ -274,6 +279,11 @@ export default function AprovacoesFipeMenor() {
               )}
             </TabsContent>
           </Tabs>
+        </TabsContent>
+
+        {/* ===== ELEGIBILIDADE ===== */}
+        <TabsContent value="elegibilidade" className="space-y-4">
+          <PainelAprovacoesElegibilidade />
         </TabsContent>
       </Tabs>
 
