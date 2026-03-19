@@ -134,10 +134,11 @@ export function EtapaDadosPessoaisDocumentos({
   const temCrlv = tiposIdentificados.includes('crlv') || tiposIdentificados.includes('nota_fiscal_veiculo');
   
   // Verificar dados extraídos
-  const cpfEfetivo = cpfManual || dadosExtraidos.cpf || '';
+  const cpfIlegivel = dadosExtraidos.cpf === 'ilegivel';
+  const cpfEfetivo = cpfManual || (cpfIlegivel ? '' : dadosExtraidos.cpf) || '';
   const cpfLimpoEfetivo = cpfEfetivo.replace(/\D/g, '');
   const cpfValido = cpfLimpoEfetivo.length === 11 && validateCPF(cpfLimpoEfetivo);
-  const cpfExtraidoInvalido = !!(dadosExtraidos.cpf && !validateCPF(dadosExtraidos.cpf.replace(/\D/g, '')));
+  const cpfExtraidoInvalido = !!(dadosExtraidos.cpf && !cpfIlegivel && !validateCPF(dadosExtraidos.cpf.replace(/\D/g, '')));
   
   const temDadosPessoais = !!(dadosExtraidos.nome && cpfEfetivo);
   const temEndereco = !!(dadosExtraidos.logradouro && dadosExtraidos.cidade && dadosExtraidos.uf);
@@ -169,7 +170,15 @@ export function EtapaDadosPessoaisDocumentos({
       // De CNH ou RG: dados pessoais + dados de documentos
       if (tipoDocumento === 'cnh' || tipoDocumento === 'rg') {
         if (dados.nome) novosDados.nome = dados.nome;
-        if (dados.cpf) novosDados.cpf = dados.cpf;
+        if (dados.cpf) {
+          novosDados.cpf = dados.cpf;
+          // Se OCR retornou "ilegivel" ou CPF inválido, notificar o usuário
+          if (dados.cpf === 'ilegivel') {
+            toast.warning('CPF não pôde ser lido do documento. Digite manualmente.');
+          } else if (!validateCPF(dados.cpf.replace(/\D/g, ''))) {
+            toast.warning('CPF extraído é inválido. Corrija manualmente.');
+          }
+        }
         if (dados.rg) novosDados.rg = dados.rg;
         if (dados.data_nascimento) novosDados.data_nascimento = dados.data_nascimento;
         
@@ -448,14 +457,18 @@ export function EtapaDadosPessoaisDocumentos({
             </div>
           </div>
 
-          {/* Correção de CPF inválido */}
-          {cpfExtraidoInvalido && (
+          {/* Correção de CPF inválido ou ilegível */}
+          {(cpfExtraidoInvalido || cpfIlegivel) && (
             <div className="p-3 rounded-lg bg-destructive/5 border border-destructive/20 space-y-2">
               <p className="text-sm text-destructive font-medium">
-                ⚠️ O CPF extraído do documento é inválido
+                {cpfIlegivel 
+                  ? '⚠️ CPF não pôde ser lido do documento' 
+                  : '⚠️ O CPF extraído do documento é inválido'}
               </p>
               <p className="text-xs text-muted-foreground">
-                A leitura automática capturou um CPF com dígitos incorretos. Digite o CPF correto abaixo:
+                {cpfIlegivel
+                  ? 'A leitura automática não conseguiu identificar o CPF com precisão. Digite manualmente:'
+                  : 'A leitura automática capturou um CPF com dígitos incorretos. Digite o CPF correto abaixo:'}
               </p>
               <Input
                 type="text"
