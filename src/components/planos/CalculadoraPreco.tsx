@@ -499,25 +499,38 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
         if (anoNum < anoAtual - 1) continue;
       }
 
-      // ── Whitelist eligibility check (when marca/modelo known from plate lookup) ──
-      if (veiculoPlaca?.marca && veiculoPlaca?.modelo && anoNum) {
-        const linhaPlano = (plano.linha || '').toLowerCase() || null;
-        const temRegras = elegibilidadeData?.some(e => {
-          const planosNaLinha = linhaPlano
-            ? (planosData?.planos || []).filter(p => (p.linha || '').toLowerCase() === linhaPlano).map(p => p.id)
-            : [plano.id];
-          return planosNaLinha.includes(e.plano_id);
-        });
-        if (temRegras) {
+      // ── Whitelist eligibility check (hard gate policy) ──
+      const linhaPlano = (plano.linha || '').toLowerCase() || null;
+      const temRegras = elegibilidadeData?.some(e => {
+        const planosNaLinha = linhaPlano
+          ? (planosData?.planos || []).filter(p => (p.linha || '').toLowerCase() === linhaPlano).map(p => p.id)
+          : [plano.id];
+        return planosNaLinha.includes(e.plano_id);
+      });
+
+      if (temRegras) {
+        if (veiculoPlaca?.marca && veiculoPlaca?.modelo && anoNum) {
           const combForElig = combustivelDetectado || combustivelManual;
           const eleg = verificarElegibilidade(plano.id, linhaPlano, veiculoPlaca.marca, veiculoPlaca.modelo, anoNum, combForElig);
           if (eleg.status === 'negado') continue;
+        } else {
+          // Hard gate: sem dados de marca/modelo → negar plano com whitelist
+          continue;
         }
       }
 
       // Blocked categories (from product_line)
       const blocked = plMaps.blockedCats[linhaSlug] || [];
       if (blocked.length > 0 && categoriaAtiva && blocked.includes(categoriaAtiva)) continue;
+
+      // Categorias aceitas do plano (mesma lógica do cotador)
+      const categoriasAceitasPlano = (plano.categoria || '')
+        .split(',').map((c: string) => c.trim().toLowerCase()).filter(Boolean);
+      if (categoriasAceitasPlano.length > 0 && categoriaAtiva) {
+        if (!categoriasAceitasPlano.includes(categoriaAtiva) && !categoriasAceitasPlano.includes('todos')) {
+          continue;
+        }
+      }
 
       // Select Exclusive: ocultar quando APP + deságio combinam
       if (isAppComDesagio && (plSlug === 'select-exclusive' || (plano as any).codigo?.toLowerCase().includes('exclusive'))) {
