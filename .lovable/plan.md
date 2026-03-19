@@ -1,17 +1,27 @@
 
-# Correção: Design do Modal de Migração
 
-## Problemas identificados (screenshot)
+# Correção: carenciaIsenta no PDF deve respeitar configuração de Regras de Venda
 
-1. **Descrição truncada** — Linhas 294-295 usam `truncate` no título e na descrição do header. A descrição longa ("O cliente está em outra associação e quer vir para a Praticcar sem perder a c...") é cortada.
-2. **Scrollbar horizontal** — O conteúdo está transbordando horizontalmente.
-3. **Botão X (fechar) sobrepondo conteúdo** — O `DialogContent` tem `p-0` mas o botão X do dialog fica posicionado absolutamente no canto superior direito, conflitando com o header customizado.
+## Problema
 
-## Alterações
+Em `src/pages/vendas/Cotador.tsx` (linha 484), o campo `carenciaIsenta` é definido como `migracaoData.status === 'aprovada'` — ou seja, sempre `true` quando aprovada, ignorando a configuração `migracao_isentar_carencia` das Regras de Venda.
 
-### `src/components/vendas/OutrasEntradasMenu.tsx`
+O PDF (em `useGerarProposta.ts` linha 336) usa esse valor diretamente para decidir se exibe "Dispensada" ou "Período padrão".
 
-1. **Header (linhas 293-296):** Remover `truncate` da descrição (linha 295) e substituir por `line-clamp-2` ou simplesmente deixar o texto fluir. Adicionar `pr-8` ao header para não conflitar com o botão X.
-2. **Overflow (linha 282):** Adicionar `overflow-hidden` ao container flex para evitar scrollbar horizontal.
+## Alteração
 
-São ajustes de 2-3 linhas de CSS.
+### `src/pages/vendas/Cotador.tsx`
+
+1. Importar o hook `useMigracaoConfig` (de `useConteudosSistema`) que já existe e retorna `{ isentar_carencia: boolean, ... }`
+2. No `useMemo` que monta `dadosProposta` (linha 484), mudar de:
+   ```
+   carenciaIsenta: migracaoData.status === 'aprovada'
+   ```
+   para:
+   ```
+   carenciaIsenta: migracaoData.status === 'aprovada' && migracaoConfig?.isentar_carencia === true
+   ```
+3. Adicionar `migracaoConfig` às dependências do `useMemo`
+
+Apenas 1 arquivo, ~3 linhas alteradas.
+
