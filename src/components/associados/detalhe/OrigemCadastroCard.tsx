@@ -119,6 +119,29 @@ function useOrigemCadastro(associadoId: string) {
       else if (tipoEntradaRaw === 'substituicao_placa') tipoEntradaKey = 'substituicao_placa';
       else if (indicacao) tipoEntradaKey = 'indicacao';
 
+      // Fallback: check for approved direct migration by CPF when type is still 'adesao'
+      if (tipoEntradaKey === 'adesao') {
+        const { data: assocCpf } = await supabase
+          .from('associados')
+          .select('cpf')
+          .eq('id', associadoId)
+          .single();
+
+        if (assocCpf?.cpf) {
+          const { data: migDireta } = await supabase
+            .from('solicitacoes_migracao')
+            .select('id')
+            .eq('associado_cpf', assocCpf.cpf)
+            .eq('status', 'aprovada')
+            .limit(1)
+            .maybeSingle();
+
+          if (migDireta) {
+            tipoEntradaKey = 'migracao';
+          }
+        }
+      }
+
       // Base result
       const result: OrigemData = {
         tipoEntrada: TIPO_ENTRADA_LABELS[tipoEntradaKey],
