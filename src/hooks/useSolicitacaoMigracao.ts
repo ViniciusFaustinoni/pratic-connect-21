@@ -74,7 +74,7 @@ export function useVerificarBloqueiosMigracao(cpf: string | undefined) {
 }
 
 // ============================================
-// Criar solicitação de migração
+// Criar solicitação de migração (via cotação)
 // ============================================
 
 interface CriarSolicitacaoData {
@@ -84,6 +84,29 @@ interface CriarSolicitacaoData {
   veiculo_placa?: string;
   associacao_origem: string;
   prazo_resposta_horas: number;
+  documentos: Array<{
+    tipo: 'comprovante_pagamento' | 'boleto_referencia';
+    arquivo_url: string;
+    nome_arquivo: string;
+    cpf_detectado?: string;
+    placa_detectada?: string;
+    legivel?: boolean;
+    validacao_ok?: boolean;
+    validacao_erro?: string;
+  }>;
+}
+
+// ============================================
+// Criar solicitação de migração direta (sem cotação)
+// ============================================
+
+interface CriarSolicitacaoDiretaData {
+  associado_cpf: string;
+  associado_nome?: string;
+  veiculo_placa?: string;
+  associacao_origem: string;
+  prazo_resposta_horas: number;
+  consultor_id?: string;
   documentos: Array<{
     tipo: 'comprovante_pagamento' | 'boleto_referencia';
     arquivo_url: string;
