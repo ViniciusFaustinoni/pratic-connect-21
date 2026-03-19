@@ -1,57 +1,53 @@
 
 
-# Somar Repasse Volante à Taxa de Substituição
+# Botões Aprovar/Rejeitar na Aba Titularidade
 
-## Valores envolvidos (todos da tabela `configuracoes`)
+## Resumo
+Adicionar botões de Aprovar e Rejeitar nos cards de solicitação pendente da aba Titularidade em Processos Operacionais, com controle de permissão e feedback visual após ação.
 
-| Chave | Valor atual | Hook existente |
-|-------|------------|----------------|
-| `taxa_substituicao_placa` | R$ 50 | `useTaxaSubstituicao()` |
-| `taxa_repasse_volante` | R$ 50 | `useTaxaRepasseVolante()` |
-| `taxa_repasse_volante_externo` | R$ 50 | `useTaxaRepasseVolanteExterno()` |
-
-Nenhum valor é hardcoded — todos vêm de `configuracoes`.
+## O que já existe
+- Edge function `aprovar-solicitacao-ia` já processa tanto `aprovar` quanto `rejeitar` para `troca_titularidade`
+- A função já verifica roles (diretor, admin_master, desenvolvedor, analista_eventos)
+- Cenário A/B é determinado automaticamente com base nas configurações
+- O protocolo retornado contém `TRC-DISP-` (cenário A) ou `TRC-` (cenário B)
+- Rejeição já salva `motivo_rejeicao` no banco
 
 ## Alterações
 
-### 1. Migration: adicionar colunas à `substituicoes_veiculo`
-
-```sql
-ALTER TABLE substituicoes_veiculo
-  ADD COLUMN IF NOT EXISTS tipo_atendimento VARCHAR(20) DEFAULT 'base',
-  ADD COLUMN IF NOT EXISTS valor_repasse NUMERIC DEFAULT 0;
+### 1. Edge function `aprovar-solicitacao-ia` — retorno enriquecido (pequena mudança)
+No bloco de troca_titularidade, adicionar campo `cenario` na resposta para que o frontend saiba se foi A ou B:
 ```
-
-Registra o tipo de atendimento escolhido e o valor do repasse para auditoria.
-
-### 2. `src/components/substituicao/StepFinanceiro.tsx`
-
-- Importar `useTaxaRepasseVolante` e `useTaxaRepasseVolanteExterno`
-- Adicionar estado `tipoAtendimento: 'base' | 'volante'` (default `'base'`)
-- Usar o hook adequado para obter o valor do repasse (por ora usar `useTaxaRepasseVolante`; diferenciar por tipo de consultor é um refinamento futuro)
-- Calcular `valorRepasse = tipoAtendimento === 'volante' ? taxaRepasseVolante : 0`
-- Calcular `totalCobranca = taxaSubstituicao + valorRepasse`
-- No **Card 1 (Taxa de Substituição)**, antes da forma de pagamento, adicionar um `RadioGroup` com duas opções:
-  - **Base Administrativa** — sem repasse
-  - **Instalação Volante** — exibe o valor do repasse como linha separada
-- Atualizar `handleGerarCobranca` para usar `totalCobranca` no `value`
-- Atualizar `handleEnviarAprovacao` para salvar `tipo_atendimento` e `valor_repasse` no registro
-- No **Resumo Final**, exibir a taxa base e o repasse separadamente quando volante, e o total somado
-
-### UI do seletor (dentro do Card 1)
-
+// No return final da função (linha ~860), incluir:
+cenario: cenarioA ? 'A' : 'B'
 ```
-Tipo de atendimento:
-○ Base Administrativa
-○ Instalação Volante (+R$ 50,00 repasse)
+Também adicionar `gerente` à lista de roles permitidos (linha 74) para que gerentes possam aprovar.
 
-Taxa de substituição:    R$ 50,00
-Repasse volante:         R$ 50,00  ← só aparece se volante
-─────────────────────────────────
-Total a cobrar:          R$ 100,00
-```
+### 2. `src/pages/cadastro/ProcessosOperacionais.tsx` — TrocaTitularidadeTab
 
-### 3. `src/types/substituicao.ts`
+**Novos imports**: `usePermissions`, `useMutation`, `useQueryClient`, `AlertDialog`, `Textarea`, `CheckCircle`, `XCircle`, `Loader2`
 
-Adicionar `tipo_atendimento` e `valor_repasse` à interface `SubstituicaoVeiculo`.
+**Permissão**: Usar `usePermissions()` para checar `isGerencia` (que inclui gerente, diretor, admin_master) — botões só aparecem se `isGerencia === true` e `sol.status === 'pendente'`.
+
+**Mutation de aprovação**: Chamar `supabase.functions.invoke('aprovar-solicitacao-ia', { body: { solicitacao_id, acao: 'aprovar' } })`. Após sucesso, invalidar query `processos-troca-titularidade` e `processos-counts`.
+
+**Mutation de rejeição**: Mesma edge function com `acao: 'rejeitar'` e `motivo` obrigatório.
+
+**UI dos botões**: Ao lado do "Ver Ficha", adicionar:
+- Botão verde "Aprovar" com ícone CheckCircle — abre AlertDialog de confirmação simples
+- Botão vermelho "Rejeitar" com ícone XCircle — abre Dialog com campo Textarea obrigatório para motivo
+
+**Resultado pós-aprovação**: Após aprovação, exibir badge no card indicando:
+- Cenário A: "Vistoria dispensada" (badge verde)
+- Cenário B: "Vistoria agendada" (badge azul)
+
+Essa info será lida do campo `resultado_id` e `dados` do registro atualizado (o card já recarrega via invalidação de query).
+
+**Resultado pós-rejeição**: Badge "Rejeitado" (já existe) + exibir motivo da rejeição abaixo dos dados.
+
+### Arquivos modificados
+
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/pages/cadastro/ProcessosOperacionais.tsx` | Botões Aprovar/Rejeitar, dialogs de confirmação, mutations, permissão |
+| `supabase/functions/aprovar-solicitacao-ia/index.ts` | Retornar `cenario` na resposta + adicionar `gerente` aos roles permitidos |
 
