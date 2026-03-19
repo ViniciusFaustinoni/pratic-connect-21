@@ -113,7 +113,7 @@ serve(async (req) => {
           province: dados.province,
           postalCode: dados.postalCode?.replace(/\D/g, ''),
           externalReference: associado_id,
-          notificationDisabled: false,
+          notificationDisabled: true,
         });
 
         console.log(`[asaas-clientes] Cliente criado: ${asaasCliente.id}`);
@@ -263,6 +263,7 @@ serve(async (req) => {
             province: associado.bairro,
             postalCode: associado.cep?.replace(/\D/g, ''),
             externalReference: associado_id,
+            notificationDisabled: true,
           });
 
           await supabase

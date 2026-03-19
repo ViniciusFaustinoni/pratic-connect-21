@@ -269,6 +269,7 @@ serve(async (req) => {
         name: cliente.nome,
         email: cliente.email,
         cpfCnpj: cliente.cpfCnpj,
+        notificationDisabled: true,
       });
       asaasClienteId = novoCliente.id;
       console.log(`[asaas-cobranca-adesao] Novo cliente criado com CPF: ${asaasClienteId}`);

@@ -98,6 +98,7 @@ serve(async (req) => {
             email: associado.email,
             mobilePhone: (associado.whatsapp || associado.telefone)?.replace(/\D/g, ''),
             externalReference: associado.id,
+            notificationDisabled: true,
           });
           customerAsaasId = novoCliente.id;
 
