@@ -1,36 +1,33 @@
 
 
-# Painel de Imprevistos no Monitoramento
+# Correção: Calculadora Não Aplica Regras de Elegibilidade e FIPE Mínimo
 
-## O que será construído
+## Problema
 
-Uma nova página `/monitoramento/imprevistos` com tabela listando todos os serviços que tiveram imprevisto registrado, com filtros por motivo, data e instalador, e ações de gestão.
+A Calculadora de Preço exibe planos Especial e Especial Plus para um Renault Scenic 2004 com FIPE R$ 13.132, que deveria ser rejeitado por:
+1. **FIPE abaixo do mínimo global** (R$ 15.000) — a calculadora não verifica `perfil_veiculo_fipe_minimo`
+2. **Whitelist de elegibilidade** — a calculadora não consulta a tabela `plano_elegibilidade_modelos`, que o cotador usa para negar veículos não listados
 
-## Arquivos
+O cotador aplica ambas as verificações. A calculadora ignora as duas.
 
-### 1. Nova página: `src/pages/monitoramento/ImprevistosPainel.tsx`
-- Tabela com colunas: Data/Hora, Associado, Instalador, Motivo, Status (pendente/concluído), Duplo Check, Reagendamento enviado
-- Filtros:
-  - **Motivo**: Select com os 5 motivos do `MOTIVOS_IMPREVISTO` (Associado ausente, Endereço incorreto, etc.)
-  - **Data**: DatePickerWithRange para filtrar por período de `imprevisto_registrado_em`
-  - **Instalador**: Select alimentado pela lista de profissionais
-- Badges coloridos para status (`imprevisto_pendente` vs `nao_compareceu`)
-- Indicadores visuais de duplo check e envio de reagendamento
-- Query na tabela `servicos` filtrando `imprevisto_registrado_em IS NOT NULL`, com join em `associados` e `profissionais`
+## Correções
 
-### 2. Hook: `src/hooks/useImprevistos.ts`
-- Query Supabase: `servicos` where `imprevisto_registrado_em` is not null
-- Select: campos de imprevisto + associado nome/telefone + profissional nome
-- Filtros aplicados via `.ilike`, `.eq`, `.gte/.lte` conforme parâmetros
+### 1. Adicionar verificação de FIPE mínimo global na calculadora
+No `CalculadoraPreco.tsx`, importar `useConfigLimitesVeiculo` e, no início da função `calcular()`, bloquear cálculo quando o valor FIPE estiver abaixo de `fipeMinimo`. Exibir mensagem informativa ao consultor.
 
-### 3. Rota em `src/App.tsx`
-- Adicionar `<Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />`
+### 2. Adicionar verificação de elegibilidade por modelo (whitelist)
+No `CalculadoraPreco.tsx`:
+- Buscar `plano_elegibilidade_modelos` (mesma query do cotador)
+- Replicar a função `verificarElegibilidadeModelo` do cotador (ou extraí-la para um utilitário compartilhado)
+- No loop de planos, quando a placa foi consultada (marca/modelo conhecidos), filtrar planos cuja whitelist nega o veículo
+- Quando não há placa (cálculo manual sem marca/modelo), manter o comportamento atual (sem filtro de elegibilidade, pois não há dados do veículo)
 
-### 4. Menu em `src/components/layout/AppSidebar.tsx`
-- Adicionar item "Imprevistos" com ícone `AlertTriangle` no grupo Monitoramento
+### 3. Feedback visual
+Quando FIPE abaixo do mínimo: exibir alerta "Veículo fora do perfil aceito (FIPE abaixo de R$ 15.000)" em vez da lista de planos.
 
-### 5. Breadcrumb em `src/components/layout/GlobalBreadcrumb.tsx`
-- Adicionar entrada `/monitoramento/imprevistos: { label: 'Imprevistos' }`
+## Arquivos Modificados
 
-Nenhuma alteração de banco necessária -- todos os campos já existem na tabela `servicos`.
+| Arquivo | Ação |
+|---------|------|
+| `src/components/planos/CalculadoraPreco.tsx` | Adicionar `useConfigLimitesVeiculo`, query de elegibilidade, e lógica de filtragem |
 
