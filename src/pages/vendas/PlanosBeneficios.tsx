@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Link } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
@@ -6,9 +6,14 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Badge } from '@/components/ui/badge';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
+import { Button } from '@/components/ui/button';
 import {
-  AlertTriangle, MapPin, Settings, Loader2, Info
+  AlertTriangle, MapPin, Settings, Loader2, Info, CalendarCheck
 } from 'lucide-react';
+import { calcularOpcoesVencimento } from '@/utils/vencimento';
+import { format } from 'date-fns';
+import { ptBR } from 'date-fns/locale';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useCotaDesagioDefault, useCotaMinimaDesagioDefault } from '@/hooks/useConteudosSistema';
 import { formatarMoeda } from '@/utils/format';
