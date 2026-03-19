@@ -3,8 +3,17 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useInadimplenciaPrazos } from './useConteudosSistema';
 import { useCarenciaDiasPadrao, useMultaRastreador, useMigracaoConfig } from './useConteudosSistema';
+import { useInadimplenciaPorVeiculo, type InadimplenciaVeiculo } from './useInadimplenciaPorVeiculo';
 
 export type StatusInadimplencia = 'adimplente' | 'regularizacao_simples' | 'revistoria_necessaria' | 'nova_adesao_obrigatoria';
+
+export interface CoberturaPorVeiculo {
+  veiculoId: string;
+  placa: string;
+  modelo: string;
+  coberturasSuspensas: boolean;
+  diasAtraso: number;
+}
 
 export interface SituacaoAssociado {
   // Carência
@@ -14,12 +23,17 @@ export interface SituacaoAssociado {
   carenciaFim: string | null;
   emCarencia: boolean;
 
-  // Inadimplência
+  // Inadimplência (geral - pior caso)
   diasAtraso: number;
   statusInadimplencia: StatusInadimplencia;
 
   // Coberturas
   coberturasSuspensas: boolean;
+
+  // Per-vehicle
+  coberturaPorVeiculo: CoberturaPorVeiculo[];
+  veiculosInadimplentes: InadimplenciaVeiculo[];
+  beneficiosAdicionaisSuspensos: boolean;
 
   // Multa rastreador
   pendenciaRastreador: boolean;
@@ -38,6 +52,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
   const { data: carenciaDias } = useCarenciaDiasPadrao();
   const { data: multaRastreador } = useMultaRastreador();
   const { data: migracaoConfig } = useMigracaoConfig();
+  const { inadimplenciaPorVeiculo, algumVeiculoInadimplente, beneficiosAdicionaisSuspensos, isLoading: isLoadingInadimplencia } = useInadimplenciaPorVeiculo(associadoId);
 
   // Fetch contrato details (carência fields)
   const { data: contrato, isLoading: isLoadingContrato } = useQuery({
@@ -71,28 +86,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
     enabled: !!associadoId,
   });
 
-  // Fetch dias de atraso (cobranças vencidas não pagas)
-  const { data: diasAtraso = 0, isLoading: isLoadingCobrancas } = useQuery({
-    queryKey: ['associado-dias-atraso', associadoId],
-    queryFn: async () => {
-      if (!associadoId) return 0;
-      const { data, error } = await supabase
-        .from('cobrancas')
-        .select('data_vencimento')
-        .eq('associado_id', associadoId)
-        .in('status', ['vencido', 'aguardando_pagamento'])
-        .order('data_vencimento', { ascending: true })
-        .limit(1);
-      if (error || !data?.length) return 0;
-      const vencimento = new Date(data[0].data_vencimento);
-      const hoje = new Date();
-      const diff = Math.floor((hoje.getTime() - vencimento.getTime()) / (1000 * 60 * 60 * 24));
-      return Math.max(0, diff);
-    },
-    enabled: !!associadoId,
-  });
-
-  // Fetch consultor vinculado + pontuação
+  // Consultor vinculado + pontuação
   const vendedorId = contrato?.vendedor_id || associado?.vendedor_original_id;
   const { data: consultorInfo } = useQuery({
     queryKey: ['consultor-pontuacao', vendedorId, contratoId],
@@ -119,7 +113,11 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
     const carenciaFim = contrato?.data_carencia_fim || null;
     const emCarencia = !carenciaIsenta && !!carenciaFim && new Date(carenciaFim) > now;
 
-    // Inadimplência
+    // Inadimplência — use worst case from per-vehicle data
+    const diasAtraso = inadimplenciaPorVeiculo.length > 0
+      ? Math.max(...inadimplenciaPorVeiculo.map(v => v.diasAtraso))
+      : 0;
+
     let statusInadimplencia: StatusInadimplencia = 'adimplente';
     if (diasAtraso > 0 && prazos) {
       if (diasAtraso <= prazos.prazoSemRevistoria) {
@@ -131,7 +129,17 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       }
     }
 
-    const coberturasSuspensas = statusInadimplencia !== 'adimplente';
+    // coberturasSuspensas = any vehicle is overdue (backward compat)
+    const coberturasSuspensas = algumVeiculoInadimplente;
+
+    // Build per-vehicle coverage
+    const coberturaPorVeiculo: CoberturaPorVeiculo[] = inadimplenciaPorVeiculo.map(v => ({
+      veiculoId: v.veiculoId,
+      placa: v.placa,
+      modelo: v.modelo,
+      coberturasSuspensas: true,
+      diasAtraso: v.diasAtraso,
+    }));
 
     return {
       carenciaIsenta,
@@ -142,13 +150,16 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       diasAtraso,
       statusInadimplencia,
       coberturasSuspensas,
+      coberturaPorVeiculo,
+      veiculosInadimplentes: inadimplenciaPorVeiculo,
+      beneficiosAdicionaisSuspensos,
       pendenciaRastreador: associado?.pendencia_rastreador || false,
       valorMultaRastreador: multaRastreador || 400,
       consultorNome: consultorInfo?.nome || null,
       consultorPontuacao: consultorInfo?.pontuacao ?? null,
-      isLoading: isLoadingPrazos || isLoadingContrato || isLoadingAssociado || isLoadingCobrancas,
+      isLoading: isLoadingPrazos || isLoadingContrato || isLoadingAssociado || isLoadingInadimplencia,
     };
-  }, [contrato, associado, diasAtraso, prazos, multaRastreador, consultorInfo, isLoadingPrazos, isLoadingContrato, isLoadingAssociado, isLoadingCobrancas]);
+  }, [contrato, associado, inadimplenciaPorVeiculo, algumVeiculoInadimplente, beneficiosAdicionaisSuspensos, prazos, multaRastreador, consultorInfo, isLoadingPrazos, isLoadingContrato, isLoadingAssociado, isLoadingInadimplencia]);
 
   return situacao;
 }
