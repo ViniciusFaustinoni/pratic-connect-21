@@ -119,6 +119,29 @@ function useOrigemCadastro(associadoId: string) {
       else if (tipoEntradaRaw === 'substituicao_placa') tipoEntradaKey = 'substituicao_placa';
       else if (indicacao) tipoEntradaKey = 'indicacao';
 
+      // Fallback: check for approved direct migration by CPF when type is still 'adesao'
+      if (tipoEntradaKey === 'adesao') {
+        const { data: assocCpf } = await supabase
+          .from('associados')
+          .select('cpf')
+          .eq('id', associadoId)
+          .single();
+
+        if (assocCpf?.cpf) {
+          const { data: migDireta } = await supabase
+            .from('solicitacoes_migracao')
+            .select('id')
+            .eq('associado_cpf', assocCpf.cpf)
+            .eq('status', 'aprovada')
+            .limit(1)
+            .maybeSingle();
+
+          if (migDireta) {
+            tipoEntradaKey = 'migracao';
+          }
+        }
+      }
+
       // Base result
       const result: OrigemData = {
         tipoEntrada: TIPO_ENTRADA_LABELS[tipoEntradaKey],
@@ -141,27 +164,55 @@ function useOrigemCadastro(associadoId: string) {
 
       // Fetch type-specific data
       if (tipoEntradaKey === 'migracao') {
-        let solicitacaoQuery = supabase
-          .from('solicitacoes_migracao')
-          .select(`
-            id, associacao_origem, aprovado_em, aprovado_por, consultor_id, status, origem_entrada,
-            analista:profiles!solicitacoes_migracao_aprovado_por_fkey(nome),
-            consultor:profiles!solicitacoes_migracao_consultor_id_fkey(nome)
-          `)
-          .eq('status', 'aprovada');
+        let sol: any = null;
 
+        // Try by cotacao_id first
         if (contrato?.cotacao_id) {
-          solicitacaoQuery = solicitacaoQuery.eq('cotacao_id', contrato.cotacao_id);
+          const { data } = await supabase
+            .from('solicitacoes_migracao')
+            .select(`
+              id, associacao_origem, aprovado_em, aprovado_por, consultor_id, status, origem_entrada,
+              analista:profiles!solicitacoes_migracao_aprovado_por_fkey(nome),
+              consultor:profiles!solicitacoes_migracao_consultor_id_fkey(nome)
+            `)
+            .eq('status', 'aprovada')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .maybeSingle();
+          sol = data;
         }
 
-        const { data: sol } = await solicitacaoQuery.maybeSingle();
+        // Fallback: search by CPF
+        if (!sol) {
+          const { data: assocCpf } = await supabase
+            .from('associados')
+            .select('cpf')
+            .eq('id', associadoId)
+            .single();
+
+          if (assocCpf?.cpf) {
+            const { data } = await supabase
+              .from('solicitacoes_migracao')
+              .select(`
+                id, associacao_origem, aprovado_em, aprovado_por, consultor_id, status, origem_entrada,
+                analista:profiles!solicitacoes_migracao_aprovado_por_fkey(nome),
+                consultor:profiles!solicitacoes_migracao_consultor_id_fkey(nome)
+              `)
+              .eq('status', 'aprovada')
+              .eq('associado_cpf', assocCpf.cpf)
+              .order('aprovado_em', { ascending: false })
+              .limit(1)
+              .maybeSingle();
+            sol = data;
+          }
+        }
+
         if (sol) {
           result.migracao = {
-            associacaoOrigem: (sol as any).associacao_origem,
-            aprovadoEm: (sol as any).aprovado_em,
+            associacaoOrigem: sol.associacao_origem,
+            aprovadoEm: sol.aprovado_em,
             analistaNome: (sol.analista as any)?.nome || null,
             consultorNome: (sol.consultor as any)?.nome || null,
-            origemEntrada: (sol as any).origem_entrada || 'consultor',
+            origemEntrada: sol.origem_entrada || 'consultor',
           };
           result.tipoEntrada = result.migracao.origemEntrada === 'direta' ? 'Migração Direta' : 'Migração Aprovada';
         }

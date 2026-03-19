@@ -89,9 +89,10 @@ export function useAprovarMigracao() {
       if (histError) throw histError;
 
       // Registrar isenção de carência no contrato vinculado (se config permitir)
-      if (cotacaoId) {
-        const isentarCarencia = await fetchMigracaoIsentarCarencia();
-        if (isentarCarencia) {
+      const isentarCarencia = await fetchMigracaoIsentarCarencia();
+      if (isentarCarencia) {
+        if (cotacaoId) {
+          // Migração via cotação — buscar contrato pela cotação
           await supabase
             .from('contratos')
             .update({
@@ -101,6 +102,46 @@ export function useAprovarMigracao() {
               data_carencia_fim: null,
             })
             .eq('cotacao_id', cotacaoId);
+        } else {
+          // Migração direta — buscar contrato ativo pelo CPF do associado
+          const { data: solData } = await supabase
+            .from('solicitacoes_migracao')
+            .select('associado_cpf')
+            .eq('id', solicitacaoId)
+            .single();
+
+          if (solData?.associado_cpf) {
+            const { data: assocData } = await supabase
+              .from('associados')
+              .select('id')
+              .eq('cpf', solData.associado_cpf)
+              .eq('status', 'ativo')
+              .limit(1)
+              .maybeSingle();
+
+            if (assocData) {
+              const { data: contratoAtivo } = await supabase
+                .from('contratos')
+                .select('id')
+                .eq('associado_id', assocData.id)
+                .eq('status', 'ativo')
+                .order('created_at', { ascending: false })
+                .limit(1)
+                .maybeSingle();
+
+              if (contratoAtivo) {
+                await supabase
+                  .from('contratos')
+                  .update({
+                    carencia_isenta: true,
+                    carencia_motivo_isencao: 'Migração aprovada',
+                    data_carencia_inicio: null,
+                    data_carencia_fim: null,
+                  })
+                  .eq('id', contratoAtivo.id);
+              }
+            }
+          }
         }
       }
 
