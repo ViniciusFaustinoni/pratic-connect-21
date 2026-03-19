@@ -467,7 +467,17 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     for (const plano of planos) {
       const catLower = (plano.categoria || '').toLowerCase();
       const tipoUsoPlano = (plano.tipo_uso || '').toLowerCase();
-      
+
+  const jaCalculouRef = useRef(false);
+
+  // Auto-recalcular quando inputs mudam após primeiro cálculo
+  useEffect(() => {
+    if (jaCalculouRef.current) {
+      calcular();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [tipoUso, tipoVeiculo, categoria, combustivelManual, anoVeiculo, valorFipe, veiculoPlaca, regiao]);
+
 
       const mapping = mappings.find(m => m.plano_id === plano.id);
       if (!mapping?.linha_slug) continue;
