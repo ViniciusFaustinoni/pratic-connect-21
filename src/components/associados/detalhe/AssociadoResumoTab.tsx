@@ -18,6 +18,7 @@ interface AssociadoResumoTabProps {
   historico: any[] | undefined;
   isLoadingHistorico: boolean;
   situacao?: SituacaoAssociado;
+  canLinkToAssociado?: boolean;
 }
 
 const formatDate = (d: string | null | undefined) =>
