@@ -1,47 +1,32 @@
 
 
-# Botão "Se fechar hoje?" na página Planos e Benefícios
+# Calculadora Aprimorada — Regras do Cotador + Atalho para Cotação
 
 ## Resumo
 
-Adicionar um botão ao lado da Calculadora na página Planos e Benefícios que, ao clicar, mostra as duas datas de vencimento possíveis para um associado que fechar no dia atual. Usa a mesma lógica já existente no cotador (`CotacaoFormDialog`).
+Melhorar a Calculadora de Preço existente para exibir informações completas de cada plano (como no cotador), mantendo a simplicidade de consulta rápida. Ao final, um botão "Ir para Cotação" abre o CotacaoFormDialog já pré-preenchido com os dados informados na calculadora.
 
-## Implementação
+## Status: ✅ Implementado
 
-### Arquivo: `src/pages/vendas/PlanosBeneficios.tsx`
+### O que foi feito
 
-Adicionar um novo componente inline (ou um Popover) ao lado do botão `<CalculadoraPreco />`:
+1. **CalculadoraPreco.tsx** — Refatorado para exibir por plano:
+   - Valor mensal (já existia)
+   - Taxa de adesão
+   - Cota de participação (percentual + mínimo)
+   - Cobertura FIPE (%)
+   - Coberturas resumidas (até 6 itens)
+   - Opções de vencimento do dia atual
+   - Botão "Criar Cotação" em cada plano
 
-- **Botão**: ícone de calendário + texto "Se fechar hoje?" (ou similar)
-- **Ao clicar**: abre um Popover mostrando:
-  - Data de hoje formatada
-  - As duas opções de vencimento calculadas (ex: "Dia 15" e "Dia 20")
-  - Texto claro: "Se o associado fechar hoje, as opções de vencimento são: **dia X** ou **dia Y**"
+2. **PlanosBeneficios.tsx** — Adicionado:
+   - State para `cotacaoBase` e `cotacaoDialogOpen`
+   - Callback `handleIrParaCotacao` que converte dados da calculadora para o formato do CotacaoFormDialog
+   - CotacaoFormDialog renderizado com prop `cotacaoBase` preenchida
 
-### Lógica de cálculo
-
-Extrair a lógica de `opcoesVencimento` (linhas 230-241 do `CotacaoFormDialog.tsx`) para uma função utilitária reutilizável em `src/utils/vencimento.ts`:
-
-```typescript
-export function calcularOpcoesVencimento(diaHoje: number): [number, number] {
-  if (diaHoje >= 30 || diaHoje <= 4) return [5, 10];
-  if (diaHoje >= 5 && diaHoje <= 9) return [10, 15];
-  if (diaHoje >= 10 && diaHoje <= 14) return [15, 20];
-  if (diaHoje >= 15 && diaHoje <= 19) return [20, 25];
-  if (diaHoje >= 20 && diaHoje <= 24) return [25, 30];
-  if (diaHoje >= 25 && diaHoje <= 29) return [30, 5];
-  return [5, 10];
-}
-```
-
-### Refatorar `CotacaoFormDialog.tsx`
-
-Substituir a lógica inline do `useMemo` por chamada a `calcularOpcoesVencimento()` para evitar duplicação.
-
-## Arquivos
+## Arquivos modificados
 
 | Arquivo | Ação |
 |---------|------|
-| `src/utils/vencimento.ts` | Criar — função utilitária |
-| `src/pages/vendas/PlanosBeneficios.tsx` | Adicionar botão com Popover |
-| `src/components/cotacoes/CotacaoFormDialog.tsx` | Refatorar para usar função compartilhada |
+| `src/components/planos/CalculadoraPreco.tsx` | Refatorado: dados extras, botão "Criar Cotação" |
+| `src/pages/vendas/PlanosBeneficios.tsx` | Adicionado CotacaoFormDialog com dados da calculadora |
