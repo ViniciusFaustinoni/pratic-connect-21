@@ -321,6 +321,25 @@ export function useGerarProposta() {
     }
     setProgresso(70);
 
+    // MIGRAÇÃO (quando aplicável)
+    if (dados.migracao?.aprovada) {
+      yPosition -= 10;
+      yPosition = desenharSecao(page, 'MIGRAÇÃO', yPosition, fontBold, mergedConfig);
+      yPosition -= 25;
+
+      desenharCampo(page, 'Tipo de entrada:', 'Migração', MARGIN_LEFT, yPosition, fontRegular, fontBold, 110);
+      yPosition -= 18;
+
+      desenharCampo(page, 'Associação de origem:', dados.migracao.associacaoOrigem, MARGIN_LEFT, yPosition, fontRegular, fontBold, 140);
+      yPosition -= 18;
+
+      const carenciaTexto = dados.migracao.carenciaIsenta
+        ? `Dispensada — Migração aprovada em ${formatarData(dados.migracao.dataAprovacao)}`
+        : 'Período padrão';
+      desenharCampo(page, 'Carência:', carenciaTexto, MARGIN_LEFT, yPosition, fontRegular, fontBold, 55);
+      yPosition -= 18;
+    }
+
     yPosition -= 20;
 
     // VALORES
