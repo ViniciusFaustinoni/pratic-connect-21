@@ -1441,12 +1441,11 @@ export function useAprovarProposta() {
         // Buscar valor_fipe do veículo para verificar se precisa de rastreador
         const { data: veiculoFipeData } = await supabase
           .from('veiculos')
-          .select('valor_fipe, tipo')
+          .select('valor_fipe')
           .eq('id', veiculoId)
           .single();
         
         const valorFipe = veiculoFipeData?.valor_fipe || 0;
-        const tipoVeiculo = (veiculoFipeData?.tipo as 'automovel' | 'moto') || 'automovel';
         
         // Buscar limites de FIPE para rastreador da configuração
         let fipeMinRastreador = 30000;
