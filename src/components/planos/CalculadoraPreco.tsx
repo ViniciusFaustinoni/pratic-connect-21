@@ -691,6 +691,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setPlaca('');
     setVeiculoPlaca(null);
     setCombustivelDetectado(null);
+    jaCalculouRef.current = false;
   };
 
   const handleIrParaCotacao = (planoId: string) => {
