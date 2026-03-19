@@ -99,6 +99,7 @@ import VistoriasManutencao from "./pages/monitoramento/VistoriasManutencao";
 import GestaoRotas from "./pages/monitoramento/GestaoRotas";
 import RessalvasPendentes from "./pages/monitoramento/RessalvasPendentes";
 import AprovacaoAssociadosMonitoramento from "./pages/monitoramento/AcionamentosRouboFurto"; // renamed
+import ImprevistosPainel from "./pages/monitoramento/ImprevistosPainel";
 import Oficinas from "./pages/oficinas/Oficinas";
 import AutoCenters from "./pages/oficinas/AutoCenters";
 import OficinasRelatorios from "./pages/oficinas/OficinasRelatorios";
