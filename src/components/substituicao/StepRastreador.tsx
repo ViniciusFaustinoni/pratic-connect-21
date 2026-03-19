@@ -37,7 +37,7 @@ export function StepRastreador({
         .from('rastreadores')
         .select('id, codigo, status')
         .eq('veiculo_id', veiculoAntigoId)
-        .in('status', ['instalado', 'ativo'])
+        .in('status', ['instalado'])
         .maybeSingle();
       return data;
     },
