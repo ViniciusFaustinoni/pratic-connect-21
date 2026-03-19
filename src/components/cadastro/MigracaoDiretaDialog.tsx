@@ -288,6 +288,8 @@ export function MigracaoDiretaDialog({ open, onOpenChange, cpfInicial, consultor
                 value={cpf}
                 onChange={e => setCpf(formatCPF(e.target.value))}
                 maxLength={14}
+                readOnly={!!cpfInicial}
+                className={cpfInicial ? 'bg-muted cursor-not-allowed' : ''}
               />
             </div>
             <div className="space-y-1.5">
