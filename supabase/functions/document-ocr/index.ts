@@ -24,6 +24,57 @@ function validateCPF(cpf: string): boolean {
   return r === parseInt(cleaned[10]);
 }
 
+// Mapa de dígitos comumente confundidos por modelos de visão
+const DIGIT_CONFUSIONS: Record<number, number[]> = {
+  0: [8, 6],
+  1: [7, 4],
+  3: [8],
+  4: [6, 9],
+  5: [6, 8],
+  6: [4, 5, 8, 0],
+  7: [1],
+  8: [3, 0, 6],
+  9: [4, 7],
+};
+
+/**
+ * Tenta corrigir um CPF inválido trocando um único dígito por alternativas
+ * visualmente similares e validando o checksum. Retorna o CPF corrigido
+ * apenas se houver exatamente UMA permutação válida (sem ambiguidade).
+ */
+function tryFixCPFByPermutation(cpf: string): string | null {
+  const digits = cpf.replace(/\D/g, '').split('').map(Number);
+  if (digits.length !== 11) return null;
+
+  const validResults: string[] = [];
+
+  for (let pos = 0; pos < 11; pos++) {
+    const originalDigit = digits[pos];
+    const alternatives = DIGIT_CONFUSIONS[originalDigit];
+    if (!alternatives) continue;
+
+    for (const alt of alternatives) {
+      const candidate = [...digits];
+      candidate[pos] = alt;
+      const candidateStr = candidate.join('');
+      if (validateCPF(candidateStr)) {
+        // Formatar como XXX.XXX.XXX-XX
+        const formatted = candidateStr.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+        if (!validResults.includes(formatted)) {
+          validResults.push(formatted);
+        }
+      }
+    }
+  }
+
+  if (validResults.length === 1) {
+    return validResults[0];
+  }
+
+  // Ambíguo (múltiplos) ou nenhum encontrado
+  return null;
+}
+
 const systemPrompt = `Analista de documentos brasileiros. Detecte o tipo e extraia dados.
 
 ## Tipos e campos obrigatórios:
