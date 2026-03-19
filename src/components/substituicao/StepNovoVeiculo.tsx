@@ -54,7 +54,7 @@ export function StepNovoVeiculo({
   const { data: limites } = useConfigLimitesVeiculo();
   const { data: restricoes } = useRestricoesAbsolutas();
   const { tipoVeiculo: tipoAntigo } = useDetectarTipoVeiculo(veiculoAntigo.marca, veiculoAntigo.modelo);
-  const { tipoVeiculo: tipoNovo } = useDetectarTipoVeiculo(dados.marca, dados.modelo);
+  const { tipoVeiculo: tipoNovo } = useDetectarTipoVeiculo(dadosNovoVeiculo.marca, dadosNovoVeiculo.modelo);
   const [placaExiste, setPlacaExiste] = useState(false);
   const [verificandoPlaca, setVerificandoPlaca] = useState(false);
   const [consultandoFipe, setConsultandoFipe] = useState(false);
@@ -62,12 +62,11 @@ export function StepNovoVeiculo({
   const [chassi, setChassi] = useState('');
   const [renavam, setRenavam] = useState('');
 
+  const dados = dadosNovoVeiculo;
+
   const tiposDiferentes = !!(dados.marca && dados.modelo && tipoAntigo !== tipoNovo);
   const restricaoMudancaLinhaAtiva = restricoes?.mudanca_linha !== false;
   const bloqueioMudancaLinha = tiposDiferentes && restricaoMudancaLinhaAtiva;
-  const [renavam, setRenavam] = useState('');
-
-  const dados = dadosNovoVeiculo;
 
   const updateDados = (partial: Partial<DadosNovoVeiculo>) => {
     setDadosNovoVeiculo({ ...dados, ...partial });
