@@ -8,6 +8,7 @@ import { Button } from '@/components/ui/button';
 import { SubstituicaoStepper } from '@/components/substituicao/SubstituicaoStepper';
 import { StepElegibilidade } from '@/components/substituicao/StepElegibilidade';
 import { StepEventoAtivo } from '@/components/substituicao/StepEventoAtivo';
+import { StepRastreador } from '@/components/substituicao/StepRastreador';
 import { StepNovoVeiculo } from '@/components/substituicao/StepNovoVeiculo';
 import { StepBeneficios } from '@/components/substituicao/StepBeneficios';
 import { StepFinanceiro } from '@/components/substituicao/StepFinanceiro';
@@ -27,10 +28,10 @@ export default function SubstituicaoVeiculoPage() {
   // Evento ativo data
   const [eventoAtivo, setEventoAtivo] = useState<{ id: string; tipo: string } | null>(null);
 
-  // Step 3 data
+  // Step 4 data
   const [dadosNovoVeiculo, setDadosNovoVeiculo] = useState<Partial<DadosNovoVeiculo>>({});
 
-  // Step 4 data
+  // Step 5 data
   const [beneficiosSelecionados, setBeneficiosSelecionados] = useState<Record<string, boolean | string>>({});
 
   const iniciarSubstituicao = useIniciarSubstituicao();
@@ -114,31 +115,37 @@ export default function SubstituicaoVeiculoPage() {
     } else {
       setSkippedSteps((prev) => [...prev, 2]);
       completeStep(2);
-      setCurrentStep(3);
+      setCurrentStep(3); // Go to Rastreador
     }
   };
 
-  // Step 2 -> next
+  // Step 2 -> next (Evento -> Rastreador)
   const handleEventoNext = () => {
     completeStep(2);
     setCurrentStep(3);
   };
 
-  // Step 3 -> next
-  const handleNovoVeiculoNext = (veiculoNovoId?: string) => {
+  // Step 3 -> next (Rastreador -> Novo Veículo)
+  const handleRastreadorNext = () => {
     completeStep(3);
     setCurrentStep(4);
   };
 
-  // Step 4 -> next
-  const handleBeneficiosNext = () => {
+  // Step 4 -> next (Novo Veículo -> Benefícios)
+  const handleNovoVeiculoNext = (_veiculoNovoId?: string) => {
     completeStep(4);
     setCurrentStep(5);
   };
 
-  // Step 5 -> confirmar (envia para aprovação)
-  const handleFinanceiroConfirmar = () => {
+  // Step 5 -> next (Benefícios -> Financeiro)
+  const handleBeneficiosNext = () => {
     completeStep(5);
+    setCurrentStep(6);
+  };
+
+  // Step 6 -> confirmar (Financeiro -> Aprovação)
+  const handleFinanceiroConfirmar = () => {
+    completeStep(6);
     toast.success('Substituição enviada para aprovação!');
   };
 
@@ -231,13 +238,11 @@ export default function SubstituicaoVeiculoPage() {
       )}
 
       {currentStep === 3 && (
-        <StepNovoVeiculo
-          veiculoAntigo={veiculoAntigoResumo}
+        <StepRastreador
           associadoId={associadoId!}
+          veiculoAntigoId={veiculoAtivo.id}
           substituicaoId={substituicaoId}
-          dadosNovoVeiculo={dadosNovoVeiculo}
-          setDadosNovoVeiculo={setDadosNovoVeiculo}
-          onNext={handleNovoVeiculoNext}
+          onNext={handleRastreadorNext}
           onBack={() => {
             if (skippedSteps.includes(2)) {
               setCurrentStep(1);
@@ -250,17 +255,30 @@ export default function SubstituicaoVeiculoPage() {
       )}
 
       {currentStep === 4 && (
+        <StepNovoVeiculo
+          veiculoAntigo={veiculoAntigoResumo}
+          associadoId={associadoId!}
+          substituicaoId={substituicaoId}
+          dadosNovoVeiculo={dadosNovoVeiculo}
+          setDadosNovoVeiculo={setDadosNovoVeiculo}
+          onNext={handleNovoVeiculoNext}
+          onBack={() => setCurrentStep(3)}
+          onIniciarSubstituicao={handleIniciarSubstituicao}
+        />
+      )}
+
+      {currentStep === 5 && (
         <StepBeneficios
           veiculoAntigo={veiculoAntigoResumo}
           dadosNovoVeiculo={dadosNovoVeiculo}
           beneficiosSelecionados={beneficiosSelecionados}
           setBeneficiosSelecionados={setBeneficiosSelecionados}
           onNext={handleBeneficiosNext}
-          onBack={() => setCurrentStep(3)}
+          onBack={() => setCurrentStep(4)}
         />
       )}
 
-      {currentStep === 5 && (
+      {currentStep === 6 && (
         <StepFinanceiro
           substituicaoId={substituicaoId}
           associadoId={associadoId!}
@@ -269,12 +287,12 @@ export default function SubstituicaoVeiculoPage() {
           dadosNovoVeiculo={dadosNovoVeiculo}
           beneficiosSelecionados={beneficiosSelecionados}
           onConfirmar={handleFinanceiroConfirmar}
-          onBack={() => setCurrentStep(4)}
+          onBack={() => setCurrentStep(5)}
           onIniciarSubstituicao={handleIniciarSubstituicao}
         />
       )}
 
-      {currentStep >= 6 && (
+      {currentStep >= 7 && (
         <Card>
           <CardContent className="py-12 text-center">
             <p className="text-muted-foreground">O step de Aprovação será implementado na próxima fase.</p>

@@ -160,7 +160,7 @@ export function StepElegibilidade({ associadoId, onNext }: StepElegibilidadeProp
       </Card>
 
       <div className="flex justify-end">
-        <Button onClick={handleNext} disabled={!adimplente || !rastreador_devolvido}>
+        <Button onClick={handleNext} disabled={!canProceed}>
           Próximo
         </Button>
       </div>

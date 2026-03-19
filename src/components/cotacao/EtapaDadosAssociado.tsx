@@ -9,6 +9,8 @@ import { User, ArrowRight, Phone, UserPlus, X } from 'lucide-react';
 import { useVendedores } from '@/hooks/useVendedores';
 import { useState } from 'react';
 import { useAssociadoSearch, type AssociadoSearchResult } from '@/hooks/useAssociadoSearch';
+import { useVerificarVeiculoAtivoCpf } from '@/hooks/useVerificarVeiculoAtivoCpf';
+import { DialogTipoOperacao } from '@/components/cotacao/DialogTipoOperacao';
 
 interface EtapaDadosAssociadoProps {
   // Dados do associado/solicitante
@@ -35,6 +37,7 @@ interface EtapaDadosAssociadoProps {
   
   // Navegação
   onNext: () => void;
+  onSubstituicao?: (associadoId: string) => void;
 }
 
 const formatPhone = (value: string): string => {
@@ -69,10 +72,16 @@ export function EtapaDadosAssociado({
   indicadorNome,
   setIndicadorNome,
   onNext,
+  onSubstituicao,
 }: EtapaDadosAssociadoProps) {
   const { data: vendedores = [], isLoading: isLoadingVendedores } = useVendedores();
   const [buscaIndicador, setBuscaIndicador] = useState('');
   const { data: resultadosBusca = [], isLoading: isSearching } = useAssociadoSearch(buscaIndicador);
+
+  // CPF para verificação de veículo ativo
+  const [cpfBusca, setCpfBusca] = useState('');
+  const { data: veiculoAtivoCpf, isLoading: verificandoCpf } = useVerificarVeiculoAtivoCpf(cpfBusca);
+  const [showDialogTipo, setShowDialogTipo] = useState(false);
   
   // Pode avançar se Nome, Telefone e Consultor estão preenchidos
   const telefoneValido = telefone1.replace(/\D/g, '').length >= 10;
@@ -98,6 +107,19 @@ export function EtapaDadosAssociado({
   };
 
   return (
+    <>
+    {veiculoAtivoCpf && (
+      <DialogTipoOperacao
+        open={showDialogTipo}
+        onOpenChange={setShowDialogTipo}
+        veiculoAtivo={veiculoAtivoCpf}
+        onSubstituicao={(associadoId) => onSubstituicao?.(associadoId)}
+        onInclusao={() => {
+          // Continue normal flow
+          setShowDialogTipo(false);
+        }}
+      />
+    )}
     <Card className="border-border bg-card">
       <CardHeader className="pb-4">
         <div className="flex items-center gap-3">
@@ -127,6 +149,44 @@ export function EtapaDadosAssociado({
               onChange={(e) => setNome(e.target.value)}
               placeholder="Nome completo do solicitante"
             />
+          </div>
+
+          {/* CPF (opcional - para verificar veículo ativo) */}
+          <div className="space-y-2 md:col-span-2">
+            <Label htmlFor="cpf">
+              CPF do cliente (opcional)
+            </Label>
+            <Input
+              id="cpf"
+              value={cpfBusca}
+              onChange={(e) => {
+                const digits = e.target.value.replace(/\D/g, '');
+                if (digits.length <= 11) {
+                  setCpfBusca(formatCPF(digits));
+                }
+              }}
+              placeholder="000.000.000-00"
+              maxLength={14}
+            />
+            {verificandoCpf && (
+              <p className="text-xs text-muted-foreground">Verificando CPF...</p>
+            )}
+            {veiculoAtivoCpf && !showDialogTipo && (
+              <div className="flex items-center gap-2 p-2 rounded-lg bg-primary/5 border border-primary/20 text-sm">
+                <User className="h-4 w-4 text-primary flex-shrink-0" />
+                <span className="flex-1">
+                  <strong>{veiculoAtivoCpf.associado_nome}</strong> já possui veículo ativo ({veiculoAtivoCpf.veiculo_marca} {veiculoAtivoCpf.veiculo_modelo} - {veiculoAtivoCpf.veiculo_placa})
+                </span>
+                <Button
+                  type="button"
+                  variant="outline"
+                  size="sm"
+                  onClick={() => setShowDialogTipo(true)}
+                >
+                  Escolher operação
+                </Button>
+              </div>
+            )}
           </div>
 
           {/* E-mail */}
@@ -293,5 +353,6 @@ export function EtapaDadosAssociado({
         </div>
       </CardContent>
     </Card>
+    </>
   );
 }

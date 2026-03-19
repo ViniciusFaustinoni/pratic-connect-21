@@ -1,0 +1,1 @@
+ALTER TABLE substituicoes_veiculo ADD COLUMN IF NOT EXISTS verificacoes_resultado jsonb DEFAULT '{}';

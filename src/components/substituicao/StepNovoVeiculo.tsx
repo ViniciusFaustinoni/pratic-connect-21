@@ -105,7 +105,7 @@ export function StepNovoVeiculo({
   };
 
   const fipeConsultada = !!dados.valor_fipe && dados.valor_fipe > 0;
-  const camposObrigatorios = dados.placa && dados.marca && dados.modelo && dados.cor && dados.combustivel && fipeConsultada && !(dados.blindado && limites?.blindadoPolicy === 'bloquear');
+  const camposObrigatorios = dados.placa && dados.marca && dados.modelo && dados.cor && dados.combustivel && fipeConsultada && !dados.blindado;
 
   // Criar veículo no banco e avançar
   const handleCriarVeiculoEAvancar = useCallback(async () => {
@@ -287,12 +287,10 @@ export function StepNovoVeiculo({
             </div>
 
             {dados.blindado && (
-              <Alert className="border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/30">
-                <AlertTriangle className="h-4 w-4 text-yellow-600" />
+              <Alert variant="destructive" className="py-2">
+                <AlertTriangle className="h-4 w-4" />
                 <AlertDescription className="text-xs">
-                  {limites?.blindadoPolicy === 'bloquear'
-                    ? 'Veículos blindados NÃO são aceitos pelo regulamento vigente.'
-                    : 'Veículo blindado requer autorização especial da diretoria por email.'}
+                  Veículos blindados NÃO são aceitos no processo de substituição de placa. Esta é uma restrição absoluta sem exceção.
                 </AlertDescription>
               </Alert>
             )}

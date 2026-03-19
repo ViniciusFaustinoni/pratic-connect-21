@@ -359,6 +359,9 @@ export default function CotacaoPage() {
             indicadorNome={indicadorNome}
             setIndicadorNome={setIndicadorNome}
             onNext={handleEtapa1Next}
+            onSubstituicao={(associadoId) => {
+              navigate(`/cadastro/substituicao-veiculo/${associadoId}`);
+            }}
           />
         )}
 
