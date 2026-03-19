@@ -331,6 +331,9 @@ export function RegrasVendaContent() {
       if (p.chave === 'migracao_isentar_carencia') {
         nextMigracao.migracao_isentar_carencia = p.valor === 'true';
       }
+      if (p.chave === 'migracao_prazo_max_comprovante_meses') {
+        nextMigracao.migracao_prazo_max_comprovante_meses = parseInt(p.valor) || 3;
+      }
     }
     setPontuacao(nextPontuacao);
     setRepasse(nextRepasse);
