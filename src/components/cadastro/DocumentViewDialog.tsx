@@ -58,11 +58,17 @@ export function DocumentViewDialog({ documento, onClose }: DocumentViewDialogPro
 
         <div className="flex flex-col items-center py-4">
           {isPdf ? (
-            <iframe
-              src={documento.arquivo_url}
+            <object
+              data={documento.arquivo_url}
+              type="application/pdf"
               className="w-full h-[60vh] rounded-lg border"
-              title="Documento PDF"
-            />
+            >
+              <iframe
+                src={`https://docs.google.com/gview?url=${encodeURIComponent(documento.arquivo_url)}&embedded=true`}
+                className="w-full h-[60vh] rounded-lg border-0"
+                title="Documento PDF"
+              />
+            </object>
           ) : (
             <img
               src={documento.arquivo_url}
