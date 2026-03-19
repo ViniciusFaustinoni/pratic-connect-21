@@ -28,9 +28,9 @@ function calcPrazo(createdAt: string, prazoHoras: number) {
 }
 
 const statusConfig = {
-  pendente: { label: 'Pendente', icon: Clock, className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
-  aprovada: { label: 'Aprovada', icon: CheckCircle, className: 'bg-green-100 text-green-800 border-green-300' },
-  reprovada: { label: 'Reprovada', icon: XCircle, className: 'bg-red-100 text-red-800 border-red-300' },
+  pendente: { label: 'Pendente', icon: Clock, className: 'bg-accent text-accent-foreground border-border' },
+  aprovada: { label: 'Aprovada', icon: CheckCircle, className: 'bg-primary/10 text-primary border-primary/30' },
+  reprovada: { label: 'Reprovada', icon: XCircle, className: 'bg-destructive/10 text-destructive border-destructive/30' },
 };
 
 export default function SolicitacoesMigracao() {
