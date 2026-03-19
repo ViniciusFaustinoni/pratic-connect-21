@@ -40,7 +40,7 @@ export function useMinhasCoberturas() {
         .from('contratos')
         .select('carencia_isenta, carencia_motivo_isencao')
         .eq('associado_id', user.id)
-        .in('status', ['ativo', 'vigente'])
+        .in('status', ['ativo'])
         .order('created_at', { ascending: false })
         .limit(1)
         .maybeSingle();
