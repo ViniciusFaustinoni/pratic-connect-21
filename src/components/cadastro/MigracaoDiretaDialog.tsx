@@ -222,6 +222,7 @@ export function MigracaoDiretaDialog({ open, onOpenChange }: Props) {
         associacao_origem: associacaoOrigem.trim(),
         prazo_resposta_horas: prazoHoras,
         consultor_id: consultorId !== 'sem_consultor' ? consultorId : undefined,
+        declaracao_cancelamento_concorrente: declaracaoCancelamento,
         documentos: allDocs,
       });
 
