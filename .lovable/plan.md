@@ -1,20 +1,20 @@
 
 
-# Unificar Aprovações FIPE e Elegibilidade em uma única página
+# Adicionar tooltips explicativos nas abas de Aprovações
 
 ## O que muda
 
-As duas páginas separadas — **Aprovações FIPE** (`/vendas/aprovacoes-fipe`) e **Aprovações Elegibilidade** (`/aprovacoes-elegibilidade`) — serão combinadas em uma única página com abas. A página `AprovacoesFipeMenor.tsx` já tem abas internas (FIPE Menor / Alto Valor). Elegibilidade será adicionada como 3ª seção.
+Cada aba ("FIPE Menor", "Alto Valor", "Elegibilidade") receberá um pequeno ícone de ajuda (`HelpCircle`) ao lado do nome, com um tooltip explicando o propósito daquela seção.
 
-## Alterações
+## Alteração
 
-| Arquivo | Mudança |
-|---------|---------|
-| `src/pages/vendas/AprovacoesFipeMenor.tsx` | Renomear para página unificada "Aprovações". Adicionar 3ª aba "Elegibilidade" que renderiza `PainelAprovacoesElegibilidade`. Atualizar título da página |
-| `src/components/layout/AppSidebar.tsx` | Remover item "Aprovações Elegibilidade" separado. Renomear "Aprovações FIPE" → "Aprovações" |
-| `src/App.tsx` | Remover rota `/aprovacoes-elegibilidade` (ou redirecionar para `/vendas/aprovacoes-fipe`). Manter rota única |
-| `src/components/layout/GlobalBreadcrumb.tsx` | Remover entrada de elegibilidade separada, renomear entrada FIPE → "Aprovações" |
-| `src/pages/vendas/AprovacoesElegibilidade.tsx` | Pode ser removido ou mantido como redirect |
+**Arquivo**: `src/pages/vendas/AprovacoesFipeMenor.tsx`
 
-A aba "Elegibilidade" reutiliza o componente `PainelAprovacoesElegibilidade` já existente, sem duplicar código.
+- Importar `HelpCircle` do lucide-react e `Tooltip`/`TooltipProvider`/`TooltipTrigger`/`TooltipContent` de `@/components/ui/tooltip`
+- Dentro de cada `TabsTrigger`, adicionar um `<Tooltip>` com `<HelpCircle className="h-3 w-3" />` e o texto explicativo:
+  - **FIPE Menor**: "Solicitações para enquadrar veículos em faixa FIPE inferior à original, reduzindo o valor mensal"
+  - **Alto Valor**: "Veículos com FIPE acima do limite permitido pelo plano que precisam de autorização especial"
+  - **Elegibilidade**: "Veículos fora da whitelist de aceitação do plano que necessitam aprovação manual para inclusão"
+
+Nenhum outro arquivo é alterado.
 
