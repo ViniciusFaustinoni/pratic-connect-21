@@ -37,7 +37,7 @@ const STATUS_CONFIG = {
   recusado: { label: 'Recusado', color: 'bg-red-100 text-red-800', icon: XCircle },
 };
 
-type SectionTab = 'fipe_menor' | 'alto_valor';
+type SectionTab = 'fipe_menor' | 'alto_valor' | 'elegibilidade';
 
 export default function AprovacoesFipeMenor() {
   const [section, setSection] = useState<SectionTab>('fipe_menor');
