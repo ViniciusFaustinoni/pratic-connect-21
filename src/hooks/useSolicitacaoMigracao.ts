@@ -123,6 +123,7 @@ export function useCriarSolicitacaoMigracao() {
           associacao_origem: data.associacao_origem,
           consultor_id: profile.id,
           prazo_resposta_horas: data.prazo_resposta_horas,
+          declaracao_cancelamento_concorrente: data.declaracao_cancelamento_concorrente,
           status: 'pendente',
         })
         .select('id')
