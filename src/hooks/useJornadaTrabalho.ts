@@ -93,9 +93,35 @@ export function useJornadaTrabalho() {
       return data as TurnoProfissional | null;
     },
     enabled: !!profile?.id,
-    staleTime: 30000,
-    refetchInterval: 60000, // Refetch a cada 1 minuto
+    staleTime: 10000,
+    refetchInterval: 30000, // Polling a cada 30s (fallback do realtime)
   });
+
+  // Realtime subscription para turnos_profissionais
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const channel = supabase
+      .channel(`turno-realtime-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'turnos_profissionais',
+          filter: `profissional_id=eq.${profile.id}`,
+        },
+        (payload) => {
+          console.log('[useJornadaTrabalho] Realtime update:', payload.eventType);
+          refetchTurno();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, refetchTurno]);
 
   // Buscar saldo acumulado do dia anterior (extras - faltantes)
   const { data: saldoAnterior } = useQuery({
@@ -153,11 +179,11 @@ export function useJornadaTrabalho() {
     setTempoReal({ minutosTrabalhados, minutosAlmoco });
   }, [turno]);
 
-  // Atualizar tempo a cada minuto
+  // Atualizar tempo a cada 30 segundos para feedback mais rápido
   useEffect(() => {
     if (turno?.status && turno.status !== 'encerrado') {
       calcularTempoReal();
-      intervalRef.current = setInterval(calcularTempoReal, 60000);
+      intervalRef.current = setInterval(calcularTempoReal, 30000);
 
       return () => {
         if (intervalRef.current) {
@@ -166,6 +192,19 @@ export function useJornadaTrabalho() {
       };
     }
   }, [turno?.status, calcularTempoReal]);
+
+  // Recalcular ao voltar do background
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && turno?.status && turno.status !== 'encerrado') {
+        console.log('[useJornadaTrabalho] Voltou ao foreground - recalculando tempo');
+        calcularTempoReal();
+        refetchTurno();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [turno?.status, calcularTempoReal, refetchTurno]);
 
   // Mutation para criar/iniciar turno (protege contra sobrescrita de inicio_turno)
   const iniciarTurnoMutation = useMutation({

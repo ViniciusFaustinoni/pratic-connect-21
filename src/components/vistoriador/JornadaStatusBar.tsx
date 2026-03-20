@@ -1,4 +1,4 @@
-import { Clock, Target, Coffee, TrendingUp, TrendingDown, AlertTriangle } from 'lucide-react';
+import { Clock, Target, Coffee, TrendingUp, TrendingDown, AlertTriangle, Loader2 } from 'lucide-react';
 import { Progress } from '@/components/ui/progress';
 import { useJornadaTrabalho, formatarMinutos } from '@/hooks/useJornadaTrabalho';
 import { cn } from '@/lib/utils';
@@ -21,12 +21,34 @@ export function JornadaStatusBar({ className }: JornadaStatusBarProps) {
     emAlmoco,
     minutosAlmocoRestantes,
     minutosAtrasoAlmoco,
-    turno
+    turno,
+    isLoading
   } = useJornadaTrabalho();
 
-  // Não mostrar se não iniciou turno
+  // Mostrar loading enquanto busca o turno
+  if (isLoading) {
+    return (
+      <div className={cn(
+        "bg-slate-800/80 border border-slate-700 rounded-lg p-3 flex items-center justify-center gap-2",
+        className
+      )}>
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span className="text-sm text-muted-foreground">Carregando jornada...</span>
+      </div>
+    );
+  }
+
+  // Se não tem turno ainda (pode estar sendo criado pelo useGarantirTurno)
   if (status === 'inativo') {
-    return null;
+    return (
+      <div className={cn(
+        "bg-slate-800/80 border border-slate-700 rounded-lg p-3 flex items-center justify-center gap-2",
+        className
+      )}>
+        <Loader2 className="h-4 w-4 animate-spin text-primary" />
+        <span className="text-sm text-muted-foreground">Iniciando jornada...</span>
+      </div>
+    );
   }
 
   // Se encerrado, mostrar resumo

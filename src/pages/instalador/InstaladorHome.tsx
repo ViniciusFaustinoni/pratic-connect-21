@@ -17,6 +17,7 @@ import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOv
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
 import { useServicosRealtime } from '@/hooks/useServicosRealtime';
+import { useGarantirTurno } from '@/hooks/useGarantirTurno';
 
 export default function InstaladorHome() {
   // Realtime: receber tarefas instantaneamente
@@ -26,6 +27,7 @@ export default function InstaladorHome() {
   const { data: tarefaAtual, isLoading } = useTarefaAtual();
   const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
   const { emServico } = useIniciarServico();
+  const { isGarantindo } = useGarantirTurno(emServico);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Verificar alocação diária (rota ou base)
@@ -105,7 +107,16 @@ export default function InstaladorHome() {
         </div>
 
         {/* Barra de Status da Jornada */}
-        {emServico && <JornadaStatusBar className="mb-4" />}
+        {emServico && (
+          isGarantindo ? (
+            <div className="bg-slate-800/80 border border-slate-700 rounded-lg p-3 flex items-center justify-center gap-2 mb-4">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">Carregando jornada...</span>
+            </div>
+          ) : (
+            <JornadaStatusBar className="mb-4" />
+          )
+        )}
 
         {/* Conteúdo Principal: Tarefa Atual ou Botão Iniciar */}
         {tarefaAtual ? (
