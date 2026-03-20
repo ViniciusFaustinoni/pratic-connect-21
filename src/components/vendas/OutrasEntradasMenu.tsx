@@ -92,6 +92,44 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const { data: debitosData, isLoading: loadingDebitos } = useVerificarDebitosAssociado(selectedAssociadoId || undefined);
   const { data: bloqueioInclusaoAtivo } = useInclusaoBloqueioDebito();
 
+  // Vehicle limit config
+  const { data: limiteVeiculosConfig } = useQuery({
+    queryKey: ['config-limite-veiculos'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'limite_veiculos_associado')
+        .maybeSingle();
+      const val = parseInt(data?.valor || '0');
+      return isNaN(val) || val <= 0 ? 0 : val; // 0 = sem limite
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch associado details for inclusão (status + veículos ativos)
+  const { data: associadoInclusaoData, isLoading: loadingAssociadoInclusao } = useQuery({
+    queryKey: ['associado-inclusao-check', selectedAssociadoId],
+    queryFn: async () => {
+      if (!selectedAssociadoId) return null;
+      // Get associado status + details
+      const { data: assoc } = await supabase
+        .from('associados')
+        .select('id, nome, cpf, telefone, email, status')
+        .eq('id', selectedAssociadoId)
+        .single();
+      if (!assoc) return null;
+      // Get active vehicles
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('id, placa, marca, modelo, ano_fabricacao, status')
+        .eq('associado_id', selectedAssociadoId)
+        .in('status', ['ativo', 'instalacao_pendente']);
+      return { ...assoc, veiculos: veiculos || [] };
+    },
+    enabled: !!selectedAssociadoId && selectedTipo === 'inclusao',
+  });
+
   // Repasse maior config for substituicao
   const { data: repasseConfig } = useQuery({
     queryKey: ['config-repasse-maior'],
@@ -203,7 +241,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
       navigate(`/cadastro/associados/${selectedAssociadoId}/substituicao`);
     } else if (selectedTipo === 'inclusao') {
       onOpenChange(false);
-      navigate(`/vendas/cotacoes?novo=true`);
+      navigate(`/vendas/cotador?associado_id=${selectedAssociadoId}&tipo_entrada=inclusao`);
     }
   };
 
@@ -213,8 +251,24 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   };
 
   const temDebitos = debitosData?.temDebito === true;
+  
+  // Inclusão: compute full eligibility
+  const inclusaoStatusCheck = (() => {
+    if (selectedTipo !== 'inclusao' || !selectedAssociadoId) return null;
+    // 1. Débitos
+    if (bloqueioInclusaoAtivo && temDebitos) return 'debitos' as const;
+    // 2. Status do associado
+    if (associadoInclusaoData && associadoInclusaoData.status !== 'ativo') return 'status_invalido' as const;
+    // 3. Limite de veículos
+    const limite = limiteVeiculosConfig || 0;
+    if (limite > 0 && associadoInclusaoData && associadoInclusaoData.veiculos.length >= limite) return 'limite_atingido' as const;
+    // All checks passed
+    if (associadoInclusaoData && !loadingDebitos && !loadingAssociadoInclusao) return 'aprovado' as const;
+    return null;
+  })();
+
   const bloqueado = selectedAssociadoId && (
-    (selectedTipo === 'inclusao' && bloqueioInclusaoAtivo && temDebitos) ||
+    (selectedTipo === 'inclusao' && (inclusaoStatusCheck === 'debitos' || inclusaoStatusCheck === 'status_invalido' || inclusaoStatusCheck === 'limite_atingido')) ||
     (selectedTipo === 'substituicao' && temDebitos)
   );
 
@@ -391,10 +445,10 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                           <span className="font-medium">{selectedAssociadoNome}</span>
                         </div>
 
-                        {loadingDebitos ? (
+                        {(loadingDebitos || (selectedTipo === 'inclusao' && loadingAssociadoInclusao)) ? (
                           <div className="flex items-center justify-center py-6">
                             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
-                            <span className="text-sm text-muted-foreground ml-2">Verificando débitos...</span>
+                            <span className="text-sm text-muted-foreground ml-2">Verificando elegibilidade...</span>
                           </div>
                         ) : bloqueado ? (
                           <Alert variant="destructive">
@@ -404,11 +458,15 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                             </AlertTitle>
                             <AlertDescription className="space-y-2">
                               <p className="text-xs">
-                                {selectedTipo === 'inclusao'
+                                {inclusaoStatusCheck === 'debitos'
                                   ? 'O associado possui débitos em aberto. É necessário quitar antes de incluir um novo veículo.'
+                                  : inclusaoStatusCheck === 'status_invalido'
+                                  ? `O associado está com status "${associadoInclusaoData?.status}". Apenas associados ativos podem incluir novos veículos.`
+                                  : inclusaoStatusCheck === 'limite_atingido'
+                                  ? `O associado já possui ${associadoInclusaoData?.veiculos.length} veículo(s) ativo(s), atingindo o limite máximo de ${limiteVeiculosConfig} configurado.`
                                   : 'O associado está inadimplente. Aplica-se a Regra do Repasse Maior.'}
                               </p>
-                              {debitosData?.debitosPorVeiculo.map((dv, i) => (
+                              {temDebitos && debitosData?.debitosPorVeiculo.map((dv, i) => (
                                 <div key={i} className="flex justify-between items-center text-xs bg-destructive/10 px-2 py-1.5 rounded">
                                   <span>{dv.marca} {dv.modelo} — {dv.placa}</span>
                                   <span className="font-semibold">{formatCurrency(dv.total)} ({dv.quantidade}x)</span>
@@ -422,6 +480,27 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                               )}
                             </AlertDescription>
                           </Alert>
+                        ) : selectedTipo === 'inclusao' && inclusaoStatusCheck === 'aprovado' ? (
+                          <div className="space-y-3">
+                            <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/50 border border-border">
+                              <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                              <span className="text-sm font-medium">Associado elegível para inclusão</span>
+                            </div>
+                            {associadoInclusaoData && associadoInclusaoData.veiculos.length > 0 && (
+                              <div className="space-y-1.5">
+                                <p className="text-xs font-medium text-muted-foreground">Veículos ativos:</p>
+                                {associadoInclusaoData.veiculos.map((v) => (
+                                  <div key={v.id} className="flex items-center justify-between text-xs px-2 py-1.5 rounded bg-muted/50">
+                                    <span>{v.marca} {v.modelo} {v.ano_fabricacao}</span>
+                                    <span className="font-mono">{v.placa}</span>
+                                  </div>
+                                ))}
+                              </div>
+                            )}
+                            <Button className="w-full" onClick={handleProsseguir}>
+                              Confirmar e iniciar inclusão
+                            </Button>
+                          </div>
                         ) : (
                           <div className="space-y-2">
                             <p className="text-xs text-muted-foreground">Nenhum débito em aberto encontrado.</p>

@@ -6,7 +6,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
-import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Badge } from '@/components/ui/badge';
 import {
   Select,
@@ -235,6 +235,11 @@ import { estimarValorFipe } from '@/utils/fipe';
 
 export default function CotadorPage() {
   const navigate = useNavigate();
+  const [searchParams] = useState(() => new URLSearchParams(window.location.search));
+  const inclusaoAssociadoId = searchParams.get('associado_id');
+  const inclusaoTipoEntrada = searchParams.get('tipo_entrada');
+  const isInclusaoVeiculo = inclusaoTipoEntrada === 'inclusao' && !!inclusaoAssociadoId;
+
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
@@ -244,6 +249,20 @@ export default function CotadorPage() {
   const { data: repasseVolanteExterno = 50 } = useTaxaRepasseVolanteExterno();
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
+
+  // Fetch associado data for inclusão pre-fill
+  const { data: inclusaoAssociado } = useQuery({
+    queryKey: ['inclusao-associado-prefill', inclusaoAssociadoId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('associados')
+        .select('id, nome, cpf, telefone, email')
+        .eq('id', inclusaoAssociadoId!)
+        .single();
+      return data;
+    },
+    enabled: isInclusaoVeiculo,
+  });
   
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
@@ -287,7 +306,7 @@ export default function CotadorPage() {
   const [comboboxAberto, setComboboxAberto] = useState(false);
   
   // Nome do associado (quando não vinculado a lead)
-  const [nomeAssociado, setNomeAssociado] = useState('');
+  const [nomeAssociado, setNomeAssociado] = useState(inclusaoAssociado?.nome || '');
 
   // Indicação
   const [isIndicacao, setIsIndicacao] = useState(false);
@@ -754,6 +773,8 @@ export default function CotadorPage() {
         tipo_instalacao: tipoInstalacao || undefined,
         indicador_id: indicadorId || null,
         indicador_nome: indicadorNome || null,
+        associado_id: inclusaoAssociadoId || null,
+        tipo_entrada: isInclusaoVeiculo ? 'inclusao' : null,
       });
 
       setCotacaoSalva(cotacaoData);
@@ -887,6 +908,18 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
   // ============================================
   return (
     <div className="space-y-6">
+      {/* INCLUSÃO BANNER */}
+      {isInclusaoVeiculo && inclusaoAssociado && (
+        <Alert className="border-primary/30 bg-primary/5">
+          <AlertCircle className="h-4 w-4 text-primary" />
+          <AlertTitle className="text-primary">Inclusão de Veículo</AlertTitle>
+          <AlertDescription className="text-sm">
+            Esta cotação é uma <strong>inclusão de segundo veículo</strong> para o associado{' '}
+            <strong>{inclusaoAssociado.nome}</strong> (CPF: {inclusaoAssociado.cpf}).
+            Os dados do associado foram preenchidos automaticamente.
+          </AlertDescription>
+        </Alert>
+      )}
       {/* HEADER */}
       <div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">

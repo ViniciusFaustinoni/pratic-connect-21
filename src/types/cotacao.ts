@@ -184,4 +184,6 @@ export interface CriarCotacaoPayload {
   tipo_instalacao?: 'rota' | 'base';
   indicador_id?: string | null;
   indicador_nome?: string | null;
+  associado_id?: string | null;
+  tipo_entrada?: string | null;
 }
