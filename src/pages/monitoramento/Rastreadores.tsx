@@ -187,6 +187,13 @@ export default function Rastreadores() {
           <ConsultaRastreador />
         </TabsContent>
 
+        {/* Aba Mapa */}
+        <TabsContent value="mapa" className="mt-6">
+          <Suspense fallback={<div className="flex h-[500px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
+            <MapaRastreadores />
+          </Suspense>
+        </TabsContent>
+
         {/* Aba Histórico */}
         <TabsContent value="historico" className="mt-6">
           <HistoricoMovimentacoes />
