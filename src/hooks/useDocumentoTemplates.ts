@@ -178,6 +178,7 @@ interface CreateTemplateInput {
   is_default_evento?: boolean;
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
+  anexar_proposta?: boolean;
 }
 
 export function useCreateTemplate() {
