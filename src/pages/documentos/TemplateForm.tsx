@@ -437,6 +437,7 @@ export default function TemplateForm() {
                     )}
                   />
 
+                  <FormField
                     control={form.control}
                     name="descricao"
                     render={({ field }) => (
