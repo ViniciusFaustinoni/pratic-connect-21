@@ -554,7 +554,24 @@ function RenderTrocaTitularidade({ data }: { data: OrigemData }) {
       <InfoField label="Cenário aplicado" value={t.cenarioLabel} icon={<ArrowRightLeft className="h-3 w-3" />} />
       {t.titularAnterior && <InfoField label="Titular anterior" value={t.titularAnterior} />}
       {t.consultorNome && <InfoField label="Consultor responsável" value={t.consultorNome} />}
-      <InfoField label="Data da troca" value={formatDate(t.dataTroca)} />
+      <InfoField label="Data da efetivação" value={formatDate(t.dataTroca)} />
+      <div className="col-span-2">
+        <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+          <ShieldCheck className="h-3 w-3" />
+          Situação de carência
+        </span>
+        {t.carenciaIsenta ? (
+          <p className="text-xs font-medium mt-0.5 text-emerald-600 dark:text-emerald-400">
+            Isento de carência — Cenário A (vistoria dispensada)
+          </p>
+        ) : t.carenciaInicio && t.carenciaFim ? (
+          <p className="text-xs font-medium mt-0.5">
+            {formatDate(t.carenciaInicio)} a {formatDate(t.carenciaFim)}
+          </p>
+        ) : (
+          <p className="text-xs font-medium mt-0.5 text-muted-foreground">Período padrão</p>
+        )}
+      </div>
     </>
   );
 }
