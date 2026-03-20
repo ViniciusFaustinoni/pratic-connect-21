@@ -1,53 +1,36 @@
 
 
-# Plano: Consolidar Estoque + Rastreadores em uma Página Unificada
+# Plano: Adicionar Lista de Rastreadores na Aba Estoque
 
 ## Problema
 
-Hoje existem dois itens separados no menu ("Estoque" e "Rastreadores") que tratam do mesmo assunto: rastreadores. Isso fragmenta a operação e obriga o coordenador a navegar entre páginas.
+A aba "Estoque" na página unificada de Rastreadores mostra apenas as métricas e a consulta por IMEI/código, mas não exibe a lista de rastreadores disponíveis (`ListaRastreadores`), que existia na página antiga de Estoque.
 
-## Solução: Página Única "Rastreadores" com Abas Unificadas
+## Solução
 
-Eliminar a página Estoque e absorver todo o conteúdo na página Rastreadores, reorganizada com abas claras:
+Adicionar o componente `ListaRastreadores` na aba Estoque, abaixo das métricas e acima da consulta.
 
-```text
-Rastreadores
-├── [Visão Geral]  ← Métricas unificadas (estoque + comunicação) + lista com filtros/cards/tabela
-├── [Estoque]      ← Entrada manual, importar lote, consulta por código/IMEI
-├── [Histórico]    ← Movimentações de estoque (entrada, saída, transferências)
-└── [Plataformas]  ← Config de plataformas (só diretor/dev, como já é hoje)
+### Alteração em `Rastreadores.tsx`
+
+Na aba "estoque" (linhas 179-182), adicionar `ListaRastreadores` entre `EstoqueMetricas` e `ConsultaRastreador`:
+
+```tsx
+<TabsContent value="estoque" className="space-y-6 mt-6">
+  <EstoqueMetricas />
+  <ListaRastreadores />
+  <ConsultaRastreador />
+</TabsContent>
 ```
 
-### Aba "Visao Geral" (tab padrão)
-- Métricas combinadas: cards de estoque (disponíveis, instalados, manutenção, baixados) + cards de comunicação (online, atenção, offline)
-- Filtros existentes do `RastreadorFiltersV2`
-- Toggle cards/tabela com toda a funcionalidade atual (portador, manutenção, retirada, mapa, exclusão, lote)
+O import de `ListaRastreadores` já existe na linha 54 do arquivo.
 
-### Aba "Estoque"
-- Botoes "Entrada Manual" e "Importar Lote" (vindos do Estoque atual)
-- `ConsultaRastreador` (busca por codigo/IMEI/serie)
-- `EstoqueMetricas` simplificada (só os números de entrada/saída do período)
+### Bug secundário
 
-### Aba "Historico"
-- `HistoricoMovimentacoes` (já existe, movido do Estoque)
-
-### Aba "Plataformas"
-- `PlataformasConfigPanel` (mantido, visível só para diretor/dev)
+O console mostra um warning de ref em `ConsultaRastreador` — componente funcional sem `forwardRef`. Isso não causa erro funcional mas será corrigido junto.
 
 ## Arquivos afetados
 
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/monitoramento/Rastreadores.tsx` | Reestruturar com 4 abas, absorver componentes do Estoque |
-| `src/components/layout/AppSidebar.tsx` | Remover item "Estoque" do menu |
-| `src/components/layout/GlobalBreadcrumb.tsx` | Remover breadcrumb de `/monitoramento/estoque` |
-| `src/App.tsx` | Redirecionar `/monitoramento/estoque` para `/monitoramento/rastreadores` (compatibilidade) |
-| `src/pages/monitoramento/DashboardCoordenador.tsx` | Atualizar link se necessário |
-
-## O que NAO sera alterado
-
-- Nenhum componente filho (EstoqueMetricas, ListaRastreadores, ConsultaRastreador, HistoricoMovimentacoes, etc.) — todos são reutilizados como estão
-- Permissões existentes
-- Edge functions
-- Página `Estoque.tsx` pode ser removida ou mantida como redirect
+| `src/pages/monitoramento/Rastreadores.tsx` | Adicionar `ListaRastreadores` na aba estoque |
 
