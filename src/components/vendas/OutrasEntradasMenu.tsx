@@ -241,7 +241,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
       navigate(`/cadastro/associados/${selectedAssociadoId}/substituicao`);
     } else if (selectedTipo === 'inclusao') {
       onOpenChange(false);
-      navigate(`/vendas/cotacoes?novo=true`);
+      navigate(`/vendas/cotador?associado_id=${selectedAssociadoId}&tipo_entrada=inclusao`);
     }
   };
 
@@ -251,8 +251,24 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   };
 
   const temDebitos = debitosData?.temDebito === true;
+  
+  // Inclusão: compute full eligibility
+  const inclusaoStatusCheck = (() => {
+    if (selectedTipo !== 'inclusao' || !selectedAssociadoId) return null;
+    // 1. Débitos
+    if (bloqueioInclusaoAtivo && temDebitos) return 'debitos' as const;
+    // 2. Status do associado
+    if (associadoInclusaoData && associadoInclusaoData.status !== 'ativo') return 'status_invalido' as const;
+    // 3. Limite de veículos
+    const limite = limiteVeiculosConfig || 0;
+    if (limite > 0 && associadoInclusaoData && associadoInclusaoData.veiculos.length >= limite) return 'limite_atingido' as const;
+    // All checks passed
+    if (associadoInclusaoData && !loadingDebitos && !loadingAssociadoInclusao) return 'aprovado' as const;
+    return null;
+  })();
+
   const bloqueado = selectedAssociadoId && (
-    (selectedTipo === 'inclusao' && bloqueioInclusaoAtivo && temDebitos) ||
+    (selectedTipo === 'inclusao' && (inclusaoStatusCheck === 'debitos' || inclusaoStatusCheck === 'status_invalido' || inclusaoStatusCheck === 'limite_atingido')) ||
     (selectedTipo === 'substituicao' && temDebitos)
   );
 
