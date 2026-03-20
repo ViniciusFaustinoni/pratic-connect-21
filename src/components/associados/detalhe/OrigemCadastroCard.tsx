@@ -712,10 +712,9 @@ export function OrigemCadastroCard({ associadoId, canLinkToAssociado = false }: 
               Carência — Vidros e Faróis
             </span>
             {(() => {
-              const vidrosIsenta = (contrato as any)?.carencia_vidros_isenta;
-              const vidrosMotivo = (contrato as any)?.carencia_vidros_motivo_isencao;
-              const vidrosInicio = (contrato as any)?.data_carencia_vidros_inicio;
-              const vidrosFim = (contrato as any)?.data_carencia_vidros_fim;
+              const vidrosIsenta = data.carenciaVidros.isenta;
+              const vidrosMotivo = data.carenciaVidros.motivoIsencao;
+              const vidrosFim = data.carenciaVidros.fim;
 
               if (vidrosIsenta) {
                 return (
