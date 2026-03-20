@@ -170,6 +170,12 @@ function useOrigemCadastro(associadoId: string) {
           inicio: contrato?.data_carencia_inicio || null,
           fim: contrato?.data_carencia_fim || null,
         },
+        carenciaVidros: {
+          isenta: (contrato as any)?.carencia_vidros_isenta || false,
+          motivoIsencao: (contrato as any)?.carencia_vidros_motivo_isencao || null,
+          inicio: (contrato as any)?.data_carencia_vidros_inicio || null,
+          fim: (contrato as any)?.data_carencia_vidros_fim || null,
+        },
       };
 
       // Fetch type-specific data
