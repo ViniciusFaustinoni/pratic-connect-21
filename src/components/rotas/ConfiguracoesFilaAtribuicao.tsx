@@ -17,6 +17,8 @@ const CONFIG_KEYS = [
   'fila_max_por_profissional',
   'fila_tempo_expiracao_horas',
   'redistribuicao_raio_km',
+  'fila_tempo_quase_disponivel_min',
+  'fila_etapa_quase_disponivel',
 ] as const;
 
 interface FilaConfig {
@@ -25,6 +27,8 @@ interface FilaConfig {
   maxPorProfissional: string;
   tempoExpiracao: string;
   redistribuicaoRaio: string;
+  tempoQuaseDisponivel: string;
+  etapaQuaseDisponivel: string;
 }
 
 const DEFAULTS: FilaConfig = {
@@ -33,6 +37,8 @@ const DEFAULTS: FilaConfig = {
   maxPorProfissional: '3',
   tempoExpiracao: '4',
   redistribuicaoRaio: '5',
+  tempoQuaseDisponivel: '75',
+  etapaQuaseDisponivel: '4',
 };
 
 function useConfiguracoesFilaAtribuicao() {
@@ -56,6 +62,8 @@ function useConfiguracoesFilaAtribuicao() {
         fila_max_por_profissional: 'maxPorProfissional',
         fila_tempo_expiracao_horas: 'tempoExpiracao',
         redistribuicao_raio_km: 'redistribuicaoRaio',
+        fila_tempo_quase_disponivel_min: 'tempoQuaseDisponivel',
+        fila_etapa_quase_disponivel: 'etapaQuaseDisponivel',
       };
 
       data?.forEach((item) => {
@@ -128,6 +136,26 @@ const FIELDS: {
     min: 1,
     max: 50,
     hint: 'Recomendado: 3-10 km.',
+  },
+  {
+    key: 'tempoQuaseDisponivel',
+    dbKey: 'fila_tempo_quase_disponivel_min',
+    label: 'Tempo mínimo "quase disponível"',
+    tooltip: 'Minutos na tarefa para considerar o profissional "quase disponível" e ampliar o raio de enfileiramento.',
+    unit: 'minutos',
+    min: 30,
+    max: 120,
+    hint: 'Recomendado: 60-90 minutos.',
+  },
+  {
+    key: 'etapaQuaseDisponivel',
+    dbKey: 'fila_etapa_quase_disponivel',
+    label: 'Etapa mínima "quase disponível"',
+    tooltip: 'Etapa do processo a partir da qual o profissional é considerado "quase disponível". O raio ampliado é ativado quando o tempo OU a etapa for atingida.',
+    unit: 'etapa',
+    min: 1,
+    max: 5,
+    hint: '1=Dados, 2=Checklist, 3=Fotos, 4=Assinatura, 5=Decisão.',
   },
 ];
 
