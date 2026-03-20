@@ -212,7 +212,7 @@ export default function AppRastreamento() {
   // Loading State
   if (isLoading) {
     return (
-      <div className="flex h-screen flex-col bg-background">
+      <div className="flex h-dvh flex-col bg-background">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
           <Skeleton className="h-8 w-8 rounded-full" />
           <Skeleton className="h-6 w-32" />
@@ -230,7 +230,7 @@ export default function AppRastreamento() {
 
   if (associadoBloqueado) {
     return (
-      <div className="flex h-screen flex-col bg-background">
+      <div className="flex h-dvh flex-col bg-background">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
           <Button 
             variant="ghost" 
@@ -287,7 +287,7 @@ export default function AppRastreamento() {
   // Empty State
   if (!vehicle || !tracker) {
     return (
-      <div className="flex h-screen flex-col bg-background">
+      <div className="flex h-dvh flex-col bg-background">
         <header className="sticky top-0 z-10 flex h-14 items-center justify-between border-b bg-background px-4">
           <Button 
             variant="ghost" 
@@ -322,7 +322,7 @@ export default function AppRastreamento() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background overflow-hidden">
+    <div className="flex h-dvh flex-col bg-background overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background px-4">
         <Button 

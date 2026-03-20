@@ -50,8 +50,8 @@ export function ReguladorLayout() {
 
   return (
     <ReguladorGuard>
-      <div className="min-h-screen bg-muted/30">
-        <div className="max-w-md mx-auto border-x border-border min-h-screen bg-background flex flex-col relative">
+      <div className="h-dvh bg-muted/30">
+        <div className="max-w-md mx-auto border-x border-border h-dvh bg-background flex flex-col relative overflow-hidden">
           {/* Header */}
           <header className="sticky top-0 z-50 bg-slate-800 shadow-sm border-b border-slate-700">
             <div className="flex items-center justify-between px-4 py-3">
@@ -104,7 +104,7 @@ export function ReguladorLayout() {
                     key={item.path}
                     to={item.path}
                     className={cn(
-                      'flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[64px]',
+                      'flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[64px] min-h-[44px] justify-center',
                       active ? 'text-emerald-400' : 'text-slate-400 hover:text-slate-200'
                     )}
                   >

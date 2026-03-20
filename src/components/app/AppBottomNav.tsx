@@ -26,7 +26,7 @@ export function AppBottomNav() {
 
   return (
     <>
-      <nav className="fixed bottom-0 left-0 right-0 z-50 flex h-[56px] items-center justify-around border-t bg-background pb-safe md:hidden">
+      <nav className="fixed bottom-0 left-0 right-0 z-50 flex items-center justify-around border-t bg-background pb-safe pt-2 md:hidden">
         {navItems.map((item) => {
           const isActive = location.pathname === item.path || 
             (item.path !== '/app/home' && location.pathname.startsWith(item.path));

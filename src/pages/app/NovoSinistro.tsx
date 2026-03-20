@@ -1133,7 +1133,7 @@ export default function NovoSinistro() {
       </main>
       
       {/* Footer Fixo */}
-      <footer className="fixed bottom-16 left-0 right-0 bg-background border-t p-4 safe-area-bottom">
+      <footer className="fixed bottom-16 left-0 right-0 bg-background border-t p-4 pb-safe">
         <div className="max-w-md mx-auto flex gap-3">
           {etapa > 1 && (
             <Button variant="outline" className="flex-1" onClick={voltarEtapa}>

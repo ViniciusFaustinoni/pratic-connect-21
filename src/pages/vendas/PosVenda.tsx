@@ -282,7 +282,7 @@ function DroppableColumn({ etapa, contratos, onContratoClick }: DroppableColumnP
       </div>
 
       {/* Column Body with Cards */}
-      <ScrollArea className="flex-1 max-h-[calc(100vh-320px)]">
+      <ScrollArea className="flex-1 max-h-[calc(100dvh-320px)]">
         <div ref={setNodeRef} className="p-2 space-y-2 min-h-[100px]">
           <SortableContext items={contratos.map((c) => c.id)} strategy={verticalListSortingStrategy}>
             {contratos.map((contrato) => (
@@ -466,7 +466,7 @@ export default function PosVenda() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 px-6 pt-4 h-[calc(100vh-220px)]">
+            <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 px-6 pt-4 h-[calc(100dvh-220px)]">
               {ETAPAS_POS_VENDA.map((etapa) => (
                 <DroppableColumn
                   key={etapa}

@@ -389,7 +389,7 @@ export default function AlertasMonitoramento() {
           </CardTitle>
         </CardHeader>
         <CardContent>
-          <ScrollArea className="h-[calc(100vh-480px)] min-h-[300px]">
+          <ScrollArea className="h-[calc(100dvh-480px)] min-h-[300px]">
             {isLoading ? (
               <div className="space-y-3">
                 {[1, 2, 3, 4, 5].map((i) => (

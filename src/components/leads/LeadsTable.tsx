@@ -135,7 +135,7 @@ export function LeadsTable({
   }
 
   return (
-    <ScrollArea className="h-[calc(100vh-340px)]">
+    <ScrollArea className="h-[calc(100dvh-340px)]">
       <Table>
         <TableHeader className="sticky top-0 bg-background z-10">
           <TableRow className="hover:bg-transparent border-border">

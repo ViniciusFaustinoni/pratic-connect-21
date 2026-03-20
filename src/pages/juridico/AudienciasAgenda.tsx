@@ -367,7 +367,7 @@ export default function AudienciasAgenda() {
               {selectedDate ? format(selectedDate, "dd 'de' MMMM 'de' yyyy", { locale: ptBR }) : ''}
             </SheetTitle>
           </SheetHeader>
-          <ScrollArea className="h-[calc(100vh-120px)] mt-4">
+          <ScrollArea className="h-[calc(100dvh-120px)] mt-4">
             {audienciasDodia.length === 0 ? (
               <p className="text-muted-foreground text-sm">Nenhuma audiência neste dia.</p>
             ) : (

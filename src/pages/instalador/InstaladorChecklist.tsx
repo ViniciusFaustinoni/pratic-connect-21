@@ -2183,7 +2183,7 @@ export default function InstaladorChecklist() {
       </Dialog>
 
       {/* Footer com navegação */}
-      <div className="flex-shrink-0 border-t border-slate-700 bg-slate-800 p-4 safe-area-pb">
+      <div className="flex-shrink-0 border-t border-slate-700 bg-slate-800 p-4 pb-safe">
         <div className="flex gap-3 max-w-lg mx-auto">
           <Button
             variant="outline"

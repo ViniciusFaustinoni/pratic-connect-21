@@ -69,7 +69,7 @@ function DroppableColumn({ etapa, children, count }: DroppableColumnProps) {
     <div
       ref={setNodeRef}
       className={cn(
-        "w-[280px] min-w-[280px] flex-shrink-0 flex flex-col rounded-lg bg-muted/50 min-h-[calc(100vh-320px)] transition-all duration-300 relative",
+        "w-[280px] min-w-[280px] flex-shrink-0 flex flex-col rounded-lg bg-muted/50 min-h-[calc(100dvh-320px)] transition-all duration-300 relative",
         isOver && [
           "bg-primary/10 ring-2 ring-primary ring-offset-2 ring-offset-background",
           "shadow-lg shadow-primary/20 scale-[1.02]"
