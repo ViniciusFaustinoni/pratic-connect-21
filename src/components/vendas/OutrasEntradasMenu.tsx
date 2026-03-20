@@ -92,6 +92,44 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const { data: debitosData, isLoading: loadingDebitos } = useVerificarDebitosAssociado(selectedAssociadoId || undefined);
   const { data: bloqueioInclusaoAtivo } = useInclusaoBloqueioDebito();
 
+  // Vehicle limit config
+  const { data: limiteVeiculosConfig } = useQuery({
+    queryKey: ['config-limite-veiculos'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'limite_veiculos_associado')
+        .maybeSingle();
+      const val = parseInt(data?.valor || '0');
+      return isNaN(val) || val <= 0 ? 0 : val; // 0 = sem limite
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
+  // Fetch associado details for inclusão (status + veículos ativos)
+  const { data: associadoInclusaoData, isLoading: loadingAssociadoInclusao } = useQuery({
+    queryKey: ['associado-inclusao-check', selectedAssociadoId],
+    queryFn: async () => {
+      if (!selectedAssociadoId) return null;
+      // Get associado status + details
+      const { data: assoc } = await supabase
+        .from('associados')
+        .select('id, nome, cpf, telefone, email, status')
+        .eq('id', selectedAssociadoId)
+        .single();
+      if (!assoc) return null;
+      // Get active vehicles
+      const { data: veiculos } = await supabase
+        .from('veiculos')
+        .select('id, placa, marca, modelo, ano_fabricacao, status')
+        .eq('associado_id', selectedAssociadoId)
+        .in('status', ['ativo', 'em_implantacao']);
+      return { ...assoc, veiculos: veiculos || [] };
+    },
+    enabled: !!selectedAssociadoId && selectedTipo === 'inclusao',
+  });
+
   // Repasse maior config for substituicao
   const { data: repasseConfig } = useQuery({
     queryKey: ['config-repasse-maior'],
