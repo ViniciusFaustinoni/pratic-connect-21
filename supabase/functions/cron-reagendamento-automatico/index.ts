@@ -89,7 +89,7 @@ Deno.serve(async (req) => {
 
             // Tentar atribuir a profissional disponível a menos de 5km
             for (const cand of candidatos) {
-              if (cand.distancia > 5) break;
+              if (cand.distancia > redistribuicaoRaioKm) break;
 
               // Verificar se está livre
               const { data: tarefaAtual } = await supabase.rpc("buscar_tarefa_atual_profissional", {
