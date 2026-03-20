@@ -46,7 +46,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         .select(`
           *,
           profissional:profissional_id(id, nome),
-          veiculo:veiculo_id(id, placa, marca, modelo, ano, cor, cobertura_roubo_furto, cobertura_total),
+          veiculo:veiculo_id(id, placa, marca, modelo, ano_modelo, cor, cobertura_roubo_furto, cobertura_total),
           associado:associado_id(id, nome, cpf, telefone, email, whatsapp, status)
         `)
         .eq('id', servicoId)
@@ -262,7 +262,7 @@ export default function AprovacaoInstalacaoDetalhe() {
           </div>
           <div>
             <span className="text-muted-foreground text-xs">Ano</span>
-            <p className="font-medium text-foreground">{veiculo?.ano || '---'}</p>
+            <p className="font-medium text-foreground">{veiculo?.ano_modelo || '---'}</p>
           </div>
           <div>
             <span className="text-muted-foreground text-xs">Instalador</span>

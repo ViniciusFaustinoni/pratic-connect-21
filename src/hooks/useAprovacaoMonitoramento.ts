@@ -26,7 +26,7 @@ export function useInstalacoesAguardandoAprovacao() {
           observacoes,
           decisao_instalador,
           profissional:profissional_id(nome),
-          veiculo:veiculo_id(placa, marca, modelo, ano, cobertura_roubo_furto, cobertura_total),
+          veiculo:veiculo_id(placa, marca, modelo, ano_modelo, cobertura_roubo_furto, cobertura_total),
           associado:associado_id(nome, telefone, email, cpf, status)
         `)
         .eq('tipo', 'instalacao')

@@ -156,7 +156,7 @@ export default function AprovacaoAssociadosMonitoramento() {
                 </p>
                 <div className="flex items-center gap-1.5 text-xs text-muted-foreground">
                   <span className="truncate">
-                    {servico.veiculo?.marca} {servico.veiculo?.modelo} {servico.veiculo?.ano}
+                    {servico.veiculo?.marca} {servico.veiculo?.modelo} {servico.veiculo?.ano_modelo}
                   </span>
                   {servico.profissional?.nome && (
                     <>
