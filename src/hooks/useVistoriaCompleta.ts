@@ -31,24 +31,22 @@ export function useAprovarVeiculoVistoria() {
     mutationFn: async (data: AprovarVeiculoData) => {
       const agora = new Date().toISOString();
 
-      // 1. Atualizar veículo com cobertura total
+      // 1. Atualizar veículo como ativo (SEM cobertura_total — aguarda aprovação do monitoramento)
       const { error: veiculoError } = await supabase
         .from('veiculos')
         .update({ 
           status: 'ativo',
-          cobertura_total: true,
           updated_at: agora,
         })
         .eq('id', data.veiculoId);
 
       if (veiculoError) throw veiculoError;
 
-      // 2. Atualizar associado para ativo
+      // 2. Atualizar associado para em_analise (aguarda aprovação do monitoramento)
       const { error: associadoError } = await supabase
         .from('associados')
         .update({ 
-          status: 'ativo',
-          data_ativacao: agora,
+          status: 'em_analise',
           updated_at: agora,
         })
         .eq('id', data.associadoId);
