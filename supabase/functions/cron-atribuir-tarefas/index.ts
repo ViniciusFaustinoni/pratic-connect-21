@@ -671,6 +671,7 @@ serve(async (req) => {
                 await supabase.functions.invoke('whatsapp-send-text', {
                   body: {
                     telefone: vistProfile.telefone,
+                    mensagem: `Nova vistoria atribuída: ${servico.associado_nome} - ${endereco} - ${dataFormatada}`,
                     template_name: 'tarefa_vistoriador_v2',
                     template_params: [
                       vistProfile.nome?.split(' ')[0] || 'Vistoriador',
