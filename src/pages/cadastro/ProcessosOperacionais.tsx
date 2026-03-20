@@ -192,10 +192,20 @@ function TrocaTitularidadeTab() {
                         Vistoria dispensada
                       </Badge>
                     )}
-                    {isAprovado && cenario === 'B' && (
-                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                    {isAprovado && cenario === 'B' && !efetivado && (
+                      <Badge className={
+                        statusServico === 'em_andamento'
+                          ? 'bg-blue-100 text-blue-800 border-blue-200'
+                          : 'bg-amber-100 text-amber-800 border-amber-200'
+                      }>
                         <ClipboardList className="h-3 w-3 mr-1" />
-                        Vistoria agendada
+                        {statusServico === 'em_andamento' ? 'Vistoria em andamento' : 'Aguardando vistoria'}
+                      </Badge>
+                    )}
+                    {isAprovado && efetivado && (
+                      <Badge className="bg-green-100 text-green-800 border-green-200">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Efetivado
                       </Badge>
                     )}
                   </div>
