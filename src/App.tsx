@@ -81,7 +81,6 @@ import InstalacoesList from "./pages/monitoramento/InstalacoesList";
 import InstalacaoDetalhe from "./pages/monitoramento/InstalacaoDetalhe";
 import Rotas from "./pages/monitoramento/Rotas";
 import MonitoramentoEncaixes from "./pages/monitoramento/Encaixes";
-import Estoque from "./pages/monitoramento/Estoque";
 import Rastreadores from "./pages/monitoramento/Rastreadores";
 import ConfigPlataformas from "./pages/monitoramento/ConfigPlataformas";
 import AlertasMonitoramento from "./pages/monitoramento/AlertasMonitoramento";
