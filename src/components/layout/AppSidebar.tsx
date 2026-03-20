@@ -68,6 +68,7 @@ import {
   TrendingDown,
   
   ShieldCheck,
+  Route,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -198,6 +199,7 @@ const menuConfig: {
         { title: 'Vistorias', url: '/monitoramento/vistorias', icon: ClipboardCheck },
         { title: 'Retiradas', url: '/monitoramento/retiradas', icon: PackageX },
         { title: 'Calendário', url: '/monitoramento/calendario', icon: Calendar },
+        { title: 'Rotas', url: '/monitoramento/rotas', icon: Route, permission: 'canEditRotas' },
         { title: 'Estoque', url: '/monitoramento/estoque', icon: Package, permission: 'canManageEquipeEstoque' },
         { 
           title: 'Rastreadores', 
