@@ -96,7 +96,7 @@ function useOrigemCadastro(associadoId: string) {
       // 1. Contract
       const { data: contrato } = await supabase
         .from('contratos')
-        .select('id, created_at, vendedor_id, tipo_entrada, cotacao_id, carencia_isenta, carencia_motivo_isencao, data_carencia_inicio, data_carencia_fim, origem_troca_titularidade_id, veiculo_id, profiles:vendedor_id(nome)')
+        .select('id, created_at, vendedor_id, tipo_entrada, cotacao_id, carencia_isenta, carencia_motivo_isencao, data_carencia_inicio, data_carencia_fim, origem_troca_titularidade_id, veiculo_id, data_carencia_vidros_inicio, data_carencia_vidros_fim, carencia_vidros_isenta, carencia_vidros_motivo_isencao, profiles:vendedor_id(nome)')
         .eq('associado_id', associadoId)
         .order('created_at', { ascending: false })
         .limit(1)
