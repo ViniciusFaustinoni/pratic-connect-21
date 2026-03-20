@@ -178,6 +178,7 @@ export default function Rastreadores() {
         {/* Aba Estoque */}
         <TabsContent value="estoque" className="space-y-6 mt-6">
           <EstoqueMetricas />
+          <ListaRastreadores />
           <ConsultaRastreador />
         </TabsContent>
 
