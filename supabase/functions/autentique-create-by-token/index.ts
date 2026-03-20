@@ -270,6 +270,41 @@ serve(async (req) => {
       }
     }
 
+    // ============= BUSCAR DADOS DE TROCA DE TITULARIDADE (quando aplicável) =============
+    if (contrato.tipo_entrada === 'troca_titularidade' && contrato.origem_troca_titularidade_id) {
+      const { data: solTroca } = await supabase
+        .from('chat_solicitacoes_ia')
+        .select('dados')
+        .eq('id', contrato.origem_troca_titularidade_id)
+        .maybeSingle();
+
+      if (solTroca?.dados) {
+        const dadosTroca = solTroca.dados as any;
+        let titularAnterior = '';
+        if (dadosTroca.associado_id) {
+          const { data: assocAnterior } = await supabase
+            .from('associados')
+            .select('nome')
+            .eq('id', dadosTroca.associado_id)
+            .maybeSingle();
+          titularAnterior = assocAnterior?.nome || '';
+        }
+
+        const cenario = dadosTroca.cenario_aplicado || dadosTroca.cenario || '';
+        const cenarioLabels: Record<string, string> = {
+          'A': 'Cenário A — Vistoria dispensada',
+          'B': 'Cenário B — Vistoria obrigatória',
+        };
+
+        templateData.trocaTitularidade = {
+          titular_anterior: titularAnterior,
+          cenario: cenario,
+          cenario_label: cenarioLabels[cenario?.toUpperCase()] || `Cenário ${cenario}`,
+        };
+        console.log('[autentique-create-by-token] Dados de troca de titularidade encontrados. Cenário:', cenario);
+      }
+    }
+
     // ============= BUSCAR TEMPLATE DO BANCO =============
     const { data: templatesDB, error: templateError } = await supabase
       .from("documento_templates")

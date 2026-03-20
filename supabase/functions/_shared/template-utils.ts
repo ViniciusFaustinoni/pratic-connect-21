@@ -166,6 +166,13 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     } : {
       'substituicao.tipo_operacao': dados.contrato.tipo_entrada === 'substituicao_placa' ? 'Substituição de Placa' : 'Nova Adesão',
     }),
+
+    // Troca de Titularidade (quando aplicável)
+    ...(dados.trocaTitularidade ? {
+      'troca.titular_anterior': dados.trocaTitularidade.titular_anterior || '—',
+      'troca.cenario': dados.trocaTitularidade.cenario || '—',
+      'troca.cenario_label': dados.trocaTitularidade.cenario_label || '—',
+    } : {}),
   };
 }
 

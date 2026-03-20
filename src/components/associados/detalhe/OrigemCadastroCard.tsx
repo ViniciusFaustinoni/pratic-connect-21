@@ -57,6 +57,9 @@ interface OrigemData {
     titularAnterior: string | null;
     dataTroca: string | null;
     consultorNome: string | null;
+    carenciaIsenta: boolean;
+    carenciaInicio: string | null;
+    carenciaFim: string | null;
   } | null;
   // Substituição de placa
   substituicaoPlaca: {
@@ -262,30 +265,45 @@ function useOrigemCadastro(associadoId: string) {
 
       if (tipoEntradaKey === 'troca_titularidade') {
         let titularAnterior: string | null = null;
+        let solicitacao: any = null;
 
-        // Try to get previous owner from the origin contract
+        // Use origem_troca_titularidade_id to find the solicitation directly
         if (contrato?.origem_troca_titularidade_id) {
-          const { data: contratoAnterior } = await supabase
-            .from('contratos')
-            .select('associado_id, associados:associado_id(nome)')
+          // origem_troca_titularidade_id stores the solicitacao_id
+          const { data: sol } = await supabase
+            .from('chat_solicitacoes_ia')
+            .select('dados, created_at, aprovado_em')
             .eq('id', contrato.origem_troca_titularidade_id)
             .maybeSingle();
-          titularAnterior = (contratoAnterior?.associados as any)?.nome || null;
+          solicitacao = sol;
+
+          // Get previous owner from dados_novo_titular or the old contract
+          const solDados = (sol?.dados || {}) as any;
+          if (solDados?.associado_id) {
+            const { data: assocAnterior } = await supabase
+              .from('associados')
+              .select('nome')
+              .eq('id', solDados.associado_id)
+              .maybeSingle();
+            titularAnterior = assocAnterior?.nome || null;
+          }
         }
 
-        // Try chat_solicitacoes_ia for scenario info
-        const { data: solicitacao } = await supabase
-          .from('chat_solicitacoes_ia')
-          .select('dados, created_at, aprovado_em')
-          .eq('associado_id', associadoId)
-          .eq('tipo', 'troca_titularidade')
-          .eq('status', 'aprovada')
-          .order('created_at', { ascending: false })
-          .limit(1)
-          .maybeSingle();
+        // Fallback: search by associado_id (legacy)
+        if (!solicitacao) {
+          const { data: sol } = await supabase
+            .from('chat_solicitacoes_ia')
+            .select('dados, created_at, aprovado_em')
+            .eq('tipo', 'troca_titularidade')
+            .or(`dados->>novo_associado_id.eq.${associadoId}`)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          solicitacao = sol;
+        }
 
         const dados = (solicitacao?.dados || {}) as any;
-        const cenario = dados?.cenario || dados?.scenario || null;
+        const cenario = dados?.cenario_aplicado || dados?.cenario || dados?.scenario || null;
         const cenarioLabels: Record<string, string> = {
           'A': 'Cenário A — Vistoria dispensada',
           'B': 'Cenário B — Vistoria obrigatória',
@@ -297,8 +315,11 @@ function useOrigemCadastro(associadoId: string) {
           cenario,
           cenarioLabel: cenario ? (cenarioLabels[cenario] || `Cenário ${cenario}`) : 'Não informado',
           titularAnterior: titularAnterior || dados?.titular_anterior || null,
-          dataTroca: solicitacao?.aprovado_em || solicitacao?.created_at || contrato?.created_at || null,
+          dataTroca: dados?.efetivado_em || solicitacao?.aprovado_em || solicitacao?.created_at || contrato?.created_at || null,
           consultorNome: consultorNome,
+          carenciaIsenta: contrato?.carencia_isenta || false,
+          carenciaInicio: contrato?.data_carencia_inicio || null,
+          carenciaFim: contrato?.data_carencia_fim || null,
         };
       }
 
@@ -533,7 +554,24 @@ function RenderTrocaTitularidade({ data }: { data: OrigemData }) {
       <InfoField label="Cenário aplicado" value={t.cenarioLabel} icon={<ArrowRightLeft className="h-3 w-3" />} />
       {t.titularAnterior && <InfoField label="Titular anterior" value={t.titularAnterior} />}
       {t.consultorNome && <InfoField label="Consultor responsável" value={t.consultorNome} />}
-      <InfoField label="Data da troca" value={formatDate(t.dataTroca)} />
+      <InfoField label="Data da efetivação" value={formatDate(t.dataTroca)} />
+      <div className="col-span-2">
+        <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+          <ShieldCheck className="h-3 w-3" />
+          Situação de carência
+        </span>
+        {t.carenciaIsenta ? (
+          <p className="text-xs font-medium mt-0.5 text-emerald-600 dark:text-emerald-400">
+            Isento de carência — Cenário A (vistoria dispensada)
+          </p>
+        ) : t.carenciaInicio && t.carenciaFim ? (
+          <p className="text-xs font-medium mt-0.5">
+            {formatDate(t.carenciaInicio)} a {formatDate(t.carenciaFim)}
+          </p>
+        ) : (
+          <p className="text-xs font-medium mt-0.5 text-muted-foreground">Período padrão</p>
+        )}
+      </div>
     </>
   );
 }

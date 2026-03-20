@@ -142,6 +142,12 @@ export interface SubstituicaoData {
   fipe_anterior: number;
 }
 
+export interface TrocaTitularidadeData {
+  titular_anterior: string;
+  cenario: string;
+  cenario_label: string;
+}
+
 export interface TermoAfiliacaoData {
   cliente: ClienteData;
   veiculo: VeiculoData;
@@ -157,6 +163,7 @@ export interface TermoAfiliacaoData {
   regrasDepreciacao?: RegraDepreciacaoData[];
   migracao?: MigracaoData;
   substituicao?: SubstituicaoData;
+  trocaTitularidade?: TrocaTitularidadeData;
 }
 
 // ============= FORMATADORES =============
