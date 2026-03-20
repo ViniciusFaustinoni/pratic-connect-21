@@ -17,6 +17,7 @@ import {
   InstalacaoMiniCard,
 } from '@/components/rotas';
 import { ConfiguracoesEncaixe } from '@/components/rotas/ConfiguracoesEncaixe';
+import { ConfiguracoesFilaAtribuicao } from '@/components/rotas/ConfiguracoesFilaAtribuicao';
 import { 
   useRotas, 
   useRotasMetricas, 
