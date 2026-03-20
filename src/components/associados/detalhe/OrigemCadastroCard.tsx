@@ -83,6 +83,13 @@ interface OrigemData {
     inicio: string | null;
     fim: string | null;
   };
+  // Carência vidros e faróis
+  carenciaVidros: {
+    isenta: boolean;
+    motivoIsencao: string | null;
+    inicio: string | null;
+    fim: string | null;
+  };
 }
 
 // ============================================
@@ -96,7 +103,7 @@ function useOrigemCadastro(associadoId: string) {
       // 1. Contract
       const { data: contrato } = await supabase
         .from('contratos')
-        .select('id, created_at, vendedor_id, tipo_entrada, cotacao_id, carencia_isenta, carencia_motivo_isencao, data_carencia_inicio, data_carencia_fim, origem_troca_titularidade_id, veiculo_id, profiles:vendedor_id(nome)')
+        .select('id, created_at, vendedor_id, tipo_entrada, cotacao_id, carencia_isenta, carencia_motivo_isencao, data_carencia_inicio, data_carencia_fim, origem_troca_titularidade_id, veiculo_id, data_carencia_vidros_inicio, data_carencia_vidros_fim, carencia_vidros_isenta, carencia_vidros_motivo_isencao, profiles:vendedor_id(nome)')
         .eq('associado_id', associadoId)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -162,6 +169,12 @@ function useOrigemCadastro(associadoId: string) {
           motivoIsencao: contrato?.carencia_motivo_isencao || null,
           inicio: contrato?.data_carencia_inicio || null,
           fim: contrato?.data_carencia_fim || null,
+        },
+        carenciaVidros: {
+          isenta: (contrato as any)?.carencia_vidros_isenta || false,
+          motivoIsencao: (contrato as any)?.carencia_vidros_motivo_isencao || null,
+          inicio: (contrato as any)?.data_carencia_vidros_inicio || null,
+          fim: (contrato as any)?.data_carencia_vidros_fim || null,
         },
       };
 
@@ -671,7 +684,7 @@ export function OrigemCadastroCard({ associadoId, canLinkToAssociado = false }: 
 
           {renderContent()}
 
-          {/* Carência — show for migration, inclusão and reativação nova adesão */}
+          {/* Carência geral — show for migration, inclusão and reativação nova adesão */}
           {(data.tipoEntradaKey === 'migracao' || (data.tipoEntradaKey === 'reativacao' && !data.reativacao?.novaCarencia)) && (
             <div className="col-span-2">
               <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
@@ -691,6 +704,45 @@ export function OrigemCadastroCard({ associadoId, canLinkToAssociado = false }: 
               )}
             </div>
           )}
+
+          {/* Carência de Vidros e Faróis */}
+          <div className="col-span-2">
+            <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
+              <ShieldCheck className="h-3 w-3" />
+              Carência — Vidros e Faróis
+            </span>
+            {(() => {
+              const vidrosIsenta = data.carenciaVidros.isenta;
+              const vidrosMotivo = data.carenciaVidros.motivoIsencao;
+              const vidrosFim = data.carenciaVidros.fim;
+
+              if (vidrosIsenta) {
+                return (
+                  <p className="text-xs font-medium mt-0.5 text-emerald-600 dark:text-emerald-400">
+                    Isento — origem: {vidrosMotivo || 'migração aprovada'}
+                  </p>
+                );
+              }
+              if (vidrosFim) {
+                const now = new Date();
+                const fim = new Date(vidrosFim);
+                if (fim > now) {
+                  const diasRestantes = Math.ceil((fim.getTime() - now.getTime()) / 86400000);
+                  return (
+                    <p className="text-xs font-medium mt-0.5 text-amber-600 dark:text-amber-400">
+                      Em carência — {diasRestantes} dias restantes (término em {formatDate(vidrosFim)})
+                    </p>
+                  );
+                }
+                return (
+                  <p className="text-xs font-medium mt-0.5 text-emerald-600 dark:text-emerald-400">
+                    Disponível sem restrição
+                  </p>
+                );
+              }
+              return <p className="text-xs font-medium mt-0.5 text-muted-foreground">Sem dados</p>;
+            })()}
+          </div>
         </div>
       </CardContent>
     </Card>

@@ -100,6 +100,11 @@ export function useAprovarMigracao() {
               carencia_motivo_isencao: 'Migração aprovada',
               data_carencia_inicio: null,
               data_carencia_fim: null,
+              // Isentar também carência de vidros e faróis
+              carencia_vidros_isenta: true,
+              carencia_vidros_motivo_isencao: 'Migração aprovada',
+              data_carencia_vidros_inicio: null,
+              data_carencia_vidros_fim: null,
             })
             .eq('cotacao_id', cotacaoId);
         } else {
@@ -137,6 +142,11 @@ export function useAprovarMigracao() {
                     carencia_motivo_isencao: 'Migração aprovada',
                     data_carencia_inicio: null,
                     data_carencia_fim: null,
+                    // Isentar também carência de vidros e faróis
+                    carencia_vidros_isenta: true,
+                    carencia_vidros_motivo_isencao: 'Migração aprovada',
+                    data_carencia_vidros_inicio: null,
+                    data_carencia_vidros_fim: null,
                   })
                   .eq('id', contratoAtivo.id);
               }

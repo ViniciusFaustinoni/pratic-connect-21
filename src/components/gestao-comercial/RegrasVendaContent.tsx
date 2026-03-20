@@ -101,6 +101,7 @@ const TAXAS_CHAVES = [
   'troca_titularidade_prazo_dispensa_vistoria',
   'inclusao_bloquear_debito_outro_veiculo',
   'limite_veiculos_associado',
+  'carencia_beneficio_vidros_dias',
 ] as const;
 
 type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
@@ -120,6 +121,7 @@ const TAXAS_DEFAULTS: TaxasConfig = {
   troca_titularidade_prazo_dispensa_vistoria: '0',
   inclusao_bloquear_debito_outro_veiculo: 'true',
   limite_veiculos_associado: '0',
+  carencia_beneficio_vidros_dias: '120',
 };
 
 const AUTORIZACOES_CHAVES = [
@@ -1224,6 +1226,34 @@ export function RegrasVendaContent() {
                 placeholder="Sem limite"
                 value={taxas.limite_veiculos_associado === '0' ? '' : taxas.limite_veiculos_associado}
                 onChange={(e) => handleTaxaChange('limite_veiculos_associado', e.target.value || '0')}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" />
+              Carência de Vidros e Faróis
+            </CardTitle>
+            <CardDescription>
+              Prazo de carência específico para o benefício de vidros e faróis, contado a partir da data de geração do contrato. Migrações aprovadas com isenção ficam isentas.
+            </CardDescription>
+          </CardHeader>
+          <CardContent>
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="carencia_beneficio_vidros_dias" className="flex-1 text-sm">
+                Carência do benefício de vidros e faróis em dias
+              </Label>
+              <Input
+                id="carencia_beneficio_vidros_dias"
+                type="number"
+                min="0"
+                step="1"
+                className="w-28 text-right"
+                value={taxas.carencia_beneficio_vidros_dias}
+                onChange={(e) => handleTaxaChange('carencia_beneficio_vidros_dias', e.target.value || '120')}
               />
             </div>
           </CardContent>

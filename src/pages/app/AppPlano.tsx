@@ -199,6 +199,39 @@ export default function AppPlano() {
             {beneficiosDoBanco.map((beneficio) => {
               // Benefícios adicionais (não cobertura principal) ficam suspensos
               const isSuspenso = beneficiosAdicionaisSuspensos;
+              const beneficioNome = (beneficio.benefits?.name || beneficio.beneficio || '').toLowerCase();
+              const isVidrosFarois = beneficioNome.includes('vidro') || beneficioNome.includes('farol') || beneficioNome.includes('faróis');
+
+              // Compute vidros carência status
+              let vidrosCarenciaBadge: React.ReactNode = null;
+              if (isVidrosFarois && contrato) {
+                const c = contrato as any;
+                if (c.carencia_vidros_isenta) {
+                  vidrosCarenciaBadge = (
+                    <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                      Isento — migração
+                    </Badge>
+                  );
+                } else if (c.data_carencia_vidros_fim) {
+                  const fimVidros = new Date(c.data_carencia_vidros_fim);
+                  const now = new Date();
+                  if (fimVidros > now) {
+                    const diasRestantes = Math.ceil((fimVidros.getTime() - now.getTime()) / 86400000);
+                    vidrosCarenciaBadge = (
+                      <Badge variant="secondary" className="text-[10px] bg-amber-100 text-amber-800 dark:bg-amber-900/30 dark:text-amber-400">
+                        Em carência — {diasRestantes} dias restantes
+                      </Badge>
+                    );
+                  } else {
+                    vidrosCarenciaBadge = (
+                      <Badge variant="secondary" className="text-[10px] bg-emerald-100 text-emerald-800 dark:bg-emerald-900/30 dark:text-emerald-400">
+                        Disponível
+                      </Badge>
+                    );
+                  }
+                }
+              }
+
               return (
                 <div key={beneficio.id} className={`flex gap-3 ${isSuspenso ? 'opacity-50' : ''}`}>
                   <div className={`flex h-8 w-8 shrink-0 items-center justify-center rounded-full ${isSuspenso ? 'bg-amber-100 dark:bg-amber-900/30' : 'bg-green-100 dark:bg-green-900/30'}`}>
@@ -209,9 +242,12 @@ export default function AppPlano() {
                     )}
                   </div>
                   <div className="flex-1">
-                    <p className="font-medium text-foreground">
-                      {beneficio.benefits?.name || beneficio.beneficio}
-                    </p>
+                    <div className="flex items-center gap-2 flex-wrap">
+                      <p className="font-medium text-foreground">
+                        {beneficio.benefits?.name || beneficio.beneficio}
+                      </p>
+                      {vidrosCarenciaBadge}
+                    </div>
                     <p className="text-sm text-muted-foreground">
                       {beneficio.benefits?.description || beneficio.descricao || ''}
                     </p>

@@ -340,6 +340,21 @@ export function useGerarProposta() {
       yPosition -= 18;
     }
 
+    // CARÊNCIA DE VIDROS E FARÓIS
+    if (dados.carenciaVidros) {
+      yPosition -= 10;
+      yPosition = desenharSecao(page, 'CARÊNCIA DE VIDROS E FARÓIS', yPosition, fontBold, mergedConfig);
+      yPosition -= 25;
+
+      if (dados.carenciaVidros.isenta) {
+        desenharCampo(page, 'Status:', 'Isento — migração aprovada', MARGIN_LEFT, yPosition, fontRegular, fontBold, 50);
+      } else {
+        desenharCampo(page, 'Início:', formatarData(dados.carenciaVidros.inicio), MARGIN_LEFT, yPosition, fontRegular, fontBold, 50);
+        desenharCampo(page, 'Término:', formatarData(dados.carenciaVidros.fim), MARGIN_LEFT + 200, yPosition, fontRegular, fontBold, 55);
+      }
+      yPosition -= 18;
+    }
+
     yPosition -= 20;
 
     // VALORES

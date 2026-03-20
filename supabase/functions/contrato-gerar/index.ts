@@ -640,10 +640,21 @@ serve(async (req) => {
 
     // 8. Calcular carência dinamicamente
     const carenciaDias = await getConfiguracaoNumero(supabase, 'carencia_dias_padrao', 120);
+    const carenciaVidrosDias = await getConfiguracaoNumero(supabase, 'carencia_beneficio_vidros_dias', 120);
     const tipoEntrada = cotacao.tipo_entrada || 'nova';
     const hoje = new Date().toISOString().split('T')[0];
     let dataCarenciaInicio: string | null = null;
     let dataCarenciaFim: string | null = null;
+
+    // Carência de vidros — sempre calculada para todos os tipos de entrada
+    let dataCarenciaVidrosInicio: string | null = hoje;
+    let dataCarenciaVidrosFim: string | null = null;
+    let carenciaVidrosIsenta = false;
+    let carenciaVidrosMotivoIsencao: string | null = null;
+
+    const fimVidros = new Date();
+    fimVidros.setDate(fimVidros.getDate() + carenciaVidrosDias);
+    dataCarenciaVidrosFim = fimVidros.toISOString().split('T')[0];
 
     if (['nova', 'inclusao'].includes(tipoEntrada)) {
       dataCarenciaInicio = hoje;
@@ -652,6 +663,7 @@ serve(async (req) => {
       dataCarenciaFim = fim.toISOString().split('T')[0];
     }
     console.log(`Carência: tipo_entrada=${tipoEntrada}, dias=${carenciaDias}, inicio=${dataCarenciaInicio}, fim=${dataCarenciaFim}`);
+    console.log(`Carência vidros: dias=${carenciaVidrosDias}, inicio=${dataCarenciaVidrosInicio}, fim=${dataCarenciaVidrosFim}`);
 
     // 9. Criar o contrato
     const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
@@ -680,6 +692,12 @@ serve(async (req) => {
             tipo_entrada: tipoEntrada,
             data_carencia_inicio: dataCarenciaInicio,
             data_carencia_fim: dataCarenciaFim,
+            
+            // Carência de vidros e faróis
+            data_carencia_vidros_inicio: carenciaVidrosIsenta ? null : dataCarenciaVidrosInicio,
+            data_carencia_vidros_fim: carenciaVidrosIsenta ? null : dataCarenciaVidrosFim,
+            carencia_vidros_isenta: carenciaVidrosIsenta,
+            carencia_vidros_motivo_isencao: carenciaVidrosMotivoIsencao,
             
             // Dados do veículo (snapshot completo)
             veiculo_marca: cotacao.veiculo_marca,

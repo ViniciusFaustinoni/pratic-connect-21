@@ -373,7 +373,7 @@ export const PRAZOS_SINISTRO = {
   reparo_oficina: 90, // dias úteis
   garantia: 90,
   indenizacao: 60, // dias úteis após docs completos
-  carencia_vidros: 120,
+  // carencia_vidros: lido da configuração 'carencia_beneficio_vidros_dias' — não usar valor hardcoded
 };
 
 // ============================================
