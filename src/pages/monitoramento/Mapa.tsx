@@ -502,7 +502,7 @@ export default function Mapa() {
   };
 
   return (
-    <div className="flex flex-col h-[calc(100vh-4rem)] p-2 md:p-4">
+    <div className="flex flex-col h-[calc(100dvh-4rem)] p-2 md:p-4">
       <Tabs value={abaAtiva} onValueChange={setAbaAtiva} className="flex flex-col h-full">
         <TabsList className="w-fit mb-2 md:mb-4">
           <TabsTrigger value="veiculos" className="gap-2 text-xs md:text-sm">

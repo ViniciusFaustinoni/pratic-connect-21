@@ -114,7 +114,7 @@ export function ConsultorDrawer({ consultor, periodo, open, onClose }: Consultor
           </div>
         </SheetHeader>
 
-        <ScrollArea className="h-[calc(100vh-180px)]">
+        <ScrollArea className="h-[calc(100dvh-180px)]">
           <div className="p-6 space-y-6">
             {/* Métricas do Período */}
             <div>

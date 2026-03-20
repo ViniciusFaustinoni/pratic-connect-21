@@ -173,7 +173,7 @@ export function RotaDetailDrawer({
               </div>
             </SheetHeader>
 
-            <ScrollArea className="h-[calc(100vh-200px)] pr-4">
+            <ScrollArea className="h-[calc(100dvh-200px)] pr-4">
               <div className="mt-6 space-y-6">
                 {/* Instaladores */}
                 {instaladoresDaRota.length > 0 ? (

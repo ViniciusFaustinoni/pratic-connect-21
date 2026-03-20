@@ -466,7 +466,7 @@ export default function PosVenda() {
             onDragStart={handleDragStart}
             onDragEnd={handleDragEnd}
           >
-            <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 px-6 pt-4 h-[calc(100vh-220px)]">
+            <div className="flex gap-4 overflow-x-auto overflow-y-hidden pb-4 px-6 pt-4 h-[calc(100dvh-220px)]">
               {ETAPAS_POS_VENDA.map((etapa) => (
                 <DroppableColumn
                   key={etapa}

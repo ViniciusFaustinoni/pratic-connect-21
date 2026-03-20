@@ -322,7 +322,7 @@ export default function AppRastreamento() {
   }
 
   return (
-    <div className="flex h-screen flex-col bg-background overflow-hidden">
+    <div className="flex h-dvh flex-col bg-background overflow-hidden">
       {/* Header */}
       <header className="sticky top-0 z-20 flex h-14 items-center justify-between border-b bg-background px-4">
         <Button 
