@@ -1206,6 +1206,26 @@ export function RegrasVendaContent() {
                 onCheckedChange={(checked) => handleTaxaChange('inclusao_bloquear_debito_outro_veiculo', String(checked))}
               />
             </div>
+            <div className="flex items-center justify-between gap-4 mt-4">
+              <div className="flex-1">
+                <Label htmlFor="limite_veiculos_associado" className="text-sm font-medium">
+                  Limite máximo de veículos por associado
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Define quantos veículos ativos um associado pode ter. Quando em branco ou zero, o sistema não aplica limite.
+                </p>
+              </div>
+              <Input
+                id="limite_veiculos_associado"
+                type="number"
+                min="0"
+                step="1"
+                className="w-28 text-right"
+                placeholder="Sem limite"
+                value={taxas.limite_veiculos_associado === '0' ? '' : taxas.limite_veiculos_associado}
+                onChange={(e) => handleTaxaChange('limite_veiculos_associado', e.target.value || '0')}
+              />
+            </div>
           </CardContent>
         </Card>
 
