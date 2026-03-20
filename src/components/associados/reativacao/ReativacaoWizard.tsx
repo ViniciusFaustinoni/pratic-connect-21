@@ -102,6 +102,45 @@ export function ReativacaoWizard({
           dados_novos: { status: 'ativo', tipo: 'nova_adesao' },
         });
 
+        // --- Update contract: tipo_entrada, carência geral e vidros ---
+        const hoje = new Date().toISOString().split('T')[0];
+        const carenciaGeralDias = carenciaDiasPadrao ?? 120;
+        const carenciaVidDias = carenciaVidrosDias ?? 120;
+        const fimGeral = new Date();
+        fimGeral.setDate(fimGeral.getDate() + carenciaGeralDias);
+        const fimVidros = new Date();
+        fimVidros.setDate(fimVidros.getDate() + carenciaVidDias);
+
+        const contratoUpdate: Record<string, any> = {
+          tipo_entrada: 'reativacao',
+          data_carencia_inicio: hoje,
+          data_carencia_fim: fimGeral.toISOString().split('T')[0],
+          carencia_isenta: false,
+          carencia_motivo_isencao: null,
+          data_carencia_vidros_inicio: hoje,
+          data_carencia_vidros_fim: fimVidros.toISOString().split('T')[0],
+          carencia_vidros_isenta: false,
+          carencia_vidros_motivo_isencao: null,
+        };
+
+        if (user?.id) {
+          contratoUpdate.vendedor_id = user.id;
+        }
+
+        if (contratoId) {
+          await supabase
+            .from('contratos')
+            .update(contratoUpdate)
+            .eq('id', contratoId);
+        } else {
+          // Rare case: no contract exists — create one
+          await supabase.from('contratos').insert({
+            ...contratoUpdate,
+            associado_id: associadoId,
+            status: 'ativo',
+          } as any);
+        }
+
         // Assign points to consultant if available
         if (situacao.consultorNome && contratoId) {
           const { data: contrato } = await supabase
@@ -111,7 +150,6 @@ export function ReativacaoWizard({
             .maybeSingle();
 
           if (contrato?.vendedor_id) {
-            // Get configured points for reativação
             const { data: paramPontos } = await supabase
               .from('comissoes_parametros')
               .select('valor')
