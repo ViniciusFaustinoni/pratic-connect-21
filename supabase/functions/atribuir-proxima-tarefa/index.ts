@@ -981,8 +981,8 @@ ${linkWhatsAppCliente}
                   mensagem: mensagemVistoriador,
                   template_name: 'sinistro_atualizado',
                   template_params: [
-                    nomeProf?.split(' ')[0] || 'Vistoriador',
-                    tipoServicoLabel,
+                    profissionalTel?.nome?.split(' ')[0] || 'Vistoriador',
+                    tipoServicoLabelWhats,
                     `${servico.associado_nome || 'Cliente'} - ${servico.veiculo_placa || ''}`,
                   ],
                 },
