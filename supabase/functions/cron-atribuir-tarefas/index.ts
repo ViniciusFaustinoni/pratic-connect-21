@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.1";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -96,6 +97,11 @@ serve(async (req) => {
 
     console.log("[cron-atribuir-tarefas] Iniciando atribuição automática de tarefas...");
 
+    // Ler configurações dinâmicas
+    const raioProximidadeKm = (await getConfiguracaoNumero(supabase, 'fila_raio_proximidade_metros', 500)) / 1000;
+    const raioQuaseDisponivelKm = (await getConfiguracaoNumero(supabase, 'fila_raio_quase_disponivel_metros', 1000)) / 1000;
+    const maxFilaPorProfissional = await getConfiguracaoNumero(supabase, 'fila_max_por_profissional', 3);
+
     const hoje = new Date().toISOString().split('T')[0];
     const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
     const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000).toISOString();
@@ -190,7 +196,7 @@ serve(async (req) => {
           const tarefa = tarefaAtual[0];
           const inicioTarefa = tarefa.inicio_em ? new Date(tarefa.inicio_em).getTime() : Date.now();
           const minutosNaTarefa = Math.floor((Date.now() - inicioTarefa) / 60000);
-          const raioFila = minutosNaTarefa >= 75 ? 1.0 : 0.5; // 1km se quase disponível, 500m normal
+          const raioFila = minutosNaTarefa >= 75 ? raioQuaseDisponivelKm : raioProximidadeKm;
 
           // Buscar serviços pendentes próximos
           const { data: servicosProximos } = await supabase

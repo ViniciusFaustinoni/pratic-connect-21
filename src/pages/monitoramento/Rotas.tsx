@@ -17,6 +17,7 @@ import {
   InstalacaoMiniCard,
 } from '@/components/rotas';
 import { ConfiguracoesEncaixe } from '@/components/rotas/ConfiguracoesEncaixe';
+import { ConfiguracoesFilaAtribuicao } from '@/components/rotas/ConfiguracoesFilaAtribuicao';
 import { 
   useRotas, 
   useRotasMetricas, 
@@ -338,8 +339,9 @@ export default function Rotas() {
 
         {/* Aba Configurações - apenas para quem pode editar */}
         {canEditRotas && (
-          <TabsContent value="configuracoes">
+          <TabsContent value="configuracoes" className="space-y-6">
             <ConfiguracoesEncaixe />
+            <ConfiguracoesFilaAtribuicao />
           </TabsContent>
         )}
       </Tabs>

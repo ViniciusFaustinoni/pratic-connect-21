@@ -1,4 +1,5 @@
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -27,6 +28,9 @@ Deno.serve(async (req) => {
     const hoje = `${ano}-${mes}-${dia}`;
 
     console.log(`[cron-reagendamento] Executando para data: ${hoje}`);
+
+    // Ler configuração dinâmica de raio de redistribuição
+    const redistribuicaoRaioKm = await getConfiguracaoNumero(supabase, 'redistribuicao_raio_km', 5);
 
     // ===== PARTE 1: Recuperar imprevistos órfãos =====
     // Serviços com imprevisto registrado há mais de 30 min mas ainda em status ativo ou imprevisto_pendente
@@ -85,7 +89,7 @@ Deno.serve(async (req) => {
 
             // Tentar atribuir a profissional disponível a menos de 5km
             for (const cand of candidatos) {
-              if (cand.distancia > 5) break;
+              if (cand.distancia > redistribuicaoRaioKm) break;
 
               // Verificar se está livre
               const { data: tarefaAtual } = await supabase.rpc("buscar_tarefa_atual_profissional", {
