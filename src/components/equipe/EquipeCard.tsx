@@ -201,7 +201,7 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
           </DropdownMenu>
         </div>
 
-        {/* Contato */}
+        {/* Contato & Info */}
         <div className="space-y-2 mb-4">
           <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
             <Mail className="h-4 w-4 flex-shrink-0" />
@@ -222,6 +222,49 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
                 <span className="text-primary"> +{profissional.regioes_atendimento.length - 2}</span>
               )}
             </span>
+          </div>
+
+          {/* Hora de login */}
+          <div className="flex items-center gap-2.5 text-sm">
+            <LogIn className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            {profissional.inicio_turno ? (
+              <span className="text-emerald-500 font-medium">
+                Logou às {format(new Date(profissional.inicio_turno), 'HH:mm')}
+              </span>
+            ) : (
+              <span className="text-muted-foreground">Não logou hoje</span>
+            )}
+          </div>
+
+          {/* Localização */}
+          <div className="flex items-center gap-2.5 text-sm">
+            <Navigation className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+            {profissional.latitude && profissional.longitude ? (
+              <div className="flex items-center gap-1.5">
+                <a
+                  href={`https://www.google.com/maps?q=${profissional.latitude},${profissional.longitude}`}
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  className="text-primary hover:underline flex items-center gap-1"
+                >
+                  Ver no mapa
+                  <ExternalLink className="h-3 w-3" />
+                </a>
+                {profissional.localizacao_updated_at && (
+                  <span className="text-muted-foreground text-xs">
+                    · {(() => {
+                      const mins = differenceInMinutes(new Date(), new Date(profissional.localizacao_updated_at));
+                      if (mins < 1) return 'agora';
+                      if (mins < 60) return `há ${mins}min`;
+                      const hrs = Math.floor(mins / 60);
+                      return `há ${hrs}h`;
+                    })()}
+                  </span>
+                )}
+              </div>
+            ) : (
+              <span className="text-muted-foreground">Sem localização</span>
+            )}
           </div>
         </div>
 
