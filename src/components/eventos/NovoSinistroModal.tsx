@@ -280,12 +280,33 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         let carenciaData: string | undefined;
 
         if (associadoData?.data_adesao) {
-          const diasDesdeAdesao = differenceInDays(new Date(), new Date(associadoData.data_adesao));
-          if (diasDesdeAdesao < 120) {
-            carenciaOk = false;
-            const dataLiberacao = new Date(associadoData.data_adesao);
-            dataLiberacao.setDate(dataLiberacao.getDate() + 120);
-            carenciaData = dataLiberacao.toLocaleDateString('pt-BR');
+          // Buscar carência de vidros do contrato ativo
+          const { data: contratoAtivo } = await supabase
+            .from('contratos')
+            .select('data_carencia_vidros_fim, carencia_vidros_isenta')
+            .eq('associado_id', selectedAssociado)
+            .eq('status', 'ativo')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (contratoAtivo?.carencia_vidros_isenta) {
+            carenciaOk = true;
+          } else if (contratoAtivo?.data_carencia_vidros_fim) {
+            const fimVidros = new Date(contratoAtivo.data_carencia_vidros_fim);
+            if (new Date() < fimVidros) {
+              carenciaOk = false;
+              carenciaData = fimVidros.toLocaleDateString('pt-BR');
+            }
+          } else {
+            // Fallback: usar data_adesao + carenciaDiasVal
+            const diasDesdeAdesao = differenceInDays(new Date(), new Date(associadoData.data_adesao));
+            if (diasDesdeAdesao < carenciaDiasVal) {
+              carenciaOk = false;
+              const dataLiberacao = new Date(associadoData.data_adesao);
+              dataLiberacao.setDate(dataLiberacao.getDate() + carenciaDiasVal);
+              carenciaData = dataLiberacao.toLocaleDateString('pt-BR');
+            }
           }
         }
 

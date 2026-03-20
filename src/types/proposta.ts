@@ -44,6 +44,13 @@ export interface DadosProposta {
     carenciaIsenta: boolean;
     dataAprovacao: string;
   };
+
+  // Carência de Vidros e Faróis
+  carenciaVidros?: {
+    inicio: string;
+    fim: string;
+    isenta?: boolean;
+  };
 }
 
 export interface ConfiguracaoPDF {
