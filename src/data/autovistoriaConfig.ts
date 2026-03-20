@@ -13,14 +13,15 @@ export interface FotoAutovistoria {
 }
 
 // CARROS (15 fotos - associado)
+// Ordem: fluxo físico lógico — exterior (caminhada ao redor) → pneus (segunda volta) → interior
 export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
-  // ===== 1. IDENTIFICAÇÃO (2 fotos) =====
+  // ===== 1. EXTERIOR — Caminhada ao redor do veículo =====
   { 
     id: 'selfie_veiculo', 
     label: 'Selfie com o Veículo ao Fundo', 
     descricao: 'Tire uma selfie com o veículo aparecendo atrás de você',
     ordem: 1,
-    categoria: 'identificacao',
+    categoria: 'exterior',
     instrucoes: [
       'Posicione-se à frente do veículo',
       'Seu rosto deve aparecer claramente na foto',
@@ -35,31 +36,10 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
     dicaExtra: 'Esta foto comprova que você está presente no local da vistoria.',
   },
   { 
-    id: 'chassi', 
-    label: 'Número do Chassi', 
-    descricao: 'Foto do número do chassi gravado no veículo (legível)',
-    ordem: 2,
-    categoria: 'identificacao',
-    instrucoes: [
-      'Localize o chassi (geralmente na base do para-brisa, lado do motorista)',
-      'Aproxime a câmera para que TODOS os números fiquem legíveis',
-      'Use flash se necessário para iluminar',
-      'O número deve aparecer por completo',
-    ],
-    evitar: [
-      'Foto de longe onde não se lê os números',
-      'Chassi sujo ou coberto',
-      'Reflexos que atrapalhem a leitura',
-    ],
-    dicaExtra: 'O chassi geralmente está visível olhando pelo para-brisa, no canto inferior esquerdo.',
-  },
-
-  // ===== 2. EXTERIOR (5 fotos) =====
-  { 
     id: 'frente', 
     label: 'Frente do Veículo', 
     descricao: 'Foto centralizada da frente do veículo',
-    ordem: 3,
+    ordem: 2,
     categoria: 'exterior',
     instrucoes: [
       'Posicione-se a 2-3 metros de distância',
@@ -77,7 +57,7 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
     id: 'lateral_direita', 
     label: 'Lateral Direita Completa', 
     descricao: 'Foto da lateral direita completa do veículo',
-    ordem: 4,
+    ordem: 3,
     categoria: 'exterior',
     instrucoes: [
       'Enquadre o veículo inteiro na horizontal',
@@ -95,7 +75,7 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
     id: 'traseira', 
     label: 'Traseira Completa', 
     descricao: 'Foto da traseira do veículo, mostrando lanternas e placa',
-    ordem: 5,
+    ordem: 4,
     categoria: 'exterior',
     instrucoes: [
       'Posicione-se a 2-3 metros de distância',
@@ -113,7 +93,7 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
     id: 'lateral_esquerda', 
     label: 'Lateral Esquerda Completa', 
     descricao: 'Foto da lateral esquerda completa do veículo',
-    ordem: 6,
+    ordem: 5,
     categoria: 'exterior',
     instrucoes: [
       'Enquadre o veículo inteiro na horizontal',
@@ -131,7 +111,7 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
     id: 'capo_aberto_placa', 
     label: 'Capô Aberto com Placa', 
     descricao: 'Foto do veículo com capô aberto e placa visível',
-    ordem: 7,
+    ordem: 6,
     categoria: 'exterior',
     instrucoes: [
       'Abra o capô completamente',
@@ -146,8 +126,27 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
     ],
     dicaExtra: 'Esta foto vincula o motor ao veículo pela placa.',
   },
+  { 
+    id: 'chassi', 
+    label: 'Número do Chassi', 
+    descricao: 'Foto do número do chassi gravado no veículo (legível)',
+    ordem: 7,
+    categoria: 'exterior',
+    instrucoes: [
+      'Localize o chassi (geralmente na base do para-brisa, lado do motorista)',
+      'Aproxime a câmera para que TODOS os números fiquem legíveis',
+      'Use flash se necessário para iluminar',
+      'O número deve aparecer por completo',
+    ],
+    evitar: [
+      'Foto de longe onde não se lê os números',
+      'Chassi sujo ou coberto',
+      'Reflexos que atrapalhem a leitura',
+    ],
+    dicaExtra: 'O chassi geralmente está visível olhando pelo para-brisa, no canto inferior esquerdo.',
+  },
 
-  // ===== 3. PNEUS (4 fotos) =====
+  // ===== 2. PNEUS — Segunda volta rápida =====
   { 
     id: 'pneu_dianteiro_direito', 
     label: 'Sola do Pneu Dianteiro Direito', 
@@ -223,7 +222,7 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
     dicaExtra: 'Vire o volante totalmente para a esquerda para expor melhor a sola do pneu.',
   },
 
-  // ===== 4. INTERIOR (4 fotos) =====
+  // ===== 3. INTERIOR — Entra no veículo =====
   { 
     id: 'banco_motorista', 
     label: 'Banco Dianteiro do Motorista', 
@@ -243,28 +242,10 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
     ],
   },
   { 
-    id: 'banco_traseiro', 
-    label: 'Banco Traseiro', 
-    descricao: 'Foto do banco traseiro mostrando estado de conservação',
-    ordem: 13,
-    categoria: 'interior',
-    instrucoes: [
-      'Abra a porta traseira',
-      'Fotografe o banco traseiro completo',
-      'Mostre o estado do estofado',
-      'Boa iluminação interna',
-    ],
-    evitar: [
-      'Foto muito escura',
-      'Banco parcialmente visível',
-      'Objetos cobrindo o banco',
-    ],
-  },
-  { 
     id: 'banco_passageiro', 
     label: 'Banco Dianteiro do Passageiro', 
     descricao: 'Foto do banco do passageiro mostrando estado de conservação',
-    ordem: 14,
+    ordem: 13,
     categoria: 'interior',
     instrucoes: [
       'Abra a porta do passageiro',
@@ -276,6 +257,24 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
       'Foto muito escura',
       'Banco parcialmente visível',
       'Objetos sobre o banco',
+    ],
+  },
+  { 
+    id: 'banco_traseiro', 
+    label: 'Banco Traseiro', 
+    descricao: 'Foto do banco traseiro mostrando estado de conservação',
+    ordem: 14,
+    categoria: 'interior',
+    instrucoes: [
+      'Abra a porta traseira',
+      'Fotografe o banco traseiro completo',
+      'Mostre o estado do estofado',
+      'Boa iluminação interna',
+    ],
+    evitar: [
+      'Foto muito escura',
+      'Banco parcialmente visível',
+      'Objetos cobrindo o banco',
     ],
   },
   { 
@@ -298,7 +297,6 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
     dicaExtra: 'Esta é a última foto! Após enviar, conclua a vistoria.',
   },
 ];
-
 // MOTOS (7 fotos)
 export const FOTOS_AUTOVISTORIA_MOTO: FotoAutovistoria[] = [
   { 
