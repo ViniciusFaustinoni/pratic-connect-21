@@ -1,62 +1,72 @@
 
 
-# Correções de Rastreabilidade — Troca de Titularidade
+# Correções: Bloqueio Cenário B + Notificação Novo Titular
 
-## Problema 1: Consultor não registrado na solicitação
+## Correção 1 — Status da vistoria no card do Cenário B
 
-A tabela `chat_solicitacoes_ia` **não tem coluna `criado_por`**. O `TrocaTitularidadeDialog` faz insert sem nenhum campo de responsável. A edge function `efetivar-troca-titularidade` já tenta ler `solicitacao.criado_por` (linha 206), mas o campo não existe no banco — sempre retorna `null`.
+### Problema
+Quando o Cenário B é determinado, um registro é criado na tabela `servicos` com `origem: 'troca_titularidade'` e `solicitacao_id`. Porém, a `processar-vistoria` não verifica a existência desse vínculo para disparar a efetivação após aprovação da vistoria. Além disso, o card na aba Titularidade não exibe o status da vistoria vinculada.
 
-## Problema 2: Cenário A/B não persistido na solicitação
+### Alterações
 
-O update final em `aprovar-solicitacao-ia` (linha 862-871) atualiza `status`, `aprovado_em`, `aprovador_id` e `resultado_id`, mas **não atualiza o campo `dados`** com o cenário aplicado. O cenário só existe nos logs de auditoria e na resposta HTTP.
+**1. Frontend — `ProcessosOperacionais.tsx`**
+
+Na query de `processos-troca-titularidade`, para solicitações com `status === 'aprovado'` e cenário B, buscar o serviço vinculado na tabela `servicos` (via `solicitacao_id`) para exibir o status da vistoria em tempo real.
+
+Adicionar uma segunda query que busca os serviços vinculados:
+```sql
+SELECT id, status, solicitacao_id 
+FROM servicos 
+WHERE solicitacao_id IN (ids das solicitações aprovadas cenário B)
+  AND origem = 'troca_titularidade'
+```
+
+No card, quando cenário é B:
+- Se serviço `pendente` → Badge amarela: "Aguardando vistoria"
+- Se serviço `em_andamento` → Badge azul: "Vistoria em andamento"
+- Se serviço `concluido` → Badge verde: "Efetivado"
+- Usar os `dados.efetivado_em` da solicitação para confirmar se a efetivação já ocorreu (badge "Efetivado")
+
+**2. Edge function — `processar-vistoria/index.ts`**
+
+Após processar uma vistoria aprovada (bloco `decisao === 'aprovada' || 'aprovada_com_ressalvas'`), adicionar verificação:
+
+1. Buscar na tabela `servicos` por `associado_id` + `veiculo_id` + `origem = 'troca_titularidade'` + `status = 'pendente'`
+2. Se encontrado e o serviço tem `solicitacao_id`, chamar `efetivar-troca-titularidade` com essa `solicitacao_id` e `cenario_override: 'B'`
+3. Atualizar o serviço como `concluido`
+
+Isso completa o fluxo automático do Cenário B que foi planejado mas não implementado no `processar-vistoria`.
 
 ---
 
-## Alterações
+## Correção 2 — Notificar novo titular após efetivação
 
-### 1. Migration — adicionar coluna `criado_por`
+### Problema
+A função `efetivar-troca-titularidade` não envia nenhuma comunicação ao novo titular após concluir a transferência.
 
-```sql
-ALTER TABLE chat_solicitacoes_ia 
-  ADD COLUMN criado_por UUID REFERENCES auth.users(id);
-```
+### Alteração
 
-Sem NOT NULL pois solicitações vindas do chat IA não têm consultor vinculado.
+**`efetivar-troca-titularidade/index.ts`**
 
-### 2. `TrocaTitularidadeDialog.tsx` — registrar usuário logado
+Após o passo 13 (log de auditoria), adicionar bloco de notificação:
 
-- Buscar `supabase.auth.getUser()` no `handleSubmit` antes do insert.
-- Incluir `criado_por: user.id` no insert.
-- Dois pontos de entrada usam este dialog: `AssociadoDetalhe.tsx` e `OutrasEntradasMenu.tsx` — ambos usam o mesmo componente, então a correção cobre os dois.
+1. Buscar o telefone do novo titular em `dados_novo_titular.telefone` ou no registro do novo associado
+2. Se telefone existir:
+   - Montar mensagem de boas-vindas usando o template `cobertura_total_ativada` existente no `notificar-cliente`, adaptado com dados da troca: nome, placa do veículo, número do contrato
+   - Enviar via `whatsapp-send-text`
+3. Se telefone não existir:
+   - Registrar no log: "Novo titular sem telefone — notificação não enviada"
+   - Não bloquear o processo
 
-### 3. `aprovar-solicitacao-ia` — persistir cenário no campo `dados`
+A mensagem incluirá: nome do novo titular, veículo (marca/modelo/placa), número do contrato, e orientação para acessar o app.
 
-No update final da solicitação (linha 862-871), adicionar merge do cenário no campo `dados`:
+---
 
-```typescript
-// Antes do update existente
-const dadosAtualizados = {
-  ...(solicitacao.dados || {}),
-  cenario_aplicado: cenarioA ? 'A' : 'B',
-};
-
-// No update
-.update({
-  status: "aprovado",
-  aprovado_em: new Date().toISOString(),
-  aprovador_id: perfilId,
-  resultado_id,
-  dados: dadosAtualizados,  // <-- adicionar
-})
-```
-
-Isso só se aplica quando `solicitacao.tipo === 'troca_titularidade'`. Para outros tipos, o `dados` não é alterado.
-
-### Arquivos modificados
+## Arquivos modificados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| Migration SQL | Adicionar coluna `criado_por` em `chat_solicitacoes_ia` |
-| `src/components/associados/TrocaTitularidadeDialog.tsx` | Buscar user logado e incluir `criado_por` no insert |
-| `supabase/functions/aprovar-solicitacao-ia/index.ts` | Persistir `cenario_aplicado` no campo `dados` antes do update final |
+| `src/pages/cadastro/ProcessosOperacionais.tsx` | Buscar status do serviço vinculado, exibir status da vistoria no card do Cenário B |
+| `supabase/functions/processar-vistoria/index.ts` | Detectar vistoria de troca de titularidade aprovada e chamar efetivação |
+| `supabase/functions/efetivar-troca-titularidade/index.ts` | Enviar WhatsApp de boas-vindas ao novo titular após efetivação |
 
