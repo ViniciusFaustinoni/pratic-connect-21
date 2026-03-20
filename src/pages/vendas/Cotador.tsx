@@ -911,7 +911,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
       {/* INCLUSÃO BANNER */}
       {isInclusaoVeiculo && inclusaoAssociado && (
         <Alert className="border-primary/30 bg-primary/5">
-          <PlusCircle className="h-4 w-4 text-primary" />
+          <AlertCircle className="h-4 w-4 text-primary" />
           <AlertTitle className="text-primary">Inclusão de Veículo</AlertTitle>
           <AlertDescription className="text-sm">
             Esta cotação é uma <strong>inclusão de segundo veículo</strong> para o associado{' '}
