@@ -296,6 +296,7 @@ export function useUpdateTemplate() {
       if (input.is_default_evento !== undefined) updateData.is_default_evento = input.is_default_evento;
       if (input.is_default_saida !== undefined) updateData.is_default_saida = input.is_default_saida;
       if (input.is_default_rastreador !== undefined) updateData.is_default_rastreador = input.is_default_rastreador;
+      if (input.anexar_proposta !== undefined) updateData.anexar_proposta = input.anexar_proposta;
 
       const { data, error } = await supabase
         .from('documento_templates')
