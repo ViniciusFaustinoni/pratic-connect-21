@@ -61,7 +61,6 @@ export const MENU_ITEM_IDS: Record<string, string> = {
   '/monitoramento/vistorias': 'vistorias',
   '/monitoramento/retiradas': 'retiradas',
   '/monitoramento/calendario': 'calendario',
-  '/monitoramento/estoque': 'estoque',
   '/monitoramento/rastreadores': 'rastreadores',
   '/monitoramento/mapa': 'mapa',
   '/monitoramento/alertas': 'alertas',

@@ -18,7 +18,8 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { Radio, Server } from 'lucide-react';
+import { Button } from '@/components/ui/button';
+import { Radio, Server, Package, Clock, Plus, Upload } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -47,18 +48,26 @@ import {
   type ViewMode,
 } from '@/components/rastreadores';
 import { PlataformasConfigPanel } from '@/components/rastreadores/PlataformasConfigPanel';
+import { EntradaEstoqueDialog } from '@/components/monitoramento/estoque/EntradaEstoqueDialog';
+import { ImportarRastreadoresDialog } from '@/components/monitoramento/estoque/ImportarRastreadoresDialog';
+import { ConsultaRastreador } from '@/components/monitoramento/estoque/ConsultaRastreador';
+import { HistoricoMovimentacoes } from '@/components/monitoramento/estoque/HistoricoMovimentacoes';
+import { EstoqueMetricas } from '@/components/monitoramento/estoque/EstoqueMetricas';
 
 export default function Rastreadores() {
   const [showForm, setShowForm] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({});
-  const [activeTab, setActiveTab] = useState('rastreadores');
+  const [activeTab, setActiveTab] = useState('visao-geral');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
-    // Recuperar preferência do localStorage
     const saved = localStorage.getItem('rastreadores-view-mode');
     return (saved as ViewMode) || 'cards';
   });
+  
+  // Modais de estoque
+  const [modalEntradaAberto, setModalEntradaAberto] = useState(false);
+  const [modalImportarAberto, setModalImportarAberto] = useState(false);
   
   // Estado do modal de mapa
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
@@ -71,14 +80,11 @@ export default function Rastreadores() {
 
   const canManagePlataformas = isDiretor || isDesenvolvedor;
 
-  // Salvar preferência de visualização
   useEffect(() => {
     localStorage.setItem('rastreadores-view-mode', viewMode);
   }, [viewMode]);
 
-  const handleOpenDetails = (id: string) => {
-    setSelectedId(id);
-  };
+  const handleOpenDetails = (id: string) => setSelectedId(id);
 
   const handleEdit = (id: string) => {
     setEditingId(id);
@@ -91,15 +97,11 @@ export default function Rastreadores() {
   };
 
   const handleFormClose = (open: boolean) => {
-    if (!open) {
-      setEditingId(null);
-    }
+    if (!open) setEditingId(null);
     setShowForm(open);
   };
 
-  const getPlataformaLabel = (codigo: string) => {
-    return plataformasLabels?.[codigo] || codigo;
-  };
+  const getPlataformaLabel = (codigo: string) => plataformasLabels?.[codigo] || codigo;
   
   const handleViewMap = (rastreadorId: string) => {
     setRastreadorMapaId(rastreadorId);
@@ -108,76 +110,91 @@ export default function Rastreadores() {
   
   const handleCloseMapModal = (open: boolean) => {
     setMapaModalOpen(open);
-    if (!open) {
-      setRastreadorMapaId(null);
-    }
+    if (!open) setRastreadorMapaId(null);
   };
+
+  // Montar lista de abas dinamicamente
+  const tabs = [
+    { value: 'visao-geral', label: 'Visão Geral', icon: Radio },
+    { value: 'estoque', label: 'Estoque', icon: Package },
+    { value: 'historico', label: 'Histórico', icon: Clock },
+    ...(canManagePlataformas ? [{ value: 'plataformas', label: 'Plataformas', icon: Server }] : []),
+  ];
 
   return (
     <div className="space-y-6">
       {/* Header da página */}
-      <div>
-        <h1 className="text-2xl font-bold tracking-tight">Rastreadores</h1>
-        <p className="text-muted-foreground">
-          Monitore a comunicação e status dos rastreadores
-        </p>
+      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+        <div>
+          <h1 className="text-2xl font-bold tracking-tight">Rastreadores</h1>
+          <p className="text-muted-foreground">
+            Gerencie rastreadores, estoque, comunicação e movimentações
+          </p>
+        </div>
+        {activeTab === 'estoque' && (
+          <div className="flex flex-wrap gap-2">
+            <Button variant="outline" onClick={() => setModalImportarAberto(true)}>
+              <Upload className="mr-2 h-4 w-4" />
+              Importar Lote
+            </Button>
+            <Button onClick={() => setModalEntradaAberto(true)}>
+              <Plus className="mr-2 h-4 w-4" />
+              Entrada Manual
+            </Button>
+          </div>
+        )}
       </div>
 
-      {canManagePlataformas ? (
-        <Tabs value={activeTab} onValueChange={setActiveTab}>
-          <TabsList>
-            <TabsTrigger value="rastreadores" className="gap-2">
-              <Radio className="h-4 w-4" />
-              Rastreadores
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList className="grid w-full lg:w-auto lg:inline-grid" style={{ gridTemplateColumns: `repeat(${tabs.length}, minmax(0, 1fr))` }}>
+          {tabs.map((tab) => (
+            <TabsTrigger key={tab.value} value={tab.value} className="gap-2">
+              <tab.icon className="h-4 w-4" />
+              <span className="hidden sm:inline">{tab.label}</span>
             </TabsTrigger>
-            <TabsTrigger value="plataformas" className="gap-2">
-              <Server className="h-4 w-4" />
-              Plataformas
-            </TabsTrigger>
-          </TabsList>
+          ))}
+        </TabsList>
 
-          <TabsContent value="rastreadores" className="space-y-6 mt-6">
-            <RastreadoresContent
-              rastreadores={rastreadores}
-              metricas={metricas}
-              isLoading={isLoading}
-              isLoadingMetricas={isLoadingMetricas}
-              filters={filters}
-              onFiltersChange={setFilters}
-              onOpenDetails={handleOpenDetails}
-              onEdit={handleEdit}
-              onNewRastreador={handleNewRastreador}
-              getPlataformaLabel={getPlataformaLabel}
-              viewMode={viewMode}
-              onViewModeChange={setViewMode}
-              isDiretor={isDiretor}
-              onViewMap={handleViewMap}
-            />
-          </TabsContent>
+        {/* Aba Visão Geral */}
+        <TabsContent value="visao-geral" className="space-y-6 mt-6">
+          <RastreadoresContent
+            rastreadores={rastreadores}
+            metricas={metricas}
+            isLoading={isLoading}
+            isLoadingMetricas={isLoadingMetricas}
+            filters={filters}
+            onFiltersChange={setFilters}
+            onOpenDetails={handleOpenDetails}
+            onEdit={handleEdit}
+            onNewRastreador={handleNewRastreador}
+            getPlataformaLabel={getPlataformaLabel}
+            viewMode={viewMode}
+            onViewModeChange={setViewMode}
+            isDiretor={isDiretor}
+            onViewMap={handleViewMap}
+          />
+        </TabsContent>
 
+        {/* Aba Estoque */}
+        <TabsContent value="estoque" className="space-y-6 mt-6">
+          <EstoqueMetricas />
+          <ConsultaRastreador />
+        </TabsContent>
+
+        {/* Aba Histórico */}
+        <TabsContent value="historico" className="mt-6">
+          <HistoricoMovimentacoes />
+        </TabsContent>
+
+        {/* Aba Plataformas (condicional) */}
+        {canManagePlataformas && (
           <TabsContent value="plataformas" className="mt-6">
             <PlataformasConfigPanel />
           </TabsContent>
-        </Tabs>
-      ) : (
-        <RastreadoresContent
-          rastreadores={rastreadores}
-          metricas={metricas}
-          isLoading={isLoading}
-          isLoadingMetricas={isLoadingMetricas}
-          filters={filters}
-          onFiltersChange={setFilters}
-          onOpenDetails={handleOpenDetails}
-          onEdit={handleEdit}
-          onNewRastreador={handleNewRastreador}
-          getPlataformaLabel={getPlataformaLabel}
-          viewMode={viewMode}
-          onViewModeChange={setViewMode}
-          isDiretor={isDiretor}
-          onViewMap={handleViewMap}
-        />
-      )}
+        )}
+      </Tabs>
 
+      {/* Modais globais */}
       <RastreadorFormDialog
         open={showForm}
         onOpenChange={handleFormClose}
@@ -196,7 +213,16 @@ export default function Rastreadores() {
         }}
       />
 
-      {/* Modal de Mapa */}
+      <EntradaEstoqueDialog
+        open={modalEntradaAberto}
+        onOpenChange={setModalEntradaAberto}
+      />
+
+      <ImportarRastreadoresDialog
+        open={modalImportarAberto}
+        onOpenChange={setModalImportarAberto}
+      />
+
       <Dialog open={mapaModalOpen} onOpenChange={handleCloseMapModal}>
         <DialogContent className="max-w-4xl max-h-[90vh]">
           <DialogHeader>
@@ -292,7 +318,6 @@ function RastreadoresContent({
     },
   });
 
-  // Rastreadores elegíveis para seleção (apenas status = 'estoque')
   const rastreadoresEstoque = rastreadores?.filter(r => r.status === 'estoque') || [];
 
   const handleSelectAll = (checked: boolean) => {
@@ -305,11 +330,8 @@ function RastreadoresContent({
 
   const handleSelectOne = (id: string, checked: boolean) => {
     const newSet = new Set(selectedIds);
-    if (checked) {
-      newSet.add(id);
-    } else {
-      newSet.delete(id);
-    }
+    if (checked) newSet.add(id);
+    else newSet.delete(id);
     setSelectedIds(newSet);
   };
 
@@ -329,17 +351,11 @@ function RastreadoresContent({
   };
 
   const handleMaintenance = (rastreador: RastreadorWithRelations) => {
-    setDialogManutencao({
-      id: rastreador.id,
-      codigo: rastreador.codigo,
-    });
+    setDialogManutencao({ id: rastreador.id, codigo: rastreador.codigo });
   };
 
   const handleWithdraw = (rastreador: RastreadorWithRelations) => {
-    setDialogRetirada({
-      id: rastreador.id,
-      codigo: rastreador.codigo,
-    });
+    setDialogRetirada({ id: rastreador.id, codigo: rastreador.codigo });
   };
 
   const handleDelete = (rastreador: RastreadorWithRelations) => {
@@ -349,13 +365,8 @@ function RastreadoresContent({
 
   return (
     <>
-      {/* Métricas */}
       <RastreadorMetrics metricas={metricas} isLoading={isLoadingMetricas} />
-
-      {/* Filtros */}
       <RastreadorFiltersV2 filters={filters} onFiltersChange={onFiltersChange} />
-
-      {/* Header da lista com toggle de visualização */}
       <RastreadorListHeader
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}
@@ -363,7 +374,6 @@ function RastreadoresContent({
         onNewRastreador={onNewRastreador}
       />
 
-      {/* Lista de rastreadores */}
       {viewMode === 'cards' ? (
         <RastreadorGridView
           rastreadores={rastreadores}
@@ -397,14 +407,12 @@ function RastreadoresContent({
         />
       )}
 
-      {/* Barra de ações em lote */}
       <RastreadorBatchActions
         selectedCount={selectedIds.size}
         onAssignPortador={() => setLoteDialogOpen(true)}
         onClear={() => setSelectedIds(new Set())}
       />
 
-      {/* Modais */}
       <AtribuirPortadorDialog
         open={portadorDialogOpen}
         onOpenChange={setPortadorDialogOpen}

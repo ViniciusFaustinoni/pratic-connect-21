@@ -200,7 +200,6 @@ const menuConfig: {
         { title: 'Retiradas', url: '/monitoramento/retiradas', icon: PackageX },
         { title: 'Calendário', url: '/monitoramento/calendario', icon: Calendar },
         { title: 'Rotas', url: '/monitoramento/rotas', icon: Route, permission: 'canEditRotas' },
-        { title: 'Estoque', url: '/monitoramento/estoque', icon: Package, permission: 'canManageEquipeEstoque' },
         { 
           title: 'Rastreadores', 
           url: '/monitoramento/rastreadores', 
