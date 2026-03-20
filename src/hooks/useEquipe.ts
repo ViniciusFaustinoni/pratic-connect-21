@@ -1,6 +1,6 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { format, subMinutes } from 'date-fns';
+import { format, startOfDay } from 'date-fns';
 
 export type StatusProfissional = 'disponivel' | 'indisponivel' | 'ferias' | 'afastado';
 export type StatusOperacional = 'em_contato' | 'em_andamento' | 'em_rota' | 'disponivel_operacional' | 'offline';
