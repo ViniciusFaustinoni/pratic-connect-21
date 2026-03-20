@@ -150,10 +150,34 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
   // Pré-preencher dados da cotação/lead
   useEffect(() => {
     if (cotacao) {
+      // Auto-set tipoOperacao from cotação's tipo_entrada (inclusão context)
+      const cotacaoTipoEntrada = (cotacao as any).tipo_entrada;
+      if (cotacaoTipoEntrada && cotacaoTipoEntrada !== tipoOperacao) {
+        setTipoOperacao(cotacaoTipoEntrada);
+      }
+
       // Primeiro: pegar valor FIPE da cotação (fonte principal)
       if (cotacao.valor_fipe) {
         form.setValue('valor_fipe', cotacao.valor_fipe);
         setDadosExtraidos(prev => ({ ...prev, valor_fipe: { value: String(cotacao.valor_fipe), fonte: 'Cotação' } }));
+      }
+
+      // Pre-fill from associado_id (inclusão flow)
+      const cotacaoAssociadoId = (cotacao as any).associado_id;
+      if (cotacaoAssociadoId && cotacaoTipoEntrada === 'inclusao') {
+        supabase
+          .from('associados')
+          .select('nome, cpf, telefone, email')
+          .eq('id', cotacaoAssociadoId)
+          .single()
+          .then(({ data: assoc }) => {
+            if (assoc) {
+              if (assoc.nome) { form.setValue('nome', assoc.nome); setDadosExtraidos(prev => ({ ...prev, nome: { value: assoc.nome, fonte: 'Associado' } })); }
+              if (assoc.cpf) { form.setValue('cpf', assoc.cpf); setDadosExtraidos(prev => ({ ...prev, cpf: { value: assoc.cpf, fonte: 'Associado' } })); }
+              if (assoc.telefone) { form.setValue('telefone', assoc.telefone); setDadosExtraidos(prev => ({ ...prev, telefone: { value: assoc.telefone, fonte: 'Associado' } })); }
+              if (assoc.email) { form.setValue('email', assoc.email); setDadosExtraidos(prev => ({ ...prev, email: { value: assoc.email, fonte: 'Associado' } })); }
+            }
+          });
       }
       
       if (cotacao.leads) {
