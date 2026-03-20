@@ -97,6 +97,7 @@ import VistoriasManutencao from "./pages/monitoramento/VistoriasManutencao";
 import GestaoRotas from "./pages/monitoramento/GestaoRotas";
 import RessalvasPendentes from "./pages/monitoramento/RessalvasPendentes";
 import AprovacaoAssociadosMonitoramento from "./pages/monitoramento/AcionamentosRouboFurto"; // renamed
+import AprovacaoInstalacaoDetalhe from "./pages/monitoramento/AprovacaoInstalacaoDetalhe";
 import ImprevistosPainel from "./pages/monitoramento/ImprevistosPainel";
 import Oficinas from "./pages/oficinas/Oficinas";
 import AutoCenters from "./pages/oficinas/AutoCenters";
@@ -604,6 +605,7 @@ const App = () => (
               <Route path="/monitoramento/realizar-vistoria" element={<Vistorias />} />
               <Route path="/monitoramento/ressalvas-pendentes" element={<RessalvasPendentes />} />
               <Route path="/monitoramento/aprovacao-associados" element={<AprovacaoAssociadosMonitoramento />} />
+              <Route path="/monitoramento/aprovacao-associados/:id" element={<AprovacaoInstalacaoDetalhe />} />
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
               
               {/* Marketing */}

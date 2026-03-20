@@ -31,24 +31,22 @@ export function useAprovarVeiculoVistoria() {
     mutationFn: async (data: AprovarVeiculoData) => {
       const agora = new Date().toISOString();
 
-      // 1. Atualizar veículo com cobertura total
+      // 1. Atualizar veículo como ativo (SEM cobertura_total — aguarda aprovação do monitoramento)
       const { error: veiculoError } = await supabase
         .from('veiculos')
         .update({ 
           status: 'ativo',
-          cobertura_total: true,
           updated_at: agora,
         })
         .eq('id', data.veiculoId);
 
       if (veiculoError) throw veiculoError;
 
-      // 2. Atualizar associado para ativo
+      // 2. Atualizar associado para em_analise (aguarda aprovação do monitoramento)
       const { error: associadoError } = await supabase
         .from('associados')
         .update({ 
-          status: 'ativo',
-          data_ativacao: agora,
+          status: 'em_analise',
           updated_at: agora,
         })
         .eq('id', data.associadoId);
@@ -85,7 +83,7 @@ export function useAprovarVeiculoVistoria() {
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
         tipo: 'veiculo_aprovado',
-        descricao: 'Veículo aprovado pelo técnico instalador - Proteção 360º ativada',
+        descricao: 'Instalação concluída — aguardando aprovação do monitoramento',
         dados_novos: { 
           vistoria_id: data.vistoriaId,
           instalacao_id: data.instalacaoId, 
@@ -138,20 +136,7 @@ export function useAprovarVeiculoVistoria() {
         }).catch(err => console.warn('Erro ao gerar laudo (não crítico):', err));
       }
 
-      // 8. Notificar cliente sobre cobertura total ativada
-      if (data.associadoId && data.instalacaoId) {
-        supabase.functions.invoke('notificar-cliente', {
-          body: {
-            tipo: 'cobertura_total_ativada',
-            associado_id: data.associadoId,
-            dados: { 
-              placa: veiculoData?.placa || 'N/A',
-              marca: veiculoData?.marca || '',
-              modelo: veiculoData?.modelo || '',
-            }
-          }
-        }).catch(err => console.warn('Erro ao notificar cliente (não crítico):', err));
-      }
+      // 8. Notificação de cobertura_total_ativada REMOVIDA — será enviada após aprovação do monitoramento
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['vistorias'] });
@@ -160,7 +145,7 @@ export function useAprovarVeiculoVistoria() {
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
-      toast.success('Veículo aprovado com sucesso! Proteção 360º ativada.');
+      toast.success('Instalação concluída! Aguardando aprovação do monitoramento.');
     },
     onError: (error) => {
       console.error('Erro ao aprovar veículo:', error);
