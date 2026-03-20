@@ -1,36 +1,34 @@
 
 
-# Plano: Adicionar Lista de Rastreadores na Aba Estoque
+# Plano: Mover "Rateio" de Configurações para Diretoria
 
-## Problema
+## Situação Atual
 
-A aba "Estoque" na página unificada de Rastreadores mostra apenas as métricas e a consulta por IMEI/código, mas não exibe a lista de rastreadores disponíveis (`ListaRastreadores`), que existia na página antiga de Estoque.
+- A página `RateioConfig` (valor da cota, multiplicadores, taxa administrativa) está em `/configuracoes/rateio` — acessível via aba "Rateio" dentro de Configurações.
+- Na Diretoria já existem: `Gestão Comercial` (com aba "Simulador de Rateio"), `Fechamento & Rateio`, e `Faixas & Cotas`.
+- O conteúdo de configuração do rateio pertence logicamente à Diretoria, não a Configurações gerais.
 
-## Solução
+## O que será feito
 
-Adicionar o componente `ListaRastreadores` na aba Estoque, abaixo das métricas e acima da consulta.
+### 1. Adicionar aba "Configuração do Rateio" na Gestão Comercial
 
-### Alteração em `Rastreadores.tsx`
+- Adicionar nova aba no `TabNavigation.tsx` (entre "Simulador de Rateio" e "Elegibilidade"):
+  - Label: "Configuração do Rateio", ícone: `Settings`
+- No `GestaoComercial.tsx`, importar `RateioConfig` e renderizar na nova aba (index 4, deslocando as demais).
 
-Na aba "estoque" (linhas 179-182), adicionar `ListaRastreadores` entre `EstoqueMetricas` e `ConsultaRastreador`:
+### 2. Remover de Configurações
 
-```tsx
-<TabsContent value="estoque" className="space-y-6 mt-6">
-  <EstoqueMetricas />
-  <ListaRastreadores />
-  <ConsultaRastreador />
-</TabsContent>
-```
-
-O import de `ListaRastreadores` já existe na linha 54 do arquivo.
-
-### Bug secundário
-
-O console mostra um warning de ref em `ConsultaRastreador` — componente funcional sem `forwardRef`. Isso não causa erro funcional mas será corrigido junto.
+- `ConfiguracoesLayout.tsx`: remover a tab "Rateio" do array `tabs`.
+- `App.tsx`: remover a rota `rateio` de dentro de `/configuracoes`, adicionar redirect `/configuracoes/rateio` → `/diretoria/gestao-comercial`.
+- `src/pages/configuracoes/index.tsx`: remover export do `RateioConfig`.
 
 ## Arquivos afetados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/monitoramento/Rastreadores.tsx` | Adicionar `ListaRastreadores` na aba estoque |
+| `src/components/gestao-comercial/TabNavigation.tsx` | +1 aba "Configuração do Rateio" |
+| `src/pages/diretoria/GestaoComercial.tsx` | Importar e renderizar RateioConfig na nova aba |
+| `src/pages/configuracoes/ConfiguracoesLayout.tsx` | Remover tab "Rateio" |
+| `src/App.tsx` | Remover rota, adicionar redirect |
+| `src/pages/configuracoes/index.tsx` | Remover export |
 
