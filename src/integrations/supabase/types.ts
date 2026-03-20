@@ -10262,6 +10262,7 @@ export type Database = {
       }
       documento_templates: {
         Row: {
+          anexar_proposta: boolean | null
           ativo: boolean | null
           cabecalho_html: string | null
           canvas_data: Json | null
@@ -10291,6 +10292,7 @@ export type Database = {
           versao: number | null
         }
         Insert: {
+          anexar_proposta?: boolean | null
           ativo?: boolean | null
           cabecalho_html?: string | null
           canvas_data?: Json | null
@@ -10320,6 +10322,7 @@ export type Database = {
           versao?: number | null
         }
         Update: {
+          anexar_proposta?: boolean | null
           ativo?: boolean | null
           cabecalho_html?: string | null
           canvas_data?: Json | null

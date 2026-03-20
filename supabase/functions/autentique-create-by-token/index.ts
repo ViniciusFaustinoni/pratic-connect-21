@@ -397,6 +397,35 @@ serve(async (req) => {
     // Limpeza final: garantir que nenhuma variável bruta apareça no HTML
     contratoHTML = limparVariaveisNaoSubstituidas(contratoHTML);
 
+    // ============= ANEXAR TEMPLATES MARCADOS COMO "ANEXAR À PROPOSTA" =============
+    try {
+      const { data: templatesAnexos } = await supabase
+        .from('documento_templates')
+        .select('nome, conteudo')
+        .eq('anexar_proposta', true)
+        .eq('ativo', true)
+        .order('nome');
+
+      if (templatesAnexos && templatesAnexos.length > 0) {
+        console.log(`[autentique-create-by-token] Anexando ${templatesAnexos.length} template(s) ao documento`);
+        let anexosHTML = '';
+        for (const tmpl of templatesAnexos) {
+          anexosHTML += `
+            <div style="page-break-before: always;"></div>
+            <h2 style="text-align: center; margin-top: 40px; margin-bottom: 20px; font-size: 16px; text-transform: uppercase;">${tmpl.nome}</h2>
+            <div style="font-size: 12px; line-height: 1.6;">${tmpl.conteudo}</div>
+          `;
+        }
+        if (contratoHTML.includes('</body>')) {
+          contratoHTML = contratoHTML.replace('</body>', `${anexosHTML}</body>`);
+        } else {
+          contratoHTML += anexosHTML;
+        }
+      }
+    } catch (err) {
+      console.warn('[autentique-create-by-token] Erro ao buscar templates para anexar:', err);
+    }
+
     console.log(`[autentique-create-by-token] Template usado: ${templateUsado}`);
     console.log('[autentique-create-by-token] HTML gerado, tamanho:', contratoHTML.length, 'bytes');
 

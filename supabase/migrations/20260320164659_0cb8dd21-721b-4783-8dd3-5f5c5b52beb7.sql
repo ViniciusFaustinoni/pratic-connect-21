@@ -1,0 +1,1 @@
+ALTER TABLE documento_templates ADD COLUMN IF NOT EXISTS anexar_proposta boolean DEFAULT false;
