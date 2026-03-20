@@ -196,7 +196,7 @@ serve(async (req) => {
           const tarefa = tarefaAtual[0];
           const inicioTarefa = tarefa.inicio_em ? new Date(tarefa.inicio_em).getTime() : Date.now();
           const minutosNaTarefa = Math.floor((Date.now() - inicioTarefa) / 60000);
-          const raioFila = minutosNaTarefa >= 75 ? 1.0 : 0.5; // 1km se quase disponível, 500m normal
+          const raioFila = minutosNaTarefa >= 75 ? raioQuaseDisponivelKm : raioProximidadeKm;
 
           // Buscar serviços pendentes próximos
           const { data: servicosProximos } = await supabase
