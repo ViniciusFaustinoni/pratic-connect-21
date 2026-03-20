@@ -1,78 +1,61 @@
 
 
-# Plano: Nova Aba "Instalação e Rotas" em Regras de Venda
+# Plano: Exibir Hora de Login e Localização na Equipe do Coordenador
 
-## Estado Atual
+## O que existe hoje
 
-- **Tab Navigation**: `TabNavigation.tsx` tem 6 abas (índice 0-5). A aba 6 será "Instalação e Rotas".
-- **Valores hardcoded encontrados**:
-  - `RotaModal.tsx` L138: `inicioMinutos = 8 * 60 + 30` (08:30 fixo)
-  - `RotaModal.tsx` L139: `minutosDecorridos = idx * 90` (90 min fixo por tarefa)
-  - `InstalacaoFilters.tsx` L89-98: regiões hardcoded (SP Centro, Zona Sul, etc.)
-  - Não encontrei limite de 6 instalações por dia explícito no código, mas será criado como config
-  - Custo fora do horário (R$ 50) não está no código atual — será criado
-  - Prazos de instalação por estado não existem
+- **Tabela `turnos_profissionais`**: tem `inicio_turno` (timestamp de quando o profissional iniciou o turno/logou no dia). Existe por profissional por dia.
+- **Tabela `vistoriadores_localizacao`**: tem `latitude`, `longitude`, `em_servico`, `updated_at` por profissional. Atualizada em tempo real pelo app mobile.
+- **Hook `useEquipe.ts`**: já busca dados de `vistoriadores_localizacao` (linhas 98-112) mas **só usa `em_servico` e `updated_at`** — não busca `latitude`/`longitude`. **Não busca `turnos_profissionais`**.
+- **`EquipeCard.tsx`**: exibe status operacional, tarefas do dia, rastreadores em posse e última atividade. **Não mostra hora de login nem localização**.
 
 ## Implementação
 
-### 1. Migration: inserir configs na tabela `configuracoes`
+### 1. Hook `useEquipe.ts` — buscar dados adicionais
 
-Inserir as seguintes chaves com valores padrão:
-- `instalacao_max_por_dia` → `6`
-- `instalacao_horario_inicio` → `08:30`
-- `instalacao_tempo_medio_minutos` → `90`
-- `instalacao_custo_fora_horario` → `50`
-- `instalacao_prazos_por_estado` → JSON: `[{"estado":"RJ","prazo_horas":48},{"estado":"SP","prazo_horas":72}]`
-- `instalacao_regioes_rotas` → JSON: `[{"value":"sp_centro","label":"São Paulo - Centro","ativa":true},{"value":"sp_zona_sul","label":"São Paulo - Zona Sul","ativa":true},{"value":"sp_zona_norte","label":"São Paulo - Zona Norte","ativa":true},{"value":"sp_zona_oeste","label":"São Paulo - Zona Oeste","ativa":true},{"value":"campinas","label":"Campinas","ativa":true},{"value":"abc","label":"ABC Paulista","ativa":true},{"value":"interior","label":"Interior","ativa":true},{"value":"litoral","label":"Litoral","ativa":true}]`
+Adicionar duas consultas extras no `queryFn`:
 
-### 2. Nova aba na `TabNavigation.tsx`
+**a) Turno do dia** — buscar `inicio_turno` de `turnos_profissionais` para cada profissional (data = hoje, status != 'encerrado' ou qualquer):
+```
+SELECT profissional_id, inicio_turno, status 
+FROM turnos_profissionais 
+WHERE profissional_id IN (...) AND data = hoje
+```
+Mapear para o campo `inicio_turno: string | null` na interface `ProfissionalEquipe`.
 
-Adicionar `{ label: 'Instalação e Rotas', icon: MapPin }` (índice 6).
+**b) Coordenadas** — já busca `vistoriadores_localizacao`, apenas adicionar `latitude, longitude` ao select existente (linha 102). Mapear para `latitude: number | null`, `longitude: number | null` na interface.
 
-### 3. Novo componente: `InstalacaoRotasConfig.tsx`
+### 2. Interface `ProfissionalEquipe` — novos campos
 
-Componente com 4 blocos em Cards, seguindo o padrão visual do `RegrasVendaContent`:
+Adicionar:
+- `inicio_turno: string | null` — hora exata que logou/iniciou turno
+- `latitude: number | null` — última latitude conhecida
+- `longitude: number | null` — última longitude conhecida
 
-**Bloco 1 — Capacidade dos Instaladores**
-- Campo numérico: "Máx. instalações por dia" (default 6)
-- Campo time: "Horário de início das rotas" (default 08:30)
-- Campo numérico: "Tempo médio por instalação (min)" (default 90)
-- Botão "Salvar" por bloco
+### 3. `EquipeCard.tsx` — exibir informações
 
-**Bloco 2 — Prazos por Estado**
-- Tabela editável: Estado + Prazo (horas úteis)
-- Botão "Adicionar estado"
-- Pré-configurado: RJ (48h) e SP (72h)
-- Botão "Salvar"
+**Hora de login**: Novo item na seção de contato/info, com ícone de relógio:
+- Se `inicio_turno` existe: "Logou às HH:mm"
+- Se não: "Não logou hoje"
 
-**Bloco 3 — Custo Fora do Horário**
-- Campo monetário: "Valor do repasse (R$)" (default 50)
-- Botão "Salvar"
+**Localização**: Novo item com ícone de mapa:
+- Se tem coordenadas (mesmo offline): exibir link clicável "Ver no mapa" que abre Google Maps na posição
+- Texto auxiliar: "Atualizado há X min" baseado no `updated_at` da localização
+- Se não tem coordenadas: "Sem localização"
 
-**Bloco 4 — Regiões de Atendimento**
-- Lista com nome e toggle ativo/inativo
-- Botão adicionar nova região (value + label)
-- Botão "Salvar"
+A localização persiste mesmo que o profissional fique offline, pois a tabela `vistoriadores_localizacao` mantém o último registro. O hook já busca dados dos últimos 60 minutos — vou remover esse filtro de cutoff para que a última posição conhecida sempre apareça, independente de quando foi.
 
-Cada bloco ao salvar grava na `configuracoes` via upsert e registra log de auditoria (insert em tabela `configuracoes_log` ou campo `updated_at` + `updated_by`).
+### 4. Ajuste no filtro de localização
 
-### 4. Registrar na `GestaoComercial.tsx`
-
-Adicionar `{activeTab === 6 && <InstalacaoRotasConfig />}`.
-
-### 5. Log de auditoria
-
-Usar a coluna `updated_at` já existente em `configuracoes`. Para registrar "quem", adicionar migration com coluna `updated_by uuid` na tabela `configuracoes` (se não existir). Exibir "Última alteração" abaixo de cada bloco.
+Atualmente o hook filtra `gte('updated_at', cutoffTime)` com cutoff de 60 minutos. Para garantir que a localização apareça mesmo que o profissional esteja offline há mais tempo, remover esse filtro. A informação de "há quanto tempo" será exibida no card para o coordenador avaliar a relevância.
 
 ## Arquivos afetados
 
-- Migration SQL (INSERT configs + ADD COLUMN `updated_by`)
-- `src/components/gestao-comercial/TabNavigation.tsx` — nova aba
-- `src/components/gestao-comercial/InstalacaoRotasConfig.tsx` — novo componente
-- `src/pages/diretoria/GestaoComercial.tsx` — renderizar aba 6
+- `src/hooks/useEquipe.ts` — buscar `inicio_turno` de turnos + `latitude`/`longitude` de localização, remover filtro de 60min
+- `src/components/equipe/EquipeCard.tsx` — exibir hora de login e link de localização
 
 ## O que NÃO será alterado
 
-- Nenhuma tela de Monitoramento será modificada
-- As 6 abas existentes permanecem intactas
+- Nenhuma tela do app do instalador
+- Nenhuma lógica de rotas ou tarefas
 
