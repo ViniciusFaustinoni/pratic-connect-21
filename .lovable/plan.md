@@ -1,85 +1,75 @@
 
 
-# Plano: Carência de Vidros e Faróis — Configurável, End-to-End
+# Plano: Completar Caminho 3 da Reativação — Contrato + Carência de Vidros
 
 ## Estado Atual
 
-**Configuração**: Não existe campo específico para carência de vidros na tabela `configuracoes`. Existe `carencia_dias_padrao` (120), que é a carência geral. A carência de vidros está hardcoded como `120` em `src/types/sinistros.ts` (linha 376) e na validação do `NovoSinistroModal.tsx` (linha 284).
+O `ReativacaoWizard.tsx` tem o Caminho 3 funcional nas etapas visuais, mas no `handleFinalizar`:
+- **Grava** histórico em `associados_historico` com `caminho: 3`
+- **Grava** pontuação do consultor via `pontuacao_eventos`
+- **Chama** `reativarAssociado(associadoId)` que apenas muda status para `ativo`
+- **NÃO** atualiza o contrato com `tipo_entrada: 'reativacao'`
+- **NÃO** recalcula carência de vidros e faróis
+- **NÃO** recalcula carência geral
 
-**Banco**: A tabela `contratos` tem `data_carencia_inicio` e `data_carencia_fim` (carência geral), mas **não tem** colunas para carência específica de vidros/faróis.
+O `reativarAssociado` em `useAssociados.ts` é genérico — muda status e ativa na Rede Veículos. Não toca no contrato.
 
-**Ficha do associado**: O `OrigemCadastroCard` e `useAssociadoSituacao` exibem a carência geral. Não há menção a carência de vidros.
-
-**App do associado**: `AppPlano.tsx` lista benefícios do plano mas não diferencia status de carência de vidros.
-
-**Proposta PDF**: `useGerarProposta.ts` não inclui informação de carência de vidros.
-
-**Edge Functions**: `contrato-gerar`, `efetivar-substituicao` e `efetivar-troca-titularidade` gravam carência geral, mas não gravam carência de vidros.
+A `OrigemCadastroCard` já busca dados de reativação do histórico e exibe caminho/dias, mas depende de `tipo_entrada` do contrato ser `'reativacao'` para entrar nesse bloco.
 
 ---
 
 ## Implementação
 
-### 1. Criar configuração `carencia_beneficio_vidros_dias` (valor padrão: 120)
-- INSERT na tabela `configuracoes` via migration
-- Adicionar campo editável na aba Regras de Venda (`RegrasVendaContent.tsx`), no bloco de Taxas/Carências, com label "Carência do benefício de vidros e faróis em dias"
+### 1. Atualizar contrato no Caminho 3 (`ReativacaoWizard.tsx`)
 
-### 2. Migration: adicionar colunas no contrato
-```sql
-ALTER TABLE contratos ADD COLUMN IF NOT EXISTS data_carencia_vidros_inicio date;
-ALTER TABLE contratos ADD COLUMN IF NOT EXISTS data_carencia_vidros_fim date;
-ALTER TABLE contratos ADD COLUMN IF NOT EXISTS carencia_vidros_isenta boolean DEFAULT false;
-ALTER TABLE contratos ADD COLUMN IF NOT EXISTS carencia_vidros_motivo_isencao text;
-```
+Dentro de `handleFinalizar`, quando `caminho === 3`, após o insert no histórico e antes de chamar `reativarAssociado`:
 
-### 3. Gravar carência de vidros em todos os fluxos de geração de contrato
+- Se `contratoId` existe, fazer UPDATE no contrato:
+  ```
+  tipo_entrada: 'reativacao'
+  data_carencia_inicio: hoje
+  data_carencia_fim: hoje + carencia_dias_padrao
+  data_carencia_vidros_inicio: hoje
+  data_carencia_vidros_fim: hoje + carencia_beneficio_vidros_dias
+  carencia_vidros_isenta: false
+  carencia_vidros_motivo_isencao: null
+  carencia_isenta: false
+  carencia_motivo_isencao: null
+  ```
+- Se `contratoId` não existe (caso raro), criar novo contrato com `tipo_entrada: 'reativacao'` vinculado ao `associadoId`
 
-**`contrato-gerar/index.ts`**: Ler `carencia_beneficio_vidros_dias` via config-helper. Para todos os `tipo_entrada` (nova, adesao, inclusao, substituicao_placa, reativacao), calcular e gravar `data_carencia_vidros_inicio` e `data_carencia_vidros_fim`. Para migração com isenção, gravar `carencia_vidros_isenta = true` com motivo.
+Ambos os prazos (geral e vidros) lidos da tabela `configuracoes` no momento da finalização.
 
-**`efetivar-substituicao/index.ts`**: Mesma lógica — ler config, calcular datas, gravar no insert do novo contrato.
+O `vendedor_id` do contrato será atualizado com o usuário logado (auth.uid), representando o consultor que processou a reativação. Se não houver consultor vinculado, o campo não é alterado.
 
-**`efetivar-troca-titularidade/index.ts`**: Mesma lógica — ler config, calcular datas, gravar no insert.
+### 2. Ler configurações no wizard
 
-**`useSolicitacoesMigracaoAdmin.ts`**: Quando migração é aprovada com isenção, gravar `carencia_vidros_isenta: true`, `carencia_vidros_motivo_isencao: 'Migração aprovada'`, datas nulas.
+Adicionar no componente os hooks:
+- `useCarenciaDiasPadrao()` (já existe em `useConteudosSistema.ts`)
+- `useCarenciaVidrosDias()` (já existe em `useConteudosSistema.ts`)
 
-### 4. Hook utilitário `useCarenciaVidrosDias`
-- Criar em `useConteudosSistema.ts`: `useCarenciaVidrosDias()` → lê `carencia_beneficio_vidros_dias` da config (fallback 120)
+Usar os valores retornados para calcular as datas no momento do UPDATE.
 
-### 5. Ficha do associado — exibir status de carência de vidros
-- `OrigemCadastroCard.tsx`: buscar as 4 novas colunas do contrato. Renderizar seção "Carência Vidros e Faróis":
-  - Em carência → "Em carência — X dias restantes (término em DD/MM/AAAA)"
-  - Cumprida → "Disponível sem restrição"
-  - Isenta → "Isento — origem: migração aprovada"
+### 3. Registrar consultor responsável
 
-### 6. App do associado — indicar status no benefício
-- `AppPlano.tsx`: Para o benefício `VIDROS_FAROIS`, buscar contrato ativo do associado e mostrar badge:
-  - Em carência → badge amarelo "Em carência — X dias restantes"
-  - Disponível → badge verde "Disponível"
-  - Isenta → badge verde "Isento — migração"
+Buscar `user.id` via `useAuth()` e gravar como `vendedor_id` no contrato atualizado, se disponível.
 
-### 7. Proposta PDF — incluir informação de carência de vidros
-- `useGerarProposta.ts`: Adicionar seção "CARÊNCIA DE VIDROS E FARÓIS" no PDF com data de início e término calculadas a partir dos dados da cotação
-- `DadosProposta` (types/proposta.ts): Adicionar campo `carenciaVidros?: { inicio: string; fim: string; isenta?: boolean }`
-- `Cotador.tsx`: Popular o campo ao montar `dadosProposta`
+### 4. OrigemCadastroCard — incluir carência de vidros na seção de reativação
 
-### 8. Corrigir validação hardcoded no sinistro
-- `NovoSinistroModal.tsx` linha 284: substituir `120` por `carenciaDiasVal` (que já é lido da config geral). Idealmente, trocar para ler do contrato do associado (`data_carencia_vidros_fim`) em vez de recalcular.
-- `src/types/sinistros.ts` linha 376: remover `carencia_vidros: 120` hardcoded
+Atualmente a seção de reativação mostra `novaCarencia` com as datas gerais. Adicionar exibição das datas de carência de vidros (`data_carencia_vidros_inicio`, `data_carencia_vidros_fim`, `carencia_vidros_isenta`) quando o caminho é 3/nova_adesao.
 
 ---
 
 ## Arquivos afetados
-- **Migration SQL**: nova config + 4 colunas em `contratos`
-- `src/components/gestao-comercial/RegrasVendaContent.tsx` — campo configurável
-- `src/hooks/useConteudosSistema.ts` — novo hook `useCarenciaVidrosDias`
-- `supabase/functions/contrato-gerar/index.ts` — gravar carência vidros
-- `supabase/functions/efetivar-substituicao/index.ts` — idem
-- `supabase/functions/efetivar-troca-titularidade/index.ts` — idem
-- `src/hooks/useSolicitacoesMigracaoAdmin.ts` — isenção migração
-- `src/components/associados/detalhe/OrigemCadastroCard.tsx` — exibir status
-- `src/pages/app/AppPlano.tsx` — badge no benefício
-- `src/hooks/useGerarProposta.ts` + `src/types/proposta.ts` — seção no PDF
-- `src/pages/vendas/Cotador.tsx` — popular dados
-- `src/components/eventos/NovoSinistroModal.tsx` — usar config em vez de hardcoded
-- `src/types/sinistros.ts` — remover constante hardcoded
+
+- `src/components/associados/reativacao/ReativacaoWizard.tsx` — UPDATE no contrato com tipo_entrada, carência geral e vidros
+- `src/components/associados/detalhe/OrigemCadastroCard.tsx` — exibir carência de vidros na seção reativação
+
+## Resultado
+
+- Contrato fica com `tipo_entrada = 'reativacao'` após Caminho 3
+- Carência geral e de vidros recalculadas a partir da data de conclusão
+- Ficha do associado exibe "Reativação — Nova adesão completa" com datas de carência de vidros
+- Consultor responsável registrado no contrato
+- Valores de carência sempre lidos da configuração, nunca hardcoded
 
