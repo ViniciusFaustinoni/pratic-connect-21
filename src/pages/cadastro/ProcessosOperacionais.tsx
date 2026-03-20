@@ -57,6 +57,40 @@ function TrocaTitularidadeTab() {
     },
   });
 
+  // Buscar serviços vinculados para Cenário B (status da vistoria em tempo real)
+  const cenarioBIds = useMemo(() => {
+    if (!solicitacoes) return [];
+    return solicitacoes
+      .filter((s: any) => {
+        const dados = s.dados as any;
+        return s.status === 'aprovado' && dados?.cenario_aplicado === 'B';
+      })
+      .map((s: any) => s.id);
+  }, [solicitacoes]);
+
+  const { data: servicosVinculados } = useQuery({
+    queryKey: ['servicos-troca-titularidade', cenarioBIds],
+    queryFn: async () => {
+      if (!cenarioBIds.length) return [];
+      const { data, error } = await supabase
+        .from('servicos')
+        .select('id, status, solicitacao_id')
+        .in('solicitacao_id', cenarioBIds)
+        .eq('origem', 'troca_titularidade');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: cenarioBIds.length > 0,
+  });
+
+  const servicosPorSolicitacao = useMemo(() => {
+    const map: Record<string, string> = {};
+    servicosVinculados?.forEach((s: any) => {
+      if (s.solicitacao_id) map[s.solicitacao_id] = s.status;
+    });
+    return map;
+  }, [servicosVinculados]);
+
   const aprovarMutation = useMutation({
     mutationFn: async (solicitacaoId: string) => {
       const { data, error } = await supabase.functions.invoke('aprovar-solicitacao-ia', {
