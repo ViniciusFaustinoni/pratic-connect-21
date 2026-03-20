@@ -170,14 +170,16 @@
 @layer base {
   * {
     @apply border-border;
+    -webkit-tap-highlight-color: transparent;
   }
 
-  /* Prevenir overflow horizontal global */
+  /* Prevenir overflow horizontal global + iOS bounce */
   html,
   body,
   #root {
     overflow-x: hidden;
     max-width: 100vw;
+    overscroll-behavior: none;
   }
 
   body {
