@@ -33,6 +33,7 @@ export function TrocaTitularidadeDialog({
 
     setLoading(true);
     try {
+      const { data: { user } } = await supabase.auth.getUser();
       const dadosNovoTitular = { nome: nome.trim(), cpf: cpf.trim(), email: email.trim(), telefone: telefone.trim() };
 
       const { error } = await supabase
@@ -43,6 +44,7 @@ export function TrocaTitularidadeDialog({
           status: 'pendente',
           dados: { origem: 'painel_relacionamento' },
           dados_novo_titular: dadosNovoTitular,
+          ...(user?.id ? { criado_por: user.id } : {}),
         });
 
       if (error) throw error;

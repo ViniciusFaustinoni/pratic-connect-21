@@ -859,15 +859,25 @@ serve(async (req) => {
       }
     }
 
-    // Atualizar solicitação como aprovada
+    // Atualizar solicitação como aprovada (persistir cenário no campo dados para troca de titularidade)
+    const updatePayload: Record<string, unknown> = {
+      status: "aprovado",
+      aprovado_em: new Date().toISOString(),
+      aprovador_id: perfilId,
+      resultado_id,
+    };
+
+    if (solicitacao.tipo === "troca_titularidade") {
+      const cenarioAplicado = resultado_protocolo?.startsWith("TRC-DISP-") ? "A" : "B";
+      updatePayload.dados = {
+        ...(typeof solicitacao.dados === "object" && solicitacao.dados !== null ? solicitacao.dados : {}),
+        cenario_aplicado: cenarioAplicado,
+      };
+    }
+
     await supabaseAdmin
       .from("chat_solicitacoes_ia")
-      .update({
-        status: "aprovado",
-        aprovado_em: new Date().toISOString(),
-        aprovador_id: perfilId,
-        resultado_id,
-      })
+      .update(updatePayload)
       .eq("id", solicitacao_id);
 
     console.log(`[aprovar-solicitacao-ia] Solicitação ${solicitacao_id} aprovada - ${solicitacao.tipo} ${resultado_protocolo}`);
