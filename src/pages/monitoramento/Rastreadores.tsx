@@ -19,7 +19,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Radio, Server, Package, Clock, Plus, Upload } from 'lucide-react';
+import { Radio, Server, Package, Clock, Plus, Upload, MapPin } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+
+const MapaRastreadores = lazy(() => import('./Mapa'));
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
