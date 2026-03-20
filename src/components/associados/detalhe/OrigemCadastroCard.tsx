@@ -83,6 +83,13 @@ interface OrigemData {
     inicio: string | null;
     fim: string | null;
   };
+  // Carência vidros e faróis
+  carenciaVidros: {
+    isenta: boolean;
+    motivoIsencao: string | null;
+    inicio: string | null;
+    fim: string | null;
+  };
 }
 
 // ============================================
