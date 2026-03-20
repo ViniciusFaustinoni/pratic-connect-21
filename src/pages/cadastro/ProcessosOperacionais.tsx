@@ -169,11 +169,13 @@ function TrocaTitularidadeTab() {
         const isPendente = sol.status === 'pendente';
         const isAprovado = sol.status === 'aprovado';
         const isRejeitado = sol.status === 'rejeitado';
-        const cenario = cenarioResultado[sol.id] || (
+        const cenario = cenarioResultado[sol.id] || dados?.cenario_aplicado || (
           sol.resultado_id && sol.status === 'aprovado'
             ? (sol.resultado_id === sol.id ? 'A' : 'B')
             : null
         );
+        const efetivado = !!dados?.efetivado_em;
+        const statusServico = servicosPorSolicitacao[sol.id];
 
         return (
           <Card key={sol.id} className="hover:shadow-md transition-shadow">
