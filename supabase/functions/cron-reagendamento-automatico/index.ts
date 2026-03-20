@@ -29,6 +29,9 @@ Deno.serve(async (req) => {
 
     console.log(`[cron-reagendamento] Executando para data: ${hoje}`);
 
+    // Ler configuração dinâmica de raio de redistribuição
+    const redistribuicaoRaioKm = await getConfiguracaoNumero(supabase, 'redistribuicao_raio_km', 5);
+
     // ===== PARTE 1: Recuperar imprevistos órfãos =====
     // Serviços com imprevisto registrado há mais de 30 min mas ainda em status ativo ou imprevisto_pendente
     const threshold30min = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
