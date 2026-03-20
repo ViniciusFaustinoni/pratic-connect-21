@@ -1,41 +1,61 @@
 
 
-# Reordenar fotos da autovistoria (15 fotos — carro)
+# Garantir entrega de todas as mensagens WhatsApp
 
-## Problema
+## Resultado da auditoria completa
 
-A ordem atual coloca o Chassi como 2a foto (logo após a selfie), quebrando o fluxo natural de quem está andando ao redor do veículo. O associado precisa se abaixar para encontrar o chassi no para-brisa antes mesmo de fotografar o exterior.
+Todas as 23+ edge functions que chamam `whatsapp-send-text` foram verificadas. **Apenas 1 bug restante** impede a entrega:
 
-## Nova ordem proposta (fluxo físico lógico)
+### Bug encontrado
 
-```text
-EXTERIOR — Caminhada ao redor do veículo:
- 1. Selfie com veículo (já está na frente)
- 2. Frente do veículo (continua na frente)
- 3. Lateral Direita (caminha para a direita)
- 4. Traseira (continua caminhando)
- 5. Lateral Esquerda (completa a volta)
- 6. Capô Aberto com Placa (volta à frente, abre o capô)
- 7. Chassi (aproveita que está na frente, olha base do para-brisa)
+**`cron-atribuir-tarefas/index.ts` — chamada ao vistoriador (linha 671-684)**
 
-PNEUS — Segunda volta rápida:
- 8. Pneu Dianteiro Direito
- 9. Pneu Traseiro Direito
-10. Pneu Traseiro Esquerdo
-11. Pneu Dianteiro Esquerdo
+O campo `mensagem` está ausente no body da requisição. A edge function `whatsapp-send-text` verifica `if (!telefone || !mensagem)` e retorna erro 400. A mensagem do vistoriador **nunca é enviada**.
 
-INTERIOR — Entra no veículo:
-12. Banco do Motorista (abre porta, fotografa)
-13. Banco do Passageiro (cruza para o outro lado)
-14. Banco Traseiro (abre porta traseira)
-15. Odômetro (liga o veículo, última foto)
+### Correção
+
+Adicionar o campo `mensagem` com texto descritivo na chamada do vistoriador, assim como já existe na chamada do instalador (linha 598 com `mensagem: msgInstalador`).
+
+```
+mensagem: `Nova vistoria atribuída: ${servico.associado_nome} - ${endereco} - ${dataFormatada}`
 ```
 
-## Alteração
+### Status das demais funções (todas OK)
 
-**Arquivo**: `src/data/autovistoriaConfig.ts`
+| Função | Template | Status |
+|--------|----------|--------|
+| notificar-inicio-rota | sinistro_atualizado | ✅ |
+| cron-atribuir-tarefas (instalador) | sinistro_atualizado | ✅ |
+| cron-atribuir-tarefas (vistoriador) | tarefa_vistoriador_v2 | ❌ falta `mensagem` |
+| aprovar-sinistro | sinistro_atualizado | ✅ |
+| notificar-retirada-whatsapp | sinistro_atualizado | ✅ |
+| notificar-manutencao-whatsapp | sinistro_atualizado | ✅ |
+| despacho-reboque-atribuir (prestador) | sinistro_atualizado | ✅ |
+| atribuir-proxima-tarefa | sinistro_atualizado | ✅ |
+| aprovar-solicitacao-ia (cancelamento) | sinistro_atualizado | ✅ |
+| aprovar-solicitacao-ia (troca titular) | sinistro_atualizado | ✅ |
+| retroativo-pagamento-termo | sinistro_atualizado | ✅ |
+| notificar-cliente | META_TEMPLATE_MAP | ✅ |
+| ativar-associado | cadastro_aprovado_botao | ✅ |
+| enviar-link-reagendamento | reagendamento_servico | ✅ |
+| autentique-create-by-token | assinatura_documento_v2 | ✅ |
+| enviar-lembretes-vencimento | cobranca_mensalidade | ✅ |
+| gerar-cobrancas-mensais | cobranca_mensalidade | ✅ |
+| disparar-boletos-lote | cobranca_mensalidade | ✅ |
+| notificar-sinistro | comunicacao_sinistro | ✅ |
+| notificar-etapa-os | sinistro_atualizado | ✅ |
+| confirmar-agendamento-cron | sinistro_atualizado | ✅ |
+| confirmar-vistorias-manha-cron | sinistro_atualizado | ✅ |
+| despacho-reboque-status | templates por status | ✅ |
+| notificar-status-assistencia | template dinâmico | ✅ |
+| whatsapp-meta-webhook (Maya) | allow_text (janela 24h) | ✅ |
+| processar-fila-ia (erro) | allow_text (janela 24h) | ✅ |
 
-Reordenar os itens do array `FOTOS_AUTOVISTORIA_CARRO` e atualizar o campo `ordem` de cada um para refletir a nova sequência. Chassi move da posição 2 para 7. Frente sobe de 3 para 2. Capô sobe de 7 para 6. Banco passageiro e traseiro trocam de posição para seguir o fluxo físico (motorista → passageiro → traseiro).
+## Arquivo a modificar
 
-Nenhum outro arquivo precisa ser alterado — o componente `Autovistoria.tsx` já itera pelo array na ordem em que é retornado.
+- `supabase/functions/cron-atribuir-tarefas/index.ts` — adicionar campo `mensagem` na chamada do vistoriador (linha 671)
+
+## Impacto
+
+Correção pontual que desbloqueará o envio de notificações WhatsApp aos vistoriadores quando tarefas são atribuídas automaticamente. Todas as demais mensagens já estão configuradas corretamente.
 
