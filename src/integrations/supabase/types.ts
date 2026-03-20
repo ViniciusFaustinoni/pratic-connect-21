@@ -11847,6 +11847,71 @@ export type Database = {
           },
         ]
       }
+      fila_servicos: {
+        Row: {
+          created_at: string | null
+          distancia_km: number
+          expires_at: string | null
+          id: string
+          motivo: string | null
+          prioridade: number | null
+          profissional_id: string
+          servico_id: string
+          status: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          distancia_km: number
+          expires_at?: string | null
+          id?: string
+          motivo?: string | null
+          prioridade?: number | null
+          profissional_id: string
+          servico_id: string
+          status?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          distancia_km?: number
+          expires_at?: string | null
+          id?: string
+          motivo?: string | null
+          prioridade?: number | null
+          profissional_id?: string
+          servico_id?: string
+          status?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "fila_servicos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "fila_servicos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "fila_servicos_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "fila_servicos_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       folha_pagamento: {
         Row: {
           adiantamento: number | null
@@ -21087,6 +21152,7 @@ export type Database = {
           imprevisto_duplo_check: boolean | null
           imprevisto_duplo_check_em: string | null
           imprevisto_motivo: string | null
+          imprevisto_origem: string | null
           imprevisto_registrado_em: string | null
           iniciada_em: string | null
           instalacao_origem_id: string | null
@@ -21198,6 +21264,7 @@ export type Database = {
           imprevisto_duplo_check?: boolean | null
           imprevisto_duplo_check_em?: string | null
           imprevisto_motivo?: string | null
+          imprevisto_origem?: string | null
           imprevisto_registrado_em?: string | null
           iniciada_em?: string | null
           instalacao_origem_id?: string | null
@@ -21309,6 +21376,7 @@ export type Database = {
           imprevisto_duplo_check?: boolean | null
           imprevisto_duplo_check_em?: string | null
           imprevisto_motivo?: string | null
+          imprevisto_origem?: string | null
           imprevisto_registrado_em?: string | null
           iniciada_em?: string | null
           instalacao_origem_id?: string | null
