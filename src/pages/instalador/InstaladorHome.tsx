@@ -17,6 +17,7 @@ import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOv
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
 import { useServicosRealtime } from '@/hooks/useServicosRealtime';
+import { useGarantirTurno } from '@/hooks/useGarantirTurno';
 
 export default function InstaladorHome() {
   // Realtime: receber tarefas instantaneamente
