@@ -222,6 +222,15 @@ serve(async (req) => {
       dataFimCarencia = fimCarencia.toISOString().split("T")[0];
     }
 
+    // Carência de vidros para troca de titularidade
+    let dataCarenciaVidrosInicio: string | null = dataInicio;
+    let dataCarenciaVidrosFim: string | null = null;
+    if (carenciaVidrosDias > 0) {
+      const fimVidros = new Date(now);
+      fimVidros.setDate(fimVidros.getDate() + carenciaVidrosDias);
+      dataCarenciaVidrosFim = fimVidros.toISOString().split("T")[0];
+    }
+
     const contratoData: Record<string, unknown> = {
       numero: numeroContrato,
       associado_id: novoAssociadoId,
@@ -239,6 +248,10 @@ serve(async (req) => {
       origem_troca_titularidade_id: solicitacao_id,
       carencia_isenta: carenciaIsenta,
       carencia_motivo_isencao: carenciaIsenta ? `Cenário ${cenario}: carência dispensada na troca de titularidade` : null,
+      // Carência de vidros e faróis
+      data_carencia_vidros_inicio: dataCarenciaVidrosInicio,
+      data_carencia_vidros_fim: dataCarenciaVidrosFim,
+      carencia_vidros_isenta: false,
     };
 
     // Copy vehicle data for the contract snapshot

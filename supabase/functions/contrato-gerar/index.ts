@@ -693,6 +693,12 @@ serve(async (req) => {
             data_carencia_inicio: dataCarenciaInicio,
             data_carencia_fim: dataCarenciaFim,
             
+            // Carência de vidros e faróis
+            data_carencia_vidros_inicio: carenciaVidrosIsenta ? null : dataCarenciaVidrosInicio,
+            data_carencia_vidros_fim: carenciaVidrosIsenta ? null : dataCarenciaVidrosFim,
+            carencia_vidros_isenta: carenciaVidrosIsenta,
+            carencia_vidros_motivo_isencao: carenciaVidrosMotivoIsencao,
+            
             // Dados do veículo (snapshot completo)
             veiculo_marca: cotacao.veiculo_marca,
             veiculo_modelo: cotacao.veiculo_modelo,

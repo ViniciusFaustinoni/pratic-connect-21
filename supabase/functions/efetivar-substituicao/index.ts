@@ -133,6 +133,10 @@ Deno.serve(async (req) => {
             data_inicio: dataInicio.toISOString(),
             data_carencia_inicio: dataInicio.toISOString(),
             data_carencia_fim: dataFimCarencia.toISOString(),
+            // Carência de vidros e faróis
+            data_carencia_vidros_inicio: dataInicio.toISOString().split('T')[0],
+            data_carencia_vidros_fim: new Date(dataInicio.getTime() + carenciaVidrosDias * 86400000).toISOString().split('T')[0],
+            carencia_vidros_isenta: false,
             status: 'ativo',
           })
           .select('id')

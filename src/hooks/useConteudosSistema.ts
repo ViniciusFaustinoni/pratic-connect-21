@@ -310,6 +310,10 @@ export function useCarenciaDiasPadrao() {
   return useConfiguracaoNumero('carencia_dias_padrao', 120);
 }
 
+export function useCarenciaVidrosDias() {
+  return useConfiguracaoNumero('carencia_beneficio_vidros_dias', 120);
+}
+
 // ============================================
 // Defaults de Cota Deságio (Aplicativo)
 // ============================================
