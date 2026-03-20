@@ -34,7 +34,7 @@ Deno.serve(async (req) => {
 
     const { data: orfaos, error: orfaosError } = await supabase
       .from("servicos")
-      .select("id, status, reagendamento_enviado_em")
+      .select("id, status, reagendamento_enviado_em, imprevisto_origem, profissional_id, latitude, longitude")
       .not("imprevisto_registrado_em", "is", null)
       .lt("imprevisto_registrado_em", threshold30min)
       .in("status", ["em_andamento", "em_rota", "agendada", "imprevisto_pendente"]);
@@ -46,6 +46,114 @@ Deno.serve(async (req) => {
     let orfaosProcessados = 0;
     for (const orfao of orfaos || []) {
       try {
+        const origem = orfao.imprevisto_origem || 'associado'; // default = associado (comportamento anterior)
+
+        if (origem === 'instalador' && orfao.latitude && orfao.longitude) {
+          // ========== REDISTRIBUIÇÃO PROATIVA (imprevisto do instalador) ==========
+          console.log(`[cron-reagendamento] Imprevisto do INSTALADOR: tentando redistribuir ${orfao.id}`);
+
+          // Buscar profissionais com GPS ativo
+          const trintaMin = new Date(now.getTime() - 30 * 60 * 1000).toISOString();
+          const { data: profissionaisAtivos } = await supabase
+            .from("vistoriadores_localizacao")
+            .select("vistoriador_id, latitude, longitude, em_servico")
+            .eq("em_servico", true)
+            .gte("updated_at", trintaMin)
+            .not("latitude", "is", null)
+            .not("longitude", "is", null);
+
+          let redistribuido = false;
+
+          if (profissionaisAtivos && profissionaisAtivos.length > 0) {
+            // Calcular distâncias
+            const calcDist = (lat1: number, lon1: number, lat2: number, lon2: number) => {
+              const R = 6371;
+              const dLat = ((lat2 - lat1) * Math.PI) / 180;
+              const dLon = ((lon2 - lon1) * Math.PI) / 180;
+              const a = Math.sin(dLat / 2) ** 2 + Math.cos((lat1 * Math.PI) / 180) * Math.cos((lat2 * Math.PI) / 180) * Math.sin(dLon / 2) ** 2;
+              return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+            };
+
+            // Excluir o profissional que reportou o imprevisto
+            const candidatos = profissionaisAtivos
+              .filter((p: any) => p.vistoriador_id !== orfao.profissional_id)
+              .map((p: any) => ({
+                ...p,
+                distancia: calcDist(orfao.latitude!, orfao.longitude!, p.latitude, p.longitude),
+              }))
+              .sort((a: any, b: any) => a.distancia - b.distancia);
+
+            // Tentar atribuir a profissional disponível a menos de 5km
+            for (const cand of candidatos) {
+              if (cand.distancia > 5) break;
+
+              // Verificar se está livre
+              const { data: tarefaAtual } = await supabase.rpc("buscar_tarefa_atual_profissional", {
+                p_profissional_id: cand.vistoriador_id,
+              });
+
+              if (!tarefaAtual || tarefaAtual.length === 0) {
+                // Disponível! Atribuir diretamente
+                await supabase.from("servicos").update({
+                  profissional_id: cand.vistoriador_id,
+                  status: "agendada",
+                  updated_at: new Date().toISOString(),
+                }).eq("id", orfao.id);
+
+                console.log(`[cron-reagendamento] ✓ Redistribuído ${orfao.id} para ${cand.vistoriador_id} (${cand.distancia.toFixed(1)}km)`);
+                redistribuido = true;
+                break;
+              } else if (cand.distancia <= 0.5) {
+                // Ocupado mas muito perto — enfileirar com prioridade alta
+                await supabase.from("fila_servicos").insert({
+                  servico_id: orfao.id,
+                  profissional_id: cand.vistoriador_id,
+                  distancia_km: cand.distancia,
+                  prioridade: 1,
+                  status: "aguardando",
+                  motivo: "redistribuicao_imprevisto",
+                }).onConflict("servico_id,profissional_id").ignore();
+
+                console.log(`[cron-reagendamento] 📋 Enfileirado ${orfao.id} para ${cand.vistoriador_id} com prioridade alta (${cand.distancia.toFixed(2)}km)`);
+                redistribuido = true;
+                break;
+              }
+            }
+          }
+
+          // Se redistribuiu, marcar imprevisto como tratado mas NÃO como nao_compareceu
+          if (redistribuido) {
+            await supabase.from("servicos").update({
+              imprevisto_duplo_check: true,
+              imprevisto_duplo_check_em: new Date().toISOString(),
+              updated_at: new Date().toISOString(),
+            }).eq("id", orfao.id);
+
+            // Redistribuir fila do profissional com imprevisto
+            if (orfao.profissional_id) {
+              const { data: filaDoProf } = await supabase
+                .from("fila_servicos")
+                .select("id, servico_id")
+                .eq("profissional_id", orfao.profissional_id)
+                .eq("status", "aguardando");
+
+              if (filaDoProf && filaDoProf.length > 0) {
+                await supabase
+                  .from("fila_servicos")
+                  .update({ status: "cancelado" } as any)
+                  .eq("profissional_id", orfao.profissional_id)
+                  .eq("status", "aguardando");
+                console.log(`[cron-reagendamento] Canceladas ${filaDoProf.length} entradas de fila do profissional com imprevisto`);
+              }
+            }
+
+            orfaosProcessados++;
+            continue;
+          }
+          // Se não redistribuiu, cai no fluxo normal abaixo
+        }
+
+        // ========== FLUXO PADRÃO: reagendar (imprevisto do associado OU falha na redistribuição) ==========
         await supabase
           .from("servicos")
           .update({
@@ -62,7 +170,7 @@ Deno.serve(async (req) => {
         });
 
         orfaosProcessados++;
-        console.log(`[cron-reagendamento] Órfão recuperado: ${orfao.id}`);
+        console.log(`[cron-reagendamento] Órfão recuperado (${origem}): ${orfao.id}`);
       } catch (e: any) {
         console.error(`[cron-reagendamento] Erro no órfão ${orfao.id}:`, e.message);
       }
