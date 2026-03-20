@@ -27,6 +27,7 @@ export default function InstaladorHome() {
   const { data: tarefaAtual, isLoading } = useTarefaAtual();
   const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
   const { emServico } = useIniciarServico();
+  const { isGarantindo } = useGarantirTurno(emServico);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
 
   // Verificar alocação diária (rota ou base)
