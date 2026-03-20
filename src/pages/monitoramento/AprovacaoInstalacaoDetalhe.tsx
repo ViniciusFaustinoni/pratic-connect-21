@@ -262,7 +262,7 @@ export default function AprovacaoInstalacaoDetalhe() {
           </div>
           <div>
             <span className="text-muted-foreground text-xs">Ano</span>
-            <p className="font-medium text-foreground">{veiculo?.ano || '---'}</p>
+            <p className="font-medium text-foreground">{veiculo?.ano_modelo || '---'}</p>
           </div>
           <div>
             <span className="text-muted-foreground text-xs">Instalador</span>
