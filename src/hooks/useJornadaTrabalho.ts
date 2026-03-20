@@ -93,9 +93,35 @@ export function useJornadaTrabalho() {
       return data as TurnoProfissional | null;
     },
     enabled: !!profile?.id,
-    staleTime: 30000,
-    refetchInterval: 60000, // Refetch a cada 1 minuto
+    staleTime: 10000,
+    refetchInterval: 30000, // Polling a cada 30s (fallback do realtime)
   });
+
+  // Realtime subscription para turnos_profissionais
+  useEffect(() => {
+    if (!profile?.id) return;
+
+    const channel = supabase
+      .channel(`turno-realtime-${profile.id}`)
+      .on(
+        'postgres_changes',
+        {
+          event: '*',
+          schema: 'public',
+          table: 'turnos_profissionais',
+          filter: `profissional_id=eq.${profile.id}`,
+        },
+        (payload) => {
+          console.log('[useJornadaTrabalho] Realtime update:', payload.eventType);
+          refetchTurno();
+        }
+      )
+      .subscribe();
+
+    return () => {
+      supabase.removeChannel(channel);
+    };
+  }, [profile?.id, refetchTurno]);
 
   // Buscar saldo acumulado do dia anterior (extras - faltantes)
   const { data: saldoAnterior } = useQuery({
