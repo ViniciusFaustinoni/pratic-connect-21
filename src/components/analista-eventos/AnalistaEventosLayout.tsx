@@ -49,8 +49,8 @@ export function AnalistaEventosLayout() {
 
   return (
     <AnalistaEventosGuard>
-      <div className="min-h-screen bg-muted/30">
-        <div className="max-w-md mx-auto border-x border-border min-h-screen bg-background flex flex-col relative">
+      <div className="h-dvh bg-muted/30">
+        <div className="max-w-md mx-auto border-x border-border h-dvh bg-background flex flex-col relative overflow-hidden">
           {/* Header */}
           <header className="sticky top-0 z-50 bg-slate-800 shadow-sm border-b border-slate-700">
             <div className="flex items-center justify-between px-4 py-3">
