@@ -107,7 +107,16 @@ export default function InstaladorHome() {
         </div>
 
         {/* Barra de Status da Jornada */}
-        {emServico && <JornadaStatusBar className="mb-4" />}
+        {emServico && (
+          isGarantindo ? (
+            <div className="bg-slate-800/80 border border-slate-700 rounded-lg p-3 flex items-center justify-center gap-2 mb-4">
+              <Loader2 className="h-4 w-4 animate-spin text-primary" />
+              <span className="text-sm text-muted-foreground">Carregando jornada...</span>
+            </div>
+          ) : (
+            <JornadaStatusBar className="mb-4" />
+          )
+        )}
 
         {/* Conteúdo Principal: Tarefa Atual ou Botão Iniciar */}
         {tarefaAtual ? (

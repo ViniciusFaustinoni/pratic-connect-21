@@ -179,11 +179,11 @@ export function useJornadaTrabalho() {
     setTempoReal({ minutosTrabalhados, minutosAlmoco });
   }, [turno]);
 
-  // Atualizar tempo a cada minuto
+  // Atualizar tempo a cada 30 segundos para feedback mais rápido
   useEffect(() => {
     if (turno?.status && turno.status !== 'encerrado') {
       calcularTempoReal();
-      intervalRef.current = setInterval(calcularTempoReal, 60000);
+      intervalRef.current = setInterval(calcularTempoReal, 30000);
 
       return () => {
         if (intervalRef.current) {
@@ -192,6 +192,19 @@ export function useJornadaTrabalho() {
       };
     }
   }, [turno?.status, calcularTempoReal]);
+
+  // Recalcular ao voltar do background
+  useEffect(() => {
+    const handleVisibility = () => {
+      if (document.visibilityState === 'visible' && turno?.status && turno.status !== 'encerrado') {
+        console.log('[useJornadaTrabalho] Voltou ao foreground - recalculando tempo');
+        calcularTempoReal();
+        refetchTurno();
+      }
+    };
+    document.addEventListener('visibilitychange', handleVisibility);
+    return () => document.removeEventListener('visibilitychange', handleVisibility);
+  }, [turno?.status, calcularTempoReal, refetchTurno]);
 
   // Mutation para criar/iniciar turno (protege contra sobrescrita de inicio_turno)
   const iniciarTurnoMutation = useMutation({
