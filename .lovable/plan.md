@@ -1,61 +1,52 @@
 
 
-# Garantir entrega de todas as mensagens WhatsApp
+# Calcular carência automaticamente no contrato-gerar para inclusão
 
-## Resultado da auditoria completa
+## Problema
+A edge function `contrato-gerar` não lê `tipo_entrada` da cotação e não calcula `data_carencia_inicio` / `data_carencia_fim` quando a operação é inclusão. Os campos ficam nulos no contrato.
 
-Todas as 23+ edge functions que chamam `whatsapp-send-text` foram verificadas. **Apenas 1 bug restante** impede a entrega:
+## Diagnóstico
+- A cotação já armazena `tipo_entrada` (gravado pelo Cotador via `useCotacao.ts`)
+- O contrato já tem as colunas `tipo_entrada`, `data_carencia_inicio`, `data_carencia_fim`
+- A configuração `carencia_dias_padrao` já existe na tabela `configuracoes` com valor `120`
+- O `contrato-gerar` (linha 648-718) cria o contrato mas **nunca** define `tipo_entrada`, `data_carencia_inicio` nem `data_carencia_fim`
 
-### Bug encontrado
+## Solução
 
-**`cron-atribuir-tarefas/index.ts` — chamada ao vistoriador (linha 671-684)**
+### Arquivo: `supabase/functions/contrato-gerar/index.ts`
 
-O campo `mensagem` está ausente no body da requisição. A edge function `whatsapp-send-text` verifica `if (!telefone || !mensagem)` e retorna erro 400. A mensagem do vistoriador **nunca é enviada**.
+1. **Importar o config-helper** existente (`../_shared/config-helper.ts`)
 
-### Correção
+2. **Antes de criar o contrato** (~linha 640), ler a configuração de carência:
+   ```typescript
+   const carenciaDias = await getConfiguracaoNumero(supabase, 'carencia_dias_padrao', 120);
+   ```
 
-Adicionar o campo `mensagem` com texto descritivo na chamada do vistoriador, assim como já existe na chamada do instalador (linha 598 com `mensagem: msgInstalador`).
+3. **Calcular as datas de carência** quando `tipo_entrada` for `inclusao` (ou qualquer tipo que exija carência — `nova` e `inclusao`):
+   ```typescript
+   const tipoEntrada = cotacao.tipo_entrada || 'nova';
+   const hoje = new Date().toISOString().split('T')[0];
+   let dataCarenciaInicio: string | null = null;
+   let dataCarenciaFim: string | null = null;
+   
+   if (['nova', 'inclusao'].includes(tipoEntrada)) {
+     dataCarenciaInicio = hoje;
+     const fim = new Date();
+     fim.setDate(fim.getDate() + carenciaDias);
+     dataCarenciaFim = fim.toISOString().split('T')[0];
+   }
+   ```
 
-```
-mensagem: `Nova vistoria atribuída: ${servico.associado_nome} - ${endereco} - ${dataFormatada}`
-```
+4. **Adicionar os campos no insert** do contrato (dentro do `.insert({...})` na linha 648):
+   ```typescript
+   tipo_entrada: tipoEntrada,
+   data_carencia_inicio: dataCarenciaInicio,
+   data_carencia_fim: dataCarenciaFim,
+   ```
 
-### Status das demais funções (todas OK)
-
-| Função | Template | Status |
-|--------|----------|--------|
-| notificar-inicio-rota | sinistro_atualizado | ✅ |
-| cron-atribuir-tarefas (instalador) | sinistro_atualizado | ✅ |
-| cron-atribuir-tarefas (vistoriador) | tarefa_vistoriador_v2 | ❌ falta `mensagem` |
-| aprovar-sinistro | sinistro_atualizado | ✅ |
-| notificar-retirada-whatsapp | sinistro_atualizado | ✅ |
-| notificar-manutencao-whatsapp | sinistro_atualizado | ✅ |
-| despacho-reboque-atribuir (prestador) | sinistro_atualizado | ✅ |
-| atribuir-proxima-tarefa | sinistro_atualizado | ✅ |
-| aprovar-solicitacao-ia (cancelamento) | sinistro_atualizado | ✅ |
-| aprovar-solicitacao-ia (troca titular) | sinistro_atualizado | ✅ |
-| retroativo-pagamento-termo | sinistro_atualizado | ✅ |
-| notificar-cliente | META_TEMPLATE_MAP | ✅ |
-| ativar-associado | cadastro_aprovado_botao | ✅ |
-| enviar-link-reagendamento | reagendamento_servico | ✅ |
-| autentique-create-by-token | assinatura_documento_v2 | ✅ |
-| enviar-lembretes-vencimento | cobranca_mensalidade | ✅ |
-| gerar-cobrancas-mensais | cobranca_mensalidade | ✅ |
-| disparar-boletos-lote | cobranca_mensalidade | ✅ |
-| notificar-sinistro | comunicacao_sinistro | ✅ |
-| notificar-etapa-os | sinistro_atualizado | ✅ |
-| confirmar-agendamento-cron | sinistro_atualizado | ✅ |
-| confirmar-vistorias-manha-cron | sinistro_atualizado | ✅ |
-| despacho-reboque-status | templates por status | ✅ |
-| notificar-status-assistencia | template dinâmico | ✅ |
-| whatsapp-meta-webhook (Maya) | allow_text (janela 24h) | ✅ |
-| processar-fila-ia (erro) | allow_text (janela 24h) | ✅ |
-
-## Arquivo a modificar
-
-- `supabase/functions/cron-atribuir-tarefas/index.ts` — adicionar campo `mensagem` na chamada do vistoriador (linha 671)
-
-## Impacto
-
-Correção pontual que desbloqueará o envio de notificações WhatsApp aos vistoriadores quando tarefas são atribuídas automaticamente. Todas as demais mensagens já estão configuradas corretamente.
+### Impacto
+- Contratos de inclusão e nova adesão terão carência calculada automaticamente
+- A ficha do associado (`OrigemCadastroCard`) já lê esses campos — passará a exibi-los corretamente
+- Migrações aprovadas continuam com carência isenta (lógica já existente em `useSolicitacoesMigracaoAdmin`)
+- Nenhum valor fixo no código — prazo vem de `carencia_dias_padrao` na tabela `configuracoes`
 
