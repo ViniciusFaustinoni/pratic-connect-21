@@ -282,7 +282,7 @@ function DroppableColumn({ etapa, contratos, onContratoClick }: DroppableColumnP
       </div>
 
       {/* Column Body with Cards */}
-      <ScrollArea className="flex-1 max-h-[calc(100vh-320px)]">
+      <ScrollArea className="flex-1 max-h-[calc(100dvh-320px)]">
         <div ref={setNodeRef} className="p-2 space-y-2 min-h-[100px]">
           <SortableContext items={contratos.map((c) => c.id)} strategy={verticalListSortingStrategy}>
             {contratos.map((contrato) => (
