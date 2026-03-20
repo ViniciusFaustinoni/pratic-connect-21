@@ -235,7 +235,7 @@ import { estimarValorFipe } from '@/utils/fipe';
 
 export default function CotadorPage() {
   const navigate = useNavigate();
-  const [searchParams] = React.useState(() => new URLSearchParams(window.location.search));
+  const [searchParams] = useState(() => new URLSearchParams(window.location.search));
   const inclusaoAssociadoId = searchParams.get('associado_id');
   const inclusaoTipoEntrada = searchParams.get('tipo_entrada');
   const isInclusaoVeiculo = inclusaoTipoEntrada === 'inclusao' && !!inclusaoAssociadoId;
