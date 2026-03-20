@@ -306,7 +306,7 @@ export default function CotadorPage() {
   const [comboboxAberto, setComboboxAberto] = useState(false);
   
   // Nome do associado (quando não vinculado a lead)
-  const [nomeAssociado, setNomeAssociado] = useState('');
+  const [nomeAssociado, setNomeAssociado] = useState(inclusaoAssociado?.nome || '');
 
   // Indicação
   const [isIndicacao, setIsIndicacao] = useState(false);
