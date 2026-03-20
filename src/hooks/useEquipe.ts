@@ -209,6 +209,10 @@ export function useProfissionaisEquipe() {
           tarefas_hoje: tarefasPorProfissional[profile.id] || 0,
           ultima_atividade: ultimaAtividadePorProfissional[profile.id] || null,
           rastreadores_atribuidos: rastreadoresPorProfissional[profile.id] || 0,
+          inicio_turno: turnoPorProfissional[profile.id] || null,
+          latitude: localizacao?.latitude ?? null,
+          longitude: localizacao?.longitude ?? null,
+          localizacao_updated_at: localizacao?.updated_at ?? null,
           tarefa_atual: tarefaAtiva,
         };
       }) as ProfissionalEquipe[];
