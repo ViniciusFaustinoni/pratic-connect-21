@@ -1,52 +1,49 @@
 
 
-# Plano: Isenção de Carência de Vidros em Migração Aprovada no Fluxo de Cotação
+# Plano: Anexar Template à Proposta de Filiação
 
-## Estado Atual
-
-**O que já existe:**
-- `contrato-gerar/index.ts` (linhas 641-700): calcula carência de vidros para TODOS os contratos, mas **nunca verifica** se a cotação tem migração aprovada. Variáveis `carenciaVidrosIsenta` e `carenciaVidrosMotivoIsencao` são declaradas mas sempre ficam `false`/`null`.
-- `useSolicitacoesMigracaoAdmin.ts`: quando migração é aprovada pelo caminho direto (sem cotação), já grava `carencia_vidros_isenta: true` no contrato existente. Este caminho está correto.
-- Tabela `solicitacoes_migracao` tem coluna `cotacao_id` que vincula migração à cotação.
-- Configuração `migracao_isentar_carencia` existe na tabela `configuracoes` e é usada no admin.
-
-**O que falta:**
-- `contrato-gerar` não consulta `solicitacoes_migracao` para verificar se a cotação tem migração aprovada.
-- `contrato-gerar` não lê `migracao_isentar_carencia` da config.
-- Resultado: contratos gerados via cotação com migração aprovada sempre têm carência ativa.
+## O que existe hoje
+- A tabela `documento_templates` tem flags booleanas para marcar templates como padrão: `is_default_autentique`, `is_default_evento`, `is_default_saida`, `is_default_rastreador`
+- **Não existe** flag para anexar template à proposta de filiação
+- O formulário `TemplateForm.tsx` já renderiza checkboxes para cada flag — basta adicionar mais um
+- A proposta é gerada via `useGerarProposta.ts` usando `pdf-lib` (PDF programático em A4)
+- O contrato/assinatura é gerado via Edge Functions `autentique-create` e `autentique-create-by-token` usando HTML dinâmico
 
 ## Implementação
 
-### Arquivo único: `supabase/functions/contrato-gerar/index.ts`
-
-Após a linha 657 (onde `dataCarenciaVidrosFim` é calculado) e antes do insert do contrato, adicionar:
-
-1. **Buscar migração aprovada vinculada à cotação:**
-```
-SELECT id, status FROM solicitacoes_migracao 
-WHERE cotacao_id = :cotacao_id AND status = 'aprovada' LIMIT 1
+### 1. Migration: adicionar coluna `anexar_proposta`
+```sql
+ALTER TABLE documento_templates 
+  ADD COLUMN IF NOT EXISTS anexar_proposta boolean DEFAULT false;
 ```
 
-2. **Se encontrou migração aprovada, ler config de isenção:**
-```
-SELECT valor FROM configuracoes WHERE chave = 'migracao_isentar_carencia'
-```
+### 2. Formulário de template (`TemplateForm.tsx`)
+- Adicionar campo `anexar_proposta` no schema Zod e default values
+- Adicionar checkbox com estilo consistente (cor roxa/violeta para diferenciar):
+  - Label: "Anexar à Proposta de Filiação"
+  - Descrição: "Este termo será automaticamente anexado como página adicional em todas as propostas de filiação geradas. Múltiplos templates podem ser marcados."
+- Gravar no insert/update
 
-3. **Se config ativa (`true`), aplicar isenção:**
-- `carenciaVidrosIsenta = true`
-- `carenciaVidrosMotivoIsencao = 'Migração aprovada'`
-- `dataCarenciaVidrosInicio = null`
-- `dataCarenciaVidrosFim = null`
-- Também isentar carência geral: `dataCarenciaInicio = null`, `dataCarenciaFim = null`
-- Setar `carencia_isenta = true`, `carencia_motivo_isencao = 'Migração aprovada'` (mesmo padrão do admin)
+### 3. Hook de templates (`useDocumentoTemplates.ts`)
+- Adicionar `anexar_proposta` nas interfaces e nos creates/updates
 
-4. **Se config desativada, manter carência padrão** (comportamento atual, sem alteração).
+### 4. Geração da proposta (`useGerarProposta.ts`)
+- Antes de gerar o PDF, buscar todos os templates com `anexar_proposta = true` e `ativo = true`
+- Para cada template encontrado, renderizar o HTML do template como página(s) adicional(is) no PDF após as páginas da proposta
+- Usar a mesma lógica de renderização HTML→PDF que já existe no sistema (converter o `conteudo` HTML do template em páginas do pdf-lib)
 
-5. **Adicionar fallback por CPF**: Se a cotação não tem `cotacao_id` direto na `solicitacoes_migracao`, buscar também por CPF do cliente (mesmo padrão usado no admin para migrações sem cotação vinculada).
+### 5. Geração do contrato Autentique (`autentique-create`)
+- Mesma lógica: buscar templates com `anexar_proposta = true` e concatenar o HTML ao final do documento antes de enviar para assinatura
+- Assim o associado assina a proposta + termos anexados de uma vez
 
-### Resultado
-- Contratos de migração aprovada via cotação terão isenção automática de carência geral e de vidros
-- Isenção controlada pela config `migracao_isentar_carencia` — nunca hardcoded
-- Motivo registrado para auditoria
-- Ambos os caminhos (cotação e direto) se comportam identicamente
+## Arquivos afetados
+- Migration SQL (nova coluna)
+- `src/pages/documentos/TemplateForm.tsx` — novo checkbox
+- `src/hooks/useDocumentoTemplates.ts` — campo nas interfaces
+- `src/hooks/useGerarProposta.ts` — buscar e anexar templates marcados
+- `supabase/functions/autentique-create/index.ts` — concatenar termos ao HTML
+- `supabase/functions/autentique-create-by-token/index.ts` — idem
+
+## Diferença em relação aos outros checkboxes
+Os checkboxes existentes são mutuamente exclusivos (apenas 1 template padrão por tipo). O `anexar_proposta` permite **múltiplos templates** marcados simultaneamente — todos serão anexados à proposta.
 
