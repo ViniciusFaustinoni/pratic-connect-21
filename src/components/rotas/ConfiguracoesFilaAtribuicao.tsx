@@ -62,6 +62,8 @@ function useConfiguracoesFilaAtribuicao() {
         fila_max_por_profissional: 'maxPorProfissional',
         fila_tempo_expiracao_horas: 'tempoExpiracao',
         redistribuicao_raio_km: 'redistribuicaoRaio',
+        fila_tempo_quase_disponivel_min: 'tempoQuaseDisponivel',
+        fila_etapa_quase_disponivel: 'etapaQuaseDisponivel',
       };
 
       data?.forEach((item) => {
