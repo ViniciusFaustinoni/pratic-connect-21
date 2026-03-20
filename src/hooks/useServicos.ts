@@ -1013,51 +1013,21 @@ export function useAprovarVeiculoServico() {
         .eq('id', data.veiculoId)
         .single();
 
-      // 5. Se já tinha autovistoria aprovada, ativar cobertura total automaticamente
-      if (veiculoAtual?.cobertura_roubo_furto && !veiculoAtual?.cobertura_total) {
-        console.log('[useAprovarVeiculoServico] Autovistoria prévia detectada, ativando cobertura_total automaticamente');
+      // 5. Atualizar veículo como ativo (SEM cobertura_total — aguarda aprovação do monitoramento)
+      {
+        const { error: veiculoError } = await supabase
+          .from('veiculos')
+          .update({
+            status: 'ativo',
+            updated_at: agora,
+          })
+          .eq('id', data.veiculoId);
+
+        if (veiculoError) throw veiculoError;
         
-        const { error: veiculoError } = await supabase
-          .from('veiculos')
-          .update({
-            status: 'ativo',
-            cobertura_total: true, // Ativar cobertura total automaticamente
-            updated_at: agora,
-          })
-          .eq('id', data.veiculoId);
-
-        if (veiculoError) throw veiculoError;
-
-        // Notificar associado via WhatsApp sobre cobertura total ativada
-        ;(async () => {
-          try {
-            const { data: veiculoInfo } = await supabase
-              .from('veiculos')
-              .select('placa, marca, modelo')
-              .eq('id', data.veiculoId)
-              .single();
-            await supabase.functions.invoke('notificar-cliente', {
-              body: {
-                tipo: 'cobertura_total_ativada',
-                associado_id: data.associadoId,
-                dados: { placa: veiculoInfo?.placa || '', marca: veiculoInfo?.marca || '', modelo: veiculoInfo?.modelo || '' },
-              },
-            });
-          } catch (err) {
-            console.warn('[aprovar-veiculo-servico] Erro ao notificar (não crítico):', err);
-          }
-        })();
-      } else {
-        // Fluxo normal sem autovistoria prévia
-        const { error: veiculoError } = await supabase
-          .from('veiculos')
-          .update({
-            status: 'ativo',
-            updated_at: agora,
-          })
-          .eq('id', data.veiculoId);
-
-        if (veiculoError) throw veiculoError;
+        if (veiculoAtual?.cobertura_roubo_furto && !veiculoAtual?.cobertura_total) {
+          console.log('[useAprovarVeiculoServico] Autovistoria prévia detectada — cobertura_total ficará pendente de aprovação do monitoramento');
+        }
       }
 
       // 6. SEMPRE tentar ativar rastreador na plataforma (independente de cobertura)
