@@ -57,6 +57,40 @@ function TrocaTitularidadeTab() {
     },
   });
 
+  // Buscar serviços vinculados para Cenário B (status da vistoria em tempo real)
+  const cenarioBIds = useMemo(() => {
+    if (!solicitacoes) return [];
+    return solicitacoes
+      .filter((s: any) => {
+        const dados = s.dados as any;
+        return s.status === 'aprovado' && dados?.cenario_aplicado === 'B';
+      })
+      .map((s: any) => s.id);
+  }, [solicitacoes]);
+
+  const { data: servicosVinculados } = useQuery({
+    queryKey: ['servicos-troca-titularidade', cenarioBIds],
+    queryFn: async () => {
+      if (!cenarioBIds.length) return [];
+      const { data, error } = await supabase
+        .from('servicos')
+        .select('id, status, solicitacao_id')
+        .in('solicitacao_id', cenarioBIds)
+        .eq('origem', 'troca_titularidade');
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: cenarioBIds.length > 0,
+  });
+
+  const servicosPorSolicitacao = useMemo(() => {
+    const map: Record<string, string> = {};
+    servicosVinculados?.forEach((s: any) => {
+      if (s.solicitacao_id) map[s.solicitacao_id] = s.status;
+    });
+    return map;
+  }, [servicosVinculados]);
+
   const aprovarMutation = useMutation({
     mutationFn: async (solicitacaoId: string) => {
       const { data, error } = await supabase.functions.invoke('aprovar-solicitacao-ia', {
@@ -135,11 +169,13 @@ function TrocaTitularidadeTab() {
         const isPendente = sol.status === 'pendente';
         const isAprovado = sol.status === 'aprovado';
         const isRejeitado = sol.status === 'rejeitado';
-        const cenario = cenarioResultado[sol.id] || (
+        const cenario = cenarioResultado[sol.id] || dados?.cenario_aplicado || (
           sol.resultado_id && sol.status === 'aprovado'
             ? (sol.resultado_id === sol.id ? 'A' : 'B')
             : null
         );
+        const efetivado = !!dados?.efetivado_em;
+        const statusServico = servicosPorSolicitacao[sol.id];
 
         return (
           <Card key={sol.id} className="hover:shadow-md transition-shadow">
@@ -156,10 +192,20 @@ function TrocaTitularidadeTab() {
                         Vistoria dispensada
                       </Badge>
                     )}
-                    {isAprovado && cenario === 'B' && (
-                      <Badge className="bg-blue-100 text-blue-800 border-blue-200">
+                    {isAprovado && cenario === 'B' && !efetivado && (
+                      <Badge className={
+                        statusServico === 'em_andamento'
+                          ? 'bg-blue-100 text-blue-800 border-blue-200'
+                          : 'bg-amber-100 text-amber-800 border-amber-200'
+                      }>
                         <ClipboardList className="h-3 w-3 mr-1" />
-                        Vistoria agendada
+                        {statusServico === 'em_andamento' ? 'Vistoria em andamento' : 'Aguardando vistoria'}
+                      </Badge>
+                    )}
+                    {isAprovado && efetivado && (
+                      <Badge className="bg-green-100 text-green-800 border-green-200">
+                        <CheckCircle className="h-3 w-3 mr-1" />
+                        Efetivado
                       </Badge>
                     )}
                   </div>

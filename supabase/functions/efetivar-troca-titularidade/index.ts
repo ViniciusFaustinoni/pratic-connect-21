@@ -440,6 +440,48 @@ serve(async (req) => {
       },
     });
 
+    // 14. Notificar novo titular via WhatsApp
+    try {
+      const telefoneNovo = dadosNovoTitular.telefone || null;
+      if (telefoneNovo) {
+        const telLimpo = telefoneNovo.replace(/\D/g, "");
+        const telFmt = telLimpo.startsWith("55") ? telLimpo : `55${telLimpo}`;
+
+        const placaVeiculo = veiculoData?.placa || "N/A";
+        const modeloVeiculo = veiculoData?.modelo || "";
+        const marcaVeiculo = veiculoData?.marca || "";
+        const veiculoDescricao = `${marcaVeiculo} ${modeloVeiculo}`.trim() || "seu veículo";
+
+        const mensagemBoasVindas = `Olá, ${dadosNovoTitular.nome}! 🎉\n\nSeja bem-vindo(a) à *Praticcar*!\n\nSeu veículo *${veiculoDescricao}* (placa *${placaVeiculo}*) foi registrado em seu nome com sucesso.\n\n📋 *Contrato:* ${novoContrato.numero}\n\nBaixe nosso app para acompanhar tudo sobre sua proteção veicular. Em caso de dúvidas, estamos à disposição!\n\nEquipe Praticcar 🚗`;
+
+        const sendResp = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}`,
+          },
+          body: JSON.stringify({
+            telefone: telFmt,
+            mensagem: mensagemBoasVindas,
+            referencia_tipo: "troca_titularidade",
+            referencia_id: solicitacao_id,
+          }),
+        });
+        const sendData = await sendResp.json();
+        console.log(`[efetivar-troca] WhatsApp novo titular: ${sendData.success ? "enviado" : "falhou"}`, sendData.error || "");
+      } else {
+        console.log("[efetivar-troca] Novo titular sem telefone — notificação WhatsApp não enviada");
+        await supabase.from("logs_auditoria").insert({
+          acao: "troca_titularidade_notificacao_ignorada",
+          modulo: "solicitacoes",
+          descricao: `Novo titular ${dadosNovoTitular.nome} sem telefone cadastrado — notificação WhatsApp não enviada.`,
+          dados_novos: { solicitacao_id, novo_associado_id: novoAssociadoId },
+        });
+      }
+    } catch (whatsErr) {
+      console.error("[efetivar-troca] Erro ao notificar novo titular (não bloqueante):", whatsErr);
+    }
+
     console.log(`[efetivar-troca] ✅ Efetivação concluída com sucesso`);
 
     return new Response(
