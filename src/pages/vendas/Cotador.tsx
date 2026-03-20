@@ -235,6 +235,11 @@ import { estimarValorFipe } from '@/utils/fipe';
 
 export default function CotadorPage() {
   const navigate = useNavigate();
+  const [searchParams] = React.useState(() => new URLSearchParams(window.location.search));
+  const inclusaoAssociadoId = searchParams.get('associado_id');
+  const inclusaoTipoEntrada = searchParams.get('tipo_entrada');
+  const isInclusaoVeiculo = inclusaoTipoEntrada === 'inclusao' && !!inclusaoAssociadoId;
+
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
   const { data: minimoAdesaoBase = 100 } = useTaxaAdesaoMinimoBase();
@@ -244,6 +249,20 @@ export default function CotadorPage() {
   const { data: repasseVolanteExterno = 50 } = useTaxaRepasseVolanteExterno();
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
   const { data: migracaoConfig } = useMigracaoConfig();
+
+  // Fetch associado data for inclusão pre-fill
+  const { data: inclusaoAssociado } = useQuery({
+    queryKey: ['inclusao-associado-prefill', inclusaoAssociadoId],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('associados')
+        .select('id, nome, cpf, telefone, email')
+        .eq('id', inclusaoAssociadoId!)
+        .single();
+      return data;
+    },
+    enabled: isInclusaoVeiculo,
+  });
   
   // Modo de entrada
   const [modo, setModo] = useState<ModoEntrada>('busca_placa');
