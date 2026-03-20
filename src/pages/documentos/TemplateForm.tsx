@@ -414,6 +414,30 @@ export default function TemplateForm() {
 
                   <FormField
                     control={form.control}
+                    name="anexar_proposta"
+                    render={({ field }) => (
+                      <FormItem className="flex flex-row items-start space-x-3 space-y-0 rounded-lg border border-violet-500/20 bg-violet-500/5 p-4">
+                        <FormControl>
+                          <Checkbox
+                            checked={field.value}
+                            onCheckedChange={field.onChange}
+                          />
+                        </FormControl>
+                        <div className="space-y-1 leading-none">
+                          <FormLabel className="flex items-center gap-2 text-violet-700 dark:text-violet-400">
+                            <Paperclip className="h-4 w-4" />
+                            Anexar à Proposta de Filiação
+                          </FormLabel>
+                          <FormDescription>
+                            Este termo será automaticamente anexado como página adicional em todas as propostas de filiação geradas.
+                            Múltiplos templates podem ser marcados.
+                          </FormDescription>
+                        </div>
+                      </FormItem>
+                    )}
+                  />
+
+                    control={form.control}
                     name="descricao"
                     render={({ field }) => (
                       <FormItem>
