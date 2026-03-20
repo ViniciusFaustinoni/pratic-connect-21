@@ -27,6 +27,10 @@ export interface ProfissionalEquipe {
   tarefas_hoje: number;
   ultima_atividade: string | null;
   rastreadores_atribuidos: number;
+  inicio_turno: string | null;
+  latitude: number | null;
+  longitude: number | null;
+  localizacao_updated_at: string | null;
   tarefa_atual?: {
     id: string;
     tipo: 'vistoria' | 'instalacao';
