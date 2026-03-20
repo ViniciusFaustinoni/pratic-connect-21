@@ -1,64 +1,73 @@
 
 
-# Correções: Bloqueio Cenário B + Notificação Novo Titular
+# Correções: Ficha e Proposta do Novo Titular — Troca de Titularidade
 
-## Correção 1 — Status da vistoria no card do Cenário B
+## Problemas Identificados
 
-### Problema
-Quando o Cenário B é determinado, um registro é criado na tabela `servicos` com `origem: 'troca_titularidade'` e `solicitacao_id`. Porém, a `processar-vistoria` não verifica a existência desse vínculo para disparar a efetivação após aprovação da vistoria. Além disso, o card na aba Titularidade não exibe o status da vistoria vinculada.
+### Ficha (OrigemCadastroCard.tsx)
 
-### Alterações
+1. **Campo cenário não encontrado** — A query busca `dados?.cenario || dados?.scenario` (linha 288), mas `aprovar-solicitacao-ia` salva como `cenario_aplicado`. O cenário nunca é encontrado.
 
-**1. Frontend — `ProcessosOperacionais.tsx`**
+2. **Status incorreto no filtro** — A query filtra por `status: 'aprovada'` (linha 282), mas o sistema grava `status: 'aprovado'`. Nenhuma solicitação é encontrada.
 
-Na query de `processos-troca-titularidade`, para solicitações com `status === 'aprovado'` e cenário B, buscar o serviço vinculado na tabela `servicos` (via `solicitacao_id`) para exibir o status da vistoria em tempo real.
+3. **Busca pelo associado errado** — A query busca por `associado_id = associadoId` do novo titular (linha 280), mas a solicitação foi criada com o `associado_id` do titular anterior. A busca deveria usar o `origem_troca_titularidade_id` do contrato (que contém o `solicitacao_id`) para encontrar a solicitação diretamente.
 
-Adicionar uma segunda query que busca os serviços vinculados:
-```sql
-SELECT id, status, solicitacao_id 
-FROM servicos 
-WHERE solicitacao_id IN (ids das solicitações aprovadas cenário B)
-  AND origem = 'troca_titularidade'
-```
+4. **Carência não exibida** — A seção de carência (linha 637) só renderiza para `migracao` e `reativacao`. A troca de titularidade não exibe carência mesmo quando o contrato tem esses dados.
 
-No card, quando cenário é B:
-- Se serviço `pendente` → Badge amarela: "Aguardando vistoria"
-- Se serviço `em_andamento` → Badge azul: "Vistoria em andamento"
-- Se serviço `concluido` → Badge verde: "Efetivado"
-- Usar os `dados.efetivado_em` da solicitação para confirmar se a efetivação já ocorreu (badge "Efetivado")
+### Proposta (template-utils.ts)
 
-**2. Edge function — `processar-vistoria/index.ts`**
+5. **Sem variáveis de troca** — O mapeamento de variáveis tem `operacao.troca_titularidade` (checkbox), mas não tem variáveis para titular anterior, cenário aplicado e label do cenário. Templates não conseguem exibir essas informações.
 
-Após processar uma vistoria aprovada (bloco `decisao === 'aprovada' || 'aprovada_com_ressalvas'`), adicionar verificação:
-
-1. Buscar na tabela `servicos` por `associado_id` + `veiculo_id` + `origem = 'troca_titularidade'` + `status = 'pendente'`
-2. Se encontrado e o serviço tem `solicitacao_id`, chamar `efetivar-troca-titularidade` com essa `solicitacao_id` e `cenario_override: 'B'`
-3. Atualizar o serviço como `concluido`
-
-Isso completa o fluxo automático do Cenário B que foi planejado mas não implementado no `processar-vistoria`.
+6. **Interface sem campo troca** — `TermoAfiliacaoData` tem campos para `migracao` e `substituicao`, mas não para `trocaTitularidade`.
 
 ---
 
-## Correção 2 — Notificar novo titular após efetivação
+## Alterações
 
-### Problema
-A função `efetivar-troca-titularidade` não envia nenhuma comunicação ao novo titular após concluir a transferência.
+### 1. `OrigemCadastroCard.tsx` — Corrigir busca e exibição
 
-### Alteração
+**Dados (useOrigemCadastro):**
+- Usar `contrato.origem_troca_titularidade_id` (que armazena o `solicitacao_id`) para buscar a solicitação diretamente por `id`, eliminando os problemas de `associado_id` errado e `status` errado.
+- Ler `dados.cenario_aplicado` em vez de `dados.cenario`.
+- Buscar `carencia_isenta`, `data_carencia_inicio`, `data_carencia_fim` do contrato (já na query existente).
 
-**`efetivar-troca-titularidade/index.ts`**
+**Interface `trocaTitularidade`:**
+- Adicionar campos `carenciaIsenta`, `carenciaInicio`, `carenciaFim`.
 
-Após o passo 13 (log de auditoria), adicionar bloco de notificação:
+**Render (RenderTrocaTitularidade):**
+- Exibir seção de carência inline (como já faz para migração e reativação).
 
-1. Buscar o telefone do novo titular em `dados_novo_titular.telefone` ou no registro do novo associado
-2. Se telefone existir:
-   - Montar mensagem de boas-vindas usando o template `cobertura_total_ativada` existente no `notificar-cliente`, adaptado com dados da troca: nome, placa do veículo, número do contrato
-   - Enviar via `whatsapp-send-text`
-3. Se telefone não existir:
-   - Registrar no log: "Novo titular sem telefone — notificação não enviada"
-   - Não bloquear o processo
+**Seção de carência global (linha 637):**
+- Adicionar `troca_titularidade` à condição de exibição. Alternativamente, mover a carência para dentro do `RenderTrocaTitularidade` para controle mais preciso.
 
-A mensagem incluirá: nome do novo titular, veículo (marca/modelo/placa), número do contrato, e orientação para acessar o app.
+### 2. `termo-afiliacao-utils.ts` — Adicionar interface de troca
+
+Adicionar campo opcional `trocaTitularidade` em `TermoAfiliacaoData`:
+```typescript
+trocaTitularidade?: {
+  titular_anterior: string;
+  cenario: string;
+  cenario_label: string;
+};
+```
+
+### 3. `template-utils.ts` — Adicionar variáveis de troca
+
+No `criarMapeamentoVariaveis`, adicionar bloco condicional:
+```typescript
+...(dados.trocaTitularidade ? {
+  'troca.titular_anterior': dados.trocaTitularidade.titular_anterior || '—',
+  'troca.cenario': dados.trocaTitularidade.cenario || '—',
+  'troca.cenario_label': dados.trocaTitularidade.cenario_label || '—',
+} : {}),
+```
+
+### 4. `autentique-create` e `autentique-create-by-token` — Injetar dados de troca
+
+Nos dois edge functions que geram propostas, quando o contrato tem `tipo_entrada === 'troca_titularidade'`:
+- Buscar a solicitação via `origem_troca_titularidade_id`
+- Buscar o nome do titular anterior via contrato anterior
+- Montar o campo `trocaTitularidade` no `TermoAfiliacaoData`
 
 ---
 
@@ -66,7 +75,9 @@ A mensagem incluirá: nome do novo titular, veículo (marca/modelo/placa), núme
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/cadastro/ProcessosOperacionais.tsx` | Buscar status do serviço vinculado, exibir status da vistoria no card do Cenário B |
-| `supabase/functions/processar-vistoria/index.ts` | Detectar vistoria de troca de titularidade aprovada e chamar efetivação |
-| `supabase/functions/efetivar-troca-titularidade/index.ts` | Enviar WhatsApp de boas-vindas ao novo titular após efetivação |
+| `src/components/associados/detalhe/OrigemCadastroCard.tsx` | Corrigir busca da solicitação, ler `cenario_aplicado`, adicionar carência |
+| `supabase/functions/_shared/termo-afiliacao-utils.ts` | Adicionar `trocaTitularidade` à interface `TermoAfiliacaoData` |
+| `supabase/functions/_shared/template-utils.ts` | Adicionar variáveis `troca.*` no mapeamento |
+| `supabase/functions/autentique-create/index.ts` | Injetar dados de troca no `TermoAfiliacaoData` |
+| `supabase/functions/autentique-create-by-token/index.ts` | Injetar dados de troca no `TermoAfiliacaoData` |
 
