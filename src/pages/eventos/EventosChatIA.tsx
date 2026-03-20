@@ -89,7 +89,7 @@ export default function EventosChatIA() {
   };
 
   return (
-    <div className="h-[calc(100vh-8rem)] flex rounded-lg border border-border bg-card overflow-hidden">
+    <div className="h-[calc(100dvh-8rem)] flex rounded-lg border border-border bg-card overflow-hidden">
       {/* Sidebar - Conversations List */}
       <div className="w-80 shrink-0">
         <ConversasList

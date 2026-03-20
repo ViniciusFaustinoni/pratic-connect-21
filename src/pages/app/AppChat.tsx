@@ -31,7 +31,7 @@ export default function AppChat() {
   const hasMessages = messages.length > 0;
 
   return (
-    <div className="flex flex-col h-[calc(100vh-8rem)] bg-background">
+    <div className="flex flex-col h-[calc(100dvh-8rem)] bg-background">
       {/* Header */}
       <header className="flex items-center justify-between gap-3 p-4 border-b bg-background">
         <div className="flex items-center gap-3">

@@ -103,7 +103,7 @@ export function AnalistaEventosLayout() {
                     key={item.path}
                     to={item.path}
                     className={cn(
-                      'flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[64px]',
+                      'flex flex-col items-center gap-1 px-3 py-2 rounded-lg transition-colors min-w-[64px] min-h-[44px] justify-center',
                       active ? 'text-sky-400' : 'text-slate-400 hover:text-slate-200'
                     )}
                   >

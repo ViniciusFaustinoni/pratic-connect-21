@@ -341,6 +341,19 @@
     overscroll-behavior: contain;
     -webkit-overflow-scrolling: touch;
   }
+
+  /* Dynamic viewport height - safe for iOS Safari */
+  .h-dvh {
+    height: 100dvh;
+  }
+
+  .min-h-dvh {
+    min-height: 100dvh;
+  }
+
+  .max-h-dvh {
+    max-height: 100dvh;
+  }
 }
 
 @supports (padding-bottom: env(safe-area-inset-bottom)) {
