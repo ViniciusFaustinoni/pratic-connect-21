@@ -52,6 +52,7 @@ import { EntradaEstoqueDialog } from '@/components/monitoramento/estoque/Entrada
 import { ImportarRastreadoresDialog } from '@/components/monitoramento/estoque/ImportarRastreadoresDialog';
 import { ConsultaRastreador } from '@/components/monitoramento/estoque/ConsultaRastreador';
 import { HistoricoMovimentacoes } from '@/components/monitoramento/estoque/HistoricoMovimentacoes';
+import { ListaRastreadores } from '@/components/monitoramento/estoque/ListaRastreadores';
 import { EstoqueMetricas } from '@/components/monitoramento/estoque/EstoqueMetricas';
 
 export default function Rastreadores() {
@@ -178,6 +179,7 @@ export default function Rastreadores() {
         {/* Aba Estoque */}
         <TabsContent value="estoque" className="space-y-6 mt-6">
           <EstoqueMetricas />
+          <ListaRastreadores />
           <ConsultaRastreador />
         </TabsContent>
 
