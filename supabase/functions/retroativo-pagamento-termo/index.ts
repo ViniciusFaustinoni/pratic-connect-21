@@ -199,7 +199,16 @@ serve(async (req) => {
                 'Content-Type': 'application/json',
                 'Authorization': `Bearer ${supabaseServiceKey}`,
               },
-              body: JSON.stringify({ telefone, mensagem }),
+              body: JSON.stringify({
+                telefone,
+                mensagem,
+                template_name: 'sinistro_atualizado',
+                template_params: [
+                  associado.nome?.split(' ')[0] || 'Associado',
+                  sinistro.protocolo || 'Evento',
+                  `Pagamento da cota - R$ ${valorFormatado}`,
+                ],
+              }),
             });
             const whatsResult = await whatsResp.json();
             console.log(`[retroativo] WhatsApp enviado para ${sinistro.protocolo}:`, whatsResult.success);

@@ -599,6 +599,12 @@ serve(async (req) => {
                     body: {
                       telefone: profProfile.telefone,
                       mensagem: msgInstalador,
+                      template_name: 'sinistro_atualizado',
+                      template_params: [
+                        profProfile.nome?.split(' ')[0] || 'Instalador',
+                        'Instalação',
+                        `Nova instalação atribuída - ${assocData?.nome || servico.associado_nome}`,
+                      ],
                       referencia_tipo: 'instalacao',
                       referencia_id: servico.instalacao_origem_id,
                     }

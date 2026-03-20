@@ -587,7 +587,16 @@ serve(async (req) => {
             await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
               method: "POST",
               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-              body: JSON.stringify({ telefone: telefoneAssociado, mensagem }),
+              body: JSON.stringify({
+                telefone: telefoneAssociado,
+                mensagem,
+                template_name: 'sinistro_atualizado',
+                template_params: [
+                  associado.nome?.split(' ')[0] || 'Associado',
+                  'Cancelamento',
+                  `Solicitação recebida - ${veiculo?.placa || 'veículo'}. Retirada será agendada.`,
+                ],
+              }),
             });
           }
         }
@@ -757,7 +766,16 @@ serve(async (req) => {
             await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
               method: "POST",
               headers: { "Content-Type": "application/json", "Authorization": `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-              body: JSON.stringify({ telefone: telefoneAssociado, mensagem }),
+              body: JSON.stringify({
+                telefone: telefoneAssociado,
+                mensagem,
+                template_name: 'sinistro_atualizado',
+                template_params: [
+                  associado.nome?.split(' ')[0] || 'Associado',
+                  'Troca de titularidade',
+                  `Solicitação recebida - ${veiculo?.placa || 'veículo'}. Vistoria será agendada.`,
+                ],
+              }),
             });
           }
         }

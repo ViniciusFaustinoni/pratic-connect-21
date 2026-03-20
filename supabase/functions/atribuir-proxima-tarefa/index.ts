@@ -979,7 +979,12 @@ ${linkWhatsAppCliente}
                 body: {
                   telefone: telProfNorm,
                   mensagem: mensagemVistoriador,
-                  allow_text: true,
+                  template_name: 'sinistro_atualizado',
+                  template_params: [
+                    profissionalTel?.nome?.split(' ')[0] || 'Vistoriador',
+                    tipoServicoLabelWhats,
+                    `${servico.associado_nome || 'Cliente'} - ${servico.veiculo_placa || ''}`,
+                  ],
                 },
               });
               

@@ -34,6 +34,12 @@ serve(async (req) => {
       );
     }
 
+    // Enviar via whatsapp-send-text
+    const supabase = createClient(
+      Deno.env.get('SUPABASE_URL')!,
+      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
+    );
+
     // Buscar valor da multa da tabela configuracoes
     const { data: cfgMulta } = await supabase.from('configuracoes').select('valor').eq('chave', 'multa_rastreador').single();
     const valorMulta = cfgMulta ? parseInt(cfgMulta.valor) : 400;
@@ -45,17 +51,16 @@ serve(async (req) => {
     // Montar mensagem
     const mensagem = `Prezado(a) ${payload.nome_associado}, informamos que a retirada do equipamento rastreador do veículo ${payload.veiculo_modelo} • ${payload.veiculo_placa} está agendada para ${dataFormatada} no período da ${periodoTexto}. Local: ${payload.local}. Prazo para comparecimento: 48 horas. Em caso de não comparecimento, será aplicada multa de R$${valorMulta} conforme regulamento. Praticcar.`;
 
-    // Enviar via whatsapp-send-text
-    const supabase = createClient(
-      Deno.env.get('SUPABASE_URL')!,
-      Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
-    );
-
     const { data, error } = await supabase.functions.invoke('whatsapp-send-text', {
       body: {
         telefone: payload.telefone,
         mensagem,
-        allow_text: true,
+        template_name: 'sinistro_atualizado',
+        template_params: [
+          payload.nome_associado?.split(' ')[0] || 'Associado',
+          'Retirada de rastreador',
+          `Agendada para ${dataFormatada} - ${periodoTexto}. Local: ${payload.local}`,
+        ],
       }
     });
 
