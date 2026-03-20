@@ -97,6 +97,11 @@ serve(async (req) => {
 
     console.log("[cron-atribuir-tarefas] Iniciando atribuição automática de tarefas...");
 
+    // Ler configurações dinâmicas
+    const raioProximidadeKm = (await getConfiguracaoNumero(supabase, 'fila_raio_proximidade_metros', 500)) / 1000;
+    const raioQuaseDisponivelKm = (await getConfiguracaoNumero(supabase, 'fila_raio_quase_disponivel_metros', 1000)) / 1000;
+    const maxFilaPorProfissional = await getConfiguracaoNumero(supabase, 'fila_max_por_profissional', 3);
+
     const hoje = new Date().toISOString().split('T')[0];
     const amanha = new Date(Date.now() + 86400000).toISOString().split('T')[0];
     const trintaMinutosAtras = new Date(Date.now() - 30 * 60 * 1000).toISOString();
