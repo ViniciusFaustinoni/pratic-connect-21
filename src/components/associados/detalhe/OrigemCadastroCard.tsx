@@ -57,6 +57,9 @@ interface OrigemData {
     titularAnterior: string | null;
     dataTroca: string | null;
     consultorNome: string | null;
+    carenciaIsenta: boolean;
+    carenciaInicio: string | null;
+    carenciaFim: string | null;
   } | null;
   // Substituição de placa
   substituicaoPlaca: {
