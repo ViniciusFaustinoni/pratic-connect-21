@@ -143,6 +143,7 @@ export default function TemplateForm() {
           is_default_evento: data.is_default_evento,
           is_default_saida: data.is_default_saida,
           is_default_rastreador: data.is_default_rastreador,
+          anexar_proposta: data.anexar_proposta,
         });
       }
       navigate('/documentos/templates');
