@@ -1135,7 +1135,7 @@ export function useAprovarVeiculoServico() {
       queryClient.invalidateQueries({ queryKey: ['rastreadores-meu-porte'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
-      toast.success('Instalação concluída! Aguardando análise cadastral.');
+      toast.success('Instalação concluída! Aguardando aprovação do monitoramento.');
     },
     onError: (error) => {
       console.error('Erro ao aprovar veículo:', error);

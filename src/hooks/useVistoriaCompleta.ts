@@ -145,7 +145,7 @@ export function useAprovarVeiculoVistoria() {
       queryClient.invalidateQueries({ queryKey: ['instalacoes'] });
       queryClient.invalidateQueries({ queryKey: ['veiculos'] });
       queryClient.invalidateQueries({ queryKey: ['associados'] });
-      toast.success('Veículo aprovado com sucesso! Proteção 360º ativada.');
+      toast.success('Instalação concluída! Aguardando aprovação do monitoramento.');
     },
     onError: (error) => {
       console.error('Erro ao aprovar veículo:', error);
