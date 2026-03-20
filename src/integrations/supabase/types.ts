@@ -7731,6 +7731,8 @@ export type Database = {
           autentique_url: string | null
           carencia_isenta: boolean | null
           carencia_motivo_isencao: string | null
+          carencia_vidros_isenta: boolean | null
+          carencia_vidros_motivo_isencao: string | null
           cliente_bairro: string | null
           cliente_cep: string | null
           cliente_cidade: string | null
@@ -7765,6 +7767,8 @@ export type Database = {
           data_cancelamento: string | null
           data_carencia_fim: string | null
           data_carencia_inicio: string | null
+          data_carencia_vidros_fim: string | null
+          data_carencia_vidros_inicio: string | null
           data_envio: string | null
           data_fim: string | null
           data_inicio: string
@@ -7845,6 +7849,8 @@ export type Database = {
           autentique_url?: string | null
           carencia_isenta?: boolean | null
           carencia_motivo_isencao?: string | null
+          carencia_vidros_isenta?: boolean | null
+          carencia_vidros_motivo_isencao?: string | null
           cliente_bairro?: string | null
           cliente_cep?: string | null
           cliente_cidade?: string | null
@@ -7879,6 +7885,8 @@ export type Database = {
           data_cancelamento?: string | null
           data_carencia_fim?: string | null
           data_carencia_inicio?: string | null
+          data_carencia_vidros_fim?: string | null
+          data_carencia_vidros_inicio?: string | null
           data_envio?: string | null
           data_fim?: string | null
           data_inicio?: string
@@ -7959,6 +7967,8 @@ export type Database = {
           autentique_url?: string | null
           carencia_isenta?: boolean | null
           carencia_motivo_isencao?: string | null
+          carencia_vidros_isenta?: boolean | null
+          carencia_vidros_motivo_isencao?: string | null
           cliente_bairro?: string | null
           cliente_cep?: string | null
           cliente_cidade?: string | null
@@ -7993,6 +8003,8 @@ export type Database = {
           data_cancelamento?: string | null
           data_carencia_fim?: string | null
           data_carencia_inicio?: string | null
+          data_carencia_vidros_fim?: string | null
+          data_carencia_vidros_inicio?: string | null
           data_envio?: string | null
           data_fim?: string | null
           data_inicio?: string
