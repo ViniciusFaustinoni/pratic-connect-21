@@ -1,58 +1,55 @@
 
 
-# Plano: Configurações de Atribuição de Tarefas na Aba do Coordenador
+# Plano: Regra "Quase Disponível" por Cruzamento Tempo + Fase (Configurável)
 
-## O que existe hoje
+## Situação Atual
 
-- A aba "Configurações" dentro de Rotas (`Rotas.tsx` linha 174) já existe e renderiza o componente `ConfiguracoesEncaixe` com 2 campos: raio de encaixe (km) e janela de disponibilidade (horas).
-- As configurações de instalação/rotas (max por dia, horário início, tempo médio, etc.) estão na Diretoria (`InstalacaoRotasConfig.tsx`) — acessível apenas ao diretor.
-- Os novos parâmetros da fila inteligente (raio de proximidade 500m, raio "quase disponível" 1km, max itens na fila) estão hardcoded no `cron-atribuir-tarefas`.
+- O cron usa apenas **tempo** (75+ min hardcoded) para determinar "quase disponível" e ampliar o raio de 500m para 1km.
+- A tabela `servicos` já tem `etapa_atual` (1-5) atualizada em tempo real pelo app do instalador.
+- O componente `ConfiguracoesFilaAtribuicao.tsx` já tem 5 campos configuráveis, mas não inclui a etapa mínima.
 
 ## O que será feito
 
-Expandir a aba "Configurações" em Rotas para incluir um segundo card com os parâmetros de atribuição automática de tarefas, acessível ao coordenador.
+Tornar a regra de "quase disponível" um **cruzamento configurável** de tempo E/OU fase, com ambos os parâmetros editáveis pelo coordenador.
 
-### 1. Migration: inserir configs na tabela `configuracoes`
+### 1. Migration: nova chave de configuração
 
-Novas chaves com valores padrão:
-- `fila_raio_proximidade_metros` → `500` (raio para enfileirar em profissional ocupado)
-- `fila_raio_quase_disponivel_metros` → `1000` (raio ampliado quando 75+ min na tarefa)
-- `fila_max_por_profissional` → `3` (máx. serviços enfileirados por profissional)
-- `fila_tempo_expiracao_horas` → `4` (tempo de expiração de itens na fila)
-- `redistribuicao_raio_km` → `5` (raio para redistribuição em caso de imprevisto do instalador)
+INSERT na tabela `configuracoes`:
+- `fila_etapa_quase_disponivel` → `4` (etapa mínima para considerar quase disponível)
+- `fila_tempo_quase_disponivel_min` → `75` (minutos mínimos — hoje está hardcoded)
 
-### 2. Novo componente: `ConfiguracoesFilaAtribuicao.tsx`
+### 2. `ConfiguracoesFilaAtribuicao.tsx` — 2 campos novos
 
-Card com os campos editáveis:
+Adicionar ao array `CONFIG_KEYS`, `FIELDS`, `FilaConfig` e `DEFAULTS`:
 
-- **Raio de proximidade** (metros) — distância para enfileirar serviço em profissional ocupado
-- **Raio "quase disponível"** (metros) — raio ampliado quando profissional está terminando
-- **Máx. na fila por profissional** — limite de serviços enfileirados
-- **Expiração da fila** (horas) — tempo até item expirar
-- **Raio de redistribuição** (km) — distância para buscar substituto em imprevisto do instalador
-- Botão "Salvar" com upsert na tabela `configuracoes`
+- **Tempo mínimo "quase disponível"** (minutos) — min: 30, max: 120, default: 75
+- **Etapa mínima "quase disponível"** (número 1-5) — min: 1, max: 5, default: 4, com hint explicando as etapas (1=Dados, 2=Checklist, 3=Fotos, 4=Assinatura, 5=Decisão)
 
-Seguir mesmo padrão visual do `ConfiguracoesEncaixe` (Card + tooltips + Input numérico).
+### 3. `cron-atribuir-tarefas/index.ts` — lógica cruzada
 
-### 3. Atualizar `Rotas.tsx`
+Nas linhas 195-199, substituir a regra hardcoded:
 
-Na aba "configuracoes" (linha 341), renderizar os dois componentes:
-```
-<ConfiguracoesEncaixe />
-<ConfiguracoesFilaAtribuicao />
+**Antes:**
+```ts
+const raioFila = minutosNaTarefa >= 75 ? raioQuaseDisponivelKm : raioProximidadeKm;
 ```
 
-### 4. Atualizar `cron-atribuir-tarefas` e `cron-reagendamento-automatico`
+**Depois:**
+```ts
+const etapaAtual = tarefa.etapa_atual || 0;
+const quaseDisponivel = minutosNaTarefa >= tempoQuaseDisponivelMin || etapaAtual >= etapaQuaseDisponivel;
+const raioFila = quaseDisponivel ? raioQuaseDisponivelKm : raioProximidadeKm;
+```
 
-Substituir os valores hardcoded (500m, 1000m, 5km) por leitura da tabela `configuracoes` no início da execução do cron.
+Os valores `tempoQuaseDisponivelMin` e `etapaQuaseDisponivel` são lidos da tabela `configuracoes` no início da execução (junto com os outros 5 parâmetros já existentes), usando o `getConfiguracaoNumero`.
+
+Garantir que a RPC `buscar_tarefa_atual_profissional` retorna `etapa_atual` — se não retorna, adicionar ao SELECT da function.
 
 ## Arquivos afetados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| Migration SQL | INSERT das 5 chaves de config |
-| `src/components/rotas/ConfiguracoesFilaAtribuicao.tsx` | Novo componente |
-| `src/pages/monitoramento/Rotas.tsx` | Renderizar novo componente na aba |
-| `supabase/functions/cron-atribuir-tarefas/index.ts` | Ler configs do banco em vez de hardcoded |
-| `supabase/functions/cron-reagendamento-automatico/index.ts` | Ler raio de redistribuição do banco |
+| Migration SQL (insert tool) | INSERT 2 chaves: `fila_etapa_quase_disponivel`, `fila_tempo_quase_disponivel_min` |
+| `src/components/rotas/ConfiguracoesFilaAtribuicao.tsx` | +2 campos no formulário |
+| `supabase/functions/cron-atribuir-tarefas/index.ts` | Ler configs + lógica cruzada tempo OU etapa |
 
