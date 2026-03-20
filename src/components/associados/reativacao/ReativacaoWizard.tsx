@@ -14,7 +14,7 @@ import {
 } from 'lucide-react';
 import { useInadimplenciaPrazos, useCarenciaDiasPadrao, useCarenciaVidrosDias } from '@/hooks/useConteudosSistema';
 import { useAssociadoActions } from '@/hooks/useAssociados';
-import { useAuth } from '@/hooks/useAuth';
+import { useAuth } from '@/contexts/AuthContext';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { SituacaoAssociado } from '@/hooks/useAssociadoSituacao';
