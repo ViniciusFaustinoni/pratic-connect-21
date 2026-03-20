@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, lazy, Suspense } from 'react';
 import { useQueryClient } from '@tanstack/react-query';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
@@ -19,7 +19,10 @@ import {
   DialogTitle,
 } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Radio, Server, Package, Clock, Plus, Upload } from 'lucide-react';
+import { Radio, Server, Package, Clock, Plus, Upload, MapPin } from 'lucide-react';
+import { Loader2 } from 'lucide-react';
+
+const MapaRastreadores = lazy(() => import('./Mapa'));
 import { supabase } from '@/integrations/supabase/client';
 import { useMutation } from '@tanstack/react-query';
 import { toast } from 'sonner';
@@ -117,6 +120,7 @@ export default function Rastreadores() {
   // Montar lista de abas dinamicamente
   const tabs = [
     { value: 'visao-geral', label: 'Visão Geral', icon: Radio },
+    { value: 'mapa', label: 'Mapa', icon: MapPin },
     { value: 'estoque', label: 'Estoque', icon: Package },
     { value: 'historico', label: 'Histórico', icon: Clock },
     ...(canManagePlataformas ? [{ value: 'plataformas', label: 'Plataformas', icon: Server }] : []),
@@ -181,6 +185,13 @@ export default function Rastreadores() {
           <EstoqueMetricas />
           <ListaRastreadores />
           <ConsultaRastreador />
+        </TabsContent>
+
+        {/* Aba Mapa */}
+        <TabsContent value="mapa" className="mt-6">
+          <Suspense fallback={<div className="flex h-[500px] items-center justify-center"><Loader2 className="h-8 w-8 animate-spin text-muted-foreground" /></div>}>
+            <MapaRastreadores />
+          </Suspense>
         </TabsContent>
 
         {/* Aba Histórico */}

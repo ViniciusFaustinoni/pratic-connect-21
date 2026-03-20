@@ -206,12 +206,6 @@ const menuConfig: {
           icon: Radio,
           permission: 'canManageRastreadores',
         },
-        { 
-          title: 'Mapa', 
-          url: '/monitoramento/mapa', 
-          icon: Map,
-          permission: 'canManageRastreadores',
-        },
         {
           title: 'Alertas',
           url: '/monitoramento/alertas',
