@@ -68,6 +68,7 @@ export default function TemplateForm() {
       is_default_evento: false,
       is_default_saida: false,
       is_default_rastreador: false,
+      anexar_proposta: false,
     },
   });
 
