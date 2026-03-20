@@ -908,6 +908,18 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
   // ============================================
   return (
     <div className="space-y-6">
+      {/* INCLUSÃO BANNER */}
+      {isInclusaoVeiculo && inclusaoAssociado && (
+        <Alert className="border-primary/30 bg-primary/5">
+          <PlusCircle className="h-4 w-4 text-primary" />
+          <AlertTitle className="text-primary">Inclusão de Veículo</AlertTitle>
+          <AlertDescription className="text-sm">
+            Esta cotação é uma <strong>inclusão de segundo veículo</strong> para o associado{' '}
+            <strong>{inclusaoAssociado.nome}</strong> (CPF: {inclusaoAssociado.cpf}).
+            Os dados do associado foram preenchidos automaticamente.
+          </AlertDescription>
+        </Alert>
+      )}
       {/* HEADER */}
       <div>
         <div className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
