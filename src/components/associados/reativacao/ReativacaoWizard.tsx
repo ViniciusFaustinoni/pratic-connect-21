@@ -45,7 +45,10 @@ export function ReativacaoWizard({
   open, onOpenChange, associadoId, contratoId, situacao,
 }: ReativacaoWizardProps) {
   const { data: prazos } = useInadimplenciaPrazos();
+  const { data: carenciaDiasPadrao } = useCarenciaDiasPadrao();
+  const { data: carenciaVidrosDias } = useCarenciaVidrosDias();
   const { reativarAssociado, isReativando } = useAssociadoActions();
+  const { user } = useAuth();
 
   // Steps tracking
   const [currentStep, setCurrentStep] = useState(0);
