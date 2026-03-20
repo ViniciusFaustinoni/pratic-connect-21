@@ -3,6 +3,7 @@ import { PDFDocument, rgb, StandardFonts, PDFPage, PDFFont } from 'pdf-lib';
 import { DadosProposta, ConfiguracaoPDF } from '@/types/proposta';
 import { toast } from 'sonner';
 import { formatarMoeda } from '@/utils/format';
+import { supabase } from '@/integrations/supabase/client';
 
 // Configurações padrão
 const CONFIG_PADRAO: ConfiguracaoPDF = {
