@@ -1,49 +1,78 @@
 
 
-# Plano: Anexar Template à Proposta de Filiação
+# Plano: Nova Aba "Instalação e Rotas" em Regras de Venda
 
-## O que existe hoje
-- A tabela `documento_templates` tem flags booleanas para marcar templates como padrão: `is_default_autentique`, `is_default_evento`, `is_default_saida`, `is_default_rastreador`
-- **Não existe** flag para anexar template à proposta de filiação
-- O formulário `TemplateForm.tsx` já renderiza checkboxes para cada flag — basta adicionar mais um
-- A proposta é gerada via `useGerarProposta.ts` usando `pdf-lib` (PDF programático em A4)
-- O contrato/assinatura é gerado via Edge Functions `autentique-create` e `autentique-create-by-token` usando HTML dinâmico
+## Estado Atual
+
+- **Tab Navigation**: `TabNavigation.tsx` tem 6 abas (índice 0-5). A aba 6 será "Instalação e Rotas".
+- **Valores hardcoded encontrados**:
+  - `RotaModal.tsx` L138: `inicioMinutos = 8 * 60 + 30` (08:30 fixo)
+  - `RotaModal.tsx` L139: `minutosDecorridos = idx * 90` (90 min fixo por tarefa)
+  - `InstalacaoFilters.tsx` L89-98: regiões hardcoded (SP Centro, Zona Sul, etc.)
+  - Não encontrei limite de 6 instalações por dia explícito no código, mas será criado como config
+  - Custo fora do horário (R$ 50) não está no código atual — será criado
+  - Prazos de instalação por estado não existem
 
 ## Implementação
 
-### 1. Migration: adicionar coluna `anexar_proposta`
-```sql
-ALTER TABLE documento_templates 
-  ADD COLUMN IF NOT EXISTS anexar_proposta boolean DEFAULT false;
-```
+### 1. Migration: inserir configs na tabela `configuracoes`
 
-### 2. Formulário de template (`TemplateForm.tsx`)
-- Adicionar campo `anexar_proposta` no schema Zod e default values
-- Adicionar checkbox com estilo consistente (cor roxa/violeta para diferenciar):
-  - Label: "Anexar à Proposta de Filiação"
-  - Descrição: "Este termo será automaticamente anexado como página adicional em todas as propostas de filiação geradas. Múltiplos templates podem ser marcados."
-- Gravar no insert/update
+Inserir as seguintes chaves com valores padrão:
+- `instalacao_max_por_dia` → `6`
+- `instalacao_horario_inicio` → `08:30`
+- `instalacao_tempo_medio_minutos` → `90`
+- `instalacao_custo_fora_horario` → `50`
+- `instalacao_prazos_por_estado` → JSON: `[{"estado":"RJ","prazo_horas":48},{"estado":"SP","prazo_horas":72}]`
+- `instalacao_regioes_rotas` → JSON: `[{"value":"sp_centro","label":"São Paulo - Centro","ativa":true},{"value":"sp_zona_sul","label":"São Paulo - Zona Sul","ativa":true},{"value":"sp_zona_norte","label":"São Paulo - Zona Norte","ativa":true},{"value":"sp_zona_oeste","label":"São Paulo - Zona Oeste","ativa":true},{"value":"campinas","label":"Campinas","ativa":true},{"value":"abc","label":"ABC Paulista","ativa":true},{"value":"interior","label":"Interior","ativa":true},{"value":"litoral","label":"Litoral","ativa":true}]`
 
-### 3. Hook de templates (`useDocumentoTemplates.ts`)
-- Adicionar `anexar_proposta` nas interfaces e nos creates/updates
+### 2. Nova aba na `TabNavigation.tsx`
 
-### 4. Geração da proposta (`useGerarProposta.ts`)
-- Antes de gerar o PDF, buscar todos os templates com `anexar_proposta = true` e `ativo = true`
-- Para cada template encontrado, renderizar o HTML do template como página(s) adicional(is) no PDF após as páginas da proposta
-- Usar a mesma lógica de renderização HTML→PDF que já existe no sistema (converter o `conteudo` HTML do template em páginas do pdf-lib)
+Adicionar `{ label: 'Instalação e Rotas', icon: MapPin }` (índice 6).
 
-### 5. Geração do contrato Autentique (`autentique-create`)
-- Mesma lógica: buscar templates com `anexar_proposta = true` e concatenar o HTML ao final do documento antes de enviar para assinatura
-- Assim o associado assina a proposta + termos anexados de uma vez
+### 3. Novo componente: `InstalacaoRotasConfig.tsx`
+
+Componente com 4 blocos em Cards, seguindo o padrão visual do `RegrasVendaContent`:
+
+**Bloco 1 — Capacidade dos Instaladores**
+- Campo numérico: "Máx. instalações por dia" (default 6)
+- Campo time: "Horário de início das rotas" (default 08:30)
+- Campo numérico: "Tempo médio por instalação (min)" (default 90)
+- Botão "Salvar" por bloco
+
+**Bloco 2 — Prazos por Estado**
+- Tabela editável: Estado + Prazo (horas úteis)
+- Botão "Adicionar estado"
+- Pré-configurado: RJ (48h) e SP (72h)
+- Botão "Salvar"
+
+**Bloco 3 — Custo Fora do Horário**
+- Campo monetário: "Valor do repasse (R$)" (default 50)
+- Botão "Salvar"
+
+**Bloco 4 — Regiões de Atendimento**
+- Lista com nome e toggle ativo/inativo
+- Botão adicionar nova região (value + label)
+- Botão "Salvar"
+
+Cada bloco ao salvar grava na `configuracoes` via upsert e registra log de auditoria (insert em tabela `configuracoes_log` ou campo `updated_at` + `updated_by`).
+
+### 4. Registrar na `GestaoComercial.tsx`
+
+Adicionar `{activeTab === 6 && <InstalacaoRotasConfig />}`.
+
+### 5. Log de auditoria
+
+Usar a coluna `updated_at` já existente em `configuracoes`. Para registrar "quem", adicionar migration com coluna `updated_by uuid` na tabela `configuracoes` (se não existir). Exibir "Última alteração" abaixo de cada bloco.
 
 ## Arquivos afetados
-- Migration SQL (nova coluna)
-- `src/pages/documentos/TemplateForm.tsx` — novo checkbox
-- `src/hooks/useDocumentoTemplates.ts` — campo nas interfaces
-- `src/hooks/useGerarProposta.ts` — buscar e anexar templates marcados
-- `supabase/functions/autentique-create/index.ts` — concatenar termos ao HTML
-- `supabase/functions/autentique-create-by-token/index.ts` — idem
 
-## Diferença em relação aos outros checkboxes
-Os checkboxes existentes são mutuamente exclusivos (apenas 1 template padrão por tipo). O `anexar_proposta` permite **múltiplos templates** marcados simultaneamente — todos serão anexados à proposta.
+- Migration SQL (INSERT configs + ADD COLUMN `updated_by`)
+- `src/components/gestao-comercial/TabNavigation.tsx` — nova aba
+- `src/components/gestao-comercial/InstalacaoRotasConfig.tsx` — novo componente
+- `src/pages/diretoria/GestaoComercial.tsx` — renderizar aba 6
+
+## O que NÃO será alterado
+
+- Nenhuma tela de Monitoramento será modificada
+- As 6 abas existentes permanecem intactas
 
