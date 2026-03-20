@@ -773,6 +773,8 @@ export default function CotadorPage() {
         tipo_instalacao: tipoInstalacao || undefined,
         indicador_id: indicadorId || null,
         indicador_nome: indicadorNome || null,
+        associado_id: inclusaoAssociadoId || null,
+        tipo_entrada: isInclusaoVeiculo ? 'inclusao' : null,
       });
 
       setCotacaoSalva(cotacaoData);
