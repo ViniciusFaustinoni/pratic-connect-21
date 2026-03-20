@@ -194,11 +194,14 @@ serve(async (req) => {
 
         // ========== ENFILEIRAR SERVIÇOS PRÓXIMOS (profissional ocupado) ==========
         try {
-          // Determinar se está "quase disponível" (75+ min na tarefa)
+          // Determinar se está "quase disponível" (tempo OU etapa do processo)
           const tarefa = tarefaAtual[0];
           const inicioTarefa = tarefa.inicio_em ? new Date(tarefa.inicio_em).getTime() : Date.now();
           const minutosNaTarefa = Math.floor((Date.now() - inicioTarefa) / 60000);
-          const raioFila = minutosNaTarefa >= 75 ? raioQuaseDisponivelKm : raioProximidadeKm;
+          const etapaAtual = tarefa.etapa_atual || 0;
+          const quaseDisponivel = minutosNaTarefa >= tempoQuaseDisponivelMin || etapaAtual >= etapaQuaseDisponivel;
+          const raioFila = quaseDisponivel ? raioQuaseDisponivelKm : raioProximidadeKm;
+          console.log(`[cron-atribuir-tarefas] Profissional ${prof.vistoriador_id}: etapa=${etapaAtual}, tempo=${minutosNaTarefa}min, quaseDisponivel=${quaseDisponivel}`);
 
           // Buscar serviços pendentes próximos
           const { data: servicosProximos } = await supabase

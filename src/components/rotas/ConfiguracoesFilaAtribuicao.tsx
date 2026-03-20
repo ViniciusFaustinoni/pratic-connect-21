@@ -137,6 +137,26 @@ const FIELDS: {
     max: 50,
     hint: 'Recomendado: 3-10 km.',
   },
+  {
+    key: 'tempoQuaseDisponivel',
+    dbKey: 'fila_tempo_quase_disponivel_min',
+    label: 'Tempo mínimo "quase disponível"',
+    tooltip: 'Minutos na tarefa para considerar o profissional "quase disponível" e ampliar o raio de enfileiramento.',
+    unit: 'minutos',
+    min: 30,
+    max: 120,
+    hint: 'Recomendado: 60-90 minutos.',
+  },
+  {
+    key: 'etapaQuaseDisponivel',
+    dbKey: 'fila_etapa_quase_disponivel',
+    label: 'Etapa mínima "quase disponível"',
+    tooltip: 'Etapa do processo a partir da qual o profissional é considerado "quase disponível". O raio ampliado é ativado quando o tempo OU a etapa for atingida.',
+    unit: 'etapa',
+    min: 1,
+    max: 5,
+    hint: '1=Dados, 2=Checklist, 3=Fotos, 4=Assinatura, 5=Decisão.',
+  },
 ];
 
 export function ConfiguracoesFilaAtribuicao() {
