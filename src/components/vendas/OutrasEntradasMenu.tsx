@@ -124,7 +124,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
         .from('veiculos')
         .select('id, placa, marca, modelo, ano_fabricacao, status')
         .eq('associado_id', selectedAssociadoId)
-        .in('status', ['ativo', 'em_implantacao']);
+        .in('status', ['ativo', 'instalacao_pendente']);
       return { ...assoc, veiculos: veiculos || [] };
     },
     enabled: !!selectedAssociadoId && selectedTipo === 'inclusao',
