@@ -1,23 +1,13 @@
 
+# Plano Final Consolidado: IA Inteligente de Rotas com Gestão de Conflitos
 
-# Plano: Adicionar "Rotas" ao Menu de Monitoramento
+## ✅ Status: IMPLEMENTADO
 
-## Situação Atual
+### O que foi feito
 
-- A página de Rotas já existe em `src/pages/monitoramento/Rotas.tsx` e a rota `/monitoramento/rotas` está registrada no `App.tsx`.
-- A permissão `canEditRotas` já é usada dentro da página para restringir funcionalidades ao coordenador.
-- O item simplesmente não aparece no menu lateral — falta adicioná-lo ao `AppSidebar.tsx`.
-
-## Implementação
-
-### Arquivo único: `src/components/layout/AppSidebar.tsx`
-
-1. Adicionar `Route` ao import do `lucide-react` (linha 3-71).
-2. Adicionar o item de menu na lista `items` do grupo `monitoramento`, após "Calendário" (linha 200):
-
-```
-{ title: 'Rotas', url: '/monitoramento/rotas', icon: Route, permission: 'canEditRotas' },
-```
-
-A permission `canEditRotas` garante que apenas o coordenador de monitoramento veja esse item no menu. Nenhum outro arquivo precisa ser alterado.
-
+1. **Migration SQL** — Tabela `fila_servicos` + coluna `imprevisto_origem` em `servicos`
+2. **ImprevistoBotao.tsx** — Classifica automaticamente a origem (associado vs instalador) + pergunta "Consegue continuar?"
+3. **cron-atribuir-tarefas** — Enfileira serviços próximos quando profissional está ocupado (500m/1km), consome fila ao ficar livre
+4. **cron-reagendamento-automatico** — Redistribui proativamente para imprevistos do instalador, apenas reagenda para imprevistos do associado
+5. **Aba "Fila" em Rotas.tsx** — Visível apenas para coordenador, com realtime e botão de reatribuição
+6. **useFilaServicos.ts** — Hook com realtime para dados da fila
