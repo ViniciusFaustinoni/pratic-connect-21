@@ -121,6 +121,7 @@ const TAXAS_DEFAULTS: TaxasConfig = {
   troca_titularidade_prazo_dispensa_vistoria: '0',
   inclusao_bloquear_debito_outro_veiculo: 'true',
   limite_veiculos_associado: '0',
+  carencia_beneficio_vidros_dias: '120',
 };
 
 const AUTORIZACOES_CHAVES = [
