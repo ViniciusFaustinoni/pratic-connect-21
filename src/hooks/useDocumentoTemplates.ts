@@ -35,6 +35,7 @@ interface TemplateFromDB {
   is_default_evento?: boolean;
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
+  anexar_proposta?: boolean;
 }
 
 // Tipo transformado para uso no frontend
