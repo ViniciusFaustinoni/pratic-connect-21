@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts"
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2'
+import { getConfiguracaoNumero } from '../_shared/config-helper.ts'
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -637,7 +638,22 @@ serve(async (req) => {
       console.log('Novo veículo criado:', veiculoId);
     }
 
-    // 8. Criar o contrato
+    // 8. Calcular carência dinamicamente
+    const carenciaDias = await getConfiguracaoNumero(supabase, 'carencia_dias_padrao', 120);
+    const tipoEntrada = cotacao.tipo_entrada || 'nova';
+    const hoje = new Date().toISOString().split('T')[0];
+    let dataCarenciaInicio: string | null = null;
+    let dataCarenciaFim: string | null = null;
+
+    if (['nova', 'inclusao'].includes(tipoEntrada)) {
+      dataCarenciaInicio = hoje;
+      const fim = new Date();
+      fim.setDate(fim.getDate() + carenciaDias);
+      dataCarenciaFim = fim.toISOString().split('T')[0];
+    }
+    console.log(`Carência: tipo_entrada=${tipoEntrada}, dias=${carenciaDias}, inicio=${dataCarenciaInicio}, fim=${dataCarenciaFim}`);
+
+    // 9. Criar o contrato
     const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
     const numeroTemp = `CTR-${timestamp}-${random}`;
@@ -650,15 +666,20 @@ serve(async (req) => {
           .insert({
             numero: numeroTemp,
             cotacao_id,
-            lead_id: leadId, // Usa o lead original se existir (não cria mais retroativamente)
+            lead_id: leadId,
             associado_id: associadoId,
-            veiculo_id: veiculoId, // CORREÇÃO: Vincular veículo ao contrato
+            veiculo_id: veiculoId,
             plano_id: cotacao.plano_escolhido_id || cotacao.plano_id,
             valor_adesao: cotacao.valor_adesao || 0,
             valor_mensal: cotacao.valor_total_mensal || cotacao.valor_mensal,
             valor_adicional: cotacao.valor_adicional || 0,
-            vendedor_id: vendedorIdFinal, // CORREÇÃO: Usar profile.id validado
+            vendedor_id: vendedorIdFinal,
             status: 'rascunho',
+            
+            // Tipo de entrada e carência
+            tipo_entrada: tipoEntrada,
+            data_carencia_inicio: dataCarenciaInicio,
+            data_carencia_fim: dataCarenciaFim,
             
             // Dados do veículo (snapshot completo)
             veiculo_marca: cotacao.veiculo_marca,
@@ -712,9 +733,9 @@ serve(async (req) => {
             cobertura_fipe: cotacao.cobertura_fipe ?? null,
             
             dia_vencimento: cotacao.dia_vencimento ? Math.min(Math.max(Number(cotacao.dia_vencimento), 1), 31) : 10,
-            data_inicio: new Date().toISOString().split('T')[0],
+            data_inicio: hoje,
             validade_link: new Date(Date.now() + 7 * 24 * 60 * 60 * 1000).toISOString(),
-            created_by: vendedorIdFinal, // CORREÇÃO: Usar profile.id validado
+            created_by: vendedorIdFinal,
           })
       .select()
       .single();
