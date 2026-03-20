@@ -17,6 +17,8 @@ const CONFIG_KEYS = [
   'fila_max_por_profissional',
   'fila_tempo_expiracao_horas',
   'redistribuicao_raio_km',
+  'fila_tempo_quase_disponivel_min',
+  'fila_etapa_quase_disponivel',
 ] as const;
 
 interface FilaConfig {
@@ -25,6 +27,8 @@ interface FilaConfig {
   maxPorProfissional: string;
   tempoExpiracao: string;
   redistribuicaoRaio: string;
+  tempoQuaseDisponivel: string;
+  etapaQuaseDisponivel: string;
 }
 
 const DEFAULTS: FilaConfig = {
@@ -33,6 +37,8 @@ const DEFAULTS: FilaConfig = {
   maxPorProfissional: '3',
   tempoExpiracao: '4',
   redistribuicaoRaio: '5',
+  tempoQuaseDisponivel: '75',
+  etapaQuaseDisponivel: '4',
 };
 
 function useConfiguracoesFilaAtribuicao() {
