@@ -756,8 +756,10 @@ serve(async (req) => {
             
             // Tipo de entrada e carência
             tipo_entrada: tipoEntrada,
-            data_carencia_inicio: dataCarenciaInicio,
-            data_carencia_fim: dataCarenciaFim,
+            data_carencia_inicio: carenciaIsenta ? null : dataCarenciaInicio,
+            data_carencia_fim: carenciaIsenta ? null : dataCarenciaFim,
+            carencia_isenta: carenciaIsenta,
+            carencia_motivo_isencao: carenciaMotivoIsencao,
             
             // Carência de vidros e faróis
             data_carencia_vidros_inicio: carenciaVidrosIsenta ? null : dataCarenciaVidrosInicio,
