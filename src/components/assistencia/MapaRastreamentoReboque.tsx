@@ -243,7 +243,7 @@ export default function MapaRastreamentoReboque({
       {/* Fullscreen overlay */}
       {fullscreen && (
         <div className="fixed inset-0 z-50 bg-background">
-          {mapContent("100vh")}
+          {mapContent("100dvh")}
           <Button
             size="icon"
             variant="secondary"
