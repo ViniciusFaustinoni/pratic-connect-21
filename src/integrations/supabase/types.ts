@@ -5293,6 +5293,7 @@ export type Database = {
           aprovador_id: string | null
           associado_id: string
           created_at: string
+          criado_por: string | null
           dados: Json
           dados_novo_titular: Json | null
           id: string
@@ -5307,6 +5308,7 @@ export type Database = {
           aprovador_id?: string | null
           associado_id: string
           created_at?: string
+          criado_por?: string | null
           dados: Json
           dados_novo_titular?: Json | null
           id?: string
@@ -5321,6 +5323,7 @@ export type Database = {
           aprovador_id?: string | null
           associado_id?: string
           created_at?: string
+          criado_por?: string | null
           dados?: Json
           dados_novo_titular?: Json | null
           id?: string
