@@ -1,83 +1,41 @@
 
 
-# Correções: Ficha e Proposta do Novo Titular — Troca de Titularidade
+# Reordenar fotos da autovistoria (15 fotos — carro)
 
-## Problemas Identificados
+## Problema
 
-### Ficha (OrigemCadastroCard.tsx)
+A ordem atual coloca o Chassi como 2a foto (logo após a selfie), quebrando o fluxo natural de quem está andando ao redor do veículo. O associado precisa se abaixar para encontrar o chassi no para-brisa antes mesmo de fotografar o exterior.
 
-1. **Campo cenário não encontrado** — A query busca `dados?.cenario || dados?.scenario` (linha 288), mas `aprovar-solicitacao-ia` salva como `cenario_aplicado`. O cenário nunca é encontrado.
+## Nova ordem proposta (fluxo físico lógico)
 
-2. **Status incorreto no filtro** — A query filtra por `status: 'aprovada'` (linha 282), mas o sistema grava `status: 'aprovado'`. Nenhuma solicitação é encontrada.
+```text
+EXTERIOR — Caminhada ao redor do veículo:
+ 1. Selfie com veículo (já está na frente)
+ 2. Frente do veículo (continua na frente)
+ 3. Lateral Direita (caminha para a direita)
+ 4. Traseira (continua caminhando)
+ 5. Lateral Esquerda (completa a volta)
+ 6. Capô Aberto com Placa (volta à frente, abre o capô)
+ 7. Chassi (aproveita que está na frente, olha base do para-brisa)
 
-3. **Busca pelo associado errado** — A query busca por `associado_id = associadoId` do novo titular (linha 280), mas a solicitação foi criada com o `associado_id` do titular anterior. A busca deveria usar o `origem_troca_titularidade_id` do contrato (que contém o `solicitacao_id`) para encontrar a solicitação diretamente.
+PNEUS — Segunda volta rápida:
+ 8. Pneu Dianteiro Direito
+ 9. Pneu Traseiro Direito
+10. Pneu Traseiro Esquerdo
+11. Pneu Dianteiro Esquerdo
 
-4. **Carência não exibida** — A seção de carência (linha 637) só renderiza para `migracao` e `reativacao`. A troca de titularidade não exibe carência mesmo quando o contrato tem esses dados.
-
-### Proposta (template-utils.ts)
-
-5. **Sem variáveis de troca** — O mapeamento de variáveis tem `operacao.troca_titularidade` (checkbox), mas não tem variáveis para titular anterior, cenário aplicado e label do cenário. Templates não conseguem exibir essas informações.
-
-6. **Interface sem campo troca** — `TermoAfiliacaoData` tem campos para `migracao` e `substituicao`, mas não para `trocaTitularidade`.
-
----
-
-## Alterações
-
-### 1. `OrigemCadastroCard.tsx` — Corrigir busca e exibição
-
-**Dados (useOrigemCadastro):**
-- Usar `contrato.origem_troca_titularidade_id` (que armazena o `solicitacao_id`) para buscar a solicitação diretamente por `id`, eliminando os problemas de `associado_id` errado e `status` errado.
-- Ler `dados.cenario_aplicado` em vez de `dados.cenario`.
-- Buscar `carencia_isenta`, `data_carencia_inicio`, `data_carencia_fim` do contrato (já na query existente).
-
-**Interface `trocaTitularidade`:**
-- Adicionar campos `carenciaIsenta`, `carenciaInicio`, `carenciaFim`.
-
-**Render (RenderTrocaTitularidade):**
-- Exibir seção de carência inline (como já faz para migração e reativação).
-
-**Seção de carência global (linha 637):**
-- Adicionar `troca_titularidade` à condição de exibição. Alternativamente, mover a carência para dentro do `RenderTrocaTitularidade` para controle mais preciso.
-
-### 2. `termo-afiliacao-utils.ts` — Adicionar interface de troca
-
-Adicionar campo opcional `trocaTitularidade` em `TermoAfiliacaoData`:
-```typescript
-trocaTitularidade?: {
-  titular_anterior: string;
-  cenario: string;
-  cenario_label: string;
-};
+INTERIOR — Entra no veículo:
+12. Banco do Motorista (abre porta, fotografa)
+13. Banco do Passageiro (cruza para o outro lado)
+14. Banco Traseiro (abre porta traseira)
+15. Odômetro (liga o veículo, última foto)
 ```
 
-### 3. `template-utils.ts` — Adicionar variáveis de troca
+## Alteração
 
-No `criarMapeamentoVariaveis`, adicionar bloco condicional:
-```typescript
-...(dados.trocaTitularidade ? {
-  'troca.titular_anterior': dados.trocaTitularidade.titular_anterior || '—',
-  'troca.cenario': dados.trocaTitularidade.cenario || '—',
-  'troca.cenario_label': dados.trocaTitularidade.cenario_label || '—',
-} : {}),
-```
+**Arquivo**: `src/data/autovistoriaConfig.ts`
 
-### 4. `autentique-create` e `autentique-create-by-token` — Injetar dados de troca
+Reordenar os itens do array `FOTOS_AUTOVISTORIA_CARRO` e atualizar o campo `ordem` de cada um para refletir a nova sequência. Chassi move da posição 2 para 7. Frente sobe de 3 para 2. Capô sobe de 7 para 6. Banco passageiro e traseiro trocam de posição para seguir o fluxo físico (motorista → passageiro → traseiro).
 
-Nos dois edge functions que geram propostas, quando o contrato tem `tipo_entrada === 'troca_titularidade'`:
-- Buscar a solicitação via `origem_troca_titularidade_id`
-- Buscar o nome do titular anterior via contrato anterior
-- Montar o campo `trocaTitularidade` no `TermoAfiliacaoData`
-
----
-
-## Arquivos modificados
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/components/associados/detalhe/OrigemCadastroCard.tsx` | Corrigir busca da solicitação, ler `cenario_aplicado`, adicionar carência |
-| `supabase/functions/_shared/termo-afiliacao-utils.ts` | Adicionar `trocaTitularidade` à interface `TermoAfiliacaoData` |
-| `supabase/functions/_shared/template-utils.ts` | Adicionar variáveis `troca.*` no mapeamento |
-| `supabase/functions/autentique-create/index.ts` | Injetar dados de troca no `TermoAfiliacaoData` |
-| `supabase/functions/autentique-create-by-token/index.ts` | Injetar dados de troca no `TermoAfiliacaoData` |
+Nenhum outro arquivo precisa ser alterado — o componente `Autovistoria.tsx` já itera pelo array na ordem em que é retornado.
 
