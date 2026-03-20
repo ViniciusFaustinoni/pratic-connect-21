@@ -21,7 +21,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { Separator } from '@/components/ui/separator';
 import { TemplateEditor, getTemplateEditor } from '@/components/documentos/TemplateEditor';
 import { VariaveisSelector } from '@/components/documentos/VariaveisSelector';
-import { ArrowLeft, Save, FileText, PenTool, Loader2, Shield, Car, Truck, MapPin } from 'lucide-react';
+import { ArrowLeft, Save, FileText, PenTool, Loader2, Shield, Car, Truck, MapPin, Paperclip } from 'lucide-react';
 import { toast } from 'sonner';
 
 // Schema de validação
