@@ -99,20 +99,35 @@ export function useProfissionaisEquipe() {
         }
       });
 
-      // 5. Buscar localização em tempo real (últimos 60 minutos)
-      const cutoffTime = subMinutes(new Date(), 60).toISOString();
+      // 5. Buscar localização (sem filtro de tempo — sempre mostra última conhecida)
       const { data: localizacoes } = await supabase
         .from('vistoriadores_localizacao')
-        .select('vistoriador_id, em_servico, updated_at')
-        .in('vistoriador_id', profileIds)
-        .gte('updated_at', cutoffTime);
+        .select('vistoriador_id, em_servico, updated_at, latitude, longitude')
+        .in('vistoriador_id', profileIds);
 
-      const localizacaoPorProfissional: Record<string, { em_servico: boolean; updated_at: string }> = {};
+      const localizacaoPorProfissional: Record<string, { em_servico: boolean; updated_at: string; latitude: number; longitude: number }> = {};
       localizacoes?.forEach(loc => {
         localizacaoPorProfissional[loc.vistoriador_id] = {
           em_servico: loc.em_servico,
           updated_at: loc.updated_at,
+          latitude: loc.latitude,
+          longitude: loc.longitude,
         };
+      });
+
+      // 5b. Buscar turno do dia para saber hora de login
+      const hojeISO = startOfDay(new Date()).toISOString();
+      const { data: turnos } = await supabase
+        .from('turnos_profissionais')
+        .select('profissional_id, inicio_turno')
+        .in('profissional_id', profileIds)
+        .gte('inicio_turno', hojeISO);
+
+      const turnoPorProfissional: Record<string, string> = {};
+      turnos?.forEach(t => {
+        if (t.profissional_id && t.inicio_turno) {
+          turnoPorProfissional[t.profissional_id] = t.inicio_turno;
+        }
       });
 
       // 6. Buscar tarefas ativas (em_rota, em_andamento ou agendada com contato) da tabela servicos
