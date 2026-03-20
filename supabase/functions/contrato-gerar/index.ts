@@ -665,6 +665,72 @@ serve(async (req) => {
     console.log(`Carência: tipo_entrada=${tipoEntrada}, dias=${carenciaDias}, inicio=${dataCarenciaInicio}, fim=${dataCarenciaFim}`);
     console.log(`Carência vidros: dias=${carenciaVidrosDias}, inicio=${dataCarenciaVidrosInicio}, fim=${dataCarenciaVidrosFim}`);
 
+    // 8b. Verificar migração aprovada para isenção de carência
+    let carenciaIsenta = false;
+    let carenciaMotivoIsencao: string | null = null;
+
+    try {
+      // Buscar migração aprovada vinculada à cotação
+      let migracaoAprovada = null;
+      
+      const { data: migPorCotacao } = await supabase
+        .from('solicitacoes_migracao')
+        .select('id, status')
+        .eq('cotacao_id', cotacao_id)
+        .eq('status', 'aprovada')
+        .limit(1)
+        .maybeSingle();
+      
+      migracaoAprovada = migPorCotacao;
+
+      // Fallback: buscar por CPF se não encontrou por cotacao_id
+      if (!migracaoAprovada && cpfFinal) {
+        const cpfLimpo = cpfFinal.replace(/\D/g, '');
+        const { data: migPorCpf } = await supabase
+          .from('solicitacoes_migracao')
+          .select('id, status')
+          .eq('cpf', cpfLimpo)
+          .eq('status', 'aprovada')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        
+        migracaoAprovada = migPorCpf;
+      }
+
+      if (migracaoAprovada) {
+        console.log('Migração aprovada encontrada:', migracaoAprovada.id);
+        
+        // Ler config de isenção
+        const { data: configIsencao } = await supabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'migracao_isentar_carencia')
+          .maybeSingle();
+        
+        const isencaoAtiva = configIsencao?.valor === 'true' || configIsencao?.valor === '1';
+        console.log('Config migracao_isentar_carencia:', configIsencao?.valor, '-> ativa:', isencaoAtiva);
+
+        if (isencaoAtiva) {
+          // Isentar carência de vidros
+          carenciaVidrosIsenta = true;
+          carenciaVidrosMotivoIsencao = 'Migração aprovada';
+          dataCarenciaVidrosInicio = null;
+          dataCarenciaVidrosFim = null;
+
+          // Isentar carência geral
+          carenciaIsenta = true;
+          carenciaMotivoIsencao = 'Migração aprovada';
+          dataCarenciaInicio = null;
+          dataCarenciaFim = null;
+
+          console.log('Isenção de carência aplicada por migração aprovada');
+        }
+      }
+    } catch (migErr) {
+      console.error('Erro ao verificar migração (não bloqueia geração):', migErr);
+    }
+
     // 9. Criar o contrato
     const timestamp = new Date().toISOString().replace(/[-:T.Z]/g, '').slice(0, 14);
     const random = Math.random().toString(36).substring(2, 8).toUpperCase();
@@ -690,8 +756,10 @@ serve(async (req) => {
             
             // Tipo de entrada e carência
             tipo_entrada: tipoEntrada,
-            data_carencia_inicio: dataCarenciaInicio,
-            data_carencia_fim: dataCarenciaFim,
+            data_carencia_inicio: carenciaIsenta ? null : dataCarenciaInicio,
+            data_carencia_fim: carenciaIsenta ? null : dataCarenciaFim,
+            carencia_isenta: carenciaIsenta,
+            carencia_motivo_isencao: carenciaMotivoIsencao,
             
             // Carência de vidros e faróis
             data_carencia_vidros_inicio: carenciaVidrosIsenta ? null : dataCarenciaVidrosInicio,
