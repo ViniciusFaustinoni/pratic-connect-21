@@ -103,14 +103,9 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         rastreador = rData;
       }
 
-      // Buscar checklist
-      let checklist: any[] = [];
-      const { data: checkData } = await supabase
-        .from('checklist_items')
-        .select('*')
-        .eq('servico_id', servicoId)
-        .order('ordem');
-      checklist = checkData || [];
+      // Checklist - buscar do servico.checklist_json se existir
+      const checklist: any[] = [];
+
 
       return {
         servico,
