@@ -1,55 +1,53 @@
 
 
-# Plano: Regra "Quase Disponível" por Cruzamento Tempo + Fase (Configurável)
+# Plano: Consolidar Estoque + Rastreadores em uma Página Unificada
 
-## Situação Atual
+## Problema
 
-- O cron usa apenas **tempo** (75+ min hardcoded) para determinar "quase disponível" e ampliar o raio de 500m para 1km.
-- A tabela `servicos` já tem `etapa_atual` (1-5) atualizada em tempo real pelo app do instalador.
-- O componente `ConfiguracoesFilaAtribuicao.tsx` já tem 5 campos configuráveis, mas não inclui a etapa mínima.
+Hoje existem dois itens separados no menu ("Estoque" e "Rastreadores") que tratam do mesmo assunto: rastreadores. Isso fragmenta a operação e obriga o coordenador a navegar entre páginas.
 
-## O que será feito
+## Solução: Página Única "Rastreadores" com Abas Unificadas
 
-Tornar a regra de "quase disponível" um **cruzamento configurável** de tempo E/OU fase, com ambos os parâmetros editáveis pelo coordenador.
+Eliminar a página Estoque e absorver todo o conteúdo na página Rastreadores, reorganizada com abas claras:
 
-### 1. Migration: nova chave de configuração
-
-INSERT na tabela `configuracoes`:
-- `fila_etapa_quase_disponivel` → `4` (etapa mínima para considerar quase disponível)
-- `fila_tempo_quase_disponivel_min` → `75` (minutos mínimos — hoje está hardcoded)
-
-### 2. `ConfiguracoesFilaAtribuicao.tsx` — 2 campos novos
-
-Adicionar ao array `CONFIG_KEYS`, `FIELDS`, `FilaConfig` e `DEFAULTS`:
-
-- **Tempo mínimo "quase disponível"** (minutos) — min: 30, max: 120, default: 75
-- **Etapa mínima "quase disponível"** (número 1-5) — min: 1, max: 5, default: 4, com hint explicando as etapas (1=Dados, 2=Checklist, 3=Fotos, 4=Assinatura, 5=Decisão)
-
-### 3. `cron-atribuir-tarefas/index.ts` — lógica cruzada
-
-Nas linhas 195-199, substituir a regra hardcoded:
-
-**Antes:**
-```ts
-const raioFila = minutosNaTarefa >= 75 ? raioQuaseDisponivelKm : raioProximidadeKm;
+```text
+Rastreadores
+├── [Visão Geral]  ← Métricas unificadas (estoque + comunicação) + lista com filtros/cards/tabela
+├── [Estoque]      ← Entrada manual, importar lote, consulta por código/IMEI
+├── [Histórico]    ← Movimentações de estoque (entrada, saída, transferências)
+└── [Plataformas]  ← Config de plataformas (só diretor/dev, como já é hoje)
 ```
 
-**Depois:**
-```ts
-const etapaAtual = tarefa.etapa_atual || 0;
-const quaseDisponivel = minutosNaTarefa >= tempoQuaseDisponivelMin || etapaAtual >= etapaQuaseDisponivel;
-const raioFila = quaseDisponivel ? raioQuaseDisponivelKm : raioProximidadeKm;
-```
+### Aba "Visao Geral" (tab padrão)
+- Métricas combinadas: cards de estoque (disponíveis, instalados, manutenção, baixados) + cards de comunicação (online, atenção, offline)
+- Filtros existentes do `RastreadorFiltersV2`
+- Toggle cards/tabela com toda a funcionalidade atual (portador, manutenção, retirada, mapa, exclusão, lote)
 
-Os valores `tempoQuaseDisponivelMin` e `etapaQuaseDisponivel` são lidos da tabela `configuracoes` no início da execução (junto com os outros 5 parâmetros já existentes), usando o `getConfiguracaoNumero`.
+### Aba "Estoque"
+- Botoes "Entrada Manual" e "Importar Lote" (vindos do Estoque atual)
+- `ConsultaRastreador` (busca por codigo/IMEI/serie)
+- `EstoqueMetricas` simplificada (só os números de entrada/saída do período)
 
-Garantir que a RPC `buscar_tarefa_atual_profissional` retorna `etapa_atual` — se não retorna, adicionar ao SELECT da function.
+### Aba "Historico"
+- `HistoricoMovimentacoes` (já existe, movido do Estoque)
+
+### Aba "Plataformas"
+- `PlataformasConfigPanel` (mantido, visível só para diretor/dev)
 
 ## Arquivos afetados
 
-| Arquivo | Alteração |
+| Arquivo | Alteracao |
 |---------|-----------|
-| Migration SQL (insert tool) | INSERT 2 chaves: `fila_etapa_quase_disponivel`, `fila_tempo_quase_disponivel_min` |
-| `src/components/rotas/ConfiguracoesFilaAtribuicao.tsx` | +2 campos no formulário |
-| `supabase/functions/cron-atribuir-tarefas/index.ts` | Ler configs + lógica cruzada tempo OU etapa |
+| `src/pages/monitoramento/Rastreadores.tsx` | Reestruturar com 4 abas, absorver componentes do Estoque |
+| `src/components/layout/AppSidebar.tsx` | Remover item "Estoque" do menu |
+| `src/components/layout/GlobalBreadcrumb.tsx` | Remover breadcrumb de `/monitoramento/estoque` |
+| `src/App.tsx` | Redirecionar `/monitoramento/estoque` para `/monitoramento/rastreadores` (compatibilidade) |
+| `src/pages/monitoramento/DashboardCoordenador.tsx` | Atualizar link se necessário |
+
+## O que NAO sera alterado
+
+- Nenhum componente filho (EstoqueMetricas, ListaRastreadores, ConsultaRastreador, HistoricoMovimentacoes, etc.) — todos são reutilizados como estão
+- Permissões existentes
+- Edge functions
+- Página `Estoque.tsx` pode ser removida ou mantida como redirect
 
