@@ -216,6 +216,7 @@ export function useCreateTemplate() {
           is_default_evento: input.is_default_evento || false,
           is_default_saida: input.is_default_saida || false,
           is_default_rastreador: input.is_default_rastreador || false,
+          anexar_proposta: input.anexar_proposta || false,
         })
         .select()
         .single();
