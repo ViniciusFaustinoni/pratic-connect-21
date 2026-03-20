@@ -83,14 +83,19 @@ serve(async (req) => {
       if (response.status === 403) {
         throw new Error("Chave de API inválida ou sem créditos. Verifique sua conta no fipeapi.com.br");
       }
-      if (response.status === 429) {
+      if (response.status === 429 || response.status === 439) {
         throw new Error("Limite de consultas excedido. Tente novamente em alguns minutos.");
       }
       if (response.status === 404) {
         throw new Error("Veículo não encontrado na base de dados.");
       }
       
-      throw new Error(`Erro na consulta de placa (código ${response.status})`);
+      // Tentar ler corpo do erro para dar mensagem mais útil
+      let errorBody = '';
+      try { errorBody = await response.text(); } catch (_) {}
+      console.error(`[plate-lookup] Corpo do erro: ${errorBody}`);
+      
+      throw new Error(`Erro na consulta de placa (código ${response.status}). Tente novamente em instantes.`);
     }
 
     const apiData = await response.json();
