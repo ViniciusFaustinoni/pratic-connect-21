@@ -591,7 +591,7 @@ const App = () => (
               <Route path="/monitoramento/encaixes" element={<MonitoramentoEncaixes />} />
               <Route path="/monitoramento/gestao-rotas" element={<GestaoRotas />} />
               <Route path="/monitoramento/estoque" element={<Navigate to="/monitoramento/rastreadores" replace />} />
-              <Route path="/monitoramento/mapa" element={<Mapa />} />
+              <Route path="/monitoramento/mapa" element={<Navigate to="/monitoramento/rastreadores" replace />} />
               <Route path="/monitoramento/rastreadores" element={<Rastreadores />} />
               <Route path="/monitoramento/config-plataformas" element={<ConfigPlataformas />} />
               <Route path="/monitoramento/alertas" element={<AlertasMonitoramento />} />
