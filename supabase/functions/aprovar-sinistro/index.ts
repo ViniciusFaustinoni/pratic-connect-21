@@ -206,10 +206,17 @@ Por favor, abra o e-mail e *assine o documento* para dar continuidade ao process
 Qualquer dúvida, estamos à disposição! 💙`;
 
       try {
+        const primeiroNomeWpp = (sinistro.associado as any)?.nome?.split(' ')[0] || 'Associado';
         await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefone.replace(/\D/g, ''),
             mensagem,
+            template_name: 'sinistro_atualizado',
+            template_params: [
+              primeiroNomeWpp,
+              sinistro.protocolo || 'Evento',
+              'Seu evento foi aprovado! Verifique seu e-mail para assinar o termo.',
+            ],
           },
         });
         console.log('[aprovar-sinistro] WhatsApp enviado');

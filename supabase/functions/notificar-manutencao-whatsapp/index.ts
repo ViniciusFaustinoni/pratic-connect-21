@@ -60,7 +60,12 @@ serve(async (req) => {
       body: {
         telefone: payload.telefone,
         mensagem,
-        allow_text: true,
+        template_name: 'sinistro_atualizado',
+        template_params: [
+          payload.nome_associado?.split(' ')[0] || 'Associado',
+          'Manutenção de rastreador',
+          `Agendada para ${dataFormatada} - ${periodoTexto}`,
+        ],
       }
     });
 

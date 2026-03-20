@@ -269,6 +269,12 @@ Por favor, dirija-se ao local e entre em contato com o associado.`;
             body: {
               telefone: prestadorTelefone.replace(/\D/g, ""),
               mensagem: msgPrestador,
+              template_name: 'sinistro_atualizado',
+              template_params: [
+                prestadorNome?.split(' ')[0] || 'Prestador',
+                'Chamado de reboque',
+                `Associado: ${nomeAssociado} - Origem: ${endOrigem}`,
+              ],
             },
           });
 
