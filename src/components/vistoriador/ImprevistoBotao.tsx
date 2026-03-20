@@ -31,6 +31,15 @@ const MOTIVOS_IMPREVISTO = [
   'Outro',
 ];
 
+// Classificação automática da origem do imprevisto
+const ORIGEM_POR_MOTIVO: Record<string, 'associado' | 'instalador'> = {
+  'Associado ausente': 'associado',
+  'Endereço incorreto': 'associado',
+  'Desistência do associado': 'associado',
+  'Problema no veículo': 'instalador',
+  'Outro': 'instalador',
+};
+
 interface ImprevistoBotaoProps {
   tarefaId: string;
   clienteNome: string;
@@ -44,11 +53,20 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
   const [observacoes, setObservacoes] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [showDuploCheck, setShowDuploCheck] = useState(false);
+  const [podeContinuar, setPodeContinuar] = useState<boolean | null>(null);
   const queryClient = useQueryClient();
+
+  const origemAtual = motivo ? ORIGEM_POR_MOTIVO[motivo] : null;
+  const mostrarPerguntaContinuar = origemAtual === 'instalador';
 
   const handleRegistrar = async () => {
     if (!motivo) {
       toast.error('Selecione o motivo do imprevisto');
+      return;
+    }
+
+    if (mostrarPerguntaContinuar && podeContinuar === null) {
+      toast.error('Informe se consegue continuar a rota');
       return;
     }
 
@@ -63,12 +81,26 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
         .update({
           imprevisto_registrado_em: new Date().toISOString(),
           imprevisto_motivo: motivoCompleto,
+          imprevisto_origem: origemAtual,
           status: 'imprevisto_pendente',
           updated_at: new Date().toISOString(),
         } as any)
         .eq('id', tarefaId);
 
       if (error) throw error;
+
+      // Se imprevisto do instalador e NÃO pode continuar, marcar indisponível no dia
+      if (origemAtual === 'instalador' && podeContinuar === false) {
+        const hoje = new Date().toISOString().split('T')[0];
+        await supabase
+          .from('turnos_profissionais')
+          .update({ 
+            status: 'encerrado',
+            fim_turno: new Date().toISOString(),
+          } as any)
+          .eq('data', hoje)
+          .eq('status', 'ativo');
+      }
 
       // PONTO A: Disparar link de reagendamento com retry (não bloqueia o fluxo)
       const triggerLink = async (tentativa: number) => {
@@ -99,6 +131,11 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
     }
   };
 
+  const handleMotivoChange = (value: string) => {
+    setMotivo(value);
+    setPodeContinuar(null); // Reset ao trocar motivo
+  };
+
   return (
     <>
       <Button
@@ -126,7 +163,7 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
           <div className="space-y-4">
             <div className="space-y-2">
               <Label>Motivo do imprevisto *</Label>
-              <Select value={motivo} onValueChange={setMotivo}>
+              <Select value={motivo} onValueChange={handleMotivoChange}>
                 <SelectTrigger>
                   <SelectValue placeholder="Selecione o motivo" />
                 </SelectTrigger>
@@ -137,6 +174,38 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
                 </SelectContent>
               </Select>
             </div>
+
+            {/* Pergunta extra para imprevistos do instalador */}
+            {mostrarPerguntaContinuar && (
+              <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/50">
+                <Label className="text-sm font-medium">Você consegue continuar a rota?</Label>
+                <div className="flex gap-2">
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={podeContinuar === true ? 'default' : 'outline'}
+                    onClick={() => setPodeContinuar(true)}
+                    className="flex-1"
+                  >
+                    Sim, consigo
+                  </Button>
+                  <Button
+                    type="button"
+                    size="sm"
+                    variant={podeContinuar === false ? 'destructive' : 'outline'}
+                    onClick={() => setPodeContinuar(false)}
+                    className="flex-1"
+                  >
+                    Não, preciso parar
+                  </Button>
+                </div>
+                {podeContinuar === false && (
+                  <p className="text-xs text-destructive">
+                    Suas tarefas restantes serão redistribuídas para outros profissionais.
+                  </p>
+                )}
+              </div>
+            )}
 
             <div className="space-y-2">
               <Label>Observações</Label>
@@ -153,7 +222,10 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
             <Button variant="outline" onClick={() => setOpen(false)} disabled={salvando}>
               Cancelar
             </Button>
-            <Button onClick={handleRegistrar} disabled={salvando || !motivo}>
+            <Button 
+              onClick={handleRegistrar} 
+              disabled={salvando || !motivo || (mostrarPerguntaContinuar && podeContinuar === null)}
+            >
               {salvando ? (
                 <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...</>
               ) : (

@@ -1,10 +1,12 @@
 import { useState } from 'react';
-import { format } from 'date-fns';
+import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Route, MapPin, Users, Calendar, Loader2 } from 'lucide-react';
+import { Route, MapPin, Users, Calendar, Loader2, ListOrdered, ArrowRightLeft, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
+import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { toast } from 'sonner';
 import { 
   RotaFormDialog, 
   RotaDetailDrawer, 
@@ -24,10 +26,10 @@ import {
 } from '@/hooks/useRotas';
 import { useRotasRealtime } from '@/hooks/useRotasRealtime';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useFilaServicos } from '@/hooks/useFilaServicos';
 
 export default function Rotas() {
   const { canEditRotas } = usePermissions();
-  // Ativar atualizações em tempo real
   useRotasRealtime();
   const [drawerRotaId, setDrawerRotaId] = useState<string | null>(null);
   const [editRota, setEditRota] = useState<Rota | null>(null);
@@ -39,6 +41,7 @@ export default function Rotas() {
   const { data: metricas, isLoading: loadingMetricas } = useRotasMetricas();
   const { data: rotas, isLoading: loadingRotas } = useRotas(filters);
   const { data: instalacoesPendentes, isLoading: loadingPendentes } = useInstalacoesDisponiveis();
+  const { data: filaServicos, isLoading: loadingFila } = useFilaServicos();
 
   const handleOpenRota = (rotaId: string) => {
     setDrawerRotaId(rotaId);
@@ -157,6 +160,17 @@ export default function Rotas() {
             </TabsTrigger>
           )}
           {canEditRotas && (
+            <TabsTrigger value="fila">
+              <ListOrdered className="mr-1 h-4 w-4" />
+              Fila
+              {filaServicos?.length ? (
+                <span className="ml-2 rounded-full bg-amber-500 px-2 py-0.5 text-xs text-white">
+                  {filaServicos.length}
+                </span>
+              ) : null}
+            </TabsTrigger>
+          )}
+          {canEditRotas && (
             <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
           )}
         </TabsList>
@@ -231,6 +245,89 @@ export default function Rotas() {
                     <Route className="h-8 w-8 text-muted-foreground/50" />
                     <p className="mt-2 text-muted-foreground">
                       Todas as instalações estão atribuídas a rotas
+                    </p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          </TabsContent>
+        )}
+
+        {/* Aba Fila - apenas para coordenador */}
+        {canEditRotas && (
+          <TabsContent value="fila">
+            <Card>
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2">
+                  <ListOrdered className="h-5 w-5" />
+                  Serviços na Fila de Proximidade
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                {loadingFila ? (
+                  <div className="flex h-32 items-center justify-center">
+                    <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                  </div>
+                ) : filaServicos?.length ? (
+                  <div className="space-y-3">
+                    {filaServicos.map((item) => (
+                      <div
+                        key={item.id}
+                        className="flex items-center justify-between rounded-lg border p-4"
+                      >
+                        <div className="flex-1 space-y-1">
+                          <div className="flex items-center gap-2">
+                            <span className="font-medium">
+                              {(item.servico as any)?.associado?.nome || 'Cliente'}
+                            </span>
+                            <Badge variant={item.prioridade >= 1 ? 'destructive' : 'secondary'}>
+                              {item.prioridade >= 1 ? (
+                                <><AlertTriangle className="mr-1 h-3 w-3" />Urgente</>
+                              ) : 'Normal'}
+                            </Badge>
+                            {item.motivo && (
+                              <Badge variant="outline" className="text-xs">
+                                {item.motivo === 'redistribuicao_imprevisto' ? 'Redistribuição' : 'Proximidade'}
+                              </Badge>
+                            )}
+                          </div>
+                          <div className="flex items-center gap-4 text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <MapPin className="h-3 w-3" />
+                              {[(item.servico as any)?.bairro, (item.servico as any)?.cidade].filter(Boolean).join(', ') || 'Endereço não informado'}
+                            </span>
+                            <span>{item.distancia_km?.toFixed(1)} km</span>
+                            <span>
+                              Na fila há {formatDistanceToNow(new Date(item.created_at), { locale: ptBR })}
+                            </span>
+                          </div>
+                          <div className="text-sm text-muted-foreground">
+                            <span className="flex items-center gap-1">
+                              <Users className="h-3 w-3" />
+                              Aguardando: {(item.profissional as any)?.nome || 'Profissional'}
+                            </span>
+                          </div>
+                        </div>
+                        <Button
+                          size="sm"
+                          variant="outline"
+                          className="gap-1"
+                          onClick={() => {
+                            // TODO: abrir modal de seleção de profissional
+                            toast.info('Funcionalidade de reatribuição manual em breve');
+                          }}
+                        >
+                          <ArrowRightLeft className="h-3 w-3" />
+                          Reatribuir
+                        </Button>
+                      </div>
+                    ))}
+                  </div>
+                ) : (
+                  <div className="flex h-32 flex-col items-center justify-center text-center">
+                    <ListOrdered className="h-8 w-8 text-muted-foreground/50" />
+                    <p className="mt-2 text-muted-foreground">
+                      Nenhum serviço na fila de proximidade no momento
                     </p>
                   </div>
                 )}

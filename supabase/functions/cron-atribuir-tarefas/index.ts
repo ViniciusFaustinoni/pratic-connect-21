@@ -183,7 +183,97 @@ serve(async (req) => {
 
       if (tarefaAtual && tarefaAtual.length > 0) {
         console.log(`[cron-atribuir-tarefas] Profissional ${prof.vistoriador_id} já tem tarefa ativa`);
+
+        // ========== ENFILEIRAR SERVIÇOS PRÓXIMOS (profissional ocupado) ==========
+        try {
+          // Determinar se está "quase disponível" (75+ min na tarefa)
+          const tarefa = tarefaAtual[0];
+          const inicioTarefa = tarefa.inicio_em ? new Date(tarefa.inicio_em).getTime() : Date.now();
+          const minutosNaTarefa = Math.floor((Date.now() - inicioTarefa) / 60000);
+          const raioFila = minutosNaTarefa >= 75 ? 1.0 : 0.5; // 1km se quase disponível, 500m normal
+
+          // Buscar serviços pendentes próximos
+          const { data: servicosProximos } = await supabase
+            .from('servicos')
+            .select('id, latitude, longitude, data_agendada')
+            .is('profissional_id', null)
+            .in('status', ['pendente', 'agendada'])
+            .not('latitude', 'is', null)
+            .not('longitude', 'is', null)
+            .gte('data_agendada', hoje)
+            .lte('data_agendada', amanha);
+
+          if (servicosProximos && servicosProximos.length > 0) {
+            for (const svc of servicosProximos) {
+              const dist = calcularDistanciaKm(prof.latitude, prof.longitude, svc.latitude, svc.longitude);
+              if (dist <= raioFila) {
+                // Verificar se já não está na fila
+                const { data: jaExiste } = await supabase
+                  .from('fila_servicos')
+                  .select('id')
+                  .eq('servico_id', svc.id)
+                  .eq('profissional_id', prof.vistoriador_id)
+                  .maybeSingle();
+
+                if (!jaExiste) {
+                  await supabase.from('fila_servicos').insert({
+                    servico_id: svc.id,
+                    profissional_id: prof.vistoriador_id,
+                    distancia_km: dist,
+                    prioridade: 0,
+                    status: 'aguardando',
+                    motivo: 'proximidade',
+                  });
+                  console.log(`[cron-atribuir-tarefas] 📋 Enfileirado serviço ${svc.id} para ${prof.vistoriador_id} (${dist.toFixed(2)}km, raio=${raioFila}km)`);
+                }
+              }
+            }
+          }
+        } catch (filaErr) {
+          console.error(`[cron-atribuir-tarefas] Erro ao enfileirar:`, filaErr);
+        }
+
         continue;
+      }
+
+      // ========== CONSULTAR FILA ANTES DA BUSCA LIVRE ==========
+      const { data: itemFila } = await supabase
+        .from('fila_servicos')
+        .select('id, servico_id, distancia_km, motivo')
+        .eq('profissional_id', prof.vistoriador_id)
+        .eq('status', 'aguardando')
+        .order('prioridade', { ascending: false })
+        .order('distancia_km', { ascending: true })
+        .limit(1)
+        .maybeSingle();
+
+      if (itemFila) {
+        // Verificar se o serviço ainda está disponível
+        const { data: svcFila } = await supabase
+          .from('servicos')
+          .select('id, tipo, data_agendada, instalacao_origem_id, vistoria_origem_id, latitude, longitude')
+          .eq('id', itemFila.servico_id)
+          .is('profissional_id', null)
+          .in('status', ['pendente', 'agendada'])
+          .maybeSingle();
+
+        if (svcFila) {
+          console.log(`[cron-atribuir-tarefas] 📋 Consumindo fila: serviço ${svcFila.id} para ${prof.vistoriador_id} (${itemFila.distancia_km.toFixed(2)}km, motivo: ${itemFila.motivo})`);
+
+          // Atribuir o serviço da fila (continua no fluxo normal abaixo, mas com este serviço pré-selecionado)
+          // Marcar fila como atribuído
+          await supabase.from('fila_servicos').update({ status: 'atribuido' } as any).eq('id', itemFila.id);
+
+          // Cancelar outras entradas de fila para este serviço
+          await supabase
+            .from('fila_servicos')
+            .update({ status: 'cancelado' } as any)
+            .eq('servico_id', svcFila.id)
+            .neq('id', itemFila.id);
+        } else {
+          // Serviço já não está disponível, limpar fila
+          await supabase.from('fila_servicos').update({ status: 'expirado' } as any).eq('id', itemFila.id);
+        }
       }
 
       // ========== BUSCA 1: Serviços NORMAIS (hoje/amanhã) ==========
