@@ -120,6 +120,7 @@ export default function Rastreadores() {
   // Montar lista de abas dinamicamente
   const tabs = [
     { value: 'visao-geral', label: 'Visão Geral', icon: Radio },
+    { value: 'mapa', label: 'Mapa', icon: MapPin },
     { value: 'estoque', label: 'Estoque', icon: Package },
     { value: 'historico', label: 'Histórico', icon: Clock },
     ...(canManagePlataformas ? [{ value: 'plataformas', label: 'Plataformas', icon: Server }] : []),
