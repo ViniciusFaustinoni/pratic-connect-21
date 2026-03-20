@@ -83,7 +83,7 @@ export function useAprovarVeiculoVistoria() {
       await supabase.from('associados_historico').insert({
         associado_id: data.associadoId,
         tipo: 'veiculo_aprovado',
-        descricao: 'Veículo aprovado pelo técnico instalador - Proteção 360º ativada',
+        descricao: 'Instalação concluída — aguardando aprovação do monitoramento',
         dados_novos: { 
           vistoria_id: data.vistoriaId,
           instalacao_id: data.instalacaoId, 
