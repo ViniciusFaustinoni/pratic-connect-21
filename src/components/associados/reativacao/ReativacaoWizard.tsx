@@ -12,8 +12,9 @@ import {
   CheckCircle, AlertTriangle, Info, Loader2, CreditCard,
   Camera, Radio, FileCheck, ArrowRight, Shield,
 } from 'lucide-react';
-import { useInadimplenciaPrazos } from '@/hooks/useConteudosSistema';
+import { useInadimplenciaPrazos, useCarenciaDiasPadrao, useCarenciaVidrosDias } from '@/hooks/useConteudosSistema';
 import { useAssociadoActions } from '@/hooks/useAssociados';
+import { useAuth } from '@/hooks/useAuth';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { SituacaoAssociado } from '@/hooks/useAssociadoSituacao';
