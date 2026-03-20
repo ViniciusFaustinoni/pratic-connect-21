@@ -5,6 +5,8 @@ import {
   Mail,
   Phone,
   MapPin,
+  ExternalLink,
+  LogIn,
   Calendar,
   BarChart,
   Edit,
