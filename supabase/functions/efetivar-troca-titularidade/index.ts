@@ -168,11 +168,12 @@ serve(async (req) => {
     const taxaTroca = await getConfiguracaoNumero(supabase, "taxa_troca_titularidade", 50);
     const carenciaPadrao = await getConfiguracaoNumero(supabase, "carencia_dias_padrao", 120);
     const carenciaCenarioA = await getConfiguracaoNumero(supabase, "carencia_troca_titularidade_cenario_a", 0);
+    const carenciaVidrosDias = await getConfiguracaoNumero(supabase, "carencia_beneficio_vidros_dias", 120);
 
     const carenciaDias = cenario === "A" ? carenciaCenarioA : carenciaPadrao;
     const carenciaIsenta = carenciaDias === 0;
 
-    console.log(`[efetivar-troca] Config: taxa=${taxaTroca}, carência=${carenciaDias} dias (isenta: ${carenciaIsenta})`);
+    console.log(`[efetivar-troca] Config: taxa=${taxaTroca}, carência=${carenciaDias} dias (isenta: ${carenciaIsenta}), vidros=${carenciaVidrosDias}`);
 
     // 6. Transferir veículo
     const { error: transferError } = await supabase
