@@ -68,6 +68,7 @@ export interface DocumentoTemplateView {
   is_default_evento?: boolean;
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
+  anexar_proposta?: boolean;
 }
 
 // Função para transformar dados do banco para o tipo do frontend
