@@ -382,6 +382,120 @@ export function useGerarProposta() {
     }
 
     desenharRodape(page, dados, fontRegular, mergedConfig);
+    setProgresso(85);
+
+    // ============= BUSCAR E ANEXAR TEMPLATES MARCADOS =============
+    try {
+      const { data: templatesAnexos } = await supabase
+        .from('documento_templates')
+        .select('nome, conteudo')
+        .eq('anexar_proposta', true)
+        .eq('ativo', true)
+        .order('nome');
+
+      if (templatesAnexos && templatesAnexos.length > 0) {
+        console.log(`[useGerarProposta] Anexando ${templatesAnexos.length} template(s) à proposta`);
+        
+        for (const tmpl of templatesAnexos) {
+          const annexPage = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+          const annexFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
+          const annexFontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
+
+          // Título do anexo
+          annexPage.drawRectangle({
+            x: 0,
+            y: A4_HEIGHT - 60,
+            width: A4_WIDTH,
+            height: 60,
+            color: rgb(0.15, 0.15, 0.15),
+          });
+          annexPage.drawText(tmpl.nome.toUpperCase(), {
+            x: MARGIN_LEFT,
+            y: A4_HEIGHT - 40,
+            size: 14,
+            font: annexFontBold,
+            color: rgb(1, 1, 1),
+          });
+
+          // Renderizar conteúdo HTML como texto simples no PDF
+          const textoLimpo = (tmpl.conteudo || '')
+            .replace(/<br\s*\/?>/gi, '\n')
+            .replace(/<\/p>/gi, '\n\n')
+            .replace(/<\/li>/gi, '\n')
+            .replace(/<li[^>]*>/gi, '• ')
+            .replace(/<\/h[1-6]>/gi, '\n\n')
+            .replace(/<[^>]+>/g, '')
+            .replace(/&nbsp;/g, ' ')
+            .replace(/&amp;/g, '&')
+            .replace(/&lt;/g, '<')
+            .replace(/&gt;/g, '>')
+            .replace(/&quot;/g, '"')
+            .replace(/&#39;/g, "'")
+            .trim();
+
+          // Quebrar em linhas respeitando largura máxima
+          const maxWidth = A4_WIDTH - MARGIN_LEFT - MARGIN_RIGHT;
+          const fontSize = 9;
+          const lineHeight = 14;
+          let yPos = A4_HEIGHT - 90;
+          
+          const paragraphs = textoLimpo.split('\n');
+          for (const para of paragraphs) {
+            if (yPos < MARGIN_BOTTOM + 30) {
+              // Nova página se necessário
+              const newPage = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
+              yPos = A4_HEIGHT - 50;
+              // Continuar desenhando na nova página
+              const words = para.split(' ');
+              let line = '';
+              for (const word of words) {
+                const testLine = line ? `${line} ${word}` : word;
+                const testWidth = annexFont.widthOfTextAtSize(testLine, fontSize);
+                if (testWidth > maxWidth && line) {
+                  newPage.drawText(line, { x: MARGIN_LEFT, y: yPos, size: fontSize, font: annexFont, color: rgb(0.15, 0.15, 0.15) });
+                  yPos -= lineHeight;
+                  line = word;
+                } else {
+                  line = testLine;
+                }
+              }
+              if (line) {
+                newPage.drawText(line, { x: MARGIN_LEFT, y: yPos, size: fontSize, font: annexFont, color: rgb(0.15, 0.15, 0.15) });
+                yPos -= lineHeight;
+              }
+              continue;
+            }
+            
+            if (!para.trim()) {
+              yPos -= lineHeight * 0.5;
+              continue;
+            }
+
+            const words = para.split(' ');
+            let line = '';
+            for (const word of words) {
+              const testLine = line ? `${line} ${word}` : word;
+              const testWidth = annexFont.widthOfTextAtSize(testLine, fontSize);
+              if (testWidth > maxWidth && line) {
+                if (yPos < MARGIN_BOTTOM + 30) break;
+                annexPage.drawText(line, { x: MARGIN_LEFT, y: yPos, size: fontSize, font: annexFont, color: rgb(0.15, 0.15, 0.15) });
+                yPos -= lineHeight;
+                line = word;
+              } else {
+                line = testLine;
+              }
+            }
+            if (line && yPos >= MARGIN_BOTTOM + 30) {
+              annexPage.drawText(line, { x: MARGIN_LEFT, y: yPos, size: fontSize, font: annexFont, color: rgb(0.15, 0.15, 0.15) });
+              yPos -= lineHeight;
+            }
+          }
+        }
+      }
+    } catch (err) {
+      console.warn('[useGerarProposta] Erro ao buscar templates para anexar:', err);
+    }
+
     setProgresso(90);
 
     const pdfBytes = await pdfDoc.save();
