@@ -43,7 +43,7 @@ const menuItems: MenuSection[] = [
     adminOnly: true,
     items: [
       { path: '/configuracoes/usuarios-acessos', label: 'Usuários e Acessos', icon: Users },
-      { path: '/configuracoes/rateio', label: 'Rateio', icon: Calculator, diretorOnly: true },
+      
     ]
   },
   {

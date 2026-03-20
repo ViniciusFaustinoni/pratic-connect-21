@@ -701,7 +701,7 @@ const App = () => (
                 <Route path="integracoes/api-keys" element={<IntegracaoApiKeys />} />
                 <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="integracoes/sga-hinova" element={<IntegracaoSGAHinova />} />
-                <Route path="rateio" element={<RateioConfig />} />
+                <Route path="rateio" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
                 <Route path="sistema" element={<Sistema />} />
               </Route>
             </Route>
