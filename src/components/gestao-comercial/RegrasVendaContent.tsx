@@ -101,6 +101,7 @@ const TAXAS_CHAVES = [
   'troca_titularidade_prazo_dispensa_vistoria',
   'inclusao_bloquear_debito_outro_veiculo',
   'limite_veiculos_associado',
+  'carencia_beneficio_vidros_dias',
 ] as const;
 
 type TaxasConfig = Record<typeof TAXAS_CHAVES[number], string>;
