@@ -17362,11 +17362,13 @@ export type Database = {
           created_at: string
           desconto_percentual: number | null
           descricao: string | null
+          descricao_landing: string | null
           destaque: boolean | null
           fipe_maxima: number | null
           fipe_minima: number | null
           footer_note: string | null
           id: string
+          imagem_landing_url: string | null
           limite_terceiros: number | null
           linha: string | null
           nivel: string | null
@@ -17382,6 +17384,7 @@ export type Database = {
           uso: string | null
           valor_adesao: number
           visivel_gestao: boolean
+          visivel_landing: boolean | null
         }
         Insert: {
           adicional_mensal?: number | null
@@ -17408,11 +17411,13 @@ export type Database = {
           created_at?: string
           desconto_percentual?: number | null
           descricao?: string | null
+          descricao_landing?: string | null
           destaque?: boolean | null
           fipe_maxima?: number | null
           fipe_minima?: number | null
           footer_note?: string | null
           id?: string
+          imagem_landing_url?: string | null
           limite_terceiros?: number | null
           linha?: string | null
           nivel?: string | null
@@ -17428,6 +17433,7 @@ export type Database = {
           uso?: string | null
           valor_adesao: number
           visivel_gestao?: boolean
+          visivel_landing?: boolean | null
         }
         Update: {
           adicional_mensal?: number | null
@@ -17454,11 +17460,13 @@ export type Database = {
           created_at?: string
           desconto_percentual?: number | null
           descricao?: string | null
+          descricao_landing?: string | null
           destaque?: boolean | null
           fipe_maxima?: number | null
           fipe_minima?: number | null
           footer_note?: string | null
           id?: string
+          imagem_landing_url?: string | null
           limite_terceiros?: number | null
           linha?: string | null
           nivel?: string | null
@@ -17474,6 +17482,7 @@ export type Database = {
           uso?: string | null
           valor_adesao?: number
           visivel_gestao?: boolean
+          visivel_landing?: boolean | null
         }
         Relationships: [
           {

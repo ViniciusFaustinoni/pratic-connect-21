@@ -20,6 +20,7 @@ import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 
 // Public Pages
 import AssociadoVistoria from "./pages/public/AssociadoVistoria";
+import LandingPlanos from "./pages/public/LandingPlanos";
 
 // Internal System Pages
 import Auth from "./pages/Auth";
@@ -429,6 +430,9 @@ const App = () => (
             
             {/* Public Reagendamento Vistoria */}
             <Route path="/reagendar/:token" element={<ReagendarVistoria />} />
+            
+            {/* Public Landing Page Planos */}
+            <Route path="/planos" element={<LandingPlanos />} />
             
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
