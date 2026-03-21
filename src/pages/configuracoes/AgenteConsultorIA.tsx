@@ -126,7 +126,7 @@ function AbaComportamento() {
   const { data: configs, isLoading } = useQuery({
     queryKey: ['agente-ia-config'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('agente_ia_config')
         .select('*')
         .order('chave');
