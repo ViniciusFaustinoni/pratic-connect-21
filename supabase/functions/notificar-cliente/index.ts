@@ -401,7 +401,7 @@ serve(async (req) => {
             ],
           },
           instalacao_agendada: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => {
               // Formatar data de ISO (2026-03-12) para dd/MM/yyyy
               let dataFormatada = 'em breve';
