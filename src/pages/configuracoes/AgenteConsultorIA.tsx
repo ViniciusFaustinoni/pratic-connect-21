@@ -40,7 +40,7 @@ function AbaPlanos() {
 
   const updatePlano = useMutation({
     mutationFn: async ({ id, field, value }: { id: string; field: string; value: any }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('planos')
         .update({ [field]: value })
         .eq('id', id);
