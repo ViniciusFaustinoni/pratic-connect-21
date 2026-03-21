@@ -863,6 +863,57 @@ export type Database = {
           },
         ]
       }
+      agente_ia_config: {
+        Row: {
+          chave: string
+          id: string
+          updated_at: string | null
+          updated_by: string | null
+          valor: string
+        }
+        Insert: {
+          chave: string
+          id?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          valor?: string
+        }
+        Update: {
+          chave?: string
+          id?: string
+          updated_at?: string | null
+          updated_by?: string | null
+          valor?: string
+        }
+        Relationships: []
+      }
+      agente_ia_contatos: {
+        Row: {
+          created_at: string | null
+          id: string
+          nome: string | null
+          status: string | null
+          telefone: string
+          ultima_interacao: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          nome?: string | null
+          status?: string | null
+          telefone: string
+          ultima_interacao?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          nome?: string | null
+          status?: string | null
+          telefone?: string
+          ultima_interacao?: string | null
+        }
+        Relationships: []
+      }
       alocacoes_diarias: {
         Row: {
           created_at: string
@@ -17339,6 +17390,7 @@ export type Database = {
       planos: {
         Row: {
           adicional_mensal: number | null
+          agente_descricao: string | null
           ano_fabricacao_maximo: number | null
           ano_fabricacao_minimo: number | null
           ano_minimo: number | null
@@ -17364,6 +17416,7 @@ export type Database = {
           descricao: string | null
           descricao_landing: string | null
           destaque: boolean | null
+          disponivel_agente: boolean | null
           fipe_maxima: number | null
           fipe_minima: number | null
           footer_note: string | null
@@ -17388,6 +17441,7 @@ export type Database = {
         }
         Insert: {
           adicional_mensal?: number | null
+          agente_descricao?: string | null
           ano_fabricacao_maximo?: number | null
           ano_fabricacao_minimo?: number | null
           ano_minimo?: number | null
@@ -17413,6 +17467,7 @@ export type Database = {
           descricao?: string | null
           descricao_landing?: string | null
           destaque?: boolean | null
+          disponivel_agente?: boolean | null
           fipe_maxima?: number | null
           fipe_minima?: number | null
           footer_note?: string | null
@@ -17437,6 +17492,7 @@ export type Database = {
         }
         Update: {
           adicional_mensal?: number | null
+          agente_descricao?: string | null
           ano_fabricacao_maximo?: number | null
           ano_fabricacao_minimo?: number | null
           ano_minimo?: number | null
@@ -17462,6 +17518,7 @@ export type Database = {
           descricao?: string | null
           descricao_landing?: string | null
           destaque?: boolean | null
+          disponivel_agente?: boolean | null
           fipe_maxima?: number | null
           fipe_minima?: number | null
           footer_note?: string | null

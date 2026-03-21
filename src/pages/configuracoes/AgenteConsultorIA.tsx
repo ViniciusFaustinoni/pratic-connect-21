@@ -365,7 +365,7 @@ function AbaContatos() {
 
   const assumirConversa = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('agente_ia_contatos')
         .update({ status: 'atendimento_humano' })
         .eq('id', id);
