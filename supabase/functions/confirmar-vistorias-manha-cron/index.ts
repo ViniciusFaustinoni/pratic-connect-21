@@ -7,9 +7,9 @@ const corsHeaders = {
 };
 
 /**
- * CRON: Confirmação Matinal de Vistorias via WhatsApp
+ * CRON: Confirmação Matinal de Serviços via WhatsApp
  * Executa às 7h (dias úteis) ou 8h (sábados) - dispara mensagem para TODOS
- * os clientes com serviço agendado para o dia
+ * os clientes com serviço agendado para o dia (vistoria, instalação, manutenção, remoção)
  * 
  * Fluxo:
  * 1. Busca todos os serviços do dia com status 'agendada' ou 'pendente'
@@ -18,7 +18,7 @@ const corsHeaders = {
  * 4. Cria registro em confirmacoes_agendamento
  * 
  * O cliente precisa responder "SIM" para que o serviço seja atribuído
- * automaticamente ao vistoriador mais próximo.
+ * automaticamente ao profissional mais próximo.
  */
 
 serve(async (req) => {
@@ -27,7 +27,7 @@ serve(async (req) => {
   }
 
   try {
-    console.log("[confirmar-vistorias-manha-cron] Iniciando disparo matinal...");
+    console.log("[confirmar-manha-cron] Iniciando disparo matinal de confirmação...");
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
@@ -41,18 +41,18 @@ serve(async (req) => {
     const horaAtual = agoraBrasilia.getHours();
     const diaSemana = agoraBrasilia.getDay(); // 0 = domingo, 6 = sábado
 
-    console.log(`[confirmar-vistorias-manha-cron] Data: ${hojeStr}, Hora: ${horaAtual}h, Dia: ${diaSemana}`);
+    console.log(`[confirmar-manha-cron] Data: ${hojeStr}, Hora: ${horaAtual}h, Dia: ${diaSemana}`);
 
     // Não executar aos domingos
     if (diaSemana === 0) {
-      console.log("[confirmar-vistorias-manha-cron] Domingo - sem vistorias");
+      console.log("[confirmar-manha-cron] Domingo - sem serviços");
       return new Response(
-        JSON.stringify({ success: true, message: "Domingo - sem vistorias", count: 0 }),
+        JSON.stringify({ success: true, message: "Domingo - sem serviços", count: 0 }),
         { headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // Buscar serviços agendados para HOJE que ainda não receberam confirmação matinal
+    // Buscar TODOS os serviços agendados para HOJE que ainda não receberam confirmação
     const { data: servicos, error: servicosError } = await supabase
       .from('servicos')
       .select(`
@@ -72,20 +72,19 @@ serve(async (req) => {
         cidade,
         uf,
         profissional:profiles!profissional_id(nome),
-        associado:associados(id, nome, telefone, whatsapp),
-        cotacao:cotacoes(id, nome, telefone)
+        associado:associados!associado_id(id, nome, telefone, whatsapp),
+        cotacao:cotacoes!cotacao_id(id, lead:leads!cotacoes_lead_id_fkey(nome, telefone))
       `)
       .eq('data_agendada', hojeStr)
       .in('status', ['agendada', 'pendente'])
-      .is('confirmacao_whatsapp', null) // Ainda não entrou no fluxo de confirmação
-      .or('local_vistoria.is.null,local_vistoria.eq.cliente'); // Apenas serviços no cliente
+      .is('confirmacao_whatsapp', null); // Ainda não entrou no fluxo de confirmação
 
     if (servicosError) {
-      console.error("[confirmar-vistorias-manha-cron] Erro ao buscar serviços:", servicosError);
+      console.error("[confirmar-manha-cron] Erro ao buscar serviços:", servicosError);
       throw servicosError;
     }
 
-    console.log(`[confirmar-vistorias-manha-cron] Encontrados ${servicos?.length || 0} serviços para confirmar`);
+    console.log(`[confirmar-manha-cron] Encontrados ${servicos?.length || 0} serviços para confirmar`);
 
     if (!servicos || servicos.length === 0) {
       return new Response(
@@ -94,7 +93,7 @@ serve(async (req) => {
       );
     }
 
-    const resultados: { servicoId: string; sucesso: boolean; erro?: string }[] = [];
+    const resultados: { servicoId: string; tipo: string; sucesso: boolean; erro?: string }[] = [];
 
     for (const servico of servicos) {
       try {
@@ -102,21 +101,21 @@ serve(async (req) => {
         let telefone: string | null = null;
         let nomeCliente: string = "Cliente";
 
-        // O select retorna objeto quando é FK singular
         const associadoData = servico.associado as any;
         const cotacaoData = servico.cotacao as any;
 
         if (associadoData) {
           telefone = associadoData.whatsapp || associadoData.telefone;
           nomeCliente = associadoData.nome || "Cliente";
-        } else if (cotacaoData) {
-          telefone = cotacaoData.telefone;
-          nomeCliente = cotacaoData.nome || "Cliente";
+        } else if (cotacaoData?.lead) {
+          const leadData = cotacaoData.lead as any;
+          telefone = leadData.telefone;
+          nomeCliente = leadData.nome || "Cliente";
         }
 
         if (!telefone) {
-          console.log(`[confirmar-vistorias-manha-cron] Serviço ${servico.id}: telefone não encontrado`);
-          resultados.push({ servicoId: servico.id, sucesso: false, erro: "Telefone não encontrado" });
+          console.log(`[confirmar-manha-cron] Serviço ${servico.id} (${servico.tipo}): telefone não encontrado`);
+          resultados.push({ servicoId: servico.id, tipo: servico.tipo, sucesso: false, erro: "Telefone não encontrado" });
           continue;
         }
 
@@ -142,15 +141,27 @@ serve(async (req) => {
           month: '2-digit'
         });
 
-        // Tipo de serviço formatado
-        const tipoServico = servico.tipo === 'instalacao' ? 'instalação do rastreador' : 
+        // Tipo de serviço formatado (mensagem longa)
+        const tipoServicoDescritivo = servico.tipo === 'instalacao' ? 'instalação do rastreador' : 
                            servico.tipo === 'vistoria' ? 'vistoria veicular' : 
-                           servico.tipo === 'remocao' ? 'remoção do rastreador' : 'serviço';
+                           servico.tipo === 'remocao' ? 'remoção do rastreador' :
+                           servico.tipo === 'manutencao' ? 'manutenção do rastreador' : 'serviço';
 
-        // Montar mensagem de confirmação matinal
+        // Label curto para template Meta
+        const tipoLabel = servico.tipo === 'instalacao' ? 'instalação' : 
+                          servico.tipo === 'vistoria' ? 'vistoria' : 
+                          servico.tipo === 'remocao' ? 'remoção' :
+                          servico.tipo === 'manutencao' ? 'manutenção' : 'serviço';
+
+        // Período formatado para template
+        const periodoLabel = servico.periodo === 'manha' ? 'pela manhã' : 
+                            servico.periodo === 'tarde' ? 'pela tarde' : 
+                            horaFormatada !== 'a confirmar' ? `às ${horaFormatada}` : 'hoje';
+
+        // Montar mensagem de confirmação matinal (fallback texto livre)
         const mensagem = `Bom dia, *${nomeCliente.split(' ')[0]}*! ☀️
 
-Lembramos que sua *${tipoServico}* está agendada para *HOJE*:
+Lembramos que sua *${tipoServicoDescritivo}* está agendada para *HOJE*:
 
 📅 ${dataFormatada}
 🕐 ${horaFormatada}
@@ -163,20 +174,23 @@ Por favor, confirme sua disponibilidade:
 Aguardamos sua confirmação! 🚗
 *PRATIC Proteção Veicular*`;
 
+        const nomeAbrev = nomeCliente.split(' ')[0];
+
         // Enviar mensagem via whatsapp-send-text
-        const nomeAbrevVist = nomeCliente.split(' ')[0];
         const { data: sendResult, error: sendError } = await supabase.functions.invoke('whatsapp-send-text', {
           body: {
             telefone: telefoneFormatado,
             mensagem,
-            template_name: 'sinistro_atualizado',
-            template_params: [nomeAbrevVist, 'vistoria', `Vistoria agendada para hoje. Confirme sua presença.`],
+            template_name: 'confirmacao_servico_v1',
+            template_params: [nomeAbrev, tipoLabel, periodoLabel],
+            fallback_template: 'sinistro_atualizado',
+            fallback_params: [nomeAbrev, tipoLabel, `${tipoLabel} agendada para hoje. Confirme sua presença.`],
           }
         });
 
         if (sendError) {
-          console.error(`[confirmar-vistorias-manha-cron] Erro ao enviar para ${telefoneFormatado}:`, sendError);
-          resultados.push({ servicoId: servico.id, sucesso: false, erro: sendError.message });
+          console.error(`[confirmar-manha-cron] Erro ao enviar para ${telefoneFormatado}:`, sendError);
+          resultados.push({ servicoId: servico.id, tipo: servico.tipo, sucesso: false, erro: sendError.message });
           continue;
         }
 
@@ -203,19 +217,19 @@ Aguardamos sua confirmação! 🚗
           .update({ confirmacao_whatsapp: 'aguardando_confirmacao_manha' })
           .eq('id', servico.id);
 
-        console.log(`[confirmar-vistorias-manha-cron] ✅ Confirmação matinal enviada para ${telefoneFormatado} (serviço ${servico.id})`);
-        resultados.push({ servicoId: servico.id, sucesso: true });
+        console.log(`[confirmar-manha-cron] ✅ Confirmação enviada para ${telefoneFormatado} (${servico.tipo} - ${servico.id})`);
+        resultados.push({ servicoId: servico.id, tipo: servico.tipo, sucesso: true });
 
       } catch (err: any) {
-        console.error(`[confirmar-vistorias-manha-cron] Erro no serviço ${servico.id}:`, err);
-        resultados.push({ servicoId: servico.id, sucesso: false, erro: err.message });
+        console.error(`[confirmar-manha-cron] Erro no serviço ${servico.id}:`, err);
+        resultados.push({ servicoId: servico.id, tipo: servico.tipo, sucesso: false, erro: err.message });
       }
     }
 
     const sucessos = resultados.filter(r => r.sucesso).length;
     const falhas = resultados.filter(r => !r.sucesso).length;
 
-    console.log(`[confirmar-vistorias-manha-cron] Concluído: ${sucessos} enviadas, ${falhas} falhas`);
+    console.log(`[confirmar-manha-cron] Concluído: ${sucessos} enviadas, ${falhas} falhas`);
 
     return new Response(
       JSON.stringify({ 
@@ -228,7 +242,7 @@ Aguardamos sua confirmação! 🚗
     );
 
   } catch (error: any) {
-    console.error("[confirmar-vistorias-manha-cron] Erro geral:", error);
+    console.error("[confirmar-manha-cron] Erro geral:", error);
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
