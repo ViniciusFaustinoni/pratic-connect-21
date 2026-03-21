@@ -28,7 +28,7 @@ function AbaPlanos() {
   const { data: planos, isLoading } = useQuery({
     queryKey: ['planos-agente-ia'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('planos')
         .select('id, nome, ativo, visivel_landing, disponivel_agente, agente_descricao, imagem_landing_url')
         .eq('ativo', true)
