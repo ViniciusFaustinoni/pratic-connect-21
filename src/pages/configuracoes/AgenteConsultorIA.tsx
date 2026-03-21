@@ -139,7 +139,7 @@ function AbaComportamento() {
 
   const saveConfig = useMutation({
     mutationFn: async ({ chave, valor }: { chave: string; valor: string }) => {
-      const { error } = await supabase
+      const { error } = await (supabase as any)
         .from('agente_ia_config')
         .update({ valor, updated_by: user?.id })
         .eq('chave', chave);
