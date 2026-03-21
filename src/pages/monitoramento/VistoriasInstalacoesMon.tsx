@@ -7,9 +7,9 @@ export default function VistoriasInstalacoesMon() {
   return (
     <div className="container mx-auto py-6 space-y-4">
       <div>
-        <h1 className="text-2xl font-bold">Vistorias e Instalações</h1>
+        <h1 className="text-2xl font-bold">Instalações e Vistorias</h1>
         <p className="text-muted-foreground">
-          Gerencie vistorias e instalações em um único painel
+          Acompanhe instalações e vistorias em um único painel
         </p>
       </div>
 
