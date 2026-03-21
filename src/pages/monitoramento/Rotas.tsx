@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Route, MapPin, Users, Calendar, Loader2, ListOrdered, ArrowRightLeft, AlertTriangle } from 'lucide-react';
+import { Route, MapPin, Users, Calendar, Loader2, ListOrdered, ArrowRightLeft, AlertTriangle, Radio, Activity } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import { useEquipeHoje } from '@/hooks/useDashboardCoordenador';
+import { useMovimentacoes } from '@/hooks/useMovimentacoes';
 import { 
   RotaFormDialog, 
   RotaDetailDrawer, 
@@ -43,6 +45,8 @@ export default function Rotas() {
   const { data: rotas, isLoading: loadingRotas } = useRotas(filters);
   const { data: instalacoesPendentes, isLoading: loadingPendentes } = useInstalacoesDisponiveis();
   const { data: filaServicos, isLoading: loadingFila } = useFilaServicos();
+  const { data: equipeHoje, isLoading: loadingEquipe } = useEquipeHoje();
+  const { data: movimentacoes, isLoading: loadingMovimentacoes } = useMovimentacoes();
 
   const handleOpenRota = (rotaId: string) => {
     setDrawerRotaId(rotaId);
@@ -67,9 +71,9 @@ export default function Rotas() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Rotas</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Vistorias e Instalações</h1>
           <p className="text-muted-foreground">
-            Acompanhe as rotas automáticas dos profissionais em campo
+            Acompanhe vistorias, instalações e movimentações em tempo real
           </p>
         </div>
       </div>
@@ -146,8 +150,16 @@ export default function Rotas() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="calendario" className="space-y-4">
-        <TabsList>
+      <Tabs defaultValue="tempo-real" className="space-y-4">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="tempo-real">
+            <Radio className="mr-1 h-4 w-4" />
+            Tempo Real
+          </TabsTrigger>
+          <TabsTrigger value="movimentacoes">
+            <Activity className="mr-1 h-4 w-4" />
+            Movimentações
+          </TabsTrigger>
           <TabsTrigger value="calendario">Calendário</TabsTrigger>
           <TabsTrigger value="lista">Lista</TabsTrigger>
           {canEditRotas && (
@@ -175,6 +187,128 @@ export default function Rotas() {
             <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
           )}
         </TabsList>
+
+        {/* Aba Tempo Real */}
+        <TabsContent value="tempo-real">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Radio className="h-5 w-5 text-green-500" />
+                Equipe em Campo — Hoje
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingEquipe ? (
+                <div className="flex h-32 items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : equipeHoje?.length ? (
+                <div className="grid gap-3 md:grid-cols-2 lg:grid-cols-3">
+                  {equipeHoje.map((membro) => (
+                    <div key={membro.id} className="flex items-center justify-between rounded-lg border p-4">
+                      <div className="space-y-1">
+                        <p className="font-medium">{membro.nome}</p>
+                        <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                          <Badge
+                            variant={
+                              membro.status === 'em_rota' ? 'default' :
+                              membro.status === 'online' ? 'secondary' : 'outline'
+                            }
+                            className="text-xs"
+                          >
+                            {membro.status === 'em_rota' ? '🚗 Em rota' :
+                             membro.status === 'online' ? '🟢 Online' : '⚫ Offline'}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {membro.tarefasConcluidas}/{membro.tarefasTotal} tarefas concluídas
+                        </p>
+                      </div>
+                      <div className="text-right">
+                        <div className="text-2xl font-bold">
+                          {membro.tarefasTotal > 0 
+                            ? Math.round((membro.tarefasConcluidas / membro.tarefasTotal) * 100) 
+                            : 0}%
+                        </div>
+                        <p className="text-xs text-muted-foreground">progresso</p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-32 flex-col items-center justify-center text-center">
+                  <Users className="h-8 w-8 text-muted-foreground/50" />
+                  <p className="mt-2 text-muted-foreground">
+                    Nenhum profissional em campo hoje
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
+
+        {/* Aba Movimentações */}
+        <TabsContent value="movimentacoes">
+          <Card>
+            <CardHeader>
+              <CardTitle className="flex items-center gap-2">
+                <Activity className="h-5 w-5" />
+                Movimentações Recentes
+              </CardTitle>
+            </CardHeader>
+            <CardContent>
+              {loadingMovimentacoes ? (
+                <div className="flex h-32 items-center justify-center">
+                  <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
+                </div>
+              ) : movimentacoes?.length ? (
+                <div className="space-y-3">
+                  {movimentacoes.map((mov) => (
+                    <div key={mov.id} className="flex items-start gap-3 rounded-lg border p-3">
+                      <div className={`mt-1 h-2 w-2 rounded-full ${
+                        mov.status === 'concluida' ? 'bg-green-500' :
+                        mov.status === 'cancelada' ? 'bg-red-500' :
+                        mov.status === 'reagendada' ? 'bg-amber-500' :
+                        'bg-blue-500'
+                      }`} />
+                      <div className="flex-1 space-y-1">
+                        <div className="flex items-center gap-2">
+                          <span className="font-medium text-sm">{mov.associado_nome || 'Cliente'}</span>
+                          <Badge variant="outline" className="text-xs">
+                            {mov.tipo === 'instalacao' ? 'Instalação' : 'Vistoria'}
+                          </Badge>
+                          <Badge variant={
+                            mov.status === 'concluida' ? 'default' :
+                            mov.status === 'cancelada' ? 'destructive' :
+                            'secondary'
+                          } className="text-xs">
+                            {mov.status === 'concluida' ? 'Concluída' :
+                             mov.status === 'cancelada' ? 'Cancelada' :
+                             mov.status === 'reagendada' ? 'Reagendada' :
+                             mov.status === 'em_andamento' ? 'Em andamento' :
+                             mov.status}
+                          </Badge>
+                        </div>
+                        <p className="text-xs text-muted-foreground">
+                          {mov.profissional_nome && `${mov.profissional_nome} · `}
+                          {mov.bairro && `${mov.bairro} · `}
+                          {formatDistanceToNow(new Date(mov.updated_at), { addSuffix: true, locale: ptBR })}
+                        </p>
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              ) : (
+                <div className="flex h-32 flex-col items-center justify-center text-center">
+                  <Activity className="h-8 w-8 text-muted-foreground/50" />
+                  <p className="mt-2 text-muted-foreground">
+                    Nenhuma movimentação registrada hoje
+                  </p>
+                </div>
+              )}
+            </CardContent>
+          </Card>
+        </TabsContent>
 
         {/* Aba Calendário */}
         <TabsContent value="calendario">
