@@ -402,6 +402,7 @@ const menuConfig: {
         { title: 'Perfis', url: '/diretoria/perfis', icon: Shield },
         { title: 'Logs', url: '/diretoria/logs', icon: FileText },
         { title: 'Relatórios', url: '/diretoria/relatorios', icon: ClipboardList },
+        { title: 'Rotas', url: '/diretoria/rotas', icon: Route },
       ],
     },
     {

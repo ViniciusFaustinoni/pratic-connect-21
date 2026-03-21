@@ -143,7 +143,7 @@ export function useAlertasCoordenador() {
           id: 'rotas-sem-equipe',
           mensagem: `${rotasSemEquipe.length} rota(s) de hoje sem equipe atribuída`,
           tipo: 'error',
-          link: '/monitoramento/rotas',
+          link: '/diretoria/rotas',
         });
       }
 
