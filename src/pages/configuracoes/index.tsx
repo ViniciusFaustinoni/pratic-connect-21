@@ -19,4 +19,5 @@ export { default as Logs } from './Logs';
 export { default as Sistema } from './Sistema';
 export { default as GradesComissao } from './GradesComissao';
 export { default as GradeComissaoForm } from './GradeComissaoForm';
+export { default as ComissionamentoPlano } from './ComissionamentoPlano';
 

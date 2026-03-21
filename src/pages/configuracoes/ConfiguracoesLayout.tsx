@@ -1,7 +1,7 @@
 import { Outlet, useLocation, Navigate, NavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
-  User, Shield, Bell, Users, Calculator, Plug, Settings
+  User, Shield, Bell, Users, Calculator, Plug, Settings, Receipt
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -20,6 +20,7 @@ const tabs: TabItem[] = [
   { path: '/configuracoes/notificacoes', label: 'Notificações', icon: Bell },
   { path: '/configuracoes/usuarios-acessos', label: 'Usuários e Acessos', icon: Users, adminOnly: true },
   { path: '/configuracoes/grades-comissao', label: 'Grades de Comissão', icon: Calculator, diretorOnly: true },
+  { path: '/configuracoes/comissionamento-plano', label: 'Comissionamento por Plano', icon: Receipt, diretorOnly: true },
   { path: '/configuracoes/integracoes', label: 'Integrações', icon: Plug },
   { path: '/configuracoes/sistema', label: 'Sistema', icon: Settings },
 ];

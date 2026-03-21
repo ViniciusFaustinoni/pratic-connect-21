@@ -132,6 +132,7 @@ import Sistema from "./pages/configuracoes/Sistema";
 import Logs from "./pages/configuracoes/Logs";
 import GradesComissao from "./pages/configuracoes/GradesComissao";
 import GradeComissaoForm from "./pages/configuracoes/GradeComissaoForm";
+import ComissionamentoPlano from "./pages/configuracoes/ComissionamentoPlano";
 import RateioConfig from "./pages/configuracoes/RateioConfig";
 import UsuariosAcessos from "./pages/configuracoes/UsuariosAcessos";
 import NotFound from "./pages/NotFound";
@@ -715,6 +716,7 @@ const App = () => (
                 <Route path="grades-comissao" element={<GradesComissao />} />
                 <Route path="grades-comissao/nova" element={<GradeComissaoForm />} />
                 <Route path="grades-comissao/:id" element={<GradeComissaoForm />} />
+                <Route path="comissionamento-plano" element={<ComissionamentoPlano />} />
                 <Route path="sistema" element={<Sistema />} />
               </Route>
             </Route>
