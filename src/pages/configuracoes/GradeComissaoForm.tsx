@@ -238,7 +238,10 @@ export default function GradeComissaoForm() {
           {niveis.length > 0 && (
             <div className="pt-3 border-t space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Total alocado:</span>
+                <span className="text-muted-foreground flex items-center">
+                  Total alocado:
+                  <FieldHint text="Soma de todos os percentuais. Pode ser menor que 100%, mas nunca maior." />
+                </span>
                 <span className={exceedsLimit ? 'text-destructive font-semibold' : 'font-medium text-foreground'}>
                   {totalPercentual}% de 100%
                 </span>
