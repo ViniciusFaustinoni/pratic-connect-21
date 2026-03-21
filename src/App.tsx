@@ -716,6 +716,7 @@ const App = () => (
                 <Route path="grades-comissao" element={<GradesComissao />} />
                 <Route path="grades-comissao/nova" element={<GradeComissaoForm />} />
                 <Route path="grades-comissao/:id" element={<GradeComissaoForm />} />
+                <Route path="comissionamento-plano" element={<ComissionamentoPlano />} />
                 <Route path="sistema" element={<Sistema />} />
               </Route>
             </Route>
