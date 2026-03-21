@@ -89,6 +89,7 @@ import Mapa from "./pages/monitoramento/Mapa";
 import CalendarioInstalacoes from "./pages/monitoramento/CalendarioInstalacoes";
 import Vistorias from "./pages/monitoramento/Vistorias";
 import VistoriasInstalacoes from "./pages/monitoramento/VistoriasInstalacoes";
+import VistoriasInstalacoesMon from "./pages/monitoramento/VistoriasInstalacoesMon";
 import DashboardCoordenador from "./pages/monitoramento/DashboardCoordenador";
 import Equipe from "./pages/monitoramento/Equipe";
 import FilaVistorias from "./pages/monitoramento/FilaVistorias";
