@@ -136,11 +136,17 @@ export default function GradeComissaoForm() {
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Nome da Grade *</label>
+            <label className="text-sm font-medium text-foreground flex items-center">
+              Nome da Grade *
+              <FieldHint text="Identifique a grade de forma clara. Ex: 'Grade Agência Premium', 'Grade Vendedor Direto'." />
+            </label>
             <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Grade Agência Premium" />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Descrição</label>
+            <label className="text-sm font-medium text-foreground flex items-center">
+              Descrição
+              <FieldHint text="Opcional. Use para detalhar o propósito ou público-alvo desta grade." />
+            </label>
             <Input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição opcional" />
           </div>
         </CardContent>
