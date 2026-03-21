@@ -1,22 +1,18 @@
 import { useState } from 'react';
-import { Plus, Search, Clock, RefreshCw, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
+import { Search, Clock, RefreshCw, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
 import { useFilasRealtime } from '@/hooks/useFilasRealtime';
-import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import { useVistorias, useVistoriasMetricas } from '@/hooks/useVistorias';
 import { VistoriaListItem } from '@/components/vistorias/VistoriaListItem';
-import { RealizarVistoriaDialog } from '@/components/vistorias/RealizarVistoriaDialog';
 import { VistoriaDetailDrawer } from '@/components/vistorias/VistoriaDetailDrawer';
 import { Loader2 } from 'lucide-react';
 
 export default function Vistorias() {
-  // Ativar realtime para atualizações automáticas
   useFilasRealtime();
 
   const [search, setSearch] = useState('');
-  const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedVistoriaId, setSelectedVistoriaId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
@@ -62,21 +58,11 @@ export default function Vistorias() {
   return (
     <div className="container mx-auto py-6 space-y-6">
       {/* Header */}
-      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
-        <div>
-          <h1 className="text-2xl font-bold">Vistorias</h1>
-          <p className="text-muted-foreground">
-            Realize e gerencie vistorias de entrada de veículos
-          </p>
-        </div>
-
-        <Button
-          onClick={() => setDialogOpen(true)}
-          className="bg-emerald-600 hover:bg-emerald-700"
-        >
-          <Plus className="h-4 w-4 mr-2" />
-          Realizar Vistoria
-        </Button>
+      <div>
+        <h1 className="text-2xl font-bold">Vistorias</h1>
+        <p className="text-muted-foreground">
+          Acompanhe vistorias de entrada de veículos
+        </p>
       </div>
 
       {/* Cards de métricas */}
@@ -120,13 +106,9 @@ export default function Vistorias() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <ClipboardList className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-1">Nenhuma vistoria encontrada</h3>
-              <p className="text-muted-foreground text-center mb-4">
-                Comece realizando uma nova vistoria.
+              <p className="text-muted-foreground text-center">
+                Nenhuma vistoria registrada no momento.
               </p>
-              <Button onClick={() => setDialogOpen(true)}>
-                <Plus className="h-4 w-4 mr-2" />
-                Realizar Vistoria
-              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -139,12 +121,6 @@ export default function Vistorias() {
           ))
         )}
       </div>
-
-      {/* Dialog de realizar vistoria */}
-      <RealizarVistoriaDialog
-        open={dialogOpen}
-        onOpenChange={setDialogOpen}
-      />
 
       {/* Drawer de detalhes da vistoria */}
       <VistoriaDetailDrawer
