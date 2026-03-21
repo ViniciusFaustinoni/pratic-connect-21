@@ -510,7 +510,7 @@ serve(async (req) => {
             ],
           },
           followup_recusa_dia7: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'proteção',
