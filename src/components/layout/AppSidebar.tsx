@@ -519,6 +519,7 @@ export function AppSidebar() {
   };
   const location = useLocation();
   const permissions = usePermissions();
+  const { hasRole } = useAuth();
   const { visibleModules, isLoading: isModuleVisLoading } = useModuleVisibility();
   const { isItemVisible } = useModuleItemVisibility();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
@@ -894,7 +895,7 @@ export function AppSidebar() {
                 />
                 <span className="text-sm font-medium">Perfil</span>
               </NavLink>
-              {(permissions.isVendedorOnly || permissions.isPerfilLimitado) && (
+              {(permissions.isVendedorOnly || permissions.isPerfilLimitado || hasRole('supervisor_externo') || hasRole('agencia')) && (
                 <NavLink 
                   to="/perfil/conta-corrente" 
                   onClick={handleNavigation}

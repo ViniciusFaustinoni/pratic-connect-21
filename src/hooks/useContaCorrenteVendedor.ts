@@ -29,6 +29,9 @@ export interface CCLancamento {
   pago_por: string | null;
   created_at: string;
   updated_at: string;
+  // Joined fields
+  associado_nome?: string;
+  plano_nome?: string;
 }
 
 export interface CCSaldo {
@@ -37,12 +40,21 @@ export interface CCSaldo {
   antecipacoes_abertas: number;
 }
 
+export interface CCResumo {
+  a_receber_este_mes: number;
+  ja_recebido_este_mes: number;
+  total_a_receber: number;
+  total_historico_recebido: number;
+}
+
 export interface CCFiltros {
   vendedorId: string;
   dataInicio?: string;
   dataFim?: string;
   tipo?: 'credito' | 'debito' | '';
   status?: string;
+  categoria?: string;
+  busca?: string;
   page?: number;
   pageSize?: number;
 }
@@ -63,15 +75,19 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
   const { getValue } = useComissaoExternaConfig();
-  const { vendedorId, dataInicio, dataFim, tipo, status, page = 1, pageSize = 20 } = filtros;
+  const { vendedorId, dataInicio, dataFim, tipo, status, categoria, busca, page = 1, pageSize = 20 } = filtros;
 
-  // Query lancamentos
+  // Query lancamentos with joins
   const lancamentosQuery = useQuery({
-    queryKey: ['cc-lancamentos', vendedorId, dataInicio, dataFim, tipo, status, page],
+    queryKey: ['cc-lancamentos', vendedorId, dataInicio, dataFim, tipo, status, categoria, busca, page],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from('cc_vendedor_lancamentos')
-        .select('*', { count: 'exact' })
+        .select(`
+          *,
+          associado:associados!cc_vendedor_lancamentos_associado_id_fkey(nome),
+          contrato:contratos!cc_vendedor_lancamentos_contrato_id_fkey(plano_id, plano:planos!contratos_plano_id_fkey(nome))
+        `, { count: 'exact' })
         .eq('vendedor_id', vendedorId)
         .order('data_lancamento', { ascending: false })
         .order('created_at', { ascending: false })
@@ -79,17 +95,92 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
 
       if (dataInicio) query = query.gte('data_lancamento', dataInicio);
       if (dataFim) query = query.lte('data_lancamento', dataFim);
-      if (tipo) query = query.eq('tipo', tipo as any);
-      if (status) query = query.eq('status', status as any);
+      if (tipo) query = query.eq('tipo', tipo);
+      if (status) query = query.eq('status', status);
+      if (categoria) query = query.eq('categoria', categoria);
+      if (busca) query = query.ilike('descricao', `%${busca}%`);
 
       const { data, error, count } = await query;
       if (error) throw error;
-      return { data: (data || []) as unknown as CCLancamento[], total: count || 0 };
+
+      const mapped = (data || []).map((l: any) => ({
+        ...l,
+        associado_nome: l.associado?.nome || null,
+        plano_nome: l.contrato?.plano?.nome || null,
+      })) as CCLancamento[];
+
+      return { data: mapped, total: count || 0 };
     },
     enabled: !!vendedorId,
   });
 
-  // Query saldo
+  // Query resumo (4 KPIs)
+  const resumoQuery = useQuery({
+    queryKey: ['cc-resumo', vendedorId],
+    queryFn: async () => {
+      const now = new Date();
+      const mesAtual = now.getMonth() + 1;
+      const anoAtual = now.getFullYear();
+      const inicioMes = `${anoAtual}-${String(mesAtual).padStart(2, '0')}-01`;
+      const fimMes = mesAtual === 12 
+        ? `${anoAtual + 1}-01-01`
+        : `${anoAtual}-${String(mesAtual + 1).padStart(2, '0')}-01`;
+
+      // A Receber este mês
+      const { data: pendMes } = await (supabase as any)
+        .from('cc_vendedor_lancamentos')
+        .select('valor_liquido')
+        .eq('vendedor_id', vendedorId)
+        .eq('tipo', 'credito')
+        .in('status', ['pendente', 'a_pagar'])
+        .gte('data_lancamento', inicioMes)
+        .lt('data_lancamento', fimMes);
+      
+      const aReceberEsteMes = (pendMes || []).reduce((s: number, r: any) => s + Number(r.valor_liquido || 0), 0);
+
+      // Já Recebido este mês
+      const { data: pagoMes } = await (supabase as any)
+        .from('cc_vendedor_lancamentos')
+        .select('valor_liquido')
+        .eq('vendedor_id', vendedorId)
+        .eq('tipo', 'credito')
+        .eq('status', 'pago')
+        .gte('data_pagamento', inicioMes)
+        .lt('data_pagamento', fimMes);
+      
+      const jaRecebidoEsteMes = (pagoMes || []).reduce((s: number, r: any) => s + Number(r.valor_liquido || 0), 0);
+
+      // Total a Receber (todos os períodos)
+      const { data: pendTotal } = await (supabase as any)
+        .from('cc_vendedor_lancamentos')
+        .select('valor_liquido')
+        .eq('vendedor_id', vendedorId)
+        .eq('tipo', 'credito')
+        .in('status', ['pendente', 'a_pagar']);
+      
+      const totalAReceber = (pendTotal || []).reduce((s: number, r: any) => s + Number(r.valor_liquido || 0), 0);
+
+      // Total Histórico Recebido
+      const { data: pagoTotal } = await (supabase as any)
+        .from('cc_vendedor_lancamentos')
+        .select('valor_liquido')
+        .eq('vendedor_id', vendedorId)
+        .eq('tipo', 'credito')
+        .eq('status', 'pago');
+      
+      const totalHistoricoRecebido = (pagoTotal || []).reduce((s: number, r: any) => s + Number(r.valor_liquido || 0), 0);
+
+      return {
+        a_receber_este_mes: aReceberEsteMes,
+        ja_recebido_este_mes: jaRecebidoEsteMes,
+        total_a_receber: totalAReceber,
+        total_historico_recebido: totalHistoricoRecebido,
+      } as CCResumo;
+    },
+    enabled: !!vendedorId,
+  });
+
+  // Query saldo (mantido para compatibilidade)
   const saldoQuery = useQuery({
     queryKey: ['cc-saldo', vendedorId],
     queryFn: async () => {
@@ -138,13 +229,10 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
 
       const inserts: any[] = [];
       const cobrou = valor_adesao > 0;
-      // Normalizar: cotação salva 'rota', mas comissão usa 'volante'
       const volante = tipo_instalacao === 'volante' || tipo_instalacao === 'rota';
 
-      // Cenário 3: nenhum lançamento
       if (!cobrou && !volante) return;
 
-      // Crédito adesão (cenários 1 e 4)
       if (cobrou) {
         const comissaoAdesao = valor_adesao * pctAdesao;
         inserts.push({
@@ -156,7 +244,6 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
         });
       }
 
-      // Débito volante (cenários 1 e 2)
       if (volante) {
         inserts.push({
           vendedor_id, associado_id, contrato_id,
@@ -168,9 +255,8 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
         });
       }
 
-      // Parcelas recorrentes (cenários 1, 2, 4)
       for (let i = 1; i <= parcelasRecorrente; i++) {
-        const valorBruto = tipoRecorrente === 'fixo' ? valorRecorrente : 0; // percentual resolved later
+        const valorBruto = tipoRecorrente === 'fixo' ? valorRecorrente : 0;
         inserts.push({
           vendedor_id, associado_id, contrato_id,
           tipo: 'credito', categoria: 'recorrente',
@@ -190,15 +276,15 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cc-lancamentos'] });
       queryClient.invalidateQueries({ queryKey: ['cc-saldo'] });
+      queryClient.invalidateQueries({ queryKey: ['cc-resumo'] });
       toast.success('Lançamentos gerados com sucesso!');
     },
     onError: (e) => toast.error('Erro ao gerar lançamentos: ' + (e as Error).message),
   });
 
-  // Mutation: confirmar parcela recorrente (quando associado paga fatura mensal)
+  // Mutation: confirmar parcela recorrente
   const confirmarParcelaRecorrente = useMutation({
     mutationFn: async ({ parcelaId, valorMensalidade }: { parcelaId: string; valorMensalidade?: number }) => {
-      // Get the parcela
       const { data: parcela, error: pErr } = await supabase
         .from('cc_vendedor_lancamentos')
         .select('*')
@@ -207,15 +293,13 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
       if (pErr || !parcela) throw pErr || new Error('Parcela não encontrada');
       const p = parcela as unknown as CCLancamento;
 
-      // If percentual, calculate valor_bruto from mensalidade
       const tipoRecorrente = getValue('comissao_ext_tipo_recorrente');
-      const valorRecorrente = Number(getValue('comissao_ext_valor_recorrente'));
+      const valorRecorrenteConf = Number(getValue('comissao_ext_valor_recorrente'));
       let valorBruto = p.valor_bruto;
       if (tipoRecorrente === 'percentual' && valorMensalidade) {
-        valorBruto = (valorRecorrente / 100) * valorMensalidade;
+        valorBruto = (valorRecorrenteConf / 100) * valorMensalidade;
       }
 
-      // Check for pending volante debits
       const { data: debitos } = await supabase
         .from('cc_vendedor_lancamentos')
         .select('id, valor_bruto, valor_liquido')
@@ -223,7 +307,6 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
         .eq('categoria', 'volante')
         .eq('status', 'pendente');
 
-      // Sum already-applied abatimentos for this vendor's volante debits
       const { data: abatimentos } = await supabase
         .from('cc_vendedor_lancamentos')
         .select('valor_abatimento')
@@ -242,11 +325,9 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
       if (saldoDevedor > 0) {
         valorAbatimento = Math.min(valorBruto, saldoDevedor);
         valorLiquido = valorBruto - valorAbatimento;
-        if (valorAbatimento >= valorBruto) {
-          descricaoExtra = ` → Abatido integralmente do débito volante. A receber: R$ 0,00`;
-        } else {
-          descricaoExtra = ` → Abatimento parcial R$ ${valorAbatimento.toFixed(2)}. A receber: R$ ${valorLiquido.toFixed(2)}`;
-        }
+        descricaoExtra = valorAbatimento >= valorBruto
+          ? ` → Abatido integralmente do débito volante. A receber: R$ 0,00`
+          : ` → Abatimento parcial R$ ${valorAbatimento.toFixed(2)}. A receber: R$ ${valorLiquido.toFixed(2)}`;
       } else {
         descricaoExtra = ` → A receber: R$ ${valorLiquido.toFixed(2)}`;
       }
@@ -271,6 +352,7 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cc-lancamentos'] });
       queryClient.invalidateQueries({ queryKey: ['cc-saldo'] });
+      queryClient.invalidateQueries({ queryKey: ['cc-resumo'] });
     },
     onError: (e) => toast.error('Erro: ' + (e as Error).message),
   });
@@ -293,6 +375,7 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cc-lancamentos'] });
       queryClient.invalidateQueries({ queryKey: ['cc-saldo'] });
+      queryClient.invalidateQueries({ queryKey: ['cc-resumo'] });
       toast.success('Pagamento registrado com sucesso!');
     },
     onError: (e) => toast.error('Erro: ' + (e as Error).message),
@@ -301,7 +384,6 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
   // Mutation: cancelar venda pré-boleto
   const cancelarVendaPreBoleto = useMutation({
     mutationFn: async ({ vendedor_id, associado_id, nome_associado }: { vendedor_id: string; associado_id: string; nome_associado: string }) => {
-      // 1. Cancel pending recurrent installments
       await supabase
         .from('cc_vendedor_lancamentos')
         .update({ status: 'cancelado', updated_at: new Date().toISOString() } as any)
@@ -310,7 +392,6 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
         .eq('categoria', 'recorrente')
         .eq('status', 'pendente');
 
-      // 2. Check if adesão was credited — if so, estorno
       const { data: adesao } = await supabase
         .from('cc_vendedor_lancamentos')
         .select('*')
@@ -332,7 +413,6 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
         } as any);
       }
 
-      // 3. Check anticipated — debit back
       const { data: antecipados } = await supabase
         .from('cc_vendedor_lancamentos')
         .select('*')
@@ -353,13 +433,12 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
         } as any);
       }
 
-      // 4. Volante debit remains (no action needed)
-
       await recalcularSaldos(vendedor_id);
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['cc-lancamentos'] });
       queryClient.invalidateQueries({ queryKey: ['cc-saldo'] });
+      queryClient.invalidateQueries({ queryKey: ['cc-resumo'] });
       toast.success('Venda cancelada e lançamentos ajustados.');
     },
     onError: (e) => toast.error('Erro: ' + (e as Error).message),
@@ -371,6 +450,8 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
     isLoadingLancamentos: lancamentosQuery.isLoading,
     saldo: saldoQuery.data || { saldo_atual: 0, a_receber_mes: 0, antecipacoes_abertas: 0 },
     isLoadingSaldo: saldoQuery.isLoading,
+    resumo: resumoQuery.data || { a_receber_este_mes: 0, ja_recebido_este_mes: 0, total_a_receber: 0, total_historico_recebido: 0 },
+    isLoadingResumo: resumoQuery.isLoading,
     registrarPagamento,
     gerarLancamentosAtivacao,
     confirmarParcelaRecorrente,
