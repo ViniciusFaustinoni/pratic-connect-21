@@ -6124,6 +6124,57 @@ export type Database = {
           },
         ]
       }
+      comissao_plano_nivel: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          id: string
+          nivel_nome: string
+          parcelas: number
+          plano_id: string
+          tipo_comissao: string
+          updated_at: string
+          valor: number
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nivel_nome: string
+          parcelas?: number
+          plano_id: string
+          tipo_comissao?: string
+          updated_at?: string
+          valor?: number
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          id?: string
+          nivel_nome?: string
+          parcelas?: number
+          plano_id?: string
+          tipo_comissao?: string
+          updated_at?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "comissao_plano_nivel_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissao_plano_nivel_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       comissoes: {
         Row: {
           ano_referencia: number
