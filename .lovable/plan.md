@@ -1,47 +1,33 @@
 
 
-# Plano: Adicionar tooltips informativos na área de Grades de Comissão
+# Plano: Exibir percentual da empresa nas grades de comissão
 
-## Resumo
+## Conceito
 
-Adicionar tooltips (usando o componente `FieldHint` já existente no projeto) em todos os campos, áreas, e botões das telas de listagem e formulário de grades de comissão, tornando a interface mais intuitiva e autoexplicativa.
+O valor que "sobra" da soma dos níveis de uma grade (100% - total alocado) pertence à empresa. Isso precisa ser visualmente explícito tanto no formulário de criação/edição quanto na listagem de grades.
 
-## 1. `src/pages/configuracoes/GradeComissaoForm.tsx`
+## Alterações
 
-Importar `FieldHint` de `@/components/admin/planos/FieldHint` e adicionar tooltips nos seguintes elementos:
+### 1. `GradeComissaoForm.tsx` -- Formulário
 
-| Local | Tooltip |
-|-------|---------|
-| Label "Nome da Grade" | "Identifique a grade de forma clara. Ex: 'Grade Agência Premium', 'Grade Vendedor Direto'." |
-| Label "Descrição" | "Opcional. Use para detalhar o propósito ou público-alvo desta grade." |
-| Título "Níveis de Comissão" | "Cada nível representa um participante na cadeia de vendas que recebe parte da taxa de adesão." |
-| Botão "+ Adicionar Nível" | "Adicione um novo nível de comissionamento (ex: Vendedor, Supervisor, Agência)." |
-| Campo nome do nível (placeholder) | "Nome do papel que recebe comissão. Ex: Vendedor Externo, Supervisor, Agência." |
-| Campo percentual (%) | "Percentual da taxa de adesão destinado a este nível. O total de todos os níveis não pode ultrapassar 100%." |
-| Setas de reordenação | "Altere a ordem de prioridade deste nível na grade." |
-| Botão remover nível (lixeira) | "Remove este nível da grade." |
-| Área "Total alocado" | "Soma de todos os percentuais. Pode ser menor que 100%, mas nunca maior." |
-| Botão "Cancelar" | "Descarta alterações e volta para a lista de grades." |
-| Botão "Criar/Salvar" | "Salva a grade com todos os níveis configurados." |
+Na seção "Total alocado" (linhas 238-259), adicionar abaixo da barra de progresso:
 
-## 2. `src/pages/configuracoes/GradesComissao.tsx`
+- Linha informativa: **"Percentual da empresa: XX%"** (100 - totalPercentual), com ícone de prédio (`Building2`) e cor verde/neutra
+- Tooltip/FieldHint: "Este é o percentual que permanece na empresa. Corresponde à diferença entre 100% e o total distribuído nos níveis."
+- Se total = 100%, exibir "0% — Todo o valor é distribuído entre os níveis"
+- Se total = 0%, exibir "100% — Nenhum nível configurado"
 
-Importar `FieldHint` e `Tooltip` components. Adicionar tooltips nos botões de ação de cada card:
+### 2. `GradesComissao.tsx` -- Listagem
 
-| Botão | Tooltip |
-|-------|---------|
-| Editar (Pencil) | "Editar os níveis e configurações desta grade" |
-| Duplicar (Copy) | "Criar uma cópia desta grade com os mesmos níveis" |
-| Ativar/Inativar (Power) | "Ativar ou inativar esta grade. Grades inativas não podem ser atribuídas a novos usuários." |
-| Excluir (Trash2) | "Excluir esta grade. Só é possível se não estiver em uso." |
-| Botão "+ Nova Grade" | "Criar uma nova grade de comissão do zero." |
+Na área de cada card (linhas 161-165), ao lado de "Total: XX%", adicionar:
 
-Usar `Tooltip`/`TooltipContent`/`TooltipTrigger` de `@/components/ui/tooltip` para os botões de ícone, e `FieldHint` para labels de texto.
+- **"Empresa: YY%"** (100 - total), com badge ou texto em cor diferenciada
+- Tooltip: "Percentual retido pela empresa"
 
 ## Arquivos afetados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/configuracoes/GradeComissaoForm.tsx` | Tooltips em todos os campos e botões |
-| `src/pages/configuracoes/GradesComissao.tsx` | Tooltips nos botões de ação dos cards |
+| `src/pages/configuracoes/GradeComissaoForm.tsx` | Exibir "Percentual da empresa" no resumo |
+| `src/pages/configuracoes/GradesComissao.tsx` | Exibir "Empresa: XX%" em cada card |
 
