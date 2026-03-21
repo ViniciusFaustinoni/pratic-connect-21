@@ -53,7 +53,7 @@ import { cn } from '@/lib/utils';
 
 const acoesRapidas = [
   { label: 'Ver Fila de Vistorias', href: '/monitoramento/vistorias', icon: ClipboardList },
-  { label: 'Gestão de Rotas', href: '/monitoramento/rotas', icon: MapPin },
+  { label: 'Gestão de Rotas', href: '/diretoria/rotas', icon: MapPin },
   { label: 'Equipe', href: '/monitoramento/equipe', icon: Users },
   { label: 'Instalações', href: '/monitoramento/instalacoes', icon: Wrench },
 ];

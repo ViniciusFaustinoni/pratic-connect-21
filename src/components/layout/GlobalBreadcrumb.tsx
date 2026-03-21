@@ -110,7 +110,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/monitoramento': { label: 'Monitoramento' },
   '/monitoramento/equipe': { label: 'Equipe' },
   '/monitoramento/instalacoes': { label: 'Instalações' },
-  '/monitoramento/rotas': { label: 'Rotas' },
+  '/diretoria/rotas': { label: 'Rotas' },
   '/monitoramento/rastreadores': { label: 'Rastreadores' },
   '/monitoramento/retiradas': { label: 'Retiradas' },
   
