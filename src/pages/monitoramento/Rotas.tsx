@@ -71,9 +71,9 @@ export default function Rotas() {
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
-          <h1 className="text-2xl font-bold tracking-tight">Rotas</h1>
+          <h1 className="text-2xl font-bold tracking-tight">Vistorias e Instalações</h1>
           <p className="text-muted-foreground">
-            Acompanhe as rotas automáticas dos profissionais em campo
+            Acompanhe vistorias, instalações e movimentações em tempo real
           </p>
         </div>
       </div>
