@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -48,14 +49,14 @@ function useConfiguracoesFilaAtribuicao() {
       const { data, error } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', [...CONFIG_KEYS]);
+        .in('chave', [...CONFIG_KEYS, 'fila_atribuicao_ativa']);
 
       if (error) {
         console.warn('[useConfiguracoesFilaAtribuicao] Erro:', error);
-        return DEFAULTS;
+        return { ...DEFAULTS, ativo: true };
       }
 
-      const config = { ...DEFAULTS };
+      const config: FilaConfig & { ativo: boolean } = { ...DEFAULTS, ativo: true };
       const map: Record<string, keyof FilaConfig> = {
         fila_raio_proximidade_metros: 'raioProximidade',
         fila_raio_quase_disponivel_metros: 'raioQuaseDisponivel',
@@ -67,8 +68,12 @@ function useConfiguracoesFilaAtribuicao() {
       };
 
       data?.forEach((item) => {
-        const key = map[item.chave];
-        if (key && item.valor) config[key] = item.valor;
+        if (item.chave === 'fila_atribuicao_ativa') {
+          config.ativo = item.valor !== 'false';
+        } else {
+          const key = map[item.chave];
+          if (key && item.valor) config[key] = item.valor;
+        }
       });
 
       return config;
@@ -165,10 +170,15 @@ export function ConfiguracoesFilaAtribuicao() {
   const queryClient = useQueryClient();
 
   const [values, setValues] = useState<FilaConfig>(DEFAULTS);
+  const [ativo, setAtivo] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
-    if (config) setValues(config);
+    if (config) {
+      const { ativo: configAtivo, ...rest } = config;
+      setValues(rest);
+      setAtivo(configAtivo);
+    }
   }, [config]);
 
   useEffect(() => {
@@ -196,6 +206,11 @@ export function ConfiguracoesFilaAtribuicao() {
     onError: () => toast.error('Erro ao salvar configurações'),
   });
 
+  const handleToggleAtivo = async (checked: boolean) => {
+    setAtivo(checked);
+    mutation.mutate([{ chave: 'fila_atribuicao_ativa', valor: String(checked) }]);
+  };
+
   const handleSave = () => {
     if (!config) return;
     const updates = FIELDS
@@ -209,16 +224,30 @@ export function ConfiguracoesFilaAtribuicao() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Workflow className="h-5 w-5" />
-          Atribuição Automática de Tarefas
-        </CardTitle>
-        <CardDescription>
-          Parâmetros que controlam o enfileiramento inteligente e a redistribuição automática de
-          serviços entre profissionais.
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Workflow className="h-5 w-5" />
+              Atribuição Automática de Tarefas
+            </CardTitle>
+            <CardDescription>
+              Parâmetros que controlam o enfileiramento inteligente e a redistribuição automática de
+              serviços entre profissionais.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-medium ${ativo ? 'text-primary' : 'text-muted-foreground'}`}>
+              {ativo ? 'Ativo' : 'Desativado'}
+            </span>
+            <Switch
+              checked={ativo}
+              onCheckedChange={handleToggleAtivo}
+              disabled={mutation.isPending}
+            />
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className={`space-y-6 transition-opacity ${!ativo ? 'opacity-50 pointer-events-none' : ''}`}>
         {FIELDS.map((field) => (
           <div key={field.key} className="space-y-2">
             <div className="flex items-center gap-2">

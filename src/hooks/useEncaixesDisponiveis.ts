@@ -151,20 +151,23 @@ export function useConfiguracoesEncaixe() {
       const { data, error } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', ['operacional_encaixe_raio_km', 'operacional_encaixe_janela_horas']);
+        .in('chave', ['operacional_encaixe_raio_km', 'operacional_encaixe_janela_horas', 'operacional_encaixe_ativo']);
 
       if (error) {
         console.warn('[useConfiguracoesEncaixe] Erro:', error);
-        return { raioKm: 10, janelaHoras: 2 };
+        return { raioKm: 10, janelaHoras: 2, ativo: true };
       }
 
-      const config = { raioKm: 10, janelaHoras: 2 };
+      const config = { raioKm: 10, janelaHoras: 2, ativo: true };
       data?.forEach((item) => {
         if (item.chave === 'operacional_encaixe_raio_km') {
           config.raioKm = Number(item.valor) || 10;
         }
         if (item.chave === 'operacional_encaixe_janela_horas') {
           config.janelaHoras = Number(item.valor) || 2;
+        }
+        if (item.chave === 'operacional_encaixe_ativo') {
+          config.ativo = item.valor !== 'false';
         }
       });
 
@@ -311,6 +314,8 @@ export function useEncaixesDisponiveis() {
     queryKey: ['encaixes-disponiveis', profile?.id, config?.raioKm, ultimaLocalizacao],
     queryFn: async (): Promise<EncaixeDisponivel[]> => {
       if (!ultimaLocalizacao || !config) return [];
+      // Se encaixe está desativado, retorna lista vazia
+      if (!config.ativo) return [];
 
       const encaixes: EncaixeDisponivel[] = [];
       const hoje = new Date().toISOString().split('T')[0];
