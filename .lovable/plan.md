@@ -1,66 +1,87 @@
 
 
-# Plano: Landing Page Pública `/planos`
+# Plano: Seção "Agente Consultor IA" nas Configurações
 
 ## Resumo
 
-Criar uma landing page pública em `/planos` para captação de associados, com hero, números, planos dinâmicos do banco, passos, benefícios, CTA e footer. Mobile-first, cores azul escuro (#0A1628) e vermelho (#C41230).
+Nova aba "Agente Consultor IA" nas Configurações, visível apenas para Diretor. Quatro sub-abas: Planos do Agente, Comportamento, Contatos/Conversas, e Landing Page. Requer nova tabela de configuração e alteração na tabela `planos`.
 
 ## 1. Banco de Dados (SQL Migration)
 
-Adicionar colunas à tabela `planos`:
-- `visivel_landing` BOOLEAN DEFAULT false — controla quais planos aparecem na LP
-- `imagem_landing_url` TEXT — URL da imagem do plano no Storage
-- `descricao_landing` TEXT — descrição curta para a LP
+### Coluna em `planos`
+- `disponivel_agente` BOOLEAN DEFAULT false
+- `agente_descricao` TEXT (instruções para o agente sobre o plano)
 
-Criar bucket público `landing-images` no Storage para as imagens hero e dos planos.
+### Nova tabela `agente_ia_config`
+- `id` UUID PK
+- `chave` TEXT UNIQUE NOT NULL (ex: 'nome_agente', 'apresentacao_inicial', 'instrucoes_comportamento', 'responder_fora_horario', 'horario_comercial', 'mensagem_fora_horario', 'dados_cotacao_opcionais', 'mensagem_link_cotacao', 'followup_ativo', 'followup_config')
+- `valor` TEXT NOT NULL
+- `updated_at` TIMESTAMPTZ DEFAULT now()
+- `updated_by` UUID references auth.users
 
-RLS: SELECT público (anon) na tabela `planos` para colunas necessárias (já existe read para authenticated; adicionar policy para anon filtrando `visivel_landing = true`).
+RLS: leitura para authenticated, escrita restrita a Diretor via `has_role`.
 
-## 2. Nova Página: `src/pages/public/LandingPlanos.tsx`
+Inserir dados iniciais com valores padrão para todas as chaves.
 
-Página única com todas as 6 seções + footer. Usa `publicSupabase` (já existente) para queries sem autenticação.
+### Nova tabela `agente_ia_contatos`
+- `id` UUID PK
+- `telefone` TEXT NOT NULL
+- `nome` TEXT
+- `status` TEXT DEFAULT 'em_conversa' ('em_conversa', 'cotacao_enviada', 'followup_ativo', 'convertido', 'encerrado', 'atendimento_humano')
+- `ultima_interacao` TIMESTAMPTZ
+- `created_at` TIMESTAMPTZ DEFAULT now()
+- UNIQUE(telefone)
 
-### Seção 1 — Hero
-- Fullscreen com imagem de fundo (placeholder gradient inicialmente, substituível por imagem do Storage)
-- Logo usando `import logoFullLight` direto (sem ThemeProvider)
-- Título, subtítulo, botão WhatsApp (`wa.me/5511953221644`, target `_blank`)
+RLS: leitura para Diretor.
 
-### Seção 2 — Números
-- Faixa azul escuro com 4 cards: +10.000 Associados, +600 Instalações/Mês, Assistência 24h, Proteção Total
+## 2. Nova Página: `src/pages/configuracoes/AgenteConsultorIA.tsx`
 
-### Seção 3 — Planos
-- Query `publicSupabase.from('planos').select('id, nome, descricao, coberturas, valor_adesao, destaque, imagem_landing_url, descricao_landing').eq('visivel_landing', true).eq('ativo', true).order('ordem_exibicao')`
-- Cards verticais com nome, imagem, até 6 benefícios (do campo `coberturas`), botão WhatsApp com texto personalizado
-- Fallback "Em breve" se nenhum plano visível
+Componente com `Tabs` (4 abas):
 
-### Seção 4 — Como Funciona
-- 3 passos horizontais (vertical no mobile): Fale com consultor, Vistoria, Proteção ativada
+### Aba 1 — Planos Disponíveis
+- Query `planos` ativos, lista com toggles:
+  - Toggle A: `visivel_landing` (já existe)
+  - Toggle B: `disponivel_agente` (novo)
+- Campo "Descrição para o Agente" (`agente_descricao`)
+- Preview de imagem + botão "Regenerar imagem" (placeholder, chama edge function de geração)
+- Salva via update na tabela `planos`
 
-### Seção 5 — Benefícios Gerais
-- Grid 3x2 (mobile 1 col) com 6 benefícios fixos com ícones Lucide
+### Aba 2 — Comportamento do Agente
+- Formulário lendo/escrevendo em `agente_ia_config` (chave/valor)
+- Seção Identidade: nome, apresentação inicial, instruções gerais
+- Toggle responder fora do horário + campos condicionais (horário, mensagem)
+- Seção Fluxo de Cotação: lista de dados fixos/opcionais com toggles, mensagem do link
+- Seção Follow-up: toggle ativo + 3 follow-ups configuráveis (horas + mensagem) armazenados como JSON na chave `followup_config`
 
-### Seção 6 — CTA Final
-- Faixa gradiente azul/vermelho, botão WhatsApp
+### Aba 3 — Contatos e Conversas
+- Query `agente_ia_contatos` com filtros (status, período)
+- Tabela: nome, telefone, status (badge colorido), última interação
+- Botão "Ver conversa" (abre dialog com mensagens de `whatsapp_fila_ia` filtradas por telefone)
+- Botão "Assumir conversa" (muda status para `atendimento_humano`)
 
-### Footer
-- Logo, texto ABP Praticcar, links simples, copyright 2025
+### Aba 4 — Landing Page
+- Iframe renderizando `/planos`
+- Botão "Copiar link" e "Abrir em nova aba"
 
-## 3. Roteamento (`App.tsx`)
+## 3. Roteamento e Layout
 
-- Import `LandingPlanos`
-- Rota pública: `<Route path="/planos" element={<LandingPlanos />} />`
-- Posicionar junto às outras rotas públicas (após linha ~431)
+### `ConfiguracoesLayout.tsx`
+- Nova tab: `{ path: '/configuracoes/agente-consultor-ia', label: 'Agente Consultor IA', icon: Bot, diretorOnly: true }`
+- Adicionar flag `diretorExclusive?: boolean` para restringir apenas a Diretor (sem Admin/Dev)
 
-## 4. Imagens
+### `App.tsx`
+- Rota: `agente-consultor-ia` dentro do grupo `configuracoes`
 
-As imagens serão placeholders iniciais (gradientes CSS). A geração por IA e upload ao Storage será feita em etapa posterior (LP02) quando o Diretor puder gerenciar imagens pela área de configurações.
+### `src/pages/configuracoes/index.tsx`
+- Exportar `AgenteConsultorIA`
 
 ## Arquivos afetados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| SQL (migração) | ADD COLUMNS `visivel_landing`, `imagem_landing_url`, `descricao_landing` em `planos`; bucket `landing-images`; RLS anon |
-| `src/pages/public/LandingPlanos.tsx` | **Novo** — página completa da LP |
-| `src/App.tsx` | Rota pública `/planos` |
+| SQL (migração) | ADD COLUMNS em `planos`, criar `agente_ia_config` e `agente_ia_contatos` |
+| `src/pages/configuracoes/AgenteConsultorIA.tsx` | **Novo** — página com 4 abas |
+| `src/pages/configuracoes/ConfiguracoesLayout.tsx` | Nova tab com ícone Bot |
+| `src/pages/configuracoes/index.tsx` | Export |
+| `src/App.tsx` | Rota nova |
 
