@@ -713,6 +713,9 @@ const App = () => (
                 <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="integracoes/sga-hinova" element={<IntegracaoSGAHinova />} />
                 <Route path="rateio" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
+                <Route path="grades-comissao" element={<GradesComissao />} />
+                <Route path="grades-comissao/nova" element={<GradeComissaoForm />} />
+                <Route path="grades-comissao/:id" element={<GradeComissaoForm />} />
                 <Route path="sistema" element={<Sistema />} />
               </Route>
             </Route>

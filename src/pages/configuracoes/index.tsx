@@ -17,4 +17,6 @@ export { default as IntegracaoFontesLeads } from './IntegracaoFontesLeads';
 export { default as IntegracaoSGAHinova } from './IntegracaoSGAHinova';
 export { default as Logs } from './Logs';
 export { default as Sistema } from './Sistema';
+export { default as GradesComissao } from './GradesComissao';
+export { default as GradeComissaoForm } from './GradeComissaoForm';
 
