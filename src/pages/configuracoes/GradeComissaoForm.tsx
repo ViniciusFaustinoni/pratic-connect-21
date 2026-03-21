@@ -8,6 +8,8 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
 import { ArrowLeft, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
 import { toast } from 'sonner';
+import { FieldHint } from '@/components/admin/planos/FieldHint';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface NivelForm {
   id?: string;
@@ -134,11 +136,17 @@ export default function GradeComissaoForm() {
       <Card>
         <CardContent className="space-y-4 pt-6">
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Nome da Grade *</label>
+            <label className="text-sm font-medium text-foreground flex items-center">
+              Nome da Grade *
+              <FieldHint text="Identifique a grade de forma clara. Ex: 'Grade Agência Premium', 'Grade Vendedor Direto'." />
+            </label>
             <Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Grade Agência Premium" />
           </div>
           <div className="space-y-2">
-            <label className="text-sm font-medium text-foreground">Descrição</label>
+            <label className="text-sm font-medium text-foreground flex items-center">
+              Descrição
+              <FieldHint text="Opcional. Use para detalhar o propósito ou público-alvo desta grade." />
+            </label>
             <Input value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição opcional" />
           </div>
         </CardContent>
@@ -147,10 +155,20 @@ export default function GradeComissaoForm() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Níveis de Comissão</CardTitle>
-            <Button variant="outline" size="sm" onClick={addNivel}>
-              <Plus className="h-4 w-4 mr-1" /> Adicionar Nível
-            </Button>
+            <CardTitle className="text-base flex items-center">
+              Níveis de Comissão
+              <FieldHint text="Cada nível representa um participante na cadeia de vendas que recebe parte da taxa de adesão." />
+            </CardTitle>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={addNivel}>
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar Nível
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Adicione um novo nível de comissionamento (ex: Vendedor, Supervisor, Agência).</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
@@ -160,45 +178,70 @@ export default function GradeComissaoForm() {
             </p>
           ) : (
             niveis.map((nivel, idx) => (
-              <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-lg p-3">
-                <div className="flex flex-col gap-0.5">
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveNivel(idx, -1)} disabled={idx === 0}>
-                    <ArrowUp className="h-3 w-3" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveNivel(idx, 1)} disabled={idx === niveis.length - 1}>
-                    <ArrowDown className="h-3 w-3" />
-                  </Button>
+              <TooltipProvider delayDuration={200} key={idx}>
+                <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-3">
+                  <div className="flex flex-col gap-0.5">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveNivel(idx, -1)} disabled={idx === 0}>
+                          <ArrowUp className="h-3 w-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Altere a ordem de prioridade deste nível na grade.</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveNivel(idx, 1)} disabled={idx === niveis.length - 1}>
+                          <ArrowDown className="h-3 w-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Altere a ordem de prioridade deste nível na grade.</TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <span className="text-xs text-muted-foreground w-5 text-center">{idx + 1}</span>
+                  <div className="flex-1 relative">
+                    <Input
+                      className="flex-1"
+                      placeholder="Nome do nível (ex: Vendedor Externo)"
+                      value={nivel.nome}
+                      onChange={e => updateNivel(idx, 'nome', e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 w-28">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      className="w-20"
+                      value={nivel.percentual}
+                      onChange={e => updateNivel(idx, 'percentual', parseFloat(e.target.value) || 0)}
+                    />
+                    <span className="text-sm text-muted-foreground flex items-center">
+                      %
+                      <FieldHint text="Percentual da taxa de adesão destinado a este nível. O total de todos os níveis não pode ultrapassar 100%." />
+                    </span>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeNivel(idx)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Remove este nível da grade.</TooltipContent>
+                  </Tooltip>
                 </div>
-                <span className="text-xs text-muted-foreground w-5 text-center">{idx + 1}</span>
-                <Input
-                  className="flex-1"
-                  placeholder="Nome do nível (ex: Vendedor Externo)"
-                  value={nivel.nome}
-                  onChange={e => updateNivel(idx, 'nome', e.target.value)}
-                />
-                <div className="flex items-center gap-1 w-28">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.5}
-                    className="w-20"
-                    value={nivel.percentual}
-                    onChange={e => updateNivel(idx, 'percentual', parseFloat(e.target.value) || 0)}
-                  />
-                  <span className="text-sm text-muted-foreground">%</span>
-                </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeNivel(idx)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
+              </TooltipProvider>
             ))
           )}
 
           {niveis.length > 0 && (
             <div className="pt-3 border-t space-y-2">
               <div className="flex items-center justify-between text-sm">
-                <span className="text-muted-foreground">Total alocado:</span>
+                <span className="text-muted-foreground flex items-center">
+                  Total alocado:
+                  <FieldHint text="Soma de todos os percentuais. Pode ser menor que 100%, mas nunca maior." />
+                </span>
                 <span className={exceedsLimit ? 'text-destructive font-semibold' : 'font-medium text-foreground'}>
                   {totalPercentual}% de 100%
                 </span>
@@ -219,10 +262,22 @@ export default function GradeComissaoForm() {
       </Card>
 
       <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={() => navigate('/configuracoes/grades-comissao')}>Cancelar</Button>
-        <Button onClick={handleSave} disabled={saving || exceedsLimit}>
-          {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar Grade'}
-        </Button>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" onClick={() => navigate('/configuracoes/grades-comissao')}>Cancelar</Button>
+            </TooltipTrigger>
+            <TooltipContent>Descarta alterações e volta para a lista de grades.</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button onClick={handleSave} disabled={saving || exceedsLimit}>
+                {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar Grade'}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Salva a grade com todos os níveis configurados.</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   );

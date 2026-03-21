@@ -12,6 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface GradeNivel {
   id: string;
@@ -115,9 +116,16 @@ export default function GradesComissao() {
           <h2 className="text-lg font-semibold text-foreground">Grades de Comissão</h2>
           <p className="text-sm text-muted-foreground">Configure grades com níveis de comissionamento sobre taxa de adesão</p>
         </div>
-        <Button onClick={() => navigate('/configuracoes/grades-comissao/nova')}>
-          <Plus className="h-4 w-4 mr-2" /> Nova Grade
-        </Button>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button onClick={() => navigate('/configuracoes/grades-comissao/nova')}>
+                <Plus className="h-4 w-4 mr-2" /> Nova Grade
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Criar uma nova grade de comissão do zero.</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {isLoading ? (
@@ -157,20 +165,42 @@ export default function GradesComissao() {
                     <Progress value={Math.min(total, 100)} className="h-1.5 w-40" />
                   </div>
 
-                  <div className="flex items-center gap-1 ml-4">
-                    <Button variant="ghost" size="icon" onClick={() => navigate(`/configuracoes/grades-comissao/${grade.id}`)}>
-                      <Pencil className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => duplicateMutation.mutate(grade.id)}>
-                      <Copy className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => toggleMutation.mutate({ id: grade.id, ativo: !grade.ativo })}>
-                      <Power className="h-4 w-4" />
-                    </Button>
-                    <Button variant="ghost" size="icon" onClick={() => setDeleteId(grade.id)}>
-                      <Trash2 className="h-4 w-4 text-destructive" />
-                    </Button>
-                  </div>
+                  <TooltipProvider delayDuration={200}>
+                    <div className="flex items-center gap-1 ml-4">
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" onClick={() => navigate(`/configuracoes/grades-comissao/${grade.id}`)}>
+                            <Pencil className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Editar os níveis e configurações desta grade</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" onClick={() => duplicateMutation.mutate(grade.id)}>
+                            <Copy className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Criar uma cópia desta grade com os mesmos níveis</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" onClick={() => toggleMutation.mutate({ id: grade.id, ativo: !grade.ativo })}>
+                            <Power className="h-4 w-4" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Ativar ou inativar esta grade. Grades inativas não podem ser atribuídas a novos usuários.</TooltipContent>
+                      </Tooltip>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <Button variant="ghost" size="icon" onClick={() => setDeleteId(grade.id)}>
+                            <Trash2 className="h-4 w-4 text-destructive" />
+                          </Button>
+                        </TooltipTrigger>
+                        <TooltipContent>Excluir esta grade. Só é possível se não estiver em uso.</TooltipContent>
+                      </Tooltip>
+                    </div>
+                  </TooltipProvider>
                 </CardContent>
               </Card>
             );
