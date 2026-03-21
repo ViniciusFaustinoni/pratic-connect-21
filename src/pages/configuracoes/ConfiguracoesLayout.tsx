@@ -1,7 +1,7 @@
 import { Outlet, useLocation, Navigate, NavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
-  User, Shield, Bell, Users, Calculator, Plug, Settings, Receipt
+  User, Shield, Bell, Users, Calculator, Plug, Settings, Receipt, Bot
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
