@@ -12858,6 +12858,71 @@ export type Database = {
           },
         ]
       }
+      grades_comissao: {
+        Row: {
+          ativo: boolean
+          created_at: string
+          created_by: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string
+          created_by?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          updated_at?: string
+        }
+        Relationships: []
+      }
+      grades_comissao_niveis: {
+        Row: {
+          created_at: string
+          grade_id: string
+          id: string
+          nome: string
+          ordem: number
+          percentual: number
+        }
+        Insert: {
+          created_at?: string
+          grade_id: string
+          id?: string
+          nome: string
+          ordem?: number
+          percentual: number
+        }
+        Update: {
+          created_at?: string
+          grade_id?: string
+          id?: string
+          nome?: string
+          ordem?: number
+          percentual?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "grades_comissao_niveis_grade_id_fkey"
+            columns: ["grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades_comissao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       hinova_mapeamentos: {
         Row: {
           ativo: boolean | null
