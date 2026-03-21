@@ -178,38 +178,60 @@ export default function GradeComissaoForm() {
             </p>
           ) : (
             niveis.map((nivel, idx) => (
-              <div key={idx} className="flex items-center gap-2 bg-muted/50 rounded-lg p-3">
-                <div className="flex flex-col gap-0.5">
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveNivel(idx, -1)} disabled={idx === 0}>
-                    <ArrowUp className="h-3 w-3" />
-                  </Button>
-                  <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveNivel(idx, 1)} disabled={idx === niveis.length - 1}>
-                    <ArrowDown className="h-3 w-3" />
-                  </Button>
+              <TooltipProvider delayDuration={200} key={idx}>
+                <div className="flex items-center gap-2 bg-muted/50 rounded-lg p-3">
+                  <div className="flex flex-col gap-0.5">
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveNivel(idx, -1)} disabled={idx === 0}>
+                          <ArrowUp className="h-3 w-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Altere a ordem de prioridade deste nível na grade.</TooltipContent>
+                    </Tooltip>
+                    <Tooltip>
+                      <TooltipTrigger asChild>
+                        <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => moveNivel(idx, 1)} disabled={idx === niveis.length - 1}>
+                          <ArrowDown className="h-3 w-3" />
+                        </Button>
+                      </TooltipTrigger>
+                      <TooltipContent>Altere a ordem de prioridade deste nível na grade.</TooltipContent>
+                    </Tooltip>
+                  </div>
+                  <span className="text-xs text-muted-foreground w-5 text-center">{idx + 1}</span>
+                  <div className="flex-1 relative">
+                    <Input
+                      className="flex-1"
+                      placeholder="Nome do nível (ex: Vendedor Externo)"
+                      value={nivel.nome}
+                      onChange={e => updateNivel(idx, 'nome', e.target.value)}
+                    />
+                  </div>
+                  <div className="flex items-center gap-1 w-28">
+                    <Input
+                      type="number"
+                      min={0}
+                      max={100}
+                      step={0.5}
+                      className="w-20"
+                      value={nivel.percentual}
+                      onChange={e => updateNivel(idx, 'percentual', parseFloat(e.target.value) || 0)}
+                    />
+                    <span className="text-sm text-muted-foreground flex items-center">
+                      %
+                      <FieldHint text="Percentual da taxa de adesão destinado a este nível. O total de todos os níveis não pode ultrapassar 100%." />
+                    </span>
+                  </div>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeNivel(idx)}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Remove este nível da grade.</TooltipContent>
+                  </Tooltip>
                 </div>
-                <span className="text-xs text-muted-foreground w-5 text-center">{idx + 1}</span>
-                <Input
-                  className="flex-1"
-                  placeholder="Nome do nível (ex: Vendedor Externo)"
-                  value={nivel.nome}
-                  onChange={e => updateNivel(idx, 'nome', e.target.value)}
-                />
-                <div className="flex items-center gap-1 w-28">
-                  <Input
-                    type="number"
-                    min={0}
-                    max={100}
-                    step={0.5}
-                    className="w-20"
-                    value={nivel.percentual}
-                    onChange={e => updateNivel(idx, 'percentual', parseFloat(e.target.value) || 0)}
-                  />
-                  <span className="text-sm text-muted-foreground">%</span>
-                </div>
-                <Button variant="ghost" size="icon" className="h-8 w-8 shrink-0" onClick={() => removeNivel(idx)}>
-                  <Trash2 className="h-4 w-4 text-destructive" />
-                </Button>
-              </div>
+              </TooltipProvider>
             ))
           )}
 
