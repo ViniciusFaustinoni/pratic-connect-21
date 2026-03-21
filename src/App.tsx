@@ -133,7 +133,6 @@ import Logs from "./pages/configuracoes/Logs";
 import GradesComissao from "./pages/configuracoes/GradesComissao";
 import GradeComissaoForm from "./pages/configuracoes/GradeComissaoForm";
 import RateioConfig from "./pages/configuracoes/RateioConfig";
-import RateioConfig from "./pages/configuracoes/RateioConfig";
 import UsuariosAcessos from "./pages/configuracoes/UsuariosAcessos";
 import NotFound from "./pages/NotFound";
 import AcessoNegado from "./pages/AcessoNegado";
