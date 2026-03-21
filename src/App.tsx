@@ -588,11 +588,13 @@ const App = () => (
               <Route path="/monitoramento/equipe" element={<Equipe />} />
               <Route path="/monitoramento/instalacoes" element={<InstalacoesList />} />
               <Route path="/monitoramento/instalacoes/:id" element={<InstalacaoDetalhe />} />
-              <Route path="/monitoramento/rotas" element={<Navigate to="/diretoria/rotas" replace />} />
+              <Route path="/monitoramento/rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
               <Route path="/monitoramento/encaixes" element={<MonitoramentoEncaixes />} />
-              <Route path="/monitoramento/gestao-rotas" element={<Navigate to="/diretoria/gestao-rotas" replace />} />
-              <Route path="/diretoria/rotas" element={<Rotas />} />
-              <Route path="/diretoria/gestao-rotas" element={<GestaoRotas />} />
+              <Route path="/monitoramento/gestao-rotas" element={<Navigate to="/diretoria/gestao-vistorias-instalacoes" replace />} />
+              <Route path="/diretoria/rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
+              <Route path="/diretoria/gestao-rotas" element={<Navigate to="/diretoria/gestao-vistorias-instalacoes" replace />} />
+              <Route path="/diretoria/vistorias-instalacoes" element={<Rotas />} />
+              <Route path="/diretoria/gestao-vistorias-instalacoes" element={<GestaoRotas />} />
               <Route path="/monitoramento/estoque" element={<Navigate to="/monitoramento/rastreadores" replace />} />
               <Route path="/monitoramento/mapa" element={<Navigate to="/monitoramento/rastreadores" replace />} />
               <Route path="/monitoramento/rastreadores" element={<Rastreadores />} />
