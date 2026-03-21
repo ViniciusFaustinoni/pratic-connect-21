@@ -460,7 +460,7 @@ serve(async (req) => {
             ],
           },
           vistoria_nova_tentativa: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'vistoria',
