@@ -1,70 +1,64 @@
 
 
-# Plano: Criar seção "Grades de Comissão" nas Configurações
+# Plano: Comissionamento por Plano (Configurações)
 
 ## Resumo
 
-Nova aba "Grades de Comissão" nas Configurações, visível apenas para Diretor e Admin. Permite criar, editar, duplicar, ativar/inativar e excluir grades de comissão com níveis percentuais que não podem ultrapassar 100% da taxa de adesão.
+Nova aba "Comissionamento por Plano" nas Configurações, visível para Diretor/Admin. Permite configurar valor/percentual de comissão recorrente por plano e por nível de hierarquia (vindos das grades de comissão).
 
 ## 1. Banco de Dados (SQL Migration)
 
-Criar tabela `grades_comissao`:
+### Tabela `comissao_plano_nivel`
 - `id` UUID PK
-- `nome` TEXT NOT NULL
-- `descricao` TEXT nullable
+- `plano_id` UUID NOT NULL references `planos(id)`
+- `nivel_nome` TEXT NOT NULL (ex: "Vendedor Externo" -- nome do nível da grade)
+- `tipo_comissao` TEXT NOT NULL DEFAULT 'valor_fixo' ('valor_fixo' | 'percentual')
+- `valor` NUMERIC NOT NULL DEFAULT 0
+- `parcelas` INTEGER NOT NULL DEFAULT 0 (0 = não gera comissão)
 - `ativo` BOOLEAN DEFAULT true
-- `created_by` UUID references auth.users
 - `created_at`, `updated_at` TIMESTAMPTZ
+- UNIQUE(`plano_id`, `nivel_nome`)
 
-Criar tabela `grades_comissao_niveis`:
-- `id` UUID PK
-- `grade_id` UUID references grades_comissao ON DELETE CASCADE
-- `nome` TEXT NOT NULL (ex: "Vendedor Externo")
-- `percentual` NUMERIC NOT NULL
-- `ordem` INTEGER NOT NULL
-- `created_at` TIMESTAMPTZ
+RLS: leitura para authenticated, escrita restrita a Diretor/Admin Master via `has_role`.
 
-RLS: leitura para authenticated, escrita restrita via `has_role` para Diretor/Admin Master.
+Trigger `updated_at` automático.
 
-## 2. Nova Página: `src/pages/configuracoes/GradesComissao.tsx`
+## 2. Nova Página: `src/pages/configuracoes/ComissionamentoPlano.tsx`
 
-Lista de grades com:
-- Cards/tabela: nome, qtd níveis, soma percentuais, status (badge Ativa/Inativa)
-- Ações: Editar, Duplicar, Ativar/Inativar, Excluir (desabilitado se em uso)
-- Botão "+ Nova Grade de Comissão" no topo
+### Lista de planos
+- Query `planos` ativos, exibe cards/tabela com nome do plano
+- Para cada plano, mostra badge com quantidade de níveis configurados
+- Ao clicar, abre configuração inline (accordion) ou navega para sub-página
 
-## 3. Nova Página/Modal: `src/pages/configuracoes/GradeComissaoForm.tsx`
+### Configuração por plano (inline ou modal)
+- Busca todos os nomes de níveis distintos de `grades_comissao_niveis` (SELECT DISTINCT nome)
+- Para cada nível, exibe linha editável:
+  - Nome do nível (read-only)
+  - Select: Valor fixo (R$) / Percentual (%)
+  - Input: valor ou percentual
+  - Input: número de parcelas
+  - Switch: ativo/inativo
+- Botão "Salvar" faz upsert em `comissao_plano_nivel`
+- Tabela visual clara conforme exemplo do usuário
 
-Formulário com:
-- Nome da grade, descrição opcional
-- Seção "Níveis de Comissão" com botão "+ Adicionar Nível"
-- Cada nível: nome (texto livre), percentual (%), botão remover, setas reordenar
-- Barra de progresso em tempo real: "Total alocado: XX% de 100%"
-- Validação: soma > 100% desabilita salvar com mensagem vermelha
-- Soma < 100% permitida
+## 3. Roteamento e Layout
 
-## 4. Roteamento (`App.tsx`)
+### `ConfiguracoesLayout.tsx`
+- Nova tab: `{ path: '/configuracoes/comissionamento-plano', label: 'Comissionamento por Plano', icon: Receipt, diretorOnly: true }`
 
-- Adicionar rota `/configuracoes/grades-comissao` → `GradesComissao`
-- Adicionar rota `/configuracoes/grades-comissao/nova` e `/configuracoes/grades-comissao/:id` → `GradeComissaoForm`
+### `App.tsx`
+- Rota: `comissionamento-plano` dentro do grupo `configuracoes`
 
-## 5. Layout (`ConfiguracoesLayout.tsx`)
+### `src/pages/configuracoes/index.tsx`
+- Exportar `ComissionamentoPlano`
 
-- Adicionar tab "Grades de Comissão" com ícone `Calculator`, flag `diretorOnly: true`
-- Ajustar filtro: `diretorOnly` mostra para Diretor, Admin Master e Desenvolvedor
-
-## 6. Exports (`src/pages/configuracoes/index.tsx`)
-
-- Exportar os dois novos componentes
-
-## Arquivos afetados
+## 4. Arquivos afetados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| SQL (migração) | Criar tabelas `grades_comissao` e `grades_comissao_niveis` com RLS |
-| `src/pages/configuracoes/GradesComissao.tsx` | **Novo** -- lista de grades |
-| `src/pages/configuracoes/GradeComissaoForm.tsx` | **Novo** -- formulário criação/edição |
-| `src/pages/configuracoes/ConfiguracoesLayout.tsx` | Adicionar tab "Grades de Comissão" |
-| `src/pages/configuracoes/index.tsx` | Exportar novos componentes |
-| `src/App.tsx` | Adicionar rotas |
+| SQL (migração) | Criar tabela `comissao_plano_nivel` com RLS |
+| `src/pages/configuracoes/ComissionamentoPlano.tsx` | **Novo** -- lista de planos + configuração por nível |
+| `src/pages/configuracoes/ConfiguracoesLayout.tsx` | Nova tab |
+| `src/pages/configuracoes/index.tsx` | Export |
+| `src/App.tsx` | Rota nova |
 
