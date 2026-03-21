@@ -1,7 +1,7 @@
 import { Outlet, useLocation, Navigate, NavLink } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import {
-  User, Shield, Bell, Users, Calculator, Plug, Settings, Receipt
+  User, Shield, Bell, Users, Calculator, Plug, Settings, Receipt, Bot
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -22,6 +22,7 @@ const tabs: TabItem[] = [
   { path: '/configuracoes/grades-comissao', label: 'Grades de Comissão', icon: Calculator, diretorOnly: true },
   { path: '/configuracoes/comissionamento-plano', label: 'Comissionamento por Plano', icon: Receipt, diretorOnly: true },
   { path: '/configuracoes/integracoes', label: 'Integrações', icon: Plug },
+  { path: '/configuracoes/agente-consultor-ia', label: 'Agente Consultor IA', icon: Bot, diretorOnly: true },
   { path: '/configuracoes/sistema', label: 'Sistema', icon: Settings },
 ];
 

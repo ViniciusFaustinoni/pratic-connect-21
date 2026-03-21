@@ -20,4 +20,5 @@ export { default as Sistema } from './Sistema';
 export { default as GradesComissao } from './GradesComissao';
 export { default as GradeComissaoForm } from './GradeComissaoForm';
 export { default as ComissionamentoPlano } from './ComissionamentoPlano';
+export { default as AgenteConsultorIA } from './AgenteConsultorIA';
 
