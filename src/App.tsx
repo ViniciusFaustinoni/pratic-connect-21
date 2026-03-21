@@ -89,6 +89,7 @@ import Mapa from "./pages/monitoramento/Mapa";
 import CalendarioInstalacoes from "./pages/monitoramento/CalendarioInstalacoes";
 import Vistorias from "./pages/monitoramento/Vistorias";
 import VistoriasInstalacoes from "./pages/monitoramento/VistoriasInstalacoes";
+import VistoriasInstalacoesMon from "./pages/monitoramento/VistoriasInstalacoesMon";
 import DashboardCoordenador from "./pages/monitoramento/DashboardCoordenador";
 import Equipe from "./pages/monitoramento/Equipe";
 import FilaVistorias from "./pages/monitoramento/FilaVistorias";
@@ -586,7 +587,7 @@ const App = () => (
               {/* Monitoramento */}
               <Route path="/monitoramento/dashboard" element={<DashboardCoordenador />} />
               <Route path="/monitoramento/equipe" element={<Equipe />} />
-              <Route path="/monitoramento/instalacoes" element={<InstalacoesList />} />
+              <Route path="/monitoramento/instalacoes" element={<Navigate to="/monitoramento/vistorias-instalacoes-mon" replace />} />
               <Route path="/monitoramento/instalacoes/:id" element={<InstalacaoDetalhe />} />
               <Route path="/monitoramento/rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
               <Route path="/monitoramento/encaixes" element={<MonitoramentoEncaixes />} />
@@ -602,9 +603,10 @@ const App = () => (
               <Route path="/monitoramento/alertas" element={<AlertasMonitoramento />} />
               
               <Route path="/monitoramento/calendario" element={<CalendarioInstalacoes />} />
-              <Route path="/monitoramento/vistorias" element={<FilaVistorias />} />
+              <Route path="/monitoramento/vistorias" element={<Navigate to="/monitoramento/vistorias-instalacoes-mon" replace />} />
               <Route path="/monitoramento/vistorias-manutencao" element={<VistoriasManutencao />} />
               <Route path="/monitoramento/vistorias-instalacoes" element={<VistoriasInstalacoes />} />
+              <Route path="/monitoramento/vistorias-instalacoes-mon" element={<VistoriasInstalacoesMon />} />
               <Route path="/monitoramento/retiradas" element={<RetiradasPage />} />
               <Route path="/monitoramento/realizar-vistoria" element={<Vistorias />} />
               <Route path="/monitoramento/ressalvas-pendentes" element={<RessalvasPendentes />} />
