@@ -1,12 +1,14 @@
 import { useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { Route, MapPin, Users, Calendar, Loader2, ListOrdered, ArrowRightLeft, AlertTriangle } from 'lucide-react';
+import { Route, MapPin, Users, Calendar, Loader2, ListOrdered, ArrowRightLeft, AlertTriangle, Radio, Activity } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { toast } from 'sonner';
+import { useEquipeHoje } from '@/hooks/useDashboardCoordenador';
+import { useMovimentacoes } from '@/hooks/useMovimentacoes';
 import { 
   RotaFormDialog, 
   RotaDetailDrawer, 
