@@ -73,7 +73,7 @@ serve(async (req) => {
         uf,
         profissional:profiles!profissional_id(nome),
         associado:associados!associado_id(id, nome, telefone, whatsapp),
-        cotacao:cotacoes!cotacao_id(id, lead:leads(nome, telefone))
+        cotacao:cotacoes!cotacao_id(id, lead:leads!cotacoes_lead_id_fkey(nome, telefone))
       `)
       .eq('data_agendada', hojeStr)
       .in('status', ['agendada', 'pendente'])
