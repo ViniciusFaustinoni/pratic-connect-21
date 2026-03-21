@@ -262,10 +262,22 @@ export default function GradeComissaoForm() {
       </Card>
 
       <div className="flex justify-end gap-3">
-        <Button variant="outline" onClick={() => navigate('/configuracoes/grades-comissao')}>Cancelar</Button>
-        <Button onClick={handleSave} disabled={saving || exceedsLimit}>
-          {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar Grade'}
-        </Button>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button variant="outline" onClick={() => navigate('/configuracoes/grades-comissao')}>Cancelar</Button>
+            </TooltipTrigger>
+            <TooltipContent>Descarta alterações e volta para a lista de grades.</TooltipContent>
+          </Tooltip>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button onClick={handleSave} disabled={saving || exceedsLimit}>
+                {saving ? 'Salvando...' : isEdit ? 'Salvar Alterações' : 'Criar Grade'}
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Salva a grade com todos os níveis configurados.</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
     </div>
   );
