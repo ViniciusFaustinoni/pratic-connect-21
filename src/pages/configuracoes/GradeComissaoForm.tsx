@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
-import { ArrowLeft, Plus, Trash2, ArrowUp, ArrowDown } from 'lucide-react';
+import { ArrowLeft, Plus, Trash2, ArrowUp, ArrowDown, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FieldHint } from '@/components/admin/planos/FieldHint';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -251,6 +251,20 @@ export default function GradeComissaoForm() {
                 className="h-2"
                 indicatorClassName={exceedsLimit ? 'bg-destructive' : undefined}
               />
+              <div className="flex items-center justify-between text-sm pt-1">
+                <span className="text-muted-foreground flex items-center gap-1">
+                  <Building2 className="h-3.5 w-3.5" />
+                  Percentual da empresa:
+                  <FieldHint text="Este é o percentual que permanece na empresa. Corresponde à diferença entre 100% e o total distribuído nos níveis." />
+                </span>
+                <span className="font-medium text-primary">
+                  {totalPercentual >= 100
+                    ? '0% — Todo o valor é distribuído'
+                    : totalPercentual === 0
+                      ? '100% — Nenhum nível configurado'
+                      : `${100 - totalPercentual}%`}
+                </span>
+              </div>
               {exceedsLimit && (
                 <p className="text-xs text-destructive font-medium">
                   A soma dos percentuais dos níveis não pode ultrapassar 100%. Total atual: {totalPercentual}%

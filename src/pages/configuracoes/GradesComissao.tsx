@@ -161,6 +161,12 @@ export default function GradesComissao() {
                     <div className="flex items-center gap-4 text-xs text-muted-foreground">
                       <span>{qtdNiveis} {qtdNiveis === 1 ? 'nível' : 'níveis'}</span>
                       <span>Total: {total}%</span>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="text-primary font-medium cursor-help">Empresa: {Math.max(100 - total, 0)}%</span>
+                        </TooltipTrigger>
+                        <TooltipContent>Percentual retido pela empresa</TooltipContent>
+                      </Tooltip>
                     </div>
                     <Progress value={Math.min(total, 100)} className="h-1.5 w-40" />
                   </div>
