@@ -467,9 +467,9 @@ serve(async (req) => {
               (dados?.motivo as string) || 'Sua vistoria precisa de ajustes. Realize uma nova pelo app.',
             ],
           },
-          // Documento → sinistro_atualizado / documentacao_pendente
+          // Documento → notificacao_geral_v1
           documento_aprovado: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'documento',
