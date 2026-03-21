@@ -894,7 +894,7 @@ export function AppSidebar() {
                 />
                 <span className="text-sm font-medium">Perfil</span>
               </NavLink>
-              {(permissions.isVendedorOnly || permissions.isPerfilLimitado) && (
+              {(permissions.isVendedorOnly || permissions.isPerfilLimitado || permissions.isSupervisorExterno || permissions.isAgencia) && (
                 <NavLink 
                   to="/perfil/conta-corrente" 
                   onClick={handleNavigation}
