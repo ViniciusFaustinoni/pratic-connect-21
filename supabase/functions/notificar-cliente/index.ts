@@ -492,9 +492,9 @@ serve(async (req) => {
               `Seu cadastro foi atualizado. Status: ${(dados?.status as string) || 'atualizado'}.`,
             ],
           },
-          // Veículo negado / followups → sinistro_atualizado
+          // Veículo negado / followups → notificacao_geral_v1
           veiculo_negado_orientacoes: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'avaliação',
