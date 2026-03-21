@@ -4,6 +4,7 @@ import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/com
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Button } from '@/components/ui/button';
+import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { useConfiguracoesEncaixe, useAtualizarConfiguracoesEncaixe } from '@/hooks/useEncaixesDisponiveis';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -14,12 +15,14 @@ export function ConfiguracoesEncaixe() {
 
   const [raioKm, setRaioKm] = useState('10');
   const [janelaHoras, setJanelaHoras] = useState('2');
+  const [ativo, setAtivo] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
     if (config) {
       setRaioKm(String(config.raioKm));
       setJanelaHoras(String(config.janelaHoras));
+      setAtivo(config.ativo);
     }
   }, [config]);
 
@@ -30,6 +33,14 @@ export function ConfiguracoesEncaixe() {
       setHasChanges(changed);
     }
   }, [raioKm, janelaHoras, config]);
+
+  const handleToggleAtivo = async (checked: boolean) => {
+    setAtivo(checked);
+    await atualizarConfig.mutateAsync({
+      chave: 'operacional_encaixe_ativo',
+      valor: String(checked),
+    });
+  };
 
   const handleSave = async () => {
     if (String(config?.raioKm) !== raioKm) {
@@ -59,16 +70,30 @@ export function ConfiguracoesEncaixe() {
     <div className="space-y-6">
       <Card>
         <CardHeader>
-          <CardTitle className="flex items-center gap-2">
-            <Settings className="h-5 w-5" />
-            Configurações de Encaixe
-          </CardTitle>
-          <CardDescription>
-            Configure os parâmetros que controlam quando e como os vistoriadores podem assumir
-            serviços próximos da sua localização.
-          </CardDescription>
+          <div className="flex items-center justify-between">
+            <div>
+              <CardTitle className="flex items-center gap-2">
+                <Settings className="h-5 w-5" />
+                Configurações de Encaixe
+              </CardTitle>
+              <CardDescription>
+                Configure os parâmetros que controlam quando e como os vistoriadores podem assumir
+                serviços próximos da sua localização.
+              </CardDescription>
+            </div>
+            <div className="flex items-center gap-2">
+              <span className={`text-sm font-medium ${ativo ? 'text-primary' : 'text-muted-foreground'}`}>
+                {ativo ? 'Ativo' : 'Desativado'}
+              </span>
+              <Switch
+                checked={ativo}
+                onCheckedChange={handleToggleAtivo}
+                disabled={atualizarConfig.isPending}
+              />
+            </div>
+          </div>
         </CardHeader>
-        <CardContent className="space-y-6">
+        <CardContent className={`space-y-6 transition-opacity ${!ativo ? 'opacity-50 pointer-events-none' : ''}`}>
           {/* Raio máximo */}
           <div className="space-y-2">
             <div className="flex items-center gap-2">

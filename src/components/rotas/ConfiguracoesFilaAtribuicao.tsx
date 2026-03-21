@@ -170,10 +170,15 @@ export function ConfiguracoesFilaAtribuicao() {
   const queryClient = useQueryClient();
 
   const [values, setValues] = useState<FilaConfig>(DEFAULTS);
+  const [ativo, setAtivo] = useState(true);
   const [hasChanges, setHasChanges] = useState(false);
 
   useEffect(() => {
-    if (config) setValues(config);
+    if (config) {
+      const { ativo: configAtivo, ...rest } = config;
+      setValues(rest);
+      setAtivo(configAtivo);
+    }
   }, [config]);
 
   useEffect(() => {
@@ -201,6 +206,11 @@ export function ConfiguracoesFilaAtribuicao() {
     onError: () => toast.error('Erro ao salvar configurações'),
   });
 
+  const handleToggleAtivo = async (checked: boolean) => {
+    setAtivo(checked);
+    mutation.mutate([{ chave: 'fila_atribuicao_ativa', valor: String(checked) }]);
+  };
+
   const handleSave = () => {
     if (!config) return;
     const updates = FIELDS
@@ -214,16 +224,30 @@ export function ConfiguracoesFilaAtribuicao() {
   return (
     <Card>
       <CardHeader>
-        <CardTitle className="flex items-center gap-2">
-          <Workflow className="h-5 w-5" />
-          Atribuição Automática de Tarefas
-        </CardTitle>
-        <CardDescription>
-          Parâmetros que controlam o enfileiramento inteligente e a redistribuição automática de
-          serviços entre profissionais.
-        </CardDescription>
+        <div className="flex items-center justify-between">
+          <div>
+            <CardTitle className="flex items-center gap-2">
+              <Workflow className="h-5 w-5" />
+              Atribuição Automática de Tarefas
+            </CardTitle>
+            <CardDescription>
+              Parâmetros que controlam o enfileiramento inteligente e a redistribuição automática de
+              serviços entre profissionais.
+            </CardDescription>
+          </div>
+          <div className="flex items-center gap-2">
+            <span className={`text-sm font-medium ${ativo ? 'text-primary' : 'text-muted-foreground'}`}>
+              {ativo ? 'Ativo' : 'Desativado'}
+            </span>
+            <Switch
+              checked={ativo}
+              onCheckedChange={handleToggleAtivo}
+              disabled={mutation.isPending}
+            />
+          </div>
+        </div>
       </CardHeader>
-      <CardContent className="space-y-6">
+      <CardContent className={`space-y-6 transition-opacity ${!ativo ? 'opacity-50 pointer-events-none' : ''}`}>
         {FIELDS.map((field) => (
           <div key={field.key} className="space-y-2">
             <div className="flex items-center gap-2">

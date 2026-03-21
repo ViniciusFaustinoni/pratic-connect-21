@@ -314,6 +314,8 @@ export function useEncaixesDisponiveis() {
     queryKey: ['encaixes-disponiveis', profile?.id, config?.raioKm, ultimaLocalizacao],
     queryFn: async (): Promise<EncaixeDisponivel[]> => {
       if (!ultimaLocalizacao || !config) return [];
+      // Se encaixe está desativado, retorna lista vazia
+      if (!config.ativo) return [];
 
       const encaixes: EncaixeDisponivel[] = [];
       const hoje = new Date().toISOString().split('T')[0];
