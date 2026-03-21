@@ -116,9 +116,16 @@ export default function GradesComissao() {
           <h2 className="text-lg font-semibold text-foreground">Grades de Comissão</h2>
           <p className="text-sm text-muted-foreground">Configure grades com níveis de comissionamento sobre taxa de adesão</p>
         </div>
-        <Button onClick={() => navigate('/configuracoes/grades-comissao/nova')}>
-          <Plus className="h-4 w-4 mr-2" /> Nova Grade
-        </Button>
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <Button onClick={() => navigate('/configuracoes/grades-comissao/nova')}>
+                <Plus className="h-4 w-4 mr-2" /> Nova Grade
+              </Button>
+            </TooltipTrigger>
+            <TooltipContent>Criar uma nova grade de comissão do zero.</TooltipContent>
+          </Tooltip>
+        </TooltipProvider>
       </div>
 
       {isLoading ? (
