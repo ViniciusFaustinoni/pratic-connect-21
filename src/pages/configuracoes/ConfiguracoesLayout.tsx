@@ -19,7 +19,7 @@ const tabs: TabItem[] = [
   { path: '/configuracoes/seguranca', label: 'Segurança', icon: Shield },
   { path: '/configuracoes/notificacoes', label: 'Notificações', icon: Bell },
   { path: '/configuracoes/usuarios-acessos', label: 'Usuários e Acessos', icon: Users, adminOnly: true },
-  
+  { path: '/configuracoes/grades-comissao', label: 'Grades de Comissão', icon: Calculator, diretorOnly: true },
   { path: '/configuracoes/integracoes', label: 'Integrações', icon: Plug },
   { path: '/configuracoes/sistema', label: 'Sistema', icon: Settings },
 ];

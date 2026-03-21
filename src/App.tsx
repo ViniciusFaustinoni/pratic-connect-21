@@ -130,6 +130,8 @@ import IntegracaoFontesLeads from "./pages/configuracoes/IntegracaoFontesLeads";
 import IntegracaoSGAHinova from "./pages/configuracoes/IntegracaoSGAHinova";
 import Sistema from "./pages/configuracoes/Sistema";
 import Logs from "./pages/configuracoes/Logs";
+import GradesComissao from "./pages/configuracoes/GradesComissao";
+import GradeComissaoForm from "./pages/configuracoes/GradeComissaoForm";
 import RateioConfig from "./pages/configuracoes/RateioConfig";
 import UsuariosAcessos from "./pages/configuracoes/UsuariosAcessos";
 import NotFound from "./pages/NotFound";
@@ -710,6 +712,9 @@ const App = () => (
                 <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="integracoes/sga-hinova" element={<IntegracaoSGAHinova />} />
                 <Route path="rateio" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
+                <Route path="grades-comissao" element={<GradesComissao />} />
+                <Route path="grades-comissao/nova" element={<GradeComissaoForm />} />
+                <Route path="grades-comissao/:id" element={<GradeComissaoForm />} />
                 <Route path="sistema" element={<Sistema />} />
               </Route>
             </Route>
