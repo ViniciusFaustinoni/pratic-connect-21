@@ -97,6 +97,16 @@ serve(async (req) => {
 
     console.log("[cron-atribuir-tarefas] Iniciando atribuição automática de tarefas...");
 
+    // Verificar se a atribuição automática está ativa
+    const filaAtiva = await getConfiguracaoNumero(supabase, 'fila_atribuicao_ativa', 1);
+    if (filaAtiva === 0 || (await supabase.from('configuracoes').select('valor').eq('chave', 'fila_atribuicao_ativa').maybeSingle()).data?.valor === 'false') {
+      console.log("[cron-atribuir-tarefas] Atribuição automática DESATIVADA - pulando processamento");
+      return new Response(
+        JSON.stringify({ resultado: 'desativado', mensagem: 'Atribuição automática está desativada' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Ler configurações dinâmicas
     const raioProximidadeKm = (await getConfiguracaoNumero(supabase, 'fila_raio_proximidade_metros', 500)) / 1000;
     const raioQuaseDisponivelKm = (await getConfiguracaoNumero(supabase, 'fila_raio_quase_disponivel_metros', 1000)) / 1000;
