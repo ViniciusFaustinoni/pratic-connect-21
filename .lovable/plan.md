@@ -1,63 +1,47 @@
 
 
-# Plano: Conta Corrente Unificada para Vendedor Externo, Supervisor Externo e Agência
+# Plano: Adicionar tooltips informativos na área de Grades de Comissão
 
-## Contexto Atual
+## Resumo
 
-Já existe `ContaCorrenteVendedor` em `/perfil/conta-corrente` com 3 cards (Saldo Atual, A Receber Mês, Antecipações) e extrato da tabela `cc_vendedor_lancamentos`. Precisa ser reformulado para atender o pedido.
+Adicionar tooltips (usando o componente `FieldHint` já existente no projeto) em todos os campos, áreas, e botões das telas de listagem e formulário de grades de comissão, tornando a interface mais intuitiva e autoexplicativa.
 
-## 1. Reformular `ContaCorrenteVendedor.tsx`
+## 1. `src/pages/configuracoes/GradeComissaoForm.tsx`
 
-### Dashboard: trocar os 3 cards por 4 novos
-- **A Receber este mês**: `cc_vendedor_lancamentos` WHERE status IN ('pendente','a_pagar') AND mês atual, tipo='credito'
-- **Já Recebido este mês**: WHERE status='pago' AND data_pagamento no mês atual, tipo='credito'
-- **Total a Receber**: WHERE status IN ('pendente','a_pagar'), tipo='credito' (todos os períodos)
-- **Total Histórico Recebido**: WHERE status='pago', tipo='credito' (todos os períodos)
+Importar `FieldHint` de `@/components/admin/planos/FieldHint` e adicionar tooltips nos seguintes elementos:
 
-### Extrato: enriquecer colunas
-- Data de geração (data_lancamento)
-- Tipo: exibir "Adesão" ou "Mensalidade (Xª parcela)" baseado em `categoria` e `parcela_numero`
-- Nome do associado: já existe no campo `descricao`, mas buscar via join com `associados` usando `associado_id`
-- Plano: buscar via contrato → plano (join `contrato_id` → `contratos.plano_id` → `planos.nome`)
-- Valor da comissão (`valor_liquido`)
-- Status com cores: 🟡 Pendente/A Pagar, 🟢 Pago (+ data pagamento), 🔴 Cancelado/Estorno (+ motivo via `observacao_pagamento`)
+| Local | Tooltip |
+|-------|---------|
+| Label "Nome da Grade" | "Identifique a grade de forma clara. Ex: 'Grade Agência Premium', 'Grade Vendedor Direto'." |
+| Label "Descrição" | "Opcional. Use para detalhar o propósito ou público-alvo desta grade." |
+| Título "Níveis de Comissão" | "Cada nível representa um participante na cadeia de vendas que recebe parte da taxa de adesão." |
+| Botão "+ Adicionar Nível" | "Adicione um novo nível de comissionamento (ex: Vendedor, Supervisor, Agência)." |
+| Campo nome do nível (placeholder) | "Nome do papel que recebe comissão. Ex: Vendedor Externo, Supervisor, Agência." |
+| Campo percentual (%) | "Percentual da taxa de adesão destinado a este nível. O total de todos os níveis não pode ultrapassar 100%." |
+| Setas de reordenação | "Altere a ordem de prioridade deste nível na grade." |
+| Botão remover nível (lixeira) | "Remove este nível da grade." |
+| Área "Total alocado" | "Soma de todos os percentuais. Pode ser menor que 100%, mas nunca maior." |
+| Botão "Cancelar" | "Descarta alterações e volta para a lista de grades." |
+| Botão "Criar/Salvar" | "Salva a grade com todos os níveis configurados." |
 
-### Filtros adicionais
-- Tipo: Adesão / Mensalidade / Todos (filtra por `categoria`)
-- Busca por nome do associado (busca texto no campo `descricao` ou join)
-- Manter período e status existentes
+## 2. `src/pages/configuracoes/GradesComissao.tsx`
 
-### Exportação CSV
-- Adicionar botão "Exportar CSV" ao lado do PDF existente
+Importar `FieldHint` e `Tooltip` components. Adicionar tooltips nos botões de ação de cada card:
 
-## 2. Atualizar Hook `useContaCorrenteVendedor.ts`
+| Botão | Tooltip |
+|-------|---------|
+| Editar (Pencil) | "Editar os níveis e configurações desta grade" |
+| Duplicar (Copy) | "Criar uma cópia desta grade com os mesmos níveis" |
+| Ativar/Inativar (Power) | "Ativar ou inativar esta grade. Grades inativas não podem ser atribuídas a novos usuários." |
+| Excluir (Trash2) | "Excluir esta grade. Só é possível se não estiver em uso." |
+| Botão "+ Nova Grade" | "Criar uma nova grade de comissão do zero." |
 
-- Adicionar query de resumo com os 4 KPIs (substituir `vw_cc_vendedor_saldo`)
-- Alterar query de lançamentos para fazer join com `associados(nome)` e `contratos(plano_id, planos(nome))` via `associado_id` e `contrato_id`
-- Adicionar filtro por `categoria` e busca texto
-
-## 3. Sidebar: ampliar visibilidade
-
-Em `AppSidebar.tsx`, a condição `(permissions.isVendedorOnly || permissions.isPerfilLimitado)` já cobre vendedor externo. Verificar se supervisor externo e agência também entram -- caso contrário, adicionar `isSupervisorExterno` e role `agencia` à condição.
-
-## 4. Notificações
-
-Criar trigger SQL ou lógica no edge function de pagamento:
-- Quando `cc_vendedor_lancamentos.status` muda para `pago` → inserir na tabela `notificacoes` (se existir) com mensagem "Sua comissão de R$ XX,00 referente à venda de [Associado] foi paga em [Data]"
-- Quando `status` muda para `cancelado` → notificação de estorno com motivo
-
-Verificar se tabela `notificacoes` já existe no sistema.
-
-## 5. Nenhuma alteração no banco de dados necessária
-
-A tabela `cc_vendedor_lancamentos` já tem todos os campos necessários. Os joins são feitos via `associado_id` e `contrato_id` existentes. Os 4 KPIs são calculados por query agregada.
+Usar `Tooltip`/`TooltipContent`/`TooltipTrigger` de `@/components/ui/tooltip` para os botões de ícone, e `FieldHint` para labels de texto.
 
 ## Arquivos afetados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| `src/pages/financeiro/ContaCorrenteVendedor.tsx` | Reformular: 4 cards, extrato enriquecido, filtros, CSV |
-| `src/hooks/useContaCorrenteVendedor.ts` | Query com joins, filtro categoria/busca, 4 KPIs |
-| `src/components/layout/AppSidebar.tsx` | Ampliar visibilidade para supervisor externo e agência |
-| SQL (trigger ou migration) | Notificação automática ao mudar status para pago/cancelado |
+| `src/pages/configuracoes/GradeComissaoForm.tsx` | Tooltips em todos os campos e botões |
+| `src/pages/configuracoes/GradesComissao.tsx` | Tooltips nos botões de ação dos cards |
 
