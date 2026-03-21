@@ -107,9 +107,10 @@ serve(async (req) => {
         if (associadoData) {
           telefone = associadoData.whatsapp || associadoData.telefone;
           nomeCliente = associadoData.nome || "Cliente";
-        } else if (cotacaoData) {
-          telefone = cotacaoData.telefone;
-          nomeCliente = cotacaoData.nome || "Cliente";
+        } else if (cotacaoData?.lead) {
+          const leadData = cotacaoData.lead as any;
+          telefone = leadData.telefone;
+          nomeCliente = leadData.nome || "Cliente";
         }
 
         if (!telefone) {
