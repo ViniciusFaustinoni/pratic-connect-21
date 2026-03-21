@@ -336,7 +336,7 @@ function AbaContatos() {
   const { data: contatos, isLoading } = useQuery({
     queryKey: ['agente-ia-contatos', statusFilter],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase as any)
         .from('agente_ia_contatos')
         .select('*')
         .order('ultima_interacao', { ascending: false, nullsFirst: false });
