@@ -13,13 +13,18 @@ import {
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 
+interface GradeNivel {
+  id: string;
+  percentual: number;
+}
+
 interface GradeComissao {
   id: string;
   nome: string;
   descricao: string | null;
   ativo: boolean;
   created_at: string;
-  grades_comissao_niveis: { id: string; percentual: number }[];
+  grades_comissao_niveis: GradeNivel[];
 }
 
 export default function GradesComissao() {
@@ -30,7 +35,7 @@ export default function GradesComissao() {
   const { data: grades = [], isLoading } = useQuery({
     queryKey: ['grades-comissao'],
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('grades_comissao')
         .select('id, nome, descricao, ativo, created_at, grades_comissao_niveis(id, percentual)')
         .order('created_at', { ascending: false });
@@ -41,7 +46,7 @@ export default function GradesComissao() {
 
   const toggleMutation = useMutation({
     mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
-      const { error } = await supabase.from('grades_comissao').update({ ativo }).eq('id', id);
+      const { error } = await (supabase as any).from('grades_comissao').update({ ativo }).eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -56,15 +61,14 @@ export default function GradesComissao() {
       const grade = grades.find(g => g.id === gradeId);
       if (!grade) throw new Error('Grade não encontrada');
 
-      // Fetch full levels
-      const { data: niveis, error: nErr } = await supabase
+      const { data: niveis, error: nErr } = await (supabase as any)
         .from('grades_comissao_niveis')
         .select('nome, percentual, ordem')
         .eq('grade_id', gradeId)
         .order('ordem');
       if (nErr) throw nErr;
 
-      const { data: newGrade, error: gErr } = await supabase
+      const { data: newGrade, error: gErr } = await (supabase as any)
         .from('grades_comissao')
         .insert({ nome: `${grade.nome} (Cópia)`, descricao: grade.descricao })
         .select('id')
@@ -72,9 +76,9 @@ export default function GradesComissao() {
       if (gErr) throw gErr;
 
       if (niveis && niveis.length > 0) {
-        const { error: iErr } = await supabase
+        const { error: iErr } = await (supabase as any)
           .from('grades_comissao_niveis')
-          .insert(niveis.map(n => ({ ...n, grade_id: newGrade.id })));
+          .insert(niveis.map((n: any) => ({ ...n, grade_id: newGrade.id })));
         if (iErr) throw iErr;
       }
     },
@@ -87,7 +91,7 @@ export default function GradesComissao() {
 
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('grades_comissao').delete().eq('id', id);
+      const { error } = await (supabase as any).from('grades_comissao').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
@@ -101,7 +105,7 @@ export default function GradesComissao() {
     },
   });
 
-  const getTotalPercentual = (niveis: { percentual: number }[]) =>
+  const getTotalPercentual = (niveis: GradeNivel[]) =>
     niveis.reduce((sum, n) => sum + Number(n.percentual), 0);
 
   return (

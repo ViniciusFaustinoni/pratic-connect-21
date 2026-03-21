@@ -30,7 +30,7 @@ export default function GradeComissaoForm() {
     queryKey: ['grade-comissao', id],
     enabled: isEdit,
     queryFn: async () => {
-      const { data, error } = await supabase
+      const { data, error } = await (supabase as any)
         .from('grades_comissao')
         .select('*, grades_comissao_niveis(id, nome, percentual, ordem)')
         .eq('id', id!)
@@ -81,16 +81,15 @@ export default function GradeComissaoForm() {
       let gradeId = id;
 
       if (isEdit) {
-        const { error } = await supabase
+        const { error } = await (supabase as any)
           .from('grades_comissao')
           .update({ nome: nome.trim(), descricao: descricao.trim() || null })
           .eq('id', id!);
         if (error) throw error;
 
-        // Delete old levels and re-insert
-        await supabase.from('grades_comissao_niveis').delete().eq('grade_id', id!);
+        await (supabase as any).from('grades_comissao_niveis').delete().eq('grade_id', id!);
       } else {
-        const { data, error } = await supabase
+        const { data, error } = await (supabase as any)
           .from('grades_comissao')
           .insert({ nome: nome.trim(), descricao: descricao.trim() || null })
           .select('id')
@@ -99,7 +98,7 @@ export default function GradeComissaoForm() {
         gradeId = data.id;
       }
 
-      const { error: nErr } = await supabase
+      const { error: nErr } = await (supabase as any)
         .from('grades_comissao_niveis')
         .insert(niveis.map((n, i) => ({
           grade_id: gradeId!,
