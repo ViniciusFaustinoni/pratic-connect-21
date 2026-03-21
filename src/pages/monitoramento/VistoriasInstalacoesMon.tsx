@@ -5,7 +5,7 @@ import Vistorias from './Vistorias';
 
 export default function VistoriasInstalacoesMon() {
   return (
-    <div className="container mx-auto py-6 space-y-6">
+    <div className="container mx-auto py-6 space-y-4">
       <div>
         <h1 className="text-2xl font-bold">Vistorias e Instalações</h1>
         <p className="text-muted-foreground">
@@ -26,13 +26,22 @@ export default function VistoriasInstalacoesMon() {
         </TabsList>
 
         <TabsContent value="instalacoes">
-          <Instalacoes />
+          <InstalacoesList />
         </TabsContent>
 
         <TabsContent value="vistorias">
-          <Vistorias />
+          <VistoriasContent />
         </TabsContent>
       </Tabs>
     </div>
   );
+}
+
+// Inline wrappers to avoid duplicate headers/containers
+function InstalacoesList() {
+  return <Instalacoes />;
+}
+
+function VistoriasContent() {
+  return <Vistorias />;
 }
