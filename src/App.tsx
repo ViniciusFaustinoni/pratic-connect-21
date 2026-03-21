@@ -134,6 +134,7 @@ import Logs from "./pages/configuracoes/Logs";
 import GradesComissao from "./pages/configuracoes/GradesComissao";
 import GradeComissaoForm from "./pages/configuracoes/GradeComissaoForm";
 import ComissionamentoPlano from "./pages/configuracoes/ComissionamentoPlano";
+import AgenteConsultorIA from "./pages/configuracoes/AgenteConsultorIA";
 import RateioConfig from "./pages/configuracoes/RateioConfig";
 import UsuariosAcessos from "./pages/configuracoes/UsuariosAcessos";
 import NotFound from "./pages/NotFound";
