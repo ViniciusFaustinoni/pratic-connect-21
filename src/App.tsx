@@ -431,6 +431,9 @@ const App = () => (
             {/* Public Reagendamento Vistoria */}
             <Route path="/reagendar/:token" element={<ReagendarVistoria />} />
             
+            {/* Public Landing Page Planos */}
+            <Route path="/planos" element={<LandingPlanos />} />
+            
             {/* Redirect root to dashboard */}
             <Route path="/" element={<Navigate to="/dashboard" replace />} />
             
