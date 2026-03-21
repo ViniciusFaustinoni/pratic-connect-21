@@ -483,9 +483,9 @@ serve(async (req) => {
               (dados?.tipo_documento as string) || 'documento pendente',
             ],
           },
-          // Status → sinistro_atualizado
+          // Status → notificacao_geral_v1
           status_atualizado: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'cadastro',
