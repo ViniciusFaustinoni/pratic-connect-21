@@ -150,8 +150,16 @@ export default function Rotas() {
       </div>
 
       {/* Tabs */}
-      <Tabs defaultValue="calendario" className="space-y-4">
-        <TabsList>
+      <Tabs defaultValue="tempo-real" className="space-y-4">
+        <TabsList className="flex-wrap">
+          <TabsTrigger value="tempo-real">
+            <Radio className="mr-1 h-4 w-4" />
+            Tempo Real
+          </TabsTrigger>
+          <TabsTrigger value="movimentacoes">
+            <Activity className="mr-1 h-4 w-4" />
+            Movimentações
+          </TabsTrigger>
           <TabsTrigger value="calendario">Calendário</TabsTrigger>
           <TabsTrigger value="lista">Lista</TabsTrigger>
           {canEditRotas && (
