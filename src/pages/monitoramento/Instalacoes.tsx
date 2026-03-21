@@ -3,7 +3,6 @@ import { format } from 'date-fns';
 import { useFilasRealtime } from '@/hooks/useFilasRealtime';
 import { ptBR } from 'date-fns/locale';
 import { 
-  Plus, 
   Calendar, 
   MapPin, 
   Wrench, 
@@ -31,7 +30,6 @@ import {
   InstalacaoWithRelations,
 } from '@/hooks/useInstalacoes';
 import {
-  InstalacaoFormDialog,
   InstalacaoDetailDrawer,
   InstalacaoFilters,
 } from '@/components/instalacoes';
@@ -42,9 +40,7 @@ export default function Instalacoes() {
   useFilasRealtime();
 
   const [filters, setFilters] = useState<Filters>({});
-  const [showFormDialog, setShowFormDialog] = useState(false);
   const [selectedInstalacaoId, setSelectedInstalacaoId] = useState<string | null>(null);
-  const [editInstalacaoId, setEditInstalacaoId] = useState<string | undefined>(undefined);
 
   const { data: instalacoesList, isLoading } = useInstalacoes(filters);
   const { data: metricas, isLoading: loadingMetricas } = useInstalacoesMetricas();
@@ -56,19 +52,6 @@ export default function Instalacoes() {
 
   const handleOpenDetail = (id: string) => {
     setSelectedInstalacaoId(id);
-  };
-
-  const handleEdit = () => {
-    if (selectedInstalacaoId) {
-      setEditInstalacaoId(selectedInstalacaoId);
-      setSelectedInstalacaoId(null);
-      setShowFormDialog(true);
-    }
-  };
-
-  const handleNewInstalacao = () => {
-    setEditInstalacaoId(undefined);
-    setShowFormDialog(true);
   };
 
   const openWhatsApp = (instalacao: InstalacaoWithRelations) => {
@@ -97,13 +80,9 @@ export default function Instalacoes() {
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Instalações</h1>
           <p className="text-muted-foreground">
-            Gerencie os agendamentos de instalação de rastreadores
+            Acompanhe os agendamentos de instalação de rastreadores
           </p>
         </div>
-        <Button onClick={handleNewInstalacao}>
-          <Plus className="mr-2 h-4 w-4" />
-          Nova Instalação
-        </Button>
       </div>
 
       {/* Cards de Métricas */}
@@ -182,13 +161,9 @@ export default function Instalacoes() {
                 <p className="mt-2 text-sm text-muted-foreground">
                   {Object.keys(filters).length > 0 
                     ? 'Nenhuma instalação encontrada com os filtros aplicados'
-                    : 'As instalações agendadas aparecerão aqui'
+                    : 'As instalações agendadas aparecerão aqui automaticamente'
                   }
                 </p>
-                <Button className="mt-4" onClick={handleNewInstalacao}>
-                  <Plus className="mr-2 h-4 w-4" />
-                  Agendar Instalação
-                </Button>
               </div>
             </div>
           ) : (
@@ -300,19 +275,11 @@ export default function Instalacoes() {
         </CardContent>
       </Card>
 
-      {/* Modal de Formulário */}
-      <InstalacaoFormDialog
-        open={showFormDialog}
-        onOpenChange={setShowFormDialog}
-        instalacaoId={editInstalacaoId}
-      />
-
       {/* Drawer de Detalhes */}
       <InstalacaoDetailDrawer
         instalacaoId={selectedInstalacaoId}
         open={!!selectedInstalacaoId}
         onOpenChange={(open) => !open && setSelectedInstalacaoId(null)}
-        onEdit={handleEdit}
       />
     </div>
   );
