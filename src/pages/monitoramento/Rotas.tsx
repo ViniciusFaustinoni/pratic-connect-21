@@ -45,6 +45,8 @@ export default function Rotas() {
   const { data: rotas, isLoading: loadingRotas } = useRotas(filters);
   const { data: instalacoesPendentes, isLoading: loadingPendentes } = useInstalacoesDisponiveis();
   const { data: filaServicos, isLoading: loadingFila } = useFilaServicos();
+  const { data: equipeHoje, isLoading: loadingEquipe } = useEquipeHoje();
+  const { data: movimentacoes, isLoading: loadingMovimentacoes } = useMovimentacoes();
 
   const handleOpenRota = (rotaId: string) => {
     setDrawerRotaId(rotaId);
