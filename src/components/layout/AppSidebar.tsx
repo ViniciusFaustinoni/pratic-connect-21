@@ -519,6 +519,7 @@ export function AppSidebar() {
   };
   const location = useLocation();
   const permissions = usePermissions();
+  const { hasRole } = useAuth();
   const { visibleModules, isLoading: isModuleVisLoading } = useModuleVisibility();
   const { isItemVisible } = useModuleItemVisibility();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
