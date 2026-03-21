@@ -199,7 +199,7 @@ const menuConfig: {
         { title: 'Vistorias', url: '/monitoramento/vistorias', icon: ClipboardCheck },
         { title: 'Retiradas', url: '/monitoramento/retiradas', icon: PackageX },
         { title: 'Calendário', url: '/monitoramento/calendario', icon: Calendar },
-        { title: 'Rotas', url: '/monitoramento/rotas', icon: Route, permission: 'canEditRotas' },
+        
         { 
           title: 'Rastreadores', 
           url: '/monitoramento/rastreadores', 
