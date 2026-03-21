@@ -152,8 +152,8 @@ Aguardamos sua confirmação! 🚗`;
           body: {
             telefone: telefoneFormatado,
             mensagem,
-            template_name: 'sinistro_atualizado',
-            template_params: [nomeAbrev, 'agendamento', `${tipoServico} agendada para hoje às ${horaFormatada}`],
+            template_name: 'confirmacao_agendamento_v1',
+            template_params: [nomeAbrev, tipoServico, `Hoje às ${horaFormatada}`],
           }
         });
 

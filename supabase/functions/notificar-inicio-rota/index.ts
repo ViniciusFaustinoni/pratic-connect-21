@@ -219,11 +219,11 @@ _Confirme sua chegada com o cliente!_`;
           body: {
             telefone: profissionalTelefone,
             mensagem: mensagem,
-            template_name: 'sinistro_atualizado',
+            template_name: 'servico_atribuido_v1',
             template_params: [
               associado.nome?.split(' ')[0] || 'Cliente',
               tipoServico,
-              `Serviço agendado para ${servico.data_agendada ? new Date(servico.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR') : 'hoje'}`,
+              `Agendado para ${servico.data_agendada ? new Date(servico.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR') : 'hoje'}`,
             ],
           }
         });

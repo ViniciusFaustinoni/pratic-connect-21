@@ -132,8 +132,40 @@ async function enviarViaMeta(
     template = tmpl;
     if (!template) throw new Error(`Template '${templateName}' não encontrado`);
     if (template.status !== "APPROVED") {
-      console.warn(`[whatsapp-send-text] Template '${templateName}' não aprovado (${template.status})`);
-      throw new Error(`Template '${templateName}' não aprovado. Status: ${template.status}`);
+      // Fallback inteligente: tentar notificacao_geral_v1 → sinistro_atualizado
+      console.warn(`[whatsapp-send-text] Template '${templateName}' não aprovado (${template.status}). Tentando fallback...`);
+      
+      const fallbackOrder = ['notificacao_geral_v1', 'sinistro_atualizado'];
+      let fallbackFound = false;
+      
+      for (const fbName of fallbackOrder) {
+        if (fbName === templateName) continue; // não tentar o mesmo
+        const { data: fbTmpl } = await supabase
+          .from("whatsapp_meta_templates")
+          .select("nome, idioma, status, corpo, botoes")
+          .eq("nome", fbName)
+          .eq("status", "APPROVED")
+          .single();
+        
+        if (fbTmpl) {
+          console.log(`[whatsapp-send-text] Usando fallback '${fbName}' no lugar de '${templateName}'`);
+          template = fbTmpl;
+          // Ajustar params para o formato do fallback (3 params: nome, assunto, detalhe)
+          if (bodyParams.length >= 3) {
+            bodyParams = bodyParams.slice(0, 3);
+          } else if (bodyParams.length === 2) {
+            bodyParams = [...bodyParams, ''];
+          } else if (bodyParams.length === 1) {
+            bodyParams = [...bodyParams, '', ''];
+          }
+          fallbackFound = true;
+          break;
+        }
+      }
+      
+      if (!fallbackFound) {
+        throw new Error(`Template '${templateName}' não aprovado (${tmpl?.status}). Nenhum fallback disponível.`);
+      }
     }
 
     // Se não temos buttonParams explícitos, verificar se template tem botão URL com {{}}

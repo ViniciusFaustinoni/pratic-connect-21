@@ -401,7 +401,7 @@ serve(async (req) => {
             ],
           },
           instalacao_agendada: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => {
               // Formatar data de ISO (2026-03-12) para dd/MM/yyyy
               let dataFormatada = 'em breve';
@@ -450,9 +450,9 @@ serve(async (req) => {
               (dados?.documentos as string) || 'documentos pendentes',
             ],
           },
-          // Vistoria → sinistro_atualizado ({{1}} nome, {{2}} ref, {{3}} atualização)
+          // Vistoria → notificacao_geral_v1
           vistoria_reprovada: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'vistoria',
@@ -460,16 +460,16 @@ serve(async (req) => {
             ],
           },
           vistoria_nova_tentativa: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'vistoria',
               (dados?.motivo as string) || 'Sua vistoria precisa de ajustes. Realize uma nova pelo app.',
             ],
           },
-          // Documento → sinistro_atualizado / documentacao_pendente
+          // Documento → notificacao_geral_v1
           documento_aprovado: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'documento',
@@ -483,18 +483,18 @@ serve(async (req) => {
               (dados?.tipo_documento as string) || 'documento pendente',
             ],
           },
-          // Status → sinistro_atualizado
+          // Status → notificacao_geral_v1
           status_atualizado: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'cadastro',
               `Seu cadastro foi atualizado. Status: ${(dados?.status as string) || 'atualizado'}.`,
             ],
           },
-          // Veículo negado / followups → sinistro_atualizado
+          // Veículo negado / followups → notificacao_geral_v1
           veiculo_negado_orientacoes: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'avaliação',
@@ -502,7 +502,7 @@ serve(async (req) => {
             ],
           },
           followup_recusa_dia3: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'avaliação',
@@ -510,7 +510,7 @@ serve(async (req) => {
             ],
           },
           followup_recusa_dia7: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'proteção',

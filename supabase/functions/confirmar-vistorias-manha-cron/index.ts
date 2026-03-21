@@ -181,10 +181,8 @@ Aguardamos sua confirmação! 🚗
           body: {
             telefone: telefoneFormatado,
             mensagem,
-            template_name: 'confirmacao_servico_v1',
+            template_name: 'confirmacao_agendamento_v1',
             template_params: [nomeAbrev, tipoLabel, periodoLabel],
-            fallback_template: 'sinistro_atualizado',
-            fallback_params: [nomeAbrev, tipoLabel, `${tipoLabel} agendada para hoje. Confirme sua presença.`],
           }
         });
 

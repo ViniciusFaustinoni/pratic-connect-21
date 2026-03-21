@@ -710,11 +710,11 @@ serve(async (req) => {
                     body: {
                       telefone: profProfile.telefone,
                       mensagem: msgInstalador,
-                      template_name: 'sinistro_atualizado',
+                      template_name: 'servico_atribuido_v1',
                       template_params: [
                         profProfile.nome?.split(' ')[0] || 'Instalador',
                         'Instalação',
-                        `Nova instalação atribuída - ${assocData?.nome || servico.associado_nome}`,
+                        `${assocData?.nome || servico.associado_nome} - ${veicData?.placa || servico.veiculo_placa}`,
                       ],
                       referencia_tipo: 'instalacao',
                       referencia_id: servico.instalacao_origem_id,
