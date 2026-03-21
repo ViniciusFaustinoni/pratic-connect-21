@@ -502,7 +502,7 @@ serve(async (req) => {
             ],
           },
           followup_recusa_dia3: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'avaliação',
