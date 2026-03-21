@@ -20,6 +20,7 @@ import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 
 // Public Pages
 import AssociadoVistoria from "./pages/public/AssociadoVistoria";
+import LandingPlanos from "./pages/public/LandingPlanos";
 
 // Internal System Pages
 import Auth from "./pages/Auth";
