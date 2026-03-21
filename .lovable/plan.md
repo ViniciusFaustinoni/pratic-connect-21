@@ -1,79 +1,70 @@
 
 
-# Plano: Criar templates Meta dedicados para notificações que NÃO são sinistro
+# Plano: Criar seção "Grades de Comissão" nas Configurações
 
-## Problema
+## Resumo
 
-O template `sinistro_atualizado` (corpo: "Olá {{1}}, há uma atualização no seu sinistro {{2}}: {{3}}") está sendo usado como fallback genérico para TODOS os tipos de notificação -- instalações, vistorias, pagamentos, confirmações, etc. Isso gera mensagens confusas como "há uma atualização no seu sinistro INSTALAÇÃO: FULANO".
+Nova aba "Grades de Comissão" nas Configurações, visível apenas para Diretor e Admin. Permite criar, editar, duplicar, ativar/inativar e excluir grades de comissão com níveis percentuais que não podem ultrapassar 100% da taxa de adesão.
 
-## Solução
+## 1. Banco de Dados (SQL Migration)
 
-Criar templates Meta dedicados por contexto e substituir as referências nos edge functions. Cada template precisa ser aprovado pela Meta antes de funcionar, mas precisa ser registrado no banco como DRAFT para depois ser enviado para aprovação.
+Criar tabela `grades_comissao`:
+- `id` UUID PK
+- `nome` TEXT NOT NULL
+- `descricao` TEXT nullable
+- `ativo` BOOLEAN DEFAULT true
+- `created_by` UUID references auth.users
+- `created_at`, `updated_at` TIMESTAMPTZ
 
-### 1. Novos templates Meta (SQL)
+Criar tabela `grades_comissao_niveis`:
+- `id` UUID PK
+- `grade_id` UUID references grades_comissao ON DELETE CASCADE
+- `nome` TEXT NOT NULL (ex: "Vendedor Externo")
+- `percentual` NUMERIC NOT NULL
+- `ordem` INTEGER NOT NULL
+- `created_at` TIMESTAMPTZ
 
-Registrar na tabela `whatsapp_meta_templates`:
+RLS: leitura para authenticated, escrita restrita via `has_role` para Diretor/Admin Master.
 
-| Template | Corpo | Uso |
-|----------|-------|-----|
-| `servico_atribuido_v1` | `Olá {{1}}! Um novo serviço foi atribuído a você: {{2}}. Detalhes: {{3}}. Acesse o app para mais informações.` | Notificar instalador/vistoriador sobre atribuição |
-| `confirmacao_agendamento_v1` | `Olá {{1}}! Seu(a) {{2}} está agendado(a) para hoje. {{3}}. Responda SIM para confirmar ou solicite reagendamento.` | Confirmação matinal e 1h antes |
-| `notificacao_geral_v1` | `Olá {{1}}! {{2}}: {{3}}. Acompanhe pelo app.` | Fallback genérico que NÃO menciona sinistro |
+## 2. Nova Página: `src/pages/configuracoes/GradesComissao.tsx`
 
-Status inicial: `DRAFT` (precisa ser enviado para aprovação via painel de templates Meta).
+Lista de grades com:
+- Cards/tabela: nome, qtd níveis, soma percentuais, status (badge Ativa/Inativa)
+- Ações: Editar, Duplicar, Ativar/Inativar, Excluir (desabilitado se em uso)
+- Botão "+ Nova Grade de Comissão" no topo
 
-### 2. Atualizar `cron-atribuir-tarefas/index.ts`
+## 3. Nova Página/Modal: `src/pages/configuracoes/GradeComissaoForm.tsx`
 
-- Linha 713: trocar `template_name: 'sinistro_atualizado'` por `'servico_atribuido_v1'`
-- Ajustar `template_params` para os parâmetros do novo template
+Formulário com:
+- Nome da grade, descrição opcional
+- Seção "Níveis de Comissão" com botão "+ Adicionar Nível"
+- Cada nível: nome (texto livre), percentual (%), botão remover, setas reordenar
+- Barra de progresso em tempo real: "Total alocado: XX% de 100%"
+- Validação: soma > 100% desabilita salvar com mensagem vermelha
+- Soma < 100% permitida
 
-### 3. Atualizar `confirmar-agendamento-cron/index.ts`
+## 4. Roteamento (`App.tsx`)
 
-- Linha 155: trocar `template_name: 'sinistro_atualizado'` por `'confirmacao_agendamento_v1'`
+- Adicionar rota `/configuracoes/grades-comissao` → `GradesComissao`
+- Adicionar rota `/configuracoes/grades-comissao/nova` e `/configuracoes/grades-comissao/:id` → `GradeComissaoForm`
 
-### 4. Atualizar `confirmar-vistorias-manha-cron/index.ts`
+## 5. Layout (`ConfiguracoesLayout.tsx`)
 
-- Trocar referência ao template `sinistro_atualizado` por `'confirmacao_agendamento_v1'`
+- Adicionar tab "Grades de Comissão" com ícone `Calculator`, flag `diretorOnly: true`
+- Ajustar filtro: `diretorOnly` mostra para Diretor, Admin Master e Desenvolvedor
 
-### 5. Atualizar `notificar-inicio-rota/index.ts`
+## 6. Exports (`src/pages/configuracoes/index.tsx`)
 
-- Linha 222: trocar `template_name: 'sinistro_atualizado'` por `'servico_atribuido_v1'`
-
-### 6. Atualizar `notificar-cliente/index.ts`
-
-- Substituir os usos de `sinistro_atualizado` para tipos que NÃO são sinistro (instalação, vistoria, documento, status) por `'notificacao_geral_v1'`
-- Manter `sinistro_atualizado` apenas para notificações que realmente envolvem sinistro
-
-### 7. Outros edge functions afetados
-
-As seguintes functions também usam `sinistro_atualizado` fora de contexto de sinistro e devem ser atualizadas:
-- `confirmar-retirada` → `notificacao_geral_v1`
-- `asaas-webhook` (pagamento) → `notificacao_geral_v1`
-- `notificar-manutencao-whatsapp` → `notificacao_geral_v1`
-- `gerar-os-cotacao-aprovada` → pode manter `sinistro_atualizado` pois é contexto de sinistro
-- `notificar-etapa-os` → pode manter, é contexto de sinistro
-
-### 8. Fallback inteligente no `whatsapp-send-text`
-
-- Quando um template DRAFT/não aprovado é solicitado, em vez de falhar, tentar usar `notificacao_geral_v1` como fallback (se aprovado), e só depois `sinistro_atualizado`
-- Isso garante transição suave enquanto templates novos aguardam aprovação
-
-## Nota importante
-
-Os templates novos vão ser criados como DRAFT. O usuário precisa enviá-los para aprovação da Meta pelo painel de templates. Enquanto não forem aprovados, o sistema usará o fallback.
+- Exportar os dois novos componentes
 
 ## Arquivos afetados
 
 | Arquivo | Alteração |
 |---------|-----------|
-| SQL (migração) | Inserir 3 novos templates Meta |
-| `cron-atribuir-tarefas/index.ts` | Usar `servico_atribuido_v1` |
-| `confirmar-agendamento-cron/index.ts` | Usar `confirmacao_agendamento_v1` |
-| `confirmar-vistorias-manha-cron/index.ts` | Usar `confirmacao_agendamento_v1` |
-| `notificar-inicio-rota/index.ts` | Usar `servico_atribuido_v1` |
-| `notificar-cliente/index.ts` | Separar sinistro de não-sinistro |
-| `confirmar-retirada/index.ts` | Usar `notificacao_geral_v1` |
-| `asaas-webhook/index.ts` | Usar `notificacao_geral_v1` |
-| `notificar-manutencao-whatsapp/index.ts` | Usar `notificacao_geral_v1` |
-| `whatsapp-send-text/index.ts` | Fallback inteligente |
+| SQL (migração) | Criar tabelas `grades_comissao` e `grades_comissao_niveis` com RLS |
+| `src/pages/configuracoes/GradesComissao.tsx` | **Novo** -- lista de grades |
+| `src/pages/configuracoes/GradeComissaoForm.tsx` | **Novo** -- formulário criação/edição |
+| `src/pages/configuracoes/ConfiguracoesLayout.tsx` | Adicionar tab "Grades de Comissão" |
+| `src/pages/configuracoes/index.tsx` | Exportar novos componentes |
+| `src/App.tsx` | Adicionar rotas |
 
