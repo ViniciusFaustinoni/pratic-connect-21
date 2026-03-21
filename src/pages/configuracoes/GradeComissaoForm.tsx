@@ -155,10 +155,20 @@ export default function GradeComissaoForm() {
       <Card>
         <CardHeader className="pb-3">
           <div className="flex items-center justify-between">
-            <CardTitle className="text-base">Níveis de Comissão</CardTitle>
-            <Button variant="outline" size="sm" onClick={addNivel}>
-              <Plus className="h-4 w-4 mr-1" /> Adicionar Nível
-            </Button>
+            <CardTitle className="text-base flex items-center">
+              Níveis de Comissão
+              <FieldHint text="Cada nível representa um participante na cadeia de vendas que recebe parte da taxa de adesão." />
+            </CardTitle>
+            <TooltipProvider delayDuration={200}>
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <Button variant="outline" size="sm" onClick={addNivel}>
+                    <Plus className="h-4 w-4 mr-1" /> Adicionar Nível
+                  </Button>
+                </TooltipTrigger>
+                <TooltipContent>Adicione um novo nível de comissionamento (ex: Vendedor, Supervisor, Agência).</TooltipContent>
+              </Tooltip>
+            </TooltipProvider>
           </div>
         </CardHeader>
         <CardContent className="space-y-3">
