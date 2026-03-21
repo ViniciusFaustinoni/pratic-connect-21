@@ -49,14 +49,14 @@ function useConfiguracoesFilaAtribuicao() {
       const { data, error } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', [...CONFIG_KEYS]);
+        .in('chave', [...CONFIG_KEYS, 'fila_atribuicao_ativa']);
 
       if (error) {
         console.warn('[useConfiguracoesFilaAtribuicao] Erro:', error);
-        return DEFAULTS;
+        return { ...DEFAULTS, ativo: true };
       }
 
-      const config = { ...DEFAULTS };
+      const config: FilaConfig & { ativo: boolean } = { ...DEFAULTS, ativo: true };
       const map: Record<string, keyof FilaConfig> = {
         fila_raio_proximidade_metros: 'raioProximidade',
         fila_raio_quase_disponivel_metros: 'raioQuaseDisponivel',
@@ -68,8 +68,12 @@ function useConfiguracoesFilaAtribuicao() {
       };
 
       data?.forEach((item) => {
-        const key = map[item.chave];
-        if (key && item.valor) config[key] = item.valor;
+        if (item.chave === 'fila_atribuicao_ativa') {
+          config.ativo = item.valor !== 'false';
+        } else {
+          const key = map[item.chave];
+          if (key && item.valor) config[key] = item.valor;
+        }
       });
 
       return config;
