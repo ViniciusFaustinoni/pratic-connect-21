@@ -450,9 +450,9 @@ serve(async (req) => {
               (dados?.documentos as string) || 'documentos pendentes',
             ],
           },
-          // Vistoria → sinistro_atualizado ({{1}} nome, {{2}} ref, {{3}} atualização)
+          // Vistoria → notificacao_geral_v1
           vistoria_reprovada: {
-            template_name: 'sinistro_atualizado',
+            template_name: 'notificacao_geral_v1',
             getParams: () => [
               primeiroNome,
               'vistoria',
