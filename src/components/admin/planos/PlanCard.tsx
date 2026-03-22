@@ -14,6 +14,8 @@ import {
   Star,
   Check,
   X,
+  Globe,
+  Bot,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
@@ -119,6 +121,18 @@ export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: Pla
                     {plan.badge_text}
                   </Badge>
                 )}
+                {(plan as any).visivel_landing && (
+                  <Badge className="bg-teal-100 text-teal-800 border-teal-300 text-xs gap-1">
+                    <Globe className="h-3 w-3" />
+                    Landing
+                  </Badge>
+                )}
+                {(plan as any).disponivel_agente && (
+                  <Badge className="bg-violet-100 text-violet-800 border-violet-300 text-xs gap-1">
+                    <Bot className="h-3 w-3" />
+                    Agente IA
+                  </Badge>
+                )}
               </div>
             </div>
 
@@ -187,6 +201,18 @@ export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: Pla
             {plan.additional_price && plan.additional_price > 0 && (
               <Badge className="bg-green-100 text-green-800 border-green-300 text-xs">
                 +{formatCurrency(plan.additional_price)}/mês
+              </Badge>
+            )}
+            {(plan as any).visivel_landing && (
+              <Badge className="bg-teal-100 text-teal-800 border-teal-300 text-xs gap-1">
+                <Globe className="h-3 w-3" />
+                Landing
+              </Badge>
+            )}
+            {(plan as any).disponivel_agente && (
+              <Badge className="bg-violet-100 text-violet-800 border-violet-300 text-xs gap-1">
+                <Bot className="h-3 w-3" />
+                Agente IA
               </Badge>
             )}
           </div>
