@@ -70,6 +70,15 @@ export interface CotacaoParaPdf {
     nome: string;
     coberturas?: string[] | null;
   } | null;
+  // Campos de deságio/cobertura FIPE
+  cotaPercentual?: number;
+  cotaMinima?: number;
+  cotaDesagio?: number;
+  cotaMinimaDesagio?: number;
+  coberturaFipe?: number;
+  anoMinimo?: number;
+  alertaDesagio?: string;
+  coberturasRemovidas?: string[];
 }
 
 export interface PlanoParaPdf {
@@ -564,6 +573,113 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y = startY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + SECTION_GAP;
 
+  // ============= COBERTURAS REMOVIDAS (PDF SIMPLES) =============
+  if (cotacao.coberturasRemovidas && cotacao.coberturasRemovidas.length > 0) {
+    checkPageBreak(40);
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO APLICÁVEL PARA ESTE VEÍCULO', brandRed);
+    y += HEADER_HEIGHT + INNER_GAP;
+
+    const removCol1 = cotacao.coberturasRemovidas.slice(0, Math.ceil(cotacao.coberturasRemovidas.length / 2));
+    const removCol2 = cotacao.coberturasRemovidas.slice(Math.ceil(cotacao.coberturasRemovidas.length / 2));
+    const startRemovY = y;
+
+    removCol1.forEach((item, index) => {
+      const lineTop = startRemovY + (index * coberturaLineHeight);
+      const textYR = lineTop + coberturaLineHeight / 2 + 2;
+      if (index % 2 === 0) {
+        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
+        doc.rect(cobCol1X, lineTop, colWidth, coberturaLineHeight, 'F');
+      }
+      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+      doc.setFontSize(9);
+      doc.text('⚠', cobCol1X + 5, textYR);
+      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text(item, cobCol1X + 12, textYR);
+    });
+
+    removCol2.forEach((item, index) => {
+      const lineTop = startRemovY + (index * coberturaLineHeight);
+      const textYR = lineTop + coberturaLineHeight / 2 + 2;
+      if (index % 2 === 0) {
+        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
+        doc.rect(cobCol2X - 4, lineTop, colWidth + 4, coberturaLineHeight, 'F');
+      }
+      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+      doc.setFontSize(9);
+      doc.text('⚠', cobCol2X + 2, textYR);
+      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text(item, cobCol2X + 9, textYR);
+    });
+
+    y = startRemovY + Math.max(removCol1.length, removCol2.length) * coberturaLineHeight + SECTION_GAP;
+  }
+
+  // ============= BADGES E COTAS (PDF SIMPLES) =============
+  if ((cotacao.coberturaFipe && cotacao.coberturaFipe !== 100) || cotacao.anoMinimo || (cotacao.cotaPercentual && cotacao.cotaMinima)) {
+    checkPageBreak(40);
+
+    if (cotacao.coberturaFipe && cotacao.coberturaFipe !== 100) {
+      const fipeBadgeText = `Cobertura: ${cotacao.coberturaFipe}% da FIPE`;
+      const fipeBadgeW = fipeBadgeText.length * 3 + 12;
+      doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
+      doc.roundedRect(margin, y, fipeBadgeW, 12, 2, 2, 'F');
+      doc.setTextColor(30, 30, 30);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text(fipeBadgeText, margin + fipeBadgeW / 2, y + 8, { align: 'center' });
+      y += 16;
+    }
+
+    if (cotacao.anoMinimo) {
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Veículos a partir de ${cotacao.anoMinimo}`, margin + 5, y + 4);
+      y += 12;
+    }
+
+    if (cotacao.cotaPercentual && cotacao.cotaMinima) {
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Cota Passeio:', margin + 5, y + 4);
+      doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${cotacao.cotaPercentual}% — mín. ${formatCurrency(cotacao.cotaMinima)}`, margin + 40, y + 4);
+      y += 10;
+
+      if (cotacao.cotaDesagio && cotacao.cotaMinimaDesagio) {
+        doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Com Deságio: ${cotacao.cotaDesagio}% — mín. ${formatCurrency(cotacao.cotaMinimaDesagio)}`, margin + 5, y + 4);
+        y += 10;
+      }
+      y += 4;
+    }
+  }
+
+  // ============= ALERTA DESÁGIO (PDF SIMPLES) =============
+  if (cotacao.alertaDesagio) {
+    checkPageBreak(30);
+    doc.setFontSize(8);
+    const alertaLines = doc.splitTextToSize(cotacao.alertaDesagio, contentWidth - 34);
+    const alertaH = Math.max(18, 10 + alertaLines.length * 5);
+    doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
+    doc.roundedRect(margin, y, contentWidth, alertaH, 3, 3, 'F');
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('⚠', margin + 10, y + 10);
+    doc.setFontSize(8);
+    alertaLines.forEach((line: string, i: number) => {
+      doc.text(line, margin + 22, y + 10 + i * 5);
+    });
+    y += alertaH + SECTION_GAP;
+  }
+
   // ============= VALORES =============
   checkPageBreak(80);
   
@@ -679,8 +795,15 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     valorAdesao: cotacao.valor_adesao || 0,
     coberturas: cotacao.planos?.coberturas || [],
     naoInclui: [],
-    coberturaFipe: 100,
+    coberturaFipe: cotacao.coberturaFipe || 100,
     cota: '',
+    cotaPercentual: cotacao.cotaPercentual,
+    cotaMinima: cotacao.cotaMinima,
+    cotaDesagio: cotacao.cotaDesagio,
+    cotaMinimaDesagio: cotacao.cotaMinimaDesagio,
+    anoMinimo: cotacao.anoMinimo,
+    alertaDesagio: cotacao.alertaDesagio,
+    coberturasRemovidas: cotacao.coberturasRemovidas,
   };
 
   const dadosVeiculoComparativo = {
@@ -1094,7 +1217,8 @@ const desenharPaginaDetalhesPlano = (
   
   const fipeText = `${plano.coberturaFipe}% FIPE`;
   const fipeWidth = fipeText.length * 3 + 12;
-  doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
+  const fipeBadgeColor = plano.coberturaFipe !== 100 ? warningYellow : glowBlue;
+  doc.setFillColor(fipeBadgeColor.r, fipeBadgeColor.g, fipeBadgeColor.b);
   doc.roundedRect(tagX, cardY - 4, fipeWidth, 11, 2, 2, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(8);
@@ -1103,8 +1227,8 @@ const desenharPaginaDetalhesPlano = (
   tagX += fipeWidth + 6;
 
   if (plano.anoMinimo) {
-    const anoText = `> ${plano.anoMinimo}`;
-    const anoWidth = anoText.length * 3.5 + 10;
+    const anoText = `A partir de ${plano.anoMinimo}`;
+    const anoWidth = anoText.length * 3 + 10;
     doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
     doc.roundedRect(tagX, cardY - 4, anoWidth, 11, 2, 2, 'F');
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
@@ -1148,15 +1272,20 @@ const desenharPaginaDetalhesPlano = (
   y += valorCardHeight + 8;
 
   if (plano.alertaDesagio) {
-    const alertaHeight = 18;
+    doc.setFontSize(8);
+    const alertaLines = doc.splitTextToSize(plano.alertaDesagio, contentWidth - 34);
+    const alertaHeight = Math.max(18, 10 + alertaLines.length * 5);
     doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
     doc.roundedRect(margin, y, contentWidth, alertaHeight, 3, 3, 'F');
     
     doc.setTextColor(30, 30, 30);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('⚠', margin + 10, y + 11);
-    doc.text(truncateText(plano.alertaDesagio, 70), margin + 22, y + 11);
+    doc.text('⚠', margin + 10, y + 10);
+    doc.setFontSize(8);
+    alertaLines.forEach((line: string, i: number) => {
+      doc.text(line, margin + 22, y + 10 + i * 5);
+    });
     
     y += alertaHeight + 8;
   }
@@ -1252,6 +1381,52 @@ const desenharPaginaDetalhesPlano = (
     y = startNaoY + Math.max(naoIncluiCol1.length, naoIncluiCol2.length) * coberturaLineHeight + 10;
   }
 
+  // ============= COBERTURAS REMOVIDAS (NÃO APLICÁVEL) =============
+  if (plano.coberturasRemovidas && plano.coberturasRemovidas.length > 0) {
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO APLICÁVEL PARA ESTE VEÍCULO', brandRed);
+    y += HEADER_HEIGHT + 6;
+
+    const removCol1 = plano.coberturasRemovidas.slice(0, Math.ceil(plano.coberturasRemovidas.length / 2));
+    const removCol2 = plano.coberturasRemovidas.slice(Math.ceil(plano.coberturasRemovidas.length / 2));
+    
+    const startRemovY = y;
+    removCol1.forEach((item, index) => {
+      const lineY = startRemovY + index * coberturaLineHeight;
+      const textY = lineY + 6;
+      
+      if (index % 2 === 0) {
+        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
+        doc.rect(col1X, lineY, colWidthVal, coberturaLineHeight, 'F');
+      }
+      
+      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+      doc.setFontSize(9);
+      doc.text('⚠', col1X + 6, textY);
+      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text(truncateText(item, 42), col1X + 14, textY);
+    });
+
+    removCol2.forEach((item, index) => {
+      const lineY = startRemovY + index * coberturaLineHeight;
+      const textY = lineY + 6;
+      
+      if (index % 2 === 0) {
+        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
+        doc.rect(col2X, lineY, colWidthVal, coberturaLineHeight, 'F');
+      }
+      
+      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+      doc.setFontSize(9);
+      doc.text('⚠', col2X + 6, textY);
+      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text(truncateText(item, 42), col2X + 14, textY);
+    });
+
+    y = startRemovY + Math.max(removCol1.length, removCol2.length) * coberturaLineHeight + 10;
+  }
+
   // ============= VALORES =============
   const labelCol = margin + 8;
   const valueCol = pageWidth - margin - 8;
@@ -1343,10 +1518,13 @@ const desenharPaginaComparativoCoberturas = (
 
   let y = headerHeight + 8;
 
-  // Coletar todas as coberturas únicas
+  // Coletar todas as coberturas únicas (incluindo removidas)
   const todasCoberturas: string[] = [];
   planos.forEach(plano => {
     plano.coberturas.forEach(c => {
+      if (!todasCoberturas.includes(c)) todasCoberturas.push(c);
+    });
+    plano.coberturasRemovidas?.forEach(c => {
       if (!todasCoberturas.includes(c)) todasCoberturas.push(c);
     });
   });
@@ -1390,17 +1568,23 @@ const desenharPaginaComparativoCoberturas = (
     doc.setFont('helvetica', 'normal');
     doc.text(truncateText(cobertura, 40), margin + 6, y + 6);
 
-    // Check/X para cada plano
+    // Check/X/⚠ para cada plano
     planos.forEach((plano, colIndex) => {
       const colX = margin + colCoberturaWidth + colIndex * colPlanoWidth;
       const centerX = colX + colPlanoWidth / 2;
       const inclui = plano.coberturas.includes(cobertura);
+      const removida = plano.coberturasRemovidas?.includes(cobertura);
 
       if (inclui) {
         doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.text('✓', centerX, y + 6.5, { align: 'center' });
+      } else if (removida) {
+        doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('⚠', centerX, y + 6.5, { align: 'center' });
       } else {
         doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
         doc.setFontSize(10);
