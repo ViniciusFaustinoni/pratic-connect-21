@@ -1,5 +1,45 @@
 // PDF Premium - PRATICCAR
 import { jsPDF, GState } from 'jspdf';
+import { supabase } from '@/integrations/supabase/client';
+
+// ============= Interface de configuração do PDF =============
+interface PdfConfig {
+  cor_primaria: string;
+  cor_secundaria: string;
+  logo_url: string | null;
+  nome_empresa: string;
+  mensagem_encerramento: string;
+  mostrar_validade: boolean;
+  mostrar_dados_solicitante: boolean;
+  mostrar_dados_veiculo: boolean;
+  mostrar_mensagem_encerramento: boolean;
+  mostrar_whatsapp_rodape: boolean;
+}
+
+// Buscar configuração do banco (retorna null se não houver registro)
+async function carregarConfigPdf(): Promise<PdfConfig | null> {
+  try {
+    const { data } = await supabase
+      .from('cotacao_pdf_config')
+      .select('cor_primaria, cor_secundaria, logo_url, nome_empresa, mensagem_encerramento, mostrar_validade, mostrar_dados_solicitante, mostrar_dados_veiculo, mostrar_mensagem_encerramento, mostrar_whatsapp_rodape')
+      .limit(1)
+      .maybeSingle();
+    return data as PdfConfig | null;
+  } catch {
+    console.warn('Erro ao carregar config do PDF, usando defaults');
+    return null;
+  }
+}
+
+// Converter hex para RGB
+function hexToRgb(hex: string): { r: number; g: number; b: number } {
+  const clean = hex.replace('#', '');
+  return {
+    r: parseInt(clean.substring(0, 2), 16),
+    g: parseInt(clean.substring(2, 4), 16),
+    b: parseInt(clean.substring(4, 6), 16),
+  };
+}
 
 export interface CotacaoParaPdf {
   numero: string | null;
@@ -17,12 +57,10 @@ export interface CotacaoParaPdf {
   codigo_fipe: string | null;
   created_at: string;
   validade_dias: number | null;
-  dia_vencimento?: number | null; // Dia do vencimento (5, 10, 15, 20, 25, 30)
-  // Dados diretos da cotação (prioridade)
+  dia_vencimento?: number | null;
   nome_solicitante?: string | null;
   telefone1_solicitante?: string | null;
   email_solicitante?: string | null;
-  // Relacionamentos (fallback)
   leads?: {
     nome: string;
     telefone: string;
@@ -34,7 +72,6 @@ export interface CotacaoParaPdf {
   } | null;
 }
 
-// Interface para plano no PDF comparativo
 export interface PlanoParaPdf {
   nome: string;
   valorMensal: number;
@@ -43,7 +80,6 @@ export interface PlanoParaPdf {
   naoInclui: string[];
   coberturaFipe: number;
   cota: string;
-  // Campos expandidos para novo layout
   cotaPercentual?: number;
   cotaMinima?: number;
   cotaDesagio?: number;
@@ -54,12 +90,11 @@ export interface PlanoParaPdf {
   coberturasRemovidas?: string[];
 }
 
-// Interface para cotação comparativa
 export interface CotacaoComparativaParaPdf {
   numero: string | null;
   created_at: string;
   validade_dias: number | null;
-  dia_vencimento?: number | null; // Dia do vencimento (5, 10, 15, 20, 25, 30)
+  dia_vencimento?: number | null;
   nome_solicitante?: string | null;
   telefone1_solicitante?: string | null;
   email_solicitante?: string | null;
@@ -69,7 +104,6 @@ export interface CotacaoComparativaParaPdf {
   veiculo_placa: string | null;
   valor_fipe: number | null;
   planosComparar: PlanoParaPdf[];
-  // Dados do vendedor para botão WhatsApp
   vendedor?: {
     nome: string;
     whatsapp?: string | null;
@@ -77,45 +111,36 @@ export interface CotacaoComparativaParaPdf {
 }
 
 // ============= PALETA DE CORES PREMIUM =============
-// Cores principais PRATIC
-const brandBlue = { r: 20, g: 55, b: 110 };       // Azul escuro PRATIC
-const brandRed = { r: 200, g: 30, b: 65 };        // Vermelho PRATIC
+const brandBlueDefault = { r: 20, g: 55, b: 110 };
+const brandRedDefault = { r: 200, g: 30, b: 65 };
 
-// Cores para corpo escuro (dark body)
-const bodyBg = { r: 30, g: 41, b: 59 };              // slate-800
-const cardBg = { r: 30, g: 41, b: 59 };              // slate-800
-const cardBorder = { r: 51, g: 65, b: 85 };           // slate-700
-const sectionHeaderBg = { r: 51, g: 65, b: 85 };      // slate-700
-const stripeBg = { r: 40, g: 52, b: 70 };             // slate-750
-const glowBlue = { r: 59, g: 130, b: 246 };           // blue-500
-const glowRed = { r: 239, g: 68, b: 68 };             // red-500
+const bodyBg = { r: 30, g: 41, b: 59 };
+const cardBg = { r: 30, g: 41, b: 59 };
+const cardBorder = { r: 51, g: 65, b: 85 };
+const sectionHeaderBg = { r: 51, g: 65, b: 85 };
+const stripeBg = { r: 40, g: 52, b: 70 };
+const glowBlue = { r: 59, g: 130, b: 246 };
+const glowRed = { r: 239, g: 68, b: 68 };
 
-// Cores de texto (tema escuro - texto claro para fundo escuro)
 const textWhite = { r: 255, g: 255, b: 255 };
-const textDark = { r: 30, g: 41, b: 59 };             // slate-800 (para header/footer claro)
-const textDarkMuted = { r: 100, g: 116, b: 139 };     // slate-500 (para header/footer)
-const textMuted = { r: 148, g: 163, b: 184 };         // slate-400 (claro p/ fundo escuro)
-const textLight = { r: 226, g: 232, b: 240 };         // slate-200 (claro p/ fundo escuro)
-const successGreen = { r: 34, g: 197, b: 94 };        // green-500 (brilhante p/ fundo escuro)
-const warningYellow = { r: 234, g: 179, b: 8 };       // yellow-500 (brilhante p/ fundo escuro)
+const textDark = { r: 30, g: 41, b: 59 };
+const textDarkMuted = { r: 100, g: 116, b: 139 };
+const textMuted = { r: 148, g: 163, b: 184 };
+const textLight = { r: 226, g: 232, b: 240 };
+const successGreen = { r: 34, g: 197, b: 94 };
+const warningYellow = { r: 234, g: 179, b: 8 };
 
-// Cores para header/footer (claros)
-const headerFooterBg = { r: 245, g: 247, b: 250 };   // slate-50
+const headerFooterBg = { r: 245, g: 247, b: 250 };
 
-// ============= CONSTANTES DE ESPAÇAMENTO (REDUZIDAS) =============
-const SECTION_GAP = 8;       // Espaço entre seções principais (era 12)
-const INNER_GAP = 5;         // Espaço interno entre elementos (era 8)
-const HEADER_HEIGHT = 12;    // Altura do header de seção
-const LINE_HEIGHT = 7;       // Altura de linha de texto (era 8)
+const SECTION_GAP = 8;
+const INNER_GAP = 5;
+const HEADER_HEIGHT = 12;
+const LINE_HEIGHT = 7;
 
-// ============= FUNÇÃO DE TRUNCAMENTO =============
 const truncateText = (text: string | null | undefined, maxLength: number): string => {
   if (!text) return '—';
-  // Aumentado para evitar cortes prematuros
   return text.length > maxLength ? text.substring(0, maxLength - 1) + '…' : text;
 };
-
-// ============= Funções auxiliares =============
 
 const formatCurrency = (value: number | null | undefined): string => {
   if (value === null || value === undefined) return 'R$ 0,00';
@@ -154,13 +179,7 @@ const formatPlaca = (placa: string | null | undefined): string => {
   return placa.toUpperCase();
 };
 
-// Coberturas carregadas dinamicamente do banco (main_coverages)
-// Fallback removido — se o plano não tiver coberturas, o PDF mostrará lista vazia
-
-// Altura reservada para rodapé
 const FOOTER_HEIGHT = 45;
-
-// ============= Funções para carregar imagens =============
 
 const loadImageAsBase64 = async (url: string): Promise<string | null> => {
   try {
@@ -178,7 +197,6 @@ const loadImageAsBase64 = async (url: string): Promise<string | null> => {
   }
 };
 
-// Carrega imagem e retorna base64 + dimensões naturais para manter aspect ratio
 const loadImageWithDimensions = async (url: string): Promise<{ base64: string; naturalWidth: number; naturalHeight: number } | null> => {
   const base64 = await loadImageAsBase64(url);
   if (!base64) return null;
@@ -189,8 +207,6 @@ const loadImageWithDimensions = async (url: string): Promise<{ base64: string; n
     img.src = base64;
   });
 };
-
-// ============= Função para desenhar gradiente =============
 
 const drawGradientRect = (
   doc: jsPDF,
@@ -213,15 +229,10 @@ const drawGradientRect = (
   }
 };
 
-// ============= Função para desenhar indicador de check (círculo verde) - CORRIGIDO =============
-
 const drawCheckIndicator = (doc: jsPDF, x: number, y: number) => {
   doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
-  // Alinhado ao centro vertical do texto (y é o baseline do texto)
   doc.circle(x, y - 2, 1.5, 'F');
 };
-
-// ============= Função para desenhar card premium (tema escuro) =============
 
 const drawPremiumCard = (
   doc: jsPDF,
@@ -237,11 +248,9 @@ const drawPremiumCard = (
 ) => {
   const { isRecommended = false, borderColor, hasGlow = false } = options;
 
-  // Fundo do card (branco)
   doc.setFillColor(cardBg.r, cardBg.g, cardBg.b);
   doc.roundedRect(x, y, width, height, 4, 4, 'F');
 
-  // Borda colorida para destaque
   if (isRecommended || hasGlow) {
     const glowColor = isRecommended ? glowRed : glowBlue;
     doc.setDrawColor(glowColor.r, glowColor.g, glowColor.b);
@@ -255,48 +264,58 @@ const drawPremiumCard = (
   }
 };
 
-// ============= Função para desenhar seção com header premium =============
-
 const drawPremiumSectionHeader = (
   doc: jsPDF,
   x: number,
   y: number,
   width: number,
-  title: string
+  title: string,
+  corSecundaria: { r: number; g: number; b: number } = brandRedDefault
 ) => {
-  // Fundo do header da seção (escuro)
   doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(x, y, width, HEADER_HEIGHT, 2, 2, 'F');
 
-  // Pequeno indicador visual (retângulo azul)
   doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
   doc.rect(x + 5, y + 3.5, 4, 5, 'F');
 
-  // Texto do título (branco para fundo escuro)
   doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
   doc.text(title, x + 13, y + 8);
 
-  // Linha inferior com gradiente azul-vermelho
-  drawGradientRect(doc, x, y + HEADER_HEIGHT, width, 1, glowBlue, brandRed, 20);
+  drawGradientRect(doc, x, y + HEADER_HEIGHT, width, 1, glowBlue, corSecundaria, 20);
 };
-
-// ============= Função para desenhar background de página com marca d'água =============
 
 const drawPageBackground = (
   doc: jsPDF,
   pageWidth: number,
   pageHeight: number
 ) => {
-  // Fundo escuro (corpo do PDF)
   doc.setFillColor(bodyBg.r, bodyBg.g, bodyBg.b);
   doc.rect(0, 0, pageWidth, pageHeight, 'F');
 };
 
+// ============= Helper to split company name for header/footer =============
+function splitNomeEmpresa(nomeEmpresa: string): { linha1: string; linha2: string } {
+  // Try to split at first space after a word, for display as two lines
+  const parts = nomeEmpresa.split(' ');
+  if (parts.length <= 1) return { linha1: nomeEmpresa, linha2: '' };
+  // First word as main title, rest as subtitle
+  return { linha1: parts[0], linha2: parts.slice(1).join(' ') };
+}
+
 // ============= Geração do PDF Premium =============
 
 export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
+  const config = await carregarConfigPdf();
+  
+  const brandBlue = config ? hexToRgb(config.cor_primaria) : brandBlueDefault;
+  const brandRed = config ? hexToRgb(config.cor_secundaria) : brandRedDefault;
+  const nomeEmpresa = config?.nome_empresa || 'PRATICCAR Proteção Veicular';
+  const { linha1: empresaNome, linha2: empresaSubtitulo } = splitNomeEmpresa(nomeEmpresa);
+  const mensagemEncerramento = config?.mensagem_encerramento || 'Será um prazer ter você como nosso associado. Estaremos aqui para o que precisar.';
+  const logoPath = config?.logo_url || '/logos/logo-full-light.png';
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
@@ -306,29 +325,23 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   // Carregar imagens
   const [logoData, vehicleBase64] = await Promise.all([
-    loadImageWithDimensions('/logos/logo-full-light.png'),
+    loadImageWithDimensions(logoPath),
     loadImageAsBase64('/vehicle-silhouette.png'),
   ]);
   const logoBase64 = logoData?.base64 || null;
   const logoAspect = logoData ? logoData.naturalWidth / logoData.naturalHeight : 1;
 
-  // Função auxiliar para verificar se precisa nova página (com background persistente)
   const checkPageBreak = (requiredSpace: number) => {
     if (y + requiredSpace > pageHeight - FOOTER_HEIGHT) {
       doc.addPage();
-      
-      // Desenhar background e marca d'água na nova página
       drawPageBackground(doc, pageWidth, pageHeight);
-      
-      // Header compacto para páginas subsequentes
       doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
       doc.rect(0, 0, pageWidth, 20, 'F');
       drawGradientRect(doc, 0, 17, pageWidth, 3, glowBlue, brandRed, 60);
       doc.setTextColor(textDark.r, textDark.g, textDark.b);
       doc.setFontSize(12);
       doc.setFont('helvetica', 'bold');
-      doc.text('PRATICCAR - Cotação de Proteção', pageWidth / 2, 13, { align: 'center' });
-      
+      doc.text(`${empresaNome} - Cotação de Proteção`, pageWidth / 2, 13, { align: 'center' });
       y = margin + 25;
     }
   };
@@ -343,145 +356,144 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.rect(0, 0, pageWidth, headerHeight, 'F');
   drawGradientRect(doc, 0, headerHeight - 3, pageWidth, 3, glowBlue, brandRed, 60);
 
-  // Logo no header (proporcional)
   const logoHeaderHeight = 35;
   const logoHeaderWidth = logoHeaderHeight * logoAspect;
   if (logoBase64) {
     doc.addImage(logoBase64, 'PNG', margin, 10, logoHeaderWidth, logoHeaderHeight);
   }
 
-  // Texto do header
   doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
   const titleX = logoBase64 ? margin + logoHeaderWidth + 6 : margin;
-  doc.text('PRATICCAR', titleX, 26);
+  doc.text(empresaNome, titleX, 26);
 
   doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'normal');
-  doc.text('Proteção Veicular', titleX, 36);
-
-  // Removido: Badge da cotação não é mais exibido no PDF
+  doc.text(empresaSubtitulo, titleX, 36);
 
   y = headerHeight + SECTION_GAP;
 
   // ============= BARRA DE VALIDADE =============
-  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
-  doc.roundedRect(margin, y, contentWidth, 14, 3, 3, 'F');
+  if (config?.mostrar_validade !== false) {
+    doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
+    doc.roundedRect(margin, y, contentWidth, 14, 3, 3, 'F');
 
-  const dataValidade = new Date(cotacao.created_at);
-  dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
-  
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 8, y + 9);
-  
-  doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 8, y + 9, { align: 'right' });
-
-  y += 14 + SECTION_GAP;
-
-  // ============= DADOS DO SOLICITANTE =============
-  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'DADOS DO SOLICITANTE');
-  y += HEADER_HEIGHT + INNER_GAP;
-
-  // Priorizar dados diretos da cotação, fallback para lead
-  const clienteNome = cotacao.nome_solicitante || cotacao.leads?.nome || 'Não informado';
-  const clienteTelefone = cotacao.telefone1_solicitante || cotacao.leads?.telefone || '';
-  const clienteEmail = cotacao.email_solicitante || cotacao.leads?.email || '';
-
-  // Colunas para melhor alinhamento - largura aumentada
-  const labelWidth = 22;
-  const col1X = margin;
-  const col1ValueX = margin + labelWidth;
-  const col2X = margin + (contentWidth / 2) + 5;
-  const col2ValueX = col2X + labelWidth;
-
-  // Linha 1: Nome completo (usa linha inteira)
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Nome:', col1X, y);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.setFont('helvetica', 'bold');
-  doc.text(truncateText(clienteNome, 55), col1ValueX, y);
-
-  y += LINE_HEIGHT;
-
-  // Linha 2: Telefone e Email
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Telefone:', col1X, y);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(formatPhone(clienteTelefone), col1ValueX, y);
-
-  if (clienteEmail) {
+    const dataValidade = new Date(cotacao.created_at);
+    dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
+    
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.text('E-mail:', col2X, y);
-    doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.text(truncateText(clienteEmail, 30), col2ValueX, y);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 8, y + 9);
+    
+    doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 8, y + 9, { align: 'right' });
+
+    y += 14 + SECTION_GAP;
   }
 
-  y += SECTION_GAP;
+  // ============= DADOS DO SOLICITANTE =============
+  if (config?.mostrar_dados_solicitante !== false) {
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'DADOS DO SOLICITANTE', brandRed);
+    y += HEADER_HEIGHT + INNER_GAP;
+
+    const clienteNome = cotacao.nome_solicitante || cotacao.leads?.nome || 'Não informado';
+    const clienteTelefone = cotacao.telefone1_solicitante || cotacao.leads?.telefone || '';
+    const clienteEmail = cotacao.email_solicitante || cotacao.leads?.email || '';
+
+    const labelWidth = 22;
+    const col1X = margin;
+    const col1ValueX = margin + labelWidth;
+    const col2X = margin + (contentWidth / 2) + 5;
+    const col2ValueX = col2X + labelWidth;
+
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Nome:', col1X, y);
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.setFont('helvetica', 'bold');
+    doc.text(truncateText(clienteNome, 55), col1ValueX, y);
+
+    y += LINE_HEIGHT;
+
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Telefone:', col1X, y);
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.text(formatPhone(clienteTelefone), col1ValueX, y);
+
+    if (clienteEmail) {
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.text('E-mail:', col2X, y);
+      doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.text(truncateText(clienteEmail, 30), col2ValueX, y);
+    }
+
+    y += SECTION_GAP;
+  }
 
   // ============= DADOS DO VEÍCULO =============
-  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'DADOS DO VEÍCULO');
-  y += HEADER_HEIGHT + INNER_GAP;
+  if (config?.mostrar_dados_veiculo !== false) {
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'DADOS DO VEÍCULO', brandRed);
+    y += HEADER_HEIGHT + INNER_GAP;
 
-  // Linha 1: Marca e Modelo
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Marca:', col1X, y);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(truncateText(cotacao.veiculo_marca, 26), col1ValueX, y);
+    const labelWidth = 22;
+    const col1X = margin;
+    const col1ValueX = margin + labelWidth;
+    const col2X = margin + (contentWidth / 2) + 5;
+    const col2ValueX = col2X + labelWidth;
 
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.text('Modelo:', col2X, y);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(truncateText(cotacao.veiculo_modelo, 30), col2ValueX, y);
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Marca:', col1X, y);
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.text(truncateText(cotacao.veiculo_marca, 26), col1ValueX, y);
 
-  y += LINE_HEIGHT;
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.text('Modelo:', col2X, y);
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.text(truncateText(cotacao.veiculo_modelo, 30), col2ValueX, y);
 
-  // Linha 2: Ano, Placa e Valor FIPE (código FIPE removido)
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.text('Ano:', col1X, y);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(cotacao.veiculo_ano?.toString() || '—', col1ValueX, y);
+    y += LINE_HEIGHT;
 
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.text('Placa:', col1X + 40, y);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(formatPlaca(cotacao.veiculo_placa), col1X + 55, y);
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.text('Ano:', col1X, y);
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.text(cotacao.veiculo_ano?.toString() || '—', col1ValueX, y);
 
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.text('Valor FIPE:', col2X, y);
-  doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(cotacao.valor_fipe), col2ValueX, y);
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.text('Placa:', col1X + 40, y);
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.text(formatPlaca(cotacao.veiculo_placa), col1X + 55, y);
 
-  y += SECTION_GAP;
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.text('Valor FIPE:', col2X, y);
+    doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+    doc.setFont('helvetica', 'bold');
+    doc.text(formatCurrency(cotacao.valor_fipe), col2ValueX, y);
+
+    y += SECTION_GAP;
+  }
 
   // ============= CARD DO PLANO (Premium Destacado) =============
   const planoNome = cotacao.planos?.nome || 'Plano Selecionado';
   const cardHeight = 42;
 
-  // Card escuro com borda brilhante
   drawPremiumCard(doc, margin, y, contentWidth, cardHeight, { 
     isRecommended: true, 
     hasGlow: true 
   });
 
-  // Nome do plano (truncado para evitar overflow)
   doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.text(truncateText(planoNome.toUpperCase(), 32), margin + 15, y + 16);
 
-  // Badge "Selecionado" - centralizado abaixo do nome
   const badgeWidth = 50;
   doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
   doc.roundedRect(margin + 15, y + 22, badgeWidth, 12, 2, 2, 'F');
@@ -490,7 +502,6 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setFont('helvetica', 'bold');
   doc.text('SELECIONADO', margin + 15 + badgeWidth / 2, y + 30, { align: 'center' });
 
-  // Valor mensal (destaque grande) - alinhado à direita
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFontSize(24);
   doc.setFont('helvetica', 'bold');
@@ -505,34 +516,29 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   // ============= COBERTURAS DO PLANO =============
   checkPageBreak(80);
-  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COBERTURAS INCLUÍDAS');
+  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COBERTURAS INCLUÍDAS', brandRed);
   y += HEADER_HEIGHT + INNER_GAP;
 
-  // Usar coberturas do plano (sem fallback hardcoded)
   const coberturas = cotacao.planos?.coberturas || [];
 
-  // Exibir em 2 colunas - posições fixas para evitar sobreposição
   const coberturasCol1 = coberturas.slice(0, Math.ceil(coberturas.length / 2));
   const coberturasCol2 = coberturas.slice(Math.ceil(coberturas.length / 2));
 
   const startY = y;
-  const coberturaLineHeight = 8; // Altura de cada linha de cobertura
+  const coberturaLineHeight = 8;
   const cobCol1X = margin;
   const cobCol2X = margin + (contentWidth / 2) + 8;
   const colWidth = (contentWidth / 2) - 8;
   
-  // Desenhar coberturas com alinhamento correto
   coberturasCol1.forEach((cobertura, index) => {
     const lineTop = startY + (index * coberturaLineHeight);
-    const textY = lineTop + coberturaLineHeight / 2 + 2; // Centralizado verticalmente
+    const textY = lineTop + coberturaLineHeight / 2 + 2;
     
-    // Fundo alternado sutil - alinhado com a linha
     if (index % 2 === 0) {
       doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
       doc.rect(cobCol1X, lineTop, colWidth, coberturaLineHeight, 'F');
     }
     
-    // Indicador de check e texto no mesmo baseline
     drawCheckIndicator(doc, cobCol1X + 5, textY);
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(9);
@@ -542,7 +548,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   coberturasCol2.forEach((cobertura, index) => {
     const lineTop = startY + (index * coberturaLineHeight);
-    const textY = lineTop + coberturaLineHeight / 2 + 2; // Centralizado verticalmente
+    const textY = lineTop + coberturaLineHeight / 2 + 2;
     
     if (index % 2 === 0) {
       doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
@@ -558,13 +564,12 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y = startY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + SECTION_GAP;
 
-  // ============= VALORES (SIMPLIFICADO - SEM COMPOSIÇÃO INTERNA) =============
+  // ============= VALORES =============
   checkPageBreak(80);
   
   const labelCol = margin + 5;
   const valueCol = pageWidth - margin - 5;
 
-  // Card: VALOR MÉDIO MENSAL (destaque azul)
   doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
   doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'F');
   doc.setDrawColor(glowBlue.r, glowBlue.g, glowBlue.b);
@@ -580,7 +585,6 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y += 24;
 
-  // Taxa de adesão (texto claro para fundo escuro)
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(9);
@@ -591,7 +595,6 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y += 12;
 
-  // Primeiro pagamento (destaque verde) com dia de vencimento
   const primeiroPagamento = (cotacao.valor_adesao || 0) + (cotacao.valor_total_mensal || 0);
   const diaVencimento = cotacao.dia_vencimento || 10;
   
@@ -611,34 +614,36 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   y += 30;
 
   // ============= MENSAGEM INSTITUCIONAL =============
-  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
-  doc.roundedRect(margin, y, contentWidth, 26, 3, 3, 'F');
-  
-  // Borda gradiente no topo
-  drawGradientRect(doc, margin, y, contentWidth, 2, glowBlue, brandRed, 40);
-  
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(9);
-  doc.setFont('helvetica', 'italic');
-  doc.text('Será um prazer ter você como nosso associado.', pageWidth / 2, y + 10, { align: 'center' });
-  doc.text('Estaremos aqui para o que precisar.', pageWidth / 2, y + 17, { align: 'center' });
-  
-  doc.setTextColor(glowBlue.r, glowBlue.g, glowBlue.b);
-  doc.setFontSize(10);
-  doc.setFont('helvetica', 'bold');
-  doc.text('Conte com a Praticcar 💙❤️', pageWidth / 2, y + 24, { align: 'center' });
+  if (config?.mostrar_mensagem_encerramento !== false) {
+    doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
+    doc.roundedRect(margin, y, contentWidth, 26, 3, 3, 'F');
+    
+    drawGradientRect(doc, margin, y, contentWidth, 2, glowBlue, brandRed, 40);
+    
+    // Split mensagem into lines
+    const mensagemLines = doc.splitTextToSize(mensagemEncerramento, contentWidth - 20);
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'italic');
+    const line1 = mensagemLines[0] || '';
+    const line2 = mensagemLines[1] || '';
+    doc.text(line1, pageWidth / 2, y + 10, { align: 'center' });
+    if (line2) doc.text(line2, pageWidth / 2, y + 17, { align: 'center' });
+    
+    doc.setTextColor(glowBlue.r, glowBlue.g, glowBlue.b);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Conte com a ${empresaNome} 💙❤️`, pageWidth / 2, y + 24, { align: 'center' });
+  }
 
   // ============= RODAPÉ PREMIUM =============
   const footerY = pageHeight - 30;
 
-  // Linha gradiente superior do rodapé
   drawGradientRect(doc, margin, footerY - 6, contentWidth, 2, glowBlue, brandRed, 50);
 
-  // Fundo do rodapé (claro)
   doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
   doc.rect(0, footerY, pageWidth, 30, 'F');
 
-  // Logo pequeno no rodapé (proporcional)
   const logoFooterHeight = 14;
   const logoFooterWidth = logoFooterHeight * logoAspect;
   if (logoBase64) {
@@ -650,18 +655,17 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'bold');
-  doc.text('PRATICCAR', footerTextX, footerY + 8);
+  doc.text(empresaNome, footerTextX, footerY + 8);
   
   doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'normal');
-  doc.text('Proteção Veicular', footerTextX, footerY + 14);
+  doc.text(empresaSubtitulo, footerTextX, footerY + 14);
 
   doc.setFontSize(7);
   const footerDate = `Gerado em: ${formatDate(new Date().toISOString())} | Validade: ${cotacao.validade_dias || 7} dias`;
   doc.text(footerDate, footerTextX, footerY + 20);
 
-  // Disclaimer (canto direito)
   doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(6);
   const disclaimer = 'Esta cotação não tem valor contratual';
@@ -676,7 +680,6 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
 // ============= PDF COMPARATIVO PREMIUM MULTI-PÁGINAS =============
 
-// Função auxiliar para desenhar rodapé compacto (páginas subsequentes)
 const desenharRodapeCompacto = (
   doc: jsPDF,
   cotacao: CotacaoComparativaParaPdf,
@@ -687,53 +690,47 @@ const desenharRodapeCompacto = (
   paginaAtual: number,
   totalPaginas: number,
   isUltimaPagina: boolean = false,
-  logoAspect: number = 1
+  logoAspect: number = 1,
+  config: PdfConfig | null = null
 ) => {
-  // Cor do WhatsApp
+  const brandRed = config ? hexToRgb(config.cor_secundaria) : brandRedDefault;
+  const nomeEmpresa = config?.nome_empresa || 'PRATICCAR Proteção Veicular';
+  const { linha1: empresaNome, linha2: empresaSubtitulo } = splitNomeEmpresa(nomeEmpresa);
+
   const whatsappGreen = { r: 37, g: 211, b: 102 };
   
-  // Verificar se deve exibir botão de WhatsApp (última página + vendedor com whatsapp)
   const vendedorWhatsapp = cotacao.vendedor?.whatsapp;
-  const mostrarBotaoWhatsapp = isUltimaPagina && vendedorWhatsapp;
+  const mostrarBotaoWhatsapp = isUltimaPagina && vendedorWhatsapp && (config?.mostrar_whatsapp_rodape !== false);
   
-  // Ajustar Y do rodapé se tiver botão de WhatsApp
   const footerY = pageHeight - 20;
   
-  // Botão de WhatsApp (se aplicável)
   if (mostrarBotaoWhatsapp) {
     const btnWidth = 80;
     const btnHeight = 14;
     const btnX = (pageWidth - btnWidth) / 2;
     const btnY = footerY - 22;
     
-    // Limpar número de telefone (apenas dígitos)
     const numeroLimpo = vendedorWhatsapp.replace(/\D/g, '');
     const mensagem = encodeURIComponent(`Olá! Vi a cotação #${cotacao.numero || 'N/A'} e gostaria de mais informações.`);
     const whatsappUrl = `https://wa.me/55${numeroLimpo}?text=${mensagem}`;
     
-    // Desenhar botão
     doc.setFillColor(whatsappGreen.r, whatsappGreen.g, whatsappGreen.b);
     doc.roundedRect(btnX, btnY, btnWidth, btnHeight, 3, 3, 'F');
     
-    // Texto do botão
     doc.setTextColor(255, 255, 255);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
     const vendedorNome = cotacao.vendedor?.nome?.split(' ')[0] || 'Vendedor';
     doc.text(`💬 Falar com ${vendedorNome}`, pageWidth / 2, btnY + 9, { align: 'center' });
     
-    // Adicionar link clicável
     doc.link(btnX, btnY, btnWidth, btnHeight, { url: whatsappUrl });
   }
 
-  // Linha gradiente
   drawGradientRect(doc, margin, footerY - 4, pageWidth - margin * 2, 1.5, glowBlue, brandRed, 40);
 
-  // Fundo do rodapé (claro)
   doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
   doc.rect(0, footerY, pageWidth, 20, 'F');
 
-  // Logo pequeno (proporcional)
   const logoSmallHeight = 12;
   const logoSmallWidth = logoSmallHeight * (logoBase64 ? logoAspect : 1);
   if (logoBase64) {
@@ -745,20 +742,18 @@ const desenharRodapeCompacto = (
   doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
-  doc.text('PRATICCAR', footerTextX, footerY + 7);
+  doc.text(empresaNome, footerTextX, footerY + 7);
 
   doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(6);
   doc.setFont('helvetica', 'normal');
-  doc.text('Proteção Veicular', footerTextX, footerY + 12);
+  doc.text(empresaSubtitulo, footerTextX, footerY + 12);
 
-  // Número da cotação e página
   doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(7);
   doc.text(`#${cotacao.numero || 'N/A'} | Página ${paginaAtual} de ${totalPaginas}`, pageWidth - margin, footerY + 10, { align: 'right' });
 };
 
-// Função para desenhar card de plano expandido com coberturas
 const desenharCardPlanoExpandido = (
   doc: jsPDF,
   plano: PlanoParaPdf,
@@ -777,16 +772,14 @@ const desenharCardPlanoExpandido = (
     ? Math.floor((width - padding * 2 - 8) / 1.6) 
     : Math.floor((width - padding * 2 - 8) / 1.8);
   
-  // Calcular altura baseada nas coberturas
   const numCoberturas = Math.min(plano.coberturas.length, maxCoberturas);
   const cardHeight = 
-    24 +  // Header (nome do plano)
-    28 +  // Valor mensal + /mês
-    (numCoberturas * lineHeight) + // Coberturas
-    (plano.coberturas.length > maxCoberturas ? 10 : 0) + // "+ X mais..."
-    18;   // Rodapé (filiação)
+    24 +
+    28 +
+    (numCoberturas * lineHeight) +
+    (plano.coberturas.length > maxCoberturas ? 10 : 0) +
+    18;
   
-  // Fundo do card
   drawPremiumCard(doc, x, y, width, cardHeight, { 
     isRecommended, 
     hasGlow: true 
@@ -794,7 +787,6 @@ const desenharCardPlanoExpandido = (
   
   let currentY = y + 6;
   
-  // 1. Header: Nome do plano centralizado com fundo azul
   doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
   doc.roundedRect(x + 3, currentY - 2, width - 6, 16, 2, 2, 'F');
   
@@ -802,35 +794,29 @@ const desenharCardPlanoExpandido = (
   doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
   
-  // Quebrar nome em múltiplas linhas se necessário
   const nomeLines = doc.splitTextToSize(plano.nome.toUpperCase(), width - 12);
   const lineToShow = nomeLines[0];
   doc.text(lineToShow, x + width / 2, currentY + 9, { align: 'center' });
   
   currentY += 28;
   
-  // 2. Valor mensal grande centralizado
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(plano.valorMensal), x + width / 2, currentY, { align: 'center' });
   currentY += 5;
   
-  // 3. "/mês" em texto menor
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.text('/mês', x + width / 2, currentY, { align: 'center' });
   currentY += 10;
   
-  // 4. Lista de coberturas
   const coberturasExibir = plano.coberturas.slice(0, maxCoberturas);
   coberturasExibir.forEach((cobertura) => {
-    // Check verde (círculo)
     doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
     doc.circle(x + padding + 3, currentY - 1.5, 1.5, 'F');
     
-    // Texto da cobertura (truncado para caber no card)
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(coberturaFontSize);
     doc.setFont('helvetica', 'normal');
@@ -839,10 +825,8 @@ const desenharCardPlanoExpandido = (
     currentY += lineHeight;
   });
   
-  
   currentY += 4;
   
-  // 5. Rodapé: Filiação (taxa de adesão)
   doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
   doc.line(x + padding, currentY - 4, x + width - padding, currentY - 4);
   
@@ -857,7 +841,6 @@ const desenharCardPlanoExpandido = (
   return cardHeight;
 };
 
-// Função para desenhar página de capa (Página 1)
 const desenharPaginaCapa = (
   doc: jsPDF,
   cotacao: CotacaoComparativaParaPdf,
@@ -867,15 +850,15 @@ const desenharPaginaCapa = (
   margin: number,
   totalPaginas: number,
   isUltimaPagina: boolean = false,
-  logoAspect: number = 1
+  logoAspect: number = 1,
+  config: PdfConfig | null = null
 ) => {
+  const brandRed = config ? hexToRgb(config.cor_secundaria) : brandRedDefault;
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
 
-  // Background
   drawPageBackground(doc, pageWidth, pageHeight);
 
-  // Header compacto (fundo claro)
   const headerHeight = 45;
   doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
   doc.rect(0, 0, pageWidth, headerHeight, 'F');
@@ -896,56 +879,69 @@ const desenharPaginaCapa = (
   y = headerHeight + 5;
 
   // Barra de validade compacta
-  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
-  doc.roundedRect(margin, y, contentWidth, 10, 2, 2, 'F');
+  if (config?.mostrar_validade !== false) {
+    doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
+    doc.roundedRect(margin, y, contentWidth, 10, 2, 2, 'F');
 
-  const dataValidade = new Date(cotacao.created_at);
-  dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
+    const dataValidade = new Date(cotacao.created_at);
+    dataValidade.setDate(dataValidade.getDate() + (cotacao.validade_dias || 7));
 
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(7);
-  doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 4, y + 7);
-  
-  doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-  doc.setFont('helvetica', 'bold');
-  doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 4, y + 7, { align: 'right' });
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.setFontSize(7);
+    doc.text(`Emitido em: ${formatDate(cotacao.created_at)}`, margin + 4, y + 7);
+    
+    doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+    doc.setFont('helvetica', 'bold');
+    doc.text(`Válida até: ${formatDate(dataValidade.toISOString())}`, pageWidth - margin - 4, y + 7, { align: 'right' });
 
-  y += 14;
+    y += 14;
+  }
 
   // Dados do solicitante e veículo compactos
-  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
-  doc.roundedRect(margin, y, contentWidth, 22, 2, 2, 'F');
+  if (config?.mostrar_dados_solicitante !== false || config?.mostrar_dados_veiculo !== false) {
+    const showSolicitante = config?.mostrar_dados_solicitante !== false;
+    const showVeiculo = config?.mostrar_dados_veiculo !== false;
+    const boxHeight = (showSolicitante && showVeiculo) ? 22 : 12;
 
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(7);
-  doc.setFont('helvetica', 'normal');
-  
-  doc.text('Cliente:', margin + 4, y + 7);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.setFont('helvetica', 'bold');
-  doc.text(truncateText(cotacao.nome_solicitante, 30) || 'Não informado', margin + 22, y + 7);
-  
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Tel:', pageWidth / 2 + 5, y + 7);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.text(formatPhone(cotacao.telefone1_solicitante), pageWidth / 2 + 16, y + 7);
+    doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
+    doc.roundedRect(margin, y, contentWidth, boxHeight, 2, 2, 'F');
 
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFont('helvetica', 'normal');
-  doc.text('Veículo:', margin + 4, y + 15);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.setFont('helvetica', 'bold');
-  doc.text(truncateText(`${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}`, 35), margin + 22, y + 15);
-  
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFont('helvetica', 'normal');
-  doc.text('FIPE:', pageWidth / 2 + 5, y + 15);
-  doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(cotacao.valor_fipe), pageWidth / 2 + 18, y + 15);
+    if (showSolicitante) {
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(7);
+      doc.setFont('helvetica', 'normal');
+      
+      doc.text('Cliente:', margin + 4, y + 7);
+      doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.setFont('helvetica', 'bold');
+      doc.text(truncateText(cotacao.nome_solicitante, 30) || 'Não informado', margin + 22, y + 7);
+      
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Tel:', pageWidth / 2 + 5, y + 7);
+      doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.text(formatPhone(cotacao.telefone1_solicitante), pageWidth / 2 + 16, y + 7);
+    }
 
-  y += 28;
+    if (showVeiculo) {
+      const veiculoLineY = showSolicitante ? y + 15 : y + 7;
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Veículo:', margin + 4, veiculoLineY);
+      doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.setFont('helvetica', 'bold');
+      doc.text(truncateText(`${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}`, 35), margin + 22, veiculoLineY);
+      
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text('FIPE:', pageWidth / 2 + 5, veiculoLineY);
+      doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+      doc.setFont('helvetica', 'bold');
+      doc.text(formatCurrency(cotacao.valor_fipe), pageWidth / 2 + 18, veiculoLineY);
+    }
+
+    y += boxHeight + 6;
+  }
 
   // Título da seção de planos
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
@@ -956,19 +952,17 @@ const desenharPaginaCapa = (
   drawGradientRect(doc, margin, y, contentWidth, 1.5, glowBlue, brandRed, 40);
   y += 8;
 
-  // Cards expandidos dos planos - Layout dinâmico e centralizado
+  // Cards expandidos dos planos
   const numPlanos = cotacao.planosComparar.length;
   const cardGap = 6;
-  const planoRecomendadoIndex = numPlanos > 1 ? 0 : -1; // Primeiro plano é recomendado
+  const planoRecomendadoIndex = numPlanos > 1 ? 0 : -1;
 
   if (numPlanos === 1) {
-    // Card único centralizado (largura 60% da página)
     const cardWidth = contentWidth * 0.6;
     const cardX = (pageWidth - cardWidth) / 2;
     desenharCardPlanoExpandido(doc, cotacao.planosComparar[0], cardX, y, cardWidth, 0, true);
     
   } else if (numPlanos === 2) {
-    // 2 cards lado a lado
     const cardWidth = (contentWidth - cardGap) / 2;
     cotacao.planosComparar.forEach((plano, index) => {
       const cardX = margin + (cardWidth + cardGap) * index;
@@ -976,7 +970,6 @@ const desenharPaginaCapa = (
     });
     
   } else {
-    // 3+ cards: Layout em grid (compact mode)
     const cardsPerRow = 3;
     const cardWidth = (contentWidth - (cardGap * (cardsPerRow - 1))) / cardsPerRow;
     
@@ -984,7 +977,6 @@ const desenharPaginaCapa = (
       const row = Math.floor(index / cardsPerRow);
       const col = index % cardsPerRow;
       
-      // Calcular quantos cards nesta linha para centralizar
       const startIndex = row * cardsPerRow;
       const cardsNestaLinha = Math.min(cardsPerRow, numPlanos - startIndex);
       const larguraLinha = (cardWidth * cardsNestaLinha) + (cardGap * (cardsNestaLinha - 1));
@@ -1001,11 +993,9 @@ const desenharPaginaCapa = (
     });
   }
 
-  // Rodapé (se for única página, passa isUltimaPagina)
-  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, 1, totalPaginas, isUltimaPagina, logoAspect);
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, 1, totalPaginas, isUltimaPagina, logoAspect, config);
 };
 
-// Função para desenhar página de detalhes de um plano
 const desenharPaginaDetalhesPlano = (
   doc: jsPDF,
   cotacao: CotacaoComparativaParaPdf,
@@ -1018,21 +1008,21 @@ const desenharPaginaDetalhesPlano = (
   margin: number,
   paginaAtual: number,
   totalPaginas: number,
-  logoAspect: number = 1
+  logoAspect: number = 1,
+  config: PdfConfig | null = null
 ) => {
+  const brandBlue = config ? hexToRgb(config.cor_primaria) : brandBlueDefault;
+  const brandRed = config ? hexToRgb(config.cor_secundaria) : brandRedDefault;
   const contentWidth = pageWidth - margin * 2;
   let y = 0;
 
-  // Background
   drawPageBackground(doc, pageWidth, pageHeight);
 
-  // Header compacto (fundo claro)
   const headerHeight = 38;
   doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
   doc.rect(0, 0, pageWidth, headerHeight, 'F');
   drawGradientRect(doc, 0, headerHeight - 2, pageWidth, 2, glowBlue, brandRed, 60);
 
-  // Badge plano X de Y
   doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
   doc.roundedRect(margin, 8, 55, 12, 2, 2, 'F');
   doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
@@ -1040,15 +1030,11 @@ const desenharPaginaDetalhesPlano = (
   doc.setFont('helvetica', 'bold');
   doc.text(`PLANO ${numeroPlano} DE ${totalPlanos}`, margin + 27.5, 16, { align: 'center' });
 
-  // Nome do plano
   doc.setTextColor(textDark.r, textDark.g, textDark.b);
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
   doc.text(truncateText(plano.nome.toUpperCase(), 28), margin + 65, 18);
 
-  // Removido: Código da cotação não é mais exibido
-
-  // Dados do veículo resumido
   doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
   doc.setFontSize(8);
   doc.text(`${cotacao.veiculo_marca} ${cotacao.veiculo_modelo} ${cotacao.veiculo_ano}`, pageWidth - margin, 20, { align: 'right' });
@@ -1057,19 +1043,16 @@ const desenharPaginaDetalhesPlano = (
 
   y = headerHeight + 8;
 
-  // Card principal do plano - NOVO LAYOUT
   const valorCardHeight = 85;
   drawPremiumCard(doc, margin, y, contentWidth, valorCardHeight, { isRecommended: true, hasGlow: true });
 
   let cardY = y + 10;
 
-  // Linha 1: Nome do plano + Badge adicional mensal
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
   doc.text(truncateText(plano.nome.toUpperCase(), 26), margin + 10, cardY);
 
-  // Badge adicional mensal (se existir)
   if (plano.adicionalMensal && plano.adicionalMensal > 0) {
     const adicionalText = `+${formatCurrency(plano.adicionalMensal)}/mês`;
     const adicionalWidth = adicionalText.length * 3.5 + 10;
@@ -1082,10 +1065,8 @@ const desenharPaginaDetalhesPlano = (
 
   cardY += 12;
 
-  // Linha 2: Tags horizontais (100% FIPE + > ANO)
   let tagX = margin + 10;
   
-  // Tag cobertura FIPE
   const fipeText = `${plano.coberturaFipe}% FIPE`;
   const fipeWidth = fipeText.length * 3 + 12;
   doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
@@ -1096,7 +1077,6 @@ const desenharPaginaDetalhesPlano = (
   doc.text(fipeText, tagX + fipeWidth / 2, cardY + 3, { align: 'center' });
   tagX += fipeWidth + 6;
 
-  // Tag ano mínimo (se existir)
   if (plano.anoMinimo) {
     const anoText = `> ${plano.anoMinimo}`;
     const anoWidth = anoText.length * 3.5 + 10;
@@ -1109,7 +1089,6 @@ const desenharPaginaDetalhesPlano = (
 
   cardY += 18;
 
-  // Linha 3: Cota Passeio
   if (plano.cotaPercentual && plano.cotaMinima) {
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
     doc.setFontSize(9);
@@ -1123,7 +1102,6 @@ const desenharPaginaDetalhesPlano = (
     cardY += 12;
   }
 
-  // Linha 4: Com Deságio (verde, se existir)
   if (plano.cotaDesagio && plano.cotaMinimaDesagio) {
     doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
     doc.setFontSize(9);
@@ -1132,7 +1110,6 @@ const desenharPaginaDetalhesPlano = (
     cardY += 12;
   }
 
-  // Valor mensal grande - lado direito do card
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
@@ -1145,7 +1122,6 @@ const desenharPaginaDetalhesPlano = (
 
   y += valorCardHeight + 8;
 
-  // Card de Alerta de Deságio (amarelo, se existir)
   if (plano.alertaDesagio) {
     const alertaHeight = 18;
     doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
@@ -1160,18 +1136,16 @@ const desenharPaginaDetalhesPlano = (
     y += alertaHeight + 8;
   }
 
-  // Seção de coberturas
-  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COBERTURAS INCLUÍDAS');
+  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COBERTURAS INCLUÍDAS', brandRed);
   y += HEADER_HEIGHT + 6;
 
-  // Coberturas em 2 colunas
-  const coberturas = plano.coberturas;
-  const coberturasCol1 = coberturas.slice(0, Math.ceil(coberturas.length / 2));
-  const coberturasCol2 = coberturas.slice(Math.ceil(coberturas.length / 2));
+  const coberturasPlano = plano.coberturas;
+  const coberturasCol1 = coberturasPlano.slice(0, Math.ceil(coberturasPlano.length / 2));
+  const coberturasCol2 = coberturasPlano.slice(Math.ceil(coberturasPlano.length / 2));
   const coberturaLineHeight = 9;
   const col1X = margin;
   const col2X = margin + contentWidth / 2 + 4;
-  const colWidth = contentWidth / 2 - 4;
+  const colWidthVal = contentWidth / 2 - 4;
 
   const startCobY = y;
   coberturasCol1.forEach((cobertura, index) => {
@@ -1180,7 +1154,7 @@ const desenharPaginaDetalhesPlano = (
     
     if (index % 2 === 0) {
       doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-      doc.rect(col1X, lineY, colWidth, coberturaLineHeight, 'F');
+      doc.rect(col1X, lineY, colWidthVal, coberturaLineHeight, 'F');
     }
     
     drawCheckIndicator(doc, col1X + 6, textY);
@@ -1196,7 +1170,7 @@ const desenharPaginaDetalhesPlano = (
     
     if (index % 2 === 0) {
       doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-      doc.rect(col2X, lineY, colWidth, coberturaLineHeight, 'F');
+      doc.rect(col2X, lineY, colWidthVal, coberturaLineHeight, 'F');
     }
     
     drawCheckIndicator(doc, col2X + 6, textY);
@@ -1208,9 +1182,8 @@ const desenharPaginaDetalhesPlano = (
 
   y = startCobY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + 10;
 
-  // Seção: Não inclui (se houver)
   if (plano.naoInclui && plano.naoInclui.length > 0) {
-    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO INCLUI NESTE PLANO');
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO INCLUI NESTE PLANO', brandRed);
     y += HEADER_HEIGHT + 6;
 
     const naoIncluiCol1 = plano.naoInclui.slice(0, Math.ceil(plano.naoInclui.length / 2));
@@ -1223,10 +1196,9 @@ const desenharPaginaDetalhesPlano = (
       
       if (index % 2 === 0) {
         doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-        doc.rect(col1X, lineY, colWidth, coberturaLineHeight, 'F');
+        doc.rect(col1X, lineY, colWidthVal, coberturaLineHeight, 'F');
       }
       
-      // X vermelho
       doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
       doc.setFontSize(9);
       doc.text('✗', col1X + 6, textY);
@@ -1241,7 +1213,7 @@ const desenharPaginaDetalhesPlano = (
       
       if (index % 2 === 0) {
         doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-        doc.rect(col2X, lineY, colWidth, coberturaLineHeight, 'F');
+        doc.rect(col2X, lineY, colWidthVal, coberturaLineHeight, 'F');
       }
       
       doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
@@ -1255,11 +1227,10 @@ const desenharPaginaDetalhesPlano = (
     y = startNaoY + Math.max(naoIncluiCol1.length, naoIncluiCol2.length) * coberturaLineHeight + 10;
   }
 
-  // ============= VALORES (SIMPLIFICADO - SEM COMPOSIÇÃO INTERNA) =============
+  // ============= VALORES =============
   const labelCol = margin + 8;
   const valueCol = pageWidth - margin - 8;
 
-  // Card: VALOR MÉDIO MENSAL (destaque azul)
   doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
   doc.roundedRect(margin, y, contentWidth, 20, 3, 3, 'F');
   doc.setDrawColor(glowBlue.r, glowBlue.g, glowBlue.b);
@@ -1274,7 +1245,6 @@ const desenharPaginaDetalhesPlano = (
   doc.text(formatCurrency(plano.valorMensal), valueCol, y + 13, { align: 'right' });
   y += 26;
 
-  // Taxa de adesão (texto claro para fundo escuro)
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFont('helvetica', 'normal');
   doc.setFontSize(10);
@@ -1284,7 +1254,6 @@ const desenharPaginaDetalhesPlano = (
   doc.text(formatCurrency(plano.valorAdesao), valueCol, y, { align: 'right' });
   y += 14;
 
-  // Card: PRIMEIRO PAGAMENTO (destaque verde)
   const primeiroPagamento = plano.valorAdesao + plano.valorMensal;
   doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
   doc.roundedRect(margin, y, contentWidth, 22, 3, 3, 'F');
@@ -1295,19 +1264,20 @@ const desenharPaginaDetalhesPlano = (
   doc.setFontSize(18);
   doc.text(formatCurrency(primeiroPagamento), valueCol, y + 14, { align: 'right' });
 
-  // Rodapé
-  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas, false, logoAspect);
+  desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas, false, logoAspect, config);
 };
 
 
 export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf): Promise<void> {
+  const config = await carregarConfigPdf();
+  const logoPath = config?.logo_url || '/logos/logo-full-light.png';
+
   const doc = new jsPDF();
   const pageWidth = doc.internal.pageSize.getWidth();
   const pageHeight = doc.internal.pageSize.getHeight();
   const margin = 15;
 
-  // Carregar logo com dimensões
-  const logoData = await loadImageWithDimensions('/logos/logo-full-light.png');
+  const logoData = await loadImageWithDimensions(logoPath);
   const logoBase64 = logoData?.base64 || null;
   const logoAspect = logoData ? logoData.naturalWidth / logoData.naturalHeight : 1;
 
@@ -1316,7 +1286,7 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   const totalPaginas = 1;
 
   // ============= PÁGINA 1: CAPA COM CARDS DOS PLANOS =============
-  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, true, logoAspect);
+  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, true, logoAspect, config);
 
   // ============= DOWNLOAD =============
   const numeroLimpo = (cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '');
