@@ -1308,10 +1308,23 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
 
   const numPlanos = cotacao.planosComparar.length;
   
-  const totalPaginas = 1;
+  const totalPaginas = 2; // Capa + comparativo de coberturas
 
   // ============= PÁGINA 1: CAPA COM CARDS DOS PLANOS =============
-  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, true, logoAspect, config);
+  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, false, logoAspect, config);
+
+  // ============= PÁGINA FINAL: COMPARATIVO DE COBERTURAS =============
+  const dadosVeiculoComparativo = {
+    veiculo_marca: cotacao.veiculo_marca,
+    veiculo_modelo: cotacao.veiculo_modelo,
+    veiculo_ano: cotacao.veiculo_ano,
+    valor_fipe: cotacao.valor_fipe,
+  };
+
+  doc.addPage();
+  desenharPaginaComparativoCoberturas(
+    doc, dadosVeiculoComparativo, cotacao.planosComparar, logoBase64, pageWidth, pageHeight, margin, 2, totalPaginas, logoAspect, config
+  );
 
   // ============= DOWNLOAD =============
   const nomeArquivo = configOverride !== undefined ? 'preview-cotacao' : `cotacao-comparativa-${(cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '')}`;
