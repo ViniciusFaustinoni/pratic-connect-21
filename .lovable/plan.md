@@ -1,35 +1,33 @@
 
 
-# Plano: Adicionar chave FIPE fallback na Edge Function `plate-lookup`
+# Plano: Corrigir tabela comparativa de coberturas no PDF
 
-## Resumo
+## Problema
 
-Adicionar um segundo secret `FIPE_PLACAS_API_KEY_FALLBACK` e implementar lógica de fallback na edge function: se a chave primária falhar (403, 429, 439), tentar automaticamente com a chave secundária antes de retornar erro.
+1. **Marcadores invisíveis**: `✓`, `✗` e `⚠` são caracteres Unicode que a fonte Helvetica do jsPDF não renderiza — aparecem como pontos minúsculos
+2. **Nomes de planos truncados**: `truncateText` com limite de caracteres corta nomes como "SELECT ONE 5%..."
 
-## 1. Novo Secret
+## Solução
 
-Adicionar `FIPE_PLACAS_API_KEY_FALLBACK` com valor `fd0cb86838329646d4f699c02012b3ce`.
+### 1. Substituir caracteres Unicode por desenhos vetoriais (linhas 1571-1594)
 
-## 2. Alteração em `supabase/functions/plate-lookup/index.ts`
+Em vez de `doc.text('✓'...)`, desenhar formas geométricas com as primitivas do jsPDF:
 
-Refatorar a lógica de consulta para:
+- **Incluído (verde)**: Círculo preenchido verde (como `drawCheckIndicator` já faz na linha 241)
+- **Removido (amarelo)**: Triângulo preenchido amarelo (3 pontos com `doc.triangle`)
+- **Não inclui (vermelho)**: X desenhado com duas linhas cruzadas vermelhas (`doc.line`)
 
-1. Extrair a chamada à API em uma função auxiliar `tentarConsulta(placa, apiKey)` que retorna a Response
-2. Tentar com `FIPE_PLACAS_API_KEY` primeiro
-3. Se receber status 403, 429 ou 439 (limite/créditos), logar e tentar com `FIPE_PLACAS_API_KEY_FALLBACK`
-4. Se a fallback também falhar, retornar o erro normalmente
-5. Se `FIPE_PLACAS_API_KEY_FALLBACK` não estiver configurada, comportamento igual ao atual (sem fallback)
+### 2. Ajustar largura da coluna de nomes dos planos (linhas 1549-1553)
 
-```
-Chave primária → 403/429/439? → Chave fallback → Erro final
-                  ↓ OK                            ↓ OK
-              Retorna dados                  Retorna dados
-```
+- Usar `doc.splitTextToSize(plano.nome, colPlanoWidth - 4)` em vez de `truncateText` para quebrar em 2 linhas se necessário
+- Aumentar `headerRowHeight` de 14 para 18 para acomodar nomes maiores
+- Reduzir `colCoberturaWidth` de 40% para 35% para dar mais espaço aos planos
 
-## Arquivos afetados
+### 3. Aumentar `rowHeight` de 9 para 10 para melhorar legibilidade
+
+## Arquivo afetado
 
 | Arquivo | Alteração |
 |---------|-----------|
-| Secret `FIPE_PLACAS_API_KEY_FALLBACK` | **Novo** |
-| `supabase/functions/plate-lookup/index.ts` | Lógica de fallback |
+| `src/lib/gerarPdfCotacao.ts` | Substituir Unicode por formas vetoriais, ajustar larguras e truncamento na tabela comparativa (linhas 1534-1597) |
 
