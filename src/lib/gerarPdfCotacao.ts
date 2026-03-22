@@ -1267,6 +1267,52 @@ const desenharPaginaDetalhesPlano = (
     y = startNaoY + Math.max(naoIncluiCol1.length, naoIncluiCol2.length) * coberturaLineHeight + 10;
   }
 
+  // ============= COBERTURAS REMOVIDAS (NÃO APLICÁVEL) =============
+  if (plano.coberturasRemovidas && plano.coberturasRemovidas.length > 0) {
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO APLICÁVEL PARA ESTE VEÍCULO', brandRed);
+    y += HEADER_HEIGHT + 6;
+
+    const removCol1 = plano.coberturasRemovidas.slice(0, Math.ceil(plano.coberturasRemovidas.length / 2));
+    const removCol2 = plano.coberturasRemovidas.slice(Math.ceil(plano.coberturasRemovidas.length / 2));
+    
+    const startRemovY = y;
+    removCol1.forEach((item, index) => {
+      const lineY = startRemovY + index * coberturaLineHeight;
+      const textY = lineY + 6;
+      
+      if (index % 2 === 0) {
+        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
+        doc.rect(col1X, lineY, colWidthVal, coberturaLineHeight, 'F');
+      }
+      
+      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+      doc.setFontSize(9);
+      doc.text('⚠', col1X + 6, textY);
+      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text(truncateText(item, 42), col1X + 14, textY);
+    });
+
+    removCol2.forEach((item, index) => {
+      const lineY = startRemovY + index * coberturaLineHeight;
+      const textY = lineY + 6;
+      
+      if (index % 2 === 0) {
+        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
+        doc.rect(col2X, lineY, colWidthVal, coberturaLineHeight, 'F');
+      }
+      
+      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+      doc.setFontSize(9);
+      doc.text('⚠', col2X + 6, textY);
+      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text(truncateText(item, 42), col2X + 14, textY);
+    });
+
+    y = startRemovY + Math.max(removCol1.length, removCol2.length) * coberturaLineHeight + 10;
+  }
+
   // ============= VALORES =============
   const labelCol = margin + 8;
   const valueCol = pageWidth - margin - 8;
