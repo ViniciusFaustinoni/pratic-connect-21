@@ -337,7 +337,7 @@ export default function LoginPage() {
                 id="lembrar-me" 
                 checked={lembrarMe}
                 onCheckedChange={(checked) => setLembrarMe(checked === true)}
-                disabled={isSubmitting || bloqueado}
+                disabled={isSubmitting}
               />
               <Label 
                 htmlFor="lembrar-me" 
