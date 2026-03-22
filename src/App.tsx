@@ -243,6 +243,7 @@ import DocumentosHistorico from "./pages/documentos/DocumentosHistorico";
 import TemplateForm from "./pages/documentos/TemplateForm";
 import AditivosList from "./pages/documentos/Aditivos";
 import AditivoForm from "./pages/documentos/AditivoForm";
+import CotacaoPdfConfig from "./pages/documentos/CotacaoPdfConfig";
 
 // Diretoria
 import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
