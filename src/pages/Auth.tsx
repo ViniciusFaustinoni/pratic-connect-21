@@ -84,28 +84,6 @@ export default function Auth() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Verificar bloqueio quando email muda (com debounce)
-  useEffect(() => {
-    const verificar = async () => {
-      if (loginEmail && emailSchema.safeParse(loginEmail).success) {
-        const resultado = await verificarBloqueio(loginEmail);
-        if (resultado.bloqueado) {
-          setBloqueio({
-            bloqueado: true,
-            permanente: resultado.permanente,
-            mensagem: resultado.mensagem
-          });
-        } else {
-          setBloqueio(null);
-        }
-      } else {
-        setBloqueio(null);
-      }
-    };
-    
-    const debounce = setTimeout(verificar, 500);
-    return () => clearTimeout(debounce);
-  }, [loginEmail]);
 
   // Redirecionar se já autenticado
   useEffect(() => {
