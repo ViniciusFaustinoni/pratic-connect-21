@@ -1268,8 +1268,8 @@ const desenharPaginaDetalhesPlano = (
 };
 
 
-export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf): Promise<void> {
-  const config = await carregarConfigPdf();
+export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf, configOverride?: PdfConfig | null): Promise<void> {
+  const config = configOverride !== undefined ? configOverride : await carregarConfigPdf();
   const logoPath = config?.logo_url || '/logos/logo-full-light.png';
 
   const doc = new jsPDF();
