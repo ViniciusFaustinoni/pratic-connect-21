@@ -8525,6 +8525,54 @@ export type Database = {
           },
         ]
       }
+      cotacao_pdf_config: {
+        Row: {
+          cor_primaria: string
+          cor_secundaria: string
+          id: string
+          logo_url: string | null
+          mensagem_encerramento: string
+          mostrar_dados_solicitante: boolean
+          mostrar_dados_veiculo: boolean
+          mostrar_mensagem_encerramento: boolean
+          mostrar_validade: boolean
+          mostrar_whatsapp_rodape: boolean
+          nome_empresa: string
+          updated_at: string | null
+          updated_by: string | null
+        }
+        Insert: {
+          cor_primaria?: string
+          cor_secundaria?: string
+          id?: string
+          logo_url?: string | null
+          mensagem_encerramento?: string
+          mostrar_dados_solicitante?: boolean
+          mostrar_dados_veiculo?: boolean
+          mostrar_mensagem_encerramento?: boolean
+          mostrar_validade?: boolean
+          mostrar_whatsapp_rodape?: boolean
+          nome_empresa?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Update: {
+          cor_primaria?: string
+          cor_secundaria?: string
+          id?: string
+          logo_url?: string | null
+          mensagem_encerramento?: string
+          mostrar_dados_solicitante?: boolean
+          mostrar_dados_veiculo?: boolean
+          mostrar_mensagem_encerramento?: boolean
+          mostrar_validade?: boolean
+          mostrar_whatsapp_rodape?: boolean
+          nome_empresa?: string
+          updated_at?: string | null
+          updated_by?: string | null
+        }
+        Relationships: []
+      }
       cotacoes: {
         Row: {
           adicionais_selecionados: Json | null

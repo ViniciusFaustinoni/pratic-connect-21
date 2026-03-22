@@ -157,6 +157,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/documentos/historico': { label: 'Histórico' },
   '/documentos/templates': { label: 'Templates' },
   '/documentos/templates/novo': { label: 'Novo Template' },
+  '/documentos/pdf-cotacao': { label: 'PDF de Cotação' },
   
   // Configurações
   '/configuracoes': { label: 'Configurações' },

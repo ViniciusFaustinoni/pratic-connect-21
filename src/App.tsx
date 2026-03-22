@@ -243,6 +243,7 @@ import DocumentosHistorico from "./pages/documentos/DocumentosHistorico";
 import TemplateForm from "./pages/documentos/TemplateForm";
 import AditivosList from "./pages/documentos/Aditivos";
 import AditivoForm from "./pages/documentos/AditivoForm";
+import CotacaoPdfConfig from "./pages/documentos/CotacaoPdfConfig";
 
 // Diretoria
 import DiretoriaDashboard from "./pages/diretoria/DiretoriaDashboard";
@@ -652,6 +653,7 @@ const App = () => (
               <Route path="/documentos/aditivos" element={<AditivosList />} />
               <Route path="/documentos/aditivos/novo" element={<AditivoForm />} />
               <Route path="/documentos/aditivos/:id" element={<AditivoForm />} />
+              <Route path="/documentos/pdf-cotacao" element={<CotacaoPdfConfig />} />
 
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />
