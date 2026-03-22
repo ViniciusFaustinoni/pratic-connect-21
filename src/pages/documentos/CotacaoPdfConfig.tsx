@@ -214,10 +214,16 @@ export default function CotacaoPdfConfig() {
             Configure a aparência e conteúdo do PDF de cotação gerado para os clientes.
           </p>
         </div>
-        <Button onClick={handleSave} disabled={saving}>
-          {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
-          Salvar configurações
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button variant="outline" onClick={handlePreview} disabled={previewing}>
+            {previewing ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <FileSearch className="h-4 w-4 mr-2" />}
+            Visualizar exemplo
+          </Button>
+          <Button onClick={handleSave} disabled={saving}>
+            {saving ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Save className="h-4 w-4 mr-2" />}
+            Salvar configurações
+          </Button>
+        </div>
       </div>
 
       {/* Card 1 — Identidade Visual */}
