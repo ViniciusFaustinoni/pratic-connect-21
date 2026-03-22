@@ -1,74 +1,85 @@
 
-# Plano: Nova página "PDF de Cotação" no menu Documentos
+
+# Plano: Conectar `cotacao_pdf_config` ao gerador de PDF
 
 ## Resumo
 
-Criar subitem "PDF de Cotação" em Documentos, com página de configuração visual que persiste no banco. Não altera o gerador de PDF.
+Modificar `src/lib/gerarPdfCotacao.ts` para buscar configurações da tabela `cotacao_pdf_config` antes de gerar o PDF, substituindo valores hardcoded quando existir registro salvo.
 
-## 1. Banco de Dados (SQL Migration)
+## Abordagem
 
-Nova tabela `cotacao_pdf_config`:
+Criar uma função auxiliar `carregarConfigPdf()` que busca o primeiro registro de `cotacao_pdf_config`. Retorna um objeto tipado com todos os campos ou `null` (sem registro = comportamento original).
 
-```sql
-CREATE TABLE public.cotacao_pdf_config (
-  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  cor_primaria TEXT NOT NULL DEFAULT '#14376E',
-  cor_secundaria TEXT NOT NULL DEFAULT '#C81E41',
-  logo_url TEXT,
-  nome_empresa TEXT NOT NULL DEFAULT 'PRATICCAR Proteção Veicular',
-  mensagem_encerramento TEXT NOT NULL DEFAULT 'Será um prazer ter você como nosso associado. Estaremos aqui para o que precisar.',
-  mostrar_validade BOOLEAN NOT NULL DEFAULT true,
-  mostrar_dados_solicitante BOOLEAN NOT NULL DEFAULT true,
-  mostrar_dados_veiculo BOOLEAN NOT NULL DEFAULT true,
-  mostrar_mensagem_encerramento BOOLEAN NOT NULL DEFAULT true,
-  mostrar_whatsapp_rodape BOOLEAN NOT NULL DEFAULT true,
-  updated_at TIMESTAMPTZ DEFAULT now(),
-  updated_by UUID REFERENCES auth.users(id)
-);
+Ambas as funções exportadas (`gerarPdfCotacao` e `gerarPdfCotacaoComparativa`) chamam essa função no início e passam o resultado para as subfunções de desenho.
+
+## Alterações em `src/lib/gerarPdfCotacao.ts`
+
+### 1. Import do Supabase client + interface de config
+
+Adicionar import do `supabase` client e definir interface `PdfConfig` com os campos da tabela.
+
+### 2. Nova função `carregarConfigPdf()`
+
+```typescript
+async function carregarConfigPdf(): Promise<PdfConfig | null> {
+  const { data } = await supabase
+    .from('cotacao_pdf_config')
+    .select('*')
+    .limit(1)
+    .maybeSingle();
+  return data;
+}
 ```
 
-RLS: SELECT para authenticated, UPDATE/INSERT restrito a Diretor via `has_role`.
+### 3. Função auxiliar `hexToRgb(hex)`
 
-Inserir 1 registro padrão com valores atuais do PDF hardcoded.
+Converte cor hex (ex: `#14376E`) para `{ r, g, b }` usado pelo jsPDF.
 
-## 2. Nova Página: `src/pages/documentos/CotacaoPdfConfig.tsx`
+### 4. Substituições condicionais nas duas funções principais
 
-Página com cards no padrão visual existente:
+No início de `gerarPdfCotacao()` e `gerarPdfCotacaoComparativa()`:
 
-**Card 1 — Identidade Visual**
-- Input cor primária (color picker + hex) — default `#14376E`
-- Input cor secundária (color picker + hex) — default `#C81E41`
-- Upload de logo (componente `UploadLogo` já existente)
-- Input nome da empresa — default "PRATICCAR Proteção Veicular"
+```typescript
+const config = await carregarConfigPdf();
+const corPrimaria = config ? hexToRgb(config.cor_primaria) : brandBlue;
+const corSecundaria = config ? hexToRgb(config.cor_secundaria) : brandRed;
+const nomeEmpresa = config?.nome_empresa || 'PRATICCAR Proteção Veicular';
+const mensagemEncerramento = config?.mensagem_encerramento || 'Será um prazer...';
+const logoUrl = config?.logo_url || '/logos/logo-full-light.png';
+```
 
-**Card 2 — Texto do PDF**
-- Textarea mensagem de encerramento — default "Será um prazer ter você como nosso associado..."
+### 5. Mapeamento de substituições
 
-**Card 3 — Seções Visíveis**
-- Toggle: Barra de validade
-- Toggle: Dados do solicitante
-- Toggle: Dados do veículo
-- Toggle: Mensagem institucional
-- Toggle: WhatsApp do vendedor no rodapé (comparativo)
+| Valor hardcoded | Campo config | Locais afetados |
+|---|---|---|
+| `brandBlue` | `cor_primaria` → `corPrimaria` | Card valor mensal (l.568), gradientes, header de seção |
+| `brandRed` | `cor_secundaria` → `corSecundaria` | Gradientes (`drawGradientRect` calls com `brandRed`) |
+| `/logos/logo-full-light.png` | `logo_url` | `loadImageWithDimensions` (l.309, l.1310) |
+| `'PRATICCAR'` no header/footer | `nome_empresa` | Header (l.358), footer (l.653), header compacto (l.330), rodapé compacto (l.748) |
+| `'Proteção Veicular'` | Parte do `nome_empresa` | Footer (l.658, l.753) |
+| Texto "Será um prazer..." | `mensagem_encerramento` | Mensagem institucional (l.623-624) |
 
-**Botão "Salvar configurações"** — upsert na tabela.
+### 6. Blocos condicionais (toggles)
 
-Carrega config existente no mount; se não houver registro, exibe defaults.
+Envolver cada seção em `if` verificando a config:
 
-## 3. Roteamento e Navegação
+- **Barra de validade** (`mostrar_validade`): linhas 370-385 em `gerarPdfCotacao`, linhas 898-913 em `desenharPaginaCapa`
+- **Dados do solicitante** (`mostrar_dados_solicitante`): linhas 387-428 em `gerarPdfCotacao`, linhas 915-932 em `desenharPaginaCapa`
+- **Dados do veículo** (`mostrar_dados_veiculo`): linhas 430-466 em `gerarPdfCotacao`, linhas 934-947 em `desenharPaginaCapa`
+- **Mensagem institucional** (`mostrar_mensagem_encerramento`): linhas 613-629 em `gerarPdfCotacao`
+- **WhatsApp no rodapé** (`mostrar_whatsapp_rodape`): linhas 696-727 em `desenharRodapeCompacto`
 
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/App.tsx` | Rota `/documentos/pdf-cotacao` |
-| `src/components/layout/AppSidebar.tsx` | Subitem "PDF de Cotação" com ícone `FileBarChart` |
-| `src/components/layout/GlobalBreadcrumb.tsx` | Breadcrumb `/documentos/pdf-cotacao` |
+Regra: se `config` é `null`, todos os blocos são desenhados (comportamento original). Se `config` existe, verifica cada flag.
+
+### 7. Propagação para subfunções do comparativo
+
+As funções `desenharPaginaCapa`, `desenharRodapeCompacto` e `desenharPaginaDetalhesPlano` recebem um parâmetro adicional `config: PdfConfig | null` para aplicar as mesmas substituições de cores, nome e toggles.
 
 ## Arquivos afetados
 
 | Arquivo | Alteração |
-|---------|-----------|
-| SQL (migração) | Criar tabela `cotacao_pdf_config` com RLS |
-| `src/pages/documentos/CotacaoPdfConfig.tsx` | **Novo** — página de configuração |
-| `src/App.tsx` | Nova rota |
-| `src/components/layout/AppSidebar.tsx` | Novo subitem no menu |
-| `src/components/layout/GlobalBreadcrumb.tsx` | Breadcrumb |
+|---|---|
+| `src/lib/gerarPdfCotacao.ts` | Buscar config, aplicar cores/textos/toggles dinamicamente |
+
+Nenhuma nova tabela ou migração necessária — a tabela já existe.
+
