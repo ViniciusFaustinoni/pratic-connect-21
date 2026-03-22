@@ -302,7 +302,7 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={handleInputChange('password')}
-                  disabled={isSubmitting || bloqueado}
+                  disabled={isSubmitting}
                   className={cn(
                     "pl-10 pr-10 h-11 transition-colors duration-200",
                     senhaValida === false && formData.password && "border-destructive focus-visible:ring-destructive",
