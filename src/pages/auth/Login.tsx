@@ -257,7 +257,7 @@ export default function LoginPage() {
                   placeholder="seu.email@pratic.com.br"
                   value={formData.email}
                   onChange={handleInputChange('email')}
-                  disabled={isSubmitting || bloqueado}
+                  disabled={isSubmitting}
                   className={cn(
                     "pl-10 pr-10 h-11 transition-colors duration-200",
                     emailValido === false && formData.email && "border-destructive focus-visible:ring-destructive",
