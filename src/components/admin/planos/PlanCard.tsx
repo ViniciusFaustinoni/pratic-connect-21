@@ -203,6 +203,18 @@ export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: Pla
                 +{formatCurrency(plan.additional_price)}/mês
               </Badge>
             )}
+            {(plan as any).visivel_landing && (
+              <Badge className="bg-teal-100 text-teal-800 border-teal-300 text-xs gap-1">
+                <Globe className="h-3 w-3" />
+                Landing
+              </Badge>
+            )}
+            {(plan as any).disponivel_agente && (
+              <Badge className="bg-violet-100 text-violet-800 border-violet-300 text-xs gap-1">
+                <Bot className="h-3 w-3" />
+                Agente IA
+              </Badge>
+            )}
           </div>
         </CardHeader>
 
