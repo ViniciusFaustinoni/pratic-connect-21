@@ -8,7 +8,12 @@ import { Button } from '@/components/ui/button';
 import { UploadLogo } from '@/components/documentos/UploadLogo';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { Loader2, Save, Palette, Type, Eye } from 'lucide-react';
+import { Loader2, Save, Palette, Type, Eye, FileSearch } from 'lucide-react';
+import { 
+  gerarPdfCotacaoComparativa, 
+  type CotacaoComparativaParaPdf,
+  type PdfConfig as PdfConfigType 
+} from '@/lib/gerarPdfCotacao';
 
 interface PdfConfig {
   id?: string;

@@ -3,7 +3,7 @@ import { jsPDF, GState } from 'jspdf';
 import { supabase } from '@/integrations/supabase/client';
 
 // ============= Interface de configuração do PDF =============
-interface PdfConfig {
+export interface PdfConfig {
   cor_primaria: string;
   cor_secundaria: string;
   logo_url: string | null;
