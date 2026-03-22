@@ -52,12 +52,6 @@ export default function Auth() {
     geral?: string;
   }>({});
   
-  // Estados de Bloqueio
-  const [bloqueio, setBloqueio] = useState<{
-    bloqueado: boolean;
-    permanente: boolean;
-    mensagem: string;
-  } | null>(null);
 
   // Validação de formato de email
   const validateEmail = (email: string): boolean => {
