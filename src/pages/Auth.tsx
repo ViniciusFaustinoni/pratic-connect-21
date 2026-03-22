@@ -404,7 +404,7 @@ export default function Auth() {
                         "pl-10 pr-10",
                         errors.senha && "border-destructive focus:border-destructive focus:ring-destructive"
                       )}
-                      disabled={loginLoading || bloqueio?.bloqueado}
+                      disabled={loginLoading}
                     />
                     <button
                       type="button"
