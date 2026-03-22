@@ -132,6 +132,71 @@ export default function CotacaoPdfConfig() {
     setConfig(prev => ({ ...prev, [key]: value }));
   };
 
+  const handlePreview = async () => {
+    setPreviewing(true);
+    try {
+      const configOverride: PdfConfigType = {
+        cor_primaria: config.cor_primaria,
+        cor_secundaria: config.cor_secundaria,
+        logo_url: config.logo_url,
+        nome_empresa: config.nome_empresa,
+        mensagem_encerramento: config.mensagem_encerramento,
+        mostrar_validade: config.mostrar_validade,
+        mostrar_dados_solicitante: config.mostrar_dados_solicitante,
+        mostrar_dados_veiculo: config.mostrar_dados_veiculo,
+        mostrar_mensagem_encerramento: config.mostrar_mensagem_encerramento,
+        mostrar_whatsapp_rodape: config.mostrar_whatsapp_rodape,
+      };
+
+      const cotacaoFicticia: CotacaoComparativaParaPdf = {
+        numero: 'PREVIEW-001',
+        created_at: new Date().toISOString(),
+        validade_dias: 7,
+        dia_vencimento: 10,
+        nome_solicitante: 'João Silva',
+        telefone1_solicitante: '(11) 91234-5678',
+        email_solicitante: 'joao@email.com',
+        veiculo_marca: 'Toyota',
+        veiculo_modelo: 'Corolla',
+        veiculo_ano: 2022,
+        veiculo_placa: 'ABC-1234',
+        valor_fipe: 95000,
+        vendedor: {
+          nome: 'Carlos Vendedor',
+          whatsapp: '(11) 99999-9999',
+        },
+        planosComparar: [
+          {
+            nome: 'Plano Essencial',
+            valorMensal: 289.90,
+            valorAdesao: 350,
+            coberturas: ['Colisão', 'Furto e Roubo', 'Incêndio', 'Assistência 24h'],
+            naoInclui: [],
+            coberturaFipe: 100,
+            cota: '',
+          },
+          {
+            nome: 'Plano Completo',
+            valorMensal: 389.90,
+            valorAdesao: 450,
+            coberturas: ['Colisão', 'Furto e Roubo', 'Incêndio', 'Assistência 24h', 'Vidros', 'Carro Reserva'],
+            naoInclui: [],
+            coberturaFipe: 100,
+            cota: '',
+          },
+        ],
+      };
+
+      await gerarPdfCotacaoComparativa(cotacaoFicticia, configOverride);
+      toast.success('PDF de exemplo gerado com sucesso!');
+    } catch (err: any) {
+      console.error('Erro ao gerar preview:', err);
+      toast.error('Erro ao gerar PDF de exemplo.');
+    } finally {
+      setPreviewing(false);
+    }
+  };
+
   if (loading) {
     return (
       <div className="flex items-center justify-center py-20">
