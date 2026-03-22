@@ -237,7 +237,7 @@ export default function LoginPage() {
         <CardContent className="space-y-4">
 
           {/* ALERTA DE ERRO */}
-          {error && !bloqueado && (
+          {error && (
             <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2 duration-300">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{ERROR_MESSAGES[error]}</AlertDescription>
