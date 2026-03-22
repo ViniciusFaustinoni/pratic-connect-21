@@ -14,6 +14,8 @@ import {
   Star,
   Check,
   X,
+  Globe,
+  Bot,
 } from 'lucide-react';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
