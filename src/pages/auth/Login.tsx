@@ -160,7 +160,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
 
-    if (!validateForm() || bloqueado) return;
+    if (!validateForm()) return;
 
     setIsSubmitting(true);
 
@@ -173,19 +173,15 @@ export default function LoginPage() {
       if (!result.success) {
         const errorType = parseSupabaseError(result.error || '');
         setError(errorType);
-        await registrarTentativaFalha(formData.email, errorType);
         setIsSubmitting(false);
         return;
       }
 
-      // Login bem-sucedido - registrar e aguardar useEffect fazer o redirect
-      await registrarTentativaSucesso(formData.email);
-      // NÃO fazer navigate aqui - o useEffect vai fazer quando profile carregar
+      // Login bem-sucedido - aguardar useEffect fazer o redirect
       // Manter isSubmitting = true para mostrar loading até redirecionar
 
     } catch (err) {
       setError('unknown_error');
-      await registrarTentativaFalha(formData.email, 'unknown_error');
       setIsSubmitting(false);
     }
     // NÃO colocar setIsSubmitting(false) no finally - mantém loading até redirect
