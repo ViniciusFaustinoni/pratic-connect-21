@@ -90,32 +90,6 @@ export default function LoginPage() {
   }, [initialized, authLoading, user, profile, isAssociado, navigate, location.search]);
 
   // ============================================
-  // VERIFICAR BLOQUEIO AO DIGITAR EMAIL (DEBOUNCED)
-  // ============================================
-  useEffect(() => {
-    if (!formData.email || !emailValido) return;
-    
-    const timeout = setTimeout(async () => {
-      try {
-        const response = await supabase.functions.invoke('auth-tentativas', {
-          body: { action: 'verificar', email: formData.email.trim().toLowerCase() }
-        });
-        
-        if (response.data?.bloqueado) {
-          setBloqueado(true);
-          setTempoRestante(response.data.minutos_restantes || 0);
-          setBloqueadoPermanente(response.data.permanente || false);
-        } else {
-          setBloqueado(false);
-          setBloqueadoPermanente(false);
-        }
-      } catch (err) {
-        console.error('Erro ao verificar bloqueio:', err);
-      }
-    }, 500);
-
-    return () => clearTimeout(timeout);
-  }, [formData.email, emailValido]);
 
   // ============================================
   // HANDLER GENÉRICO PARA INPUTS COM VALIDAÇÃO EM TEMPO REAL
