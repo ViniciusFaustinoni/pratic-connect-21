@@ -1518,10 +1518,13 @@ const desenharPaginaComparativoCoberturas = (
 
   let y = headerHeight + 8;
 
-  // Coletar todas as coberturas únicas
+  // Coletar todas as coberturas únicas (incluindo removidas)
   const todasCoberturas: string[] = [];
   planos.forEach(plano => {
     plano.coberturas.forEach(c => {
+      if (!todasCoberturas.includes(c)) todasCoberturas.push(c);
+    });
+    plano.coberturasRemovidas?.forEach(c => {
       if (!todasCoberturas.includes(c)) todasCoberturas.push(c);
     });
   });
