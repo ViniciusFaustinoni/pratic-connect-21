@@ -68,13 +68,6 @@ export default function LoginPage() {
   const [emailValido, setEmailValido] = useState<boolean | null>(null);
   const [senhaValida, setSenhaValida] = useState<boolean | null>(null);
 
-  // ============================================
-  // ESTADOS DE RATE LIMITING
-  // ============================================
-  const [tentativasRestantes, setTentativasRestantes] = useState<number | null>(null);
-  const [bloqueado, setBloqueado] = useState(false);
-  const [tempoRestante, setTempoRestante] = useState<number>(0);
-  const [bloqueadoPermanente, setBloqueadoPermanente] = useState(false);
 
   // ============================================
   // REDIRECT SE JÁ AUTENTICADO
@@ -97,32 +90,6 @@ export default function LoginPage() {
   }, [initialized, authLoading, user, profile, isAssociado, navigate, location.search]);
 
   // ============================================
-  // VERIFICAR BLOQUEIO AO DIGITAR EMAIL (DEBOUNCED)
-  // ============================================
-  useEffect(() => {
-    if (!formData.email || !emailValido) return;
-    
-    const timeout = setTimeout(async () => {
-      try {
-        const response = await supabase.functions.invoke('auth-tentativas', {
-          body: { action: 'verificar', email: formData.email.trim().toLowerCase() }
-        });
-        
-        if (response.data?.bloqueado) {
-          setBloqueado(true);
-          setTempoRestante(response.data.minutos_restantes || 0);
-          setBloqueadoPermanente(response.data.permanente || false);
-        } else {
-          setBloqueado(false);
-          setBloqueadoPermanente(false);
-        }
-      } catch (err) {
-        console.error('Erro ao verificar bloqueio:', err);
-      }
-    }, 500);
-
-    return () => clearTimeout(timeout);
-  }, [formData.email, emailValido]);
 
   // ============================================
   // HANDLER GENÉRICO PARA INPUTS COM VALIDAÇÃO EM TEMPO REAL
@@ -185,51 +152,6 @@ export default function LoginPage() {
     return 'unknown_error';
   };
 
-  // ============================================
-  // REGISTRAR TENTATIVA FALHA
-  // ============================================
-  const registrarTentativaFalha = async (email: string, motivo: string) => {
-    try {
-      const response = await supabase.functions.invoke('auth-tentativas', {
-        body: { 
-          action: 'registrar', 
-          email: email.trim().toLowerCase(), 
-          sucesso: false,
-          motivo_falha: motivo
-        }
-      });
-      
-      if (response.data?.bloqueado) {
-        setBloqueado(true);
-        setTempoRestante(response.data.minutos || 0);
-        setBloqueadoPermanente(response.data.permanente || false);
-        setTentativasRestantes(null);
-      } else if (response.data?.tentativas_restantes !== undefined) {
-        setTentativasRestantes(response.data.tentativas_restantes);
-      }
-    } catch (err) {
-      console.error('Erro ao registrar tentativa:', err);
-    }
-  };
-
-  // ============================================
-  // REGISTRAR TENTATIVA SUCESSO
-  // ============================================
-  const registrarTentativaSucesso = async (email: string) => {
-    try {
-      await supabase.functions.invoke('auth-tentativas', {
-        body: { 
-          action: 'registrar', 
-          email: email.trim().toLowerCase(), 
-          sucesso: true
-        }
-      });
-      setTentativasRestantes(null);
-      setBloqueado(false);
-    } catch (err) {
-      console.error('Erro ao registrar sucesso:', err);
-    }
-  };
 
   // ============================================
   // SUBMIT LOGIN EMAIL/SENHA
@@ -238,7 +160,7 @@ export default function LoginPage() {
     e.preventDefault();
     setError(null);
 
-    if (!validateForm() || bloqueado) return;
+    if (!validateForm()) return;
 
     setIsSubmitting(true);
 
@@ -251,19 +173,15 @@ export default function LoginPage() {
       if (!result.success) {
         const errorType = parseSupabaseError(result.error || '');
         setError(errorType);
-        await registrarTentativaFalha(formData.email, errorType);
         setIsSubmitting(false);
         return;
       }
 
-      // Login bem-sucedido - registrar e aguardar useEffect fazer o redirect
-      await registrarTentativaSucesso(formData.email);
-      // NÃO fazer navigate aqui - o useEffect vai fazer quando profile carregar
+      // Login bem-sucedido - aguardar useEffect fazer o redirect
       // Manter isSubmitting = true para mostrar loading até redirecionar
 
     } catch (err) {
       setError('unknown_error');
-      await registrarTentativaFalha(formData.email, 'unknown_error');
       setIsSubmitting(false);
     }
     // NÃO colocar setIsSubmitting(false) no finally - mantém loading até redirect
@@ -317,31 +235,9 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* ALERTA DE BLOQUEIO */}
-          {bloqueado && (
-            <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2 duration-300">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {bloqueadoPermanente 
-                  ? 'Conta bloqueada permanentemente. Contate seu supervisor para desbloquear.'
-                  : `Conta temporariamente bloqueada. Tente novamente em ${tempoRestante} minuto(s).`
-                }
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* ALERTA DE TENTATIVAS RESTANTES */}
-          {tentativasRestantes !== null && tentativasRestantes <= 2 && !bloqueado && (
-            <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 animate-in fade-in slide-in-from-top-2 duration-300">
-              <AlertCircle className="h-4 w-4 text-yellow-600" />
-              <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                Atenção: {tentativasRestantes} tentativa(s) restante(s) antes do bloqueio.
-              </AlertDescription>
-            </Alert>
-          )}
 
           {/* ALERTA DE ERRO */}
-          {error && !bloqueado && (
+          {error && (
             <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2 duration-300">
               <AlertCircle className="h-4 w-4" />
               <AlertDescription>{ERROR_MESSAGES[error]}</AlertDescription>
@@ -361,7 +257,7 @@ export default function LoginPage() {
                   placeholder="seu.email@pratic.com.br"
                   value={formData.email}
                   onChange={handleInputChange('email')}
-                  disabled={isSubmitting || bloqueado}
+                  disabled={isSubmitting}
                   className={cn(
                     "pl-10 pr-10 h-11 transition-colors duration-200",
                     emailValido === false && formData.email && "border-destructive focus-visible:ring-destructive",
@@ -406,7 +302,7 @@ export default function LoginPage() {
                   placeholder="••••••••"
                   value={formData.password}
                   onChange={handleInputChange('password')}
-                  disabled={isSubmitting || bloqueado}
+                  disabled={isSubmitting}
                   className={cn(
                     "pl-10 pr-10 h-11 transition-colors duration-200",
                     senhaValida === false && formData.password && "border-destructive focus-visible:ring-destructive",
@@ -441,7 +337,7 @@ export default function LoginPage() {
                 id="lembrar-me" 
                 checked={lembrarMe}
                 onCheckedChange={(checked) => setLembrarMe(checked === true)}
-                disabled={isSubmitting || bloqueado}
+                disabled={isSubmitting}
               />
               <Label 
                 htmlFor="lembrar-me" 
@@ -455,7 +351,7 @@ export default function LoginPage() {
             <Button 
               type="submit" 
               className="w-full h-11 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]" 
-              disabled={isSubmitting || bloqueado || emailValido === false || senhaValida === false}
+              disabled={isSubmitting || emailValido === false || senhaValida === false}
             >
               {isSubmitting ? (
                 <>

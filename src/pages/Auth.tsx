@@ -12,8 +12,6 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
 import { 
-  verificarBloqueio, 
-  registrarTentativa, 
   criarSessao, 
   detectarDispositivo,
   SESSION_TOKEN_KEY
@@ -54,12 +52,6 @@ export default function Auth() {
     geral?: string;
   }>({});
   
-  // Estados de Bloqueio
-  const [bloqueio, setBloqueio] = useState<{
-    bloqueado: boolean;
-    permanente: boolean;
-    mensagem: string;
-  } | null>(null);
 
   // Validação de formato de email
   const validateEmail = (email: string): boolean => {
@@ -92,28 +84,6 @@ export default function Auth() {
     return Object.keys(newErrors).length === 0;
   };
 
-  // Verificar bloqueio quando email muda (com debounce)
-  useEffect(() => {
-    const verificar = async () => {
-      if (loginEmail && emailSchema.safeParse(loginEmail).success) {
-        const resultado = await verificarBloqueio(loginEmail);
-        if (resultado.bloqueado) {
-          setBloqueio({
-            bloqueado: true,
-            permanente: resultado.permanente,
-            mensagem: resultado.mensagem
-          });
-        } else {
-          setBloqueio(null);
-        }
-      } else {
-        setBloqueio(null);
-      }
-    };
-    
-    const debounce = setTimeout(verificar, 500);
-    return () => clearTimeout(debounce);
-  }, [loginEmail]);
 
   // Redirecionar se já autenticado
   useEffect(() => {
@@ -182,16 +152,6 @@ export default function Auth() {
       return;
     }
 
-    // Verificar bloqueio antes de tentar
-    const bloqueioResult = await verificarBloqueio(loginEmail);
-    if (bloqueioResult.bloqueado) {
-      setBloqueio({
-        bloqueado: true,
-        permanente: bloqueioResult.permanente,
-        mensagem: bloqueioResult.mensagem
-      });
-      return;
-    }
 
     setLoginLoading(true);
 
@@ -225,8 +185,6 @@ export default function Auth() {
         return;
       }
 
-      // Registrar sucesso
-      await registrarTentativa(loginEmail, true);
       
       // Criar sessão customizada
       const tipoDispositivo = detectarDispositivo();
@@ -254,32 +212,14 @@ export default function Auth() {
       }
       
     } catch (error: any) {
-      // Registrar falha
-      const tentativaResult = await registrarTentativa(loginEmail, false, 'senha_incorreta');
+      const errorMessage = error.message || '';
       
-      if (tentativaResult.bloqueado) {
-        setBloqueio({
-          bloqueado: true,
-          permanente: tentativaResult.permanente,
-          mensagem: tentativaResult.permanente 
-            ? 'Conta bloqueada permanentemente. Contate seu supervisor.'
-            : `Conta bloqueada por ${tentativaResult.minutos} minutos.`
-        });
+      if (errorMessage.includes('Invalid login credentials')) {
+        setErrors({ geral: 'Email ou senha incorretos' });
+      } else if (errorMessage.includes('Email not confirmed')) {
+        setErrors({ geral: 'Email não confirmado. Verifique sua caixa de entrada.' });
       } else {
-        // Mensagem GENÉRICA por segurança - não revela se email existe ou não
-        const errorMessage = error.message || '';
-        
-        if (errorMessage.includes('Invalid login credentials')) {
-          setErrors({ geral: 'Email ou senha incorretos' });
-        } else if (errorMessage.includes('Email not confirmed')) {
-          setErrors({ geral: 'Email não confirmado. Verifique sua caixa de entrada.' });
-        } else if (tentativaResult.tentativas_restantes > 0) {
-          setErrors({ 
-            geral: `Email ou senha incorretos. ${tentativaResult.tentativas_restantes} tentativa(s) restante(s).` 
-          });
-        } else {
-          setErrors({ geral: 'Erro ao fazer login. Tente novamente.' });
-        }
+        setErrors({ geral: 'Erro ao fazer login. Tente novamente.' });
       }
       
       console.error('Erro no login:', error);
@@ -403,24 +343,9 @@ export default function Auth() {
             {/* Tab Senha */}
             <TabsContent value="senha">
               <form onSubmit={handleLogin} className="space-y-4">
-                {/* Alerta de Bloqueio */}
-                {bloqueio?.bloqueado && (
-                  <Alert variant="destructive">
-                    <Lock className="h-4 w-4" />
-                    <AlertTitle>Conta Bloqueada</AlertTitle>
-                    <AlertDescription>
-                      {bloqueio.mensagem}
-                      {bloqueio.permanente && (
-                        <p className="mt-2 text-sm">
-                          Entre em contato com seu supervisor para desbloquear.
-                        </p>
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                )}
 
                 {/* Erro Geral de Login */}
-                {errors.geral && !bloqueio?.bloqueado && (
+                {errors.geral && (
                   <Alert variant="destructive" className="animate-in fade-in duration-200">
                     <AlertDescription>{errors.geral}</AlertDescription>
                   </Alert>
@@ -450,7 +375,7 @@ export default function Auth() {
                     setErrors(prev => ({ ...prev, email: 'Formato de email inválido' }));
                   }
                 }}
-                disabled={loginLoading || bloqueio?.bloqueado}
+                disabled={loginLoading}
                 className={errors.email ? 'border-destructive' : ''}
               />
                   {errors.email && (
@@ -479,7 +404,7 @@ export default function Auth() {
                         "pl-10 pr-10",
                         errors.senha && "border-destructive focus:border-destructive focus:ring-destructive"
                       )}
-                      disabled={loginLoading || bloqueio?.bloqueado}
+                      disabled={loginLoading}
                     />
                     <button
                       type="button"
@@ -511,7 +436,7 @@ export default function Auth() {
                 <Button 
                   type="submit" 
                   className="w-full"
-                  disabled={loginLoading || isSubmittingLogin || !loginEmail || !loginPassword || bloqueio?.bloqueado}
+                  disabled={loginLoading || isSubmittingLogin || !loginEmail || !loginPassword}
                 >
                   {loginLoading ? (
                     <>
