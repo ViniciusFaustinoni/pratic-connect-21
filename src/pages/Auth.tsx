@@ -185,8 +185,6 @@ export default function Auth() {
         return;
       }
 
-      // Registrar sucesso
-      await registrarTentativa(loginEmail, true);
       
       // Criar sessão customizada
       const tipoDispositivo = detectarDispositivo();
