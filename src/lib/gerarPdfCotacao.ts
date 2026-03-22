@@ -1289,6 +1289,6 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, true, logoAspect, config);
 
   // ============= DOWNLOAD =============
-  const numeroLimpo = (cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '');
-  doc.save(`cotacao-comparativa-${numeroLimpo}.pdf`);
+  const nomeArquivo = configOverride !== undefined ? 'preview-cotacao' : `cotacao-comparativa-${(cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '')}`;
+  doc.save(`${nomeArquivo}.pdf`);
 }
