@@ -672,6 +672,31 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.text(disclaimer, pageWidth - margin, footerY + 10, { align: 'right' });
   doc.text('e está sujeita a análise.', pageWidth - margin, footerY + 15, { align: 'right' });
 
+  // ============= PÁGINA: COMPARATIVO DE COBERTURAS =============
+  const planoSimples: PlanoParaPdf = {
+    nome: cotacao.planos?.nome || 'Plano',
+    valorMensal: cotacao.valor_total_mensal || 0,
+    valorAdesao: cotacao.valor_adesao || 0,
+    coberturas: cotacao.planos?.coberturas || [],
+    naoInclui: [],
+    coberturaFipe: 100,
+    cota: '',
+  };
+
+  const dadosVeiculoComparativo = {
+    veiculo_marca: cotacao.veiculo_marca,
+    veiculo_modelo: cotacao.veiculo_modelo,
+    veiculo_ano: cotacao.veiculo_ano,
+    valor_fipe: cotacao.valor_fipe,
+  };
+
+  if (planoSimples.coberturas.length > 0) {
+    doc.addPage();
+    desenharPaginaComparativoCoberturas(
+      doc, dadosVeiculoComparativo, [planoSimples], logoBase64, pageWidth, pageHeight, margin, 2, 2, logoAspect, config
+    );
+  }
+
   // ============= DOWNLOAD =============
   const numeroLimpo = (cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '');
   const fileName = `cotacao-${numeroLimpo}.pdf`;
@@ -1267,6 +1292,143 @@ const desenharPaginaDetalhesPlano = (
   desenharRodapeCompacto(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, paginaAtual, totalPaginas, false, logoAspect, config);
 };
 
+// ============= PÁGINA COMPARATIVO DE COBERTURAS =============
+
+interface DadosVeiculoParaComparativo {
+  veiculo_marca: string | null;
+  veiculo_modelo: string | null;
+  veiculo_ano: number | null;
+  valor_fipe: number | null;
+}
+
+const desenharPaginaComparativoCoberturas = (
+  doc: jsPDF,
+  dadosVeiculo: DadosVeiculoParaComparativo,
+  planos: PlanoParaPdf[],
+  logoBase64: string | null,
+  pageWidth: number,
+  pageHeight: number,
+  margin: number,
+  paginaAtual: number,
+  totalPaginas: number,
+  logoAspect: number = 1,
+  config: PdfConfig | null = null
+) => {
+  const brandBlue = config ? hexToRgb(config.cor_primaria) : brandBlueDefault;
+  const brandRed = config ? hexToRgb(config.cor_secundaria) : brandRedDefault;
+  const contentWidth = pageWidth - margin * 2;
+
+  // Background
+  drawPageBackground(doc, pageWidth, pageHeight);
+
+  // Header compacto
+  const headerHeight = 38;
+  doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
+  doc.rect(0, 0, pageWidth, headerHeight, 'F');
+  drawGradientRect(doc, 0, headerHeight - 2, pageWidth, 2, glowBlue, brandRed, 60);
+
+  doc.setTextColor(textDark.r, textDark.g, textDark.b);
+  doc.setFontSize(14);
+  doc.setFont('helvetica', 'bold');
+  doc.text('COMPARATIVO DE COBERTURAS', margin, 22);
+
+  if (config?.mostrar_dados_veiculo !== false) {
+    doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(`${dadosVeiculo.veiculo_marca || ''} ${dadosVeiculo.veiculo_modelo || ''} ${dadosVeiculo.veiculo_ano || ''}`, pageWidth - margin, 20, { align: 'right' });
+    doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+    doc.text(formatCurrency(dadosVeiculo.valor_fipe), pageWidth - margin, 28, { align: 'right' });
+  }
+
+  let y = headerHeight + 8;
+
+  // Coletar todas as coberturas únicas
+  const todasCoberturas: string[] = [];
+  planos.forEach(plano => {
+    plano.coberturas.forEach(c => {
+      if (!todasCoberturas.includes(c)) todasCoberturas.push(c);
+    });
+  });
+
+  if (todasCoberturas.length === 0) return;
+
+  // Calcular larguras
+  const colCoberturaWidth = contentWidth * 0.4;
+  const colPlanoWidth = (contentWidth - colCoberturaWidth) / planos.length;
+  const rowHeight = 9;
+
+  // Cabeçalho da tabela
+  const headerRowHeight = 14;
+  doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
+  doc.roundedRect(margin, y, contentWidth, headerRowHeight, 2, 2, 'F');
+
+  doc.setTextColor(255, 255, 255);
+  doc.setFontSize(8);
+  doc.setFont('helvetica', 'bold');
+  doc.text('COBERTURA', margin + 6, y + 9);
+
+  planos.forEach((plano, index) => {
+    const colX = margin + colCoberturaWidth + index * colPlanoWidth;
+    const truncatedName = truncateText(plano.nome.toUpperCase(), Math.floor(colPlanoWidth / 2.5));
+    doc.text(truncatedName, colX + colPlanoWidth / 2, y + 9, { align: 'center' });
+  });
+
+  y += headerRowHeight + 2;
+
+  // Linhas da tabela
+  todasCoberturas.forEach((cobertura, rowIndex) => {
+    // Zebra striping
+    if (rowIndex % 2 === 0) {
+      doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
+      doc.rect(margin, y, contentWidth, rowHeight, 'F');
+    }
+
+    // Nome da cobertura
+    doc.setTextColor(textLight.r, textLight.g, textLight.b);
+    doc.setFontSize(8);
+    doc.setFont('helvetica', 'normal');
+    doc.text(truncateText(cobertura, 40), margin + 6, y + 6);
+
+    // Check/X para cada plano
+    planos.forEach((plano, colIndex) => {
+      const colX = margin + colCoberturaWidth + colIndex * colPlanoWidth;
+      const centerX = colX + colPlanoWidth / 2;
+      const inclui = plano.coberturas.includes(cobertura);
+
+      if (inclui) {
+        doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('✓', centerX, y + 6.5, { align: 'center' });
+      } else {
+        doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('✗', centerX, y + 6.5, { align: 'center' });
+      }
+    });
+
+    y += rowHeight;
+  });
+
+  // Rodapé simples com paginação
+  const footerY = pageHeight - 20;
+  doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
+  doc.rect(0, footerY, pageWidth, 20, 'F');
+  drawGradientRect(doc, margin, footerY - 2, contentWidth, 2, glowBlue, brandRed, 50);
+
+  const logoFooterHeight = 10;
+  const logoFooterWidth = logoFooterHeight * logoAspect;
+  if (logoBase64) {
+    doc.addImage(logoBase64, 'PNG', margin, footerY + 5, logoFooterWidth, logoFooterHeight);
+  }
+
+  doc.setTextColor(textDarkMuted.r, textDarkMuted.g, textDarkMuted.b);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'normal');
+  doc.text(`Página ${paginaAtual} de ${totalPaginas}`, pageWidth - margin, footerY + 12, { align: 'right' });
+};
 
 export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf, configOverride?: PdfConfig | null): Promise<void> {
   const config = configOverride !== undefined ? configOverride : await carregarConfigPdf();
@@ -1283,10 +1445,23 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
 
   const numPlanos = cotacao.planosComparar.length;
   
-  const totalPaginas = 1;
+  const totalPaginas = 2; // Capa + comparativo de coberturas
 
   // ============= PÁGINA 1: CAPA COM CARDS DOS PLANOS =============
-  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, true, logoAspect, config);
+  desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, false, logoAspect, config);
+
+  // ============= PÁGINA FINAL: COMPARATIVO DE COBERTURAS =============
+  const dadosVeiculoComparativo = {
+    veiculo_marca: cotacao.veiculo_marca,
+    veiculo_modelo: cotacao.veiculo_modelo,
+    veiculo_ano: cotacao.veiculo_ano,
+    valor_fipe: cotacao.valor_fipe,
+  };
+
+  doc.addPage();
+  desenharPaginaComparativoCoberturas(
+    doc, dadosVeiculoComparativo, cotacao.planosComparar, logoBase64, pageWidth, pageHeight, margin, 2, totalPaginas, logoAspect, config
+  );
 
   // ============= DOWNLOAD =============
   const nomeArquivo = configOverride !== undefined ? 'preview-cotacao' : `cotacao-comparativa-${(cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '')}`;
