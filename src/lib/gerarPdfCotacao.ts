@@ -1532,24 +1532,30 @@ const desenharPaginaComparativoCoberturas = (
   if (todasCoberturas.length === 0) return;
 
   // Calcular larguras
-  const colCoberturaWidth = contentWidth * 0.4;
+  const colCoberturaWidth = contentWidth * 0.35;
   const colPlanoWidth = (contentWidth - colCoberturaWidth) / planos.length;
-  const rowHeight = 9;
+  const rowHeight = 10;
 
   // Cabeçalho da tabela
-  const headerRowHeight = 14;
+  const headerRowHeight = 18;
   doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
   doc.roundedRect(margin, y, contentWidth, headerRowHeight, 2, 2, 'F');
 
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(8);
+  doc.setFontSize(7.5);
   doc.setFont('helvetica', 'bold');
-  doc.text('COBERTURA', margin + 6, y + 9);
+  doc.text('COBERTURA', margin + 6, y + 11);
 
   planos.forEach((plano, index) => {
     const colX = margin + colCoberturaWidth + index * colPlanoWidth;
-    const truncatedName = truncateText(plano.nome.toUpperCase(), Math.floor(colPlanoWidth / 2.5));
-    doc.text(truncatedName, colX + colPlanoWidth / 2, y + 9, { align: 'center' });
+    const lines = doc.splitTextToSize(plano.nome.toUpperCase(), colPlanoWidth - 4);
+    const linesToDraw = lines.slice(0, 2); // max 2 lines
+    const lineHeight = 4.5;
+    const blockHeight = linesToDraw.length * lineHeight;
+    const startY = y + (headerRowHeight - blockHeight) / 2 + lineHeight - 0.5;
+    linesToDraw.forEach((line: string, li: number) => {
+      doc.text(line, colX + colPlanoWidth / 2, startY + li * lineHeight, { align: 'center' });
+    });
   });
 
   y += headerRowHeight + 2;
@@ -1566,30 +1572,44 @@ const desenharPaginaComparativoCoberturas = (
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(8);
     doc.setFont('helvetica', 'normal');
-    doc.text(truncateText(cobertura, 40), margin + 6, y + 6);
+    doc.text(truncateText(cobertura, 40), margin + 6, y + 7);
 
-    // Check/X/⚠ para cada plano
+    // Indicadores vetoriais para cada plano
     planos.forEach((plano, colIndex) => {
       const colX = margin + colCoberturaWidth + colIndex * colPlanoWidth;
       const centerX = colX + colPlanoWidth / 2;
+      const centerY = y + rowHeight / 2;
       const inclui = plano.coberturas.includes(cobertura);
       const removida = plano.coberturasRemovidas?.includes(cobertura);
 
       if (inclui) {
-        doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('✓', centerX, y + 6.5, { align: 'center' });
+        // Círculo verde preenchido
+        doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
+        doc.circle(centerX, centerY, 2.5, 'F');
+        // Checkmark branco dentro do círculo
+        doc.setDrawColor(255, 255, 255);
+        doc.setLineWidth(0.6);
+        doc.line(centerX - 1.2, centerY, centerX - 0.3, centerY + 1);
+        doc.line(centerX - 0.3, centerY + 1, centerX + 1.3, centerY - 1);
       } else if (removida) {
-        doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('⚠', centerX, y + 6.5, { align: 'center' });
+        // Triângulo amarelo (alerta)
+        doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
+        doc.triangle(
+          centerX, centerY - 2.5,
+          centerX - 2.5, centerY + 1.5,
+          centerX + 2.5, centerY + 1.5,
+          'F'
+        );
+        // Exclamação branca
+        doc.setFillColor(255, 255, 255);
+        doc.rect(centerX - 0.3, centerY - 1.2, 0.6, 1.8, 'F');
+        doc.circle(centerX, centerY + 1, 0.35, 'F');
       } else {
-        doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
-        doc.setFontSize(10);
-        doc.setFont('helvetica', 'bold');
-        doc.text('✗', centerX, y + 6.5, { align: 'center' });
+        // X vermelho com linhas cruzadas
+        doc.setDrawColor(glowRed.r, glowRed.g, glowRed.b);
+        doc.setLineWidth(0.7);
+        doc.line(centerX - 2, centerY - 2, centerX + 2, centerY + 2);
+        doc.line(centerX + 2, centerY - 2, centerX - 2, centerY + 2);
       }
     });
 
