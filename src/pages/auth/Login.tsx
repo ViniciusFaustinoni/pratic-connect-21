@@ -152,51 +152,6 @@ export default function LoginPage() {
     return 'unknown_error';
   };
 
-  // ============================================
-  // REGISTRAR TENTATIVA FALHA
-  // ============================================
-  const registrarTentativaFalha = async (email: string, motivo: string) => {
-    try {
-      const response = await supabase.functions.invoke('auth-tentativas', {
-        body: { 
-          action: 'registrar', 
-          email: email.trim().toLowerCase(), 
-          sucesso: false,
-          motivo_falha: motivo
-        }
-      });
-      
-      if (response.data?.bloqueado) {
-        setBloqueado(true);
-        setTempoRestante(response.data.minutos || 0);
-        setBloqueadoPermanente(response.data.permanente || false);
-        setTentativasRestantes(null);
-      } else if (response.data?.tentativas_restantes !== undefined) {
-        setTentativasRestantes(response.data.tentativas_restantes);
-      }
-    } catch (err) {
-      console.error('Erro ao registrar tentativa:', err);
-    }
-  };
-
-  // ============================================
-  // REGISTRAR TENTATIVA SUCESSO
-  // ============================================
-  const registrarTentativaSucesso = async (email: string) => {
-    try {
-      await supabase.functions.invoke('auth-tentativas', {
-        body: { 
-          action: 'registrar', 
-          email: email.trim().toLowerCase(), 
-          sucesso: true
-        }
-      });
-      setTentativasRestantes(null);
-      setBloqueado(false);
-    } catch (err) {
-      console.error('Erro ao registrar sucesso:', err);
-    }
-  };
 
   // ============================================
   // SUBMIT LOGIN EMAIL/SENHA
