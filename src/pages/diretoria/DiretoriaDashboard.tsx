@@ -1015,6 +1015,28 @@ export default function DiretoriaDashboard() {
                 </span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-between"
+                onClick={() => navigate('/configuracoes/agente-consultor-ia')}
+              >
+                <span className="flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  Agente Consultor IA
+                </span>
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-between"
+                onClick={() => window.open('/planos', '_blank')}
+              >
+                <span className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  Landing Page (Planos)
+                </span>
+                <ArrowRight className="h-4 w-4" />
+              </Button>
             </CardContent>
           </Card>
         </div>
