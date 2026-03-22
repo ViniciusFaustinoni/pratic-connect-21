@@ -3,7 +3,7 @@ import { jsPDF, GState } from 'jspdf';
 import { supabase } from '@/integrations/supabase/client';
 
 // ============= Interface de configuração do PDF =============
-interface PdfConfig {
+export interface PdfConfig {
   cor_primaria: string;
   cor_secundaria: string;
   logo_url: string | null;
@@ -1268,8 +1268,8 @@ const desenharPaginaDetalhesPlano = (
 };
 
 
-export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf): Promise<void> {
-  const config = await carregarConfigPdf();
+export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaParaPdf, configOverride?: PdfConfig | null): Promise<void> {
+  const config = configOverride !== undefined ? configOverride : await carregarConfigPdf();
   const logoPath = config?.logo_url || '/logos/logo-full-light.png';
 
   const doc = new jsPDF();
@@ -1289,6 +1289,6 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
   desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, true, logoAspect, config);
 
   // ============= DOWNLOAD =============
-  const numeroLimpo = (cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '');
-  doc.save(`cotacao-comparativa-${numeroLimpo}.pdf`);
+  const nomeArquivo = configOverride !== undefined ? 'preview-cotacao' : `cotacao-comparativa-${(cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '')}`;
+  doc.save(`${nomeArquivo}.pdf`);
 }
