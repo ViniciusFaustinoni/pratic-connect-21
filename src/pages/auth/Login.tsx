@@ -351,7 +351,7 @@ export default function LoginPage() {
             <Button 
               type="submit" 
               className="w-full h-11 transition-all duration-200 hover:scale-[1.02] active:scale-[0.98]" 
-              disabled={isSubmitting || bloqueado || emailValido === false || senhaValida === false}
+              disabled={isSubmitting || emailValido === false || senhaValida === false}
             >
               {isSubmitting ? (
                 <>

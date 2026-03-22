@@ -436,7 +436,7 @@ export default function Auth() {
                 <Button 
                   type="submit" 
                   className="w-full"
-                  disabled={loginLoading || isSubmittingLogin || !loginEmail || !loginPassword || bloqueio?.bloqueado}
+                  disabled={loginLoading || isSubmittingLogin || !loginEmail || !loginPassword}
                 >
                   {loginLoading ? (
                     <>
