@@ -28,6 +28,12 @@ function formatarPlaca(placa: string): string {
   return placa;
 }
 
+// Função auxiliar para tentar consulta com uma chave específica
+async function tentarConsulta(placa: string, apiKey: string): Promise<Response> {
+  const apiUrl = `https://placas.fipeapi.com.br/placas/${placa}?key=${apiKey}`;
+  return await fetch(apiUrl);
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === 'OPTIONS') {
@@ -55,14 +61,15 @@ serve(async (req) => {
       throw new Error("API de placas não configurada. Configure o secret FIPE_PLACAS_API_KEY");
     }
 
-    // Consultar API de placas (placas.fipeapi.com.br)
-    const apiUrl = `https://placas.fipeapi.com.br/placas/${placaNormalizada}?key=${apiKey}`;
-    
-    console.log(`[plate-lookup] Chamando API: placas.fipeapi.com.br`);
+    const fallbackKey = Deno.env.get('FIPE_PLACAS_API_KEY_FALLBACK');
+
+    console.log(`[plate-lookup] Chamando API: placas.fipeapi.com.br (chave primária)`);
     
     let response: Response;
+    let usedFallback = false;
+
     try {
-      response = await fetch(apiUrl);
+      response = await tentarConsulta(placaNormalizada, apiKey);
     } catch (fetchError) {
       console.error(`[plate-lookup] Erro de conexão:`, fetchError);
       return new Response(
@@ -77,8 +84,20 @@ serve(async (req) => {
       );
     }
 
+    // Se chave primária falhou por limite/créditos, tentar fallback
+    if ([403, 429, 439].includes(response.status) && fallbackKey) {
+      console.log(`[plate-lookup] Chave primária retornou ${response.status}, tentando fallback...`);
+      try {
+        response = await tentarConsulta(placaNormalizada, fallbackKey);
+        usedFallback = true;
+        console.log(`[plate-lookup] Fallback retornou status ${response.status}`);
+      } catch (fallbackError) {
+        console.error(`[plate-lookup] Erro de conexão na fallback:`, fallbackError);
+      }
+    }
+
     if (!response.ok) {
-      console.error(`[plate-lookup] Erro HTTP: ${response.status}`);
+      console.error(`[plate-lookup] Erro HTTP: ${response.status} (fallback: ${usedFallback})`);
       
       if (response.status === 403) {
         throw new Error("Chave de API inválida ou sem créditos. Verifique sua conta no fipeapi.com.br");
@@ -90,7 +109,6 @@ serve(async (req) => {
         throw new Error("Veículo não encontrado na base de dados.");
       }
       
-      // Tentar ler corpo do erro para dar mensagem mais útil
       let errorBody = '';
       try { errorBody = await response.text(); } catch (_) {}
       console.error(`[plate-lookup] Corpo do erro: ${errorBody}`);
@@ -99,7 +117,7 @@ serve(async (req) => {
     }
 
     const apiData = await response.json();
-    console.log(`[plate-lookup] Resposta da API:`, JSON.stringify(apiData));
+    console.log(`[plate-lookup] Resposta da API (fallback: ${usedFallback}):`, JSON.stringify(apiData));
 
     // Extrair dados aninhados (estrutura: { data: { veiculo: {...}, fipes: [...] } })
     const veiculo = apiData.data?.veiculo || apiData.veiculo || apiData;
