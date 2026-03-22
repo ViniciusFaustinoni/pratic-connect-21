@@ -345,7 +345,7 @@ export default function Auth() {
               <form onSubmit={handleLogin} className="space-y-4">
 
                 {/* Erro Geral de Login */}
-                {errors.geral && !bloqueio?.bloqueado && (
+                {errors.geral && (
                   <Alert variant="destructive" className="animate-in fade-in duration-200">
                     <AlertDescription>{errors.geral}</AlertDescription>
                   </Alert>
