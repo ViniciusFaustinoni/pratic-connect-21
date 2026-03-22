@@ -1103,7 +1103,8 @@ const desenharPaginaDetalhesPlano = (
   
   const fipeText = `${plano.coberturaFipe}% FIPE`;
   const fipeWidth = fipeText.length * 3 + 12;
-  doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
+  const fipeBadgeColor = plano.coberturaFipe !== 100 ? warningYellow : glowBlue;
+  doc.setFillColor(fipeBadgeColor.r, fipeBadgeColor.g, fipeBadgeColor.b);
   doc.roundedRect(tagX, cardY - 4, fipeWidth, 11, 2, 2, 'F');
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(8);
@@ -1112,8 +1113,8 @@ const desenharPaginaDetalhesPlano = (
   tagX += fipeWidth + 6;
 
   if (plano.anoMinimo) {
-    const anoText = `> ${plano.anoMinimo}`;
-    const anoWidth = anoText.length * 3.5 + 10;
+    const anoText = `A partir de ${plano.anoMinimo}`;
+    const anoWidth = anoText.length * 3 + 10;
     doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
     doc.roundedRect(tagX, cardY - 4, anoWidth, 11, 2, 2, 'F');
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
