@@ -573,6 +573,113 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y = startY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + SECTION_GAP;
 
+  // ============= COBERTURAS REMOVIDAS (PDF SIMPLES) =============
+  if (cotacao.coberturasRemovidas && cotacao.coberturasRemovidas.length > 0) {
+    checkPageBreak(40);
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO APLICÁVEL PARA ESTE VEÍCULO', brandRed);
+    y += HEADER_HEIGHT + INNER_GAP;
+
+    const removCol1 = cotacao.coberturasRemovidas.slice(0, Math.ceil(cotacao.coberturasRemovidas.length / 2));
+    const removCol2 = cotacao.coberturasRemovidas.slice(Math.ceil(cotacao.coberturasRemovidas.length / 2));
+    const startRemovY = y;
+
+    removCol1.forEach((item, index) => {
+      const lineTop = startRemovY + (index * coberturaLineHeight);
+      const textYR = lineTop + coberturaLineHeight / 2 + 2;
+      if (index % 2 === 0) {
+        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
+        doc.rect(cobCol1X, lineTop, colWidth, coberturaLineHeight, 'F');
+      }
+      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+      doc.setFontSize(9);
+      doc.text('⚠', cobCol1X + 5, textYR);
+      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text(item, cobCol1X + 12, textYR);
+    });
+
+    removCol2.forEach((item, index) => {
+      const lineTop = startRemovY + (index * coberturaLineHeight);
+      const textYR = lineTop + coberturaLineHeight / 2 + 2;
+      if (index % 2 === 0) {
+        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
+        doc.rect(cobCol2X - 4, lineTop, colWidth + 4, coberturaLineHeight, 'F');
+      }
+      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+      doc.setFontSize(9);
+      doc.text('⚠', cobCol2X + 2, textYR);
+      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
+      doc.setFont('helvetica', 'normal');
+      doc.text(item, cobCol2X + 9, textYR);
+    });
+
+    y = startRemovY + Math.max(removCol1.length, removCol2.length) * coberturaLineHeight + SECTION_GAP;
+  }
+
+  // ============= BADGES E COTAS (PDF SIMPLES) =============
+  if ((cotacao.coberturaFipe && cotacao.coberturaFipe !== 100) || cotacao.anoMinimo || (cotacao.cotaPercentual && cotacao.cotaMinima)) {
+    checkPageBreak(40);
+
+    if (cotacao.coberturaFipe && cotacao.coberturaFipe !== 100) {
+      const fipeBadgeText = `Cobertura: ${cotacao.coberturaFipe}% da FIPE`;
+      const fipeBadgeW = fipeBadgeText.length * 3 + 12;
+      doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
+      doc.roundedRect(margin, y, fipeBadgeW, 12, 2, 2, 'F');
+      doc.setTextColor(30, 30, 30);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'bold');
+      doc.text(fipeBadgeText, margin + fipeBadgeW / 2, y + 8, { align: 'center' });
+      y += 16;
+    }
+
+    if (cotacao.anoMinimo) {
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text(`Veículos a partir de ${cotacao.anoMinimo}`, margin + 5, y + 4);
+      y += 12;
+    }
+
+    if (cotacao.cotaPercentual && cotacao.cotaMinima) {
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Cota Passeio:', margin + 5, y + 4);
+      doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.setFont('helvetica', 'bold');
+      doc.text(`${cotacao.cotaPercentual}% — mín. ${formatCurrency(cotacao.cotaMinima)}`, margin + 40, y + 4);
+      y += 10;
+
+      if (cotacao.cotaDesagio && cotacao.cotaMinimaDesagio) {
+        doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+        doc.setFontSize(9);
+        doc.setFont('helvetica', 'bold');
+        doc.text(`Com Deságio: ${cotacao.cotaDesagio}% — mín. ${formatCurrency(cotacao.cotaMinimaDesagio)}`, margin + 5, y + 4);
+        y += 10;
+      }
+      y += 4;
+    }
+  }
+
+  // ============= ALERTA DESÁGIO (PDF SIMPLES) =============
+  if (cotacao.alertaDesagio) {
+    checkPageBreak(30);
+    doc.setFontSize(8);
+    const alertaLines = doc.splitTextToSize(cotacao.alertaDesagio, contentWidth - 34);
+    const alertaH = Math.max(18, 10 + alertaLines.length * 5);
+    doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
+    doc.roundedRect(margin, y, contentWidth, alertaH, 3, 3, 'F');
+    doc.setTextColor(30, 30, 30);
+    doc.setFontSize(9);
+    doc.setFont('helvetica', 'bold');
+    doc.text('⚠', margin + 10, y + 10);
+    doc.setFontSize(8);
+    alertaLines.forEach((line: string, i: number) => {
+      doc.text(line, margin + 22, y + 10 + i * 5);
+    });
+    y += alertaH + SECTION_GAP;
+  }
+
   // ============= VALORES =============
   checkPageBreak(80);
   
