@@ -212,32 +212,14 @@ export default function Auth() {
       }
       
     } catch (error: any) {
-      // Registrar falha
-      const tentativaResult = await registrarTentativa(loginEmail, false, 'senha_incorreta');
+      const errorMessage = error.message || '';
       
-      if (tentativaResult.bloqueado) {
-        setBloqueio({
-          bloqueado: true,
-          permanente: tentativaResult.permanente,
-          mensagem: tentativaResult.permanente 
-            ? 'Conta bloqueada permanentemente. Contate seu supervisor.'
-            : `Conta bloqueada por ${tentativaResult.minutos} minutos.`
-        });
+      if (errorMessage.includes('Invalid login credentials')) {
+        setErrors({ geral: 'Email ou senha incorretos' });
+      } else if (errorMessage.includes('Email not confirmed')) {
+        setErrors({ geral: 'Email não confirmado. Verifique sua caixa de entrada.' });
       } else {
-        // Mensagem GENÉRICA por segurança - não revela se email existe ou não
-        const errorMessage = error.message || '';
-        
-        if (errorMessage.includes('Invalid login credentials')) {
-          setErrors({ geral: 'Email ou senha incorretos' });
-        } else if (errorMessage.includes('Email not confirmed')) {
-          setErrors({ geral: 'Email não confirmado. Verifique sua caixa de entrada.' });
-        } else if (tentativaResult.tentativas_restantes > 0) {
-          setErrors({ 
-            geral: `Email ou senha incorretos. ${tentativaResult.tentativas_restantes} tentativa(s) restante(s).` 
-          });
-        } else {
-          setErrors({ geral: 'Erro ao fazer login. Tente novamente.' });
-        }
+        setErrors({ geral: 'Erro ao fazer login. Tente novamente.' });
       }
       
       console.error('Erro no login:', error);
