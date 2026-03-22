@@ -46,6 +46,7 @@ export default function CotacaoPdfConfig() {
   const [config, setConfig] = useState<PdfConfig>(DEFAULTS);
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [previewing, setPreviewing] = useState(false);
 
   useEffect(() => {
     loadConfig();
