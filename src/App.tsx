@@ -653,6 +653,7 @@ const App = () => (
               <Route path="/documentos/aditivos" element={<AditivosList />} />
               <Route path="/documentos/aditivos/novo" element={<AditivoForm />} />
               <Route path="/documentos/aditivos/:id" element={<AditivoForm />} />
+              <Route path="/documentos/pdf-cotacao" element={<CotacaoPdfConfig />} />
 
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />

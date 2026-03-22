@@ -415,6 +415,7 @@ const menuConfig: {
         { title: 'Histórico', url: '/documentos/historico', icon: History, hideForDiretor: true },
         { title: 'Templates', url: '/documentos/templates', icon: FileCode },
         { title: 'Aditivos', url: '/documentos/aditivos', icon: FileText },
+        { title: 'PDF de Cotação', url: '/documentos/pdf-cotacao', icon: BarChart3 },
       ],
     },
     {
