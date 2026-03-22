@@ -375,7 +375,7 @@ export default function Auth() {
                     setErrors(prev => ({ ...prev, email: 'Formato de email inválido' }));
                   }
                 }}
-                disabled={loginLoading || bloqueio?.bloqueado}
+                disabled={loginLoading}
                 className={errors.email ? 'border-destructive' : ''}
               />
                   {errors.email && (
