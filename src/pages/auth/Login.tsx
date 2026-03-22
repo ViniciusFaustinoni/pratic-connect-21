@@ -235,28 +235,6 @@ export default function LoginPage() {
         </CardHeader>
 
         <CardContent className="space-y-4">
-          {/* ALERTA DE BLOQUEIO */}
-          {bloqueado && (
-            <Alert variant="destructive" className="animate-in fade-in slide-in-from-top-2 duration-300">
-              <AlertCircle className="h-4 w-4" />
-              <AlertDescription>
-                {bloqueadoPermanente 
-                  ? 'Conta bloqueada permanentemente. Contate seu supervisor para desbloquear.'
-                  : `Conta temporariamente bloqueada. Tente novamente em ${tempoRestante} minuto(s).`
-                }
-              </AlertDescription>
-            </Alert>
-          )}
-
-          {/* ALERTA DE TENTATIVAS RESTANTES */}
-          {tentativasRestantes !== null && tentativasRestantes <= 2 && !bloqueado && (
-            <Alert className="border-yellow-500 bg-yellow-50 dark:bg-yellow-950/20 animate-in fade-in slide-in-from-top-2 duration-300">
-              <AlertCircle className="h-4 w-4 text-yellow-600" />
-              <AlertDescription className="text-yellow-700 dark:text-yellow-400">
-                Atenção: {tentativasRestantes} tentativa(s) restante(s) antes do bloqueio.
-              </AlertDescription>
-            </Alert>
-          )}
 
           {/* ALERTA DE ERRO */}
           {error && !bloqueado && (
