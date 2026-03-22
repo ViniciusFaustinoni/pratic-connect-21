@@ -1158,15 +1158,20 @@ const desenharPaginaDetalhesPlano = (
   y += valorCardHeight + 8;
 
   if (plano.alertaDesagio) {
-    const alertaHeight = 18;
+    doc.setFontSize(8);
+    const alertaLines = doc.splitTextToSize(plano.alertaDesagio, contentWidth - 34);
+    const alertaHeight = Math.max(18, 10 + alertaLines.length * 5);
     doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
     doc.roundedRect(margin, y, contentWidth, alertaHeight, 3, 3, 'F');
     
     doc.setTextColor(30, 30, 30);
     doc.setFontSize(9);
     doc.setFont('helvetica', 'bold');
-    doc.text('⚠', margin + 10, y + 11);
-    doc.text(truncateText(plano.alertaDesagio, 70), margin + 22, y + 11);
+    doc.text('⚠', margin + 10, y + 10);
+    doc.setFontSize(8);
+    alertaLines.forEach((line: string, i: number) => {
+      doc.text(line, margin + 22, y + 10 + i * 5);
+    });
     
     y += alertaHeight + 8;
   }
