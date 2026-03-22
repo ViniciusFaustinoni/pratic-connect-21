@@ -1568,17 +1568,23 @@ const desenharPaginaComparativoCoberturas = (
     doc.setFont('helvetica', 'normal');
     doc.text(truncateText(cobertura, 40), margin + 6, y + 6);
 
-    // Check/X para cada plano
+    // Check/X/⚠ para cada plano
     planos.forEach((plano, colIndex) => {
       const colX = margin + colCoberturaWidth + colIndex * colPlanoWidth;
       const centerX = colX + colPlanoWidth / 2;
       const inclui = plano.coberturas.includes(cobertura);
+      const removida = plano.coberturasRemovidas?.includes(cobertura);
 
       if (inclui) {
         doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
         doc.setFontSize(10);
         doc.setFont('helvetica', 'bold');
         doc.text('✓', centerX, y + 6.5, { align: 'center' });
+      } else if (removida) {
+        doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+        doc.setFontSize(10);
+        doc.setFont('helvetica', 'bold');
+        doc.text('⚠', centerX, y + 6.5, { align: 'center' });
       } else {
         doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
         doc.setFontSize(10);
