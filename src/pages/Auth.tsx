@@ -12,8 +12,6 @@ import { toast } from 'sonner';
 import { supabase } from '@/integrations/supabase/client';
 import { z } from 'zod';
 import { 
-  verificarBloqueio, 
-  registrarTentativa, 
   criarSessao, 
   detectarDispositivo,
   SESSION_TOKEN_KEY
