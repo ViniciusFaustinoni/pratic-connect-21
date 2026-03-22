@@ -19,6 +19,8 @@ import {
   Navigation,
   Timer,
   Radio,
+  Bot,
+  Globe,
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -1010,6 +1012,28 @@ export default function DiretoriaDashboard() {
                 <span className="flex items-center gap-2">
                   <TrendingUp className="h-4 w-4" />
                   Indicadores Atuariais
+                </span>
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-between"
+                onClick={() => navigate('/configuracoes/agente-consultor-ia')}
+              >
+                <span className="flex items-center gap-2">
+                  <Bot className="h-4 w-4" />
+                  Agente Consultor IA
+                </span>
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-between"
+                onClick={() => window.open('/planos', '_blank')}
+              >
+                <span className="flex items-center gap-2">
+                  <Globe className="h-4 w-4" />
+                  Landing Page (Planos)
                 </span>
                 <ArrowRight className="h-4 w-4" />
               </Button>
