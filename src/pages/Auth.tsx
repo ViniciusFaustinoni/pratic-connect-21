@@ -152,16 +152,6 @@ export default function Auth() {
       return;
     }
 
-    // Verificar bloqueio antes de tentar
-    const bloqueioResult = await verificarBloqueio(loginEmail);
-    if (bloqueioResult.bloqueado) {
-      setBloqueio({
-        bloqueado: true,
-        permanente: bloqueioResult.permanente,
-        mensagem: bloqueioResult.mensagem
-      });
-      return;
-    }
 
     setLoginLoading(true);
 
