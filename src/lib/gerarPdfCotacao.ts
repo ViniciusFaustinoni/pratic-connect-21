@@ -70,6 +70,15 @@ export interface CotacaoParaPdf {
     nome: string;
     coberturas?: string[] | null;
   } | null;
+  // Campos de deságio/cobertura FIPE
+  cotaPercentual?: number;
+  cotaMinima?: number;
+  cotaDesagio?: number;
+  cotaMinimaDesagio?: number;
+  coberturaFipe?: number;
+  anoMinimo?: number;
+  alertaDesagio?: string;
+  coberturasRemovidas?: string[];
 }
 
 export interface PlanoParaPdf {
