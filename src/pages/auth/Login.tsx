@@ -68,13 +68,6 @@ export default function LoginPage() {
   const [emailValido, setEmailValido] = useState<boolean | null>(null);
   const [senhaValida, setSenhaValida] = useState<boolean | null>(null);
 
-  // ============================================
-  // ESTADOS DE RATE LIMITING
-  // ============================================
-  const [tentativasRestantes, setTentativasRestantes] = useState<number | null>(null);
-  const [bloqueado, setBloqueado] = useState(false);
-  const [tempoRestante, setTempoRestante] = useState<number>(0);
-  const [bloqueadoPermanente, setBloqueadoPermanente] = useState(false);
 
   // ============================================
   // REDIRECT SE JÁ AUTENTICADO
