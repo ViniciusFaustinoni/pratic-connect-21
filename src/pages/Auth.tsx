@@ -343,21 +343,6 @@ export default function Auth() {
             {/* Tab Senha */}
             <TabsContent value="senha">
               <form onSubmit={handleLogin} className="space-y-4">
-                {/* Alerta de Bloqueio */}
-                {bloqueio?.bloqueado && (
-                  <Alert variant="destructive">
-                    <Lock className="h-4 w-4" />
-                    <AlertTitle>Conta Bloqueada</AlertTitle>
-                    <AlertDescription>
-                      {bloqueio.mensagem}
-                      {bloqueio.permanente && (
-                        <p className="mt-2 text-sm">
-                          Entre em contato com seu supervisor para desbloquear.
-                        </p>
-                      )}
-                    </AlertDescription>
-                  </Alert>
-                )}
 
                 {/* Erro Geral de Login */}
                 {errors.geral && !bloqueio?.bloqueado && (
