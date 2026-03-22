@@ -672,6 +672,31 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.text(disclaimer, pageWidth - margin, footerY + 10, { align: 'right' });
   doc.text('e está sujeita a análise.', pageWidth - margin, footerY + 15, { align: 'right' });
 
+  // ============= PÁGINA: COMPARATIVO DE COBERTURAS =============
+  const planoSimples: PlanoParaPdf = {
+    nome: cotacao.planos?.nome || 'Plano',
+    valorMensal: cotacao.valor_total_mensal || 0,
+    valorAdesao: cotacao.valor_adesao || 0,
+    coberturas: cotacao.planos?.coberturas || [],
+    naoInclui: [],
+    coberturaFipe: 100,
+    cota: '',
+  };
+
+  const dadosVeiculoComparativo = {
+    veiculo_marca: cotacao.veiculo_marca,
+    veiculo_modelo: cotacao.veiculo_modelo,
+    veiculo_ano: cotacao.veiculo_ano,
+    valor_fipe: cotacao.valor_fipe,
+  };
+
+  if (planoSimples.coberturas.length > 0) {
+    doc.addPage();
+    desenharPaginaComparativoCoberturas(
+      doc, dadosVeiculoComparativo, [planoSimples], logoBase64, pageWidth, pageHeight, margin, 2, 2, logoAspect, config
+    );
+  }
+
   // ============= DOWNLOAD =============
   const numeroLimpo = (cotacao.numero || 'PRATICCAR').replace(/[^a-zA-Z0-9-]/g, '');
   const fileName = `cotacao-${numeroLimpo}.pdf`;
