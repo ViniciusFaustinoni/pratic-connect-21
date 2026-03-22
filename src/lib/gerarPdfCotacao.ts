@@ -795,8 +795,15 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     valorAdesao: cotacao.valor_adesao || 0,
     coberturas: cotacao.planos?.coberturas || [],
     naoInclui: [],
-    coberturaFipe: 100,
+    coberturaFipe: cotacao.coberturaFipe || 100,
     cota: '',
+    cotaPercentual: cotacao.cotaPercentual,
+    cotaMinima: cotacao.cotaMinima,
+    cotaDesagio: cotacao.cotaDesagio,
+    cotaMinimaDesagio: cotacao.cotaMinimaDesagio,
+    anoMinimo: cotacao.anoMinimo,
+    alertaDesagio: cotacao.alertaDesagio,
+    coberturasRemovidas: cotacao.coberturasRemovidas,
   };
 
   const dadosVeiculoComparativo = {
