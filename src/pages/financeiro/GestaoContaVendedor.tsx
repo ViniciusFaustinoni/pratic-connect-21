@@ -208,18 +208,41 @@ export default function GestaoContaVendedor() {
                       </TableCell>
                       <TableCell className={`text-right font-medium ${l.tipo === 'credito' ? 'text-green-600' : 'text-destructive'}`}>{formatarMoeda(l.valor_liquido)}</TableCell>
                       <TableCell>
-                        <Badge variant={STATUS_VARIANT[l.status] || 'outline'}
-                          className={l.valor_abatimento > 0 && l.status !== 'cancelado' ? 'bg-orange-500 text-white border-orange-500' : ''}>
-                          {l.valor_abatimento > 0 && l.status !== 'cancelado' ? 'Abatendo débito' : STATUS_LABELS[l.status] || l.status}
-                        </Badge>
+                        {l.status === 'cancelado' ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge variant="destructive">Estornado</Badge>
+                              </TooltipTrigger>
+                              {l.observacao_pagamento && (
+                                <TooltipContent side="top" className="max-w-xs">
+                                  <p className="text-xs font-medium">Motivo:</p>
+                                  <p className="text-xs">{l.observacao_pagamento}</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <Badge variant={STATUS_VARIANT[l.status] || 'outline'}
+                            className={l.valor_abatimento > 0 && l.status !== 'cancelado' ? 'bg-orange-500 text-white border-orange-500' : ''}>
+                            {l.valor_abatimento > 0 && l.status !== 'cancelado' ? 'Abatendo débito' : STATUS_LABELS[l.status] || l.status}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">{l.saldo_apos != null ? formatarMoeda(l.saldo_apos) : '—'}</TableCell>
                       <TableCell>
-                        {l.status === 'a_pagar' && l.tipo === 'credito' && (
-                          <Button size="sm" variant="outline" onClick={() => setModalParcela(l)}>
-                            <CheckCircle className="h-3 w-3 mr-1" /> Pagar
-                          </Button>
-                        )}
+                        <div className="flex gap-1">
+                          {l.status === 'a_pagar' && l.tipo === 'credito' && (
+                            <Button size="sm" variant="outline" onClick={() => setModalParcela(l)}>
+                              <CheckCircle className="h-3 w-3 mr-1" /> Pagar
+                            </Button>
+                          )}
+                          {l.status === 'pago' && l.tipo === 'credito' && podeEstornar && (
+                            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setModalEstorno(l)}>
+                              <RotateCcw className="h-3 w-3 mr-1" /> Estornar
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
