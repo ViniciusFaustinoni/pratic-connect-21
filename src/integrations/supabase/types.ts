@@ -749,6 +749,27 @@ export type Database = {
           },
         ]
       }
+      agencia_vendedores: {
+        Row: {
+          agencia_user_id: string
+          created_at: string | null
+          id: string
+          vendedor_user_id: string
+        }
+        Insert: {
+          agencia_user_id: string
+          created_at?: string | null
+          id?: string
+          vendedor_user_id: string
+        }
+        Update: {
+          agencia_user_id?: string
+          created_at?: string | null
+          id?: string
+          vendedor_user_id?: string
+        }
+        Relationships: []
+      }
       agendamentos_base: {
         Row: {
           atendido_por: string | null

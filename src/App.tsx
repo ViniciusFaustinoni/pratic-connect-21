@@ -176,6 +176,9 @@ import ContaCorrenteVendedor from "./pages/financeiro/ContaCorrenteVendedor";
 import GestaoContaVendedor from "./pages/financeiro/GestaoContaVendedor";
 import DashboardVendaExterna from "./pages/financeiro/DashboardVendaExterna";
 
+// Agência
+import AgenciaDashboard from "./pages/agencia/AgenciaDashboard";
+
 // Contabilidade
 import ContabilidadeDashboard from "./pages/contabilidade/ContabilidadeDashboard";
 import PlanoContas from "./pages/contabilidade/PlanoContas";
@@ -540,6 +543,9 @@ const App = () => (
               <Route path="/financeiro/venda-externa" element={<DashboardVendaExterna />} />
               <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
               <Route path="/perfil/conta-corrente" element={<ContaCorrenteVendedor />} />
+              
+              {/* Agência */}
+              <Route path="/agencia" element={<AgenciaDashboard />} />
               
               {/* Cobrança */}
               <Route path="/cobranca" element={<CobrancaDashboard />} />
