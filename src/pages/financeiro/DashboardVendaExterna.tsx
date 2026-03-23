@@ -144,6 +144,7 @@ export default function DashboardVendaExterna() {
             <TableHeader>
               <TableRow>
                 <TableHead>Vendedor</TableHead>
+                <TableHead>Tipo</TableHead>
                 <TableHead className="text-right">Saldo atual</TableHead>
                 <TableHead className="text-right">A pagar este mês</TableHead>
                 <TableHead className="text-right">Antecipações</TableHead>
