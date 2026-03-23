@@ -168,6 +168,10 @@ export default function GestaoContaVendedor() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Associado</label>
+                  <Input placeholder="Buscar por associado..." value={buscaAssociado} onChange={e => { setBuscaAssociado(e.target.value); setPage(1); }} className="w-52" />
+                </div>
               </div>
             </CardContent>
           </Card>
