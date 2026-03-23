@@ -6,15 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Plus, Trash2, ArrowUp, ArrowDown, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FieldHint } from '@/components/admin/planos/FieldHint';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAppRoles } from '@/hooks/useAppRoles';
 
 interface NivelForm {
   id?: string;
   nome: string;
   percentual: number;
+  role: string;
 }
 
 export default function GradeComissaoForm() {
