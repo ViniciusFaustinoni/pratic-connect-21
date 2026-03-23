@@ -1,85 +1,83 @@
 
 
-# Plano: Saldo de Horas com Bloqueio e Visibilidade
+# Plano: Registro Formal de Recusas de Tarefa
 
 ## Resumo
 
-Transformar os campos `minutos_faltantes` e `saldo_anterior_minutos` em regras ativas: bloqueio de turno por debito acumulado, visibilidade do saldo no perfil do vistoriador, e coluna de saldo + cards resumo no RH.
+Criar tabela dedicada `registros_recusa_tarefa`, modal de recusa no app do vistoriador, alerta automatico para coordenador ao atingir limite, historico de atribuicoes no detalhe do servico, e badge de recusas no card do RH.
 
 ---
 
-## PARTE 1 — Configuracao na Diretoria
+## PARTE 1 — DB: Tabela + Configuracoes
 
-**`InstalacaoRotasConfig.tsx`**:
+**Nova tabela `registros_recusa_tarefa`**:
+```
+id (uuid PK default gen_random_uuid()),
+servico_id (uuid FK servicos NOT NULL),
+profissional_id (uuid FK profiles NOT NULL),
+turno_id (uuid FK turnos_profissionais),
+motivo (text NOT NULL),
+motivo_livre (text),
+created_at (timestamptz default now())
+```
+RLS: insert/select para authenticated.
 
-- Adicionar 2 chaves ao `CONFIG_CHAVES`: `jornada_limite_debito_horas`, `jornada_exibir_saldo_vistoriador`
-- Adicionar ao hook: parsing dos 2 valores novos
-- Adicionar state vars: `limiteDebito` (string, default '0'), `exibirSaldo` (boolean, default true)
-- Populate no `useEffect`
-- No Bloco 5, adicionar 2 campos apos os 6 existentes:
-  - Input numerico "Limite de debito para bloqueio (horas)" — com nota "(0 = desativado)"
-  - Toggle "Exibir saldo de horas para o vistoriador"
-- Salvar junto no botao "Salvar Jornada" existente
-
-**DB**: Insert 2 registros na tabela `configuracoes`:
-- `jornada_limite_debito_horas` = `0`
-- `jornada_exibir_saldo_vistoriador` = `true`
-
----
-
-## PARTE 2 — Bloqueio no `useGarantirTurno.ts`
-
-Antes de criar novo turno (linha 58), adicionar verificacao:
-
-1. Ler `jornada_limite_debito_horas` da tabela `configuracoes` (fallback: 0)
-2. Se limite > 0:
-   - O `saldoAcumulado` ja e calculado na linha 71 — se for negativo e `Math.abs(saldoAcumulado) > limite * 60`:
-   - Throw error com mensagem amigavel
-3. Se limite === 0: prosseguir normalmente
-
-No `onError`, detectar essa mensagem especifica e exibir `toast.error` com a mensagem de debito em vez do erro generico.
-
-Retornar tambem `debitoBloqueado: boolean` e `mensagemDebito: string | null` para que o `BotaoIniciarServico` possa exibir o alerta visualmente.
+**Insert em `configuracoes`**:
+- `recusa_exigir_motivo` = `true`
+- `recusa_limite_alerta` = `3`
 
 ---
 
-## PARTE 3 — Perfil do Vistoriador (`InstaladorPerfil.tsx`)
+## PARTE 2 — Configuracao na Diretoria (`InstalacaoRotasConfig.tsx`)
 
-Adicionar secao "Minha Jornada" entre o card de perfil e o card de menu:
+Adicionar 2 chaves ao `CONFIG_CHAVES`: `recusa_exigir_motivo`, `recusa_limite_alerta`.
 
-1. Query `configuracoes` para `jornada_exibir_saldo_vistoriador` e `jornada_limite_debito_horas`
-2. Query ultimo turno encerrado do profissional para pegar `saldo_anterior_minutos` + extras/faltantes → calcular saldo atual
-3. Query turnos do mes corrente para total dias trabalhados e soma de `minutos_trabalhados`
-4. Exibir:
-   - **Saldo atual**: verde se positivo ("+ Xh Ymin de credito"), vermelho se negativo ("- Xh Ymin de debito") — so se config `exibir_saldo` = true
-   - **Resumo do mes**: "X dias trabalhados" e "Xh Ymin total"
-   - **Alerta de bloqueio**: se debito > limite configurado, card vermelho com aviso
+Novo bloco 8 após GPS:
+- Toggle "Exigir motivo ao recusar tarefa" (`recusa_exigir_motivo`)
+- Input numerico "Limite de recusas por turno para alerta" (`recusa_limite_alerta`, default 3)
+- Botao "Salvar Recusas"
 
 ---
 
-## PARTE 4 — Painel RH (`JornadasProfissionais.tsx`)
+## PARTE 3 — Componente `ModalRecusaTarefa`
 
-### 4a. Cards de resumo de saldo (acima da tabela de turnos)
+**Novo arquivo**: `src/components/vistoriador/ModalRecusaTarefa.tsx`
 
-Adicionar apos os cards de estatisticas existentes (linha 285), um novo grid com 3 cards:
-- "Vistoriadores com debito": count de turnos do dia com saldo negativo
-- "Debito consolidado da equipe": soma dos saldos negativos formatado
-- "Credito consolidado da equipe": soma dos saldos positivos formatado
+Dialog com:
+- 5 opcoes radio: motivos pre-definidos
+- Campo texto livre para "Outro motivo"
+- Botoes "Confirmar Recusa" e "Cancelar"
 
-Calcular com base nos turnos ja carregados na query existente (usando `saldo_anterior_minutos` + `minutos_extras` - `minutos_faltantes`).
+---
 
-### 4b. Coluna "Saldo" no JornadaProfissionalCard
+## PARTE 4 — Botao de Recusa no `TarefaAtualCard.tsx`
 
-No `JornadaProfissionalCard.tsx`, na secao de turno encerrado (linha 163), adicionar apos extras/faltantes:
-- Linha "Saldo do dia": `minutos_extras - minutos_faltantes`, verde se positivo, vermelho se negativo
+Botao "Recusar Tarefa" visivel quando tarefa esta agendada.
+Ao confirmar: registra recusa, desatribui servico, busca proxima tarefa, verifica limite.
 
-### 4c. Parametros read-only
+---
 
-Adicionar ao painel colapsavel de parametros os 2 novos campos:
-- "Limite debito bloqueio": Xh (ou "Desativado" se 0)
-- "Exibir saldo vistoriador": Sim/Nao
+## PARTE 5 — Verificacao de Limite e Alerta
 
-Adicionar as 2 chaves na query de parametros.
+Apos registrar recusa, conta recusas no turno. Se >= limite, envia notificacao para coordenadores/admins (sem duplicar).
+
+---
+
+## PARTE 6 — Historico de Atribuicoes no `InstalacaoDetailDrawer.tsx`
+
+Secao "Historico de Atribuicoes" com lista cronologica de recusas por servico.
+
+---
+
+## PARTE 7 — Badge de Recusas no `JornadaProfissionalCard.tsx`
+
+Badge discreto com contagem de recusas no turno (amarelo/vermelho conforme limite).
+
+---
+
+## PARTE 8 — Parametros read-only no RH
+
+2 campos adicionais no painel colapsavel: "Exigir motivo recusa" e "Limite recusas/turno".
 
 ---
 
@@ -87,10 +85,10 @@ Adicionar as 2 chaves na query de parametros.
 
 | Arquivo | Alteracao |
 |---|---|
-| DB (insert) | 2 registros: `jornada_limite_debito_horas`, `jornada_exibir_saldo_vistoriador` |
-| `src/components/gestao-comercial/InstalacaoRotasConfig.tsx` | 2 campos novos no Bloco 5 |
-| `src/hooks/useGarantirTurno.ts` | Verificacao de debito antes de criar turno |
-| `src/pages/instalador/InstaladorPerfil.tsx` | Secao "Minha Jornada" |
-| `src/components/rh/JornadaProfissionalCard.tsx` | Linha "Saldo do dia" |
-| `src/pages/rh/JornadasProfissionais.tsx` | 3 cards resumo + 2 parametros read-only |
-
+| DB migration | Tabela `registros_recusa_tarefa` + 2 inserts em `configuracoes` |
+| `src/components/gestao-comercial/InstalacaoRotasConfig.tsx` | Bloco 8 Recusas |
+| `src/components/vistoriador/ModalRecusaTarefa.tsx` | **Novo** |
+| `src/components/vistoriador/TarefaAtualCard.tsx` | Botao recusar + logica |
+| `src/components/instalacoes/InstalacaoDetailDrawer.tsx` | Secao historico atribuicoes |
+| `src/components/rh/JornadaProfissionalCard.tsx` | Badge recusas |
+| `src/pages/rh/JornadasProfissionais.tsx` | Query recusas + 2 parametros read-only |
