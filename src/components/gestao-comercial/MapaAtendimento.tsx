@@ -348,7 +348,7 @@ export function MapaAtendimento() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label>Valor da diária de viagem (R$)</Label>
               <Input
@@ -371,6 +371,17 @@ export function MapaAtendimento() {
                 placeholder="72"
               />
               <p className="text-xs text-muted-foreground mt-1">Padrão volante: 48h</p>
+            </div>
+            <div>
+              <Label>Horas sem resposta para alerta (prestador)</Label>
+              <Input
+                type="number"
+                min="1"
+                value={prestadorHorasAlerta}
+                onChange={e => setPrestadorHorasAlerta(e.target.value)}
+                placeholder="2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Alerta ao coordenador após X horas</p>
             </div>
           </div>
           <Button
