@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useValidacaoPresenca, type ResultadoValidacao } from '@/hooks/useValidacaoPresenca';
+import { ModalValidacaoPresenca } from '@/components/vistoriador/ModalValidacaoPresenca';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Camera, Check, AlertTriangle, 
