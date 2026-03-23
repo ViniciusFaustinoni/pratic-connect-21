@@ -176,6 +176,9 @@ import ContaCorrenteVendedor from "./pages/financeiro/ContaCorrenteVendedor";
 import GestaoContaVendedor from "./pages/financeiro/GestaoContaVendedor";
 import DashboardVendaExterna from "./pages/financeiro/DashboardVendaExterna";
 
+// Agência
+import AgenciaDashboard from "./pages/agencia/AgenciaDashboard";
+
 // Contabilidade
 import ContabilidadeDashboard from "./pages/contabilidade/ContabilidadeDashboard";
 import PlanoContas from "./pages/contabilidade/PlanoContas";
