@@ -1,72 +1,55 @@
 
 
-# Plano: Estorno Individual de Comissão Paga
+# Plano: Classificação e Filtro por Tipo de Beneficiário
 
-## Resumo
+## Arquivos a modificar
 
-Implementar fluxo completo de estorno manual para comissões individuais já pagas, com modal de motivo obrigatório, geração de débito, auditoria e card de resumo no dashboard.
-
-## Arquivos a criar/modificar
-
-| Arquivo | Ação |
+| Arquivo | Alteração |
 |---|---|
-| `src/components/financeiro/EstornoComissaoModal.tsx` | **Criar** — Modal de estorno |
-| `src/hooks/useContaCorrenteVendedor.ts` | **Modificar** — Adicionar mutation `estornarComissao` |
-| `src/pages/financeiro/GestaoContaVendedor.tsx` | **Modificar** — Botão de estorno + tooltip de motivo |
-| `src/hooks/useDashboardVendaExterna.ts` | **Modificar** — Adicionar query de estornos no mês |
-| `src/pages/financeiro/DashboardVendaExterna.tsx` | **Modificar** — Card "Estornos no mês" |
+| `src/hooks/useDashboardVendaExterna.ts` | Buscar roles dos vendedores e adicionar campo `tipo` ao `VendedorResumo` |
+| `src/pages/financeiro/DashboardVendaExterna.tsx` | Coluna "Tipo" com badge colorido + Select de filtro |
 
 ## Detalhamento
 
-### 1. Modal `EstornoComissaoModal.tsx`
+### 1. Hook — buscar roles e mapear tipo
 
-Novo componente Dialog com:
-- Props: `open`, `onClose`, `lancamento` (CCLancamento), `vendedorNome`, `onConfirm`, `isSaving`
-- Exibe resumo: vendedor, descrição, valor líquido, data pagamento
-- Campo `Textarea` para motivo (mínimo 10 caracteres)
-- Aviso fixo: "Esta ação não pode ser desfeita. O vendedor será notificado automaticamente com o motivo informado."
-- Botão "Confirmar estorno" (variant destructive) desabilitado se motivo < 10 chars
-- Botão "Cancelar"
+No `useDashboardVendaExterna.ts`, dentro da `vendedoresQuery`:
 
-### 2. Mutation `estornarComissao` no hook
+- Após obter os `vendedorIds`, buscar roles na tabela `user_roles` via join com `profiles`:
+  ```
+  profiles.id → profiles.user_id → user_roles.user_id
+  ```
+  Como `vendedor_id` é `profiles.id`, primeiro buscar `user_id` dos profiles e depois os roles.
 
-No `useContaCorrenteVendedor.ts`, adicionar mutation que:
+- Mapear role para tipo de exibição:
+  - `vendedor_externo` → `"Vendedor"`
+  - `agencia` → `"Agência"`
+  - `supervisor_vendas` → `"Supervisor"`
+  - Qualquer outro → `"Outro"`
 
-1. Atualiza o lançamento original:
-   - `status: 'cancelado'`
-   - `observacao_pagamento: motivo`
-   - `pago_por: profile.id` (reutilizando campo para auditoria de quem estornou)
-   - `updated_at: now()`
+- Adicionar `tipo: string` ao interface `VendedorResumo`
 
-2. Insere novo lançamento de débito:
-   - `tipo: 'debito'`
-   - `categoria: 'estorno'`
-   - `descricao: 'Estorno — [descrição original]'`
-   - `valor_bruto/valor_liquido`: mesmo valor do original
-   - `status: 'a_pagar'`
-   - `debito_volante_ref_id: id do lançamento original` (referência)
+### 2. Dashboard — coluna "Tipo"
 
-3. Chama `recalcularSaldos`
+Na tabela, adicionar `<TableHead>Tipo</TableHead>` após "Vendedor" (e atualizar `colSpan` de 7 para 8).
 
-O trigger `trg_notificar_pagamento` cuida da notificação automaticamente ao detectar `status → cancelado`.
+Na row, renderizar badge colorido:
+- `"Vendedor"` → `bg-blue-100 text-blue-700 border-blue-200`
+- `"Agência"` → `bg-purple-100 text-purple-700 border-purple-200`
+- `"Supervisor"` → `bg-orange-100 text-orange-700 border-orange-200`
+- `"Outro"` → `bg-gray-100 text-gray-700 border-gray-200`
 
-### 3. Botão na tabela `GestaoContaVendedor.tsx`
+### 3. Dashboard — filtro por tipo
 
-- Importar `usePermissions` para obter `isDiretor`
-- Na coluna "Ações", quando `l.status === 'pago' && l.tipo === 'credito'` e `isDiretor === true`: exibir botão "Estornar" (ícone RotateCcw, variant ghost destructive)
-- Na coluna "Status", quando `l.status === 'cancelado'`: exibir badge "Estornado" e tooltip com `l.observacao_pagamento` ao hover
-- Importar e renderizar `EstornoComissaoModal`
+Adicionar estado `filtroTipo` com type `'todos' | 'Vendedor' | 'Agência' | 'Supervisor'`.
 
-### 4. Card no Dashboard
+Adicionar um terceiro `Select` na barra de filtros, após o Select de situação:
+```
+Tipo de beneficiário: [Todos | Vendedor | Agência | Supervisor]
+```
 
-No `useDashboardVendaExterna.ts`:
-- Adicionar query para somar `valor_liquido` de lançamentos com `categoria = 'estorno'`, `tipo = 'debito'`, criados no mês atual
-- Expor `estornos_mes` e `estornos_count` no `DashboardCards`
-
-No `DashboardVendaExterna.tsx`:
-- Adicionar 5º card "Estornos no mês" com ícone `RotateCcw`, cor vermelha, exibindo total e quantidade
-
-### 5. Controle de permissão
-
-O botão de estorno será visível apenas quando `isDiretor` for `true` (perfis `diretor` ou `gerente_comercial` conforme `isGerencia`). O hook `usePermissions` já deriva essa flag dos roles do banco. Vendedores e supervisores não verão o botão.
+Integrar no `filtrados` filter chain:
+```ts
+if (filtroTipo !== 'todos' && v.tipo !== filtroTipo) return false;
+```
 
