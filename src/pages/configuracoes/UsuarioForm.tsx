@@ -380,6 +380,9 @@ export default function UsuarioForm() {
     const next = {
       nome: usuario.nome || '', email: usuario.email || '',
       telefone: usuario.telefone || '', cpf: usuario.cpf || '',
+      cnpj: (usuario as any).cnpj || '',
+      razao_social: (usuario as any).razao_social || '',
+      nome_fantasia: (usuario as any).nome_fantasia || '',
       senha: '', tipo: usuario.tipo || 'funcionario', ativo: usuario.ativo ?? true,
       perfis: usuario.roles || [], regioes_atendimento: usuario.regioes_atendimento || [],
       capacidade_diaria: usuario.capacidade_diaria || 10,
@@ -388,6 +391,8 @@ export default function UsuarioForm() {
     setFormData((prev) => {
       const same = prev.nome === next.nome && prev.email === next.email &&
         prev.telefone === next.telefone && prev.cpf === next.cpf &&
+        prev.cnpj === next.cnpj && prev.razao_social === next.razao_social &&
+        prev.nome_fantasia === next.nome_fantasia &&
         prev.tipo === next.tipo && prev.ativo === next.ativo &&
         prev.perfis.length === next.perfis.length &&
         prev.perfis.every((p, i) => p === next.perfis[i]) &&

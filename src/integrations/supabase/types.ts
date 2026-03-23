@@ -19378,6 +19378,7 @@ export type Database = {
           bloqueado: boolean | null
           capacidade_diaria: number | null
           categoria_profissional: string | null
+          cnpj: string | null
           codigo_sga_voluntario: string | null
           cpf: string | null
           created_at: string
@@ -19388,10 +19389,12 @@ export type Database = {
           id: string
           motivo_bloqueio: string | null
           nome: string
+          nome_fantasia: string | null
           notif_documentos_pendentes: boolean | null
           notif_novos_leads: boolean | null
           notif_resumo_diario: boolean | null
           primeiro_acesso: boolean
+          razao_social: string | null
           regioes_atendimento: string[] | null
           telefone: string | null
           tipo: Database["public"]["Enums"]["tipo_usuario"]
@@ -19406,6 +19409,7 @@ export type Database = {
           bloqueado?: boolean | null
           capacidade_diaria?: number | null
           categoria_profissional?: string | null
+          cnpj?: string | null
           codigo_sga_voluntario?: string | null
           cpf?: string | null
           created_at?: string
@@ -19416,10 +19420,12 @@ export type Database = {
           id?: string
           motivo_bloqueio?: string | null
           nome: string
+          nome_fantasia?: string | null
           notif_documentos_pendentes?: boolean | null
           notif_novos_leads?: boolean | null
           notif_resumo_diario?: boolean | null
           primeiro_acesso?: boolean
+          razao_social?: string | null
           regioes_atendimento?: string[] | null
           telefone?: string | null
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
@@ -19434,6 +19440,7 @@ export type Database = {
           bloqueado?: boolean | null
           capacidade_diaria?: number | null
           categoria_profissional?: string | null
+          cnpj?: string | null
           codigo_sga_voluntario?: string | null
           cpf?: string | null
           created_at?: string
@@ -19444,10 +19451,12 @@ export type Database = {
           id?: string
           motivo_bloqueio?: string | null
           nome?: string
+          nome_fantasia?: string | null
           notif_documentos_pendentes?: boolean | null
           notif_novos_leads?: boolean | null
           notif_resumo_diario?: boolean | null
           primeiro_acesso?: boolean
+          razao_social?: string | null
           regioes_atendimento?: string[] | null
           telefone?: string | null
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
