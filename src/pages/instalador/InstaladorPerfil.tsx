@@ -72,13 +72,14 @@ export default function InstaladorPerfil() {
       const inicioMes = format(startOfMonth(getHojeBrasilia()), 'yyyy-MM-dd');
       const { data } = await supabase
         .from('turnos_profissionais')
-        .select('minutos_trabalhados')
+        .select('minutos_trabalhados, em_viagem, bonus_viagem')
         .eq('profissional_id', profile.id)
         .gte('data', inicioMes)
         .eq('status', 'encerrado');
       const dias = data?.length || 0;
-      const totalMinutos = data?.reduce((acc, t) => acc + (t.minutos_trabalhados || 0), 0) || 0;
-      return { dias, totalMinutos };
+      const totalMinutos = data?.reduce((acc, t) => acc + ((t as any).minutos_trabalhados || 0), 0) || 0;
+      const totalBonusViagem = data?.reduce((acc, t) => acc + ((t as any).em_viagem ? ((t as any).bonus_viagem || 0) : 0), 0) || 0;
+      return { dias, totalMinutos, totalBonusViagem };
     },
     enabled: !!profile?.id,
     staleTime: 1000 * 60 * 5,
