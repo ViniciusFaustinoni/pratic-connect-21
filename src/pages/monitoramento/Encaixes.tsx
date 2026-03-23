@@ -319,7 +319,7 @@ function ConfiguracoesEncaixeSection() {
   );
 }
 
-export default function MonitoramentoEncaixes() {
+export default function MonitoramentoEncaixes({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const { data: encaixes, isLoading } = useTodosEncaixes();
 
