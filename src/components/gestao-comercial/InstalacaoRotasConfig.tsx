@@ -157,6 +157,12 @@ export function InstalacaoRotasConfig() {
     setCustoFora(config.custoForaHorario);
     setPrazos(config.prazosEstado);
     setRegioes(config.regioes);
+    setJornadaTurno(config.jornadaDuracaoTurno);
+    setJornadaAlmoco(config.jornadaHorasAteAlmoco);
+    setJornadaDuracaoAlmoco(config.jornadaDuracaoAlmoco);
+    setJornadaTolerancia(config.jornadaToleranciaAtraso);
+    setJornadaProdMin(config.jornadaProdutividadeMinima);
+    setJornadaAlertaImprod(config.jornadaAlertaImprodutividade);
   }, [config]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['configuracoes-instalacao-rotas'] });
