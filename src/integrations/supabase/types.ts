@@ -13421,6 +13421,70 @@ export type Database = {
           },
         ]
       }
+      instalacao_prestador_links: {
+        Row: {
+          chegada_em: string | null
+          concluida_em: string | null
+          created_at: string | null
+          expires_at: string
+          foto_comprovante_url: string | null
+          id: string
+          instalacao_id: string
+          prestador_id: string
+          status: string
+          token: string
+          updated_at: string | null
+        }
+        Insert: {
+          chegada_em?: string | null
+          concluida_em?: string | null
+          created_at?: string | null
+          expires_at?: string
+          foto_comprovante_url?: string | null
+          id?: string
+          instalacao_id: string
+          prestador_id: string
+          status?: string
+          token?: string
+          updated_at?: string | null
+        }
+        Update: {
+          chegada_em?: string | null
+          concluida_em?: string | null
+          created_at?: string | null
+          expires_at?: string
+          foto_comprovante_url?: string | null
+          id?: string
+          instalacao_id?: string
+          prestador_id?: string
+          status?: string
+          token?: string
+          updated_at?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "instalacao_prestador_links_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacao_prestador_links_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "instalacao_prestador_links_prestador_id_fkey"
+            columns: ["prestador_id"]
+            isOneToOne: false
+            referencedRelation: "prestadores_assistencia"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       instalacoes: {
         Row: {
           assinatura_cliente_url: string | null

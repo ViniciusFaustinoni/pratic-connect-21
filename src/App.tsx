@@ -21,6 +21,7 @@ import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 // Public Pages
 import AssociadoVistoria from "./pages/public/AssociadoVistoria";
 import LandingPlanos from "./pages/public/LandingPlanos";
+import PrestadorInstalacao from "./pages/public/PrestadorInstalacao";
 
 // Internal System Pages
 import Auth from "./pages/Auth";
@@ -426,6 +427,9 @@ const App = () => (
             
             {/* Public Acompanhamento Reboque (Associado) */}
             <Route path="/acompanhar/reboque/:token" element={<AcompanhamentoReboquePublico />} />
+            
+            {/* Public Prestador Instalação */}
+            <Route path="/prestador/instalacao/:token" element={<PrestadorInstalacao />} />
             
             {/* Public Portal Terceiro */}
             <Route path="/terceiro/:token" element={<PortalTerceiro />} />

@@ -1,5 +1,5 @@
 import { useMemo, useState } from 'react';
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -21,6 +21,9 @@ import {
   Trash2,
   Shield,
   ExternalLink,
+  Send,
+  Copy,
+  Image,
 } from 'lucide-react';
 import {
   Drawer,
@@ -39,6 +42,12 @@ import {
   AlertDialogTitle,
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -61,10 +70,66 @@ export function InstalacaoDetailDrawer({
   onEdit 
 }: InstalacaoDetailDrawerProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [fotoDialogUrl, setFotoDialogUrl] = useState<string | null>(null);
   const { data: instalacao, isLoading } = useInstalacao(instalacaoId || undefined);
   const updateStatus = useUpdateInstalacaoStatus();
   const deleteInstalacao = useDeleteInstalacao();
+
+  // Buscar link do prestador (se houver)
+  const { data: prestadorLink } = useQuery({
+    queryKey: ['prestador-link-instalacao', instalacaoId],
+    queryFn: async () => {
+      if (!instalacaoId) return null;
+      const { data } = await (supabase as any)
+        .from('instalacao_prestador_links')
+        .select('*, prestador:prestador_id(razao_social, nome_fantasia, whatsapp, telefone)')
+        .eq('instalacao_id', instalacaoId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!instalacaoId && open,
+  });
+
+  // Enviar/reenviar link do prestador
+  const enviarLinkPrestador = useMutation({
+    mutationFn: async () => {
+      if (!instalacao) throw new Error('Sem instalação');
+      // Buscar prestador_id do serviço vinculado
+      const { data: servico } = await (supabase as any)
+        .from('servicos')
+        .select('prestador_id')
+        .eq('associado_id', instalacao.associado_id)
+        .eq('tipo', 'instalacao')
+        .not('prestador_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const prestadorId = servico?.prestador_id;
+      if (!prestadorId) throw new Error('Nenhum prestador vinculado a esta instalação');
+
+      const { data, error } = await supabase.functions.invoke('gerar-link-prestador', {
+        body: { instalacao_id: instalacaoId, prestador_id: prestadorId },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['prestador-link-instalacao', instalacaoId] });
+      toast({
+        title: 'Link enviado!',
+        description: data.whatsapp_enviado
+          ? `WhatsApp enviado para ${data.prestador_nome}`
+          : `Link gerado para ${data.prestador_nome}`,
+      });
+    },
+    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+  });
 
   // Buscar registro de presença GPS
   const { data: registroPresenca } = useQuery({
@@ -323,7 +388,100 @@ export function InstalacaoDetailDrawer({
               </div>
             </section>
 
-            {/* Registro de Presença GPS */}
+            {/* Seção Prestador */}
+            {prestadorLink && (
+              <>
+                <Separator />
+                <section>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Send className="h-4 w-4" />
+                    Prestador
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        {prestadorLink.prestador?.nome_fantasia || prestadorLink.prestador?.razao_social || 'Prestador'}
+                      </span>
+                      <Badge variant="outline" className={cn(
+                        prestadorLink.status === 'aguardando' && 'bg-amber-500/15 text-amber-700 border-amber-500/30',
+                        prestadorLink.status === 'em_execucao' && 'bg-blue-500/15 text-blue-700 border-blue-500/30',
+                        prestadorLink.status === 'concluida' && 'bg-green-500/15 text-green-700 border-green-500/30',
+                      )}>
+                        {prestadorLink.status === 'aguardando' && '⏳ Aguardando'}
+                        {prestadorLink.status === 'em_execucao' && '🔧 Em execução'}
+                        {prestadorLink.status === 'concluida' && '✅ Concluído'}
+                      </Badge>
+                    </div>
+
+                    {prestadorLink.chegada_em && (
+                      <p className="text-xs text-muted-foreground">
+                        Chegada: {format(new Date(prestadorLink.chegada_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      </p>
+                    )}
+                    {prestadorLink.concluida_em && (
+                      <p className="text-xs text-muted-foreground">
+                        Concluído: {format(new Date(prestadorLink.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      </p>
+                    )}
+
+                    {prestadorLink.foto_comprovante_url && (
+                      <div
+                        className="cursor-pointer"
+                        onClick={() => setFotoDialogUrl(prestadorLink.foto_comprovante_url)}
+                      >
+                        <img
+                          src={prestadorLink.foto_comprovante_url}
+                          alt="Comprovante"
+                          className="h-20 w-20 object-cover rounded-md border"
+                        />
+                        <p className="text-xs text-primary mt-1">Clique para ampliar</p>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const url = `https://pratic-connect-21.lovable.app/prestador/instalacao/${prestadorLink.token}`;
+                          navigator.clipboard.writeText(url);
+                          toast({ title: 'Link copiado!' });
+                        }}
+                      >
+                        <Copy className="h-4 w-4 mr-1" />
+                        Copiar Link
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => enviarLinkPrestador.mutate()}
+                        disabled={enviarLinkPrestador.isPending}
+                      >
+                        {enviarLinkPrestador.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                          <Send className="h-4 w-4 mr-1" />
+                        )}
+                        Reenviar
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              </>
+            )}
+
+            {/* Dialog para foto ampliada */}
+            <Dialog open={!!fotoDialogUrl} onOpenChange={() => setFotoDialogUrl(null)}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Comprovante do Prestador</DialogTitle>
+                </DialogHeader>
+                {fotoDialogUrl && (
+                  <img src={fotoDialogUrl} alt="Comprovante" className="w-full rounded-md" />
+                )}
+              </DialogContent>
+            </Dialog>
+
             {registroPresenca && (
               <>
                 <Separator />
