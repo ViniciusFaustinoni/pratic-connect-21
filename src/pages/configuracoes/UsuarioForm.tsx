@@ -449,10 +449,15 @@ export default function UsuarioForm() {
       } else {
         setFieldErrors({});
         const isVistoriador = formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p));
+        const isAgenciaNew = formData.perfis.includes('agencia');
         const { data, error } = await supabase.functions.invoke('create-user', {
           body: {
             nome: formData.nome, email: formData.email, telefone: formData.telefone,
-            cpf: formData.cpf, senha: formData.senha, tipo: formData.tipo, perfis: formData.perfis,
+            ...(isAgenciaNew
+              ? { cnpj: formData.cnpj, razao_social: formData.razao_social, nome_fantasia: formData.nome_fantasia }
+              : { cpf: formData.cpf }
+            ),
+            senha: formData.senha, tipo: formData.tipo, perfis: formData.perfis,
             ...(isVistoriador && { regioes_atendimento: formData.regioes_atendimento, capacidade_diaria: formData.capacidade_diaria }),
           }
         });
