@@ -504,6 +504,21 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                   )}
                   Iniciar Tarefa
                 </Button>
+
+                {/* Botão Recusar */}
+                <Button
+                  variant="outline"
+                  onClick={handleRecusarClick}
+                  disabled={isRecusando}
+                  className="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+                >
+                  {isRecusando ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <XCircle className="h-4 w-4" />
+                  )}
+                  Recusar Tarefa
+                </Button>
                 
                 {/* Feedback visual quando bloqueado por horário */}
                 {!podeIniciarPorHorario && tarefa.hora_agendada && (
