@@ -62,6 +62,12 @@ function useInstalacaoConfigs() {
         prazosEstado: parsePrazos(map.instalacao_prazos_por_estado?.valor),
         regioes: parseRegioes(map.instalacao_regioes_rotas?.valor),
         updatedAt: map.instalacao_max_por_dia?.updated_at ?? null,
+        jornadaDuracaoTurno: map.jornada_duracao_turno_horas?.valor ?? '8',
+        jornadaHorasAteAlmoco: map.jornada_horas_ate_almoco?.valor ?? '4',
+        jornadaDuracaoAlmoco: map.jornada_duracao_almoco_minutos?.valor ?? '60',
+        jornadaToleranciaAtraso: map.jornada_tolerancia_atraso_minutos?.valor ?? '0',
+        jornadaProdutividadeMinima: map.jornada_produtividade_minima?.valor ?? '1',
+        jornadaAlertaImprodutividade: map.jornada_horas_alerta_improdutividade?.valor ?? '2',
       };
     },
     staleTime: 1000 * 60 * 5,
