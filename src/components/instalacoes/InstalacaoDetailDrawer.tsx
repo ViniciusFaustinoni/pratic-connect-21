@@ -294,7 +294,54 @@ export function InstalacaoDetailDrawer({
               </div>
             </section>
 
-            {instalacao.observacoes && (
+            {/* Registro de Presença GPS */}
+            {registroPresenca && (
+              <>
+                <Separator />
+                <section>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Shield className="h-4 w-4" />
+                    Registro de Presença
+                  </h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={
+                        registroPresenca.gps_indisponivel
+                          ? 'bg-muted text-muted-foreground'
+                          : registroPresenca.dentro_do_raio
+                            ? 'bg-green-500/15 text-green-700 border-green-500/30'
+                            : 'bg-amber-500/15 text-amber-700 border-amber-500/30'
+                      }>
+                        {registroPresenca.gps_indisponivel
+                          ? 'GPS indisponível'
+                          : registroPresenca.dentro_do_raio
+                            ? 'Dentro do raio'
+                            : registroPresenca.confirmou_presenca
+                              ? 'Fora do raio (confirmou presença)'
+                              : 'Fora do raio'}
+                      </Badge>
+                    </div>
+                    {registroPresenca.distancia_metros != null && (
+                      <p className="text-muted-foreground">
+                        Distância registrada: <strong>{Math.round(registroPresenca.distancia_metros)}m</strong>
+                      </p>
+                    )}
+                    {registroPresenca.latitude_vistoriador && registroPresenca.longitude_vistoriador && (
+                      <a
+                        href={`https://www.google.com/maps?q=${registroPresenca.latitude_vistoriador},${registroPresenca.longitude_vistoriador}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline text-xs"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Ver localização no mapa
+                      </a>
+                    )}
+                  </div>
+                </section>
+              </>
+            )}
+
               <>
                 <Separator />
                 <section>
