@@ -207,6 +207,7 @@ export default function GestaoContaVendedor() {
                     <TableRow key={l.id}>
                       <TableCell className="whitespace-nowrap">{format(new Date(l.data_lancamento), 'dd/MM/yyyy')}</TableCell>
                       <TableCell className="max-w-xs truncate">{l.descricao}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">{l.associado_nome || '—'}</TableCell>
                       <TableCell>
                         <Badge variant={l.tipo === 'credito' ? 'default' : 'destructive'} className={l.tipo === 'credito' ? 'bg-green-600' : ''}>
                           {l.tipo === 'credito' ? 'Crédito' : 'Débito'}
