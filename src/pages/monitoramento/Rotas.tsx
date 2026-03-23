@@ -485,6 +485,13 @@ export default function Rotas() {
             <ConfiguracoesFilaAtribuicao />
           </TabsContent>
         )}
+
+        {/* Aba Gestão de Rotas - apenas para quem pode editar */}
+        {canEditRotas && (
+          <TabsContent value="gestao-rotas">
+            <GestaoRotas embedded />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Dialogs */}
