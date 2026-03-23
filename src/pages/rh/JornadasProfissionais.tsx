@@ -114,6 +114,12 @@ export default function JornadasProfissionais() {
   });
 
   // Calcular estatísticas
+  const saldosPorTurno = (turnos || []).map(t => {
+    const saldoDia = (t.minutos_extras || 0) - (t.minutos_faltantes || 0);
+    const saldoAcumulado = saldoDia + (t.saldo_anterior_minutos || 0);
+    return { ...t, saldoDia, saldoAcumulado };
+  });
+
   const stats = {
     total: turnos?.length || 0,
     trabalhando: turnos?.filter(t => t.status === 'ativo').length || 0,
@@ -122,6 +128,9 @@ export default function JornadasProfissionais() {
     semAlmoco: turnos?.filter(t => t.status === 'ativo' && !t.inicio_almoco && t.minutos_trabalhados >= 240).length || 0,
     horasExtras: turnos?.reduce((acc, t) => acc + (t.minutos_extras || 0), 0) || 0,
     horasFaltantes: turnos?.reduce((acc, t) => acc + (t.minutos_faltantes || 0), 0) || 0,
+    comDebito: saldosPorTurno.filter(t => t.status === 'encerrado' && t.saldoAcumulado < 0).length,
+    debitoTotal: Math.abs(saldosPorTurno.filter(t => t.status === 'encerrado' && t.saldoAcumulado < 0).reduce((acc, t) => acc + t.saldoAcumulado, 0)),
+    creditoTotal: saldosPorTurno.filter(t => t.status === 'encerrado' && t.saldoAcumulado > 0).reduce((acc, t) => acc + t.saldoAcumulado, 0),
   };
 
   const formatarMinutos = (minutos: number): string => {
