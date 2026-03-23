@@ -411,6 +411,20 @@ export default function UsuarioForm() {
             .insert(formData.perfis.map(role => ({ user_id: usuario.user_id, role: role as any })));
           if (rolesError) throw rolesError;
         }
+
+        // Salvar grade de comissão
+        const isVendas = formData.perfis.some(p => ['consultor_interno', 'consultor_externo', 'agencia'].includes(p));
+        if (isVendas && formData.grade_comissao_id) {
+          const { data: session } = await supabase.auth.getSession();
+          await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
+          await (supabase as any).from('usuario_grade_comissao').insert({
+            user_id: usuario.user_id,
+            grade_id: formData.grade_comissao_id,
+            atribuido_por: session?.session?.user?.id || null,
+          });
+        } else if (!isVendas) {
+          await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
+        }
       } else {
         setFieldErrors({});
         const isVistoriador = formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p));
