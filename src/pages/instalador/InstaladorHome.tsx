@@ -252,6 +252,16 @@ export default function InstaladorHome() {
         </div>
       </div>
     </div>
+
+      {/* Modal de Resumo do Dia */}
+      <ModalResumoDia
+        open={mostrarResumoDia}
+        onClose={fecharResumoDia}
+        turno={turno}
+        servicosConcluidos={servicosConcluidos}
+        servicosRecusados={servicosRecusados}
+        exibirSaldoAcumulado={exibirSaldo}
+      />
     </>
   );
 }
