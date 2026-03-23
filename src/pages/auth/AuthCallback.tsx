@@ -124,6 +124,8 @@ export default function AuthCallback() {
             } catch {
               navigate('/instalador', { replace: true });
             }
+          } else if (profile.tipo === 'agencia') {
+            navigate('/agencia', { replace: true });
           } else {
             navigate('/dashboard', { replace: true });
           }

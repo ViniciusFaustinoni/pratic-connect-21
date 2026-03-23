@@ -544,8 +544,7 @@ const App = () => (
               <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
               <Route path="/perfil/conta-corrente" element={<ContaCorrenteVendedor />} />
               
-              {/* Agência */}
-              <Route path="/agencia" element={<AgenciaDashboard />} />
+              {/* Agência moved to dedicated layout below */}
               
               {/* Cobrança */}
               <Route path="/cobranca" element={<CobrancaDashboard />} />

@@ -116,7 +116,7 @@ export default function DefinirSenha() {
       });
 
       toast.success('Senha definida com sucesso!');
-      const destino = profileTipo === 'associado' ? '/app/home' : '/dashboard';
+      const destino = profileTipo === 'associado' ? '/app/home' : profileTipo === 'agencia' ? '/agencia' : '/dashboard';
       navigate(destino, { replace: true });
 
     } catch (error: any) {

@@ -83,6 +83,10 @@ export default function LoginPage() {
         navigate('/app/home', { replace: true });
         return;
       }
+      if (profile.tipo === 'agencia') {
+        navigate('/agencia', { replace: true });
+        return;
+      }
       const params = new URLSearchParams(location.search);
       const returnTo = params.get('returnTo') || '/dashboard';
       navigate(returnTo, { replace: true });

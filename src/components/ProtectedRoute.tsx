@@ -57,12 +57,14 @@ export function ProtectedRoute({
   if (allowedTipos && allowedTipos.length > 0) {
     const userTipo = profile?.tipo;
     
-    if (!userTipo || !allowedTipos.includes(userTipo as 'funcionario' | 'associado' | 'prestador')) {
+    if (!userTipo || !allowedTipos.includes(userTipo as 'funcionario' | 'associado' | 'prestador' | 'agencia')) {
       // Redirecionar para área correta baseado no tipo
       if (userTipo === 'associado') {
         return <Navigate to="/app/home" replace />;
       } else if (userTipo === 'funcionario') {
         return <Navigate to="/dashboard" replace />;
+      } else if (userTipo === 'agencia') {
+        return <Navigate to="/agencia" replace />;
       } else {
         return <Navigate to={authRedirect} replace />;
       }
