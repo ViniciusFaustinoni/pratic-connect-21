@@ -245,6 +245,14 @@ export function HistoricoJornadas({ exibirSaldo }: HistoricoJornadasProps) {
                         <span>{recusas}</span>
                       </div>
                     )}
+                    {turno.em_viagem && (
+                      <div className="flex justify-between text-blue-400">
+                        <span>🚗 Dia de viagem</span>
+                        {(turno.bonus_viagem || 0) > 0 && (
+                          <span>R$ {Number(turno.bonus_viagem).toFixed(2).replace('.', ',')} diária</span>
+                        )}
+                      </div>
+                    )}
                   </div>
                 </AccordionContent>
               </AccordionItem>
