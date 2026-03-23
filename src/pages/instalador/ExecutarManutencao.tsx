@@ -123,14 +123,44 @@ export default function ExecutarManutencao() {
     }
   };
 
-  const handleCheguei = () => {
-    if (id) {
+  // GPS validation
+  const { validarPresenca, confirmarPresenca } = useValidacaoPresenca();
+  const [showGpsModal, setShowGpsModal] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsResultado, setGpsResultado] = useState<ResultadoValidacao | null>(null);
+
+  const handleCheguei = async () => {
+    if (!id || !servico) return;
+    setShowGpsModal(true);
+    setGpsLoading(true);
+    setGpsResultado(null);
+
+    const endereco = [servico.endereco, servico.bairro, servico.cidade, servico.uf].filter(Boolean).join(', ');
+    const resultado = await validarPresenca(id, endereco, servico.latitude, servico.longitude);
+    setGpsResultado(resultado);
+    setGpsLoading(false);
+
+    // Auto-proceed if approved or GPS unavailable
+    if (resultado.aprovado || resultado.gpsIndisponivel) {
+      setShowGpsModal(false);
       iniciarServico(id, {
-        onSuccess: () => {
-          toast.success('Chegada registrada! Agora você pode realizar a manutenção.');
-        }
+        onSuccess: () => toast.success('Chegada registrada! Agora você pode realizar a manutenção.'),
       });
     }
+  };
+
+  const handleGpsConfirmar = () => {
+    if (!id) return;
+    confirmarPresenca(id);
+    setShowGpsModal(false);
+    iniciarServico(id, {
+      onSuccess: () => toast.success('Chegada registrada! Agora você pode realizar a manutenção.'),
+    });
+  };
+
+  const handleGpsCancelar = () => {
+    setShowGpsModal(false);
+    setGpsResultado(null);
   };
 
   // Dialog de confirmação de condição
