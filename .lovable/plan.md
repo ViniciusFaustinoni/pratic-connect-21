@@ -1,69 +1,39 @@
 
 
-# Plano: Rebranding da Pagina Usuarios e Acessos
+# Plano: Reorganizar Formulário — Tipo de Usuário como Primeiro Campo
 
-## Problema Atual
+## Problema
 
-A pagina tem 5 abas que se sobrepoe e confundem:
+1. O campo "Tipo de usuário" fica DEPOIS das informações básicas — deveria vir primeiro para triar o tipo de cadastro
+2. Não existe a opção "Agência" no tipo de usuário — só Funcionário, Associado, Prestador
+3. Os campos CNPJ/Razão Social só aparecem se o perfil "agencia" estiver selecionado nos checkboxes (que ficam mais abaixo), criando dependência circular
 
-```text
-Atual:
-┌─────────────────────────────────────────────────────┐
-│ Usuarios │ Vendedores │ Perfis │ Logs │ Visibilidade│
-└─────────────────────────────────────────────────────┘
+## Solução
 
-- "Vendedores" = subconjunto filtrado de "Usuarios" (redundante)
-- "Perfis de Acesso" = cards de roles + tabela para atribuir perfis
-  (duplica o que ja se faz ao editar um usuario)
-- "Visibilidade" = config avancada de modulos por perfil
-- "Logs" = auditoria (contexto diferente de gestao de usuarios)
+### 1. Adicionar "Agência" como tipo de usuário
+
+No select de tipo (linha 608-613), adicionar:
+```
+<SelectItem value="agencia">Agência</SelectItem>
 ```
 
-## Proposta: 3 Abas Claras
+### 2. Mover "Tipo de Usuário" para ANTES do card de Informações Básicas
 
-```text
-Nova estrutura:
-┌───────────────────────────────────────┐
-│  Usuarios  │  Permissoes  │  Auditoria │
-└───────────────────────────────────────┘
-```
+Extrair o campo "Tipo de usuário" para um card próprio no topo do formulário, antes de qualquer outro campo. Assim o tipo triará o que aparece abaixo.
 
-### Aba 1 — Usuarios (unificada)
+### 3. Lógica condicional baseada no tipo (não no perfil)
 
-Absorve "Usuarios" + "Vendedores" numa unica lista. Mudancas:
+Trocar a condição `formData.perfis.includes('agencia')` por `formData.tipo === 'agencia'`:
+- **tipo = agencia**: mostrar CNPJ, Razão Social, Nome Fantasia (esconder CPF)
+- **tipo ≠ agencia**: mostrar CPF (esconder campos empresariais)
 
-- Adicionar filtro rapido por **area** (Comercial, Operacional, Administrativo) — derivado do campo `area` de `app_roles_config`
-- Quando filtrado por area "Comercial", exibe automaticamente as colunas de vendedor (Leads, Conversao) que hoje so aparecem na aba Vendedores
-- Remove a aba "Vendedores" separada
-- Manter filtros existentes: tipo, perfil, status, busca
+Quando `tipo === 'agencia'`, auto-selecionar o perfil `agencia` nos checkboxes.
 
-### Aba 2 — Permissoes (consolida Perfis + Visibilidade)
+### 4. Ajustar saveUser
 
-Junta "Perfis de Acesso" e "Visibilidade" numa unica aba com duas secoes:
-
-1. **Perfis do Sistema** — os cards de roles com contagem (visual existente)
-2. **Visibilidade de Modulos** — a matriz de visibilidade por perfil (componente `PerfisVisibilidade` existente)
-
-Remove a atribuicao de perfis por usuario desta aba (isso ja e feito no formulario do usuario ao clicar "Editar").
-
-### Aba 3 — Auditoria
-
-Renomeia "Logs de Atividade" para "Auditoria". Conteudo identico.
-
-## Mudancas Tecnicas
-
-| O que muda | Detalhe |
-|---|---|
-| Tabs de 5 para 3 | `usuarios`, `permissoes`, `auditoria` |
-| Tab Usuarios | Adicionar filtro por area + colunas condicionais de vendas |
-| Tab Permissoes | Renderizar cards de perfis + `PerfisVisibilidade` na mesma aba |
-| Tab Vendedores | Removida |
-| Tab Visibilidade | Removida (movida para Permissoes) |
-| Stats cards | Remover card "Vendedores" separado, manter Total/Ativos/Inativos |
-| State vars | Remover states de vendedores (`searchVendedor`, `filterTipoVendedor`) |
-| Hook `useVendedores` | Continua importado para dados de leads/conversao nas colunas condicionais |
+Na lógica de save, trocar `isAgencia` de `formData.perfis.includes('agencia')` para `formData.tipo === 'agencia'`.
 
 ## Arquivo afetado
 
-`src/pages/configuracoes/UsuariosAcessos.tsx` — unico arquivo, refatoracao interna.
+`src/pages/configuracoes/UsuarioForm.tsx` — único arquivo.
 
