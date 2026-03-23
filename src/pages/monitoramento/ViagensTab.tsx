@@ -101,17 +101,17 @@ export default function ViagensTab() {
       const hojeStr = format(hoje, 'yyyy-MM-dd');
 
       const { count: ativas } = await (supabase
-        .from('instalacoes')
+        .from('instalacoes') as any)
         .select('*', { count: 'exact', head: true })
         .eq('tipo_deslocamento', 'viagem')
-        .in('status', OPEN_STATUSES) as any);
+        .in('status', OPEN_STATUSES);
 
       const { data: tecnicosHoje } = await (supabase
-        .from('instalacoes')
+        .from('instalacoes') as any)
         .select('instalador_id, instalador_responsavel_id')
         .eq('tipo_deslocamento', 'viagem')
         .eq('data_agendada', hojeStr)
-        .in('status', OPEN_STATUSES) as any);
+        .in('status', OPEN_STATUSES);
 
       const tecnicoIds = new Set(
         (tecnicosHoje || [])
