@@ -1,68 +1,69 @@
 
 
-# Plano: Cadastro de Agência com CNPJ e Dados Empresariais
+# Plano: Rebranding da Pagina Usuarios e Acessos
 
-## Problema
+## Problema Atual
 
-O formulário de cadastro de usuários sempre pede CPF, mas agências são empresas e precisam de CNPJ, razão social e nome fantasia. Não existe nenhum campo empresarial na tabela `profiles`.
+A pagina tem 5 abas que se sobrepoe e confundem:
 
-## Solução
+```text
+Atual:
+┌─────────────────────────────────────────────────────┐
+│ Usuarios │ Vendedores │ Perfis │ Logs │ Visibilidade│
+└─────────────────────────────────────────────────────┘
 
-### 1. Migration — Adicionar campos empresariais ao `profiles`
-
-```sql
-ALTER TABLE public.profiles
-  ADD COLUMN cnpj TEXT,
-  ADD COLUMN razao_social TEXT,
-  ADD COLUMN nome_fantasia TEXT;
+- "Vendedores" = subconjunto filtrado de "Usuarios" (redundante)
+- "Perfis de Acesso" = cards de roles + tabela para atribuir perfis
+  (duplica o que ja se faz ao editar um usuario)
+- "Visibilidade" = config avancada de modulos por perfil
+- "Logs" = auditoria (contexto diferente de gestao de usuarios)
 ```
 
-### 2. `UsuarioForm.tsx` — Formulário condicional
+## Proposta: 3 Abas Claras
 
-Quando o perfil `agencia` estiver selecionado:
-- Esconder o campo CPF
-- Mostrar campos: **CNPJ** (com `CnpjInput` mascarado), **Razão Social** e **Nome Fantasia**
-- Tornar CNPJ e Razão Social obrigatórios para agência
-
-Quando NÃO for agência: manter o campo CPF como está hoje.
-
-Adicionar os campos ao `formData`:
-```typescript
-cnpj: '',
-razao_social: '',
-nome_fantasia: '',
+```text
+Nova estrutura:
+┌───────────────────────────────────────┐
+│  Usuarios  │  Permissoes  │  Auditoria │
+└───────────────────────────────────────┘
 ```
 
-No `useEffect` de carregamento, popular esses campos a partir do `usuario`.
+### Aba 1 — Usuarios (unificada)
 
-No `saveUser`, incluir `cnpj`, `razao_social`, `nome_fantasia` no update/create.
+Absorve "Usuarios" + "Vendedores" numa unica lista. Mudancas:
 
-### 3. `create-user` edge function — Aceitar campos empresariais
+- Adicionar filtro rapido por **area** (Comercial, Operacional, Administrativo) — derivado do campo `area` de `app_roles_config`
+- Quando filtrado por area "Comercial", exibe automaticamente as colunas de vendedor (Leads, Conversao) que hoje so aparecem na aba Vendedores
+- Remove a aba "Vendedores" separada
+- Manter filtros existentes: tipo, perfil, status, busca
 
-Atualizar a interface `CreateUserRequest` para incluir `cnpj?`, `razao_social?`, `nome_fantasia?`.
+### Aba 2 — Permissoes (consolida Perfis + Visibilidade)
 
-Na verificação de duplicidade: se `cnpj` for informado, verificar se já existe em `profiles`.
+Junta "Perfis de Acesso" e "Visibilidade" numa unica aba com duas secoes:
 
-No update do profile após criação: salvar `cnpj`, `razao_social`, `nome_fantasia`.
+1. **Perfis do Sistema** — os cards de roles com contagem (visual existente)
+2. **Visibilidade de Modulos** — a matriz de visibilidade por perfil (componente `PerfisVisibilidade` existente)
 
-### 4. Validação de CNPJ
+Remove a atribuicao de perfis por usuario desta aba (isso ja e feito no formulario do usuario ao clicar "Editar").
 
-Usar o componente `CnpjInput` já existente em `src/components/inputs/MaskedInputs.tsx` para máscara.
+### Aba 3 — Auditoria
 
-Reutilizar `validateCNPJ` de `src/lib/validations` para validação no submit.
+Renomeia "Logs de Atividade" para "Auditoria". Conteudo identico.
 
-## Arquivos afetados
+## Mudancas Tecnicas
 
-| Arquivo | Alteração |
+| O que muda | Detalhe |
 |---|---|
-| Migration SQL | Adicionar `cnpj`, `razao_social`, `nome_fantasia` ao `profiles` |
-| `src/pages/configuracoes/UsuarioForm.tsx` | Campos condicionais por perfil agência |
-| `supabase/functions/create-user/index.ts` | Aceitar e salvar campos empresariais |
+| Tabs de 5 para 3 | `usuarios`, `permissoes`, `auditoria` |
+| Tab Usuarios | Adicionar filtro por area + colunas condicionais de vendas |
+| Tab Permissoes | Renderizar cards de perfis + `PerfisVisibilidade` na mesma aba |
+| Tab Vendedores | Removida |
+| Tab Visibilidade | Removida (movida para Permissoes) |
+| Stats cards | Remover card "Vendedores" separado, manter Total/Ativos/Inativos |
+| State vars | Remover states de vendedores (`searchVendedor`, `filterTipoVendedor`) |
+| Hook `useVendedores` | Continua importado para dados de leads/conversao nas colunas condicionais |
 
-## O que não muda
+## Arquivo afetado
 
-- Fluxo para outros perfis (CPF continua normal)
-- Dashboard da agência
-- Tabela `agencia_vendedores`
-- Grades de comissão
+`src/pages/configuracoes/UsuariosAcessos.tsx` — unico arquivo, refatoracao interna.
 
