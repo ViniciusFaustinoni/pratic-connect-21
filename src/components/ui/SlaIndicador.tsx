@@ -7,6 +7,7 @@ import { Clock } from 'lucide-react';
 interface SlaIndicadorProps {
   criadoEm: string;
   tipoServico: string;
+  tipoDeslocamento?: string;
   className?: string;
 }
 
