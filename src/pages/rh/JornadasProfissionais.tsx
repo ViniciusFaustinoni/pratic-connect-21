@@ -205,6 +205,14 @@ export default function JornadasProfissionais() {
                   <p className="text-xs text-muted-foreground">Prazo manutenção/retirada</p>
                   <p className="text-sm font-semibold">{parametros?.slaManutencao || '24'}h</p>
                 </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Validação GPS</p>
+                  <p className="text-sm font-semibold">{parametros?.gpsValidacaoAtiva === 'false' ? 'Desativada' : 'Ativa'}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Raio GPS</p>
+                  <p className="text-sm font-semibold">{parametros?.gpsRaioMetros || '500'}m</p>
+                </div>
               </div>
               <div className="flex justify-end">
                 <Button variant="outline" size="sm" onClick={() => navigate('/diretoria/gestao-comercial')}>

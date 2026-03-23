@@ -575,6 +575,55 @@ export function InstalacaoRotasConfig() {
         </CardContent>
       </Card>
 
+      {/* ── Bloco 7 — Validação GPS ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MapPin className="h-4 w-4" />
+            Validação de Localização (GPS)
+          </CardTitle>
+          <CardDescription>
+            Exige que o vistoriador esteja no local ao iniciar o serviço. Divergências ficam registradas para auditoria.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Exigir validação de localização</Label>
+              <p className="text-xs text-muted-foreground">Quando desativado, o serviço inicia sem verificação GPS</p>
+            </div>
+            <Switch checked={gpsAtiva} onCheckedChange={setGpsAtiva} />
+          </div>
+          {gpsAtiva && (
+            <div className="space-y-2 max-w-xs">
+              <Label>Raio máximo de tolerância (metros)</Label>
+              <Input type="number" min={50} max={5000} value={gpsRaio} onChange={e => setGpsRaio(e.target.value)} />
+            </div>
+          )}
+          <p className="text-xs text-amber-600">⚠ Alterações têm efeito imediato na operação. Informe a equipe antes de alterar.</p>
+          <div className="flex justify-end">
+            <Button onClick={async () => {
+              setSavingB7(true);
+              try {
+                await Promise.all([
+                  salvarConfig('gps_validacao_ativa', gpsAtiva ? 'true' : 'false', profile?.id),
+                  salvarConfig('gps_raio_metros', gpsRaio, profile?.id),
+                ]);
+                toast.success('Configurações de GPS salvas com sucesso');
+                invalidate();
+              } catch {
+                toast.error('Erro ao salvar configurações de GPS');
+              } finally {
+                setSavingB7(false);
+              }
+            }} disabled={savingB7} size="sm">
+              {savingB7 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              Salvar GPS
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── Bloco 4 — Regiões de Atendimento ── */}
       <Card>
         <CardHeader>
