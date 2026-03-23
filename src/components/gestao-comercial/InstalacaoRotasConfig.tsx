@@ -32,6 +32,12 @@ const CONFIG_CHAVES = [
   'instalacao_custo_fora_horario',
   'instalacao_prazos_por_estado',
   'instalacao_regioes_rotas',
+  'jornada_duracao_turno_horas',
+  'jornada_horas_ate_almoco',
+  'jornada_duracao_almoco_minutos',
+  'jornada_tolerancia_atraso_minutos',
+  'jornada_produtividade_minima',
+  'jornada_horas_alerta_improdutividade',
 ] as const;
 
 // ── Hook ───────────────────────────────────────────
