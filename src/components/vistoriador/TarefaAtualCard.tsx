@@ -257,7 +257,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
               <p className="font-medium text-foreground truncate">{tarefa.cliente.nome}</p>
               <div className="flex items-center gap-2">
                 <p className="text-sm text-muted-foreground">{tarefa.cliente.telefone}</p>
-                <SlaIndicador criadoEm={tarefa.created_at || tarefa.data_agendada} tipoServico={tarefa.tipo} />
+                <SlaIndicador criadoEm={tarefa.data_agendada} tipoServico={tarefa.tipo} />
               </div>
             </div>
             <Button
