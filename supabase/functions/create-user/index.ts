@@ -118,6 +118,22 @@ serve(async (req) => {
       }
     }
 
+    // Verificar se CNPJ já existe (se fornecido)
+    if (cnpj) {
+      const { data: existingCNPJ } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('cnpj', cnpj)
+        .maybeSingle();
+
+      if (existingCNPJ) {
+        return new Response(
+          JSON.stringify({ error: 'Este CNPJ já está cadastrado' }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Criar usuário no Auth (com ou sem senha)
     const createUserOptions: any = {
       email: email.toLowerCase(),
