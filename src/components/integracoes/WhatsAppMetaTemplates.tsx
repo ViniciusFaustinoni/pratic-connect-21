@@ -1,5 +1,5 @@
-import { useState, useCallback } from 'react';
-import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit, Copy, Rocket } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
+import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit, Copy, Rocket, ListChecks, X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
