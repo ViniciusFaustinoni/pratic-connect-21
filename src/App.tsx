@@ -627,6 +627,7 @@ const App = () => (
               <Route path="/monitoramento/aprovacao-associados" element={<AprovacaoAssociadosMonitoramento />} />
               <Route path="/monitoramento/aprovacao-associados/:id" element={<AprovacaoInstalacaoDetalhe />} />
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
+              <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
               
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />
