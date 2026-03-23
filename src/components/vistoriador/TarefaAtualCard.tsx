@@ -226,7 +226,7 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
             const { data: coordenadores } = await supabase
               .from('user_roles')
               .select('user_id')
-              .in('role', ['coordenador_monitoramento', 'admin', 'diretoria']);
+              .in('role', ['coordenador_monitoramento', 'admin', 'diretor']);
 
             for (const coord of (coordenadores || [])) {
               await supabase.from('notificacoes').insert({
