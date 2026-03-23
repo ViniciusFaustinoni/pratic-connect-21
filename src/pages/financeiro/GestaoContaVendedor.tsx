@@ -37,6 +37,7 @@ export default function GestaoContaVendedor() {
   const [dataFim, setDataFim] = useState('');
   const [tipo, setTipo] = useState<'credito' | 'debito' | ''>('');
   const [status, setStatus] = useState('');
+  const [buscaAssociado, setBuscaAssociado] = useState('');
   const [page, setPage] = useState(1);
   const [modalParcela, setModalParcela] = useState<CCLancamento | null>(null);
   const [modalEstorno, setModalEstorno] = useState<CCLancamento | null>(null);
@@ -167,6 +168,10 @@ export default function GestaoContaVendedor() {
                     </SelectContent>
                   </Select>
                 </div>
+                <div>
+                  <label className="text-xs font-medium text-muted-foreground">Associado</label>
+                  <Input placeholder="Buscar por associado..." value={buscaAssociado} onChange={e => { setBuscaAssociado(e.target.value); setPage(1); }} className="w-52" />
+                </div>
               </div>
             </CardContent>
           </Card>
@@ -179,6 +184,7 @@ export default function GestaoContaVendedor() {
                   <TableRow>
                     <TableHead>Data</TableHead>
                     <TableHead>Descrição</TableHead>
+                    <TableHead>Associado</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead className="text-right">Bruto</TableHead>
                     <TableHead className="text-right">Abatimento</TableHead>
@@ -190,13 +196,18 @@ export default function GestaoContaVendedor() {
                 </TableHeader>
                 <TableBody>
                   {isLoadingLancamentos ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-                  ) : lancamentos.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum lançamento</TableCell></TableRow>
-                  ) : lancamentos.map((l: CCLancamento) => (
+                    <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                  ) : (() => {
+                    const lancamentosFiltrados = lancamentos.filter((l: CCLancamento) =>
+                      !buscaAssociado || (l.associado_nome || '').toLowerCase().includes(buscaAssociado.toLowerCase())
+                    );
+                    return lancamentosFiltrados.length === 0 ? (
+                    <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum lançamento</TableCell></TableRow>
+                  ) : lancamentosFiltrados.map((l: CCLancamento) => (
                     <TableRow key={l.id}>
                       <TableCell className="whitespace-nowrap">{format(new Date(l.data_lancamento), 'dd/MM/yyyy')}</TableCell>
                       <TableCell className="max-w-xs truncate">{l.descricao}</TableCell>
+                      <TableCell className="max-w-[150px] truncate">{l.associado_nome || '—'}</TableCell>
                       <TableCell>
                         <Badge variant={l.tipo === 'credito' ? 'default' : 'destructive'} className={l.tipo === 'credito' ? 'bg-green-600' : ''}>
                           {l.tipo === 'credito' ? 'Crédito' : 'Débito'}
@@ -245,7 +256,8 @@ export default function GestaoContaVendedor() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ));
+                  })()}
                 </TableBody>
               </Table>
             </CardContent>
