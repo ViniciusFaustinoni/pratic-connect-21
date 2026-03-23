@@ -212,10 +212,34 @@ export default function GradeComissaoForm() {
                     </Tooltip>
                   </div>
                   <span className="text-xs text-muted-foreground w-5 text-center">{idx + 1}</span>
+                  <div className="w-44">
+                    <Select
+                      value={nivel.role}
+                      onValueChange={(val) => {
+                        const roleConfig = commercialRoles.find(r => r.role === val);
+                        setNiveis(prev => prev.map((n, i) => i === idx ? { ...n, role: val, nome: n.nome || (roleConfig?.label || '') } : n));
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Perfil *" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {commercialRoles.map(r => (
+                          <SelectItem
+                            key={r.role}
+                            value={r.role}
+                            disabled={niveis.some((n, i) => i !== idx && n.role === r.role)}
+                          >
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="flex-1 relative">
                     <Input
                       className="flex-1"
-                      placeholder="Nome do nível (ex: Vendedor Externo)"
+                      placeholder="Nome do nível (ex: Vendedor Principal)"
                       value={nivel.nome}
                       onChange={e => updateNivel(idx, 'nome', e.target.value)}
                     />
