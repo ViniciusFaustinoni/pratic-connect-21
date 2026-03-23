@@ -178,6 +178,7 @@ export function MapaAtendimento() {
       return {
         diaria: map.viagem_valor_diaria || '0',
         sla: map.viagem_sla_horas || '72',
+        prestadorHoras: map.prestador_horas_alerta_sem_resposta || '2',
       };
     },
     staleTime: 1000 * 60 * 5,
