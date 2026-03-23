@@ -333,6 +333,53 @@ export function MapaAtendimento() {
         </Table>
       </Card>
 
+      {/* Regras de Viagem */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MapPin className="h-4 w-4" /> Regras de Viagem
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Configurações aplicadas automaticamente a instalações em municípios classificados como "Viagem".
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Valor da diária de viagem (R$)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={viagemDiaria}
+                onChange={e => setViagemDiaria(e.target.value)}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Zero = sem compensação</p>
+            </div>
+            <div>
+              <Label>SLA de instalação em viagem (horas úteis)</Label>
+              <Input
+                type="number"
+                min="1"
+                value={viagemSla}
+                onChange={e => setViagemSla(e.target.value)}
+                placeholder="72"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Padrão volante: 48h</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => salvarViagemMutation.mutate()}
+            disabled={salvarViagemMutation.isPending}
+          >
+            {salvarViagemMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Salvar regras de viagem
+          </Button>
+        </CardContent>
+      </Card>
+
       {/* Dialog Adicionar */}
       <Dialog open={showAddDialog} onOpenChange={setShowAddDialog}>
         <DialogContent>

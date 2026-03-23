@@ -73,7 +73,8 @@ export function SlaIndicador({ criadoEm, tipoServico, tipoDeslocamento, classNam
   const resultado = useMemo(() => {
     if (!config) return null;
     const slaTipo = getSlaTipo(tipoServico);
-    const prazoHoras = slaTipo === 'manutencao' ? config.manutencao : config.instalacao;
+    const isViagem = tipoDeslocamento === 'viagem' && slaTipo === 'instalacao';
+    const prazoHoras = slaTipo === 'manutencao' ? config.manutencao : (isViagem ? config.viagem : config.instalacao);
     const { percentual, restanteMs } = calcularPercentualSla(criadoEm, prazoHoras);
     return { percentual, restanteMs, texto: formatarRestante(restanteMs) };
     // eslint-disable-next-line react-hooks/exhaustive-deps
