@@ -61,7 +61,7 @@ function getSlaTipo(tipo: string): 'instalacao' | 'manutencao' {
   return 'instalacao';
 }
 
-export function SlaIndicador({ criadoEm, tipoServico, className }: SlaIndicadorProps) {
+export function SlaIndicador({ criadoEm, tipoServico, tipoDeslocamento, className }: SlaIndicadorProps) {
   const { data: config } = useSlaConfig();
   const [agora, setAgora] = useState(Date.now());
 
