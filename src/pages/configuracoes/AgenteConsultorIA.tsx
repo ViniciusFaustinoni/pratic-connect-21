@@ -117,14 +117,29 @@ function AbaPlanos() {
                 rows={2}
               />
             </div>
-            {plano.imagem_landing_url && (
-              <div className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                <a href={plano.imagem_landing_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
-                  Ver imagem atual
-                </a>
-              </div>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {plano.imagem_landing_url && (
+                <>
+                  <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                  <a href={plano.imagem_landing_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                    Ver imagem atual
+                  </a>
+                </>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                disabled={generatingImageId === plano.id}
+                onClick={() => handleRegenerarImagem(plano)}
+              >
+                {generatingImageId === plano.id ? (
+                  <><Loader2 className="h-3 w-3 animate-spin" /> Gerando...</>
+                ) : (
+                  <><RefreshCw className="h-3 w-3" /> Regenerar imagem</>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ))}

@@ -158,3 +158,6 @@ verify_jwt = false
 
 [functions.efetivar-troca-titularidade]
 verify_jwt = false
+
+[functions.gerar-imagem-plano]
+verify_jwt = false
