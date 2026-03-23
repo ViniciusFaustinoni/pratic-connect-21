@@ -254,6 +254,7 @@ export default function InstalacoesList() {
               <TableHead>Veículo</TableHead>
               <TableHead>Endereço</TableHead>
               <TableHead>Instalador</TableHead>
+              <TableHead>Prazo</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[50px]">Ações</TableHead>
             </TableRow>
