@@ -291,6 +291,7 @@ export default function UsuarioForm() {
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [gradeError, setGradeError] = useState(false);
   const [novoEmail, setNovoEmail] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [alterandoEmail, setAlterandoEmail] = useState(false);
