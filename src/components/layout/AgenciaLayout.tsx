@@ -38,10 +38,27 @@ export function AgenciaLayout() {
                   <p className="text-xs text-muted-foreground">{profile?.nome || 'Agência'}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Sair</span>
-              </Button>
+              <div className="flex items-center gap-1">
+                {navItems.map((item) => (
+                  <Button
+                    key={item.path}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(item.path)}
+                    className={cn(
+                      'gap-2',
+                      location.pathname === item.path && 'bg-accent text-accent-foreground'
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span className="hidden sm:inline">{item.label}</span>
+                  </Button>
+                ))}
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline">Sair</span>
+                </Button>
+              </div>
             </div>
           </header>
 

@@ -780,6 +780,7 @@ const App = () => (
             {/* Agência Routes */}
             <Route element={<AgenciaLayout />}>
               <Route path="/agencia" element={<AgenciaDashboard />} />
+              <Route path="/agencia/dados-pagamento" element={<DadosPagamento />} />
             </Route>
             
             {/* Installer App Routes */}
