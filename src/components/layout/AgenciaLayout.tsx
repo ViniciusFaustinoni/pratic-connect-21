@@ -10,6 +10,12 @@ import { cn } from '@/lib/utils';
 export function AgenciaLayout() {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const navItems = [
+    { path: '/agencia', label: 'Painel', icon: LayoutDashboard },
+    { path: '/agencia/dados-pagamento', label: 'Dados de Pagamento', icon: CreditCard },
+  ];
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
