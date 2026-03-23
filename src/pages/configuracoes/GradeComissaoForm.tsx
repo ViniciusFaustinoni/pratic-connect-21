@@ -82,7 +82,12 @@ export default function GradeComissaoForm() {
   const handleSave = async () => {
     if (!nome.trim()) return toast.error('Nome é obrigatório');
     if (niveis.length === 0) return toast.error('Adicione pelo menos um nível');
+    if (niveis.some(n => !n.role)) return toast.error('Selecione o perfil de cada nível');
     if (niveis.some(n => !n.nome.trim())) return toast.error('Todos os níveis precisam de nome');
+    // Check duplicate roles
+    const rolesUsed = niveis.map(n => n.role);
+    const hasDuplicates = rolesUsed.length !== new Set(rolesUsed).size;
+    if (hasDuplicates) return toast.error('Cada perfil só pode aparecer uma vez na grade');
     if (exceedsLimit) return;
 
     setSaving(true);
