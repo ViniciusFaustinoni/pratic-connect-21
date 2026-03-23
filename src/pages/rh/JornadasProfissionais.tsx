@@ -12,13 +12,17 @@ import {
   Calendar,
   RefreshCw,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  ChevronDown,
+  Settings2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { JornadaProfissionalCard } from '@/components/rh/JornadaProfissionalCard';
 import { getHojeBrasilia } from '@/lib/date-utils';
+import { useNavigate } from 'react-router-dom';
 
 interface TurnoComProfile {
   id: string;
