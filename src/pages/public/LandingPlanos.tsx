@@ -84,7 +84,7 @@ export default function LandingPlanos() {
             { icon: Users, label: '+10.000', sub: 'Associados Ativos' },
             { icon: Wrench, label: '+600', sub: 'Instalações por Mês' },
             { icon: PhoneCall, label: '24h', sub: 'Assistência em Todo Brasil' },
-            { icon: Shield, label: '100%', sub: 'Proteção Total' },
+            { icon: Shield, label: '100%', sub: 'Proteção 360º' },
           ].map((item) => (
             <div key={item.sub} className="flex flex-col items-center rounded-2xl bg-white/5 p-6 text-center backdrop-blur-sm">
               <item.icon className="mb-3 h-8 w-8 text-[#C41230]" />
