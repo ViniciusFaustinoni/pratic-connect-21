@@ -198,6 +198,55 @@ export function MapaAtendimento() {
     );
   }
 
+  // ===== Regras de Viagem =====
+  const [viagemDiaria, setViagemDiaria] = useState('');
+  const [viagemSla, setViagemSla] = useState('');
+  const [viagemLoaded, setViagemLoaded] = useState(false);
+
+  const { data: configViagem } = useQuery({
+    queryKey: ['config-viagem'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['viagem_valor_diaria', 'viagem_sla_horas']);
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        diaria: map.viagem_valor_diaria || '0',
+        sla: map.viagem_sla_horas || '72',
+      };
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  if (configViagem && !viagemLoaded) {
+    setViagemDiaria(configViagem.diaria);
+    setViagemSla(configViagem.sla);
+    setViagemLoaded(true);
+  }
+
+  const salvarViagemMutation = useMutation({
+    mutationFn: async () => {
+      const updates = [
+        { chave: 'viagem_valor_diaria', valor: viagemDiaria },
+        { chave: 'viagem_sla_horas', valor: viagemSla },
+      ];
+      for (const u of updates) {
+        const { error } = await supabase
+          .from('configuracoes')
+          .update({ valor: u.valor, updated_at: new Date().toISOString() })
+          .eq('chave', u.chave);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config-viagem'] });
+      queryClient.invalidateQueries({ queryKey: ['config-sla-prazos'] });
+      toast.success('Regras de viagem salvas!');
+    },
+    onError: () => toast.error('Erro ao salvar regras de viagem'),
+  });
+
   return (
     <div className="space-y-4">
       {/* Resumo */}
