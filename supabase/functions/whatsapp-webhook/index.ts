@@ -3203,33 +3203,31 @@ serve(async (req) => {
           lead.nome
         );
         
-        // Responder ao lead
-        const primeiroNome = lead.nome?.split(' ')[0] || 'Cliente';
-        await sendWhatsAppMessage(
-          apiUrl,
-          instancia.instance_name,
-          telefone,
-          `Olá ${primeiroNome}! 😊\n\nRecebemos sua mensagem. Nosso consultor entrará em contato em breve.\n\nAgradecemos o interesse na PRATICCAR! 🚗`
-        );
-        
-        // Notificar vendedor do lead (se tiver)
-        if (lead.vendedor_id) {
-          // Buscar profile_id do vendedor
-          const { data: vendedorProfile } = await supabase
-            .from("profiles")
-            .select("id")
-            .eq("user_id", lead.vendedor_id)
-            .single();
-          
-          if (vendedorProfile) {
-            await supabase.from("notificacoes").insert({
-              usuario_id: vendedorProfile.id,
-              titulo: "📱 Lead respondeu no WhatsApp",
-              mensagem: `${lead.nome}: "${mensagemTexto.substring(0, 100)}${mensagemTexto.length > 100 ? '...' : ''}"`,
-              tipo: "info",
-              dados: { lead_id: lead.id, telefone },
-            });
-          }
+        // Delegar para agente consultor IA
+        console.log(`[whatsapp-webhook] Delegando lead para agente-consultor-ia: ${telefone}`);
+        try {
+          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/agente-consultor-ia`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({
+              telefone,
+              texto: mensagemTexto,
+              tipo_msg: tipoPrincipal,
+            }),
+          });
+        } catch (agentErr: any) {
+          console.error(`[whatsapp-webhook] Erro delegação agente (lead):`, agentErr);
+          // Fallback: resposta genérica
+          const primeiroNome = lead.nome?.split(' ')[0] || 'Cliente';
+          await sendWhatsAppMessage(
+            apiUrl,
+            instancia.instance_name,
+            telefone,
+            `Olá ${primeiroNome}! 😊\n\nRecebemos sua mensagem. Nosso consultor entrará em contato em breve.\n\nAgradecemos o interesse na PRATICCAR! 🚗`
+          );
         }
         
         return new Response(JSON.stringify({ ok: true, lead_id: lead.id }), { headers: corsHeaders });
