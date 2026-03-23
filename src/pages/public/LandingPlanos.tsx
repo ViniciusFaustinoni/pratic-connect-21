@@ -278,7 +278,7 @@ export default function LandingPlanos() {
             <a href={WHATSAPP_BASE} target="_blank" rel="noopener noreferrer" className="hover:text-white transition">Fale Conosco</a>
           </div>
           <p className="mt-6 text-xs text-gray-600">
-            © 2025 Praticcar. Todos os direitos reservados.
+            © 2026 Praticcar. Todos os direitos reservados.
           </p>
         </div>
       </footer>
