@@ -38,6 +38,8 @@ const CONFIG_CHAVES = [
   'jornada_tolerancia_atraso_minutos',
   'jornada_produtividade_minima',
   'jornada_horas_alerta_improdutividade',
+  'sla_horas_instalacao',
+  'sla_horas_manutencao',
 ] as const;
 
 // ── Hook ───────────────────────────────────────────
