@@ -98,8 +98,8 @@ export function InstalacaoDetailDrawer({
   const enviarLinkPrestador = useMutation({
     mutationFn: async () => {
       if (!instalacao) throw new Error('Sem instalação');
-      // Precisamos de um prestador_id — buscar do serviço
-      const { data: servico } = await supabase
+      // Buscar prestador_id do serviço vinculado
+      const { data: servico } = await (supabase as any)
         .from('servicos')
         .select('prestador_id')
         .eq('associado_id', instalacao.associado_id)
