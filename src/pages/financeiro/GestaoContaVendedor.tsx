@@ -3,7 +3,9 @@ import { useParams } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useContaCorrenteVendedor, CCLancamento } from '@/hooks/useContaCorrenteVendedor';
+import { usePermissions } from '@/hooks/usePermissions';
 import { RegistrarPagamentoCCModal } from '@/components/financeiro/RegistrarPagamentoCCModal';
+import { EstornoComissaoModal } from '@/components/financeiro/EstornoComissaoModal';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -11,9 +13,10 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Pagination, PaginationContent, PaginationItem, PaginationLink, PaginationNext, PaginationPrevious } from '@/components/ui/pagination';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { formatarMoeda } from '@/utils/format';
 import { format } from 'date-fns';
-import { DollarSign, TrendingUp, Clock, CheckCircle, Zap } from 'lucide-react';
+import { DollarSign, TrendingUp, Clock, CheckCircle, Zap, RotateCcw } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { Info } from 'lucide-react';
 
@@ -36,6 +39,8 @@ export default function GestaoContaVendedor() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [modalParcela, setModalParcela] = useState<CCLancamento | null>(null);
+  const [modalEstorno, setModalEstorno] = useState<CCLancamento | null>(null);
+  const { isDiretor, isGerencia } = usePermissions();
 
   useEffect(() => { if (paramId) setSelectedVendedor(paramId); }, [paramId]);
 
@@ -53,8 +58,9 @@ export default function GestaoContaVendedor() {
     },
   });
 
-  const { lancamentos, totalLancamentos, isLoadingLancamentos, saldo, isLoadingSaldo, registrarPagamento } =
+  const { lancamentos, totalLancamentos, isLoadingLancamentos, saldo, isLoadingSaldo, registrarPagamento, estornarComissao } =
     useContaCorrenteVendedor({ vendedorId: selectedVendedor, dataInicio, dataFim, tipo, status, page, pageSize: 15 });
+  const podeEstornar = isDiretor || isGerencia;
 
   const totalPages = Math.ceil(totalLancamentos / 15);
   const vendedorNome = vendedores?.find(v => v.id === selectedVendedor)?.nome || '';
@@ -202,18 +208,41 @@ export default function GestaoContaVendedor() {
                       </TableCell>
                       <TableCell className={`text-right font-medium ${l.tipo === 'credito' ? 'text-green-600' : 'text-destructive'}`}>{formatarMoeda(l.valor_liquido)}</TableCell>
                       <TableCell>
-                        <Badge variant={STATUS_VARIANT[l.status] || 'outline'}
-                          className={l.valor_abatimento > 0 && l.status !== 'cancelado' ? 'bg-orange-500 text-white border-orange-500' : ''}>
-                          {l.valor_abatimento > 0 && l.status !== 'cancelado' ? 'Abatendo débito' : STATUS_LABELS[l.status] || l.status}
-                        </Badge>
+                        {l.status === 'cancelado' ? (
+                          <TooltipProvider>
+                            <Tooltip>
+                              <TooltipTrigger>
+                                <Badge variant="destructive">Estornado</Badge>
+                              </TooltipTrigger>
+                              {l.observacao_pagamento && (
+                                <TooltipContent side="top" className="max-w-xs">
+                                  <p className="text-xs font-medium">Motivo:</p>
+                                  <p className="text-xs">{l.observacao_pagamento}</p>
+                                </TooltipContent>
+                              )}
+                            </Tooltip>
+                          </TooltipProvider>
+                        ) : (
+                          <Badge variant={STATUS_VARIANT[l.status] || 'outline'}
+                            className={l.valor_abatimento > 0 && l.status !== 'cancelado' ? 'bg-orange-500 text-white border-orange-500' : ''}>
+                            {l.valor_abatimento > 0 && l.status !== 'cancelado' ? 'Abatendo débito' : STATUS_LABELS[l.status] || l.status}
+                          </Badge>
+                        )}
                       </TableCell>
                       <TableCell className="text-right">{l.saldo_apos != null ? formatarMoeda(l.saldo_apos) : '—'}</TableCell>
                       <TableCell>
-                        {l.status === 'a_pagar' && l.tipo === 'credito' && (
-                          <Button size="sm" variant="outline" onClick={() => setModalParcela(l)}>
-                            <CheckCircle className="h-3 w-3 mr-1" /> Pagar
-                          </Button>
-                        )}
+                        <div className="flex gap-1">
+                          {l.status === 'a_pagar' && l.tipo === 'credito' && (
+                            <Button size="sm" variant="outline" onClick={() => setModalParcela(l)}>
+                              <CheckCircle className="h-3 w-3 mr-1" /> Pagar
+                            </Button>
+                          )}
+                          {l.status === 'pago' && l.tipo === 'credito' && podeEstornar && (
+                            <Button size="sm" variant="ghost" className="text-destructive hover:text-destructive" onClick={() => setModalEstorno(l)}>
+                              <RotateCcw className="h-3 w-3 mr-1" /> Estornar
+                            </Button>
+                          )}
+                        </div>
                       </TableCell>
                     </TableRow>
                   ))}
@@ -246,6 +275,15 @@ export default function GestaoContaVendedor() {
             parcela={modalParcela}
             onConfirm={(dados) => registrarPagamento.mutate(dados)}
             isSaving={registrarPagamento.isPending}
+          />
+
+          <EstornoComissaoModal
+            open={!!modalEstorno}
+            onClose={() => setModalEstorno(null)}
+            lancamento={modalEstorno}
+            vendedorNome={vendedorNome}
+            onConfirm={(dados) => estornarComissao.mutate(dados, { onSuccess: () => setModalEstorno(null) })}
+            isSaving={estornarComissao.isPending}
           />
         </>
       )}

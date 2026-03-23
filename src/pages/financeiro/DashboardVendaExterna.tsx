@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatarMoeda } from '@/utils/format';
 import { format } from 'date-fns';
-import { CalendarDays, Clock, AlertTriangle, CheckCircle2, FileDown, Eye, DollarSign, Zap, Loader2 } from 'lucide-react';
+import { CalendarDays, Clock, AlertTriangle, CheckCircle2, FileDown, Eye, DollarSign, Zap, Loader2, RotateCcw } from 'lucide-react';
 
 type Filtro = 'todos' | 'com_saldo' | 'devedor' | 'antecipacao' | 'zerado';
 
@@ -50,7 +50,7 @@ export default function DashboardVendaExterna() {
       </div>
 
       {/* 4 Cards */}
-      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-4 gap-4">
+      <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-5 gap-4">
         <SummaryCard
           title="A pagar este mês"
           value={cards?.a_pagar_mes}
@@ -85,6 +85,15 @@ export default function DashboardVendaExterna() {
           icon={<CheckCircle2 className="h-4 w-4" />}
           color="text-green-600"
           bgColor="bg-green-50"
+          loading={isLoadingCards}
+        />
+        <SummaryCard
+          title="Estornos no mês"
+          value={cards?.estornos_mes}
+          subtitle={cards ? `${cards.estornos_count} estornos realizados` : ''}
+          icon={<RotateCcw className="h-4 w-4" />}
+          color="text-destructive"
+          bgColor="bg-red-50"
           loading={isLoadingCards}
         />
       </div>

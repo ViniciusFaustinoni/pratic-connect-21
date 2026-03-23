@@ -381,6 +381,62 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
     onError: (e) => toast.error('Erro: ' + (e as Error).message),
   });
 
+  // Mutation: estornar comissão individual paga
+  const estornarComissao = useMutation({
+    mutationFn: async ({ lancamentoId, motivo }: { lancamentoId: string; motivo: string }) => {
+      // 1. Buscar lançamento original
+      const { data: original, error: fetchErr } = await (supabase as any)
+        .from('cc_vendedor_lancamentos')
+        .select('*')
+        .eq('id', lancamentoId)
+        .single();
+      if (fetchErr || !original) throw fetchErr || new Error('Lançamento não encontrado');
+
+      // 2. Atualizar status para cancelado
+      const { error: updateErr } = await supabase
+        .from('cc_vendedor_lancamentos')
+        .update({
+          status: 'cancelado',
+          observacao_pagamento: motivo,
+          pago_por: profile?.id || null,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', lancamentoId);
+      if (updateErr) throw updateErr;
+
+      // 3. Gerar lançamento de débito (estorno)
+      const { error: insertErr } = await supabase
+        .from('cc_vendedor_lancamentos')
+        .insert({
+          vendedor_id: original.vendedor_id,
+          associado_id: original.associado_id,
+          contrato_id: original.contrato_id,
+          tipo: 'debito',
+          categoria: 'estorno',
+          descricao: `Estorno — ${original.descricao}`,
+          valor_bruto: original.valor_liquido,
+          valor_abatimento: 0,
+          valor_liquido: original.valor_liquido,
+          status: 'a_pagar',
+          data_lancamento: new Date().toISOString().slice(0, 10),
+          debito_volante_ref_id: lancamentoId,
+        } as any);
+      if (insertErr) throw insertErr;
+
+      // 4. Recalcular saldos
+      await recalcularSaldos(original.vendedor_id);
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['cc-lancamentos'] });
+      queryClient.invalidateQueries({ queryKey: ['cc-saldo'] });
+      queryClient.invalidateQueries({ queryKey: ['cc-resumo'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-ve-cards'] });
+      queryClient.invalidateQueries({ queryKey: ['dashboard-ve-vendedores'] });
+      toast.success('Comissão estornada com sucesso!');
+    },
+    onError: (e) => toast.error('Erro ao estornar: ' + (e as Error).message),
+  });
+
   // Mutation: cancelar venda pré-boleto
   const cancelarVendaPreBoleto = useMutation({
     mutationFn: async ({ vendedor_id, associado_id, nome_associado }: { vendedor_id: string; associado_id: string; nome_associado: string }) => {
@@ -453,6 +509,7 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
     resumo: resumoQuery.data || { a_receber_este_mes: 0, ja_recebido_este_mes: 0, total_a_receber: 0, total_historico_recebido: 0 },
     isLoadingResumo: resumoQuery.isLoading,
     registrarPagamento,
+    estornarComissao,
     gerarLancamentosAtivacao,
     confirmarParcelaRecorrente,
     cancelarVendaPreBoleto,
