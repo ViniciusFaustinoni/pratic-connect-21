@@ -505,20 +505,17 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                   Iniciar Tarefa
                 </Button>
 
-                {/* Botão Recusar */}
-                <Button
-                  variant="outline"
-                  onClick={handleRecusarClick}
-                  disabled={isRecusando}
-                  className="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
-                >
-                  {isRecusando ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <XCircle className="h-4 w-4" />
-                  )}
-                  Recusar Tarefa
-                </Button>
+                {/* Link discreto para reportar imprevisto */}
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleRecusarClick}
+                    disabled={isRecusando}
+                    className="text-sm text-muted-foreground underline hover:text-destructive disabled:opacity-50 transition-colors"
+                  >
+                    {isRecusando ? 'Reportando...' : 'Reportar Imprevisto'}
+                  </button>
+                </div>
                 
                 {/* Feedback visual quando bloqueado por horário */}
                 {!podeIniciarPorHorario && tarefa.hora_agendada && (
