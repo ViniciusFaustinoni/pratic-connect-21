@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ImprevistoBotao } from './ImprevistoBotao';
+import { SlaIndicador } from '@/components/ui/SlaIndicador';
 
 interface TarefaAtualCardProps {
   tarefa: TarefaAtual & {
