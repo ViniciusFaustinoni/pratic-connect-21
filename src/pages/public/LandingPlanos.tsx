@@ -132,12 +132,20 @@ export default function LandingPlanos() {
                   {/* Image */}
                   <div className="h-44 bg-gradient-to-br from-[#0A1628] to-[#1a3358] flex items-center justify-center">
                     {plano.imagem_landing_url ? (
-                      <img
-                        src={plano.imagem_landing_url}
-                        alt={plano.nome}
-                        className="h-full w-full object-cover"
-                        loading="lazy"
-                      />
+                      <>
+                        <img
+                          src={plano.imagem_landing_url}
+                          alt={plano.nome}
+                          className="h-full w-full object-cover"
+                          loading="lazy"
+                          onError={(e) => {
+                            e.currentTarget.style.display = 'none';
+                            const fallback = e.currentTarget.nextElementSibling;
+                            if (fallback) fallback.classList.remove('hidden');
+                          }}
+                        />
+                        <Car className="h-16 w-16 text-white/30 hidden" />
+                      </>
                     ) : (
                       <Car className="h-16 w-16 text-white/30" />
                     )}
