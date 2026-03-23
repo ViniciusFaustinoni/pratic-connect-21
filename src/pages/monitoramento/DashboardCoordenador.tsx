@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Link, useNavigate } from 'react-router-dom';
 import { 
   ClipboardList, 
@@ -14,7 +14,8 @@ import {
   Navigation,
   Timer,
   Radio,
-  BarChart3
+  BarChart3,
+  Phone
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -49,6 +50,7 @@ import { useMetricasTempo } from '@/hooks/useMetricasTempo';
 import { useRastreadoresPorPortador } from '@/hooks/useRastreadoresPorPortador';
 import { usePerformanceSemanalCoordenador } from '@/hooks/usePerformanceSemanalCoordenador';
 import { AgendamentosBase } from '@/components/monitoramento/AgendamentosBase';
+import { VistoriadoresEmAlerta } from '@/components/monitoramento/VistoriadoresEmAlerta';
 import { cn } from '@/lib/utils';
 
 const acoesRapidas = [
