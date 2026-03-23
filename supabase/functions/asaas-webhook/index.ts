@@ -368,6 +368,28 @@ serve(async (req) => {
               comprovante_url: payment.transactionReceiptUrl,
             });
 
+            // === GERAR COMISSÕES POR PLANO/NÍVEL ===
+            if (cobranca.contrato_id) {
+              try {
+                const tipoComissao = cobranca.tipo === 'adesao' ? 'adesao' : 'recorrente';
+                const { data: comissoesResult, error: comissoesError } = await supabase
+                  .rpc('fn_gerar_comissao_plano_nivel', {
+                    p_contrato_id: cobranca.contrato_id,
+                    p_cobranca_id: cobranca.id,
+                    p_valor_pago: payment.value,
+                    p_tipo: tipoComissao,
+                  });
+
+                if (comissoesError) {
+                  console.error('[asaas-webhook] Erro ao gerar comissões por plano:', comissoesError);
+                } else if (comissoesResult > 0) {
+                  console.log(`[asaas-webhook] ✓ ${comissoesResult} comissão(ões) gerada(s) para contrato ${cobranca.contrato_id} (${tipoComissao})`);
+                }
+              } catch (comErr) {
+                console.error('[asaas-webhook] Erro ao chamar fn_gerar_comissao_plano_nivel:', comErr);
+              }
+            }
+
             // Buscar user_id do associado para notificações
             const { data: associadoUser } = await supabase
               .from('associados')
