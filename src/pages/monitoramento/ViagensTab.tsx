@@ -100,11 +100,11 @@ export default function ViagensTab() {
     queryFn: async () => {
       const hojeStr = format(hoje, 'yyyy-MM-dd');
 
-      const { count: ativas } = await supabase
+      const { count: ativas } = await (supabase
         .from('instalacoes')
         .select('*', { count: 'exact', head: true })
         .eq('tipo_deslocamento', 'viagem')
-        .in('status', OPEN_STATUSES);
+        .in('status', OPEN_STATUSES) as any);
 
       const { data: tecnicosHoje } = await supabase
         .from('instalacoes')
