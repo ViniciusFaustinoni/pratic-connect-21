@@ -70,6 +70,8 @@ function useInstalacaoConfigs() {
         jornadaToleranciaAtraso: map.jornada_tolerancia_atraso_minutos?.valor ?? '0',
         jornadaProdutividadeMinima: map.jornada_produtividade_minima?.valor ?? '1',
         jornadaAlertaImprodutividade: map.jornada_horas_alerta_improdutividade?.valor ?? '2',
+        slaInstalacao: map.sla_horas_instalacao?.valor ?? '48',
+        slaManutencao: map.sla_horas_manutencao?.valor ?? '24',
       };
     },
     staleTime: 1000 * 60 * 5,
