@@ -476,6 +476,7 @@ export default function UsuarioForm() {
     },
     onSuccess: () => {
       setFieldErrors({});
+      setGradeError(false);
       toast.success(isEditing ? 'Usuário atualizado!' : 'Usuário criado!');
       queryClient.invalidateQueries({ queryKey: ['usuarios'] });
       navigate('/configuracoes/usuarios');
