@@ -135,7 +135,7 @@ export default function ExecutarManutencao() {
     setGpsLoading(true);
     setGpsResultado(null);
 
-    const endereco = [servico.endereco, servico.bairro, servico.cidade, servico.uf].filter(Boolean).join(', ');
+    const endereco = [servico.logradouro, servico.numero, servico.bairro, servico.cidade, servico.uf].filter(Boolean).join(', ');
     const resultado = await validarPresenca(id, endereco, servico.latitude, servico.longitude);
     setGpsResultado(resultado);
     setGpsLoading(false);
