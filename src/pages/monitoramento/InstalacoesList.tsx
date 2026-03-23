@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Search, Plus, Clock, Calendar, Truck, CheckCircle, MoreHorizontal, Eye, UserPlus, X, ChevronLeft, ChevronRight, MapPin, AlertCircle, Trash2 } from 'lucide-react';
+import { Search, Plus, Clock, Calendar, Truck, CheckCircle, MoreHorizontal, Eye, UserPlus, X, ChevronLeft, ChevronRight, MapPin, AlertCircle, Trash2, AlertTriangle } from 'lucide-react';
+import { SlaIndicador, useSlaConfig, calcularPercentualSla } from '@/components/ui/SlaIndicador';
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS, StatusInstalacao, PeriodoInstalacao } from '@/types/database';
 import { AtribuirInstaladorDialog } from '@/components/instalacoes/AtribuirInstaladorDialog';
