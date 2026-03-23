@@ -1,37 +1,43 @@
 
 
-# Plano: Mover "Encaixes" para dentro de "Instalações e Vistorias"
+# Plano: Nova aba "Viagens" em Instalacoes e Vistorias
 
 ## Resumo
 
-Consolidar "Encaixes" como terceira aba na pagina VistoriasInstalacoesMon.tsx e remover o item separado do sidebar.
+Criar componente `ViagensTab.tsx` e adiciona-lo como quarta aba na pagina VistoriasInstalacoesMon.tsx.
 
 ---
 
 ## Alteracoes
 
-### 1. `src/components/layout/AppSidebar.tsx`
+### 1. Novo arquivo: `src/pages/monitoramento/ViagensTab.tsx`
 
-Remover a linha:
-```tsx
-{ title: 'Encaixes', url: '/monitoramento/encaixes', icon: CalendarCheck },
-```
+Componente autonomo que renderiza:
+
+**Cards de resumo** (condicionais a `viagem_valor_diaria > 0`):
+- Viagens ativas: query em `instalacoes` com `tipo_deslocamento = 'viagem'` e status em aberto (`agendada`, `em_rota`, `em_andamento`, `reagendada`)
+- Tecnicos em viagem hoje: count distinct de `instalador_id` em instalacoes viagem agendadas para hoje
+- Diarias no mes: sum de `bonus_viagem` em `turnos_profissionais` no mes atual
+
+**Filtros**:
+- Status: Select com opcoes "Todas", "Em aberto", "Concluidas"
+- Tecnico: Select populado via query em `profiles` (instaladores)
+- Periodo: DatePickerWithRange com mes atual como padrao
+
+**Tabela**:
+- Query `instalacoes` filtrada por `tipo_deslocamento = 'viagem'`, ordenada por `data_agendada` desc
+- Colunas: Associado/municipio, Tecnico, Data agendada, Status (badge existente), SLA (SlaIndicador existente), Diaria (condicional)
+- Click na linha: `navigate(/monitoramento/instalacoes/:id)`
+- Estado vazio: "Nenhuma viagem no periodo selecionado."
+
+**Config**: buscar `viagem_valor_diaria` da tabela `configuracoes` para condicionar cards e coluna de diaria.
 
 ### 2. `src/pages/monitoramento/VistoriasInstalacoesMon.tsx`
 
-Adicionar terceira aba "Encaixes":
-
-- Import `Puzzle` do lucide-react e `MonitoramentoEncaixes` (com prop `embedded`)
-- Nova TabsTrigger "Encaixes" com icone Puzzle
-- Novo TabsContent renderizando `<MonitoramentoEncaixes embedded />`
-
-### 3. `src/pages/monitoramento/Encaixes.tsx`
-
-Adicionar prop `embedded?: boolean` ao componente `MonitoramentoEncaixes`. Quando `embedded={true}`, ocultar o header (titulo, descricao, botao Atualizar) para evitar duplicacao visual.
-
-### 4. `src/App.tsx`
-
-Manter a rota `/monitoramento/encaixes` como redirect para `/monitoramento/vistorias-instalacoes-mon` (backward compatibility).
+- Importar `Truck` do lucide-react
+- Importar `ViagensTab` do novo arquivo
+- Adicionar TabsTrigger "Viagens" com icone Truck apos "Encaixes"
+- Adicionar TabsContent renderizando `<ViagensTab />`
 
 ---
 
@@ -39,8 +45,6 @@ Manter a rota `/monitoramento/encaixes` como redirect para `/monitoramento/visto
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/layout/AppSidebar.tsx` | Remover item "Encaixes" |
-| `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` | Nova aba Encaixes |
-| `src/pages/monitoramento/Encaixes.tsx` | Prop `embedded` para ocultar header |
-| `src/App.tsx` | Redirect da rota antiga |
+| `src/pages/monitoramento/ViagensTab.tsx` | **Novo** componente |
+| `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` | Nova aba |
 
