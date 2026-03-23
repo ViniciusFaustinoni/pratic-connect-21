@@ -41,9 +41,56 @@ export function WhatsAppMetaTemplates() {
   const [testPhone, setTestPhone] = useState('');
   const [testSending, setTestSending] = useState(false);
   const [reenvioId, setReenvioId] = useState<string | null>(null);
+
+  // Fila de envio em massa
+  const [envioEmMassa, setEnvioEmMassa] = useState(false);
+  const [envioProgresso, setEnvioProgresso] = useState<{ atual: number; total: number; nome: string } | null>(null);
+  const cancelarFilaRef = useRef(false);
+
+  const drafts = templates.filter((t) => t.status === 'DRAFT');
   const approved = templates.filter((t) => t.status === 'APPROVED').length;
   const pending = templates.filter((t) => t.status === 'PENDING').length;
   const rejected = templates.filter((t) => t.status === 'REJECTED').length;
+
+  const enviarEmMassa = useCallback(async () => {
+    if (drafts.length === 0) {
+      toast.info('Nenhum rascunho para enviar.');
+      return;
+    }
+
+    setEnvioEmMassa(true);
+    cancelarFilaRef.current = false;
+    let enviados = 0;
+    let erros = 0;
+
+    for (let i = 0; i < drafts.length; i++) {
+      if (cancelarFilaRef.current) break;
+
+      const t = drafts[i];
+      setEnvioProgresso({ atual: i + 1, total: drafts.length, nome: t.nome });
+
+      try {
+        await enviar.mutateAsync(t.id);
+        enviados++;
+      } catch {
+        erros++;
+      }
+
+      // Aguardar 15s antes do próximo (exceto no último)
+      if (i < drafts.length - 1 && !cancelarFilaRef.current) {
+        await new Promise((r) => setTimeout(r, 15000));
+      }
+    }
+
+    setEnvioEmMassa(false);
+    setEnvioProgresso(null);
+
+    if (cancelarFilaRef.current) {
+      toast.info(`Envio cancelado. ${enviados} enviados, ${erros} erros.`);
+    } else {
+      toast.success(`Concluído! ${enviados} enviados${erros > 0 ? `, ${erros} erros` : ''}.`);
+    }
+  }, [drafts, enviar]);
 
   const handleReenviarComIA = useCallback(async (templateId: string) => {
     const t = templates.find((tpl) => tpl.id === templateId);
