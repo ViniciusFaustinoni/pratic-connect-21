@@ -1,33 +1,24 @@
 
 
-# Plano: Corrigir tabela comparativa de coberturas no PDF
+# Plano: Padronizar termo para "Proteção 360º"
 
-## Problema
+## Resumo
 
-1. **Marcadores invisíveis**: `✓`, `✗` e `⚠` são caracteres Unicode que a fonte Helvetica do jsPDF não renderiza — aparecem como pontos minúsculos
-2. **Nomes de planos truncados**: `truncateText` com limite de caracteres corta nomes como "SELECT ONE 5%..."
+Substituir todas as ocorrências de "Proteção Total", "Proteção Completa" e "Proteção completa" por "Proteção 360º" nos textos voltados ao usuário. Manter inalterados comentários internos de código.
 
-## Solução
+## Alterações
 
-### 1. Substituir caracteres Unicode por desenhos vetoriais (linhas 1571-1594)
+| Arquivo | Linha | De | Para |
+|---------|-------|----|------|
+| `src/pages/public/LandingPlanos.tsx` | 87 | `'Proteção Total'` | `'Proteção 360º'` |
+| `src/pages/public/LandingPlanos.tsx` | 63 | `Proteção completa, assistência 24h...` | `Proteção 360º, assistência 24h...` |
+| `src/pages/public/LandingPlanos.tsx` | 105 | `Proteção completa a partir de...` | `Proteção 360º a partir de...` |
+| `src/components/cotacao-publica/EscolhaPlano.tsx` | 201 | `Proteção Completa` | `Proteção 360º` |
+| `src/components/cotacao-publica/EscolhaPlano.tsx` | 318 | `Proteção completa para seu veículo...` | `Proteção 360º para seu veículo...` |
+| `src/components/veiculos/BadgeCobertura.tsx` | 31 | `Proteção completa contra roubo...` | `Proteção 360º contra roubo...` |
+| `src/components/cadastro/StatusCoberturaCard.tsx` | 92 | `Proteção completa com rastreamento ativo` | `Proteção 360º com rastreamento ativo` |
+| `src/types/canvas-editor.ts` | 216 | `'Proteção Completa'` | `'Proteção 360º'` |
+| `src/data/associadoTeste.ts` | 178 | `'Proteção Completa'` | `'Proteção 360º'` |
 
-Em vez de `doc.text('✓'...)`, desenhar formas geométricas com as primitivas do jsPDF:
-
-- **Incluído (verde)**: Círculo preenchido verde (como `drawCheckIndicator` já faz na linha 241)
-- **Removido (amarelo)**: Triângulo preenchido amarelo (3 pontos com `doc.triangle`)
-- **Não inclui (vermelho)**: X desenhado com duas linhas cruzadas vermelhas (`doc.line`)
-
-### 2. Ajustar largura da coluna de nomes dos planos (linhas 1549-1553)
-
-- Usar `doc.splitTextToSize(plano.nome, colPlanoWidth - 4)` em vez de `truncateText` para quebrar em 2 linhas se necessário
-- Aumentar `headerRowHeight` de 14 para 18 para acomodar nomes maiores
-- Reduzir `colCoberturaWidth` de 40% para 35% para dar mais espaço aos planos
-
-### 3. Aumentar `rowHeight` de 9 para 10 para melhorar legibilidade
-
-## Arquivo afetado
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `src/lib/gerarPdfCotacao.ts` | Substituir Unicode por formas vetoriais, ajustar larguras e truncamento na tabela comparativa (linhas 1534-1597) |
+**Não alterado**: `supabase/functions/whatsapp-webhook/index.ts` linha 3366 — é comentário interno de código ("proteção total" no sentido técnico de loop protection), não nome de produto.
 
