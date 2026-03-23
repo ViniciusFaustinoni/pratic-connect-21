@@ -38,6 +38,7 @@ export default function DashboardVendaExterna() {
   // Filter vendors
   const filtrados = vendedores.filter(v => {
     if (busca && !v.vendedor_nome.toLowerCase().includes(busca.toLowerCase())) return false;
+    if (filtroTipo !== 'todos' && v.tipo !== filtroTipo) return false;
     if (filtro === 'com_saldo' && v.a_pagar_mes <= 0) return false;
     if (filtro === 'devedor' && v.saldo_atual >= 0) return false;
     if (filtro === 'antecipacao' && v.antecipacoes_abertas <= 0) return false;
