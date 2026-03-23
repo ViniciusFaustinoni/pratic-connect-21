@@ -25396,6 +25396,38 @@ export type Database = {
         }
         Relationships: []
       }
+      usuario_grade_comissao: {
+        Row: {
+          atribuido_por: string | null
+          created_at: string | null
+          grade_id: string
+          id: string
+          user_id: string
+        }
+        Insert: {
+          atribuido_por?: string | null
+          created_at?: string | null
+          grade_id: string
+          id?: string
+          user_id: string
+        }
+        Update: {
+          atribuido_por?: string | null
+          created_at?: string | null
+          grade_id?: string
+          id?: string
+          user_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "usuario_grade_comissao_grade_id_fkey"
+            columns: ["grade_id"]
+            isOneToOne: false
+            referencedRelation: "grades_comissao"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       utms: {
         Row: {
           ativo: boolean | null

@@ -284,6 +284,7 @@ export default function UsuarioForm() {
     perfis: preselectedPerfil ? [preselectedPerfil] : [] as string[],
     regioes_atendimento: [] as string[],
     capacidade_diaria: 10,
+    grade_comissao_id: '' as string,
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
@@ -342,6 +343,35 @@ export default function UsuarioForm() {
     enabled: isEditing
   });
 
+  // Buscar grade atribuída ao usuário
+  const { data: userGrade } = useQuery({
+    queryKey: ['usuario-grade-comissao', usuario?.user_id],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('usuario_grade_comissao')
+        .select('grade_id')
+        .eq('user_id', usuario!.user_id)
+        .maybeSingle();
+      if (error) throw error;
+      return data?.grade_id || '';
+    },
+    enabled: isEditing && !!usuario?.user_id,
+  });
+
+  // Buscar grades disponíveis
+  const { data: gradesDisponiveis = [] } = useQuery({
+    queryKey: ['grades-comissao-ativas'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('grades_comissao')
+        .select('id, nome')
+        .eq('ativo', true)
+        .order('nome');
+      if (error) throw error;
+      return data as { id: string; nome: string }[];
+    },
+  });
+
   useEffect(() => {
     if (!usuario) return;
     const next = {
@@ -350,6 +380,7 @@ export default function UsuarioForm() {
       senha: '', tipo: usuario.tipo || 'funcionario', ativo: usuario.ativo ?? true,
       perfis: usuario.roles || [], regioes_atendimento: usuario.regioes_atendimento || [],
       capacidade_diaria: usuario.capacidade_diaria || 10,
+      grade_comissao_id: userGrade || '',
     };
     setFormData((prev) => {
       const same = prev.nome === next.nome && prev.email === next.email &&
@@ -358,10 +389,11 @@ export default function UsuarioForm() {
         prev.perfis.length === next.perfis.length &&
         prev.perfis.every((p, i) => p === next.perfis[i]) &&
         prev.regioes_atendimento.length === next.regioes_atendimento.length &&
-        prev.capacidade_diaria === next.capacidade_diaria;
+        prev.capacidade_diaria === next.capacidade_diaria &&
+        prev.grade_comissao_id === next.grade_comissao_id;
       return same ? prev : next;
     });
-  }, [usuario]);
+  }, [usuario, userGrade]);
 
   // Salvar usuário
   const saveUser = useMutation({
@@ -378,6 +410,20 @@ export default function UsuarioForm() {
           const { error: rolesError } = await supabase.from('user_roles')
             .insert(formData.perfis.map(role => ({ user_id: usuario.user_id, role: role as any })));
           if (rolesError) throw rolesError;
+        }
+
+        // Salvar grade de comissão
+        const isVendas = formData.perfis.some(p => ['consultor_interno', 'consultor_externo', 'agencia'].includes(p));
+        if (isVendas && formData.grade_comissao_id) {
+          const { data: session } = await supabase.auth.getSession();
+          await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
+          await (supabase as any).from('usuario_grade_comissao').insert({
+            user_id: usuario.user_id,
+            grade_id: formData.grade_comissao_id,
+            atribuido_por: session?.session?.user?.id || null,
+          });
+        } else if (!isVendas) {
+          await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
         }
       } else {
         setFieldErrors({});
@@ -589,6 +635,41 @@ export default function UsuarioForm() {
                       onChange={(e) => setFormData({ ...formData, capacidade_diaria: parseInt(e.target.value) || 10 })}
                       className="bg-background" />
                     <p className="text-xs text-muted-foreground">Máximo de tarefas por dia (1-20)</p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
+
+            {/* Grade de Comissão — para consultores e agências */}
+            {formData.perfis.some(p => ['consultor_interno', 'consultor_externo', 'agencia'].includes(p)) && (
+              <Card className="border-border/50 border-green-500/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <TrendingUp className="w-5 h-5 text-green-500" />
+                    Grade de Comissão
+                  </CardTitle>
+                  <CardDescription>Atribua uma grade de comissionamento a este usuário</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <Label htmlFor="grade_comissao">Grade</Label>
+                    <Select
+                      value={formData.grade_comissao_id || 'none'}
+                      onValueChange={(v) => setFormData(prev => ({ ...prev, grade_comissao_id: v === 'none' ? '' : v }))}
+                    >
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Selecione uma grade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhuma grade</SelectItem>
+                        {gradesDisponiveis.map((g) => (
+                          <SelectItem key={g.id} value={g.id}>{g.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Define os percentuais de comissão aplicados a este consultor/agência
+                    </p>
                   </div>
                 </CardContent>
               </Card>
