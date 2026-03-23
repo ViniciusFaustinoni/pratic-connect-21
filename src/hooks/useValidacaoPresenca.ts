@@ -109,15 +109,15 @@ export function useValidacaoPresenca() {
 
       // Se ainda sem destino, registrar e aprovar
       if (latDest == null || lonDest == null) {
-        try {
-          await supabase.from('registros_presenca').insert({
+      try {
+          await (supabase as any).from('registros_presenca').insert({
             servico_id: servicoId,
             latitude_vistoriador: latVist,
             longitude_vistoriador: lonVist,
             gps_indisponivel: false,
             dentro_do_raio: true,
             confirmou_presenca: false,
-          } as any);
+          });
         } catch { /* silent */ }
         return { aprovado: true, distancia: null, dentroDoRaio: true, gpsIndisponivel: false };
       }
