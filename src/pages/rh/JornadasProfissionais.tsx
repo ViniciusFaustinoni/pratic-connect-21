@@ -91,6 +91,8 @@ export default function JornadasProfissionais() {
         gpsRaioMetros: map.gps_raio_metros || '500',
         limiteDebito: map.jornada_limite_debito_horas || '0',
         exibirSaldo: map.jornada_exibir_saldo_vistoriador || 'true',
+        recusaExigirMotivo: map.recusa_exigir_motivo || 'true',
+        recusaLimiteAlerta: map.recusa_limite_alerta || '3',
       };
     },
     staleTime: 1000 * 60 * 5,
