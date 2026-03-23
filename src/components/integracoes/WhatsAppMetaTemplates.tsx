@@ -1,10 +1,11 @@
-import { useState, useCallback } from 'react';
-import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit, Copy, Rocket } from 'lucide-react';
+import { useState, useCallback, useRef } from 'react';
+import { FileText, RefreshCw, Plus, Loader2, Trash2, Eye, Send, Edit, Copy, Rocket, ListChecks, X } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
 import { Alert, AlertDescription } from '@/components/ui/alert';
+import { Progress } from '@/components/ui/progress';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -40,9 +41,56 @@ export function WhatsAppMetaTemplates() {
   const [testPhone, setTestPhone] = useState('');
   const [testSending, setTestSending] = useState(false);
   const [reenvioId, setReenvioId] = useState<string | null>(null);
+
+  // Fila de envio em massa
+  const [envioEmMassa, setEnvioEmMassa] = useState(false);
+  const [envioProgresso, setEnvioProgresso] = useState<{ atual: number; total: number; nome: string } | null>(null);
+  const cancelarFilaRef = useRef(false);
+
+  const drafts = templates.filter((t) => t.status === 'DRAFT');
   const approved = templates.filter((t) => t.status === 'APPROVED').length;
   const pending = templates.filter((t) => t.status === 'PENDING').length;
   const rejected = templates.filter((t) => t.status === 'REJECTED').length;
+
+  const enviarEmMassa = useCallback(async () => {
+    if (drafts.length === 0) {
+      toast.info('Nenhum rascunho para enviar.');
+      return;
+    }
+
+    setEnvioEmMassa(true);
+    cancelarFilaRef.current = false;
+    let enviados = 0;
+    let erros = 0;
+
+    for (let i = 0; i < drafts.length; i++) {
+      if (cancelarFilaRef.current) break;
+
+      const t = drafts[i];
+      setEnvioProgresso({ atual: i + 1, total: drafts.length, nome: t.nome });
+
+      try {
+        await enviar.mutateAsync(t.id);
+        enviados++;
+      } catch {
+        erros++;
+      }
+
+      // Aguardar 15s antes do próximo (exceto no último)
+      if (i < drafts.length - 1 && !cancelarFilaRef.current) {
+        await new Promise((r) => setTimeout(r, 15000));
+      }
+    }
+
+    setEnvioEmMassa(false);
+    setEnvioProgresso(null);
+
+    if (cancelarFilaRef.current) {
+      toast.info(`Envio cancelado. ${enviados} enviados, ${erros} erros.`);
+    } else {
+      toast.success(`Concluído! ${enviados} enviados${erros > 0 ? `, ${erros} erros` : ''}.`);
+    }
+  }, [drafts, enviar]);
 
   const handleReenviarComIA = useCallback(async (templateId: string) => {
     const t = templates.find((tpl) => tpl.id === templateId);
@@ -99,11 +147,22 @@ export function WhatsAppMetaTemplates() {
           </h3>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => sincronizar.mutate()} disabled={sincronizar.isPending}>
+          <Button variant="outline" size="sm" onClick={() => sincronizar.mutate()} disabled={sincronizar.isPending || envioEmMassa}>
             {sincronizar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
             Sincronizar
           </Button>
-          <Button size="sm" onClick={() => { setEditTemplate(null); setDrawerOpen(true); }}>
+          {drafts.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={enviarEmMassa}
+              disabled={envioEmMassa}
+            >
+              {envioEmMassa ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ListChecks className="h-4 w-4 mr-1" />}
+              Enviar {drafts.length} rascunho{drafts.length > 1 ? 's' : ''}
+            </Button>
+          )}
+          <Button size="sm" onClick={() => { setEditTemplate(null); setDrawerOpen(true); }} disabled={envioEmMassa}>
             <Plus className="h-4 w-4 mr-1" />
             Novo Template
           </Button>
@@ -118,6 +177,35 @@ export function WhatsAppMetaTemplates() {
           só são permitidas dentro de uma janela de 24 horas após o associado ter enviado uma mensagem primeiro.
         </AlertDescription>
       </Alert>
+
+      {/* Barra de progresso envio em massa */}
+      {envioEmMassa && envioProgresso && (
+        <Alert className="border-primary/30 bg-primary/5">
+          <ListChecks className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">
+                  Enviando {envioProgresso.atual}/{envioProgresso.total} — <span className="font-mono text-xs">{envioProgresso.nome}</span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => { cancelarFilaRef.current = true; }}
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Cancelar
+                </Button>
+              </div>
+              <Progress value={(envioProgresso.atual / envioProgresso.total) * 100} className="h-2" />
+              <p className="text-[10px] text-muted-foreground">
+                Tempo estimado: ~{Math.max(0, (envioProgresso.total - envioProgresso.atual)) * 15}s restantes • Intervalo de 15s entre envios
+              </p>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
 
       {/* Resumo */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
