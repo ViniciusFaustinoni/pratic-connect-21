@@ -70,13 +70,13 @@ export function HistoricoJornadas({ exibirSaldo }: HistoricoJornadasProps) {
       if (!profile?.id) return {};
       const { data } = await supabase
         .from('servicos')
-        .select('id, data_servico')
+        .select('id, created_at')
         .eq('profissional_id', profile.id)
         .eq('status', 'concluida')
-        .gte('data_servico', dataLimite);
+        .gte('created_at', dataLimite + 'T00:00:00');
       const map: Record<string, number> = {};
       (data || []).forEach(s => {
-        const d = s.data_servico;
+        const d = s.created_at?.substring(0, 10);
         if (d) map[d] = (map[d] || 0) + 1;
       });
       return map;
