@@ -42,6 +42,8 @@ const CONFIG_CHAVES = [
   'sla_horas_manutencao',
   'gps_validacao_ativa',
   'gps_raio_metros',
+  'jornada_limite_debito_horas',
+  'jornada_exibir_saldo_vistoriador',
 ] as const;
 
 // ── Hook ───────────────────────────────────────────
