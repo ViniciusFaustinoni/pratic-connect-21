@@ -102,7 +102,7 @@ export default function LandingPlanos() {
             Escolha o plano ideal para você
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-gray-500">
-            Proteção completa a partir de uma contribuição mensal acessível
+            Proteção 360º a partir de uma contribuição mensal acessível
           </p>
 
           {loading ? (

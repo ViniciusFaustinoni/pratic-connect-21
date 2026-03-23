@@ -315,7 +315,7 @@ export function EscolhaPlano({
 
                   {/* Descrição curta */}
                   <p className="text-sm text-muted-foreground mb-6 text-center">
-                    Proteção completa para seu veículo com coberturas abrangentes
+                    Proteção 360º para seu veículo com coberturas abrangentes
                   </p>
 
                   {/* BOTÃO 3D DE SELEÇÃO */}

@@ -28,7 +28,7 @@ export function BadgeCobertura({
         label: 'Proteção 360º',
         icon: ShieldCheck,
         className: 'bg-emerald-500/20 text-emerald-600 dark:text-emerald-400 border-emerald-500/30',
-        tooltip: 'Veículo com Proteção 360º ativa - Proteção completa contra roubo, furto e colisão',
+        tooltip: 'Veículo com Proteção 360º ativa - Proteção 360º contra roubo, furto e colisão',
       };
     }
     if (coberturaRouboFurto) {

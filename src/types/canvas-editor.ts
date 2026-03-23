@@ -213,7 +213,7 @@ export const VARIABLE_GROUPS = [
     name: 'Dados do Plano',
     icon: 'shield',
     variables: [
-      { name: 'plano', label: 'Nome do Plano', example: 'Proteção Completa' },
+      { name: 'plano', label: 'Nome do Plano', example: 'Proteção 360º' },
       { name: 'valor_mensalidade', label: 'Valor da Mensalidade', example: 'R$ 189,90' },
       { name: 'valor_adesao', label: 'Taxa de Adesão', example: 'R$ 150,00' },
       { name: 'coberturas', label: 'Lista de Coberturas', example: 'Roubo/Furto, Colisão, Terceiros' },

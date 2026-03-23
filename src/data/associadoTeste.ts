@@ -175,7 +175,7 @@ export const ASSOCIADO_TESTE: AssociadoTeste = {
   },
   status: 'suspenso',
   associadoDesde: '2024-01-15',
-  plano: 'Proteção Completa',
+  plano: 'Proteção 360º',
   valorMensalidade: 189.90,
   diaVencimento: 10,
 
