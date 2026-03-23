@@ -49,9 +49,10 @@ export interface JornadaState {
   status: 'inativo' | 'trabalhando' | 'almoco' | 'encerrado';
 }
 
-const JORNADA_PADRAO_MINUTOS = 480; // 8 horas
-const TEMPO_ATE_ALMOCO_MINUTOS = 240; // 4 horas
-const DURACAO_ALMOCO_MINUTOS = 60; // 1 hora
+// Fallback defaults (used when DB config unavailable)
+const FALLBACK_JORNADA = 480;
+const FALLBACK_ATE_ALMOCO = 240;
+const FALLBACK_DURACAO_ALMOCO = 60;
 
 /**
  * Hook para controle de jornada de trabalho do vistoriador/instalador
