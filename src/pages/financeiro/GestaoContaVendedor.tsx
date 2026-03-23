@@ -256,7 +256,8 @@ export default function GestaoContaVendedor() {
                         </div>
                       </TableCell>
                     </TableRow>
-                  ))}
+                  ));
+                  })()}
                 </TableBody>
               </Table>
             </CardContent>

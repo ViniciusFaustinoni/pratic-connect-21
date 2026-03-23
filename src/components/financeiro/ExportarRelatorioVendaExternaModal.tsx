@@ -573,6 +573,10 @@ export function ExportarRelatorioVendaExternaModal({ open, onClose, vendedores }
               </div>
               <div className="flex justify-end gap-2 pt-2">
                 <Button variant="outline" onClick={onClose}>Cancelar</Button>
+                <Button onClick={handleExportarBeneficiarioCSV} disabled={loading} variant="outline">
+                  {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileSpreadsheet className="h-4 w-4 mr-1" />}
+                  Exportar CSV
+                </Button>
                 <Button onClick={handleExportarBeneficiario} disabled={loading}>
                   {loading ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <FileDown className="h-4 w-4 mr-1" />}
                   Exportar PDF
