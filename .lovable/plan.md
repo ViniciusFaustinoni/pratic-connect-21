@@ -1,56 +1,56 @@
 
 
-# Plano: Modal de Resumo do Dia ao Encerrar Turno
+# Plano: Historico de Jornadas no Perfil do Vistoriador
 
 ## Resumo
 
-Exibir automaticamente um modal com o resumo do dia quando o turno encerra, mostrando horas trabalhadas, servicos concluidos/recusados, saldo do turno e saldo acumulado. O modal aparece uma unica vez por turno usando sessionStorage.
+Adicionar aba "Historico" na tela InstaladorPerfil.tsx com lista dos ultimos 30 turnos, accordion para detalhes, e card de resumo mensal no topo. Sem nova rota.
 
 ---
 
-## PARTE 1 — Componente `ModalResumoDia`
+## PARTE 1 — Reestruturar InstaladorPerfil com Tabs
 
-**Novo arquivo**: `src/components/vistoriador/ModalResumoDia.tsx`
+Transformar o conteudo atual em sistema de 2 abas usando `Tabs` do shadcn:
 
-Props:
-- `open: boolean`
-- `onClose: () => void`
-- `turno: TurnoProfissional` (dados do turno encerrado)
-- `servicosConcluidos: number`
-- `servicosRecusados: number`
-- `exibirSaldoAcumulado: boolean`
-
-Dialog com `onInteractOutside` e `onEscapeKeyDown` prevenidos + sem botao X:
-- Titulo: "Turno encerrado ✓"
-- Secao "Seu dia em numeros": horas trabalhadas (formatarMinutos), servicos concluidos, recusados (se > 0)
-- Secao "Saldo do turno": `minutos_extras - minutos_faltantes` — verde/vermelho/neutro
-- Secao "Saldo acumulado" (condicional): `saldo_anterior_minutos + extras - faltantes`
-- Botao "Entendido" que chama `onClose`
+- Card de avatar/nome permanece fixo acima das abas
+- **Aba "Meu Perfil"**: contem tudo que existe hoje (Minha Jornada, menu, botao sair, versao)
+- **Aba "Historico"**: novo componente `HistoricoJornadas`
 
 ---
 
-## PARTE 2 — Logica no `useJornadaTrabalho.ts`
+## PARTE 2 — Componente `HistoricoJornadas`
 
-Adicionar estado e controle de exibicao:
+**Novo arquivo**: `src/components/vistoriador/HistoricoJornadas.tsx`
 
-- `mostrarResumoDia: boolean` — state interno
-- `useEffect` que observa `turno?.status`: quando muda para `'encerrado'` e `turno?.id` existe:
-  - Verificar `sessionStorage.getItem('resumo-turno-' + turno.id)`
-  - Se nao existe: setar `mostrarResumoDia = true`
-- `fecharResumoDia()`: seta `sessionStorage.setItem('resumo-turno-' + turno.id, 'true')` e `mostrarResumoDia = false`
-- Expor: `mostrarResumoDia`, `fecharResumoDia`
+### Resumo do mes (card no topo)
+Calculado dos dados ja carregados (turnos do mes corrente):
+- Dias trabalhados, total horas, saldo acumulado do mes, total servicos concluidos
 
----
+### Lista de turnos (ultimos 30 dias)
+Query `turnos_profissionais` com `profissional_id`, `status = 'encerrado'`, ultimos 30 dias, order desc, limit 30.
 
-## PARTE 3 — Integracao no `InstaladorHome.tsx`
+Para servicos concluidos por dia: query separada em `servicos` agrupando por data (ou buscar todos do periodo e agrupar client-side).
 
-- Importar `ModalResumoDia`
-- Usar `mostrarResumoDia` e `fecharResumoDia` do hook (via useJornadaTrabalho — precisara chamar o hook aqui ou extrair de onde ja e usado)
-- Queries condicionais (habilitadas quando `mostrarResumoDia === true`):
-  - Servicos concluidos: `servicos` com `profissional_id`, `status = 'concluida'`, `data = hoje`
-  - Servicos recusados: `registros_recusa_tarefa` com `profissional_id`, `created_at` de hoje
-  - Config `jornada_exibir_saldo_vistoriador`
-- Renderizar `<ModalResumoDia>` ao final do JSX
+Cada card compacto:
+- Data formatada ("Segunda, 20 jan"), badge de status, horas trabalhadas, servicos, saldo (condicional)
+
+Status:
+- "Concluido": `minutos_trabalhados >= (jornada_duracao_turno * 60 - 10)`
+- "Incompleto": menos horas que esperado
+- "Improdutivo": 0 servicos concluidos
+
+### Accordion expand
+Ao tocar, expandir inline com `Accordion` do shadcn:
+- `inicio_turno` / `fim_turno` formatados
+- `minutos_almoco` utilizado
+- Recusas do dia (query `registros_recusa_tarefa`)
+- `minutos_extras` / `minutos_faltantes`
+
+### Paginacao
+Botao "Carregar mais" incrementando offset em 30.
+
+### Configs lidas
+- `jornada_exibir_saldo_vistoriador` e `jornada_duracao_turno_horas` da query de configs ja existente
 
 ---
 
@@ -58,7 +58,6 @@ Adicionar estado e controle de exibicao:
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/vistoriador/ModalResumoDia.tsx` | **Novo** |
-| `src/hooks/useJornadaTrabalho.ts` | Estado `mostrarResumoDia` + `fecharResumoDia` + sessionStorage |
-| `src/pages/instalador/InstaladorHome.tsx` | Queries condicionais + render do modal |
+| `src/pages/instalador/InstaladorPerfil.tsx` | Reestruturar com Tabs, mover conteudo para aba "Meu Perfil" |
+| `src/components/vistoriador/HistoricoJornadas.tsx` | **Novo** — lista de turnos + resumo mensal |
 
