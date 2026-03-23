@@ -179,6 +179,7 @@ import DashboardVendaExterna from "./pages/financeiro/DashboardVendaExterna";
 
 // Agência
 import AgenciaDashboard from "./pages/agencia/AgenciaDashboard";
+import DadosPagamento from "./pages/agencia/DadosPagamento";
 
 // Contabilidade
 import ContabilidadeDashboard from "./pages/contabilidade/ContabilidadeDashboard";
@@ -780,6 +781,7 @@ const App = () => (
             {/* Agência Routes */}
             <Route element={<AgenciaLayout />}>
               <Route path="/agencia" element={<AgenciaDashboard />} />
+              <Route path="/agencia/dados-pagamento" element={<DadosPagamento />} />
             </Route>
             
             {/* Installer App Routes */}

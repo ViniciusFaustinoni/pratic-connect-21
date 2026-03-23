@@ -1,14 +1,21 @@
-import { Outlet, useNavigate } from 'react-router-dom';
+import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
 import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider';
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
-import { LogOut, Building2 } from 'lucide-react';
+import { LogOut, Building2, CreditCard, LayoutDashboard } from 'lucide-react';
 import { supabase } from '@/integrations/supabase/client';
+import { cn } from '@/lib/utils';
 
 export function AgenciaLayout() {
   const { profile } = useAuth();
   const navigate = useNavigate();
+  const location = useLocation();
+
+  const navItems = [
+    { path: '/agencia', label: 'Painel', icon: LayoutDashboard },
+    { path: '/agencia/dados-pagamento', label: 'Dados de Pagamento', icon: CreditCard },
+  ];
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -31,10 +38,27 @@ export function AgenciaLayout() {
                   <p className="text-xs text-muted-foreground">{profile?.nome || 'Agência'}</p>
                 </div>
               </div>
-              <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
-                <LogOut className="h-4 w-4" />
-                <span className="hidden sm:inline">Sair</span>
-              </Button>
+              <div className="flex items-center gap-1">
+                {navItems.map((item) => (
+                  <Button
+                    key={item.path}
+                    variant="ghost"
+                    size="sm"
+                    onClick={() => navigate(item.path)}
+                    className={cn(
+                      'gap-2',
+                      location.pathname === item.path && 'bg-accent text-accent-foreground'
+                    )}
+                  >
+                    <item.icon className="h-4 w-4" />
+                    <span className="hidden sm:inline">{item.label}</span>
+                  </Button>
+                ))}
+                <Button variant="ghost" size="sm" onClick={handleLogout} className="gap-2">
+                  <LogOut className="h-4 w-4" />
+                  <span className="hidden sm:inline">Sair</span>
+                </Button>
+              </div>
             </div>
           </header>
 
