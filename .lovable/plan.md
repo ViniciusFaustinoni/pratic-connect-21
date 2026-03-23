@@ -1,68 +1,56 @@
 
-# Plano: Corrigir Acesso do Perfil Agência — Loop Infinito + Layout Dedicado
 
-## Problema Raiz
+# Plano: Dados Bancários Editáveis pela Agência
 
-O tipo `agencia` não é tratado em nenhum ponto do fluxo de autenticação:
+## Problema
 
-```text
-Login → tipo 'agencia' cai no else → /dashboard
-/dashboard está dentro do AppLayout → allowedTipos=['funcionario']
-ProtectedRoute rejeita → redireciona para /auth
-/auth detecta user logado → /dashboard
-→ LOOP INFINITO (tela piscando)
+A tabela `profiles` não tem campos para dados bancários (banco, agencia, conta, pix). A agência não tem como informar ou atualizar seus dados para pagamento.
+
+## Solução
+
+### 1. Migration — Adicionar campos bancários na tabela `profiles`
+
+```sql
+ALTER TABLE public.profiles
+  ADD COLUMN banco TEXT,
+  ADD COLUMN agencia_bancaria TEXT,
+  ADD COLUMN conta_bancaria TEXT,
+  ADD COLUMN tipo_conta TEXT,
+  ADD COLUMN pix_tipo TEXT,
+  ADD COLUMN pix_chave TEXT;
 ```
 
-## Solução em 4 partes
+Campos nullable, sem impacto em dados existentes. Nome `agencia_bancaria` para não conflitar com o campo conceitual "agência" do sistema.
 
-### 1. Criar `AgenciaLayout` — layout dedicado para agência
+### 2. Rota `/agencia/dados-pagamento` — Página de edição
 
-Novo arquivo `src/components/layout/AgenciaLayout.tsx`:
-- `ProtectedRoute` com `allowedTipos={['agencia']}`
-- Layout limpo: header com logo + nome da agência + logout
-- Sem sidebar (agência tem acesso restrito)
-- Sem `useRouteGuard` (que forçaria redirect para módulos que agência não tem)
+Nova página `src/pages/agencia/DadosPagamento.tsx` com formulário para:
+- Banco (nome)
+- Agência bancária
+- Conta bancária
+- Tipo de conta (Corrente / Poupança)
+- Tipo de chave Pix (CPF/CNPJ, Email, Telefone, Aleatória)
+- Chave Pix
 
-### 2. Mover rota `/agencia` para fora do `AppLayout`
+Carrega dados do `profiles` do usuário logado, salva via `supabase.from('profiles').update(...)`.
 
-Em `App.tsx`:
-- Remover `<Route path="/agencia">` de dentro do `AppLayout`
-- Criar rota separada com o novo `AgenciaLayout`:
+### 3. Navegação no `AgenciaLayout`
 
-```text
-<Route element={<AgenciaLayout />}>
-  <Route path="/agencia" element={<AgenciaDashboard />} />
-</Route>
+Adicionar link/tab no header para "Dados de Pagamento" ao lado do painel principal, permitindo a agência navegar entre a Conta Corrente e seus dados bancários.
+
+### 4. Rota em `App.tsx`
+
+Adicionar rota filha dentro do `AgenciaLayout`:
 ```
-
-### 3. Corrigir redirects de login para tipo `agencia`
-
-Adicionar tratamento em 4 arquivos:
-
-| Arquivo | Mudança |
-|---|---|
-| `src/pages/auth/Login.tsx` (linha 86-88) | Antes do fallback `/dashboard`, checar `profile.tipo === 'agencia'` → `/agencia` |
-| `src/pages/auth/AuthCallback.tsx` (linha 127) | Adicionar `else if (profile.tipo === 'agencia')` → `/agencia` |
-| `src/pages/auth/DefinirSenha.tsx` (linhas 69, 119) | Adicionar agencia ao ternário de destino |
-| `src/components/ProtectedRoute.tsx` (linha 60-68) | Adicionar `agencia` ao type union + redirect para `/agencia` |
-
-### 4. ProtectedRoute — reconhecer tipo `agencia`
-
-Na linha 60, o cast é `'funcionario' | 'associado' | 'prestador'` — adicionar `'agencia'`.
-Na cascata de redirects (linhas 62-68), adicionar:
-```typescript
-} else if (userTipo === 'agencia') {
-  return <Navigate to="/agencia" replace />;
-}
+<Route path="/agencia/dados-pagamento" element={<DadosPagamento />} />
 ```
 
 ## Arquivos afetados
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/layout/AgenciaLayout.tsx` | **Novo** — layout dedicado com ProtectedRoute |
-| `src/App.tsx` | Mover rota `/agencia` para layout dedicado |
-| `src/pages/auth/Login.tsx` | Redirect agência → `/agencia` |
-| `src/pages/auth/AuthCallback.tsx` | Redirect agência → `/agencia` |
-| `src/pages/auth/DefinirSenha.tsx` | Redirect agência → `/agencia` |
-| `src/components/ProtectedRoute.tsx` | Adicionar `agencia` ao tipo + redirect |
+| Migration SQL | Adicionar 6 colunas bancárias em `profiles` |
+| `src/pages/agencia/DadosPagamento.tsx` | **Novo** — formulário de dados bancários |
+| `src/components/layout/AgenciaLayout.tsx` | Navegação para dados de pagamento |
+| `src/App.tsx` | Nova rota `/agencia/dados-pagamento` |
+
