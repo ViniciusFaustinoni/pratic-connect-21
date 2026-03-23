@@ -27,6 +27,8 @@ interface TurnoProfissional {
 
 interface JornadaProfissionalCardProps {
   turno: TurnoProfissional;
+  recusasNoTurno?: number;
+  limiteRecusas?: number;
   className?: string;
 }
 
