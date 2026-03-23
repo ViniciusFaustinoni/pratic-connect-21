@@ -183,6 +183,8 @@ export function InstalacaoRotasConfig() {
     setJornadaAlertaImprod(config.jornadaAlertaImprodutividade);
     setSlaInstalacao(config.slaInstalacao);
     setSlaManutencao(config.slaManutencao);
+    setGpsAtiva(config.gpsValidacaoAtiva !== 'false');
+    setGpsRaio(config.gpsRaioMetros);
   }, [config]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['configuracoes-instalacao-rotas'] });
