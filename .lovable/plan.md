@@ -1,56 +1,34 @@
 
 
-# Plano: Dados Bancários Editáveis pela Agência
+# Plano: Grade Obrigatória para Vendedor Externo e Agência
 
-## Problema
+## O que muda
 
-A tabela `profiles` não tem campos para dados bancários (banco, agencia, conta, pix). A agência não tem como informar ou atualizar seus dados para pagamento.
+### `src/pages/configuracoes/UsuarioForm.tsx`
 
-## Solução
+**Validação antes de salvar** — No `handleSave` / `mutationFn` (linha ~408), antes de prosseguir com update ou create:
 
-### 1. Migration — Adicionar campos bancários na tabela `profiles`
-
-```sql
-ALTER TABLE public.profiles
-  ADD COLUMN banco TEXT,
-  ADD COLUMN agencia_bancaria TEXT,
-  ADD COLUMN conta_bancaria TEXT,
-  ADD COLUMN tipo_conta TEXT,
-  ADD COLUMN pix_tipo TEXT,
-  ADD COLUMN pix_chave TEXT;
+```text
+Se perfis incluem 'vendedor_externo' OU 'agencia':
+  Se grade_comissao_id está vazio → bloquear save
 ```
 
-Campos nullable, sem impacto em dados existentes. Nome `agencia_bancaria` para não conflitar com o campo conceitual "agência" do sistema.
+- Exibir `toast.error('Selecione uma grade de comissão')` 
+- Setar erro visual no campo grade (borda vermelha no `SelectTrigger`)
+- Não aplicar para `vendedor_clt` — apenas `vendedor_externo` e `agencia`
 
-### 2. Rota `/agencia/dados-pagamento` — Página de edição
+**Destaque visual do campo** — No bloco do Select de grade (linha ~727):
+- Adicionar estado `gradeError` que fica `true` quando validação falha
+- Aplicar classe `border-destructive` no `SelectTrigger` quando em erro
+- Limpar erro quando usuário seleciona uma grade
 
-Nova página `src/pages/agencia/DadosPagamento.tsx` com formulário para:
-- Banco (nome)
-- Agência bancária
-- Conta bancária
-- Tipo de conta (Corrente / Poupança)
-- Tipo de chave Pix (CPF/CNPJ, Email, Telefone, Aleatória)
-- Chave Pix
+### Lógica específica
 
-Carrega dados do `profiles` do usuário logado, salva via `supabase.from('profiles').update(...)`.
+A validação se aplica tanto na **edição** (linha 409) quanto na **criação** (linha 449). Em ambos os caminhos, checar antes de qualquer operação no banco.
 
-### 3. Navegação no `AgenciaLayout`
-
-Adicionar link/tab no header para "Dados de Pagamento" ao lado do painel principal, permitindo a agência navegar entre a Conta Corrente e seus dados bancários.
-
-### 4. Rota em `App.tsx`
-
-Adicionar rota filha dentro do `AgenciaLayout`:
-```
-<Route path="/agencia/dados-pagamento" element={<DadosPagamento />} />
-```
-
-## Arquivos afetados
+## Arquivo afetado
 
 | Arquivo | Alteração |
 |---|---|
-| Migration SQL | Adicionar 6 colunas bancárias em `profiles` |
-| `src/pages/agencia/DadosPagamento.tsx` | **Novo** — formulário de dados bancários |
-| `src/components/layout/AgenciaLayout.tsx` | Navegação para dados de pagamento |
-| `src/App.tsx` | Nova rota `/agencia/dados-pagamento` |
+| `src/pages/configuracoes/UsuarioForm.tsx` | Validação obrigatória de grade para `vendedor_externo` e `agencia` + destaque visual |
 
