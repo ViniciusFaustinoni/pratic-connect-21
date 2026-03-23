@@ -674,8 +674,8 @@ export function InstalacaoRotasConfig() {
         <CardContent className="space-y-4">
           <div className="flex items-center justify-between">
             <div className="space-y-0.5">
-              <Label>Exigir motivo ao recusar tarefa</Label>
-              <p className="text-xs text-muted-foreground">Quando desativado, a recusa acontece sem pedir justificativa</p>
+              <Label>Exigir motivo ao reportar imprevisto</Label>
+              <p className="text-xs text-muted-foreground">Quando desativado, o imprevisto é reportado sem pedir justificativa</p>
             </div>
             <Switch checked={recusaExigirMotivo} onCheckedChange={setRecusaExigirMotivo} />
           </div>

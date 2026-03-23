@@ -198,6 +198,31 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
         motivo_livre: motivoLivre || null,
       });
 
+      // Notificação imediata ao coordenador
+      try {
+        const { data: coordenadores } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .in('role', ['coordenador_monitoramento', 'admin']);
+
+        for (const coord of (coordenadores || [])) {
+          await supabase.from('notificacoes').insert({
+            user_id: coord.user_id,
+            titulo: '🚨 Imprevisto reportado',
+            mensagem: `${profile?.nome || 'Técnico'} reportou: "${motivo}"${motivoLivre ? ` - ${motivoLivre}` : ''}. Instalação #${tarefa.id.slice(0, 8)} retornou para a fila.`,
+            tipo: 'alerta',
+            subtipo: 'imprevisto_reportado',
+            referencia_id: tarefa.id,
+            referencia_tipo: 'servico',
+            lida: false,
+            canal_sistema: true,
+            prioridade: 'alta',
+          });
+        }
+      } catch (notifErr) {
+        console.warn('Erro ao enviar notificação de imprevisto:', notifErr);
+      }
+
       // Desatribuir serviço
       await supabase.from('servicos').update({
         profissional_id: null,

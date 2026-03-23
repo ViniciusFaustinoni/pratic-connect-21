@@ -79,10 +79,10 @@ export function ModalRecusaTarefa({ open, onOpenChange, onConfirm, isPending }: 
           <Button
             variant="destructive"
             onClick={handleConfirm}
-            disabled={!motivo || isPending || (motivo === 'Outro motivo' && !motivoLivre.trim())}
+            disabled={!motivo || isPending || (motivo === 'Outro imprevisto grave' && !motivoLivre.trim())}
           >
             {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Confirmar Recusa
+            Confirmar imprevisto
           </Button>
         </DialogFooter>
       </DialogContent>
