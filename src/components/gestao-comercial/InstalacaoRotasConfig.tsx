@@ -74,6 +74,8 @@ function useInstalacaoConfigs() {
         jornadaAlertaImprodutividade: map.jornada_horas_alerta_improdutividade?.valor ?? '2',
         slaInstalacao: map.sla_horas_instalacao?.valor ?? '48',
         slaManutencao: map.sla_horas_manutencao?.valor ?? '24',
+        gpsValidacaoAtiva: map.gps_validacao_ativa?.valor ?? 'true',
+        gpsRaioMetros: map.gps_raio_metros?.valor ?? '500',
       };
     },
     staleTime: 1000 * 60 * 5,
