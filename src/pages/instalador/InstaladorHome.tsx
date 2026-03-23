@@ -19,6 +19,11 @@ import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
 import { useServicosRealtime } from '@/hooks/useServicosRealtime';
 import { useGarantirTurno } from '@/hooks/useGarantirTurno';
 import { useMonitorImprodutividade } from '@/hooks/useMonitorImprodutividade';
+import { useJornadaTrabalho } from '@/hooks/useJornadaTrabalho';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { getHojeBrasilia } from '@/lib/date-utils';
+import { ModalResumoDia } from '@/components/vistoriador/ModalResumoDia';
 
 export default function InstaladorHome() {
   // Realtime: receber tarefas instantaneamente
@@ -32,6 +37,53 @@ export default function InstaladorHome() {
   const { emServico } = useIniciarServico();
   const { isGarantindo } = useGarantirTurno(emServico);
   const [isOnline, setIsOnline] = useState(navigator.onLine);
+  const { mostrarResumoDia, fecharResumoDia, turno } = useJornadaTrabalho();
+
+  const hojeStr = getHojeBrasilia().toISOString().split('T')[0];
+
+  // Queries condicionais — só executam quando o modal de resumo vai aparecer
+  const { data: servicosConcluidos = 0 } = useQuery({
+    queryKey: ['resumo-servicos-concluidos', profile?.id, hojeStr],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('servicos')
+        .select('id', { count: 'exact', head: true })
+        .eq('profissional_id', profile!.id)
+        .eq('status', 'concluida')
+        .gte('created_at', `${hojeStr}T00:00:00`)
+        .lt('created_at', `${hojeStr}T23:59:59`);
+      return count || 0;
+    },
+    enabled: mostrarResumoDia && !!profile?.id,
+  });
+
+  const { data: servicosRecusados = 0 } = useQuery({
+    queryKey: ['resumo-servicos-recusados', profile?.id, hojeStr],
+    queryFn: async () => {
+      const { count } = await supabase
+        .from('registros_recusa_tarefa')
+        .select('id', { count: 'exact', head: true })
+        .eq('profissional_id', profile!.id)
+        .gte('created_at', `${hojeStr}T00:00:00`)
+        .lt('created_at', `${hojeStr}T23:59:59`);
+      return count || 0;
+    },
+    enabled: mostrarResumoDia && !!profile?.id,
+  });
+
+  const { data: exibirSaldo = true } = useQuery({
+    queryKey: ['config-exibir-saldo'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'jornada_exibir_saldo_vistoriador')
+        .maybeSingle();
+      return data?.valor !== 'false';
+    },
+    enabled: mostrarResumoDia,
+    staleTime: 1000 * 60 * 10,
+  });
 
   // Verificar alocação diária (rota ou base)
   const { isBase: isVistoriadorBase } = useAlocacaoDiaria();
@@ -200,6 +252,16 @@ export default function InstaladorHome() {
         </div>
       </div>
     </div>
+
+      {/* Modal de Resumo do Dia */}
+      <ModalResumoDia
+        open={mostrarResumoDia}
+        onClose={fecharResumoDia}
+        turno={turno}
+        servicosConcluidos={servicosConcluidos}
+        servicosRecusados={servicosRecusados}
+        exibirSaldoAcumulado={exibirSaldo}
+      />
     </>
   );
 }

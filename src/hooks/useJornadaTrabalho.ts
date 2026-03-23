@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback, useRef } from 'react';
+import { useState, useEffect, useCallback, useRef, useMemo } from 'react';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -448,6 +448,31 @@ export function useJornadaTrabalho() {
       encerrarTurnoMutation.mutate();
     }
   }, [turno?.status, tempoReal.minutosTrabalhados, minutosRestantes, turno?.id]);
+  // --- Modal de resumo do dia ---
+  const [mostrarResumoDia, setMostrarResumoDia] = useState(false);
+  const resumoCheckedRef = useRef<string | null>(null);
+
+  useEffect(() => {
+    if (
+      turno?.status === 'encerrado' &&
+      turno?.id &&
+      resumoCheckedRef.current !== turno.id
+    ) {
+      resumoCheckedRef.current = turno.id;
+      const key = `resumo-turno-${turno.id}`;
+      if (!sessionStorage.getItem(key)) {
+        setMostrarResumoDia(true);
+      }
+    }
+  }, [turno?.status, turno?.id]);
+
+  const fecharResumoDia = useCallback(() => {
+    if (turno?.id) {
+      sessionStorage.setItem(`resumo-turno-${turno.id}`, 'true');
+    }
+    setMostrarResumoDia(false);
+  }, [turno?.id]);
+
   const getStatus = (): JornadaState['status'] => {
     if (!turno || !turno.inicio_turno) return 'inativo';
     if (turno.status === 'encerrado') return 'encerrado';
@@ -474,6 +499,10 @@ export function useJornadaTrabalho() {
   return {
     ...jornadaState,
     isLoading,
+    
+    // Resumo do dia
+    mostrarResumoDia,
+    fecharResumoDia,
     
     // Ações
     iniciarTurno: iniciarTurnoMutation.mutate,
