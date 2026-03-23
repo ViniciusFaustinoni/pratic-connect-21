@@ -180,6 +180,16 @@ export function JornadaProfissionalCard({ turno, className }: JornadaProfissiona
                 <span>-{formatarMinutos(turno.minutos_faltantes)} faltantes</span>
               </div>
             )}
+            {/* Saldo do dia */}
+            {(turno.minutos_extras > 0 || turno.minutos_faltantes > 0) && (() => {
+              const saldoDia = (turno.minutos_extras || 0) - (turno.minutos_faltantes || 0);
+              return (
+                <div className={cn("flex items-center gap-1 text-sm mt-1", saldoDia >= 0 ? "text-green-400" : "text-red-400")}>
+                  {saldoDia >= 0 ? <TrendingUp className="h-4 w-4" /> : <TrendingDown className="h-4 w-4" />}
+                  <span>Saldo: {saldoDia >= 0 ? '+' : '-'}{formatarMinutos(Math.abs(saldoDia))}</span>
+                </div>
+              );
+            })()}
           </div>
         )}
       </CardContent>

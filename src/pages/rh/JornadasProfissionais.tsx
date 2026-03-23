@@ -87,6 +87,8 @@ export default function JornadasProfissionais() {
         slaManutencao: map.sla_horas_manutencao || '24',
         gpsValidacaoAtiva: map.gps_validacao_ativa || 'true',
         gpsRaioMetros: map.gps_raio_metros || '500',
+        limiteDebito: map.jornada_limite_debito_horas || '0',
+        exibirSaldo: map.jornada_exibir_saldo_vistoriador || 'true',
       };
     },
     staleTime: 1000 * 60 * 5,
