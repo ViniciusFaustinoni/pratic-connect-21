@@ -483,6 +483,10 @@ export default function UsuarioForm() {
     },
     onError: (error: any) => {
       const errorMessage = error.message || 'Erro ao salvar usuário';
+      if (errorMessage === 'GRADE_REQUIRED') {
+        toast.error('Selecione uma grade de comissão para vendedor externo ou agência.');
+        return;
+      }
       if (errorMessage.includes('CPF já está cadastrado')) {
         setFieldErrors(prev => ({ ...prev, cpf: 'Este CPF já está cadastrado no sistema' }));
         toast.error('CPF já cadastrado.');
