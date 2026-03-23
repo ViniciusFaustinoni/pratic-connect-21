@@ -32,11 +32,12 @@ export function useSlaConfig() {
       const { data } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', ['sla_horas_instalacao', 'sla_horas_manutencao']);
+        .in('chave', ['sla_horas_instalacao', 'sla_horas_manutencao', 'viagem_sla_horas']);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
         instalacao: parseFloat(map.sla_horas_instalacao) || 48,
         manutencao: parseFloat(map.sla_horas_manutencao) || 24,
+        viagem: parseFloat(map.viagem_sla_horas) || 72,
       };
     },
     staleTime: 1000 * 60 * 10,
