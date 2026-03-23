@@ -83,6 +83,8 @@ export default function JornadasProfissionais() {
         alertaImprodutividade: map.jornada_horas_alerta_improdutividade || '2',
         slaInstalacao: map.sla_horas_instalacao || '48',
         slaManutencao: map.sla_horas_manutencao || '24',
+        gpsValidacaoAtiva: map.gps_validacao_ativa || 'true',
+        gpsRaioMetros: map.gps_raio_metros || '500',
       };
     },
     staleTime: 1000 * 60 * 5,
