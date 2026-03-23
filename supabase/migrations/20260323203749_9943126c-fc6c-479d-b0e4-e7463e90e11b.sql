@@ -1,0 +1,1 @@
+ALTER TYPE public.tipo_usuario ADD VALUE IF NOT EXISTS 'agencia';

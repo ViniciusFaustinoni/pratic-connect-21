@@ -28538,7 +28538,7 @@ export type Database = {
         | "fenomeno_natural"
         | "vidros"
         | "terceiros"
-      tipo_usuario: "funcionario" | "associado" | "prestador"
+      tipo_usuario: "funcionario" | "associado" | "prestador" | "agencia"
       tipo_vistoria: "entrada" | "saida" | "sinistro"
     }
     CompositeTypes: {
@@ -28965,7 +28965,7 @@ export const Constants = {
         "vidros",
         "terceiros",
       ],
-      tipo_usuario: ["funcionario", "associado", "prestador"],
+      tipo_usuario: ["funcionario", "associado", "prestador", "agencia"],
       tipo_vistoria: ["entrada", "saida", "sinistro"],
     },
   },
