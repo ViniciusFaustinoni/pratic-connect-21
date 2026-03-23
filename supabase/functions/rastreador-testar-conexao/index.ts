@@ -173,7 +173,24 @@ serve(async (req) => {
         })
         .eq('integracao', plataforma_codigo);
     } catch (credError) {
-      console.log('[Testar Conexão] Erro ao atualizar status:', credError);
+      console.log('[Testar Conexão] Erro ao atualizar integracoes_credenciais:', credError);
+    }
+
+    // Atualizar rastreadores_credenciais (usado pela UI para exibir badge)
+    try {
+      if (plataforma) {
+        await supabase
+          .from('rastreadores_credenciais')
+          .update({
+            configurado: testeSucesso,
+            teste_sucesso: testeSucesso,
+            testado_em: new Date().toISOString(),
+            teste_mensagem: mensagem,
+          })
+          .eq('plataforma_id', plataforma.id);
+      }
+    } catch (e) {
+      console.log('[Testar Conexão] Erro ao atualizar rastreadores_credenciais:', e);
     }
 
     return new Response(
