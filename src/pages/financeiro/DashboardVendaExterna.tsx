@@ -166,6 +166,7 @@ export default function DashboardVendaExterna() {
                       {v.tipo}
                     </Badge>
                   </TableCell>
+                  <TableCell className="text-right">
                     <span className={v.saldo_atual > 0 ? 'text-green-600 font-semibold' : v.saldo_atual < 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}>
                       {formatarMoeda(v.saldo_atual)}
                     </span>
