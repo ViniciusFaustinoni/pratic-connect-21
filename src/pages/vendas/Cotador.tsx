@@ -335,6 +335,23 @@ export default function CotadorPage() {
   } | null>(null);
   const [showBlacklistModal, setShowBlacklistModal] = useState(false);
 
+  // Município de atendimento
+  const [municipioBusca, setMunicipioBusca] = useState('');
+  const [municipioSelecionado, setMunicipioSelecionado] = useState<{
+    id: string; nome: string; uf: string; tipo_atendimento: string;
+  } | null>(null);
+
+  const { data: municipiosAtendimento } = useQuery({
+    queryKey: ['municipios-atendimento-cotador'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('municipios_atendimento')
+        .select('id, nome, uf, tipo_atendimento')
+        .order('nome');
+      return data || [];
+    },
+  });
+
   // Hook FIPE
   const { getByPlaca, loading: loadingFipe } = useFipe();
   
