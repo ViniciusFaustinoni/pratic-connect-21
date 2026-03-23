@@ -19,6 +19,11 @@ import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
 import { useServicosRealtime } from '@/hooks/useServicosRealtime';
 import { useGarantirTurno } from '@/hooks/useGarantirTurno';
 import { useMonitorImprodutividade } from '@/hooks/useMonitorImprodutividade';
+import { useJornadaTrabalho } from '@/hooks/useJornadaTrabalho';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { getHojeBrasilia } from '@/lib/date-utils';
+import { ModalResumoDia } from '@/components/vistoriador/ModalResumoDia';
 
 export default function InstaladorHome() {
   // Realtime: receber tarefas instantaneamente
