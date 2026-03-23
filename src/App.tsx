@@ -777,6 +777,10 @@ const App = () => (
               <Route path="/app/ouvidoria/:id" element={<OuvidoriaDetalheApp />} />
             </Route>
             <Route path="/app" element={<Navigate to="/app/home" replace />} />
+            {/* Agência Routes */}
+            <Route element={<AgenciaLayout />}>
+              <Route path="/agencia" element={<AgenciaDashboard />} />
+            </Route>
             
             {/* Installer App Routes */}
             <Route path="/instalador/login" element={<InstaladorLogin />} />
