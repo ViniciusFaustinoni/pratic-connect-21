@@ -86,6 +86,7 @@ export const TIPO_USUARIO_LABELS: Record<TipoUsuario, string> = {
   funcionario: 'Funcionário',
   associado: 'Associado',
   prestador: 'Prestador',
+  agencia: 'Agência',
 };
 
 /**
