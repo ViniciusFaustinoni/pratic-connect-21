@@ -1,55 +1,60 @@
 
 
-# Plano: Classificação e Filtro por Tipo de Beneficiário
+# Plano: Relatório por Plano no Modal de Exportação
 
-## Arquivos a modificar
+## Resumo
+
+Adicionar aba "Por plano" ao modal existente `ExportarRelatorioVendaExternaModal`, com filtros próprios, geração de PDF e CSV agrupando comissões por plano e nível de beneficiário.
+
+## Arquivo a modificar
 
 | Arquivo | Alteração |
 |---|---|
-| `src/hooks/useDashboardVendaExterna.ts` | Buscar roles dos vendedores e adicionar campo `tipo` ao `VendedorResumo` |
-| `src/pages/financeiro/DashboardVendaExterna.tsx` | Coluna "Tipo" com badge colorido + Select de filtro |
+| `src/components/financeiro/ExportarRelatorioVendaExternaModal.tsx` | Adicionar abas, nova lógica de relatório por plano, exportação CSV |
 
 ## Detalhamento
 
-### 1. Hook — buscar roles e mapear tipo
+### 1. Abas no modal
 
-No `useDashboardVendaExterna.ts`, dentro da `vendedoresQuery`:
+Usar `Tabs` do Radix com duas abas:
+- `"beneficiario"` — conteúdo atual (filtros + botão existente), sem alteração
+- `"plano"` — novo conteúdo descrito abaixo
 
-- Após obter os `vendedorIds`, buscar roles na tabela `user_roles` via join com `profiles`:
-  ```
-  profiles.id → profiles.user_id → user_roles.user_id
-  ```
-  Como `vendedor_id` é `profiles.id`, primeiro buscar `user_id` dos profiles e depois os roles.
+O `DialogContent` passa de `max-w-md` para `max-w-lg` para acomodar.
 
-- Mapear role para tipo de exibição:
-  - `vendedor_externo` → `"Vendedor"`
-  - `agencia` → `"Agência"`
-  - `supervisor_vendas` → `"Supervisor"`
-  - Qualquer outro → `"Outro"`
+### 2. Filtros da aba "Por plano"
 
-- Adicionar `tipo: string` ao interface `VendedorResumo`
+- **Período**: data início e data fim (mesmo padrão do existente)
+- **Plano**: Select buscando `planos` ativos (`supabase.from('planos').select('id, nome').eq('ativo', true).order('nome')`), com opção "Todos os planos" como padrão
+- **Status**: Select com "Todos" / "Pendente" (`a_pagar`) / "Pago" (`pago`)
 
-### 2. Dashboard — coluna "Tipo"
+### 3. Query de dados
 
-Na tabela, adicionar `<TableHead>Tipo</TableHead>` após "Vendedor" (e atualizar `colSpan` de 7 para 8).
+Ao exportar, executar:
 
-Na row, renderizar badge colorido:
-- `"Vendedor"` → `bg-blue-100 text-blue-700 border-blue-200`
-- `"Agência"` → `bg-purple-100 text-purple-700 border-purple-200`
-- `"Supervisor"` → `bg-orange-100 text-orange-700 border-orange-200`
-- `"Outro"` → `bg-gray-100 text-gray-700 border-gray-200`
+1. Buscar lançamentos do período (tipo `credito`, excluindo `cancelado` se status=Todos) com join para obter `associado_id`
+2. Para cada `associado_id` encontrado, buscar `plano_id` dos associados via query separada (`associados.id, plano_id`)
+3. Buscar nomes dos planos via query aos `planos`
+4. Para cada `vendedor_id`, buscar role via `profiles.user_id → user_roles.role` (mesma lógica já implementada no dashboard)
+5. Agrupar: `plano_nome + nível → { qtd, bruto, abatimento, líquido }`
 
-### 3. Dashboard — filtro por tipo
+### 4. PDF por plano
 
-Adicionar estado `filtroTipo` com type `'todos' | 'Vendedor' | 'Agência' | 'Supervisor'`.
+Usando jsPDF + autoTable:
+- Cabeçalho: "Relatório de Comissões por Plano" + período
+- Para cada plano: título com nome + total, seguido de tabela com colunas: Nível, Qtd Comissões, Total Bruto, Total Abatimentos, Total Líquido
+- Rodapé com totais gerais (quando "Todos os planos")
+- Paginação no rodapé
 
-Adicionar um terceiro `Select` na barra de filtros, após o Select de situação:
-```
-Tipo de beneficiário: [Todos | Vendedor | Agência | Supervisor]
-```
+### 5. CSV por plano
 
-Integrar no `filtrados` filter chain:
-```ts
-if (filtroTipo !== 'todos' && v.tipo !== filtroTipo) return false;
-```
+Gerar CSV com separador `;` e BOM, colunas: Plano, Nível, Qtd Comissões, Bruto, Abatimento, Líquido. Uma linha por combinação plano+nível. Linha final de totais.
+
+### 6. Botões de exportação
+
+Na aba "Por plano", dois botões:
+- "Exportar PDF" (ícone FileDown)
+- "Exportar CSV" (ícone FileSpreadsheet)
+
+Ambos compartilham a mesma lógica de busca de dados, diferindo apenas na geração do arquivo.
 
