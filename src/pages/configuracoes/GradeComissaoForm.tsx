@@ -6,15 +6,18 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Progress } from '@/components/ui/progress';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { ArrowLeft, Plus, Trash2, ArrowUp, ArrowDown, Building2 } from 'lucide-react';
 import { toast } from 'sonner';
 import { FieldHint } from '@/components/admin/planos/FieldHint';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
+import { useAppRoles } from '@/hooks/useAppRoles';
 
 interface NivelForm {
   id?: string;
   nome: string;
   percentual: number;
+  role: string;
 }
 
 export default function GradeComissaoForm() {
@@ -22,6 +25,10 @@ export default function GradeComissaoForm() {
   const isEdit = !!id && id !== 'nova';
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { roles: appRoles } = useAppRoles();
+
+  // Filter to commercial roles only
+  const commercialRoles = appRoles.filter(r => ['vendedor_clt', 'vendedor_externo', 'agencia'].includes(r.role));
 
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
@@ -34,7 +41,7 @@ export default function GradeComissaoForm() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('grades_comissao')
-        .select('*, grades_comissao_niveis(id, nome, percentual, ordem)')
+        .select('*, grades_comissao_niveis(id, nome, percentual, ordem, role)')
         .eq('id', id!)
         .single();
       if (error) throw error;
@@ -47,14 +54,14 @@ export default function GradeComissaoForm() {
       setNome(existing.nome);
       setDescricao(existing.descricao || '');
       const sorted = [...(existing.grades_comissao_niveis || [])].sort((a: any, b: any) => a.ordem - b.ordem);
-      setNiveis(sorted.map((n: any) => ({ id: n.id, nome: n.nome, percentual: Number(n.percentual) })));
+      setNiveis(sorted.map((n: any) => ({ id: n.id, nome: n.nome, percentual: Number(n.percentual), role: n.role || '' })));
     }
   }, [existing]);
 
   const totalPercentual = niveis.reduce((s, n) => s + (Number(n.percentual) || 0), 0);
   const exceedsLimit = totalPercentual > 100;
 
-  const addNivel = () => setNiveis(prev => [...prev, { nome: '', percentual: 0 }]);
+  const addNivel = () => setNiveis(prev => [...prev, { nome: '', percentual: 0, role: '' }]);
 
   const removeNivel = (idx: number) => setNiveis(prev => prev.filter((_, i) => i !== idx));
 
@@ -75,7 +82,12 @@ export default function GradeComissaoForm() {
   const handleSave = async () => {
     if (!nome.trim()) return toast.error('Nome é obrigatório');
     if (niveis.length === 0) return toast.error('Adicione pelo menos um nível');
+    if (niveis.some(n => !n.role)) return toast.error('Selecione o perfil de cada nível');
     if (niveis.some(n => !n.nome.trim())) return toast.error('Todos os níveis precisam de nome');
+    // Check duplicate roles
+    const rolesUsed = niveis.map(n => n.role);
+    const hasDuplicates = rolesUsed.length !== new Set(rolesUsed).size;
+    if (hasDuplicates) return toast.error('Cada perfil só pode aparecer uma vez na grade');
     if (exceedsLimit) return;
 
     setSaving(true);
@@ -107,6 +119,7 @@ export default function GradeComissaoForm() {
           nome: n.nome.trim(),
           percentual: n.percentual,
           ordem: i,
+          role: n.role,
         })));
       if (nErr) throw nErr;
 
@@ -199,10 +212,34 @@ export default function GradeComissaoForm() {
                     </Tooltip>
                   </div>
                   <span className="text-xs text-muted-foreground w-5 text-center">{idx + 1}</span>
+                  <div className="w-44">
+                    <Select
+                      value={nivel.role}
+                      onValueChange={(val) => {
+                        const roleConfig = commercialRoles.find(r => r.role === val);
+                        setNiveis(prev => prev.map((n, i) => i === idx ? { ...n, role: val, nome: n.nome || (roleConfig?.label || '') } : n));
+                      }}
+                    >
+                      <SelectTrigger className="h-9">
+                        <SelectValue placeholder="Perfil *" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {commercialRoles.map(r => (
+                          <SelectItem
+                            key={r.role}
+                            value={r.role}
+                            disabled={niveis.some((n, i) => i !== idx && n.role === r.role)}
+                          >
+                            {r.label}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
                   <div className="flex-1 relative">
                     <Input
                       className="flex-1"
-                      placeholder="Nome do nível (ex: Vendedor Externo)"
+                      placeholder="Nome do nível (ex: Vendedor Principal)"
                       value={nivel.nome}
                       onChange={e => updateNivel(idx, 'nome', e.target.value)}
                     />
