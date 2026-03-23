@@ -193,6 +193,8 @@ export function InstalacaoRotasConfig() {
     setSlaManutencao(config.slaManutencao);
     setGpsAtiva(config.gpsValidacaoAtiva !== 'false');
     setGpsRaio(config.gpsRaioMetros);
+    setLimiteDebito(config.limiteDebito);
+    setExibirSaldo(config.exibirSaldo !== 'false');
   }, [config]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['configuracoes-instalacao-rotas'] });
