@@ -20,6 +20,7 @@ import {
 } from '@/components/rotas';
 import { ConfiguracoesEncaixe } from '@/components/rotas/ConfiguracoesEncaixe';
 import { ConfiguracoesFilaAtribuicao } from '@/components/rotas/ConfiguracoesFilaAtribuicao';
+import GestaoRotas from './GestaoRotas';
 import { 
   useRotas, 
   useRotasMetricas, 
@@ -185,6 +186,12 @@ export default function Rotas() {
           )}
           {canEditRotas && (
             <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
+          )}
+          {canEditRotas && (
+            <TabsTrigger value="gestao-rotas">
+              <Route className="mr-1 h-4 w-4" />
+              Gestão de Rotas
+            </TabsTrigger>
           )}
         </TabsList>
 
@@ -476,6 +483,13 @@ export default function Rotas() {
           <TabsContent value="configuracoes" className="space-y-6">
             <ConfiguracoesEncaixe />
             <ConfiguracoesFilaAtribuicao />
+          </TabsContent>
+        )}
+
+        {/* Aba Gestão de Rotas - apenas para quem pode editar */}
+        {canEditRotas && (
+          <TabsContent value="gestao-rotas">
+            <GestaoRotas embedded />
           </TabsContent>
         )}
       </Tabs>

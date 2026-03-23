@@ -67,7 +67,7 @@ const STATUS_TAREFA_CONFIG = {
   reagendada: { label: 'Reagendada', icon: Clock, className: 'text-blue-600' },
 };
 
-export default function GestaoRotas() {
+export default function GestaoRotas({ embedded = false }: { embedded?: boolean }) {
   const [dataSelecionada, setDataSelecionada] = useState<Date>(new Date());
   const [formRotaOpen, setFormRotaOpen] = useState(false);
   const [rotaParaEditar, setRotaParaEditar] = useState<RotaWithRelations | null>(null);
@@ -123,48 +123,48 @@ export default function GestaoRotas() {
 
   return (
     <div className="space-y-6">
-      {/* Header */}
-      <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
-        <div>
-          {/* Breadcrumb */}
-          <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
-            <Link to="/dashboard" className="flex items-center gap-1 hover:text-foreground">
-              <Home className="h-4 w-4" />
-            </Link>
-            <ChevronRight className="h-4 w-4" />
-            <span>Monitoramento</span>
-            <ChevronRight className="h-4 w-4" />
-            <span className="text-foreground font-medium">Gestão de Rotas</span>
-          </nav>
-          <h1 className="text-2xl font-bold tracking-tight">Gestão de Rotas</h1>
-        </div>
-        
-        <div className="flex items-center gap-2">
-          <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
-            <PopoverTrigger asChild>
-              <Button variant="outline" className="gap-2">
-                <Calendar className="h-4 w-4" />
-                {format(dataSelecionada, 'dd/MM/yyyy')}
-              </Button>
-            </PopoverTrigger>
-            <PopoverContent className="w-auto p-0" align="end">
-              <CalendarComponent
-                mode="single"
-                selected={dataSelecionada}
-                onSelect={(date) => {
-                  if (date) {
-                    setDataSelecionada(date);
-                    setCalendarOpen(false);
-                  }
-                }}
-                locale={ptBR}
-              />
-            </PopoverContent>
-          </Popover>
+      {/* Header - only when standalone */}
+      {!embedded && (
+        <div className="flex flex-col gap-4 md:flex-row md:items-center md:justify-between">
+          <div>
+            {/* Breadcrumb */}
+            <nav className="flex items-center gap-2 text-sm text-muted-foreground mb-2">
+              <Link to="/dashboard" className="flex items-center gap-1 hover:text-foreground">
+                <Home className="h-4 w-4" />
+              </Link>
+              <ChevronRight className="h-4 w-4" />
+              <span>Monitoramento</span>
+              <ChevronRight className="h-4 w-4" />
+              <span className="text-foreground font-medium">Gestão de Rotas</span>
+            </nav>
+            <h1 className="text-2xl font-bold tracking-tight">Gestão de Rotas</h1>
+          </div>
           
-          {/* Botão de nova rota removido - rotas são criadas automaticamente */}
+          <div className="flex items-center gap-2">
+            <Popover open={calendarOpen} onOpenChange={setCalendarOpen}>
+              <PopoverTrigger asChild>
+                <Button variant="outline" className="gap-2">
+                  <Calendar className="h-4 w-4" />
+                  {format(dataSelecionada, 'dd/MM/yyyy')}
+                </Button>
+              </PopoverTrigger>
+              <PopoverContent className="w-auto p-0" align="end">
+                <CalendarComponent
+                  mode="single"
+                  selected={dataSelecionada}
+                  onSelect={(date) => {
+                    if (date) {
+                      setDataSelecionada(date);
+                      setCalendarOpen(false);
+                    }
+                  }}
+                  locale={ptBR}
+                />
+              </PopoverContent>
+            </Popover>
+          </div>
         </div>
-      </div>
+      )}
 
       {/* Navegação de Data */}
       <div className="flex items-center justify-between bg-muted/50 rounded-lg px-4 py-3">
