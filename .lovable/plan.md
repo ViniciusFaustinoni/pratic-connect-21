@@ -1,37 +1,37 @@
 
 
-# Plano: Sidebar + Correcao Status Softruck
+# Plano: Mover "Encaixes" para dentro de "Instalações e Vistorias"
 
-## PARTE 1 — Sidebar
+## Resumo
 
-Auditoria confirma que **todos os itens ja existem** no sidebar:
-- Monitoramento: "Prestadores Parceiros" (L232), "Encaixes" (L233) ✅
-- RH: "Treinamentos" (L368), "Recrutamento" (L369) ✅
-- Diretoria: "Gestao de Rotas" foi consolidado como aba dentro de "Vistorias e Instalacoes" (prompt anterior aprovado)
-
-**Nenhuma alteracao necessaria na sidebar.**
+Consolidar "Encaixes" como terceira aba na pagina VistoriasInstalacoesMon.tsx e remover o item separado do sidebar.
 
 ---
 
-## PARTE 2 — Correcao Status Softruck
+## Alteracoes
 
-### Problema
+### 1. `src/components/layout/AppSidebar.tsx`
 
-Softruck exige `configurado && testado` para mostrar "Conectado" (linha 203 de Integracoes.tsx). Se nenhum health check foi executado, `testado` e `false` e o status fica "Pendente".
+Remover a linha:
+```tsx
+{ title: 'Encaixes', url: '/monitoramento/encaixes', icon: CalendarCheck },
+```
 
-### Correcao
+### 2. `src/pages/monitoramento/VistoriasInstalacoesMon.tsx`
 
-Alterar para `ativo: s.configurado` em dois arquivos:
+Adicionar terceira aba "Encaixes":
 
-**Arquivo 1**: `src/pages/configuracoes/Integracoes.tsx` (linha 203)
-- De: `ativo: s.configurado && s.testado`
-- Para: `ativo: s.configurado`
+- Import `Puzzle` do lucide-react e `MonitoramentoEncaixes` (com prop `embedded`)
+- Nova TabsTrigger "Encaixes" com icone Puzzle
+- Novo TabsContent renderizando `<MonitoramentoEncaixes embedded />`
 
-**Arquivo 2**: `src/components/integracoes/ServicosTab.tsx` (linha 315)
-- De: `ativo: integracoes.softruck.configurado && integracoes.softruck.testado`
-- Para: `ativo: integracoes.softruck.configurado`
+### 3. `src/pages/monitoramento/Encaixes.tsx`
 
-Aplicar a mesma correcao para `rede_veiculos` por consistencia (linhas 212 e 323 respectivamente).
+Adicionar prop `embedded?: boolean` ao componente `MonitoramentoEncaixes`. Quando `embedded={true}`, ocultar o header (titulo, descricao, botao Atualizar) para evitar duplicacao visual.
+
+### 4. `src/App.tsx`
+
+Manter a rota `/monitoramento/encaixes` como redirect para `/monitoramento/vistorias-instalacoes-mon` (backward compatibility).
 
 ---
 
@@ -39,6 +39,8 @@ Aplicar a mesma correcao para `rede_veiculos` por consistencia (linhas 212 e 323
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/configuracoes/Integracoes.tsx` | Softruck e Rede Veiculos: remover `&& testado` |
-| `src/components/integracoes/ServicosTab.tsx` | Mesma correcao |
+| `src/components/layout/AppSidebar.tsx` | Remover item "Encaixes" |
+| `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` | Nova aba Encaixes |
+| `src/pages/monitoramento/Encaixes.tsx` | Prop `embedded` para ocultar header |
+| `src/App.tsx` | Redirect da rota antiga |
 
