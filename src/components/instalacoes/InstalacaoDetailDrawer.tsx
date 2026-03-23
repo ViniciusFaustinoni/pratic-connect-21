@@ -371,6 +371,36 @@ export function InstalacaoDetailDrawer({
               </>
             )}
 
+            {/* Histórico de Atribuições (Recusas) */}
+            {historicoRecusas && historicoRecusas.length > 0 && (
+              <>
+                <Separator />
+                <section>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <RotateCcw className="h-4 w-4" />
+                    Histórico de Atribuições
+                  </h3>
+                  <div className="space-y-2">
+                    {historicoRecusas.map((rec: any) => (
+                      <div key={rec.id} className="flex items-start gap-2 text-sm border border-border/50 rounded-md p-2">
+                        <XCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium">{rec.profissional?.nome || 'Profissional'}</p>
+                          <p className="text-muted-foreground text-xs">Recusou: {rec.motivo}</p>
+                          {rec.motivo_livre && (
+                            <p className="text-muted-foreground text-xs italic">"{rec.motivo_livre}"</p>
+                          )}
+                          <p className="text-muted-foreground text-xs">
+                            {format(new Date(rec.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </section>
+              </>
+            )}
+
             {instalacao.observacoes && (
               <>
                 <Separator />
