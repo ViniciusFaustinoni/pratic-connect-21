@@ -1,4 +1,4 @@
-import { Package, Shield, Gift, Calculator, ShieldCheck, Gavel, MapPin, Settings, LucideIcon } from 'lucide-react';
+import { Package, Shield, Gift, Calculator, ShieldCheck, Gavel, MapPin, Settings, Globe, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Tab {
@@ -15,6 +15,7 @@ const tabs: Tab[] = [
   { label: 'Elegibilidade', icon: ShieldCheck },
   { label: 'Regras de Venda', icon: Gavel },
   { label: 'Instalação e Rotas', icon: MapPin },
+  { label: 'Mapa de Atendimento', icon: Globe },
 ];
 
 interface TabNavigationProps {

@@ -1,4 +1,5 @@
 import { useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
 import { useParams, useNavigate, Link } from 'react-router-dom';
 import {
   ArrowLeft, User, Car, Loader2, Eye, Edit, Plus,
@@ -463,7 +464,7 @@ export default function AssociadoDetalhe() {
                 <DataField label="CEP" value={associado.cep || '—'} />
                 <DataField label="Logradouro" value={`${associado.logradouro || '—'}${associado.numero ? `, ${associado.numero}` : ''}${associado.complemento ? ` - ${associado.complemento}` : ''}`} />
                 <DataField label="Bairro" value={associado.bairro || '—'} />
-                <DataField label="Cidade / UF" value={`${associado.cidade || '—'} ${associado.uf ? `- ${associado.uf}` : ''}`} />
+                <DataFieldWithMunicipioBadge cidade={associado.cidade} uf={associado.uf} />
               </CardContent>
             </Card>
 
@@ -1033,5 +1034,51 @@ function MiniStat({ value, label, color }: { value: number; label: string; color
         <p className="text-[11px] text-muted-foreground">{label}</p>
       </CardContent>
     </Card>
+  );
+}
+
+const TIPO_BADGE_CLASSES: Record<string, string> = {
+  volante: 'bg-muted text-muted-foreground',
+  viagem: 'bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300',
+  prestador: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900/30 dark:text-yellow-300',
+  fora_cobertura: 'bg-destructive/10 text-destructive',
+};
+
+const TIPO_BADGE_LABELS: Record<string, string> = {
+  volante: 'Volante',
+  viagem: 'Viagem',
+  prestador: 'Prestador',
+  fora_cobertura: 'Fora de Cobertura',
+};
+
+function DataFieldWithMunicipioBadge({ cidade, uf }: { cidade?: string | null; uf?: string | null }) {
+  const displayValue = `${cidade || '—'} ${uf ? `- ${uf}` : ''}`;
+
+  const { data: municipio } = useQuery({
+    queryKey: ['municipio-badge', cidade, uf],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('municipios_atendimento')
+        .select('tipo_atendimento')
+        .eq('nome', cidade!)
+        .eq('uf', uf!)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!cidade && !!uf,
+  });
+
+  return (
+    <div>
+      <p className="text-[11px] text-muted-foreground">Cidade / UF</p>
+      <div className="flex items-center gap-2">
+        <p className="font-medium">{displayValue}</p>
+        {municipio?.tipo_atendimento && (
+          <Badge className={TIPO_BADGE_CLASSES[municipio.tipo_atendimento] || ''}>
+            {TIPO_BADGE_LABELS[municipio.tipo_atendimento] || municipio.tipo_atendimento}
+          </Badge>
+        )}
+      </div>
+    </div>
   );
 }
