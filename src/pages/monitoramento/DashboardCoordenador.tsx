@@ -52,6 +52,7 @@ import { usePerformanceSemanalCoordenador } from '@/hooks/usePerformanceSemanalC
 import { AgendamentosBase } from '@/components/monitoramento/AgendamentosBase';
 import { VistoriadoresEmAlerta } from '@/components/monitoramento/VistoriadoresEmAlerta';
 import { PrestadoresAtivos } from '@/components/monitoramento/PrestadoresAtivos';
+import { useMonitorPrestadorSemResposta } from '@/hooks/useMonitorPrestadorSemResposta';
 import { cn } from '@/lib/utils';
 
 const acoesRapidas = [

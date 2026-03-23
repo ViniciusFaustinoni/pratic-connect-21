@@ -164,6 +164,7 @@ export function MapaAtendimento() {
   // ===== Regras de Viagem =====
   const [viagemDiaria, setViagemDiaria] = useState('');
   const [viagemSla, setViagemSla] = useState('');
+  const [prestadorHorasAlerta, setPrestadorHorasAlerta] = useState('');
   const [viagemLoaded, setViagemLoaded] = useState(false);
 
   const { data: configViagem } = useQuery({
