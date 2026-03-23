@@ -1,65 +1,51 @@
 
 
-# Plano: Monitor Automatico de Prestador Sem Resposta
+# Plano: Adicionar rotas ocultas ao menu lateral
 
 ## Resumo
 
-Hook silencioso que verifica a cada 15 minutos se prestadores com links ativos nao confirmaram chegada apos X horas (configuravel), e notifica coordenadores/admins automaticamente sem duplicar alertas.
+Adicionar 6 itens de navegacao ao AppSidebar.tsx em 3 grupos existentes, sem alterar nenhuma pagina.
 
 ---
 
-## PARTE 1 — Config no banco
+## Alteracao unica: `src/components/layout/AppSidebar.tsx`
 
-Inserir nova chave na tabela `configuracoes`:
-- `prestador_horas_alerta_sem_resposta` = `2`
+### 1. Imports de icones (linha 72)
 
-Sem migration — usar insert tool.
+Adicionar ao bloco de imports do lucide-react: `CalendarCheck`, `Settings2`, `GraduationCap`, `UserSearch`
 
----
+(`Truck`, `Route` ja estao importados)
 
-## PARTE 2 — Campo na secao "Regras de Viagem" do MapaAtendimento
+### 2. Grupo Monitoramento (apos "Aprovação de Associados", linha 228)
 
-**Arquivo**: `src/components/gestao-comercial/MapaAtendimento.tsx`
+Adicionar 3 itens:
 
-- Adicionar state `prestadorHorasAlerta` ao lado de `viagemDiaria` e `viagemSla`
-- Buscar chave `prestador_horas_alerta_sem_resposta` na query `config-viagem` existente
-- Adicionar campo numerico na grid: "Horas sem resposta para alerta (prestador)", padrao 2
-- Incluir na mutation `salvarViagemMutation` o update dessa chave
+```tsx
+{ title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
+{ title: 'Encaixes', url: '/monitoramento/encaixes', icon: CalendarCheck },
+{ title: 'Config. Plataformas', url: '/monitoramento/config-plataformas', icon: Settings2, permission: 'canManageRastreadores' },
+```
 
----
+### 3. Grupo RH (apos "Benefícios", linha 356)
 
-## PARTE 3 — Hook `useMonitorPrestadorSemResposta`
+Adicionar 2 itens:
 
-**Novo**: `src/hooks/useMonitorPrestadorSemResposta.ts`
+```tsx
+{ title: 'Treinamentos', url: '/rh/treinamentos', icon: GraduationCap },
+{ title: 'Recrutamento', url: '/rh/recrutamento', icon: UserSearch },
+```
 
-Segue o mesmo padrao do `useMonitorImprodutividade`:
+### 4. Grupo Diretoria (apos "Vistorias e Instalações", linha 404)
 
-1. Query de config: buscar `prestador_horas_alerta_sem_resposta` (staleTime 10min)
-2. `useEffect` com `setInterval` de 15 minutos
-3. A cada ciclo:
-   - Buscar `instalacao_prestador_links` com status `aguardando`, `created_at < now() - X horas`, `expires_at > now()`
-   - Para cada link encontrado, verificar se ja existe notificacao com `referencia_id = link.id` e tipo `prestador_sem_resposta`
-   - Se nao existe: buscar nome do prestador (`prestadores_assistencia`), cidade da instalacao (`instalacoes`), e destinatarios (`user_roles` com roles coordenador_monitoramento/admin/diretor)
-   - Inserir notificacoes com titulo, mensagem, tipo `alerta`, referencia_id, referencia_tipo `instalacao_prestador_link`, prioridade `alta`
-4. Cleanup: clearInterval no unmount
-5. Completamente silencioso — sem toast, sem UI
+Adicionar 1 item:
 
----
-
-## PARTE 4 — Integracao no DashboardCoordenador
-
-**Arquivo**: `src/pages/monitoramento/DashboardCoordenador.tsx`
-
-Adicionar `useMonitorPrestadorSemResposta()` no topo do componente, ao lado dos hooks existentes. Sem renderizacao adicional.
+```tsx
+{ title: 'Gestão de Rotas', url: '/diretoria/gestao-vistorias-instalacoes', icon: Route },
+```
 
 ---
 
-## Arquivos afetados
+## Nenhuma outra alteracao
 
-| Arquivo | Alteracao |
-|---|---|
-| DB (insert) | Config `prestador_horas_alerta_sem_resposta` |
-| `src/components/gestao-comercial/MapaAtendimento.tsx` | Campo config prestador |
-| `src/hooks/useMonitorPrestadorSemResposta.ts` | **Novo** hook |
-| `src/pages/monitoramento/DashboardCoordenador.tsx` | Chamar hook |
+Nenhuma pagina criada ou modificada. Apenas navegacao.
 
