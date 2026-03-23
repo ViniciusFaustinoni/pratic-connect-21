@@ -66,6 +66,37 @@ export function InstalacaoDetailDrawer({
   const updateStatus = useUpdateInstalacaoStatus();
   const deleteInstalacao = useDeleteInstalacao();
 
+  // Buscar registro de presença GPS
+  const { data: registroPresenca } = useQuery({
+    queryKey: ['registro-presenca-instalacao', instalacaoId],
+    queryFn: async () => {
+      if (!instalacaoId) return null;
+      // Buscar serviço associado à instalação pelo associado_id e tipo instalacao
+      const inst = await supabase.from('instalacoes').select('associado_id, veiculo_id').eq('id', instalacaoId).single();
+      if (!inst.data) return null;
+      
+      const { data: servicos } = await supabase
+        .from('servicos')
+        .select('id')
+        .eq('associado_id', inst.data.associado_id)
+        .eq('tipo', 'instalacao')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (!servicos?.length) return null;
+      
+      const { data } = await (supabase as any)
+        .from('registros_presenca')
+        .select('*')
+        .eq('servico_id', servicos[0].id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      return data;
+    },
+    enabled: !!instalacaoId && open,
+  });
   const handleDelete = async () => {
     if (!instalacaoId) return;
     
