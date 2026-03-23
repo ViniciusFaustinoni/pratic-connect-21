@@ -198,7 +198,7 @@ export function EscolhaPlano({
       >
         <div className="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-primary/10 border border-primary/20 mb-4">
           <Sparkles className="h-4 w-4 text-primary" />
-          <span className="text-sm font-medium text-primary">Proteção Completa</span>
+          <span className="text-sm font-medium text-primary">Proteção 360º</span>
         </div>
         <h2 className="text-3xl md:text-4xl font-bold text-foreground mb-3">
           Escolha o plano ideal
