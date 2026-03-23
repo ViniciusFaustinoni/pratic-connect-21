@@ -217,6 +217,14 @@ export default function JornadasProfissionais() {
                   <p className="text-xs text-muted-foreground">Raio GPS</p>
                   <p className="text-sm font-semibold">{parametros?.gpsRaioMetros || '500'}m</p>
                 </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Limite débito bloqueio</p>
+                  <p className="text-sm font-semibold">{parametros?.limiteDebito === '0' ? 'Desativado' : `${parametros?.limiteDebito}h`}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Exibir saldo vistoriador</p>
+                  <p className="text-sm font-semibold">{parametros?.exibirSaldo === 'false' ? 'Não' : 'Sim'}</p>
+                </div>
               </div>
               <div className="flex justify-end">
                 <Button variant="outline" size="sm" onClick={() => navigate('/diretoria/gestao-comercial')}>
