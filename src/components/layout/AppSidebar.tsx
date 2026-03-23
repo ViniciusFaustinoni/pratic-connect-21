@@ -69,6 +69,10 @@ import {
   
   ShieldCheck,
   Route,
+  CalendarCheck,
+  Settings2,
+  GraduationCap,
+  UserSearch,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -224,7 +228,14 @@ const menuConfig: {
           title: 'Aprovação de Associados',
           url: '/monitoramento/aprovacao-associados',
           icon: ShieldAlert,
-          permission: 'canManageRastreadores',
+        },
+        { title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
+        { title: 'Encaixes', url: '/monitoramento/encaixes', icon: CalendarCheck },
+        {
+          title: 'Config. Plataformas',
+          url: '/monitoramento/config-plataformas',
+          icon: Settings2,
+          permission: 'canManageRastreadores' as PermissionKey,
         },
       ],
     },
@@ -354,6 +365,8 @@ const menuConfig: {
         { title: 'Organograma', url: '/rh/organograma', icon: GitBranch },
         { title: 'Departamentos', url: '/rh/departamentos', icon: Building2 },
         { title: 'Benefícios', url: '/rh/beneficios', icon: Gift },
+        { title: 'Treinamentos', url: '/rh/treinamentos', icon: GraduationCap },
+        { title: 'Recrutamento', url: '/rh/recrutamento', icon: UserSearch },
       ],
     },
     {
@@ -402,6 +415,7 @@ const menuConfig: {
         { title: 'Logs', url: '/diretoria/logs', icon: FileText },
         { title: 'Relatórios', url: '/diretoria/relatorios', icon: ClipboardList },
         { title: 'Vistorias e Instalações', url: '/diretoria/vistorias-instalacoes', icon: ClipboardList },
+        { title: 'Gestão de Rotas', url: '/diretoria/gestao-vistorias-instalacoes', icon: Route },
       ],
     },
     {
