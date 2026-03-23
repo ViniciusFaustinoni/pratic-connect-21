@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useContaCorrenteVendedor, CCLancamento } from '@/hooks/useContaCorrenteVendedor';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -13,7 +12,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { formatarMoeda } from '@/utils/format';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { DollarSign, Users, Loader2, Wallet, TrendingUp, Clock } from 'lucide-react';
+import { DollarSign, Loader2, Wallet, TrendingUp, Clock } from 'lucide-react';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   pendente: { label: 'Pendente', color: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30', variant: 'outline' },
@@ -40,193 +39,7 @@ function getTipoLabel(l: CCLancamento): string {
   return CATEGORIA_LABELS[l.categoria] || l.categoria;
 }
 
-// ===== ABA COMISSÕES DA EQUIPE =====
-function ComissoesEquipeTab() {
-  const { profile } = useAuth();
-  const [page, setPage] = useState(1);
-  const pageSize = 15;
 
-  // Buscar vendedores vinculados
-  const { data: vendedores = [], isLoading: loadingVendedores } = useQuery({
-    queryKey: ['agencia-vendedores', profile?.id],
-    queryFn: async () => {
-      if (!profile?.id) return [];
-      const { data, error } = await (supabase as any)
-        .from('agencia_vendedores')
-        .select('vendedor_user_id')
-        .eq('agencia_user_id', profile.id);
-      if (error) throw error;
-      return (data || []).map((r: any) => r.vendedor_user_id as string);
-    },
-    enabled: !!profile?.id,
-  });
-
-  // Buscar comissões dos vendedores + da agência
-  const allIds = profile?.id ? [profile.id, ...vendedores] : vendedores;
-
-  const { data: comissoesResult, isLoading: loadingComissoes } = useQuery({
-    queryKey: ['agencia-comissoes-equipe', allIds, page],
-    queryFn: async () => {
-      if (allIds.length === 0) return { data: [], count: 0 };
-
-      const from = (page - 1) * pageSize;
-      const to = from + pageSize - 1;
-
-      const { data, error, count } = await (supabase as any)
-        .from('conta_corrente_vendedor')
-        .select('*, profiles!conta_corrente_vendedor_vendedor_id_fkey(nome)', { count: 'exact' })
-        .in('vendedor_id', allIds)
-        .order('data_lancamento', { ascending: false })
-        .range(from, to);
-
-      if (error) throw error;
-      return { data: data || [], count: count || 0 };
-    },
-    enabled: allIds.length > 0,
-  });
-
-  // Totalizar
-  const { data: totais } = useQuery({
-    queryKey: ['agencia-comissoes-totais', allIds],
-    queryFn: async () => {
-      if (allIds.length === 0) return { total_creditos: 0, total_debitos: 0, saldo: 0 };
-
-      const { data, error } = await (supabase as any)
-        .from('conta_corrente_vendedor')
-        .select('tipo, valor_liquido')
-        .in('vendedor_id', allIds);
-
-      if (error) throw error;
-
-      let creditos = 0, debitos = 0;
-      (data || []).forEach((r: any) => {
-        if (r.tipo === 'credito') creditos += Number(r.valor_liquido || 0);
-        else debitos += Math.abs(Number(r.valor_liquido || 0));
-      });
-      return { total_creditos: creditos, total_debitos: debitos, saldo: creditos - debitos };
-    },
-    enabled: allIds.length > 0,
-  });
-
-  const comissoes = comissoesResult?.data || [];
-  const totalCount = comissoesResult?.count || 0;
-  const totalPages = Math.ceil(totalCount / pageSize);
-  const isLoading = loadingVendedores || loadingComissoes;
-
-  return (
-    <div className="space-y-4">
-      {/* Cards resumo */}
-      <div className="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Créditos</CardTitle>
-            <TrendingUp className="h-4 w-4 text-green-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-green-600">{formatarMoeda(totais?.total_creditos || 0)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Total Débitos</CardTitle>
-            <Clock className="h-4 w-4 text-red-500" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold text-red-600">{formatarMoeda(totais?.total_debitos || 0)}</div>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-            <CardTitle className="text-sm font-medium">Saldo Equipe</CardTitle>
-            <DollarSign className="h-4 w-4 text-muted-foreground" />
-          </CardHeader>
-          <CardContent>
-            <div className="text-2xl font-bold">{formatarMoeda(totais?.saldo || 0)}</div>
-          </CardContent>
-        </Card>
-      </div>
-
-      {/* Tabela */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Lançamentos da Equipe</CardTitle>
-          <p className="text-sm text-muted-foreground">{vendedores.length} vendedor(es) vinculado(s)</p>
-        </CardHeader>
-        <CardContent>
-          {isLoading ? (
-            <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>
-          ) : comissoes.length === 0 ? (
-            <p className="text-center text-muted-foreground py-8">Nenhum lançamento encontrado.</p>
-          ) : (
-            <>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Data</TableHead>
-                    <TableHead>Vendedor</TableHead>
-                    <TableHead>Descrição</TableHead>
-                    <TableHead>Tipo</TableHead>
-                    <TableHead className="text-right">Valor</TableHead>
-                    <TableHead>Status</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {comissoes.map((l: any) => {
-                    const statusCfg = STATUS_CONFIG[l.status] || { label: l.status, color: '', variant: 'outline' as const };
-                    return (
-                      <TableRow key={l.id}>
-                        <TableCell className="whitespace-nowrap">
-                          {format(new Date(l.data_lancamento), 'dd/MM/yyyy', { locale: ptBR })}
-                        </TableCell>
-                        <TableCell className="font-medium">{l.profiles?.nome || '—'}</TableCell>
-                        <TableCell>{l.descricao}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={l.tipo === 'credito' ? 'text-green-600' : 'text-red-600'}>
-                            {l.tipo === 'credito' ? 'Crédito' : 'Débito'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className={`text-right font-medium ${l.tipo === 'credito' ? 'text-green-600' : 'text-red-600'}`}>
-                          {l.tipo === 'credito' ? '+' : '-'}{formatarMoeda(Math.abs(Number(l.valor_liquido)))}
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={statusCfg.variant} className={statusCfg.color}>{statusCfg.label}</Badge>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-
-              {totalPages > 1 && (
-                <div className="mt-4">
-                  <Pagination>
-                    <PaginationContent>
-                      {page > 1 && (
-                        <PaginationItem>
-                          <PaginationPrevious onClick={() => setPage(p => p - 1)} />
-                        </PaginationItem>
-                      )}
-                      {Array.from({ length: Math.min(totalPages, 5) }, (_, i) => i + 1).map(p => (
-                        <PaginationItem key={p}>
-                          <PaginationLink isActive={p === page} onClick={() => setPage(p)}>{p}</PaginationLink>
-                        </PaginationItem>
-                      ))}
-                      {page < totalPages && (
-                        <PaginationItem>
-                          <PaginationNext onClick={() => setPage(p => p + 1)} />
-                        </PaginationItem>
-                      )}
-                    </PaginationContent>
-                  </Pagination>
-                </div>
-              )}
-            </>
-          )}
-        </CardContent>
-      </Card>
-    </div>
-  );
-}
 
 // ===== ABA CONTA CORRENTE =====
 function ContaCorrenteTab() {
@@ -409,29 +222,10 @@ export default function AgenciaDashboard() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Painel da Agência</h1>
-        <p className="text-muted-foreground">Acompanhe sua conta corrente e as comissões da sua equipe.</p>
+        <p className="text-muted-foreground">Acompanhe sua conta corrente consolidada.</p>
       </div>
 
-      <Tabs defaultValue="conta-corrente" className="w-full">
-        <TabsList>
-          <TabsTrigger value="conta-corrente" className="gap-2">
-            <Wallet className="h-4 w-4" />
-            Conta Corrente
-          </TabsTrigger>
-          <TabsTrigger value="equipe" className="gap-2">
-            <Users className="h-4 w-4" />
-            Comissões da Equipe
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="conta-corrente">
-          <ContaCorrenteTab />
-        </TabsContent>
-
-        <TabsContent value="equipe">
-          <ComissoesEquipeTab />
-        </TabsContent>
-      </Tabs>
+      <ContaCorrenteTab />
     </div>
   );
 }
