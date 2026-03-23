@@ -1,83 +1,56 @@
 
 
-# Plano: Registro Formal de Recusas de Tarefa
+# Plano: Modal de Resumo do Dia ao Encerrar Turno
 
 ## Resumo
 
-Criar tabela dedicada `registros_recusa_tarefa`, modal de recusa no app do vistoriador, alerta automatico para coordenador ao atingir limite, historico de atribuicoes no detalhe do servico, e badge de recusas no card do RH.
+Exibir automaticamente um modal com o resumo do dia quando o turno encerra, mostrando horas trabalhadas, servicos concluidos/recusados, saldo do turno e saldo acumulado. O modal aparece uma unica vez por turno usando sessionStorage.
 
 ---
 
-## PARTE 1 — DB: Tabela + Configuracoes
+## PARTE 1 — Componente `ModalResumoDia`
 
-**Nova tabela `registros_recusa_tarefa`**:
-```
-id (uuid PK default gen_random_uuid()),
-servico_id (uuid FK servicos NOT NULL),
-profissional_id (uuid FK profiles NOT NULL),
-turno_id (uuid FK turnos_profissionais),
-motivo (text NOT NULL),
-motivo_livre (text),
-created_at (timestamptz default now())
-```
-RLS: insert/select para authenticated.
+**Novo arquivo**: `src/components/vistoriador/ModalResumoDia.tsx`
 
-**Insert em `configuracoes`**:
-- `recusa_exigir_motivo` = `true`
-- `recusa_limite_alerta` = `3`
+Props:
+- `open: boolean`
+- `onClose: () => void`
+- `turno: TurnoProfissional` (dados do turno encerrado)
+- `servicosConcluidos: number`
+- `servicosRecusados: number`
+- `exibirSaldoAcumulado: boolean`
 
----
-
-## PARTE 2 — Configuracao na Diretoria (`InstalacaoRotasConfig.tsx`)
-
-Adicionar 2 chaves ao `CONFIG_CHAVES`: `recusa_exigir_motivo`, `recusa_limite_alerta`.
-
-Novo bloco 8 após GPS:
-- Toggle "Exigir motivo ao recusar tarefa" (`recusa_exigir_motivo`)
-- Input numerico "Limite de recusas por turno para alerta" (`recusa_limite_alerta`, default 3)
-- Botao "Salvar Recusas"
+Dialog com `onInteractOutside` e `onEscapeKeyDown` prevenidos + sem botao X:
+- Titulo: "Turno encerrado ✓"
+- Secao "Seu dia em numeros": horas trabalhadas (formatarMinutos), servicos concluidos, recusados (se > 0)
+- Secao "Saldo do turno": `minutos_extras - minutos_faltantes` — verde/vermelho/neutro
+- Secao "Saldo acumulado" (condicional): `saldo_anterior_minutos + extras - faltantes`
+- Botao "Entendido" que chama `onClose`
 
 ---
 
-## PARTE 3 — Componente `ModalRecusaTarefa`
+## PARTE 2 — Logica no `useJornadaTrabalho.ts`
 
-**Novo arquivo**: `src/components/vistoriador/ModalRecusaTarefa.tsx`
+Adicionar estado e controle de exibicao:
 
-Dialog com:
-- 5 opcoes radio: motivos pre-definidos
-- Campo texto livre para "Outro motivo"
-- Botoes "Confirmar Recusa" e "Cancelar"
-
----
-
-## PARTE 4 — Botao de Recusa no `TarefaAtualCard.tsx`
-
-Botao "Recusar Tarefa" visivel quando tarefa esta agendada.
-Ao confirmar: registra recusa, desatribui servico, busca proxima tarefa, verifica limite.
+- `mostrarResumoDia: boolean` — state interno
+- `useEffect` que observa `turno?.status`: quando muda para `'encerrado'` e `turno?.id` existe:
+  - Verificar `sessionStorage.getItem('resumo-turno-' + turno.id)`
+  - Se nao existe: setar `mostrarResumoDia = true`
+- `fecharResumoDia()`: seta `sessionStorage.setItem('resumo-turno-' + turno.id, 'true')` e `mostrarResumoDia = false`
+- Expor: `mostrarResumoDia`, `fecharResumoDia`
 
 ---
 
-## PARTE 5 — Verificacao de Limite e Alerta
+## PARTE 3 — Integracao no `InstaladorHome.tsx`
 
-Apos registrar recusa, conta recusas no turno. Se >= limite, envia notificacao para coordenadores/admins (sem duplicar).
-
----
-
-## PARTE 6 — Historico de Atribuicoes no `InstalacaoDetailDrawer.tsx`
-
-Secao "Historico de Atribuicoes" com lista cronologica de recusas por servico.
-
----
-
-## PARTE 7 — Badge de Recusas no `JornadaProfissionalCard.tsx`
-
-Badge discreto com contagem de recusas no turno (amarelo/vermelho conforme limite).
-
----
-
-## PARTE 8 — Parametros read-only no RH
-
-2 campos adicionais no painel colapsavel: "Exigir motivo recusa" e "Limite recusas/turno".
+- Importar `ModalResumoDia`
+- Usar `mostrarResumoDia` e `fecharResumoDia` do hook (via useJornadaTrabalho — precisara chamar o hook aqui ou extrair de onde ja e usado)
+- Queries condicionais (habilitadas quando `mostrarResumoDia === true`):
+  - Servicos concluidos: `servicos` com `profissional_id`, `status = 'concluida'`, `data = hoje`
+  - Servicos recusados: `registros_recusa_tarefa` com `profissional_id`, `created_at` de hoje
+  - Config `jornada_exibir_saldo_vistoriador`
+- Renderizar `<ModalResumoDia>` ao final do JSX
 
 ---
 
@@ -85,10 +58,7 @@ Badge discreto com contagem de recusas no turno (amarelo/vermelho conforme limit
 
 | Arquivo | Alteracao |
 |---|---|
-| DB migration | Tabela `registros_recusa_tarefa` + 2 inserts em `configuracoes` |
-| `src/components/gestao-comercial/InstalacaoRotasConfig.tsx` | Bloco 8 Recusas |
-| `src/components/vistoriador/ModalRecusaTarefa.tsx` | **Novo** |
-| `src/components/vistoriador/TarefaAtualCard.tsx` | Botao recusar + logica |
-| `src/components/instalacoes/InstalacaoDetailDrawer.tsx` | Secao historico atribuicoes |
-| `src/components/rh/JornadaProfissionalCard.tsx` | Badge recusas |
-| `src/pages/rh/JornadasProfissionais.tsx` | Query recusas + 2 parametros read-only |
+| `src/components/vistoriador/ModalResumoDia.tsx` | **Novo** |
+| `src/hooks/useJornadaTrabalho.ts` | Estado `mostrarResumoDia` + `fecharResumoDia` + sessionStorage |
+| `src/pages/instalador/InstaladorHome.tsx` | Queries condicionais + render do modal |
+
