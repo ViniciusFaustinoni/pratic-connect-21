@@ -1,39 +1,46 @@
 
 
-# Plano: Reorganizar Formulário — Tipo de Usuário como Primeiro Campo
+# Plano: Vincular Níveis de Comissão a Perfis de Acesso
 
 ## Problema
 
-1. O campo "Tipo de usuário" fica DEPOIS das informações básicas — deveria vir primeiro para triar o tipo de cadastro
-2. Não existe a opção "Agência" no tipo de usuário — só Funcionário, Associado, Prestador
-3. Os campos CNPJ/Razão Social só aparecem se o perfil "agencia" estiver selecionado nos checkboxes (que ficam mais abaixo), criando dependência circular
+Hoje cada nível de comissão tem apenas um campo texto livre (`nome`). O sistema não sabe **para qual perfil** destinar cada percentual. Quando a grade é atribuída a um usuário, não há como identificar automaticamente "50% vai pro vendedor, 20% vai pra agência".
 
 ## Solução
 
-### 1. Adicionar "Agência" como tipo de usuário
+Adicionar uma coluna `role` na tabela `grades_comissao_niveis` que vincula cada nível a um perfil do sistema (`vendedor_clt`, `vendedor_externo`, `agencia`, etc.).
 
-No select de tipo (linha 608-613), adicionar:
+### 1. Migration — Adicionar coluna `role`
+
+```sql
+ALTER TABLE public.grades_comissao_niveis
+  ADD COLUMN role TEXT;
 ```
-<SelectItem value="agencia">Agência</SelectItem>
+
+Coluna nullable para não quebrar dados existentes. O `nome` continua como label de exibição.
+
+### 2. `GradeComissaoForm.tsx` — Select de perfil em cada nível
+
+Substituir o campo de texto livre por um **Select** com os perfis comerciais (`vendedor_clt`, `vendedor_externo`, `agencia`) carregados dinamicamente via `useAppRoles`. O campo `nome` será auto-preenchido com o label do perfil selecionado, mas editável para customização (ex: "Vendedor Principal", "Agência Matriz").
+
+Cada nível terá:
+```text
+[ Select Perfil ▼ ] [ Nome (auto-fill) ] [ __% ]
 ```
 
-### 2. Mover "Tipo de Usuário" para ANTES do card de Informações Básicas
+### 3. Persistência
 
-Extrair o campo "Tipo de usuário" para um card próprio no topo do formulário, antes de qualquer outro campo. Assim o tipo triará o que aparece abaixo.
+No `handleSave`, incluir o `role` selecionado ao inserir os níveis. Na query de carregamento, ler o `role` junto.
 
-### 3. Lógica condicional baseada no tipo (não no perfil)
+### 4. Validação
 
-Trocar a condição `formData.perfis.includes('agencia')` por `formData.tipo === 'agencia'`:
-- **tipo = agencia**: mostrar CNPJ, Razão Social, Nome Fantasia (esconder CPF)
-- **tipo ≠ agencia**: mostrar CPF (esconder campos empresariais)
+- Não permitir dois níveis com o mesmo `role` na mesma grade (um vendedor não pode aparecer duas vezes)
+- Perfil é obrigatório em cada nível
 
-Quando `tipo === 'agencia'`, auto-selecionar o perfil `agencia` nos checkboxes.
+## Arquivos afetados
 
-### 4. Ajustar saveUser
-
-Na lógica de save, trocar `isAgencia` de `formData.perfis.includes('agencia')` para `formData.tipo === 'agencia'`.
-
-## Arquivo afetado
-
-`src/pages/configuracoes/UsuarioForm.tsx` — único arquivo.
+| Arquivo | Alteração |
+|---|---|
+| Migration SQL | `ADD COLUMN role TEXT` em `grades_comissao_niveis` |
+| `src/pages/configuracoes/GradeComissaoForm.tsx` | Select de perfil + auto-fill nome + salvar role |
 
