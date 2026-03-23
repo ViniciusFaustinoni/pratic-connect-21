@@ -58,7 +58,29 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const { mutate: iniciarRota, isPending: isIniciandoRota } = useIniciarRota();
   const { buscarProximaTarefa, isLoading: isBuscandoProxima } = useIniciarServico();
   const { mutate: registrarContato, isPending: isRegistrandoContato } = useRegistrarContato();
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
   
+  const [showRecusaModal, setShowRecusaModal] = useState(false);
+  const [isRecusando, setIsRecusando] = useState(false);
+  
+  // Ler config de recusa
+  const { data: configRecusa } = useQuery({
+    queryKey: ['config-recusa-tarefa'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['recusa_exigir_motivo', 'recusa_limite_alerta']);
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        exigirMotivo: map.recusa_exigir_motivo !== 'false',
+        limiteAlerta: parseInt(map.recusa_limite_alerta || '3', 10),
+      };
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
   // Estado para atualização em tempo real (a cada minuto)
   const [agora, setAgora] = useState(new Date());
   
