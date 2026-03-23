@@ -905,6 +905,14 @@ export default function ExecutarRetirada() {
           </Card>
         </div>
       )}
+      <ModalValidacaoPresenca
+        open={showGpsModal}
+        onOpenChange={setShowGpsModal}
+        loading={gpsLoading}
+        resultado={gpsResultado}
+        onConfirmarPresenca={handleGpsConfirmarRetirada}
+        onCancelar={handleGpsCancelarRetirada}
+      />
     </div>
   );
 }
