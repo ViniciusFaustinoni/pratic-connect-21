@@ -57,7 +57,7 @@ export function useGarantirTurno(emServico: boolean) {
         return turnoExistente.id;
       }
 
-      // Criar novo turno — buscar saldo do dia anterior
+      // Criar novo turno — buscar saldo do dia anterior e verificar débito
       const { data: turnoAnterior } = await supabase
         .from('turnos_profissionais')
         .select('minutos_extras, minutos_faltantes, saldo_anterior_minutos')
@@ -71,6 +71,20 @@ export function useGarantirTurno(emServico: boolean) {
         ? (turnoAnterior.minutos_extras || 0) - (turnoAnterior.minutos_faltantes || 0)
         : 0;
       const saldoAcumulado = saldoDoDia + (turnoAnterior?.saldo_anterior_minutos || 0);
+
+      // Verificar limite de débito
+      const { data: configLimite } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'jornada_limite_debito_horas')
+        .maybeSingle();
+      
+      const limiteHoras = parseFloat(configLimite?.valor || '0');
+      if (limiteHoras > 0 && saldoAcumulado < 0 && Math.abs(saldoAcumulado) > limiteHoras * 60) {
+        const horas = Math.floor(Math.abs(saldoAcumulado) / 60);
+        const mins = Math.abs(saldoAcumulado) % 60;
+        throw new Error(`DEBITO_BLOQUEIO:Você possui ${horas}h ${mins}min de débito acumulado. Entre em contato com o coordenador para regularizar antes de iniciar um novo turno.`);
+      }
 
       const { data: novoTurno, error: insertError } = await supabase
         .from('turnos_profissionais')
