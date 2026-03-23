@@ -427,7 +427,7 @@ export default function JornadasProfissionais() {
           ) : turnos && turnos.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {turnos.map((turno) => (
-                <JornadaProfissionalCard key={turno.id} turno={turno} recusasNoTurno={recusasPorTurno?.[turno.id] || 0} limiteRecusas={parseInt(parametros?.recusaLimiteAlerta || "3", 10)} />
+                <JornadaProfissionalCard key={turno.id} turno={turno} recusasNoTurno={recusasPorTurno?.[turno.id] || 0} limiteRecusas={parseInt(parametros?.recusaLimiteAlerta || "3", 10)} emViagem={(turno as any).em_viagem} bonusViagem={(turno as any).bonus_viagem} />
               ))}
             </div>
           ) : (
