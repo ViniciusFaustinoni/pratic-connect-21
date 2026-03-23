@@ -604,7 +604,7 @@ const App = () => (
               <Route path="/monitoramento/instalacoes" element={<Navigate to="/monitoramento/vistorias-instalacoes-mon" replace />} />
               <Route path="/monitoramento/instalacoes/:id" element={<InstalacaoDetalhe />} />
               <Route path="/monitoramento/rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
-              <Route path="/monitoramento/encaixes" element={<MonitoramentoEncaixes />} />
+              <Route path="/monitoramento/encaixes" element={<Navigate to="/monitoramento/vistorias-instalacoes-mon" replace />} />
               <Route path="/monitoramento/gestao-rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
               <Route path="/diretoria/rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
               <Route path="/diretoria/gestao-rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />

@@ -230,7 +230,6 @@ const menuConfig: {
           icon: ShieldAlert,
         },
         { title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
-        { title: 'Encaixes', url: '/monitoramento/encaixes', icon: CalendarCheck },
         {
           title: 'Config. Plataformas',
           url: '/monitoramento/config-plataformas',
