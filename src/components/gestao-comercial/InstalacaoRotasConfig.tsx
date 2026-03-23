@@ -505,6 +505,18 @@ export function InstalacaoRotasConfig() {
               <Label>Horas sem serviço para alerta</Label>
               <Input type="number" min={0.5} max={8} step={0.5} value={jornadaAlertaImprod} onChange={e => setJornadaAlertaImprod(e.target.value)} />
             </div>
+            <div className="space-y-2">
+              <Label>Limite de débito para bloqueio (horas)</Label>
+              <Input type="number" min={0} max={100} step={1} value={limiteDebito} onChange={e => setLimiteDebito(e.target.value)} />
+              <p className="text-xs text-muted-foreground">(0 = desativado)</p>
+            </div>
+            <div className="flex items-center justify-between col-span-full">
+              <div className="space-y-0.5">
+                <Label>Exibir saldo de horas para o vistoriador</Label>
+                <p className="text-xs text-muted-foreground">Quando ativo, o vistoriador vê seu saldo no perfil do app</p>
+              </div>
+              <Switch checked={exibirSaldo} onCheckedChange={setExibirSaldo} />
+            </div>
           </div>
 
           <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
@@ -524,6 +536,8 @@ export function InstalacaoRotasConfig() {
                   salvarConfig('jornada_tolerancia_atraso_minutos', jornadaTolerancia, profile?.id),
                   salvarConfig('jornada_produtividade_minima', jornadaProdMin, profile?.id),
                   salvarConfig('jornada_horas_alerta_improdutividade', jornadaAlertaImprod, profile?.id),
+                  salvarConfig('jornada_limite_debito_horas', limiteDebito, profile?.id),
+                  salvarConfig('jornada_exibir_saldo_vistoriador', exibirSaldo ? 'true' : 'false', profile?.id),
                 ]);
                 toast.success('Parâmetros de jornada salvos com sucesso');
                 invalidate();
