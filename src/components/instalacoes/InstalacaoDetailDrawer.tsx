@@ -342,6 +342,7 @@ export function InstalacaoDetailDrawer({
               </>
             )}
 
+            {instalacao.observacoes && (
               <>
                 <Separator />
                 <section>
