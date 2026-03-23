@@ -196,6 +196,7 @@ export function MapaAtendimento() {
       const updates = [
         { chave: 'viagem_valor_diaria', valor: viagemDiaria },
         { chave: 'viagem_sla_horas', valor: viagemSla },
+        { chave: 'prestador_horas_alerta_sem_resposta', valor: prestadorHorasAlerta },
       ];
       for (const u of updates) {
         const { error } = await supabase
