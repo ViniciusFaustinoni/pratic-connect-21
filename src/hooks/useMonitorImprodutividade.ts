@@ -51,11 +51,11 @@ export function useMonitorImprodutividade() {
 
       // Verificar serviços concluídos no dia
       const hojeStr = getHojeBrasilia().toISOString().split('T')[0];
-      const { count } = await supabase
+      const { count } = await (supabase as any)
         .from('servicos')
         .select('id', { count: 'exact', head: true })
         .eq('profissional_id', profile.id)
-        .eq('status', 'concluido')
+        .eq('status', 'concluida')
         .gte('concluido_em', `${hojeStr}T00:00:00`)
         .lte('concluido_em', `${hojeStr}T23:59:59`);
 
