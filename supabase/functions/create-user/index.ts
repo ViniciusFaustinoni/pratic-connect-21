@@ -17,7 +17,7 @@ interface CreateUserRequest {
   senha?: string;
   perfil?: string;
   perfis?: string[];
-  tipo: 'funcionario' | 'associado' | 'prestador';
+  tipo: 'funcionario' | 'associado' | 'prestador' | 'agencia';
   regioes_atendimento?: string[];
   capacidade_diaria?: number;
 }
@@ -214,20 +214,45 @@ serve(async (req) => {
       const appUrl = supabaseUrl.replace('.supabase.co', '.lovable.app');
       
       try {
+        const emailTemplate = tipo === 'agencia' ? 'acesso-agencia' : 'acesso-funcionario';
+        const emailData: Record<string, unknown> = {
+          nome,
+          linkAcesso: linkData?.properties?.action_link || `${appUrl}/login`,
+        };
+        if (tipo === 'agencia') {
+          emailData.nomeFantasia = nome_fantasia || '';
+          emailData.razaoSocial = razao_social || '';
+        }
+        
         await supabaseAdmin.functions.invoke('send-email', {
           body: {
-            template: 'acesso-funcionario',
+            template: emailTemplate,
             to: email.toLowerCase(),
-            data: {
-              nome,
-              linkAcesso: linkData?.properties?.action_link || `${appUrl}/login`,
-            }
+            data: emailData,
           }
         });
-        console.log('Email de acesso enviado');
+        console.log(`Email de acesso enviado (template: ${emailTemplate})`);
       } catch (emailError) {
         console.error('Erro ao enviar email:', emailError);
-        // Não falha a operação se email não for enviado
+      }
+
+      // Enviar WhatsApp de boas-vindas para agências
+      if (tipo === 'agencia' && telefone) {
+        try {
+          const nomeIdentificado = nome_fantasia || razao_social || nome;
+          const magicLink = linkData?.properties?.action_link || `${appUrl}/login`;
+          
+          await supabaseAdmin.functions.invoke('whatsapp-send-text', {
+            body: {
+              telefone,
+              template: 'boas_vindas_agencia_v1',
+              params: [nomeIdentificado, magicLink],
+            }
+          });
+          console.log('WhatsApp de boas-vindas enviado para agência');
+        } catch (whatsError) {
+          console.error('Erro ao enviar WhatsApp:', whatsError);
+        }
       }
     }
 
