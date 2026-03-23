@@ -128,10 +128,21 @@ async function processarMensagemUsuario(
       updated_at: new Date().toISOString(),
     }).eq("id", lead.id);
 
-    const primeiroNome = lead.nome?.split(" ")[0] || "Cliente";
-    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
-      `Olá ${primeiroNome}! 😊\n\nRecebemos sua mensagem. Nosso consultor entrará em contato em breve.\n\nAgradecemos o interesse na PRATICCAR! 🚗`
-    );
+    // Delegar para agente consultor IA em vez de resposta genérica
+    console.log(`[whatsapp-meta-webhook] Delegando lead para agente-consultor-ia: ${telefone}`);
+    try {
+      await fetch(`${supabaseUrl}/functions/v1/agente-consultor-ia`, {
+        method: "POST",
+        headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+        body: JSON.stringify({ telefone, texto, tipo_msg: tipoMsg, latitude, longitude }),
+      });
+    } catch (agentErr: any) {
+      console.error(`[whatsapp-meta-webhook] Erro delegação agente (lead):`, agentErr);
+      const primeiroNome = lead.nome?.split(" ")[0] || "Cliente";
+      await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+        `Olá ${primeiroNome}! 😊\n\nRecebemos sua mensagem. Nosso consultor entrará em contato em breve.\n\nAgradecemos o interesse na PRATICCAR! 🚗`
+      );
+    }
     return;
   }
 
