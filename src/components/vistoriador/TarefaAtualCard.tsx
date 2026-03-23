@@ -174,6 +174,98 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
     iniciarTarefa({ tarefaId: tarefa.id });
   };
 
+  const handleRecusar = async (motivo: string, motivoLivre?: string) => {
+    setIsRecusando(true);
+    try {
+      // Buscar turno ativo
+      const { data: turnoAtivo } = await supabase
+        .from('turnos_profissionais')
+        .select('id')
+        .eq('profissional_id', profile?.id || '')
+        .eq('status', 'ativo')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const turnoId = turnoAtivo?.id || null;
+
+      // Registrar recusa
+      await (supabase as any).from('registros_recusa_tarefa').insert({
+        servico_id: tarefa.id,
+        profissional_id: profile?.id,
+        turno_id: turnoId,
+        motivo,
+        motivo_livre: motivoLivre || null,
+      });
+
+      // Desatribuir serviço
+      await supabase.from('servicos').update({
+        profissional_id: null,
+        status: 'pendente',
+      }).eq('id', tarefa.id);
+
+      // Verificar limite de recusas e enviar alerta
+      if (turnoId) {
+        const { count } = await (supabase as any)
+          .from('registros_recusa_tarefa')
+          .select('id', { count: 'exact', head: true })
+          .eq('turno_id', turnoId);
+
+        const limite = configRecusa?.limiteAlerta || 3;
+        if ((count || 0) >= limite) {
+          // Verificar se já existe alerta para este turno
+          const { data: alertaExistente } = await supabase
+            .from('notificacoes')
+            .select('id')
+            .eq('referencia_id', turnoId)
+            .eq('subtipo', 'recusa_limite_atingido')
+            .limit(1);
+
+          if (!alertaExistente?.length) {
+            // Buscar coordenadores/admins
+            const { data: coordenadores } = await supabase
+              .from('user_roles')
+              .select('user_id')
+              .in('role', ['coordenador_monitoramento', 'admin', 'diretoria']);
+
+            for (const coord of (coordenadores || [])) {
+              await supabase.from('notificacoes').insert({
+                user_id: coord.user_id,
+                titulo: '⚠️ Vistoriador com muitas recusas',
+                mensagem: `Vistoriador ${profile?.nome || ''} recusou ${count} tarefas neste turno.`,
+                tipo: 'alerta',
+                subtipo: 'recusa_limite_atingido',
+                referencia_id: turnoId,
+                referencia_tipo: 'turno',
+                lida: false,
+                canal_sistema: true,
+                prioridade: 'alta',
+              });
+            }
+          }
+        }
+      }
+
+      // Buscar próxima tarefa
+      buscarProximaTarefa();
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      setShowRecusaModal(false);
+    } catch (err) {
+      console.error('Erro ao recusar tarefa:', err);
+      toast.error('Erro ao recusar tarefa');
+    } finally {
+      setIsRecusando(false);
+    }
+  };
+
+  const handleRecusarClick = () => {
+    if (configRecusa?.exigirMotivo) {
+      setShowRecusaModal(true);
+    } else {
+      handleRecusar('Sem motivo informado');
+    }
+  };
+
   const handleExecutar = () => {
     if (isManutencao(tarefa.tipo)) {
       navigate(`/instalador/manutencao/${tarefa.id}`);
