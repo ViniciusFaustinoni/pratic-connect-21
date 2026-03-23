@@ -427,7 +427,7 @@ export default function JornadasProfissionais() {
           ) : turnos && turnos.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {turnos.map((turno) => (
-                <JornadaProfissionalCard key={turno.id} turno={turno} />
+                <JornadaProfissionalCard key={turno.id} turno={turno} recusasNoTurno={recusasPorTurno?.[turno.id] || 0} limiteRecusas={parseInt(parametros?.recusaLimiteAlerta || "3", 10)} />
               ))}
             </div>
           ) : (
@@ -441,7 +441,7 @@ export default function JornadasProfissionais() {
           {turnosAtivos.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {turnosAtivos.map((turno) => (
-                <JornadaProfissionalCard key={turno.id} turno={turno} />
+                <JornadaProfissionalCard key={turno.id} turno={turno} recusasNoTurno={recusasPorTurno?.[turno.id] || 0} limiteRecusas={parseInt(parametros?.recusaLimiteAlerta || "3", 10)} />
               ))}
             </div>
           ) : (
@@ -455,7 +455,7 @@ export default function JornadasProfissionais() {
           {turnosAlmoco.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {turnosAlmoco.map((turno) => (
-                <JornadaProfissionalCard key={turno.id} turno={turno} />
+                <JornadaProfissionalCard key={turno.id} turno={turno} recusasNoTurno={recusasPorTurno?.[turno.id] || 0} limiteRecusas={parseInt(parametros?.recusaLimiteAlerta || "3", 10)} />
               ))}
             </div>
           ) : (
@@ -469,7 +469,7 @@ export default function JornadasProfissionais() {
           {turnosEncerrados.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {turnosEncerrados.map((turno) => (
-                <JornadaProfissionalCard key={turno.id} turno={turno} />
+                <JornadaProfissionalCard key={turno.id} turno={turno} recusasNoTurno={recusasPorTurno?.[turno.id] || 0} limiteRecusas={parseInt(parametros?.recusaLimiteAlerta || "3", 10)} />
               ))}
             </div>
           ) : (
