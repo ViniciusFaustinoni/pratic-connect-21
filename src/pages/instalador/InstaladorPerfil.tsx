@@ -203,6 +203,15 @@ export default function InstaladorPerfil() {
                   </div>
                 </div>
 
+                {(configJornada?.viagemValorDiaria ?? 0) > 0 && (resumoMes?.totalBonusViagem ?? 0) > 0 && (
+                  <div className="rounded-lg bg-orange-900/30 border border-orange-500/30 p-3 flex items-center justify-between">
+                    <span className="text-sm text-orange-300">Diárias de viagem no mês</span>
+                    <span className="text-sm font-semibold text-orange-300">
+                      R$ {(resumoMes?.totalBonusViagem ?? 0).toFixed(2)}
+                    </span>
+                  </div>
+                )}
+
                 {debitoBloqueado && (
                   <div className="rounded-lg bg-red-900/30 border border-red-500/50 p-3 flex items-start gap-2">
                     <AlertTriangle className="h-4 w-4 text-red-400 mt-0.5 shrink-0" />
