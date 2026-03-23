@@ -83,13 +83,13 @@ export function useValidacaoPresenca() {
         lonVist = pos.coords.longitude;
       } catch {
         // GPS indisponível
-        try {
-          await supabase.from('registros_presenca').insert({
+      try {
+          await (supabase as any).from('registros_presenca').insert({
             servico_id: servicoId,
             gps_indisponivel: true,
             latitude_destino: latDest,
             longitude_destino: lonDest,
-          } as any);
+          });
         } catch { /* silent */ }
         return { aprovado: true, distancia: null, dentroDoRaio: false, gpsIndisponivel: true };
       }
