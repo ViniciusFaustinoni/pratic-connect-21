@@ -3203,33 +3203,31 @@ serve(async (req) => {
           lead.nome
         );
         
-        // Responder ao lead
-        const primeiroNome = lead.nome?.split(' ')[0] || 'Cliente';
-        await sendWhatsAppMessage(
-          apiUrl,
-          instancia.instance_name,
-          telefone,
-          `Olá ${primeiroNome}! 😊\n\nRecebemos sua mensagem. Nosso consultor entrará em contato em breve.\n\nAgradecemos o interesse na PRATICCAR! 🚗`
-        );
-        
-        // Notificar vendedor do lead (se tiver)
-        if (lead.vendedor_id) {
-          // Buscar profile_id do vendedor
-          const { data: vendedorProfile } = await supabase
-            .from("profiles")
-            .select("id")
-            .eq("user_id", lead.vendedor_id)
-            .single();
-          
-          if (vendedorProfile) {
-            await supabase.from("notificacoes").insert({
-              usuario_id: vendedorProfile.id,
-              titulo: "📱 Lead respondeu no WhatsApp",
-              mensagem: `${lead.nome}: "${mensagemTexto.substring(0, 100)}${mensagemTexto.length > 100 ? '...' : ''}"`,
-              tipo: "info",
-              dados: { lead_id: lead.id, telefone },
-            });
-          }
+        // Delegar para agente consultor IA
+        console.log(`[whatsapp-webhook] Delegando lead para agente-consultor-ia: ${telefone}`);
+        try {
+          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/agente-consultor-ia`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({
+              telefone,
+              texto: mensagemTexto,
+              tipo_msg: tipoPrincipal,
+            }),
+          });
+        } catch (agentErr: any) {
+          console.error(`[whatsapp-webhook] Erro delegação agente (lead):`, agentErr);
+          // Fallback: resposta genérica
+          const primeiroNome = lead.nome?.split(' ')[0] || 'Cliente';
+          await sendWhatsAppMessage(
+            apiUrl,
+            instancia.instance_name,
+            telefone,
+            `Olá ${primeiroNome}! 😊\n\nRecebemos sua mensagem. Nosso consultor entrará em contato em breve.\n\nAgradecemos o interesse na PRATICCAR! 🚗`
+          );
         }
         
         return new Response(JSON.stringify({ ok: true, lead_id: lead.id }), { headers: corsHeaders });
@@ -3316,18 +3314,38 @@ Verifique se o CPF está correto ou entre em contato com nossa central para mais
         mediaFilename || undefined
       );
       
-      // Pedir CPF para identificação
-      await sendWhatsAppMessage(
-        apiUrl,
-        instancia.instance_name,
-        telefone,
-        `Olá! 👋 Não consegui identificar seu número em nosso sistema.
-
-Por favor, me informe seu *CPF* (apenas números) para que eu possa te ajudar.
-
-Se você ainda não é associado PRATIC, acesse nosso site ou entre em contato conosco! 📞`
-      );
-      return new Response(JSON.stringify({ ok: true, notFound: true, awaiting_cpf: true }), { headers: corsHeaders });
+      // ========================================
+      // DELEGAR PARA AGENTE CONSULTOR IA
+      // ========================================
+      console.log(`[whatsapp-webhook] Delegando número desconhecido para agente-consultor-ia: ${telefone}`);
+      try {
+        const agentRes = await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/agente-consultor-ia`, {
+          method: "POST",
+          headers: {
+            "Content-Type": "application/json",
+            Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+          },
+          body: JSON.stringify({
+            telefone,
+            texto: mensagemTexto,
+            tipo_msg: tipoPrincipal,
+            latitude: tipoPrincipal === 'localizacao' ? tipoMensagem.localizacao?.degreesLatitude : null,
+            longitude: tipoPrincipal === 'localizacao' ? tipoMensagem.localizacao?.degreesLongitude : null,
+          }),
+        });
+        const agentResult = await agentRes.json();
+        console.log(`[whatsapp-webhook] Agente consultor respondeu:`, JSON.stringify(agentResult).substring(0, 200));
+      } catch (agentErr: any) {
+        console.error(`[whatsapp-webhook] Erro ao delegar para agente-consultor-ia:`, agentErr);
+        // Fallback: pedir CPF como antes
+        await sendWhatsAppMessage(
+          apiUrl,
+          instancia.instance_name,
+          telefone,
+          `Olá! 👋 Não consegui identificar seu número em nosso sistema.\n\nPor favor, me informe seu *CPF* (apenas números) para que eu possa te ajudar.\n\nSe você ainda não é associado PRATIC, acesse nosso site ou entre em contato conosco! 📞`
+        );
+      }
+      return new Response(JSON.stringify({ ok: true, delegated_to_agent: true }), { headers: corsHeaders });
     }
 
     // ========================================
