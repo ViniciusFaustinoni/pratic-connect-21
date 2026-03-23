@@ -161,7 +161,11 @@ export default function DashboardVendaExterna() {
               ) : filtrados.map(v => (
                 <TableRow key={v.vendedor_id}>
                   <TableCell className="font-medium">{v.vendedor_nome}</TableCell>
-                  <TableCell className="text-right">
+                  <TableCell>
+                    <Badge variant="outline" className={TIPO_BADGE_CLASSES[v.tipo] || TIPO_BADGE_CLASSES['Outro']}>
+                      {v.tipo}
+                    </Badge>
+                  </TableCell>
                     <span className={v.saldo_atual > 0 ? 'text-green-600 font-semibold' : v.saldo_atual < 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}>
                       {formatarMoeda(v.saldo_atual)}
                     </span>
