@@ -24,6 +24,24 @@ import {
 // ─── Tab 1: Planos do Agente ──────────────────────────────────────────────
 function AbaPlanos() {
   const queryClient = useQueryClient();
+  const [generatingImageId, setGeneratingImageId] = useState<string | null>(null);
+
+  const handleRegenerarImagem = async (plano: any) => {
+    setGeneratingImageId(plano.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('gerar-imagem-plano', {
+        body: { plano_id: plano.id, nome: plano.nome, descricao: plano.agente_descricao },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      queryClient.invalidateQueries({ queryKey: ['planos-agente-ia'] });
+      toast.success('Imagem gerada com sucesso!');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao gerar imagem');
+    } finally {
+      setGeneratingImageId(null);
+    }
+  };
 
   const { data: planos, isLoading } = useQuery({
     queryKey: ['planos-agente-ia'],
