@@ -173,7 +173,7 @@ export function MapaAtendimento() {
       const { data } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', ['viagem_valor_diaria', 'viagem_sla_horas']);
+        .in('chave', ['viagem_valor_diaria', 'viagem_sla_horas', 'prestador_horas_alerta_sem_resposta']);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
         diaria: map.viagem_valor_diaria || '0',
