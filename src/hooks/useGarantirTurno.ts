@@ -103,11 +103,21 @@ export function useGarantirTurno(emServico: boolean) {
       return novoTurno.id;
     },
     onSuccess: () => {
+      setDebitoBloqueado(false);
+      setMensagemDebito(null);
       queryClient.invalidateQueries({ queryKey: ['turno-profissional'] });
       queryClient.invalidateQueries({ queryKey: ['jornadas-profissionais'] });
     },
     onError: (error) => {
-      console.error('[useGarantirTurno] Erro:', error);
+      const msg = error.message || '';
+      if (msg.startsWith('DEBITO_BLOQUEIO:')) {
+        const mensagem = msg.replace('DEBITO_BLOQUEIO:', '');
+        setDebitoBloqueado(true);
+        setMensagemDebito(mensagem);
+        toast.error(mensagem);
+      } else {
+        console.error('[useGarantirTurno] Erro:', error);
+      }
     },
   });
 
