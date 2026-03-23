@@ -67,7 +67,7 @@ function calcularTempoReal(turno: TurnoProfissional): { trabalhados: number; alm
   return { trabalhados, almoco: minutosAlmoco };
 }
 
-export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecusas = 3, className }: JornadaProfissionalCardProps) {
+export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecusas = 3, emViagem, bonusViagem, className }: JornadaProfissionalCardProps) {
   const { trabalhados, almoco } = calcularTempoReal(turno);
   const jornadaPadrao = 480;
   const jornadaAjustada = jornadaPadrao - (turno.saldo_anterior_minutos || 0);
