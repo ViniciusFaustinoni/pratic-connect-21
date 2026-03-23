@@ -64,12 +64,12 @@ export default function ViagensTab() {
         .select(`
           id, status, data_agendada, periodo, tipo_deslocamento, tipo_servico, created_at,
           cidade, uf, instalador_id, instalador_responsavel_id,
-          associados!inner (id, nome),
+          associados (id, nome),
           instalador:profiles!instalacoes_instalador_id_fkey (id, nome),
           instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome)
         `)
         .eq('tipo_deslocamento', 'viagem')
-        .order('data_agendada', { ascending: false });
+        .order('data_agendada', { ascending: false }) as any;
 
       if (dateRange?.from) {
         query = query.gte('data_agendada', format(dateRange.from, 'yyyy-MM-dd'));
