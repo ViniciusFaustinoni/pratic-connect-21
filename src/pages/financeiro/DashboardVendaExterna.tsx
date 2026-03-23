@@ -155,9 +155,9 @@ export default function DashboardVendaExterna() {
             </TableHeader>
             <TableBody>
               {isLoadingVendedores ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
               ) : filtrados.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum vendedor encontrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum vendedor encontrado</TableCell></TableRow>
               ) : filtrados.map(v => (
                 <TableRow key={v.vendedor_id}>
                   <TableCell className="font-medium">{v.vendedor_nome}</TableCell>
