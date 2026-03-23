@@ -1,43 +1,57 @@
 
 
-
-# Plano: Link Tokenizado para Prestador com WhatsApp Meta
+# Plano: Aba "Prestadores Parceiros" no Monitoramento
 
 ## Resumo
 
-Link publico tokenizado para prestadores confirmarem chegada e conclusao de instalacoes com foto. Envio via WhatsApp Meta API. Acompanhamento no drawer do coordenador.
+Criar pagina "Prestadores Parceiros" no modulo de Monitoramento (nao na Diretoria), acessivel apenas a Diretor, Admin Master e Coordenador de Monitoramento. Inclui lista com metricas, historico, e card resumo no dashboard do coordenador.
 
 ---
 
-## PARTE 1 — Tabela + Storage (Migration) ✅
+## PARTE 1 — Nova pagina `src/pages/monitoramento/PrestadoresParceiros.tsx`
 
-- Tabela `instalacao_prestador_links` com token, status, timestamps, foto
-- Bucket `prestador-fotos` publico
-- RLS: anon SELECT/UPDATE, authenticated ALL
-- Template Meta `prestador_nova_instalacao_v1` (DRAFT)
+Pagina completa com:
 
-## PARTE 2 — Edge Function `gerar-link-prestador` ✅
+- **Lista de prestadores** da `prestadores_assistencia`:
+  - Nome, WhatsApp, status (toggle inline)
+  - Municipios de atuacao (badges dos municipios tipo `prestador` da `municipios_atendimento`)
+  - Metricas agregadas da `instalacao_prestador_links`: total recebidas, concluidas, taxa de conclusao (%)
+  - Botao "Editar" → abre `NovoPrestadorModal` existente
+  - Botao "Ver historico" → expande inline ultimos 10 registros de `instalacao_prestador_links`
+- **Botao "+ Novo Prestador"** → abre `NovoPrestadorModal` em modo criacao
+- **Busca** por nome e **filtro** por status
 
-- Gera token, busca dados, envia WhatsApp via `whatsapp-send-text`
-- Retorna token e URL
+Protecao de acesso via `PermissionGate` ou check no hook: apenas perfis `diretor`, `admin_master`, `coordenador_monitoramento`.
 
-## PARTE 3 — Pagina Publica `/prestador/instalacao/:token` ✅
+## PARTE 2 — Rota no App.tsx
 
-- Mobile-first, sem autenticacao (publicSupabase)
-- Confirmar chegada → em_execucao
-- Upload foto + concluir → concluida
+Adicionar rota `/monitoramento/prestadores-parceiros` apontando para `PrestadoresParceiros`.
 
-## PARTE 4 — Secao Prestador no InstalacaoDetailDrawer ✅
+## PARTE 3 — Link de acesso
 
-- Badge status, horarios, foto comprovante
-- Botoes "Copiar Link" e "Reenviar"
+Adicionar link na sidebar/navegacao do modulo de Monitoramento (ou nos `acoesRapidas` do `DashboardCoordenador`). Visivel apenas para os 3 perfis permitidos.
+
+## PARTE 4 — Card "Prestadores Ativos" no DashboardCoordenador
+
+**Novo componente**: `src/components/monitoramento/PrestadoresAtivos.tsx`
+
+Card com:
+- Prestadores com link ativo (status `aguardando` ou `em_execucao`, nao expirado)
+- Quantidade de instalacoes aguardando vs em execucao
+- Lista resumida: nome, municipio, status badge, tempo desde envio
+
+Renderizar no `DashboardCoordenador.tsx` apos `VistoriadoresEmAlerta`.
+
+---
 
 ## Arquivos afetados
 
 | Arquivo | Alteracao |
 |---|---|
-| DB migration | Tabela + bucket + template |
-| `supabase/functions/gerar-link-prestador/index.ts` | Nova edge function |
-| `src/pages/public/PrestadorInstalacao.tsx` | Nova pagina publica |
-| `src/App.tsx` | Rota + import |
-| `src/components/instalacoes/InstalacaoDetailDrawer.tsx` | Secao prestador |
+| `src/pages/monitoramento/PrestadoresParceiros.tsx` | **Novo** — lista + metricas + historico |
+| `src/components/monitoramento/PrestadoresAtivos.tsx` | **Novo** — card dashboard |
+| `src/pages/monitoramento/DashboardCoordenador.tsx` | Renderizar PrestadoresAtivos + acao rapida |
+| `src/App.tsx` | Rota `/monitoramento/prestadores-parceiros` |
+
+Nenhuma migration necessaria — usa tabelas existentes.
+
