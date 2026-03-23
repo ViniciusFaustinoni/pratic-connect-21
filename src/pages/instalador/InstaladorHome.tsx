@@ -18,10 +18,13 @@ import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
 import { useServicosRealtime } from '@/hooks/useServicosRealtime';
 import { useGarantirTurno } from '@/hooks/useGarantirTurno';
+import { useMonitorImprodutividade } from '@/hooks/useMonitorImprodutividade';
 
 export default function InstaladorHome() {
   // Realtime: receber tarefas instantaneamente
   useServicosRealtime();
+  // Monitor silencioso de improdutividade
+  useMonitorImprodutividade();
   const { profile } = useAuth();
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading } = useTarefaAtual();
