@@ -54,7 +54,7 @@ export default function GradeComissaoForm() {
       setNome(existing.nome);
       setDescricao(existing.descricao || '');
       const sorted = [...(existing.grades_comissao_niveis || [])].sort((a: any, b: any) => a.ordem - b.ordem);
-      setNiveis(sorted.map((n: any) => ({ id: n.id, nome: n.nome, percentual: Number(n.percentual) })));
+      setNiveis(sorted.map((n: any) => ({ id: n.id, nome: n.nome, percentual: Number(n.percentual), role: n.role || '' })));
     }
   }, [existing]);
 
