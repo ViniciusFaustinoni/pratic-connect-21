@@ -128,7 +128,7 @@ export function useValidacaoPresenca() {
 
       // Registrar
       try {
-        await supabase.from('registros_presenca').insert({
+        await (supabase as any).from('registros_presenca').insert({
           servico_id: servicoId,
           latitude_vistoriador: latVist,
           longitude_vistoriador: lonVist,
@@ -137,7 +137,7 @@ export function useValidacaoPresenca() {
           distancia_metros: distancia,
           dentro_do_raio: dentroDoRaio,
           confirmou_presenca: false,
-        } as any);
+        });
       } catch { /* silent */ }
 
       return {
