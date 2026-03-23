@@ -736,9 +736,9 @@ export default function UsuarioForm() {
                     <Label htmlFor="grade_comissao">Grade</Label>
                     <Select
                       value={formData.grade_comissao_id || 'none'}
-                      onValueChange={(v) => setFormData(prev => ({ ...prev, grade_comissao_id: v === 'none' ? '' : v }))}
+                      onValueChange={(v) => { setFormData(prev => ({ ...prev, grade_comissao_id: v === 'none' ? '' : v })); setGradeError(false); }}
                     >
-                      <SelectTrigger className="bg-background">
+                      <SelectTrigger className={`bg-background ${gradeError ? 'border-destructive ring-destructive' : ''}`}>
                         <SelectValue placeholder="Selecione uma grade" />
                       </SelectTrigger>
                       <SelectContent>
