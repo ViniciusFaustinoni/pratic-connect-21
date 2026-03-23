@@ -1,69 +1,37 @@
 
 
-# Plano Unificado: Boas-vindas Agencia — Email + WhatsApp + Template Meta
+# Plano: Corrigir Template `boas_vindas_agencia_v1` — Adicionar Exemplos e Botão URL
 
-## Resumo
+## Problema
 
-Ao criar um usuario do tipo `agencia`, o sistema enviara automaticamente:
-1. **Email** com template especifico `acesso-agencia` (linguagem empresarial)
-2. **WhatsApp** com template Meta `boas_vindas_agencia_v1` (com fallback para `notificacao_geral_v1`)
+A migration inseriu o template sem:
+1. `variaveis_exemplo` — Meta exige exemplos preenchidos para aprovar
+2. `botoes` — o link de acesso deveria ser um **botão URL** (como outros templates do sistema), não texto inline no corpo
+3. O corpo tem `{{2}}` no meio do texto como link — isso não funciona bem na Meta; o link deve ir no botão
 
-## Implementacao
+## Solução
 
-### 1. Migration — Inserir template Meta como DRAFT
+Uma migration UPDATE para corrigir o template existente:
 
 ```sql
-INSERT INTO public.whatsapp_meta_templates (nome, categoria, corpo, header_tipo, header_texto, rodape, status, idioma)
-VALUES (
-  'boas_vindas_agencia_v1', 'UTILITY',
-  'Olá {{1}}, bem-vindo(a) ao Painel PRATIC! Seu acesso foi criado com sucesso. Utilize o link abaixo para acessar sua conta: {{2}}. Em caso de dúvidas, entre em contato com nosso suporte.',
-  'text', 'PRATIC - Acesso Criado', 'PRATIC Associação de Proteção Veicular', 'DRAFT', 'pt_BR'
-);
+UPDATE whatsapp_meta_templates 
+SET 
+  corpo = 'Olá {{1}}, bem-vindo(a) ao Painel PRATIC! Seu acesso foi criado com sucesso. Utilize o botão abaixo para acessar sua conta. Em caso de dúvidas, entre em contato com nosso suporte.',
+  variaveis_exemplo = '{"1": "Agência Exemplo"}',
+  botoes = '[{"type": "URL", "text": "Acessar Painel", "url": "https://pratic-connect-21.lovable.app/app/criar-senha?token={{1}}"}]',
+  updated_at = now()
+WHERE nome = 'boas_vindas_agencia_v1';
 ```
 
-Apos implementacao, enviar para aprovacao da Meta pelo painel (Integracoes > WhatsApp > Templates).
+Mudanças:
+- Remove `{{2}}` do corpo (link vai no botão)
+- Adiciona `variaveis_exemplo` com exemplo para `{{1}}`
+- Adiciona botão URL "Acessar Painel" com variável `{{1}}` na URL
+- Corpo agora tem apenas `{{1}}` (nome da agência) — 1 variável no corpo, 1 variável no botão
 
-### 2. `send-email/index.ts` — Novo template `acesso-agencia`
+## Arquivo afetado
 
-Adicionar ao objeto `TEMPLATES` um novo template com:
-- Assunto: "Seu acesso ao Painel PRATIC foi criado"
-- Saudacao usando nome fantasia ou razao social (com fallback para nome)
-- Mensagem: "Seu acesso ao Painel de Agencia PRATIC foi criado"
-- Botao: "Acessar Painel da Agencia"
-- Aviso de expiracao do link
-- Visual identico aos templates existentes
-
-### 3. `create-user/index.ts` — Tipo `agencia` + email condicional + WhatsApp
-
-- Adicionar `'agencia'` ao tipo na interface `CreateUserRequest` (linha 20)
-- No bloco de envio de email (linhas 216-231), escolher template condicional:
-  - `tipo === 'agencia'` → template `acesso-agencia`, dados incluem `nomeFantasia` e `razaoSocial`
-  - demais → template `acesso-funcionario` (como hoje)
-- Apos o email, enviar WhatsApp via `whatsapp-send-text` com:
-  - Template: `boas_vindas_agencia_v1`
-  - Params: `[nome_fantasia || razao_social || nome, magic_link]`
-  - Telefone do cadastro
-  - Fallback automatico para `notificacao_geral_v1` (ja implementado no `whatsapp-send-text`)
-
-### Fluxo completo
-
-```text
-Criar usuario (tipo=agencia)
-  → Auth + Profile (cnpj, razao_social, nome_fantasia) + Roles
-  → Gerar magic link
-  → Enviar email (template acesso-agencia)
-  → Enviar WhatsApp (template boas_vindas_agencia_v1 via whatsapp-send-text)
-```
-
-## Arquivos afetados
-
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---|---|
-| Migration SQL | Insert template `boas_vindas_agencia_v1` como DRAFT |
-| `supabase/functions/send-email/index.ts` | Novo template `acesso-agencia` |
-| `supabase/functions/create-user/index.ts` | Tipo `agencia` na interface + email condicional + envio WhatsApp |
-
-## Pos-implementacao
-
-O template WhatsApp sera criado como **DRAFT**. O usuario deve ir em **Integracoes > WhatsApp > Templates Meta** e clicar "Enviar para aprovacao". Enquanto nao aprovado, o fallback `notificacao_geral_v1` sera usado automaticamente.
+| Migration SQL | UPDATE template com exemplos + botão URL |
 
