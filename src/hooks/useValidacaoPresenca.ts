@@ -152,9 +152,9 @@ export function useValidacaoPresenca() {
 
   const confirmarPresenca = useCallback(async (servicoId: string) => {
     try {
-      await supabase
+      await (supabase as any)
         .from('registros_presenca')
-        .update({ confirmou_presenca: true } as any)
+        .update({ confirmou_presenca: true })
         .eq('servico_id', servicoId)
         .order('created_at', { ascending: false })
         .limit(1);
