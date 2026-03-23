@@ -509,6 +509,7 @@ export function useContaCorrenteVendedor(filtros: CCFiltros) {
     resumo: resumoQuery.data || { a_receber_este_mes: 0, ja_recebido_este_mes: 0, total_a_receber: 0, total_historico_recebido: 0 },
     isLoadingResumo: resumoQuery.isLoading,
     registrarPagamento,
+    estornarComissao,
     gerarLancamentosAtivacao,
     confirmarParcelaRecorrente,
     cancelarVendaPreBoleto,

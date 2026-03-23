@@ -276,6 +276,15 @@ export default function GestaoContaVendedor() {
             onConfirm={(dados) => registrarPagamento.mutate(dados)}
             isSaving={registrarPagamento.isPending}
           />
+
+          <EstornoComissaoModal
+            open={!!modalEstorno}
+            onClose={() => setModalEstorno(null)}
+            lancamento={modalEstorno}
+            vendedorNome={vendedorNome}
+            onConfirm={(dados) => estornarComissao.mutate(dados, { onSuccess: () => setModalEstorno(null) })}
+            isSaving={estornarComissao.isPending}
+          />
         </>
       )}
     </div>
