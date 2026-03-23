@@ -1,57 +1,72 @@
 
 
-# Plano: Notificação de Estorno para o Vendedor (4.13)
+# Plano: Estorno Individual de Comissão Paga
 
-## O que muda
+## Resumo
 
-Atualizar a function `fn_notificar_pagamento_vendedor` para também detectar quando o status muda para `'cancelado'` (estorno) e inserir uma notificação com o motivo.
+Implementar fluxo completo de estorno manual para comissões individuais já pagas, com modal de motivo obrigatório, geração de débito, auditoria e card de resumo no dashboard.
 
-### Migration SQL
+## Arquivos a criar/modificar
 
-```sql
-CREATE OR REPLACE FUNCTION public.fn_notificar_pagamento_vendedor()
-RETURNS TRIGGER AS $$
-BEGIN
-  -- Notificação de pagamento
-  IF NEW.status = 'pago' AND OLD.status != 'pago' AND NEW.tipo = 'credito' THEN
-    INSERT INTO notificacoes_vendas (usuario_id, tipo, titulo, mensagem, dados_extras)
-    VALUES (
-      NEW.vendedor_id,
-      'pagamento_comissao',
-      'Pagamento recebido!',
-      FORMAT('Comissão de R$ %s foi paga em %s',
-        TO_CHAR(NEW.valor_liquido, 'FM999G999D00'),
-        TO_CHAR(NEW.data_pagamento::date, 'DD/MM/YYYY')),
-      jsonb_build_object('lancamento_id', NEW.id, 'valor', NEW.valor_liquido)
-    );
-  END IF;
-
-  -- Notificação de estorno
-  IF NEW.status = 'cancelado' AND OLD.status != 'cancelado' THEN
-    INSERT INTO notificacoes_vendas (usuario_id, tipo, titulo, mensagem, dados_extras)
-    VALUES (
-      NEW.vendedor_id,
-      'estorno_comissao',
-      'Comissão estornada',
-      FORMAT('Comissão de R$ %s foi estornada. Motivo: %s',
-        TO_CHAR(NEW.valor_liquido, 'FM999G999D00'),
-        COALESCE(NEW.observacao_pagamento, 'Não informado')),
-      jsonb_build_object('lancamento_id', NEW.id, 'valor', NEW.valor_liquido, 'motivo', NEW.observacao_pagamento)
-    );
-  END IF;
-
-  RETURN NEW;
-END;
-$$ LANGUAGE plpgsql SECURITY DEFINER SET search_path = public;
-```
-
-O trigger `trg_notificar_pagamento` já existe e continua apontando para a mesma function — basta o `CREATE OR REPLACE`.
-
-## Arquivo afetado
-
-| Arquivo | Alteração |
+| Arquivo | Ação |
 |---|---|
-| Migration SQL | `CREATE OR REPLACE` da function com bloco adicional para estorno |
+| `src/components/financeiro/EstornoComissaoModal.tsx` | **Criar** — Modal de estorno |
+| `src/hooks/useContaCorrenteVendedor.ts` | **Modificar** — Adicionar mutation `estornarComissao` |
+| `src/pages/financeiro/GestaoContaVendedor.tsx` | **Modificar** — Botão de estorno + tooltip de motivo |
+| `src/hooks/useDashboardVendaExterna.ts` | **Modificar** — Adicionar query de estornos no mês |
+| `src/pages/financeiro/DashboardVendaExterna.tsx` | **Modificar** — Card "Estornos no mês" |
 
-Nenhuma alteração no frontend — o `useNotificacoesVendasRealtime()` já captura qualquer INSERT na `notificacoes_vendas` e exibe o toast automaticamente.
+## Detalhamento
+
+### 1. Modal `EstornoComissaoModal.tsx`
+
+Novo componente Dialog com:
+- Props: `open`, `onClose`, `lancamento` (CCLancamento), `vendedorNome`, `onConfirm`, `isSaving`
+- Exibe resumo: vendedor, descrição, valor líquido, data pagamento
+- Campo `Textarea` para motivo (mínimo 10 caracteres)
+- Aviso fixo: "Esta ação não pode ser desfeita. O vendedor será notificado automaticamente com o motivo informado."
+- Botão "Confirmar estorno" (variant destructive) desabilitado se motivo < 10 chars
+- Botão "Cancelar"
+
+### 2. Mutation `estornarComissao` no hook
+
+No `useContaCorrenteVendedor.ts`, adicionar mutation que:
+
+1. Atualiza o lançamento original:
+   - `status: 'cancelado'`
+   - `observacao_pagamento: motivo`
+   - `pago_por: profile.id` (reutilizando campo para auditoria de quem estornou)
+   - `updated_at: now()`
+
+2. Insere novo lançamento de débito:
+   - `tipo: 'debito'`
+   - `categoria: 'estorno'`
+   - `descricao: 'Estorno — [descrição original]'`
+   - `valor_bruto/valor_liquido`: mesmo valor do original
+   - `status: 'a_pagar'`
+   - `debito_volante_ref_id: id do lançamento original` (referência)
+
+3. Chama `recalcularSaldos`
+
+O trigger `trg_notificar_pagamento` cuida da notificação automaticamente ao detectar `status → cancelado`.
+
+### 3. Botão na tabela `GestaoContaVendedor.tsx`
+
+- Importar `usePermissions` para obter `isDiretor`
+- Na coluna "Ações", quando `l.status === 'pago' && l.tipo === 'credito'` e `isDiretor === true`: exibir botão "Estornar" (ícone RotateCcw, variant ghost destructive)
+- Na coluna "Status", quando `l.status === 'cancelado'`: exibir badge "Estornado" e tooltip com `l.observacao_pagamento` ao hover
+- Importar e renderizar `EstornoComissaoModal`
+
+### 4. Card no Dashboard
+
+No `useDashboardVendaExterna.ts`:
+- Adicionar query para somar `valor_liquido` de lançamentos com `categoria = 'estorno'`, `tipo = 'debito'`, criados no mês atual
+- Expor `estornos_mes` e `estornos_count` no `DashboardCards`
+
+No `DashboardVendaExterna.tsx`:
+- Adicionar 5º card "Estornos no mês" com ícone `RotateCcw`, cor vermelha, exibindo total e quantidade
+
+### 5. Controle de permissão
+
+O botão de estorno será visível apenas quando `isDiretor` for `true` (perfis `diretor` ou `gerente_comercial` conforme `isGerencia`). O hook `usePermissions` já deriva essa flag dos roles do banco. Vendedores e supervisores não verão o botão.
 
