@@ -52,6 +52,7 @@ import { usePerformanceSemanalCoordenador } from '@/hooks/usePerformanceSemanalC
 import { AgendamentosBase } from '@/components/monitoramento/AgendamentosBase';
 import { VistoriadoresEmAlerta } from '@/components/monitoramento/VistoriadoresEmAlerta';
 import { PrestadoresAtivos } from '@/components/monitoramento/PrestadoresAtivos';
+import { useMonitorPrestadorSemResposta } from '@/hooks/useMonitorPrestadorSemResposta';
 import { cn } from '@/lib/utils';
 
 const acoesRapidas = [
@@ -76,6 +77,9 @@ export default function DashboardCoordenador() {
   });
   const { data: rastreadoresPortador, isLoading: loadingRastreadoresPortador } = useRastreadoresPorPortador();
   const { data: performanceSemanal, isLoading: loadingPerformance } = usePerformanceSemanalCoordenador();
+
+  // Monitor silencioso de prestadores sem resposta
+  useMonitorPrestadorSemResposta();
 
   const isLoading = loadingVistorias || loadingInstalacoes || loadingRotas;
 

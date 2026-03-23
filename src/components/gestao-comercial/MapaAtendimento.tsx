@@ -164,6 +164,7 @@ export function MapaAtendimento() {
   // ===== Regras de Viagem =====
   const [viagemDiaria, setViagemDiaria] = useState('');
   const [viagemSla, setViagemSla] = useState('');
+  const [prestadorHorasAlerta, setPrestadorHorasAlerta] = useState('');
   const [viagemLoaded, setViagemLoaded] = useState(false);
 
   const { data: configViagem } = useQuery({
@@ -172,11 +173,12 @@ export function MapaAtendimento() {
       const { data } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', ['viagem_valor_diaria', 'viagem_sla_horas']);
+        .in('chave', ['viagem_valor_diaria', 'viagem_sla_horas', 'prestador_horas_alerta_sem_resposta']);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
         diaria: map.viagem_valor_diaria || '0',
         sla: map.viagem_sla_horas || '72',
+        prestadorHoras: map.prestador_horas_alerta_sem_resposta || '2',
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -185,6 +187,7 @@ export function MapaAtendimento() {
   if (configViagem && !viagemLoaded) {
     setViagemDiaria(configViagem.diaria);
     setViagemSla(configViagem.sla);
+    setPrestadorHorasAlerta(configViagem.prestadorHoras);
     setViagemLoaded(true);
   }
 
@@ -193,6 +196,7 @@ export function MapaAtendimento() {
       const updates = [
         { chave: 'viagem_valor_diaria', valor: viagemDiaria },
         { chave: 'viagem_sla_horas', valor: viagemSla },
+        { chave: 'prestador_horas_alerta_sem_resposta', valor: prestadorHorasAlerta },
       ];
       for (const u of updates) {
         const { error } = await supabase
@@ -344,7 +348,7 @@ export function MapaAtendimento() {
           </CardDescription>
         </CardHeader>
         <CardContent className="space-y-4">
-          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-4">
             <div>
               <Label>Valor da diária de viagem (R$)</Label>
               <Input
@@ -367,6 +371,17 @@ export function MapaAtendimento() {
                 placeholder="72"
               />
               <p className="text-xs text-muted-foreground mt-1">Padrão volante: 48h</p>
+            </div>
+            <div>
+              <Label>Horas sem resposta para alerta (prestador)</Label>
+              <Input
+                type="number"
+                min="1"
+                value={prestadorHorasAlerta}
+                onChange={e => setPrestadorHorasAlerta(e.target.value)}
+                placeholder="2"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Alerta ao coordenador após X horas</p>
             </div>
           </div>
           <Button

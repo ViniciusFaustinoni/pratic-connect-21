@@ -1,0 +1,1 @@
+INSERT INTO configuracoes (chave, valor, tipo, categoria, descricao) VALUES ('prestador_horas_alerta_sem_resposta', '2', 'numero', 'operacional', 'Horas sem resposta do prestador para gerar alerta ao coordenador') ON CONFLICT (chave) DO NOTHING;
