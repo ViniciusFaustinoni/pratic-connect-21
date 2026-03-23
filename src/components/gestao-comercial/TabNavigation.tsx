@@ -1,4 +1,4 @@
-import { Package, Shield, Gift, Calculator, ShieldCheck, Gavel, MapPin, Settings, LucideIcon } from 'lucide-react';
+import { Package, Shield, Gift, Calculator, ShieldCheck, Gavel, MapPin, Settings, Globe, LucideIcon } from 'lucide-react';
 import { cn } from '@/lib/utils';
 
 interface Tab {
