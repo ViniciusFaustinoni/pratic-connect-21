@@ -161,6 +161,11 @@ export function InstalacaoRotasConfig() {
   const [slaManutencao, setSlaManutencao] = useState('24');
   const [savingB6, setSavingB6] = useState(false);
 
+  // ── Bloco 7 state (GPS)
+  const [gpsAtiva, setGpsAtiva] = useState(true);
+  const [gpsRaio, setGpsRaio] = useState('500');
+  const [savingB7, setSavingB7] = useState(false);
+
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
