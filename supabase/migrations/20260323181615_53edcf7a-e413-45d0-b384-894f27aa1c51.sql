@@ -1,0 +1,1 @@
+UPDATE rastreadores_credenciais SET configurado = true WHERE plataforma_id = (SELECT id FROM rastreadores_config_plataformas WHERE plataforma = 'softruck') AND configurado = false;
