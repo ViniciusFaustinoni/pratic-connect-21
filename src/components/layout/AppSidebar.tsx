@@ -69,6 +69,10 @@ import {
   
   ShieldCheck,
   Route,
+  CalendarCheck,
+  Settings2,
+  GraduationCap,
+  UserSearch,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
