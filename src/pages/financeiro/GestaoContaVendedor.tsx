@@ -37,6 +37,7 @@ export default function GestaoContaVendedor() {
   const [dataFim, setDataFim] = useState('');
   const [tipo, setTipo] = useState<'credito' | 'debito' | ''>('');
   const [status, setStatus] = useState('');
+  const [buscaAssociado, setBuscaAssociado] = useState('');
   const [page, setPage] = useState(1);
   const [modalParcela, setModalParcela] = useState<CCLancamento | null>(null);
   const [modalEstorno, setModalEstorno] = useState<CCLancamento | null>(null);
