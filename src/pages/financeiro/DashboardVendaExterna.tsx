@@ -15,6 +15,14 @@ import { format } from 'date-fns';
 import { CalendarDays, Clock, AlertTriangle, CheckCircle2, FileDown, Eye, DollarSign, Zap, Loader2, RotateCcw } from 'lucide-react';
 
 type Filtro = 'todos' | 'com_saldo' | 'devedor' | 'antecipacao' | 'zerado';
+type FiltroTipo = 'todos' | 'Vendedor' | 'Agência' | 'Supervisor';
+
+const TIPO_BADGE_CLASSES: Record<string, string> = {
+  'Vendedor': 'bg-blue-100 text-blue-700 border-blue-200',
+  'Agência': 'bg-purple-100 text-purple-700 border-purple-200',
+  'Supervisor': 'bg-orange-100 text-orange-700 border-orange-200',
+  'Outro': 'bg-gray-100 text-gray-700 border-gray-200',
+};
 
 export default function DashboardVendaExterna() {
   const navigate = useNavigate();
