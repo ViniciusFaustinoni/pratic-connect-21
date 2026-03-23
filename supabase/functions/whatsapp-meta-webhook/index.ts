@@ -159,16 +159,24 @@ async function processarMensagemUsuario(
       return;
     }
 
-    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
-      `Não encontrei nenhum associado ativo com esse CPF. 😕\n\nVerifique se o CPF está correto ou entre em contato com nossa central.\n\n📞 *Central de Atendimento*: praticcar.com.br`
-    );
-    return;
+    // CPF não encontrado — NÃO retornar aqui, delegar para agente
+    console.log(`[whatsapp-meta-webhook] CPF ${cpfLimpo} não encontrado, delegando para agente`);
   }
 
-  // ---- 4. PEDIR CPF PARA IDENTIFICAÇÃO ----
-  await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
-    `Olá! 👋 Não consegui identificar seu número em nosso sistema.\n\nPor favor, me informe seu *CPF* (apenas números) para que eu possa te ajudar.\n\nSe você ainda não é associado PRATIC, acesse nosso site! 📞`
-  );
+  // ---- 4. DELEGAR PARA AGENTE CONSULTOR IA ----
+  console.log(`[whatsapp-meta-webhook] Delegando para agente-consultor-ia: ${telefone}`);
+  try {
+    await fetch(`${supabaseUrl}/functions/v1/agente-consultor-ia`, {
+      method: "POST",
+      headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+      body: JSON.stringify({ telefone, texto, tipo_msg: tipoMsg, latitude, longitude }),
+    });
+  } catch (agentErr: any) {
+    console.error(`[whatsapp-meta-webhook] Erro delegação agente:`, agentErr);
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+      `Olá! 👋 Obrigado pelo contato. Nosso consultor entrará em contato em breve! 😊`
+    );
+  }
 }
 
 /**

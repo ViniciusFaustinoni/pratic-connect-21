@@ -161,3 +161,6 @@ verify_jwt = false
 
 [functions.gerar-imagem-plano]
 verify_jwt = false
+
+[functions.agente-consultor-ia]
+verify_jwt = false
