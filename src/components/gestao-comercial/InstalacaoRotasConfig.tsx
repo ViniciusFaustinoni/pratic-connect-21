@@ -42,6 +42,8 @@ const CONFIG_CHAVES = [
   'sla_horas_manutencao',
   'gps_validacao_ativa',
   'gps_raio_metros',
+  'jornada_limite_debito_horas',
+  'jornada_exibir_saldo_vistoriador',
 ] as const;
 
 // ── Hook ───────────────────────────────────────────
@@ -76,6 +78,8 @@ function useInstalacaoConfigs() {
         slaManutencao: map.sla_horas_manutencao?.valor ?? '24',
         gpsValidacaoAtiva: map.gps_validacao_ativa?.valor ?? 'true',
         gpsRaioMetros: map.gps_raio_metros?.valor ?? '500',
+        limiteDebito: map.jornada_limite_debito_horas?.valor ?? '0',
+        exibirSaldo: map.jornada_exibir_saldo_vistoriador?.valor ?? 'true',
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -161,6 +165,10 @@ export function InstalacaoRotasConfig() {
   const [slaManutencao, setSlaManutencao] = useState('24');
   const [savingB6, setSavingB6] = useState(false);
 
+  // ── Bloco 5b state (Débito/Saldo)
+  const [limiteDebito, setLimiteDebito] = useState('0');
+  const [exibirSaldo, setExibirSaldo] = useState(true);
+
   // ── Bloco 7 state (GPS)
   const [gpsAtiva, setGpsAtiva] = useState(true);
   const [gpsRaio, setGpsRaio] = useState('500');
@@ -185,6 +193,8 @@ export function InstalacaoRotasConfig() {
     setSlaManutencao(config.slaManutencao);
     setGpsAtiva(config.gpsValidacaoAtiva !== 'false');
     setGpsRaio(config.gpsRaioMetros);
+    setLimiteDebito(config.limiteDebito);
+    setExibirSaldo(config.exibirSaldo !== 'false');
   }, [config]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['configuracoes-instalacao-rotas'] });
@@ -495,6 +505,18 @@ export function InstalacaoRotasConfig() {
               <Label>Horas sem serviço para alerta</Label>
               <Input type="number" min={0.5} max={8} step={0.5} value={jornadaAlertaImprod} onChange={e => setJornadaAlertaImprod(e.target.value)} />
             </div>
+            <div className="space-y-2">
+              <Label>Limite de débito para bloqueio (horas)</Label>
+              <Input type="number" min={0} max={100} step={1} value={limiteDebito} onChange={e => setLimiteDebito(e.target.value)} />
+              <p className="text-xs text-muted-foreground">(0 = desativado)</p>
+            </div>
+            <div className="flex items-center justify-between col-span-full">
+              <div className="space-y-0.5">
+                <Label>Exibir saldo de horas para o vistoriador</Label>
+                <p className="text-xs text-muted-foreground">Quando ativo, o vistoriador vê seu saldo no perfil do app</p>
+              </div>
+              <Switch checked={exibirSaldo} onCheckedChange={setExibirSaldo} />
+            </div>
           </div>
 
           <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
@@ -514,6 +536,8 @@ export function InstalacaoRotasConfig() {
                   salvarConfig('jornada_tolerancia_atraso_minutos', jornadaTolerancia, profile?.id),
                   salvarConfig('jornada_produtividade_minima', jornadaProdMin, profile?.id),
                   salvarConfig('jornada_horas_alerta_improdutividade', jornadaAlertaImprod, profile?.id),
+                  salvarConfig('jornada_limite_debito_horas', limiteDebito, profile?.id),
+                  salvarConfig('jornada_exibir_saldo_vistoriador', exibirSaldo ? 'true' : 'false', profile?.id),
                 ]);
                 toast.success('Parâmetros de jornada salvos com sucesso');
                 invalidate();

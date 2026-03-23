@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getHojeBrasilia } from '@/lib/date-utils';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 /**
  * Hook idempotente para garantir que o turno de hoje existe quando o profissional está em serviço.
@@ -23,7 +24,8 @@ export function useGarantirTurno(emServico: boolean) {
   const queryClient = useQueryClient();
   const hasRunRef = useRef(false);
   const lastDateRef = useRef<string>('');
-
+  const [debitoBloqueado, setDebitoBloqueado] = useState(false);
+  const [mensagemDebito, setMensagemDebito] = useState<string | null>(null);
   const garantirTurnoMutation = useMutation({
     mutationFn: async () => {
       if (!profile?.id) throw new Error('Sem perfil');
@@ -55,7 +57,7 @@ export function useGarantirTurno(emServico: boolean) {
         return turnoExistente.id;
       }
 
-      // Criar novo turno — buscar saldo do dia anterior
+      // Criar novo turno — buscar saldo do dia anterior e verificar débito
       const { data: turnoAnterior } = await supabase
         .from('turnos_profissionais')
         .select('minutos_extras, minutos_faltantes, saldo_anterior_minutos')
@@ -69,6 +71,20 @@ export function useGarantirTurno(emServico: boolean) {
         ? (turnoAnterior.minutos_extras || 0) - (turnoAnterior.minutos_faltantes || 0)
         : 0;
       const saldoAcumulado = saldoDoDia + (turnoAnterior?.saldo_anterior_minutos || 0);
+
+      // Verificar limite de débito
+      const { data: configLimite } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'jornada_limite_debito_horas')
+        .maybeSingle();
+      
+      const limiteHoras = parseFloat(configLimite?.valor || '0');
+      if (limiteHoras > 0 && saldoAcumulado < 0 && Math.abs(saldoAcumulado) > limiteHoras * 60) {
+        const horas = Math.floor(Math.abs(saldoAcumulado) / 60);
+        const mins = Math.abs(saldoAcumulado) % 60;
+        throw new Error(`DEBITO_BLOQUEIO:Você possui ${horas}h ${mins}min de débito acumulado. Entre em contato com o coordenador para regularizar antes de iniciar um novo turno.`);
+      }
 
       const { data: novoTurno, error: insertError } = await supabase
         .from('turnos_profissionais')
@@ -87,11 +103,21 @@ export function useGarantirTurno(emServico: boolean) {
       return novoTurno.id;
     },
     onSuccess: () => {
+      setDebitoBloqueado(false);
+      setMensagemDebito(null);
       queryClient.invalidateQueries({ queryKey: ['turno-profissional'] });
       queryClient.invalidateQueries({ queryKey: ['jornadas-profissionais'] });
     },
     onError: (error) => {
-      console.error('[useGarantirTurno] Erro:', error);
+      const msg = error.message || '';
+      if (msg.startsWith('DEBITO_BLOQUEIO:')) {
+        const mensagem = msg.replace('DEBITO_BLOQUEIO:', '');
+        setDebitoBloqueado(true);
+        setMensagemDebito(mensagem);
+        toast.error(mensagem);
+      } else {
+        console.error('[useGarantirTurno] Erro:', error);
+      }
     },
   });
 
@@ -134,5 +160,7 @@ export function useGarantirTurno(emServico: boolean) {
   return {
     garantirTurno: garantir,
     isGarantindo: garantirTurnoMutation.isPending,
+    debitoBloqueado,
+    mensagemDebito,
   };
 }

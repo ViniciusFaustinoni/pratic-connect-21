@@ -72,6 +72,8 @@ export default function JornadasProfissionais() {
           'sla_horas_manutencao',
           'gps_validacao_ativa',
           'gps_raio_metros',
+          'jornada_limite_debito_horas',
+          'jornada_exibir_saldo_vistoriador',
         ]);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
@@ -85,6 +87,8 @@ export default function JornadasProfissionais() {
         slaManutencao: map.sla_horas_manutencao || '24',
         gpsValidacaoAtiva: map.gps_validacao_ativa || 'true',
         gpsRaioMetros: map.gps_raio_metros || '500',
+        limiteDebito: map.jornada_limite_debito_horas || '0',
+        exibirSaldo: map.jornada_exibir_saldo_vistoriador || 'true',
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -110,6 +114,12 @@ export default function JornadasProfissionais() {
   });
 
   // Calcular estatísticas
+  const saldosPorTurno = (turnos || []).map(t => {
+    const saldoDia = (t.minutos_extras || 0) - (t.minutos_faltantes || 0);
+    const saldoAcumulado = saldoDia + (t.saldo_anterior_minutos || 0);
+    return { ...t, saldoDia, saldoAcumulado };
+  });
+
   const stats = {
     total: turnos?.length || 0,
     trabalhando: turnos?.filter(t => t.status === 'ativo').length || 0,
@@ -118,6 +128,9 @@ export default function JornadasProfissionais() {
     semAlmoco: turnos?.filter(t => t.status === 'ativo' && !t.inicio_almoco && t.minutos_trabalhados >= 240).length || 0,
     horasExtras: turnos?.reduce((acc, t) => acc + (t.minutos_extras || 0), 0) || 0,
     horasFaltantes: turnos?.reduce((acc, t) => acc + (t.minutos_faltantes || 0), 0) || 0,
+    comDebito: saldosPorTurno.filter(t => t.status === 'encerrado' && t.saldoAcumulado < 0).length,
+    debitoTotal: Math.abs(saldosPorTurno.filter(t => t.status === 'encerrado' && t.saldoAcumulado < 0).reduce((acc, t) => acc + t.saldoAcumulado, 0)),
+    creditoTotal: saldosPorTurno.filter(t => t.status === 'encerrado' && t.saldoAcumulado > 0).reduce((acc, t) => acc + t.saldoAcumulado, 0),
   };
 
   const formatarMinutos = (minutos: number): string => {
@@ -213,6 +226,14 @@ export default function JornadasProfissionais() {
                   <p className="text-xs text-muted-foreground">Raio GPS</p>
                   <p className="text-sm font-semibold">{parametros?.gpsRaioMetros || '500'}m</p>
                 </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Limite débito bloqueio</p>
+                  <p className="text-sm font-semibold">{parametros?.limiteDebito === '0' ? 'Desativado' : `${parametros?.limiteDebito}h`}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Exibir saldo vistoriador</p>
+                  <p className="text-sm font-semibold">{parametros?.exibirSaldo === 'false' ? 'Não' : 'Sim'}</p>
+                </div>
               </div>
               <div className="flex justify-end">
                 <Button variant="outline" size="sm" onClick={() => navigate('/diretoria/gestao-comercial')}>
@@ -298,7 +319,7 @@ export default function JornadasProfissionais() {
 
       {/* Resumo de Horas */}
       {stats.encerrados > 0 && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <TrendingUp className="h-5 w-5 text-green-500" />
@@ -319,6 +340,40 @@ export default function JornadasProfissionais() {
                   -{formatarMinutos(stats.horasFaltantes)}
                 </p>
                 <p className="text-xs text-muted-foreground">Horas Faltantes Total</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              <div>
+                <p className="text-lg font-bold">{stats.comDebito}</p>
+                <p className="text-xs text-muted-foreground">Com Débito</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <TrendingDown className="h-5 w-5 text-red-500" />
+              <div>
+                <p className="text-lg font-bold text-red-600">
+                  -{formatarMinutos(stats.debitoTotal)}
+                </p>
+                <p className="text-xs text-muted-foreground">Débito Consolidado</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <TrendingUp className="h-5 w-5 text-green-500" />
+              <div>
+                <p className="text-lg font-bold text-green-600">
+                  +{formatarMinutos(stats.creditoTotal)}
+                </p>
+                <p className="text-xs text-muted-foreground">Crédito Consolidado</p>
               </div>
             </CardContent>
           </Card>
