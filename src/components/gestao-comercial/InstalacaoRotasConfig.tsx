@@ -40,6 +40,8 @@ const CONFIG_CHAVES = [
   'jornada_horas_alerta_improdutividade',
   'sla_horas_instalacao',
   'sla_horas_manutencao',
+  'gps_validacao_ativa',
+  'gps_raio_metros',
 ] as const;
 
 // ── Hook ───────────────────────────────────────────
@@ -72,6 +74,8 @@ function useInstalacaoConfigs() {
         jornadaAlertaImprodutividade: map.jornada_horas_alerta_improdutividade?.valor ?? '2',
         slaInstalacao: map.sla_horas_instalacao?.valor ?? '48',
         slaManutencao: map.sla_horas_manutencao?.valor ?? '24',
+        gpsValidacaoAtiva: map.gps_validacao_ativa?.valor ?? 'true',
+        gpsRaioMetros: map.gps_raio_metros?.valor ?? '500',
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -157,6 +161,11 @@ export function InstalacaoRotasConfig() {
   const [slaManutencao, setSlaManutencao] = useState('24');
   const [savingB6, setSavingB6] = useState(false);
 
+  // ── Bloco 7 state (GPS)
+  const [gpsAtiva, setGpsAtiva] = useState(true);
+  const [gpsRaio, setGpsRaio] = useState('500');
+  const [savingB7, setSavingB7] = useState(false);
+
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
@@ -174,6 +183,8 @@ export function InstalacaoRotasConfig() {
     setJornadaAlertaImprod(config.jornadaAlertaImprodutividade);
     setSlaInstalacao(config.slaInstalacao);
     setSlaManutencao(config.slaManutencao);
+    setGpsAtiva(config.gpsValidacaoAtiva !== 'false');
+    setGpsRaio(config.gpsRaioMetros);
   }, [config]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['configuracoes-instalacao-rotas'] });
@@ -559,6 +570,55 @@ export function InstalacaoRotasConfig() {
             }} disabled={savingB6} size="sm">
               {savingB6 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
               Salvar SLA
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Bloco 7 — Validação GPS ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <MapPin className="h-4 w-4" />
+            Validação de Localização (GPS)
+          </CardTitle>
+          <CardDescription>
+            Exige que o vistoriador esteja no local ao iniciar o serviço. Divergências ficam registradas para auditoria.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Exigir validação de localização</Label>
+              <p className="text-xs text-muted-foreground">Quando desativado, o serviço inicia sem verificação GPS</p>
+            </div>
+            <Switch checked={gpsAtiva} onCheckedChange={setGpsAtiva} />
+          </div>
+          {gpsAtiva && (
+            <div className="space-y-2 max-w-xs">
+              <Label>Raio máximo de tolerância (metros)</Label>
+              <Input type="number" min={50} max={5000} value={gpsRaio} onChange={e => setGpsRaio(e.target.value)} />
+            </div>
+          )}
+          <p className="text-xs text-amber-600">⚠ Alterações têm efeito imediato na operação. Informe a equipe antes de alterar.</p>
+          <div className="flex justify-end">
+            <Button onClick={async () => {
+              setSavingB7(true);
+              try {
+                await Promise.all([
+                  salvarConfig('gps_validacao_ativa', gpsAtiva ? 'true' : 'false', profile?.id),
+                  salvarConfig('gps_raio_metros', gpsRaio, profile?.id),
+                ]);
+                toast.success('Configurações de GPS salvas com sucesso');
+                invalidate();
+              } catch {
+                toast.error('Erro ao salvar configurações de GPS');
+              } finally {
+                setSavingB7(false);
+              }
+            }} disabled={savingB7} size="sm">
+              {savingB7 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              Salvar GPS
             </Button>
           </div>
         </CardContent>

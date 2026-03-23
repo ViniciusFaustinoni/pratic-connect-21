@@ -1,4 +1,6 @@
 import { useState, useMemo, useEffect, useCallback } from 'react';
+import { useValidacaoPresenca, type ResultadoValidacao } from '@/hooks/useValidacaoPresenca';
+import { ModalValidacaoPresenca } from '@/components/vistoriador/ModalValidacaoPresenca';
 import { useParams, useNavigate } from 'react-router-dom';
 import { 
   ArrowLeft, Camera, Check, AlertTriangle, 
@@ -255,15 +257,43 @@ export default function ExecutarRetirada() {
     assinaturaEnviada && 
     integridadeValida;
 
-  // Handler para "Cheguei no Local"
-  const handleCheguei = () => {
-    if (servicoId) {
+  // GPS validation
+  const { validarPresenca, confirmarPresenca } = useValidacaoPresenca();
+  const [showGpsModal, setShowGpsModal] = useState(false);
+  const [gpsLoading, setGpsLoading] = useState(false);
+  const [gpsResultado, setGpsResultado] = useState<ResultadoValidacao | null>(null);
+
+  const handleCheguei = async () => {
+    if (!servicoId || !servico) return;
+    setShowGpsModal(true);
+    setGpsLoading(true);
+    setGpsResultado(null);
+
+    const endereco = [servico.logradouro, servico.numero, servico.bairro, servico.cidade, servico.uf].filter(Boolean).join(', ');
+    const resultado = await validarPresenca(servicoId, endereco, servico.latitude, servico.longitude);
+    setGpsResultado(resultado);
+    setGpsLoading(false);
+
+    if (resultado.aprovado || resultado.gpsIndisponivel) {
+      setShowGpsModal(false);
       iniciarServico(servicoId, {
-        onSuccess: () => {
-          toast.success('Chegada registrada! Agora você pode realizar a retirada.');
-        }
+        onSuccess: () => toast.success('Chegada registrada! Agora você pode realizar a retirada.'),
       });
     }
+  };
+
+  const handleGpsConfirmarRetirada = () => {
+    if (!servicoId) return;
+    confirmarPresenca(servicoId);
+    setShowGpsModal(false);
+    iniciarServico(servicoId, {
+      onSuccess: () => toast.success('Chegada registrada! Agora você pode realizar a retirada.'),
+    });
+  };
+
+  const handleGpsCancelarRetirada = () => {
+    setShowGpsModal(false);
+    setGpsResultado(null);
   };
 
   // Handler para "Associado Ausente"
@@ -875,6 +905,14 @@ export default function ExecutarRetirada() {
           </Card>
         </div>
       )}
+      <ModalValidacaoPresenca
+        open={showGpsModal}
+        onOpenChange={setShowGpsModal}
+        loading={gpsLoading}
+        resultado={gpsResultado}
+        onConfirmarPresenca={handleGpsConfirmarRetirada}
+        onCancelar={handleGpsCancelarRetirada}
+      />
     </div>
   );
 }

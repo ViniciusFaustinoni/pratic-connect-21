@@ -1,7 +1,9 @@
 import { useMemo, useState } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { 
+import {
   Calendar, 
   Clock, 
   MapPin, 
@@ -16,7 +18,9 @@ import {
   XCircle,
   RotateCcw,
   Cpu,
-  Trash2
+  Trash2,
+  Shield,
+  ExternalLink,
 } from 'lucide-react';
 import {
   Drawer,
@@ -62,6 +66,37 @@ export function InstalacaoDetailDrawer({
   const updateStatus = useUpdateInstalacaoStatus();
   const deleteInstalacao = useDeleteInstalacao();
 
+  // Buscar registro de presença GPS
+  const { data: registroPresenca } = useQuery({
+    queryKey: ['registro-presenca-instalacao', instalacaoId],
+    queryFn: async () => {
+      if (!instalacaoId) return null;
+      // Buscar serviço associado à instalação pelo associado_id e tipo instalacao
+      const inst = await supabase.from('instalacoes').select('associado_id, veiculo_id').eq('id', instalacaoId).single();
+      if (!inst.data) return null;
+      
+      const { data: servicos } = await supabase
+        .from('servicos')
+        .select('id')
+        .eq('associado_id', inst.data.associado_id)
+        .eq('tipo', 'instalacao')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (!servicos?.length) return null;
+      
+      const { data } = await (supabase as any)
+        .from('registros_presenca')
+        .select('*')
+        .eq('servico_id', servicos[0].id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      
+      return data;
+    },
+    enabled: !!instalacaoId && open,
+  });
   const handleDelete = async () => {
     if (!instalacaoId) return;
     
@@ -258,6 +293,54 @@ export function InstalacaoDetailDrawer({
                 </Button>
               </div>
             </section>
+
+            {/* Registro de Presença GPS */}
+            {registroPresenca && (
+              <>
+                <Separator />
+                <section>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Shield className="h-4 w-4" />
+                    Registro de Presença
+                  </h3>
+                  <div className="space-y-2 text-sm">
+                    <div className="flex items-center gap-2">
+                      <Badge variant="outline" className={
+                        registroPresenca.gps_indisponivel
+                          ? 'bg-muted text-muted-foreground'
+                          : registroPresenca.dentro_do_raio
+                            ? 'bg-green-500/15 text-green-700 border-green-500/30'
+                            : 'bg-amber-500/15 text-amber-700 border-amber-500/30'
+                      }>
+                        {registroPresenca.gps_indisponivel
+                          ? 'GPS indisponível'
+                          : registroPresenca.dentro_do_raio
+                            ? 'Dentro do raio'
+                            : registroPresenca.confirmou_presenca
+                              ? 'Fora do raio (confirmou presença)'
+                              : 'Fora do raio'}
+                      </Badge>
+                    </div>
+                    {registroPresenca.distancia_metros != null && (
+                      <p className="text-muted-foreground">
+                        Distância registrada: <strong>{Math.round(registroPresenca.distancia_metros)}m</strong>
+                      </p>
+                    )}
+                    {registroPresenca.latitude_vistoriador && registroPresenca.longitude_vistoriador && (
+                      <a
+                        href={`https://www.google.com/maps?q=${registroPresenca.latitude_vistoriador},${registroPresenca.longitude_vistoriador}`}
+                        target="_blank"
+                        rel="noopener noreferrer"
+                        className="inline-flex items-center gap-1 text-primary hover:underline text-xs"
+                      >
+                        <ExternalLink className="h-3 w-3" />
+                        Ver localização no mapa
+                      </a>
+                    )}
+                  </div>
+                </section>
+              </>
+            )}
 
             {instalacao.observacoes && (
               <>

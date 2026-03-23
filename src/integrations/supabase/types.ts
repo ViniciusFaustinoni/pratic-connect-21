@@ -20872,6 +20872,56 @@ export type Database = {
         }
         Relationships: []
       }
+      registros_presenca: {
+        Row: {
+          confirmou_presenca: boolean | null
+          created_at: string | null
+          dentro_do_raio: boolean | null
+          distancia_metros: number | null
+          gps_indisponivel: boolean | null
+          id: string
+          latitude_destino: number | null
+          latitude_vistoriador: number | null
+          longitude_destino: number | null
+          longitude_vistoriador: number | null
+          servico_id: string
+        }
+        Insert: {
+          confirmou_presenca?: boolean | null
+          created_at?: string | null
+          dentro_do_raio?: boolean | null
+          distancia_metros?: number | null
+          gps_indisponivel?: boolean | null
+          id?: string
+          latitude_destino?: number | null
+          latitude_vistoriador?: number | null
+          longitude_destino?: number | null
+          longitude_vistoriador?: number | null
+          servico_id: string
+        }
+        Update: {
+          confirmou_presenca?: boolean | null
+          created_at?: string | null
+          dentro_do_raio?: boolean | null
+          distancia_metros?: number | null
+          gps_indisponivel?: boolean | null
+          id?: string
+          latitude_destino?: number | null
+          latitude_vistoriador?: number | null
+          longitude_destino?: number | null
+          longitude_vistoriador?: number | null
+          servico_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registros_presenca_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       regras_categorizacao: {
         Row: {
           ativo: boolean | null

@@ -70,6 +70,8 @@ export default function JornadasProfissionais() {
           'jornada_horas_alerta_improdutividade',
           'sla_horas_instalacao',
           'sla_horas_manutencao',
+          'gps_validacao_ativa',
+          'gps_raio_metros',
         ]);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
@@ -81,6 +83,8 @@ export default function JornadasProfissionais() {
         alertaImprodutividade: map.jornada_horas_alerta_improdutividade || '2',
         slaInstalacao: map.sla_horas_instalacao || '48',
         slaManutencao: map.sla_horas_manutencao || '24',
+        gpsValidacaoAtiva: map.gps_validacao_ativa || 'true',
+        gpsRaioMetros: map.gps_raio_metros || '500',
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -200,6 +204,14 @@ export default function JornadasProfissionais() {
                 <div className="rounded-lg bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Prazo manutenção/retirada</p>
                   <p className="text-sm font-semibold">{parametros?.slaManutencao || '24'}h</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Validação GPS</p>
+                  <p className="text-sm font-semibold">{parametros?.gpsValidacaoAtiva === 'false' ? 'Desativada' : 'Ativa'}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Raio GPS</p>
+                  <p className="text-sm font-semibold">{parametros?.gpsRaioMetros || '500'}m</p>
                 </div>
               </div>
               <div className="flex justify-end">
