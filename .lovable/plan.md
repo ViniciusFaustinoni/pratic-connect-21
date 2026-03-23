@@ -1,70 +1,101 @@
 
 
-# Plano: SLA de Prazo Visível em Todo o Sistema
+# Plano: Validação de Presença GPS ao Iniciar Serviço
 
 ## Resumo
 
-Adicionar indicador de prazo (SLA) em cards de tarefas do instalador, lista do coordenador e painéis de configuração da Diretoria/RH, usando um componente reutilizável `SlaIndicador`.
+Adicionar verificação de localização GPS quando o vistoriador toca "Cheguei no Local", com registro para auditoria. Configurável pela Diretoria (toggle on/off + raio). Visível pelo coordenador no detalhe do serviço.
 
 ---
 
-## PARTE 1 — Configuração na Diretoria + DB
+## PARTE 1 — DB: Configuração + Tabela de Auditoria
 
-**DB**: Inserir 2 chaves na tabela `configuracoes`:
-- `sla_horas_instalacao` = `48`
-- `sla_horas_manutencao` = `24`
+**Configurações** (insert na tabela `configuracoes`):
+- `gps_validacao_ativa` = `true`
+- `gps_raio_metros` = `500`
 
-**`InstalacaoRotasConfig.tsx`**:
-- Adicionar `sla_horas_instalacao` e `sla_horas_manutencao` ao `CONFIG_CHAVES`
-- Adicionar 2 campos numéricos ao bloco "Jornada dos Vistoriadores" (ou novo bloco "Prazos de SLA")
-- State vars `slaInstalacao` / `slaManutencao`, populate do DB, salvar junto com os outros
-
----
-
-## PARTE 2 — Componente `SlaIndicador`
-
-**Novo arquivo**: `src/components/ui/SlaIndicador.tsx`
-
-Props:
-- `criadoEm: string` (ISO date)
-- `tipoServico: string` (instalacao, vistoria, manutencao, retirada)
-
-Lógica interna:
-- Query `configuracoes` para `sla_horas_instalacao` e `sla_horas_manutencao` (com cache longo)
-- Seleciona prazo correto por tipo (manutencao/retirada = `sla_horas_manutencao`, demais = `sla_horas_instalacao`)
-- Calcula `prazoFinal = criadoEm + prazoHoras`, `restante = prazoFinal - agora`
-- Atualiza via `setInterval` a cada 60s
-- Exibe Badge colorida:
-  - Verde (>50%), Amarelo (25-50%), Vermelho (<25%), Vermelho escuro ("VENCIDO")
-  - Formato: "Xh Ymin" ou "VENCIDO"
+**Nova tabela `registros_presenca`**:
+```
+id (uuid PK), servico_id (FK servicos), latitude_vistoriador (float), 
+longitude_vistoriador (float), latitude_destino (float), longitude_destino (float),
+distancia_metros (float), dentro_do_raio (boolean), confirmou_presenca (boolean),
+gps_indisponivel (boolean default false), created_at (timestamptz)
+```
+RLS: insert para authenticated, select para authenticated.
 
 ---
 
-## PARTE 3 — App do Instalador
+## PARTE 2 — Diretoria (`InstalacaoRotasConfig.tsx`)
 
-**`TarefaAtualCard.tsx`**: Adicionar `<SlaIndicador>` no card, após o nome do cliente, usando `tarefa.created_at` e `tarefa.tipo_servico`
-
-**`InstaladorHome.tsx`**: O `TarefaAtualCard` já é renderizado aqui — herdará automaticamente
-
-**`InstaladorTarefas.tsx`**: Nos cards de histórico/hoje, adicionar `<SlaIndicador>` se a tarefa não estiver concluída
-
----
-
-## PARTE 4 — Painel do Coordenador
-
-**`InstalacoesList.tsx`**:
-- Adicionar coluna/badge `<SlaIndicador>` em cada linha da tabela, usando `instalacao.created_at` e tipo `instalacao`
-- Adicionar botão "Atenção Urgente" na barra de filtros (toggle) que filtra client-side mostrando apenas itens com <25% de prazo ou vencidos
-- O `SlaIndicador` expõe uma função utilitária `calcularPercentualSla()` para uso no filtro
+Adicionar **Bloco 7** após SLA:
+- Toggle `Switch` "Exigir validação de localização" (chave `gps_validacao_ativa`)
+- Campo numérico "Raio máximo de tolerância (metros)" visível quando toggle ligado (chave `gps_raio_metros`)
+- Botão "Salvar GPS"
+- Adicionar as 2 chaves ao `CONFIG_CHAVES` e ao hook, state vars, populate e save
 
 ---
 
-## PARTE 5 — Painel RH
+## PARTE 3 — Hook `useValidacaoPresenca`
 
-**`JornadasProfissionais.tsx`**: Adicionar 2 cards read-only no grid de parâmetros:
-- "Prazo instalação/vistoria: Xh"
-- "Prazo manutenção/retirada: Xh"
-- Buscar `sla_horas_instalacao` e `sla_horas_manutencao` junto com as outras chaves já buscadas
+**Novo arquivo**: `src/hooks/useValidacaoPresenca.ts`
+
+Lógica:
+1. Query `configuracoes` para `gps_validacao_ativa` e `gps_raio_metros` (cache 10min)
+2. Função `validarPresenca(servicoId, enderecoCompleto, latDestino?, lonDestino?)`:
+   - Se validação desativada → retorna `{ aprovado: true, pulou: true }`
+   - Obtém posição GPS via `navigator.geolocation.getCurrentPosition`
+   - Se endereço sem lat/lon, geocodifica via edge function `geocode-endereco` (já existe)
+   - Calcula distância Haversine entre posição atual e destino
+   - Insere registro na tabela `registros_presenca`
+   - Retorna `{ aprovado, distancia, dentrDoRaio, gpsIndisponivel }`
+3. Se GPS falhar/negado → retorna `{ aprovado: true, gpsIndisponivel: true }`, registra mesmo assim
+
+---
+
+## PARTE 4 — Componente `ModalValidacaoPresenca`
+
+**Novo arquivo**: `src/components/vistoriador/ModalValidacaoPresenca.tsx`
+
+Dialog reutilizável com 3 estados:
+- **Loading**: "Verificando sua localização..." com spinner
+- **Fora do raio**: "Você está a X metros do endereço." + botões "Estou no local correto" (prossegue, registra divergência) e "Ainda estou a caminho" (fecha)
+- **GPS indisponível**: Alert informativo, prossegue automaticamente
+
+---
+
+## PARTE 5 — Acoplamento nos 4 fluxos de execução
+
+Em cada arquivo, interceptar o `handleCheguei` existente:
+
+| Arquivo | Ponto de interceptação |
+|---|---|
+| `ExecutarManutencao.tsx` (linha 124) | `handleCheguei` chama `iniciarServico(id)` |
+| `ExecutarRetirada.tsx` (linha 259) | `handleCheguei` chama `iniciarServico(servicoId)` |
+| `ExecutarVistoriaCompleta.tsx` | Não tem `handleCheguei` — o serviço já chega em andamento (verificar) |
+| `InstaladorChecklist.tsx` | Não tem `handleCheguei` — usa `useServicoDetalhes` (serviço já iniciado) |
+
+**Nota**: Apenas ExecutarManutencao e ExecutarRetirada têm botão "Cheguei". Para VistoriaCompleta e InstaladorChecklist, o serviço já está em andamento quando a página abre. A validação será adicionada nos 2 arquivos que têm `handleCheguei`. Se necessário, podemos adicionar validação no InstaladorChecklist na etapa 1 (Dados) como verificação inicial.
+
+Fluxo no `handleCheguei`:
+1. Abrir modal de validação
+2. Chamar `validarPresenca` com endereço do serviço
+3. Se dentro do raio ou GPS indisponível → prosseguir com `iniciarServico`
+4. Se fora do raio → mostrar distância e botões de decisão
+
+---
+
+## PARTE 6 — Visibilidade no Coordenador (`InstalacaoDetailDrawer.tsx`)
+
+Adicionar seção "Registro de Presença" quando `servico.iniciada_em` existe:
+- Query `registros_presenca` por `servico_id`
+- Exibir: status (Dentro/Fora/GPS indisponível), distância, link Google Maps
+- Seção condicional: só aparece se há registro
+
+---
+
+## PARTE 7 — Painel RH
+
+Adicionar os 2 campos GPS (toggle e raio) ao painel read-only de parâmetros em `JornadasProfissionais.tsx`.
 
 ---
 
@@ -72,11 +103,12 @@ Lógica interna:
 
 | Arquivo | Alteração |
 |---|---|
-| DB (insert) | 2 registros: `sla_horas_instalacao`, `sla_horas_manutencao` |
-| `src/components/gestao-comercial/InstalacaoRotasConfig.tsx` | 2 campos SLA + chaves no hook |
-| `src/components/ui/SlaIndicador.tsx` | **Novo** — componente reutilizável |
-| `src/components/vistoriador/TarefaAtualCard.tsx` | Adicionar SlaIndicador |
-| `src/pages/instalador/InstaladorTarefas.tsx` | SlaIndicador nos cards |
-| `src/pages/monitoramento/InstalacoesList.tsx` | SlaIndicador + filtro "Atenção Urgente" |
-| `src/pages/rh/JornadasProfissionais.tsx` | 2 cards SLA read-only |
+| DB migration | Tabela `registros_presenca` + 2 inserts em `configuracoes` |
+| `src/components/gestao-comercial/InstalacaoRotasConfig.tsx` | Bloco 7 GPS |
+| `src/hooks/useValidacaoPresenca.ts` | **Novo** |
+| `src/components/vistoriador/ModalValidacaoPresenca.tsx` | **Novo** |
+| `src/pages/instalador/ExecutarManutencao.tsx` | Interceptar `handleCheguei` |
+| `src/pages/instalador/ExecutarRetirada.tsx` | Interceptar `handleCheguei` |
+| `src/components/instalacoes/InstalacaoDetailDrawer.tsx` | Seção presença |
+| `src/pages/rh/JornadasProfissionais.tsx` | 2 campos GPS read-only |
 
