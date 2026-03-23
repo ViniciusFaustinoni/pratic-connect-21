@@ -39,6 +39,8 @@ export default function GestaoContaVendedor() {
   const [status, setStatus] = useState('');
   const [page, setPage] = useState(1);
   const [modalParcela, setModalParcela] = useState<CCLancamento | null>(null);
+  const [modalEstorno, setModalEstorno] = useState<CCLancamento | null>(null);
+  const { isDiretor, isGerencia } = usePermissions();
 
   useEffect(() => { if (paramId) setSelectedVendedor(paramId); }, [paramId]);
 
