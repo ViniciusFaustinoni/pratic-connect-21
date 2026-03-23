@@ -160,5 +160,7 @@ export function useGarantirTurno(emServico: boolean) {
   return {
     garantirTurno: garantir,
     isGarantindo: garantirTurnoMutation.isPending,
+    debitoBloqueado,
+    mensagemDebito,
   };
 }
