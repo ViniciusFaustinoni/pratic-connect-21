@@ -600,6 +600,14 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de Recusa */}
+      <ModalRecusaTarefa
+        open={showRecusaModal}
+        onOpenChange={setShowRecusaModal}
+        onConfirm={handleRecusar}
+        isPending={isRecusando}
+      />
     </>
   );
 }
