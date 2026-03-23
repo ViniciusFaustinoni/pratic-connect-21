@@ -178,6 +178,11 @@ export function InstalacaoRotasConfig() {
   const [gpsRaio, setGpsRaio] = useState('500');
   const [savingB7, setSavingB7] = useState(false);
 
+  // ── Bloco 8 state (Recusas)
+  const [recusaExigirMotivo, setRecusaExigirMotivo] = useState(true);
+  const [recusaLimiteAlerta, setRecusaLimiteAlerta] = useState('3');
+  const [savingB8, setSavingB8] = useState(false);
+
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
