@@ -223,29 +223,10 @@ export default function AgenciaDashboard() {
     <div className="space-y-6">
       <div>
         <h1 className="text-2xl font-bold tracking-tight">Painel da Agência</h1>
-        <p className="text-muted-foreground">Acompanhe sua conta corrente e as comissões da sua equipe.</p>
+        <p className="text-muted-foreground">Acompanhe sua conta corrente consolidada.</p>
       </div>
 
-      <Tabs defaultValue="conta-corrente" className="w-full">
-        <TabsList>
-          <TabsTrigger value="conta-corrente" className="gap-2">
-            <Wallet className="h-4 w-4" />
-            Conta Corrente
-          </TabsTrigger>
-          <TabsTrigger value="equipe" className="gap-2">
-            <Users className="h-4 w-4" />
-            Comissões da Equipe
-          </TabsTrigger>
-        </TabsList>
-
-        <TabsContent value="conta-corrente">
-          <ContaCorrenteTab />
-        </TabsContent>
-
-        <TabsContent value="equipe">
-          <ComissoesEquipeTab />
-        </TabsContent>
-      </Tabs>
+      <ContaCorrenteTab />
     </div>
   );
 }
