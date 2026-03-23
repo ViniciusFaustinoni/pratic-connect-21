@@ -1,41 +1,59 @@
 
 
-# Plano: Corrigir Variáveis no Início/Fim dos Templates Meta
+# Plano: Corrigir Variáveis e Renomear Templates com Dias
 
-## Problema
+## Problema 1 — Variável no fim do corpo
 
-A Meta rejeita templates onde variáveis `{{X}}` estão no início ou no final do corpo. Dois templates terminam com variável:
+Apenas `boleto_gerado_v1` ainda termina com `{{6}}`. O `lembrete_desconto_v1` já foi corrigido (já tem o rodapé).
 
-| Template | Problema |
-|---|---|
-| `boleto_gerado_v1` | Termina com `{{6}}` (linha digitável) |
-| `lembrete_desconto_v1` | Termina com `{{3}}` (linha digitável) |
+## Problema 2 — Nomes sem indicação de dia
 
-Nenhum template começa com variável (todos têm texto fixo antes).
+Os nomes atuais não mostram em que dia da régua cada template é usado, dificultando a visualização.
 
-## Correção
+---
 
-Adicionar texto fixo após a variável final em cada template:
+## Correções
 
-**`boleto_gerado_v1`**: Após `{{6}}`, adicionar quebra de linha + o rodapé que já consta no template original da Julia:
+### 1. Fix corpo do `boleto_gerado_v1`
+
+Adicionar após `{{6}}`:
 ```
 {{6}}
 
 ESSA MENSAGEM É AUTOMÁTICA. FAVOR NÃO RESPONDER!
 ```
 
-**`lembrete_desconto_v1`**: Após `{{3}}`, adicionar o rodapé:
-```
-{{3}}
+### 2. Renomear todos os 14 templates
 
-ESSA MENSAGEM É AUTOMÁTICA. FAVOR NÃO RESPONDER!
-```
+| Nome atual | Novo nome |
+|---|---|
+| `boleto_gerado_v1` | `emissao_boleto_gerado_v1` |
+| `lembrete_desconto_v1` | `d_6_lembrete_desconto_v1` |
+| `boleto_vence_hoje_v1` | `d0_boleto_vence_hoje_v1` |
+| `boleto_vencido_urgente_v1` | `d1_a_d4_boleto_vencido_v1` |
+| `ultimo_dia_sem_revistoria_v1` | `d5_ultimo_dia_sem_revistoria_v1` |
+| `impedimento_pagamento_v1` | `d6_impedimento_pagamento_v1` |
+| `reforco_contato_v1` | `d7_reforco_contato_v1` |
+| `urgencia_revistoria_v1` | `d8_urgencia_revistoria_v1` |
+| `alerta_retirada_v1` | `d9_alerta_retirada_v1` |
+| `ultima_tentativa_v1` | `d10_ultima_tentativa_v1` |
+| `aviso_negativacao_v1` | `d11_aviso_negativacao_v1` |
+| `debito_com_multa_v1` | `d12_debito_com_multa_v1` |
+| `regularize_cadastro_v1` | `d13_regularize_cadastro_v1` |
+| `reativacao_protecao_v1` | `d14_d61_reativacao_protecao_v1` |
 
-## Execução
+Convenção: `d` + número do dia + `_` + nome descritivo. Para D-6 usa `d_6` (underline no lugar do menos). Para emissão (sem dia fixo na régua), usa `emissao_`.
 
-Um único UPDATE nos 2 registros da tabela `whatsapp_meta_templates`.
+### 3. Atualizar `ReguaCobranca.tsx`
 
-## Arquivo afetado
+Atualizar os nomes dos templates no array `etapasPadrao` para refletir os novos nomes.
 
-Nenhum arquivo de código — apenas dados no banco.
+---
+
+## Arquivos afetados
+
+| Arquivo | Alteração |
+|---|---|
+| DB (UPDATE) | Renomear 14 templates + fix corpo do `boleto_gerado_v1` |
+| `src/pages/cobranca/ReguaCobranca.tsx` | Atualizar nomes em `etapasPadrao` |
 
