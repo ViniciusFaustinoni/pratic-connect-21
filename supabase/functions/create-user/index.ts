@@ -10,13 +10,16 @@ interface CreateUserRequest {
   nome: string;
   email: string;
   cpf?: string;
+  cnpj?: string;
+  razao_social?: string;
+  nome_fantasia?: string;
   telefone?: string;
-  senha?: string;           // Senha opcional - se não passar, usa magic link
-  perfil?: string;          // Para retro-compatibilidade
-  perfis?: string[];        // Múltiplos perfis
+  senha?: string;
+  perfil?: string;
+  perfis?: string[];
   tipo: 'funcionario' | 'associado' | 'prestador';
-  regioes_atendimento?: string[];  // Regiões de atuação (vistoriadores)
-  capacidade_diaria?: number;       // Capacidade de tarefas por dia
+  regioes_atendimento?: string[];
+  capacidade_diaria?: number;
 }
 
 serve(async (req) => {
