@@ -10,7 +10,8 @@ import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { DropdownMenu, DropdownMenuContent, DropdownMenuItem, DropdownMenuSeparator, DropdownMenuTrigger } from '@/components/ui/dropdown-menu';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Search, Plus, Clock, Calendar, Truck, CheckCircle, MoreHorizontal, Eye, UserPlus, X, ChevronLeft, ChevronRight, MapPin, AlertCircle, Trash2 } from 'lucide-react';
+import { Search, Plus, Clock, Calendar, Truck, CheckCircle, MoreHorizontal, Eye, UserPlus, X, ChevronLeft, ChevronRight, MapPin, AlertCircle, Trash2, AlertTriangle } from 'lucide-react';
+import { SlaIndicador, useSlaConfig, calcularPercentualSla } from '@/components/ui/SlaIndicador';
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS, StatusInstalacao, PeriodoInstalacao } from '@/types/database';
 import { AtribuirInstaladorDialog } from '@/components/instalacoes/AtribuirInstaladorDialog';
@@ -22,6 +23,7 @@ export default function InstalacoesList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusInstalacao | ''>('');
   const [periodoFilter, setPeriodoFilter] = useState<'hoje' | 'amanha' | 'semana' | ''>('');
+  const [urgentFilter, setUrgentFilter] = useState(false);
   const [atribuirDialogOpen, setAtribuirDialogOpen] = useState(false);
   const [selectedInstalacaoId, setSelectedInstalacaoId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
@@ -80,12 +82,12 @@ export default function InstalacoesList() {
   const { data: contagem } = useInstalacoesContagem();
   const { cancelarInstalacao, isCancelando } = useInstalacaoActions();
   const deleteInstalacao = useDeleteInstalacao();
+  const { data: slaConfig } = useSlaConfig();
 
   // Extract instalacoes and pagination from data
-  const { instalacoes, pagination } = useMemo(() => {
+  const { instalacoes: rawInstalacoes, pagination } = useMemo(() => {
     if (!data) return { instalacoes: [] as InstalacaoWithRelations[], pagination: undefined };
     
-    // If data has instalacoes property, it's the paginated format
     if ('instalacoes' in data) {
       return { 
         instalacoes: data.instalacoes, 
@@ -93,9 +95,19 @@ export default function InstalacoesList() {
       };
     }
     
-    // Otherwise it's just an array
     return { instalacoes: data as InstalacaoWithRelations[], pagination: undefined };
   }, [data]);
+
+  // Apply urgent filter client-side
+  const instalacoes = useMemo(() => {
+    if (!urgentFilter || !slaConfig) return rawInstalacoes;
+    return rawInstalacoes.filter(inst => {
+      if (inst.status === 'concluida' || inst.status === 'cancelada') return false;
+      const prazoHoras = slaConfig.instalacao;
+      const { percentual } = calcularPercentualSla(inst.created_at, prazoHoras);
+      return percentual <= 25;
+    });
+  }, [rawInstalacoes, urgentFilter, slaConfig]);
 
   const handleFilterChange = <T,>(setter: (v: T) => void, value: T) => {
     setter(value);
@@ -216,8 +228,17 @@ export default function InstalacoesList() {
           </SelectContent>
         </Select>
 
-        {(search || statusFilter || periodoFilter) && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatusFilter(''); setPeriodoFilter(''); setPage(1); }}>
+        <Button
+          variant={urgentFilter ? "destructive" : "outline"}
+          size="sm"
+          onClick={() => { setUrgentFilter(!urgentFilter); setPage(1); }}
+        >
+          <AlertTriangle className="h-4 w-4 mr-1" />
+          Atenção Urgente
+        </Button>
+
+        {(search || statusFilter || periodoFilter || urgentFilter) && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatusFilter(''); setPeriodoFilter(''); setUrgentFilter(false); setPage(1); }}>
             <X className="h-4 w-4 mr-1" /> Limpar filtros
           </Button>
         )}
@@ -233,6 +254,7 @@ export default function InstalacoesList() {
               <TableHead>Veículo</TableHead>
               <TableHead>Endereço</TableHead>
               <TableHead>Instalador</TableHead>
+              <TableHead>Prazo</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="w-[50px]">Ações</TableHead>
             </TableRow>
@@ -240,7 +262,7 @@ export default function InstalacoesList() {
           <TableBody>
             {instalacoes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center">
+                <TableCell colSpan={8} className="h-32 text-center">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <Calendar className="h-8 w-8" />
                     <p>Nenhuma instalação encontrada</p>
@@ -281,6 +303,11 @@ export default function InstalacoesList() {
                       <span className="text-sm">{inst.instalador?.nome || inst.instalador_responsavel?.nome || inst.profiles?.nome}</span>
                     ) : (
                       <span className="text-sm text-muted-foreground italic">Não atribuído</span>
+                    )}
+                  </TableCell>
+                  <TableCell>
+                    {inst.status !== 'concluida' && inst.status !== 'cancelada' && (
+                      <SlaIndicador criadoEm={inst.created_at} tipoServico="instalacao" />
                     )}
                   </TableCell>
                   <TableCell>

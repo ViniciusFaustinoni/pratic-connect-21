@@ -28,6 +28,7 @@ import { cn } from '@/lib/utils';
 import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ImprevistoBotao } from './ImprevistoBotao';
+import { SlaIndicador } from '@/components/ui/SlaIndicador';
 
 interface TarefaAtualCardProps {
   tarefa: TarefaAtual & {
@@ -254,7 +255,10 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
             </div>
             <div className="flex-1 min-w-0">
               <p className="font-medium text-foreground truncate">{tarefa.cliente.nome}</p>
-              <p className="text-sm text-muted-foreground">{tarefa.cliente.telefone}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-muted-foreground">{tarefa.cliente.telefone}</p>
+                <SlaIndicador criadoEm={tarefa.data_agendada} tipoServico={tarefa.tipo} />
+              </div>
             </div>
             <Button
               variant="outline"
