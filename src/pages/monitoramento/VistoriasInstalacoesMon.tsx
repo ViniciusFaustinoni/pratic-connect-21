@@ -1,7 +1,8 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wrench, ClipboardCheck } from 'lucide-react';
+import { Wrench, ClipboardCheck, Puzzle } from 'lucide-react';
 import Instalacoes from './Instalacoes';
 import Vistorias from './Vistorias';
+import MonitoramentoEncaixes from './Encaixes';
 
 export default function VistoriasInstalacoesMon() {
   return (
@@ -9,7 +10,7 @@ export default function VistoriasInstalacoesMon() {
       <div>
         <h1 className="text-2xl font-bold">Instalações e Vistorias</h1>
         <p className="text-muted-foreground">
-          Acompanhe instalações e vistorias em um único painel
+          Acompanhe instalações, vistorias e encaixes em um único painel
         </p>
       </div>
 
@@ -23,25 +24,24 @@ export default function VistoriasInstalacoesMon() {
             <ClipboardCheck className="h-4 w-4" />
             Vistorias
           </TabsTrigger>
+          <TabsTrigger value="encaixes" className="gap-2">
+            <Puzzle className="h-4 w-4" />
+            Encaixes
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="instalacoes">
-          <InstalacoesList />
+          <Instalacoes />
         </TabsContent>
 
         <TabsContent value="vistorias">
-          <VistoriasContent />
+          <Vistorias />
+        </TabsContent>
+
+        <TabsContent value="encaixes">
+          <MonitoramentoEncaixes embedded />
         </TabsContent>
       </Tabs>
     </div>
   );
-}
-
-// Inline wrappers to avoid duplicate headers/containers
-function InstalacoesList() {
-  return <Instalacoes />;
-}
-
-function VistoriasContent() {
-  return <Vistorias />;
 }

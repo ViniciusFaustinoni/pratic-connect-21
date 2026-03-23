@@ -319,7 +319,7 @@ function ConfiguracoesEncaixeSection() {
   );
 }
 
-export default function MonitoramentoEncaixes() {
+export default function MonitoramentoEncaixes({ embedded = false }: { embedded?: boolean }) {
   const queryClient = useQueryClient();
   const { data: encaixes, isLoading } = useTodosEncaixes();
 
@@ -333,25 +333,27 @@ export default function MonitoramentoEncaixes() {
   const semAtribuicao = encaixes?.filter(e => !e.profissional_atribuido_id) || [];
 
   return (
-    <div className="container mx-auto p-6 space-y-6">
+    <div className={embedded ? "space-y-6" : "container mx-auto p-6 space-y-6"}>
       {/* Header */}
-      <div className="flex items-center justify-between">
-        <div className="flex items-center gap-3">
-          <div className="p-2 rounded-lg bg-primary/10">
-            <Puzzle className="h-6 w-6 text-primary" />
+      {!embedded && (
+        <div className="flex items-center justify-between">
+          <div className="flex items-center gap-3">
+            <div className="p-2 rounded-lg bg-primary/10">
+              <Puzzle className="h-6 w-6 text-primary" />
+            </div>
+            <div>
+              <h1 className="text-2xl font-bold">Encaixes Disponíveis</h1>
+              <p className="text-muted-foreground">
+                Gerencie e atribua serviços marcados para encaixe
+              </p>
+            </div>
           </div>
-          <div>
-            <h1 className="text-2xl font-bold">Encaixes Disponíveis</h1>
-            <p className="text-muted-foreground">
-              Gerencie e atribua serviços marcados para encaixe
-            </p>
-          </div>
+          <Button variant="outline" onClick={handleRefresh}>
+            <RefreshCw className="h-4 w-4 mr-2" />
+            Atualizar
+          </Button>
         </div>
-        <Button variant="outline" onClick={handleRefresh}>
-          <RefreshCw className="h-4 w-4 mr-2" />
-          Atualizar
-        </Button>
-      </div>
+      )}
 
       {/* Configurações */}
       <ConfiguracoesEncaixeSection />
