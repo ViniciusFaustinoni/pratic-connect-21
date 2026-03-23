@@ -10,13 +10,16 @@ interface CreateUserRequest {
   nome: string;
   email: string;
   cpf?: string;
+  cnpj?: string;
+  razao_social?: string;
+  nome_fantasia?: string;
   telefone?: string;
-  senha?: string;           // Senha opcional - se não passar, usa magic link
-  perfil?: string;          // Para retro-compatibilidade
-  perfis?: string[];        // Múltiplos perfis
+  senha?: string;
+  perfil?: string;
+  perfis?: string[];
   tipo: 'funcionario' | 'associado' | 'prestador';
-  regioes_atendimento?: string[];  // Regiões de atuação (vistoriadores)
-  capacidade_diaria?: number;       // Capacidade de tarefas por dia
+  regioes_atendimento?: string[];
+  capacidade_diaria?: number;
 }
 
 serve(async (req) => {
@@ -78,7 +81,7 @@ serve(async (req) => {
     }
 
     const body: CreateUserRequest = await req.json();
-    const { nome, email, cpf, telefone, senha, perfil, perfis, tipo, regioes_atendimento, capacidade_diaria } = body;
+    const { nome, email, cpf, cnpj, razao_social, nome_fantasia, telefone, senha, perfil, perfis, tipo, regioes_atendimento, capacidade_diaria } = body;
     
     // Determinar perfis a adicionar
     const perfisParaAdicionar = perfis?.length ? perfis : (perfil ? [perfil] : ['vendedor_clt']);
@@ -115,6 +118,22 @@ serve(async (req) => {
       }
     }
 
+    // Verificar se CNPJ já existe (se fornecido)
+    if (cnpj) {
+      const { data: existingCNPJ } = await supabaseAdmin
+        .from('profiles')
+        .select('id')
+        .eq('cnpj', cnpj)
+        .maybeSingle();
+
+      if (existingCNPJ) {
+        return new Response(
+          JSON.stringify({ error: 'Este CNPJ já está cadastrado' }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+    }
+
     // Criar usuário no Auth (com ou sem senha)
     const createUserOptions: any = {
       email: email.toLowerCase(),
@@ -143,8 +162,11 @@ serve(async (req) => {
     }
 
     // O trigger handle_new_user já cria o profile, mas precisamos atualizar campos adicionais
-    const updateData: any = { primeiro_acesso: !senha }; // Se tem senha, não é primeiro acesso
+    const updateData: any = { primeiro_acesso: !senha };
     if (cpf) updateData.cpf = cpf;
+    if (cnpj) updateData.cnpj = cnpj;
+    if (razao_social) updateData.razao_social = razao_social;
+    if (nome_fantasia) updateData.nome_fantasia = nome_fantasia;
     if (telefone) updateData.telefone = telefone;
     if (regioes_atendimento?.length) updateData.regioes_atendimento = regioes_atendimento;
     if (capacidade_diaria) updateData.capacidade_diaria = capacidade_diaria;
