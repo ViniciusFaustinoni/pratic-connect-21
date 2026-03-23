@@ -18,12 +18,30 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Bot, Settings, MessageSquare, Globe, Save, Eye, ExternalLink, Copy,
-  Users, Phone, Clock, Send, UserCheck, Loader2, Image as ImageIcon
+  Users, Phone, Clock, Send, UserCheck, Loader2, Image as ImageIcon, RefreshCw
 } from 'lucide-react';
 
 // ─── Tab 1: Planos do Agente ──────────────────────────────────────────────
 function AbaPlanos() {
   const queryClient = useQueryClient();
+  const [generatingImageId, setGeneratingImageId] = useState<string | null>(null);
+
+  const handleRegenerarImagem = async (plano: any) => {
+    setGeneratingImageId(plano.id);
+    try {
+      const { data, error } = await supabase.functions.invoke('gerar-imagem-plano', {
+        body: { plano_id: plano.id, nome: plano.nome, descricao: plano.agente_descricao },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      queryClient.invalidateQueries({ queryKey: ['planos-agente-ia'] });
+      toast.success('Imagem gerada com sucesso!');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao gerar imagem');
+    } finally {
+      setGeneratingImageId(null);
+    }
+  };
 
   const { data: planos, isLoading } = useQuery({
     queryKey: ['planos-agente-ia'],
@@ -99,14 +117,29 @@ function AbaPlanos() {
                 rows={2}
               />
             </div>
-            {plano.imagem_landing_url && (
-              <div className="flex items-center gap-2">
-                <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                <a href={plano.imagem_landing_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
-                  Ver imagem atual
-                </a>
-              </div>
-            )}
+            <div className="flex items-center gap-2 flex-wrap">
+              {plano.imagem_landing_url && (
+                <>
+                  <ImageIcon className="h-4 w-4 text-muted-foreground" />
+                  <a href={plano.imagem_landing_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
+                    Ver imagem atual
+                  </a>
+                </>
+              )}
+              <Button
+                variant="outline"
+                size="sm"
+                className="h-7 text-xs gap-1.5"
+                disabled={generatingImageId === plano.id}
+                onClick={() => handleRegenerarImagem(plano)}
+              >
+                {generatingImageId === plano.id ? (
+                  <><Loader2 className="h-3 w-3 animate-spin" /> Gerando...</>
+                ) : (
+                  <><RefreshCw className="h-3 w-3" /> Regenerar imagem</>
+                )}
+              </Button>
+            </div>
           </CardContent>
         </Card>
       ))}
