@@ -1,60 +1,52 @@
 
 
-# Plano: Relatório por Plano no Modal de Exportação
+# Plano: Busca por Associado + CSV por Beneficiário
 
-## Resumo
-
-Adicionar aba "Por plano" ao modal existente `ExportarRelatorioVendaExternaModal`, com filtros próprios, geração de PDF e CSV agrupando comissões por plano e nível de beneficiário.
-
-## Arquivo a modificar
+## Arquivos a modificar
 
 | Arquivo | Alteração |
 |---|---|
-| `src/components/financeiro/ExportarRelatorioVendaExternaModal.tsx` | Adicionar abas, nova lógica de relatório por plano, exportação CSV |
+| `src/pages/financeiro/GestaoContaVendedor.tsx` | Coluna "Associado" + campo de busca |
+| `src/components/financeiro/ExportarRelatorioVendaExternaModal.tsx` | Botão "Exportar CSV" na aba beneficiário |
 
-## Detalhamento
+## Parte 1 — Busca por Associado
 
-### 1. Abas no modal
+### Coluna "Associado"
 
-Usar `Tabs` do Radix com duas abas:
-- `"beneficiario"` — conteúdo atual (filtros + botão existente), sem alteração
-- `"plano"` — novo conteúdo descrito abaixo
+Adicionar `<TableHead>Associado</TableHead>` após "Descrição" (linha 181). Na row, exibir `l.associado_nome || '—'`. Atualizar `colSpan` de 9 para 10 nas linhas de loading/empty.
 
-O `DialogContent` passa de `max-w-md` para `max-w-lg` para acomodar.
+### Campo de busca
 
-### 2. Filtros da aba "Por plano"
+Adicionar estado `buscaAssociado` e um `Input` com placeholder "Buscar por associado..." na barra de filtros (após o Select de status, linha 168).
 
-- **Período**: data início e data fim (mesmo padrão do existente)
-- **Plano**: Select buscando `planos` ativos (`supabase.from('planos').select('id, nome').eq('ativo', true).order('nome')`), com opção "Todos os planos" como padrão
-- **Status**: Select com "Todos" / "Pendente" (`a_pagar`) / "Pago" (`pago`)
+Filtrar `lancamentos` no frontend antes de renderizar:
 
-### 3. Query de dados
+```ts
+const lancamentosFiltrados = lancamentos.filter(l =>
+  !buscaAssociado || (l.associado_nome || '').toLowerCase().includes(buscaAssociado.toLowerCase())
+);
+```
 
-Ao exportar, executar:
+Usar `lancamentosFiltrados` no `.map()` da tabela em vez de `lancamentos`.
 
-1. Buscar lançamentos do período (tipo `credito`, excluindo `cancelado` se status=Todos) com join para obter `associado_id`
-2. Para cada `associado_id` encontrado, buscar `plano_id` dos associados via query separada (`associados.id, plano_id`)
-3. Buscar nomes dos planos via query aos `planos`
-4. Para cada `vendedor_id`, buscar role via `profiles.user_id → user_roles.role` (mesma lógica já implementada no dashboard)
-5. Agrupar: `plano_nome + nível → { qtd, bruto, abatimento, líquido }`
+### Dado já disponível
 
-### 4. PDF por plano
+O hook `useContaCorrenteVendedor` já faz join e retorna `associado_nome` no `CCLancamento` — nenhuma alteração no hook.
 
-Usando jsPDF + autoTable:
-- Cabeçalho: "Relatório de Comissões por Plano" + período
-- Para cada plano: título com nome + total, seguido de tabela com colunas: Nível, Qtd Comissões, Total Bruto, Total Abatimentos, Total Líquido
-- Rodapé com totais gerais (quando "Todos os planos")
-- Paginação no rodapé
+## Parte 2 — CSV por Beneficiário
 
-### 5. CSV por plano
+### Função `handleExportarBeneficiarioCSV`
 
-Gerar CSV com separador `;` e BOM, colunas: Plano, Nível, Qtd Comissões, Bruto, Abatimento, Líquido. Uma linha por combinação plano+nível. Linha final de totais.
+Reutilizar a mesma query já feita em `handleExportarBeneficiario` (linhas 72-100) para buscar lançamentos e vendedores.
 
-### 6. Botões de exportação
+Gerar CSV com:
+- Header: `Vendedor;Data;Descrição;Tipo;Bruto;Abatimento;Líquido;Status`
+- Uma linha por lançamento, agrupado por vendedor
+- Linha de totais ao final
+- BOM + separador `;`
+- Arquivo: `comissoes-beneficiario-{dataInicio}-a-{dataFim}.csv`
 
-Na aba "Por plano", dois botões:
-- "Exportar PDF" (ícone FileDown)
-- "Exportar CSV" (ícone FileSpreadsheet)
+### Botão
 
-Ambos compartilham a mesma lógica de busca de dados, diferindo apenas na geração do arquivo.
+Na aba "Por beneficiário" (linha 510-516), adicionar botão "Exportar CSV" com ícone `FileSpreadsheet`, antes do botão PDF existente. Ambos compartilham o estado `loading`.
 
