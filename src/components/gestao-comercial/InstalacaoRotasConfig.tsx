@@ -152,6 +152,11 @@ export function InstalacaoRotasConfig() {
   const [jornadaAlertaImprod, setJornadaAlertaImprod] = useState('2');
   const [savingB5, setSavingB5] = useState(false);
 
+  // ── Bloco 6 state (SLA)
+  const [slaInstalacao, setSlaInstalacao] = useState('48');
+  const [slaManutencao, setSlaManutencao] = useState('24');
+  const [savingB6, setSavingB6] = useState(false);
+
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
