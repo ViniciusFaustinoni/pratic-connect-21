@@ -78,6 +78,8 @@ function useInstalacaoConfigs() {
         slaManutencao: map.sla_horas_manutencao?.valor ?? '24',
         gpsValidacaoAtiva: map.gps_validacao_ativa?.valor ?? 'true',
         gpsRaioMetros: map.gps_raio_metros?.valor ?? '500',
+        limiteDebito: map.jornada_limite_debito_horas?.valor ?? '0',
+        exibirSaldo: map.jornada_exibir_saldo_vistoriador?.valor ?? 'true',
       };
     },
     staleTime: 1000 * 60 * 5,
