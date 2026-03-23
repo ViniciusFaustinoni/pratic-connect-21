@@ -59,8 +59,8 @@ export default function ViagensTab() {
   const { data: viagens, isLoading } = useQuery({
     queryKey: ['viagens-tab', dateRange, statusFilter, tecnicoFilter],
     queryFn: async () => {
-      let query = supabase
-        .from('instalacoes')
+      let query = (supabase
+        .from('instalacoes') as any)
         .select(`
           id, status, data_agendada, periodo, tipo_deslocamento, tipo_servico, created_at,
           cidade, uf, instalador_id, instalador_responsavel_id,
@@ -69,7 +69,7 @@ export default function ViagensTab() {
           instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome)
         `)
         .eq('tipo_deslocamento', 'viagem')
-        .order('data_agendada', { ascending: false }) as any;
+        .order('data_agendada', { ascending: false });
 
       if (dateRange?.from) {
         query = query.gte('data_agendada', format(dateRange.from, 'yyyy-MM-dd'));
