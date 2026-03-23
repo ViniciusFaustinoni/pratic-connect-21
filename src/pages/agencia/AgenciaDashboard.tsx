@@ -3,7 +3,6 @@ import { useAuth } from '@/contexts/AuthContext';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useContaCorrenteVendedor, CCLancamento } from '@/hooks/useContaCorrenteVendedor';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Input } from '@/components/ui/input';
@@ -13,7 +12,7 @@ import { Pagination, PaginationContent, PaginationItem, PaginationLink, Paginati
 import { formatarMoeda } from '@/utils/format';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { DollarSign, Users, Loader2, Wallet, TrendingUp, Clock } from 'lucide-react';
+import { DollarSign, Loader2, Wallet, TrendingUp, Clock } from 'lucide-react';
 
 const STATUS_CONFIG: Record<string, { label: string; color: string; variant: 'default' | 'secondary' | 'destructive' | 'outline' }> = {
   pendente: { label: 'Pendente', color: 'bg-yellow-500/15 text-yellow-600 border-yellow-500/30', variant: 'outline' },
