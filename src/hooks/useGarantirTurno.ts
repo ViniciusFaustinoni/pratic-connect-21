@@ -24,7 +24,8 @@ export function useGarantirTurno(emServico: boolean) {
   const queryClient = useQueryClient();
   const hasRunRef = useRef(false);
   const lastDateRef = useRef<string>('');
-
+  const [debitoBloqueado, setDebitoBloqueado] = useState(false);
+  const [mensagemDebito, setMensagemDebito] = useState<string | null>(null);
   const garantirTurnoMutation = useMutation({
     mutationFn: async () => {
       if (!profile?.id) throw new Error('Sem perfil');
