@@ -428,6 +428,9 @@ const App = () => (
             {/* Public Acompanhamento Reboque (Associado) */}
             <Route path="/acompanhar/reboque/:token" element={<AcompanhamentoReboquePublico />} />
             
+            {/* Public Prestador Instalação */}
+            <Route path="/prestador/instalacao/:token" element={<PrestadorInstalacao />} />
+            
             {/* Public Portal Terceiro */}
             <Route path="/terceiro/:token" element={<PortalTerceiro />} />
             
