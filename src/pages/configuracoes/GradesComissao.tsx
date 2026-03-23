@@ -6,7 +6,7 @@ import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Progress } from '@/components/ui/progress';
-import { Plus, Pencil, Copy, Power, Trash2, Layers } from 'lucide-react';
+import { Plus, Pencil, Copy, Power, Trash2, Layers, Users } from 'lucide-react';
 import { toast } from 'sonner';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -42,6 +42,22 @@ export default function GradesComissao() {
         .order('created_at', { ascending: false });
       if (error) throw error;
       return data as GradeComissao[];
+    },
+  });
+
+  // Buscar contagem de usuários por grade
+  const { data: userCounts = {} } = useQuery({
+    queryKey: ['grades-comissao-user-counts'],
+    queryFn: async () => {
+      const { data, error } = await (supabase as any)
+        .from('usuario_grade_comissao')
+        .select('grade_id');
+      if (error) throw error;
+      const counts: Record<string, number> = {};
+      (data || []).forEach((r: any) => {
+        counts[r.grade_id] = (counts[r.grade_id] || 0) + 1;
+      });
+      return counts;
     },
   });
 
@@ -90,6 +106,15 @@ export default function GradesComissao() {
     onError: () => toast.error('Erro ao duplicar'),
   });
 
+  const handleDeleteClick = async (id: string) => {
+    const count = userCounts[id] || 0;
+    if (count > 0) {
+      toast.error(`Esta grade está atribuída a ${count} usuário(s) e não pode ser excluída. Remova as atribuições primeiro.`);
+      return;
+    }
+    setDeleteId(id);
+  };
+
   const deleteMutation = useMutation({
     mutationFn: async (id: string) => {
       const { error } = await (supabase as any).from('grades_comissao').delete().eq('id', id);
@@ -97,6 +122,7 @@ export default function GradesComissao() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['grades-comissao'] });
+      queryClient.invalidateQueries({ queryKey: ['grades-comissao-user-counts'] });
       toast.success('Grade excluída');
       setDeleteId(null);
     },
@@ -145,6 +171,7 @@ export default function GradesComissao() {
           {grades.map((grade) => {
             const total = getTotalPercentual(grade.grades_comissao_niveis);
             const qtdNiveis = grade.grades_comissao_niveis.length;
+            const qtdUsuarios = userCounts[grade.id] || 0;
             return (
               <Card key={grade.id} className={!grade.ativo ? 'opacity-60' : ''}>
                 <CardContent className="flex items-center justify-between py-4 px-5">
@@ -154,6 +181,12 @@ export default function GradesComissao() {
                       <Badge variant={grade.ativo ? 'default' : 'secondary'}>
                         {grade.ativo ? 'Ativa' : 'Inativa'}
                       </Badge>
+                      {qtdUsuarios > 0 && (
+                        <Badge variant="outline" className="gap-1">
+                          <Users className="h-3 w-3" />
+                          {qtdUsuarios}
+                        </Badge>
+                      )}
                     </div>
                     {grade.descricao && (
                       <p className="text-xs text-muted-foreground truncate">{grade.descricao}</p>
@@ -199,7 +232,7 @@ export default function GradesComissao() {
                       </Tooltip>
                       <Tooltip>
                         <TooltipTrigger asChild>
-                          <Button variant="ghost" size="icon" onClick={() => setDeleteId(grade.id)}>
+                          <Button variant="ghost" size="icon" onClick={() => handleDeleteClick(grade.id)}>
                             <Trash2 className="h-4 w-4 text-destructive" />
                           </Button>
                         </TooltipTrigger>

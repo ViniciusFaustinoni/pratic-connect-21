@@ -284,6 +284,7 @@ export default function UsuarioForm() {
     perfis: preselectedPerfil ? [preselectedPerfil] : [] as string[],
     regioes_atendimento: [] as string[],
     capacidade_diaria: 10,
+    grade_comissao_id: '' as string,
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
