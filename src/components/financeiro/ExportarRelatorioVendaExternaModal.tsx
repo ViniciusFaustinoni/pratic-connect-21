@@ -211,6 +211,70 @@ export function ExportarRelatorioVendaExternaModal({ open, onClose, vendedores }
     }
   };
 
+  // ===================== BENEFICIÁRIO — CSV =====================
+  const handleExportarBeneficiarioCSV = async () => {
+    setLoading(true);
+    try {
+      let query = supabase
+        .from('cc_vendedor_lancamentos')
+        .select('*')
+        .gte('data_lancamento', dataInicio)
+        .lte('data_lancamento', dataFim)
+        .order('vendedor_id')
+        .order('data_lancamento', { ascending: true });
+
+      if (vendedorId !== 'todos') {
+        query = query.eq('vendedor_id', vendedorId);
+      }
+
+      const { data, error } = await query;
+      if (error) throw error;
+      const lancamentos = (data || []) as any[];
+
+      if (lancamentos.length === 0) {
+        toast.info('Nenhum dado encontrado para os filtros selecionados.');
+        setLoading(false);
+        return;
+      }
+
+      const nomeMap: Record<string, string> = {};
+      vendedores.forEach(v => { nomeMap[v.vendedor_id] = v.vendedor_nome; });
+
+      const statusLabel: Record<string, string> = {
+        pendente: 'Pendente', a_pagar: 'A pagar', pago: 'Pago',
+        antecipado: 'Antecipado', cancelado: 'Cancelado', em_abatimento: 'Em abatimento',
+      };
+
+      const header = 'Vendedor;Data;Descrição;Tipo;Bruto;Abatimento;Líquido;Status';
+      const lines = lancamentos.map(l =>
+        `${(nomeMap[l.vendedor_id] || 'Vendedor').replace(/;/g, ',')};${format(new Date(l.data_lancamento), 'dd/MM/yyyy')};${(l.descricao || '').replace(/;/g, ',')};${l.tipo === 'credito' ? 'Crédito' : 'Débito'};${Number(l.valor_bruto).toFixed(2).replace('.', ',')};${Number(l.valor_abatimento || 0).toFixed(2).replace('.', ',')};${Number(l.valor_liquido).toFixed(2).replace('.', ',')};${statusLabel[l.status] || l.status}`
+      );
+
+      // Totals
+      const totBruto = lancamentos.reduce((s, l) => s + Number(l.valor_bruto), 0);
+      const totAbat = lancamentos.reduce((s, l) => s + Number(l.valor_abatimento || 0), 0);
+      const totLiq = lancamentos.reduce((s, l) => s + Number(l.valor_liquido), 0);
+      lines.push(`TOTAL;;;${lancamentos.length};${totBruto.toFixed(2).replace('.', ',')};${totAbat.toFixed(2).replace('.', ',')};${totLiq.toFixed(2).replace('.', ',')};`);
+
+      const bom = '\uFEFF';
+      const csv = bom + [header, ...lines].join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `comissoes-beneficiario-${dataInicio}-a-${dataFim}.csv`;
+      a.click();
+      URL.revokeObjectURL(url);
+
+      toast.success('CSV exportado com sucesso!');
+      onClose();
+    } catch (e) {
+      toast.error('Erro ao gerar CSV: ' + (e as Error).message);
+    } finally {
+      setLoading(false);
+    }
+  };
+
   // ===================== POR PLANO — data fetch =====================
   const fetchDadosPorPlano = async (): Promise<PlanoNivelRow[]> => {
     // 1) Fetch credit lancamentos in period
