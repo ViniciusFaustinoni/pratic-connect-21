@@ -74,6 +74,8 @@ export default function JornadasProfissionais() {
           'gps_raio_metros',
           'jornada_limite_debito_horas',
           'jornada_exibir_saldo_vistoriador',
+          'recusa_exigir_motivo',
+          'recusa_limite_alerta',
         ]);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
