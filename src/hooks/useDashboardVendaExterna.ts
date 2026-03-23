@@ -23,6 +23,8 @@ export interface DashboardCards {
   debitos_count: number;
   total_pago_mes: number;
   total_pago_count: number;
+  estornos_mes: number;
+  estornos_count: number;
 }
 
 export function useDashboardVendaExterna() {
