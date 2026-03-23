@@ -71,7 +71,6 @@ export function InstalacaoDetailDrawer({
     queryKey: ['registro-presenca-instalacao', instalacaoId],
     queryFn: async () => {
       if (!instalacaoId) return null;
-      // Buscar serviço associado à instalação pelo associado_id e tipo instalacao
       const inst = await supabase.from('instalacoes').select('associado_id, veiculo_id').eq('id', instalacaoId).single();
       if (!inst.data) return null;
       
@@ -94,6 +93,36 @@ export function InstalacaoDetailDrawer({
         .maybeSingle();
       
       return data;
+    },
+    enabled: !!instalacaoId && open,
+  });
+
+  // Buscar histórico de recusas do serviço
+  const { data: historicoRecusas } = useQuery({
+    queryKey: ['historico-recusas-instalacao', instalacaoId],
+    queryFn: async () => {
+      if (!instalacaoId) return [];
+      // Buscar serviço associado
+      const inst = await supabase.from('instalacoes').select('associado_id').eq('id', instalacaoId).single();
+      if (!inst.data) return [];
+      
+      const { data: servicos } = await supabase
+        .from('servicos')
+        .select('id')
+        .eq('associado_id', inst.data.associado_id)
+        .eq('tipo', 'instalacao')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (!servicos?.length) return [];
+
+      const { data } = await (supabase as any)
+        .from('registros_recusa_tarefa')
+        .select('*, profissional:profiles(nome)')
+        .eq('servico_id', servicos[0].id)
+        .order('created_at', { ascending: false });
+
+      return data || [];
     },
     enabled: !!instalacaoId && open,
   });
