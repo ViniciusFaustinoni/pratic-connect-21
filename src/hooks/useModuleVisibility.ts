@@ -61,4 +61,5 @@ export const MODULE_ROUTES: Record<string, string[]> = {
   relatorios: ['/relatorios'],
   documentos: ['/documentos'],
   configuracoes: ['/configuracoes'],
+  agencia: ['/agencia'],
 };
