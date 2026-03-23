@@ -1,64 +1,66 @@
 
 
-# Resultado da Validação: Comissionamento por Plano
+# Validação: Extrato do Vendedor — Resultados
 
-## Status por item
+## Resumo
 
 | Item | Teste | Status | Detalhe |
 |------|-------|--------|---------|
-| 3.1 | Acesso à configuração | **OK** | Página existe em `/configuracoes/comissionamento-plano`, busca planos ativos e níveis de grades |
-| 3.2 | Valor fixo | **OK** | UI permite selecionar "Valor fixo (R$)", informar valor e parcelas, salva na tabela `comissao_plano_nivel` |
-| 3.3 | Percentual | **OK** | UI permite selecionar "Percentual (%)", informar valor e parcelas |
-| 3.4 | Múltiplos níveis | **OK** | Cada nível da grade aparece como linha separada, salvos em registros independentes |
-| 3.5 | Zero parcelas | **OK** | Campo aceita 0; badge "níveis configurados" só conta registros com `ativo=true AND parcelas>0` |
-| 3.6 | Nível inativo | **OK** | Toggle `Switch` seta `ativo=false`, salvo no banco |
-| 3.7 | Não retroativo | **NÃO IMPLEMENTADO** | Nenhum backend consome `comissao_plano_nivel` |
-| 3.8 | Geração automática | **NÃO IMPLEMENTADO** | Nenhum backend consome `comissao_plano_nivel` |
-| 3.9 | Limite de parcelas | **NÃO IMPLEMENTADO** | Nenhum backend consome `comissao_plano_nivel` |
-| 3.10 | Cálculo percentual | **NÃO IMPLEMENTADO** | Nenhum backend consome `comissao_plano_nivel` |
+| 4.1 | Menu visível | **OK** | "Conta Corrente" aparece no footer do sidebar para `isVendedorOnly`, `isPerfilLimitado`, `supervisor_externo` e `agencia` (linha 911 de AppSidebar.tsx). Rota `/perfil/conta-corrente` registrada em App.tsx (linha 547). |
+| 4.2 | Cards de resumo | **OK** | 4 cards implementados: A Receber Este Mês, Já Recebido Este Mês, Total a Receber, Total Histórico Recebido. Hook `useContaCorrenteVendedor` calcula via 4 queries na `cc_vendedor_lancamentos` (linhas 118-181). |
+| 4.3 | Extrato de adesão | **OK** | `getTipoLabel()` retorna "Adesão" quando `categoria === 'adesao'`. Associado nome vem via join. Status exibido via Badge. |
+| 4.4 | Extrato de mensalidade | **OK** | `getTipoLabel()` retorna "Mensalidade (Xª parcela)" quando `categoria === 'recorrente'` e `parcela_numero` existe. |
+| 4.5 | Status Pago | **OK** | STATUS_CONFIG inclui `pago: { label: 'Pago', ... }`. Coluna "Pagamento" exibe `data_pagamento` formatada. O hook `registrarPagamento` atualiza `status='pago'` e `data_pagamento`. |
+| 4.6 | Status Estornado | **OK** | STATUS_CONFIG mapeia `cancelado` para label "Estornado". Quando `status === 'cancelado'`, exibe `observacao_pagamento` como motivo em texto vermelho abaixo do badge (linhas 348-351). |
+| 4.7 | Filtro por período | **OK** | Campos "Data início" e "Data fim" aplicam `gte`/`lte` na query (linhas 96-97 do hook). |
+| 4.8 | Filtro por status | **OK** | Select de status com opções: Pendente, A pagar, Pago, Estornado. Aplica `.eq('status', status)` (linha 99). |
+| 4.9 | Busca por associado | **OK** | Campo de busca aplica `.ilike('descricao', '%busca%')` (linha 101). Busca na descrição do lançamento (que contém o nome do associado). |
+| 4.10 | Exportar extrato | **OK** | Botões PDF e CSV implementados. PDF usa jsPDF+autoTable com filtros ativos e resumo. CSV gera arquivo com separador `;`. Ambos respeitam filtros ativos. |
+| 4.11 | Isolamento total | **OK** | RLS policy `cc_vendedor_own_select` restringe SELECT a `vendedor_id = get_profile_id_for_auth(auth.uid())`. Admin/diretor tem policy separada `cc_admin_all`. |
+| 4.12 | Notificação de pagamento | **NÃO IMPLEMENTADO** | Quando o Financeiro registra pagamento via `registrarPagamento` (update status para 'pago'), **nenhuma notificação é criada** na `notificacoes_vendas`. O realtime listener existe, mas ninguém insere a notificação no momento do pagamento. |
 
-## Problema raiz: 3.7 a 3.10
+## Item pendente: 4.12 — Notificação de pagamento
 
-A tabela `comissao_plano_nivel` existe e a UI de configuração funciona, mas **nenhum backend lê essa tabela para gerar comissões**. Especificamente:
+### Problema
+O mutation `registrarPagamento` (useContaCorrenteVendedor.ts, linha 361) faz apenas um `UPDATE` no lançamento para `status='pago'`. Não há trigger no banco nem código no frontend que insira uma notificação na tabela `notificacoes_vendas` ao dar baixa.
 
-- `fn_calcular_recorrente` (DB function) usa `comissoes_faixas_recorrente` — tabela antiga, não `comissao_plano_nivel`
-- `criar-instalacao-pos-pagamento` (Edge Function) usa valores da tabela `configuracoes` — sistema legado
-- `asaas-webhook` / `gerar-faturas-mensais` — não referenciam `comissao_plano_nivel`
+### Solução proposta
 
-A configuração "por plano e por nível" é salva, mas nunca consumida na geração real.
+**Opção A — Trigger no banco** (recomendada):
+Criar um trigger `AFTER UPDATE` na tabela `cc_vendedor_lancamentos` que, quando `status` muda para `'pago'`, insere automaticamente uma notificação na `notificacoes_vendas`:
 
-## Plano de implementação (3.7-3.10)
+```sql
+CREATE FUNCTION fn_notificar_pagamento_vendedor()
+RETURNS TRIGGER AS $$
+BEGIN
+  IF NEW.status = 'pago' AND OLD.status != 'pago' AND NEW.tipo = 'credito' THEN
+    INSERT INTO notificacoes_vendas (usuario_id, tipo, titulo, mensagem, dados_extras)
+    VALUES (
+      NEW.vendedor_id,
+      'pagamento_comissao',
+      'Pagamento recebido!',
+      FORMAT('Comissão de R$ %s foi paga em %s', 
+        TO_CHAR(NEW.valor_liquido, 'FM999G999D00'), 
+        TO_CHAR(NEW.data_pagamento::date, 'DD/MM/YYYY')),
+      jsonb_build_object('lancamento_id', NEW.id, 'valor', NEW.valor_liquido)
+    );
+  END IF;
+  RETURN NEW;
+END;
+$$ LANGUAGE plpgsql SECURITY DEFINER;
 
-### 1. Criar DB Function `fn_gerar_comissao_plano_nivel`
+CREATE TRIGGER trg_notificar_pagamento
+AFTER UPDATE ON cc_vendedor_lancamentos
+FOR EACH ROW EXECUTE FUNCTION fn_notificar_pagamento_vendedor();
+```
 
-Nova função PL/pgSQL que:
-- Recebe `p_contrato_id`, `p_cobranca_id`, `p_valor_pago`, `p_mes_referencia`
-- Busca o `plano_id` do contrato
-- Consulta `comissao_plano_nivel` para esse plano (somente `ativo=true`)
-- Busca o vendedor do contrato e sua hierarquia de grade (`grades_comissao_niveis`)
-- Para cada nível configurado:
-  - Conta quantas comissões já foram geradas para esse contrato+nível
-  - Se `count < parcelas`, gera nova comissão com o valor snapshot (fixo ou % do valor pago)
-  - Se `count >= parcelas`, não gera (limite de parcelas - item 3.9)
-- Valores são gravados como snapshot na tabela `comissoes` — não retroativo por design (item 3.7)
+O vendedor receberia a notificação em tempo real via o `useNotificacoesVendasRealtime()` já existente.
 
-### 2. Integrar no fluxo de pagamento de mensalidade
-
-No `asaas-webhook` (ou `gerar-faturas-mensais`), após confirmar pagamento de uma mensalidade:
-- Chamar `fn_gerar_comissao_plano_nivel` passando os dados da cobrança
-- Isso garante geração automática (item 3.8) e cálculo correto (item 3.10)
-
-### 3. Tabela de comissões geradas
-
-Verificar se a tabela `comissoes` (ou `comissoes_recorrentes`) comporta os campos necessários:
-- `contrato_id`, `cobranca_id`, `nivel_nome`, `plano_id`, `parcela_numero`, `parcela_total`
-- Se não, criar migration para adicionar colunas ou criar tabela dedicada `comissoes_plano_geradas`
-
-## Arquivos afetados
+### Arquivos afetados
 
 | Arquivo | Alteração |
 |---|---|
-| Migration SQL | Nova function `fn_gerar_comissao_plano_nivel` + possível tabela `comissoes_plano_geradas` |
-| `supabase/functions/asaas-webhook/index.ts` | Chamar a function após pagamento confirmado de mensalidade |
-| Nenhuma alteração no frontend | A UI de configuração já está funcional |
+| Migration SQL | Trigger `trg_notificar_pagamento` + function `fn_notificar_pagamento_vendedor` |
+
+Nenhuma alteração no frontend — o listener realtime já captura INSERTs na `notificacoes_vendas`.
 
