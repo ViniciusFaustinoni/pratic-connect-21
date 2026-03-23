@@ -13480,7 +13480,7 @@ export type Database = {
             foreignKeyName: "instalacao_prestador_links_prestador_id_fkey"
             columns: ["prestador_id"]
             isOneToOne: false
-            referencedRelation: "prestadores_assistencia"
+            referencedRelation: "prestadores_instalacao"
             referencedColumns: ["id"]
           },
         ]
@@ -18503,6 +18503,36 @@ export type Database = {
           status?: string | null
           telefone?: string | null
           updated_at?: string
+          whatsapp?: string | null
+        }
+        Relationships: []
+      }
+      prestadores_instalacao: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          id: string
+          municipios_atuacao: string[] | null
+          nome: string
+          updated_at: string | null
+          whatsapp: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          municipios_atuacao?: string[] | null
+          nome: string
+          updated_at?: string | null
+          whatsapp?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          municipios_atuacao?: string[] | null
+          nome?: string
+          updated_at?: string | null
           whatsapp?: string | null
         }
         Relationships: []

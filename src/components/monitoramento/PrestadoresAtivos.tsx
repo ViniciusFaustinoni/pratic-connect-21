@@ -29,11 +29,11 @@ export function PrestadoresAtivos() {
       let prestadorMap: Record<string, string> = {};
       if (prestadorIds.length > 0) {
         const { data: prestadores } = await (supabase as any)
-          .from('prestadores_assistencia')
-          .select('id, nome_fantasia, razao_social')
+          .from('prestadores_instalacao')
+          .select('id, nome')
           .in('id', prestadorIds);
         (prestadores || []).forEach((p: any) => {
-          prestadorMap[p.id] = p.nome_fantasia || p.razao_social || 'Prestador';
+          prestadorMap[p.id] = p.nome || 'Prestador';
         });
       }
 
