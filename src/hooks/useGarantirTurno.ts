@@ -1,9 +1,10 @@
-import { useCallback, useEffect, useRef } from 'react';
+import { useCallback, useEffect, useRef, useState } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
 import { getHojeBrasilia } from '@/lib/date-utils';
 import { format } from 'date-fns';
+import { toast } from 'sonner';
 
 /**
  * Hook idempotente para garantir que o turno de hoje existe quando o profissional está em serviço.
