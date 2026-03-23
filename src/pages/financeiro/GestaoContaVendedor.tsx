@@ -58,8 +58,9 @@ export default function GestaoContaVendedor() {
     },
   });
 
-  const { lancamentos, totalLancamentos, isLoadingLancamentos, saldo, isLoadingSaldo, registrarPagamento } =
+  const { lancamentos, totalLancamentos, isLoadingLancamentos, saldo, isLoadingSaldo, registrarPagamento, estornarComissao } =
     useContaCorrenteVendedor({ vendedorId: selectedVendedor, dataInicio, dataFim, tipo, status, page, pageSize: 15 });
+  const podeEstornar = isDiretor || isGerencia;
 
   const totalPages = Math.ceil(totalLancamentos / 15);
   const vendedorNome = vendedores?.find(v => v.id === selectedVendedor)?.nome || '';
