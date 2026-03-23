@@ -32,11 +32,12 @@ export default function InstaladorPerfil() {
       const { data } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', ['jornada_exibir_saldo_vistoriador', 'jornada_limite_debito_horas']);
+        .in('chave', ['jornada_exibir_saldo_vistoriador', 'jornada_limite_debito_horas', 'viagem_valor_diaria']);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
         exibirSaldo: map.jornada_exibir_saldo_vistoriador !== 'false',
         limiteDebito: parseFloat(map.jornada_limite_debito_horas || '0'),
+        viagemValorDiaria: parseFloat(map.viagem_valor_diaria || '0'),
       };
     },
     staleTime: 1000 * 60 * 5,
