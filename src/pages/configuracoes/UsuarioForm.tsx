@@ -407,6 +407,14 @@ export default function UsuarioForm() {
   // Salvar usuário
   const saveUser = useMutation({
     mutationFn: async () => {
+      // Validação: grade obrigatória para vendedor_externo e agencia
+      const requiresGrade = formData.perfis.some(p => ['vendedor_externo', 'agencia'].includes(p));
+      if (requiresGrade && !formData.grade_comissao_id) {
+        setGradeError(true);
+        throw new Error('GRADE_REQUIRED');
+      }
+      setGradeError(false);
+
       if (isEditing && usuario) {
         const isAgencia = formData.tipo === 'agencia';
         const profileUpdate: any = {
