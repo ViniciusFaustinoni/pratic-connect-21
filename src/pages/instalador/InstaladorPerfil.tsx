@@ -32,11 +32,12 @@ export default function InstaladorPerfil() {
       const { data } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', ['jornada_exibir_saldo_vistoriador', 'jornada_limite_debito_horas']);
+        .in('chave', ['jornada_exibir_saldo_vistoriador', 'jornada_limite_debito_horas', 'viagem_valor_diaria']);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
         exibirSaldo: map.jornada_exibir_saldo_vistoriador !== 'false',
         limiteDebito: parseFloat(map.jornada_limite_debito_horas || '0'),
+        viagemValorDiaria: parseFloat(map.viagem_valor_diaria || '0'),
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -71,13 +72,14 @@ export default function InstaladorPerfil() {
       const inicioMes = format(startOfMonth(getHojeBrasilia()), 'yyyy-MM-dd');
       const { data } = await supabase
         .from('turnos_profissionais')
-        .select('minutos_trabalhados')
+        .select('minutos_trabalhados, em_viagem, bonus_viagem')
         .eq('profissional_id', profile.id)
         .gte('data', inicioMes)
         .eq('status', 'encerrado');
       const dias = data?.length || 0;
-      const totalMinutos = data?.reduce((acc, t) => acc + (t.minutos_trabalhados || 0), 0) || 0;
-      return { dias, totalMinutos };
+      const totalMinutos = data?.reduce((acc, t) => acc + ((t as any).minutos_trabalhados || 0), 0) || 0;
+      const totalBonusViagem = data?.reduce((acc, t) => acc + ((t as any).em_viagem ? ((t as any).bonus_viagem || 0) : 0), 0) || 0;
+      return { dias, totalMinutos, totalBonusViagem };
     },
     enabled: !!profile?.id,
     staleTime: 1000 * 60 * 5,
@@ -200,6 +202,15 @@ export default function InstaladorPerfil() {
                     </p>
                   </div>
                 </div>
+
+                {(configJornada?.viagemValorDiaria ?? 0) > 0 && (resumoMes?.totalBonusViagem ?? 0) > 0 && (
+                  <div className="rounded-lg bg-orange-900/30 border border-orange-500/30 p-3 flex items-center justify-between">
+                    <span className="text-sm text-orange-300">Diárias de viagem no mês</span>
+                    <span className="text-sm font-semibold text-orange-300">
+                      R$ {(resumoMes?.totalBonusViagem ?? 0).toFixed(2)}
+                    </span>
+                  </div>
+                )}
 
                 {debitoBloqueado && (
                   <div className="rounded-lg bg-red-900/30 border border-red-500/50 p-3 flex items-start gap-2">

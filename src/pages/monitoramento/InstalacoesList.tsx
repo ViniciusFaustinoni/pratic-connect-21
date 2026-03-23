@@ -296,6 +296,9 @@ export default function InstalacoesList() {
                       <span className="text-sm truncate max-w-[180px]">
                         {inst.bairro}, {inst.cidade}
                       </span>
+                      {(inst as any).tipo_deslocamento === 'viagem' && (
+                        <Badge className="ml-1 text-[10px] px-1.5 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Viagem</Badge>
+                      )}
                     </div>
                   </TableCell>
                   <TableCell>
@@ -307,7 +310,7 @@ export default function InstalacoesList() {
                   </TableCell>
                   <TableCell>
                     {inst.status !== 'concluida' && inst.status !== 'cancelada' && (
-                      <SlaIndicador criadoEm={inst.created_at} tipoServico="instalacao" />
+                      <SlaIndicador criadoEm={inst.created_at} tipoServico="instalacao" tipoDeslocamento={(inst as any).tipo_deslocamento} />
                     )}
                   </TableCell>
                   <TableCell>

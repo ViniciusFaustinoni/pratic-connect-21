@@ -161,6 +161,55 @@ export function MapaAtendimento() {
     onError: () => toast.error('Erro ao importar municípios'),
   });
 
+  // ===== Regras de Viagem =====
+  const [viagemDiaria, setViagemDiaria] = useState('');
+  const [viagemSla, setViagemSla] = useState('');
+  const [viagemLoaded, setViagemLoaded] = useState(false);
+
+  const { data: configViagem } = useQuery({
+    queryKey: ['config-viagem'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['viagem_valor_diaria', 'viagem_sla_horas']);
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        diaria: map.viagem_valor_diaria || '0',
+        sla: map.viagem_sla_horas || '72',
+      };
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  if (configViagem && !viagemLoaded) {
+    setViagemDiaria(configViagem.diaria);
+    setViagemSla(configViagem.sla);
+    setViagemLoaded(true);
+  }
+
+  const salvarViagemMutation = useMutation({
+    mutationFn: async () => {
+      const updates = [
+        { chave: 'viagem_valor_diaria', valor: viagemDiaria },
+        { chave: 'viagem_sla_horas', valor: viagemSla },
+      ];
+      for (const u of updates) {
+        const { error } = await supabase
+          .from('configuracoes')
+          .update({ valor: u.valor, updated_at: new Date().toISOString() })
+          .eq('chave', u.chave);
+        if (error) throw error;
+      }
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['config-viagem'] });
+      queryClient.invalidateQueries({ queryKey: ['config-sla-prazos'] });
+      toast.success('Regras de viagem salvas!');
+    },
+    onError: () => toast.error('Erro ao salvar regras de viagem'),
+  });
+
   const filtered = municipios.filter(m => {
     const matchBusca = !busca || m.nome.toLowerCase().includes(busca.toLowerCase());
     const matchTipo = filtroTipo === 'todos' || m.tipo_atendimento === filtroTipo;
@@ -282,6 +331,53 @@ export function MapaAtendimento() {
             )}
           </TableBody>
         </Table>
+      </Card>
+
+      {/* Regras de Viagem */}
+      <Card>
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base flex items-center gap-2">
+            <MapPin className="h-4 w-4" /> Regras de Viagem
+          </CardTitle>
+          <CardDescription className="text-xs">
+            Configurações aplicadas automaticamente a instalações em municípios classificados como "Viagem".
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div>
+              <Label>Valor da diária de viagem (R$)</Label>
+              <Input
+                type="number"
+                min="0"
+                step="0.01"
+                value={viagemDiaria}
+                onChange={e => setViagemDiaria(e.target.value)}
+                placeholder="0"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Zero = sem compensação</p>
+            </div>
+            <div>
+              <Label>SLA de instalação em viagem (horas úteis)</Label>
+              <Input
+                type="number"
+                min="1"
+                value={viagemSla}
+                onChange={e => setViagemSla(e.target.value)}
+                placeholder="72"
+              />
+              <p className="text-xs text-muted-foreground mt-1">Padrão volante: 48h</p>
+            </div>
+          </div>
+          <Button
+            size="sm"
+            onClick={() => salvarViagemMutation.mutate()}
+            disabled={salvarViagemMutation.isPending}
+          >
+            {salvarViagemMutation.isPending && <Loader2 className="h-4 w-4 animate-spin mr-2" />}
+            Salvar regras de viagem
+          </Button>
+        </CardContent>
       </Card>
 
       {/* Dialog Adicionar */}

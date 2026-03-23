@@ -7,6 +7,7 @@ import { Clock } from 'lucide-react';
 interface SlaIndicadorProps {
   criadoEm: string;
   tipoServico: string;
+  tipoDeslocamento?: string;
   className?: string;
 }
 
@@ -31,11 +32,12 @@ export function useSlaConfig() {
       const { data } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', ['sla_horas_instalacao', 'sla_horas_manutencao']);
+        .in('chave', ['sla_horas_instalacao', 'sla_horas_manutencao', 'viagem_sla_horas']);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
         instalacao: parseFloat(map.sla_horas_instalacao) || 48,
         manutencao: parseFloat(map.sla_horas_manutencao) || 24,
+        viagem: parseFloat(map.viagem_sla_horas) || 72,
       };
     },
     staleTime: 1000 * 60 * 10,
@@ -59,7 +61,7 @@ function getSlaTipo(tipo: string): 'instalacao' | 'manutencao' {
   return 'instalacao';
 }
 
-export function SlaIndicador({ criadoEm, tipoServico, className }: SlaIndicadorProps) {
+export function SlaIndicador({ criadoEm, tipoServico, tipoDeslocamento, className }: SlaIndicadorProps) {
   const { data: config } = useSlaConfig();
   const [agora, setAgora] = useState(Date.now());
 
@@ -71,7 +73,8 @@ export function SlaIndicador({ criadoEm, tipoServico, className }: SlaIndicadorP
   const resultado = useMemo(() => {
     if (!config) return null;
     const slaTipo = getSlaTipo(tipoServico);
-    const prazoHoras = slaTipo === 'manutencao' ? config.manutencao : config.instalacao;
+    const isViagem = tipoDeslocamento === 'viagem' && slaTipo === 'instalacao';
+    const prazoHoras = slaTipo === 'manutencao' ? config.manutencao : (isViagem ? config.viagem : config.instalacao);
     const { percentual, restanteMs } = calcularPercentualSla(criadoEm, prazoHoras);
     return { percentual, restanteMs, texto: formatarRestante(restanteMs) };
     // eslint-disable-next-line react-hooks/exhaustive-deps

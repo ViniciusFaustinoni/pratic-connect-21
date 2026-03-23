@@ -270,6 +270,37 @@ serve(async (req) => {
       templateData.regrasVenda = regrasVenda;
     }
 
+    // ============= PRAZO DE INSTALAÇÃO POR MUNICÍPIO =============
+    const clienteCidade = contrato.associados?.cidade || contrato.cliente_cidade || '';
+    const clienteUf = contrato.associados?.uf || contrato.cliente_uf || '';
+    let prazoInstalacao = '';
+    if (clienteCidade && clienteUf) {
+      const { data: municipio } = await supabase
+        .from('municipios_atendimento')
+        .select('tipo_atendimento')
+        .ilike('nome', clienteCidade.trim())
+        .ilike('uf', clienteUf.trim())
+        .maybeSingle();
+      if (municipio?.tipo_atendimento === 'viagem') {
+        const { data: configSla } = await supabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'viagem_sla_horas')
+          .maybeSingle();
+        const horas = configSla?.valor || '72';
+        prazoInstalacao = `${horas} horas úteis`;
+      }
+    }
+    if (!prazoInstalacao) {
+      const { data: configSlaPadrao } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'sla_horas_instalacao')
+        .maybeSingle();
+      prazoInstalacao = `${configSlaPadrao?.valor || '48'} horas úteis`;
+    }
+    templateData.prazo_instalacao = prazoInstalacao;
+
     // Fetch migration data if applicable
     if (contrato.tipo_entrada === 'migracao') {
       let solMigracao = null;

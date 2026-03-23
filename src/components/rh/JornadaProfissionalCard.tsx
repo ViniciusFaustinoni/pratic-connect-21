@@ -29,6 +29,8 @@ interface JornadaProfissionalCardProps {
   turno: TurnoProfissional;
   recusasNoTurno?: number;
   limiteRecusas?: number;
+  emViagem?: boolean;
+  bonusViagem?: number;
   className?: string;
 }
 
@@ -65,7 +67,7 @@ function calcularTempoReal(turno: TurnoProfissional): { trabalhados: number; alm
   return { trabalhados, almoco: minutosAlmoco };
 }
 
-export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecusas = 3, className }: JornadaProfissionalCardProps) {
+export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecusas = 3, emViagem, bonusViagem, className }: JornadaProfissionalCardProps) {
   const { trabalhados, almoco } = calcularTempoReal(turno);
   const jornadaPadrao = 480;
   const jornadaAjustada = jornadaPadrao - (turno.saldo_anterior_minutos || 0);
@@ -103,6 +105,9 @@ export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecus
               <h4 className="font-medium text-white">
                 {turno.profile?.nome || 'Profissional'}
               </h4>
+              {emViagem && (
+                <Badge className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Viagem</Badge>
+              )}
             </div>
           </div>
           {getStatusBadge()}
@@ -205,6 +210,12 @@ export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecus
                 </div>
               );
             })()}
+            {bonusViagem != null && bonusViagem > 0 && (
+              <div className="flex items-center gap-1 text-sm mt-1 text-orange-400">
+                <MapPin className="h-4 w-4" />
+                <span>+ R$ {bonusViagem.toFixed(2)} diária de viagem</span>
+              </div>
+            )}
           </div>
         )}
       </CardContent>
