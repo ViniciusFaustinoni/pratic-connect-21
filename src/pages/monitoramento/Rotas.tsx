@@ -20,6 +20,7 @@ import {
 } from '@/components/rotas';
 import { ConfiguracoesEncaixe } from '@/components/rotas/ConfiguracoesEncaixe';
 import { ConfiguracoesFilaAtribuicao } from '@/components/rotas/ConfiguracoesFilaAtribuicao';
+import GestaoRotas from './GestaoRotas';
 import { 
   useRotas, 
   useRotasMetricas, 
