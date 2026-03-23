@@ -463,7 +463,7 @@ export default function AssociadoDetalhe() {
                 <DataField label="CEP" value={associado.cep || '—'} />
                 <DataField label="Logradouro" value={`${associado.logradouro || '—'}${associado.numero ? `, ${associado.numero}` : ''}${associado.complemento ? ` - ${associado.complemento}` : ''}`} />
                 <DataField label="Bairro" value={associado.bairro || '—'} />
-                <DataField label="Cidade / UF" value={`${associado.cidade || '—'} ${associado.uf ? `- ${associado.uf}` : ''}`} />
+                <DataFieldWithMunicipioBadge cidade={associado.cidade} uf={associado.uf} />
               </CardContent>
             </Card>
 

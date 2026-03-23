@@ -1933,7 +1933,7 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                 onClick={handleSalvarEEnviarWhatsApp}
                 className="flex-1 bg-green-600 hover:bg-green-700 text-white"
                 size="lg"
-                disabled={salvandoCotacao}
+                disabled={salvandoCotacao || municipioSelecionado?.tipo_atendimento === 'fora_cobertura'}
               >
                 {salvandoCotacao ? (
                   <>
