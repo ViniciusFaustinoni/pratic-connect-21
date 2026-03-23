@@ -15,6 +15,7 @@ const tabs: Tab[] = [
   { label: 'Elegibilidade', icon: ShieldCheck },
   { label: 'Regras de Venda', icon: Gavel },
   { label: 'Instalação e Rotas', icon: MapPin },
+  { label: 'Mapa de Atendimento', icon: Globe },
 ];
 
 interface TabNavigationProps {

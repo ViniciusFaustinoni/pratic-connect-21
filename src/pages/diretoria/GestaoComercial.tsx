@@ -9,6 +9,7 @@ import { ElegibilidadeVeiculos } from '@/components/gestao-comercial/Elegibilida
 import { RegrasVendaContent } from '@/components/gestao-comercial/RegrasVendaContent';
 import { InstalacaoRotasConfig } from '@/components/gestao-comercial/InstalacaoRotasConfig';
 import RateioConfig from '@/pages/configuracoes/RateioConfig';
+import { MapaAtendimento } from '@/components/gestao-comercial/MapaAtendimento';
 
 export default function GestaoComercial() {
   const [activeTab, setActiveTab] = useState(0);
@@ -26,6 +27,7 @@ export default function GestaoComercial() {
       {activeTab === 5 && <ElegibilidadeVeiculos />}
       {activeTab === 6 && <RegrasVendaContent />}
       {activeTab === 7 && <InstalacaoRotasConfig />}
+      {activeTab === 8 && <MapaAtendimento />}
     </div>
   );
 }
