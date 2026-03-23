@@ -139,6 +139,15 @@ export function InstalacaoRotasConfig() {
   const [novaRegiaoLabel, setNovaRegiaoLabel] = useState('');
   const [savingB4, setSavingB4] = useState(false);
 
+  // ── Bloco 5 state (Jornada)
+  const [jornadaTurno, setJornadaTurno] = useState('8');
+  const [jornadaAlmoco, setJornadaAlmoco] = useState('4');
+  const [jornadaDuracaoAlmoco, setJornadaDuracaoAlmoco] = useState('60');
+  const [jornadaTolerancia, setJornadaTolerancia] = useState('0');
+  const [jornadaProdMin, setJornadaProdMin] = useState('1');
+  const [jornadaAlertaImprod, setJornadaAlertaImprod] = useState('2');
+  const [savingB5, setSavingB5] = useState(false);
+
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
