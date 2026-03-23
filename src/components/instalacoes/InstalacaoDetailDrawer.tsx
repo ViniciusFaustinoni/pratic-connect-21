@@ -18,7 +18,9 @@ import {
   XCircle,
   RotateCcw,
   Cpu,
-  Trash2
+  Trash2,
+  Shield,
+  ExternalLink,
 } from 'lucide-react';
 import {
   Drawer,
