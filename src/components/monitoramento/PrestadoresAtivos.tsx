@@ -33,7 +33,7 @@ export function PrestadoresAtivos() {
           .select('id, nome')
           .in('id', prestadorIds);
         (prestadores || []).forEach((p: any) => {
-          prestadorMap[p.id] = p.nome_fantasia || p.razao_social || 'Prestador';
+          prestadorMap[p.id] = p.nome || 'Prestador';
         });
       }
 
