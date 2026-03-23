@@ -14,11 +14,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 const MOTIVOS_RECUSA = [
-  'Estou no trânsito',
-  'Veículo com problema',
-  'Muito longe da minha localização',
-  'Tarefa fora da minha capacidade técnica',
-  'Outro motivo',
+  'Acidente ou emergência pessoal',
+  'Veículo quebrado ou sinistro',
+  'Problema de saúde',
+  'Outro imprevisto grave',
 ] as const;
 
 interface ModalRecusaTarefaProps {
@@ -49,9 +48,9 @@ export function ModalRecusaTarefa({ open, onOpenChange, onConfirm, isPending }: 
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Recusar Tarefa</DialogTitle>
+          <DialogTitle>Reportar Imprevisto</DialogTitle>
           <DialogDescription>
-            Selecione o motivo da recusa. Essa informação será registrada para o coordenador.
+            Ao reportar um imprevisto, esta tarefa retorna para a fila e o coordenador será notificado imediatamente. Use apenas em situações que impeçam você de realizar o serviço.
           </DialogDescription>
         </DialogHeader>
 
@@ -64,7 +63,7 @@ export function ModalRecusaTarefa({ open, onOpenChange, onConfirm, isPending }: 
           ))}
         </RadioGroup>
 
-        {motivo === 'Outro motivo' && (
+        {motivo === 'Outro imprevisto grave' && (
           <Textarea
             placeholder="Descreva o motivo..."
             value={motivoLivre}
@@ -80,10 +79,10 @@ export function ModalRecusaTarefa({ open, onOpenChange, onConfirm, isPending }: 
           <Button
             variant="destructive"
             onClick={handleConfirm}
-            disabled={!motivo || isPending || (motivo === 'Outro motivo' && !motivoLivre.trim())}
+            disabled={!motivo || isPending || (motivo === 'Outro imprevisto grave' && !motivoLivre.trim())}
           >
             {isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
-            Confirmar Recusa
+            Confirmar imprevisto
           </Button>
         </DialogFooter>
       </DialogContent>

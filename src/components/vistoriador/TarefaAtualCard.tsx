@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   MapPin, Phone, Car, Clock, Navigation, Play, 
   CheckCircle2, User, ChevronRight, Loader2, Route, Zap,
-  MessageCircle, MessageSquareWarning, Timer, XCircle
+  MessageCircle, MessageSquareWarning, Timer
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -197,6 +197,31 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
         motivo,
         motivo_livre: motivoLivre || null,
       });
+
+      // Notificação imediata ao coordenador
+      try {
+        const { data: coordenadores } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .in('role', ['coordenador_monitoramento', 'admin']);
+
+        for (const coord of (coordenadores || [])) {
+          await supabase.from('notificacoes').insert({
+            user_id: coord.user_id,
+            titulo: '🚨 Imprevisto reportado',
+            mensagem: `${profile?.nome || 'Técnico'} reportou: "${motivo}"${motivoLivre ? ` - ${motivoLivre}` : ''}. Instalação #${tarefa.id.slice(0, 8)} retornou para a fila.`,
+            tipo: 'alerta',
+            subtipo: 'imprevisto_reportado',
+            referencia_id: tarefa.id,
+            referencia_tipo: 'servico',
+            lida: false,
+            canal_sistema: true,
+            prioridade: 'alta',
+          });
+        }
+      } catch (notifErr) {
+        console.warn('Erro ao enviar notificação de imprevisto:', notifErr);
+      }
 
       // Desatribuir serviço
       await supabase.from('servicos').update({
@@ -505,20 +530,17 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                   Iniciar Tarefa
                 </Button>
 
-                {/* Botão Recusar */}
-                <Button
-                  variant="outline"
-                  onClick={handleRecusarClick}
-                  disabled={isRecusando}
-                  className="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
-                >
-                  {isRecusando ? (
-                    <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
-                    <XCircle className="h-4 w-4" />
-                  )}
-                  Recusar Tarefa
-                </Button>
+                {/* Link discreto para reportar imprevisto */}
+                <div className="flex justify-center">
+                  <button
+                    type="button"
+                    onClick={handleRecusarClick}
+                    disabled={isRecusando}
+                    className="text-sm text-muted-foreground underline hover:text-destructive disabled:opacity-50 transition-colors"
+                  >
+                    {isRecusando ? 'Reportando...' : 'Reportar Imprevisto'}
+                  </button>
+                </div>
                 
                 {/* Feedback visual quando bloqueado por horário */}
                 {!podeIniciarPorHorario && tarefa.hora_agendada && (
