@@ -449,7 +449,7 @@ export default function UsuarioForm() {
       } else {
         setFieldErrors({});
         const isVistoriador = formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p));
-        const isAgenciaNew = formData.perfis.includes('agencia');
+        const isAgenciaNew = formData.tipo === 'agencia';
         const { data, error } = await supabase.functions.invoke('create-user', {
           body: {
             nome: formData.nome, email: formData.email, telefone: formData.telefone,
