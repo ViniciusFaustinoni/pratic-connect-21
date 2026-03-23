@@ -1,82 +1,66 @@
 
 
-# Plano: Separar Prestadores de Instalacao dos Prestadores de Assistencia
+# Plano: Preencher tipo_deslocamento automaticamente
 
-## Problema
+## CORREÇÃO 1 — Instalações novas
 
-A pagina Prestadores Parceiros do Monitoramento usa a tabela `prestadores_assistencia` (reboque, guincho, etc). Prestadores de instalacao sao um cadastro distinto com campos diferentes.
+**Arquivo**: `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+
+Antes da linha 364 (montagem do `instalacaoData`), adicionar consulta ao Mapa de Atendimento usando `endereco.cidade` e `endereco.estado` que já estão disponíveis no contexto:
+
+```typescript
+// Determinar tipo_deslocamento pelo Mapa de Atendimento
+let tipoDeslocamento = 'volante';
+try {
+  const { data: municipio } = await supabase
+    .from('municipios_atendimento')
+    .select('tipo_atendimento')
+    .ilike('nome', (endereco.cidade || '').trim())
+    .ilike('uf', (endereco.estado || '').trim())
+    .maybeSingle();
+
+  if (municipio?.tipo_atendimento === 'viagem') {
+    tipoDeslocamento = 'viagem';
+  } else if (municipio?.tipo_atendimento === 'prestador') {
+    tipoDeslocamento = 'prestador';
+  }
+  console.log(`[CriarInstalacaoPosPagamento] tipo_deslocamento: ${tipoDeslocamento} (municipio: ${endereco.cidade}/${endereco.estado})`);
+} catch (err) {
+  console.warn('[CriarInstalacaoPosPagamento] Erro ao consultar municipio, usando volante:', err);
+}
+```
+
+Adicionar `tipo_deslocamento: tipoDeslocamento` ao objeto `instalacaoData` (linha 385).
+
+Padrão segue o mesmo usado em `autentique-create/index.ts` (linhas 277-281) que já faz consulta idêntica.
 
 ---
 
-## Alteracoes
+## CORREÇÃO 2 — Instalações existentes
 
-### 1. Nova tabela: `prestadores_instalacao` (migracao SQL)
-
-```sql
-CREATE TABLE public.prestadores_instalacao (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  nome text NOT NULL,
-  whatsapp text,
-  municipios_atuacao text[] DEFAULT '{}',
-  ativo boolean DEFAULT true,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
-);
-
-ALTER TABLE public.prestadores_instalacao ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "authenticated_all" ON public.prestadores_instalacao
-  FOR ALL TO authenticated USING (true) WITH CHECK (true);
-```
-
-### 2. Migrar FK da `instalacao_prestador_links`
-
-Alterar a coluna `prestador_id` para referenciar `prestadores_instalacao` em vez de `prestadores_assistencia`:
+Executar UPDATE retroativo via insert tool (operação de dados, não migração):
 
 ```sql
-ALTER TABLE public.instalacao_prestador_links
-  DROP CONSTRAINT instalacao_prestador_links_prestador_id_fkey,
-  ADD CONSTRAINT instalacao_prestador_links_prestador_id_fkey
-    FOREIGN KEY (prestador_id) REFERENCES public.prestadores_instalacao(id);
+UPDATE instalacoes i
+SET tipo_deslocamento = CASE
+  WHEN m.tipo_atendimento = 'viagem' THEN 'viagem'
+  WHEN m.tipo_atendimento = 'prestador' THEN 'prestador'
+  ELSE 'volante'
+END
+FROM associados a
+LEFT JOIN municipios_atendimento m
+  ON LOWER(TRIM(m.nome)) = LOWER(TRIM(a.cidade))
+  AND LOWER(TRIM(m.uf)) = LOWER(TRIM(a.estado))
+WHERE i.associado_id = a.id
+  AND (i.tipo_deslocamento IS NULL OR i.tipo_deslocamento = '');
 ```
-
-### 3. Novo componente: `NovoPrestadorInstalacaoModal.tsx`
-
-Modal simples com 4 campos:
-- Nome / Razao Social (text, obrigatorio)
-- WhatsApp (text)
-- Municipios de atuacao (multi-select dos municipios com tipo "prestador" do Mapa de Atendimento, ja buscados na pagina)
-- Status ativo/inativo (switch)
-
-Faz insert/update na tabela `prestadores_instalacao`.
-
-### 4. Reescrever `PrestadoresParceiros.tsx`
-
-Trocar todas as queries de `prestadores_assistencia` para `prestadores_instalacao`:
-- Lista principal: `from('prestadores_instalacao')`
-- Metricas: `from('instalacao_prestador_links')` com join em `prestadores_instalacao` (ja funciona pois a FK sera migrada)
-- Historico expandido: sem alteracao (usa `instalacao_prestador_links` que ja esta correto)
-- Toggle status: update em `prestadores_instalacao`
-- Substituir `NovoPrestadorModal` pelo novo `NovoPrestadorInstalacaoModal`
-- Coluna "Municipios" mostra `p.municipios_atuacao` do prestador (nao mais todos os municipios genericos)
-
-### 5. Atualizar `PrestadoresAtivos.tsx` (dashboard card)
-
-Trocar query de nomes de `prestadores_assistencia` para `prestadores_instalacao`.
 
 ---
 
 ## Arquivos afetados
 
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---|---|
-| Migracao SQL | Nova tabela + migrar FK |
-| `src/components/monitoramento/NovoPrestadorInstalacaoModal.tsx` | **Novo** modal de cadastro |
-| `src/pages/monitoramento/PrestadoresParceiros.tsx` | Trocar tabela e modal |
-| `src/components/monitoramento/PrestadoresAtivos.tsx` | Trocar tabela de nomes |
-
-## Nao alterado
-
-- `prestadores_assistencia` e toda a area de Assistencia 24h permanecem intactos
-- `NovoPrestadorModal.tsx` nao e modificado
+| `supabase/functions/criar-instalacao-pos-pagamento/index.ts` | Consulta municípios + campo tipo_deslocamento no payload |
+| SQL (insert tool) | UPDATE retroativo nas instalações existentes |
 
