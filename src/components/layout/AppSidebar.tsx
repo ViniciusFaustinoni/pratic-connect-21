@@ -236,7 +236,6 @@ const menuConfig: {
           url: '/monitoramento/config-plataformas',
           icon: Settings2,
           permission: 'canManageRastreadores' as PermissionKey,
-          permission: 'canManageRastreadores',
         },
       ],
     },
