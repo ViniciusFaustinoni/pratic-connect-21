@@ -366,6 +366,8 @@ const menuConfig: {
         { title: 'Organograma', url: '/rh/organograma', icon: GitBranch },
         { title: 'Departamentos', url: '/rh/departamentos', icon: Building2 },
         { title: 'Benefícios', url: '/rh/beneficios', icon: Gift },
+        { title: 'Treinamentos', url: '/rh/treinamentos', icon: GraduationCap },
+        { title: 'Recrutamento', url: '/rh/recrutamento', icon: UserSearch },
       ],
     },
     {
