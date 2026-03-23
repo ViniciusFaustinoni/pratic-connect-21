@@ -13,6 +13,7 @@ import { AppLayout as AssociadoAppLayout } from "@/components/app/AppLayout";
 import { InstaladorLayout } from "@/components/instalador/InstaladorLayout";
 import { ReguladorLayout } from "@/components/regulador/ReguladorLayout";
 import { AnalistaEventosLayout } from "@/components/analista-eventos/AnalistaEventosLayout";
+import { AgenciaLayout } from "@/components/layout/AgenciaLayout";
 import InstaladorTarefas from "./pages/instalador/InstaladorTarefas";
 import InstaladorMapa from "./pages/instalador/InstaladorMapa";
 import InstaladorPerfil from "./pages/instalador/InstaladorPerfil";
