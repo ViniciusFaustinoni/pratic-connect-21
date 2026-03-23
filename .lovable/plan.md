@@ -1,34 +1,34 @@
 
 
-# Plano: Grade Obrigatória para Vendedor Externo e Agência
+# Plano: Atribuir Grade "TESTE (Cópia)" a Todos os Vendedores Externos
 
-## O que muda
+## Dados encontrados
 
-### `src/pages/configuracoes/UsuarioForm.tsx`
+**Grade**: `TESTE (Cópia)` — ID: `a9518c56-2b76-45ee-ab4e-3c76641342bb`
 
-**Validação antes de salvar** — No `handleSave` / `mutationFn` (linha ~408), antes de prosseguir com update ou create:
+**5 vendedores externos sem grade** (tabela `usuario_grade_comissao` está vazia):
 
-```text
-Se perfis incluem 'vendedor_externo' OU 'agencia':
-  Se grade_comissao_id está vazio → bloquear save
+| Nome | user_id |
+|---|---|
+| [teste] VENDEDOR EXTERNO | 0e65a299-70ac-4faf-ae2b-cfabab505488 |
+| ADRIANO DA SILVA VIEIRA | 9543bb60-3674-4e0f-9e5b-2e579ffceff1 |
+| CARLOS EDUARDO DE LIMA NEGREIROS | 047bca0d-fc17-43fb-b075-686316fff8c7 |
+| KALAYANE SHASNAM MURADO | 37015964-1f50-4ed6-8249-46f073b06eec |
+| SUANE DONOZOR | 98ab00bb-22b1-41b3-8438-076aec22bb0d |
+
+## Ação
+
+Inserir 5 registros na tabela `usuario_grade_comissao` vinculando cada vendedor externo à grade de teste:
+
+```sql
+INSERT INTO usuario_grade_comissao (user_id, grade_comissao_id)
+VALUES
+  ('0e65a299-70ac-4faf-ae2b-cfabab505488', 'a9518c56-2b76-45ee-ab4e-3c76641342bb'),
+  ('9543bb60-3674-4e0f-9e5b-2e579ffceff1', 'a9518c56-2b76-45ee-ab4e-3c76641342bb'),
+  ('047bca0d-fc17-43fb-b075-686316fff8c7', 'a9518c56-2b76-45ee-ab4e-3c76641342bb'),
+  ('37015964-1f50-4ed6-8249-46f073b06eec', 'a9518c56-2b76-45ee-ab4e-3c76641342bb'),
+  ('98ab00bb-22b1-41b3-8438-076aec22bb0d', 'a9518c56-2b76-45ee-ab4e-3c76641342bb');
 ```
 
-- Exibir `toast.error('Selecione uma grade de comissão')` 
-- Setar erro visual no campo grade (borda vermelha no `SelectTrigger`)
-- Não aplicar para `vendedor_clt` — apenas `vendedor_externo` e `agencia`
-
-**Destaque visual do campo** — No bloco do Select de grade (linha ~727):
-- Adicionar estado `gradeError` que fica `true` quando validação falha
-- Aplicar classe `border-destructive` no `SelectTrigger` quando em erro
-- Limpar erro quando usuário seleciona uma grade
-
-### Lógica específica
-
-A validação se aplica tanto na **edição** (linha 409) quanto na **criação** (linha 449). Em ambos os caminhos, checar antes de qualquer operação no banco.
-
-## Arquivo afetado
-
-| Arquivo | Alteração |
-|---|---|
-| `src/pages/configuracoes/UsuarioForm.tsx` | Validação obrigatória de grade para `vendedor_externo` e `agencia` + destaque visual |
+Nenhum arquivo de código é alterado — apenas inserção de dados.
 
