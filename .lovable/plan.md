@@ -1,56 +1,23 @@
 
 
-# Plano: Corrigir Template `prestador_nova_instalacao_v1` Rejeitado
+# Plano: Linha "Dia de viagem" no accordion do HistoricoJornadas
 
-## Problema
+## Alteracao
 
-O template foi rejeitado pela Meta por dois motivos:
-1. **Sem `variaveis_exemplo`** — a Meta exige exemplos para cada variavel
-2. **Corpo termina com texto fixo generico** — a Meta rejeita textos que parecem spam ou que nao identificam a empresa
+**Arquivo**: `src/components/vistoriador/HistoricoJornadas.tsx`
 
-## Correcao
+Apos o bloco de recusas (linha 247), antes do `</div>` que fecha o `space-y-2`, adicionar:
 
-### Migration SQL
-
-Atualizar o template no banco com:
-
-**Corpo revisado** — adicionar identificacao da empresa antes do rodape, e mover o aviso de mensagem automatica para o campo `rodape` (que e o campo correto para isso):
-
-```
-Olá {{1}}! Nova instalação atribuída pela Praticcar.
-
-Associado: {{2}}
-Município: {{3}}
-Endereço: {{4}}
-Data prevista: {{5}}
-
-Acesse os detalhes e confirme pelo link:
-{{6}}
-
-Equipe Praticcar.
+```tsx
+{turno.em_viagem && (
+  <div className="flex justify-between text-blue-400">
+    <span>🚗 Dia de viagem</span>
+    {(turno.bonus_viagem || 0) > 0 && (
+      <span>R$ {Number(turno.bonus_viagem).toFixed(2).replace('.', ',')} diária</span>
+    )}
+  </div>
+)}
 ```
 
-**Rodape**: `Pratic Car - Proteção Veicular` (mesmo padrao dos templates aprovados)
-
-**Variaveis exemplo**:
-```json
-{
-  "1": "Auto Elétrica Silva",
-  "2": "João Carlos",
-  "3": "Araruama",
-  "4": "Rua das Flores, nº 123, Centro, Araruama, RJ",
-  "5": "25/03/2026",
-  "6": "https://pratic-connect-21.lovable.app/prestador/instalacao/abc123token"
-}
-```
-
-**Status**: voltar para `DRAFT` para reenvio
-
-### Arquivo afetado
-
-| Arquivo | Alteracao |
-|---|---|
-| DB migration | UPDATE corpo, rodape, variaveis_exemplo, status do template |
-
-Nenhuma alteracao de codigo — apenas correcao do template no banco. Apos a migration, o operador reenvia pelo painel existente.
+Nenhuma outra alteracao necessaria — os campos `em_viagem` e `bonus_viagem` ja existem na tabela `turnos_profissionais` e o select ja usa `*`.
 
