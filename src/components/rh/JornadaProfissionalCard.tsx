@@ -210,6 +210,12 @@ export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecus
                 </div>
               );
             })()}
+            {bonusViagem != null && bonusViagem > 0 && (
+              <div className="flex items-center gap-1 text-sm mt-1 text-orange-400">
+                <MapPin className="h-4 w-4" />
+                <span>+ R$ {bonusViagem.toFixed(2)} diária de viagem</span>
+              </div>
+            )}
           </div>
         )}
       </CardContent>

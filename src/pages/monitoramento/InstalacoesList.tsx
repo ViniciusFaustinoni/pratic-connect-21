@@ -310,7 +310,7 @@ export default function InstalacoesList() {
                   </TableCell>
                   <TableCell>
                     {inst.status !== 'concluida' && inst.status !== 'cancelada' && (
-                      <SlaIndicador criadoEm={inst.created_at} tipoServico="instalacao" />
+                      <SlaIndicador criadoEm={inst.created_at} tipoServico="instalacao" tipoDeslocamento={(inst as any).tipo_deslocamento} />
                     )}
                   </TableCell>
                   <TableCell>

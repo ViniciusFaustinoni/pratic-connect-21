@@ -358,7 +358,12 @@ export default function InstalacaoDetalhePage() {
               <p className="font-medium">{instalacao.logradouro}, {instalacao.numero}</p>
               {instalacao.complemento && <p className="text-sm text-muted-foreground">{instalacao.complemento}</p>}
               <p className="text-sm text-muted-foreground">{instalacao.bairro}</p>
-              <p className="text-sm text-muted-foreground">{instalacao.cidade} - {instalacao.uf}</p>
+              <div className="flex items-center gap-2">
+                <p className="text-sm text-muted-foreground">{instalacao.cidade} - {instalacao.uf}</p>
+                {(instalacao as any).tipo_deslocamento === 'viagem' && (
+                  <Badge className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Viagem</Badge>
+                )}
+              </div>
               <p className="text-sm text-muted-foreground">CEP: {instalacao.cep}</p>
             </div>
             <Button variant="outline" className="w-full" onClick={handleMapa}>
