@@ -76,6 +76,15 @@ export function useDashboardVendaExterna() {
         .gte('data_pagamento', mesAtualInicio)
         .lt('data_pagamento', mesAtualFim);
 
+      // Estornos no mês
+      const { data: estornos, count: estornoCount } = await supabase
+        .from('cc_vendedor_lancamentos')
+        .select('valor_liquido', { count: 'exact' })
+        .eq('tipo', 'debito' as any)
+        .eq('categoria', 'estorno' as any)
+        .gte('created_at', mesAtualInicio)
+        .lt('created_at', mesAtualFim);
+
       return {
         a_pagar_mes: aPagarItems.reduce((s: number, r: any) => s + Number(r.valor_liquido), 0),
         a_pagar_parcelas: aPagarItems.length,
@@ -86,6 +95,8 @@ export function useDashboardVendaExterna() {
         debitos_count: debCount || 0,
         total_pago_mes: (pagos || []).reduce((s: number, r: any) => s + Number(r.valor_liquido), 0),
         total_pago_count: pagoCount || 0,
+        estornos_mes: (estornos || []).reduce((s: number, r: any) => s + Number(r.valor_liquido), 0),
+        estornos_count: estornoCount || 0,
       };
     },
   });
