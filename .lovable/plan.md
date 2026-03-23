@@ -1,121 +1,96 @@
 
 
-# Plano: Inteligencia Geografica de Viagem — Regras Automaticas
+# Plano: Link Tokenizado para Prestador com WhatsApp Meta
 
 ## Resumo
 
-Identificar automaticamente instalacoes em municipios de viagem, aplicar SLA diferenciado (72h default), exibir badge no painel do coordenador, registrar diarias na jornada do tecnico, e incluir prazo no contrato. Sem impacto na tela do consultor.
+Criar link publico tokenizado para prestadores confirmarem chegada e conclusao de instalacoes com foto. Envio automatico via WhatsApp usando a API Meta ja integrada (template aprovado), sem n8n. Acompanhamento em tempo real no drawer do coordenador.
 
 ---
 
-## PARTE 1 — Configs + Schema (Migration)
+## PARTE 1 — Tabela + Storage (Migration)
 
-### 1a. Inserir configs padrao na tabela `configuracoes`
+### 1a. Tabela `instalacao_prestador_links`
 
-- `viagem_valor_diaria` = `0`
-- `viagem_sla_horas` = `72`
+```text
+id uuid PK
+instalacao_id uuid FK instalacoes(id) ON DELETE CASCADE
+prestador_id uuid FK prestadores_assistencia(id)
+token text UNIQUE DEFAULT encode(gen_random_bytes(32), 'hex')
+status text DEFAULT 'aguardando' CHECK IN ('aguardando','em_execucao','concluida','expirado')
+expires_at timestamptz DEFAULT now() + interval '7 days'
+chegada_em timestamptz
+concluida_em timestamptz
+foto_comprovante_url text
+created_at timestamptz DEFAULT now()
+```
 
-### 1b. Novos campos no banco
+RLS: SELECT publico por token (anon), INSERT/UPDATE para authenticated.
 
-**Tabela `servicos`**:
-- `tipo_deslocamento text DEFAULT 'local'` — valores: `local`, `viagem`, `prestador`
+### 1b. Storage bucket `prestador-fotos`
 
-**Tabela `turnos_profissionais`**:
-- `em_viagem boolean DEFAULT false`
-- `bonus_viagem numeric DEFAULT 0`
+Bucket publico para leitura. RLS permite INSERT para anon (upload pelo prestador via link publico).
 
-### 1c. Trigger: marcar tipo_deslocamento automaticamente
+### 1c. Config `webhook_prestador_url` removida — nao necessaria
 
-Criar trigger `set_tipo_deslocamento_on_servico()` que roda no INSERT/UPDATE da tabela `servicos`:
-- Se `cidade` e `uf` preenchidos, buscar na `municipios_atendimento`
-- Se `tipo_atendimento = 'viagem'`, setar `tipo_deslocamento = 'viagem'`
-- Se `tipo_atendimento = 'prestador'`, setar `tipo_deslocamento = 'prestador'`
-- Senao, manter `local`
+### 1d. Template Meta `prestador_nova_instalacao_v1`
 
-Isso cobre todos os pontos de criacao de servico (trigger sync_instalacao_to_servicos, inserts manuais, etc).
-
----
-
-## PARTE 2 — Secao "Regras de Viagem" no MapaAtendimento
-
-**Arquivo**: `src/components/gestao-comercial/MapaAtendimento.tsx`
-
-Adicionar Card abaixo da tabela de municipios com:
-- Valor da diaria (R$): Input numerico, chave `viagem_valor_diaria`
-- SLA viagem (horas): Input numerico, chave `viagem_sla_horas`
-- Botao salvar (usa upsert/update na tabela `configuracoes`)
-- Carregar valores via query existente
+Inserir na tabela `whatsapp_meta_templates` um template DRAFT categoria UTILITY:
+- Corpo com variaveis: nome prestador, nome associado, municipio, endereco, link
+- Rodape fixo no final (regra Meta)
+- Status DRAFT — o operador envia para aprovacao pelo painel existente
 
 ---
 
-## PARTE 3 — SLA Diferenciado no SlaIndicador
+## PARTE 2 — Edge Function `gerar-link-prestador`
 
-**Arquivo**: `src/components/ui/SlaIndicador.tsx`
+**Novo**: `supabase/functions/gerar-link-prestador/index.ts`
 
-- Adicionar prop opcional `tipoDeslocamento?: string`
-- No `useSlaConfig`, buscar tambem `viagem_sla_horas` da tabela `configuracoes`
-- No calculo: se `tipoDeslocamento === 'viagem'` e tipo for instalacao, usar `viagem_sla_horas` em vez de `sla_horas_instalacao`
+Recebe `{ instalacao_id, prestador_id }`:
 
----
+1. Buscar dados da instalacao (associado, endereco, data agendada)
+2. Buscar dados do prestador (nome, whatsapp) da `prestadores_assistencia`
+3. Inserir registro em `instalacao_prestador_links` gerando token
+4. Construir URL: `https://pratic-connect-21.lovable.app/prestador/instalacao/{token}`
+5. Enviar WhatsApp via `whatsapp-send-text` (invocacao interna) usando o template `prestador_nova_instalacao_v1` com as variaveis preenchidas
+6. Retornar token e URL
 
-## PARTE 4 — Badge "Viagem" na Lista de Instalacoes
-
-**Arquivo**: `src/pages/monitoramento/InstalacoesList.tsx`
-
-Na celula de Endereco (linha ~293), buscar municipio da instalacao na `municipios_atendimento` e se tipo = viagem, exibir Badge laranja "Viagem" ao lado do texto do bairro/cidade. Query feita uma unica vez para todos os municipios (bulk), nao por linha.
-
-Tambem passar `tipoDeslocamento` ao `SlaIndicador` na coluna Prazo.
+Se o template ainda estiver DRAFT, o sistema de fallback do `whatsapp-send-text` ja lida com isso (usa `notificacao_geral_v1` como fallback).
 
 ---
 
-## PARTE 5 — Info de Viagem no Detalhe da Instalacao
+## PARTE 3 — Pagina Publica `/prestador/instalacao/:token`
 
-**Arquivo**: `src/pages/monitoramento/InstalacaoDetalhe.tsx`
+**Novo**: `src/pages/public/PrestadorInstalacao.tsx`
 
-No card Endereco (linha ~349), se o municipio for viagem:
-- Badge "Viagem" laranja
-- Texto: "SLA: [viagem_sla_horas]h uteis"
-- Se `viagem_valor_diaria > 0`: "Diaria: R$ [valor]"
+Pagina mobile-first usando `publicSupabase` (sem autenticacao):
 
-Query condicional na `municipios_atendimento` + `configuracoes`.
+1. Valida token (existe + nao expirado)
+2. Se invalido: card com mensagem de erro
+3. Se valido, exibe card com:
+   - Nome do associado, endereco completo, data/hora agendada
+   - Telefone do associado com botao "Ligar" (`tel:`)
+4. Acoes por status:
+   - `aguardando`: Botao "Confirmar Chegada" → update status `em_execucao`, registrar `chegada_em`
+   - `em_execucao`: Upload de foto + botao "Marcar como Concluido" (exige 1 foto minimo) → upload para bucket `prestador-fotos`, update status `concluida`, registrar `concluida_em` e `foto_comprovante_url`
+   - `concluida`: Mensagem "Instalacao concluida com sucesso"
 
----
-
-## PARTE 6 — Registro na Jornada do Tecnico
-
-### 6a. JornadaProfissionalCard (RH)
-
-**Arquivo**: `src/components/rh/JornadaProfissionalCard.tsx`
-
-Adicionar props opcionais `emViagem?: boolean` e `bonusViagem?: number`:
-- Se `emViagem`, exibir Badge discreto "Viagem" ao lado do nome
-- Se `bonusViagem > 0`, exibir linha "+ R$ [valor] diaria de viagem" na secao de resultado
-
-### 6b. JornadasProfissionais (RH)
-
-**Arquivo**: `src/pages/rh/JornadasProfissionais.tsx`
-
-O select de `turnos_profissionais` ja usa `*` — novos campos `em_viagem` e `bonus_viagem` virao automaticamente. Passar para o `JornadaProfissionalCard`.
-
-### 6c. InstaladorPerfil (Tecnico)
-
-**Arquivo**: `src/pages/instalador/InstaladorPerfil.tsx`
-
-Na query de resumo do mes, buscar tambem `em_viagem, bonus_viagem`. Somar `bonus_viagem` dos turnos com `em_viagem = true`. Se total > 0, exibir: "Diarias de viagem no mes: R$ [total]".
+**Rota no App.tsx**: `<Route path="/prestador/instalacao/:token" element={<PrestadorInstalacao />} />`
 
 ---
 
-## PARTE 7 — Prazo no Contrato (Autentique)
+## PARTE 4 — Secao Prestador no InstalacaoDetailDrawer
 
-**Arquivo**: `supabase/functions/autentique-create/index.ts`
+**Arquivo**: `src/components/instalacoes/InstalacaoDetailDrawer.tsx`
 
-No `mapearDadosParaTemplate` ou antes de gerar HTML:
-- Buscar `municipios_atendimento` pelo municipio do associado/contrato
-- Se tipo = viagem, buscar `viagem_sla_horas` das configs
-- Adicionar variavel `{{prazo_instalacao}}` com valor "72 horas uteis" (ou valor configurado)
-- Para volante, usar o SLA padrao
+Quando `tipo_deslocamento === 'prestador'`, adicionar secao apos Endereco:
 
-O template HTML no banco (tabela `documento_templates`) devera conter a variavel `{{prazo_instalacao}}` na secao de condicoes. Sera um ajuste de dados, nao de estrutura.
+- Query `instalacao_prestador_links` pelo `instalacao_id` (ultimo registro)
+- Badge de status colorido (amarelo=aguardando, azul=em_execucao, verde=concluida)
+- Horarios de chegada e conclusao (quando houver)
+- Foto comprovante: miniatura clicavel (Dialog com imagem grande)
+- Botao "Enviar Link WhatsApp": chama edge function `gerar-link-prestador` (gera novo token + envia WhatsApp)
+- Botao "Copiar Link": copia URL para clipboard
 
 ---
 
@@ -123,13 +98,9 @@ O template HTML no banco (tabela `documento_templates`) devera conter a variavel
 
 | Arquivo | Alteracao |
 |---|---|
-| DB migration | Colunas servicos/turnos + configs + trigger |
-| `src/components/gestao-comercial/MapaAtendimento.tsx` | Secao "Regras de Viagem" |
-| `src/components/ui/SlaIndicador.tsx` | Prop tipoDeslocamento + SLA viagem |
-| `src/pages/monitoramento/InstalacoesList.tsx` | Badge viagem + SLA diferenciado |
-| `src/pages/monitoramento/InstalacaoDetalhe.tsx` | Info viagem no card endereco |
-| `src/components/rh/JornadaProfissionalCard.tsx` | Badge viagem + bonus |
-| `src/pages/rh/JornadasProfissionais.tsx` | Passar novos campos |
-| `src/pages/instalador/InstaladorPerfil.tsx` | Total diarias do mes |
-| `supabase/functions/autentique-create/index.ts` | Variavel prazo_instalacao |
+| DB migration | Tabela + bucket + template Meta |
+| `supabase/functions/gerar-link-prestador/index.ts` | **Nova** edge function |
+| `src/pages/public/PrestadorInstalacao.tsx` | **Nova** pagina publica |
+| `src/App.tsx` | Rota `/prestador/instalacao/:token` |
+| `src/components/instalacoes/InstalacaoDetailDrawer.tsx` | Secao prestador |
 
