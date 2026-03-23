@@ -383,7 +383,7 @@ export default function UsuarioForm() {
       cnpj: (usuario as any).cnpj || '',
       razao_social: (usuario as any).razao_social || '',
       nome_fantasia: (usuario as any).nome_fantasia || '',
-      senha: '', tipo: usuario.tipo || 'funcionario', ativo: usuario.ativo ?? true,
+      senha: '', tipo: (usuario.roles || []).includes('agencia') ? 'agencia' : (usuario.tipo || 'funcionario'), ativo: usuario.ativo ?? true,
       perfis: usuario.roles || [], regioes_atendimento: usuario.regioes_atendimento || [],
       capacidade_diaria: usuario.capacidade_diaria || 10,
       grade_comissao_id: userGrade || '',
