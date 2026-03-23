@@ -258,6 +258,14 @@ export default function JornadasProfissionais() {
                   <p className="text-xs text-muted-foreground">Exibir saldo vistoriador</p>
                   <p className="text-sm font-semibold">{parametros?.exibirSaldo === 'false' ? 'Não' : 'Sim'}</p>
                 </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Exigir motivo recusa</p>
+                  <p className="text-sm font-semibold">{parametros?.recusaExigirMotivo === 'false' ? 'Não' : 'Sim'}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Limite recusas/turno</p>
+                  <p className="text-sm font-semibold">{parametros?.recusaLimiteAlerta || '3'}</p>
+                </div>
               </div>
               <div className="flex justify-end">
                 <Button variant="outline" size="sm" onClick={() => navigate('/diretoria/gestao-comercial')}>
