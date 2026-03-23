@@ -312,7 +312,7 @@ export function ServicosTab() {
     // Rastreadores (usam teste de conexão)
     if (servico.plataformaCodigo === 'softruck') {
       return {
-        ativo: integracoes.softruck.configurado && integracoes.softruck.testado,
+        ativo: integracoes.softruck.configurado,
         ultimaExecucao: integracoes.softruck.testado_em 
           ? formatDistanceToNow(new Date(integracoes.softruck.testado_em), { addSuffix: true, locale: ptBR })
           : undefined
@@ -320,7 +320,7 @@ export function ServicosTab() {
     }
     if (servico.plataformaCodigo === 'rede_veiculos') {
       return {
-        ativo: integracoes.rede_veiculos.configurado && integracoes.rede_veiculos.testado,
+        ativo: integracoes.rede_veiculos.configurado,
         ultimaExecucao: integracoes.rede_veiculos.testado_em 
           ? formatDistanceToNow(new Date(integracoes.rede_veiculos.testado_em), { addSuffix: true, locale: ptBR })
           : undefined
