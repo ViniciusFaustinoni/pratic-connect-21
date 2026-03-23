@@ -48,9 +48,9 @@ export function ModalRecusaTarefa({ open, onOpenChange, onConfirm, isPending }: 
     <Dialog open={open} onOpenChange={handleOpenChange}>
       <DialogContent>
         <DialogHeader>
-          <DialogTitle>Recusar Tarefa</DialogTitle>
+          <DialogTitle>Reportar Imprevisto</DialogTitle>
           <DialogDescription>
-            Selecione o motivo da recusa. Essa informação será registrada para o coordenador.
+            Ao reportar um imprevisto, esta tarefa retorna para a fila e o coordenador será notificado imediatamente. Use apenas em situações que impeçam você de realizar o serviço.
           </DialogDescription>
         </DialogHeader>
 
