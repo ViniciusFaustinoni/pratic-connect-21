@@ -58,16 +58,18 @@ export default function DadosPagamento() {
   const handleSave = async () => {
     if (!user?.id) return;
     setSaving(true);
+    const updateData = {
+      banco: dados.banco || null,
+      agencia_bancaria: dados.agencia_bancaria || null,
+      conta_bancaria: dados.conta_bancaria || null,
+      tipo_conta: dados.tipo_conta || null,
+      pix_tipo: dados.pix_tipo || null,
+      pix_chave: dados.pix_chave || null,
+    } as any;
+
     const { error } = await supabase
       .from('profiles')
-      .update({
-        banco: dados.banco || null,
-        agencia_bancaria: dados.agencia_bancaria || null,
-        conta_bancaria: dados.conta_bancaria || null,
-        tipo_conta: dados.tipo_conta || null,
-        pix_tipo: dados.pix_tipo || null,
-        pix_chave: dados.pix_chave || null,
-      })
+      .update(updateData)
       .eq('id', user.id);
 
     setSaving(false);
