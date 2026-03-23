@@ -228,8 +228,17 @@ export default function InstalacoesList() {
           </SelectContent>
         </Select>
 
-        {(search || statusFilter || periodoFilter) && (
-          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatusFilter(''); setPeriodoFilter(''); setPage(1); }}>
+        <Button
+          variant={urgentFilter ? "destructive" : "outline"}
+          size="sm"
+          onClick={() => { setUrgentFilter(!urgentFilter); setPage(1); }}
+        >
+          <AlertTriangle className="h-4 w-4 mr-1" />
+          Atenção Urgente
+        </Button>
+
+        {(search || statusFilter || periodoFilter || urgentFilter) && (
+          <Button variant="ghost" size="sm" onClick={() => { setSearch(''); setStatusFilter(''); setPeriodoFilter(''); setUrgentFilter(false); setPage(1); }}>
             <X className="h-4 w-4 mr-1" /> Limpar filtros
           </Button>
         )}
