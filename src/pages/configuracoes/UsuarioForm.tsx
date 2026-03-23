@@ -291,6 +291,7 @@ export default function UsuarioForm() {
   });
 
   const [fieldErrors, setFieldErrors] = useState<Record<string, string>>({});
+  const [gradeError, setGradeError] = useState(false);
   const [novoEmail, setNovoEmail] = useState('');
   const [novaSenha, setNovaSenha] = useState('');
   const [alterandoEmail, setAlterandoEmail] = useState(false);
@@ -406,6 +407,14 @@ export default function UsuarioForm() {
   // Salvar usuário
   const saveUser = useMutation({
     mutationFn: async () => {
+      // Validação: grade obrigatória para vendedor_externo e agencia
+      const requiresGrade = formData.perfis.some(p => ['vendedor_externo', 'agencia'].includes(p));
+      if (requiresGrade && !formData.grade_comissao_id) {
+        setGradeError(true);
+        throw new Error('GRADE_REQUIRED');
+      }
+      setGradeError(false);
+
       if (isEditing && usuario) {
         const isAgencia = formData.tipo === 'agencia';
         const profileUpdate: any = {
@@ -467,12 +476,17 @@ export default function UsuarioForm() {
     },
     onSuccess: () => {
       setFieldErrors({});
+      setGradeError(false);
       toast.success(isEditing ? 'Usuário atualizado!' : 'Usuário criado!');
       queryClient.invalidateQueries({ queryKey: ['usuarios'] });
       navigate('/configuracoes/usuarios');
     },
     onError: (error: any) => {
       const errorMessage = error.message || 'Erro ao salvar usuário';
+      if (errorMessage === 'GRADE_REQUIRED') {
+        toast.error('Selecione uma grade de comissão para vendedor externo ou agência.');
+        return;
+      }
       if (errorMessage.includes('CPF já está cadastrado')) {
         setFieldErrors(prev => ({ ...prev, cpf: 'Este CPF já está cadastrado no sistema' }));
         toast.error('CPF já cadastrado.');
@@ -726,9 +740,9 @@ export default function UsuarioForm() {
                     <Label htmlFor="grade_comissao">Grade</Label>
                     <Select
                       value={formData.grade_comissao_id || 'none'}
-                      onValueChange={(v) => setFormData(prev => ({ ...prev, grade_comissao_id: v === 'none' ? '' : v }))}
+                      onValueChange={(v) => { setFormData(prev => ({ ...prev, grade_comissao_id: v === 'none' ? '' : v })); setGradeError(false); }}
                     >
-                      <SelectTrigger className="bg-background">
+                      <SelectTrigger className={`bg-background ${gradeError ? 'border-destructive ring-destructive' : ''}`}>
                         <SelectValue placeholder="Selecione uma grade" />
                       </SelectTrigger>
                       <SelectContent>
