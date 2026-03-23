@@ -61,7 +61,7 @@ export default function GradeComissaoForm() {
   const totalPercentual = niveis.reduce((s, n) => s + (Number(n.percentual) || 0), 0);
   const exceedsLimit = totalPercentual > 100;
 
-  const addNivel = () => setNiveis(prev => [...prev, { nome: '', percentual: 0 }]);
+  const addNivel = () => setNiveis(prev => [...prev, { nome: '', percentual: 0, role: '' }]);
 
   const removeNivel = (idx: number) => setNiveis(prev => prev.filter((_, i) => i !== idx));
 
