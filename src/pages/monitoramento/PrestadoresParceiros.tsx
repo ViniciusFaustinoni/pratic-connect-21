@@ -3,8 +3,8 @@ import { Link } from 'react-router-dom';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { PermissionGate } from '@/components/PermissionGate';
-import { NovoPrestadorModal } from '@/components/assistencia/NovoPrestadorModal';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { NovoPrestadorInstalacaoModal } from '@/components/monitoramento/NovoPrestadorInstalacaoModal';
+import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -24,9 +24,9 @@ import {
 } from '@/components/ui/collapsible';
 import { 
   Users, Plus, Search, ChevronDown, ChevronUp, Phone, Pencil, 
-  TrendingUp, CheckCircle2, Clock 
+  TrendingUp, CheckCircle2,
 } from 'lucide-react';
-import { format, formatDistanceToNow } from 'date-fns';
+import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 
@@ -44,20 +44,20 @@ export default function PrestadoresParceiros() {
   const [editingPrestador, setEditingPrestador] = useState<any>(null);
   const [expandedId, setExpandedId] = useState<string | null>(null);
 
-  // Buscar prestadores
+  // Buscar prestadores de instalação
   const { data: prestadores = [], isLoading } = useQuery({
     queryKey: ['prestadores-parceiros'],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from('prestadores_assistencia')
+        .from('prestadores_instalacao')
         .select('*')
-        .order('razao_social', { ascending: true });
+        .order('nome', { ascending: true });
       if (error) throw error;
       return data || [];
     },
   });
 
-  // Buscar métricas agregadas de todos os prestadores
+  // Buscar métricas agregadas
   const { data: metricas = {} } = useQuery({
     queryKey: ['prestadores-metricas'],
     queryFn: async () => {
@@ -85,19 +85,6 @@ export default function PrestadoresParceiros() {
     },
   });
 
-  // Buscar municípios tipo prestador
-  const { data: municipiosPrestador = [] } = useQuery({
-    queryKey: ['municipios-prestador'],
-    queryFn: async () => {
-      const { data, error } = await (supabase as any)
-        .from('municipios_atendimento')
-        .select('nome, uf')
-        .eq('tipo_atendimento', 'prestador');
-      if (error) throw error;
-      return data || [];
-    },
-  });
-
   // Histórico expandido
   const { data: historico = [] } = useQuery({
     queryKey: ['prestador-historico', expandedId],
@@ -118,8 +105,8 @@ export default function PrestadoresParceiros() {
   const toggleStatus = useMutation({
     mutationFn: async ({ id, ativo }: { id: string; ativo: boolean }) => {
       const { error } = await (supabase as any)
-        .from('prestadores_assistencia')
-        .update({ ativo })
+        .from('prestadores_instalacao')
+        .update({ ativo, updated_at: new Date().toISOString() })
         .eq('id', id);
       if (error) throw error;
     },
@@ -131,7 +118,7 @@ export default function PrestadoresParceiros() {
 
   // Filtrar prestadores
   const filtrados = prestadores.filter((p: any) => {
-    const nome = (p.nome_fantasia || p.razao_social || '').toLowerCase();
+    const nome = (p.nome || '').toLowerCase();
     if (busca && !nome.includes(busca.toLowerCase())) return false;
     if (filtroStatus === 'ativo' && !p.ativo) return false;
     if (filtroStatus === 'inativo' && p.ativo) return false;
@@ -181,7 +168,7 @@ export default function PrestadoresParceiros() {
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Prestadores Parceiros</h1>
-            <p className="text-muted-foreground">Gerencie prestadores e acompanhe métricas de atendimento</p>
+            <p className="text-muted-foreground">Técnicos terceirizados para instalação em municípios sem equipe própria</p>
           </div>
           <Button onClick={() => setModalOpen(true)}>
             <Plus className="h-4 w-4 mr-2" />
@@ -288,18 +275,19 @@ export default function PrestadoresParceiros() {
                   {filtrados.map((p: any) => {
                     const m = (metricas as Record<string, PrestadorMetricas>)[p.id] || { total: 0, concluidas: 0, taxa: 0 };
                     const isExpanded = expandedId === p.id;
+                    const municipios: string[] = p.municipios_atuacao || [];
                     return (
                       <Collapsible key={p.id} open={isExpanded} onOpenChange={() => setExpandedId(isExpanded ? null : p.id)} asChild>
                         <>
                           <TableRow className="group">
                             <TableCell className="font-medium">
-                              {p.nome_fantasia || p.razao_social}
+                              {p.nome}
                             </TableCell>
                             <TableCell>
-                              {p.whatsapp || p.telefone ? (
-                                <a href={`tel:${p.whatsapp || p.telefone}`} className="flex items-center gap-1 text-primary hover:underline">
+                              {p.whatsapp ? (
+                                <a href={`https://wa.me/55${p.whatsapp.replace(/\D/g, '')}`} target="_blank" rel="noopener noreferrer" className="flex items-center gap-1 text-primary hover:underline">
                                   <Phone className="h-3 w-3" />
-                                  {p.whatsapp || p.telefone}
+                                  {p.whatsapp}
                                 </a>
                               ) : (
                                 <span className="text-muted-foreground">—</span>
@@ -307,15 +295,18 @@ export default function PrestadoresParceiros() {
                             </TableCell>
                             <TableCell>
                               <div className="flex flex-wrap gap-1">
-                                {municipiosPrestador.slice(0, 3).map((mun: any) => (
-                                  <Badge key={mun.nome} variant="outline" className="text-xs">
-                                    {mun.nome}
+                                {municipios.slice(0, 3).map((mun: string) => (
+                                  <Badge key={mun} variant="outline" className="text-xs">
+                                    {mun}
                                   </Badge>
                                 ))}
-                                {municipiosPrestador.length > 3 && (
+                                {municipios.length > 3 && (
                                   <Badge variant="outline" className="text-xs">
-                                    +{municipiosPrestador.length - 3}
+                                    +{municipios.length - 3}
                                   </Badge>
+                                )}
+                                {municipios.length === 0 && (
+                                  <span className="text-muted-foreground text-xs">Nenhum</span>
                                 )}
                               </div>
                             </TableCell>
@@ -392,7 +383,7 @@ export default function PrestadoresParceiros() {
           </CardContent>
         </Card>
 
-        <NovoPrestadorModal
+        <NovoPrestadorInstalacaoModal
           open={modalOpen}
           onClose={() => setModalOpen(false)}
           onSuccess={() => {
@@ -402,7 +393,7 @@ export default function PrestadoresParceiros() {
         />
 
         {editingPrestador && (
-          <NovoPrestadorModal
+          <NovoPrestadorInstalacaoModal
             open={!!editingPrestador}
             onClose={() => setEditingPrestador(null)}
             onSuccess={() => {
