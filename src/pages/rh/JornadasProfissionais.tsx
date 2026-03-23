@@ -68,6 +68,8 @@ export default function JornadasProfissionais() {
           'jornada_tolerancia_atraso_minutos',
           'jornada_produtividade_minima',
           'jornada_horas_alerta_improdutividade',
+          'sla_horas_instalacao',
+          'sla_horas_manutencao',
         ]);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
@@ -77,6 +79,8 @@ export default function JornadasProfissionais() {
         toleranciaAtraso: map.jornada_tolerancia_atraso_minutos || '0',
         produtividadeMinima: map.jornada_produtividade_minima || '1',
         alertaImprodutividade: map.jornada_horas_alerta_improdutividade || '2',
+        slaInstalacao: map.sla_horas_instalacao || '48',
+        slaManutencao: map.sla_horas_manutencao || '24',
       };
     },
     staleTime: 1000 * 60 * 5,
