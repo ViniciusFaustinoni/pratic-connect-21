@@ -326,7 +326,7 @@ export function useUsuarioActions() {
         nome: string;
         email: string;
         telefone: string | null;
-        tipo: 'funcionario' | 'associado' | 'prestador';
+        tipo: 'funcionario' | 'associado' | 'prestador' | 'agencia';
         ativo: boolean;
       }>;
     }) => {
