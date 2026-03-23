@@ -82,6 +82,8 @@ function useInstalacaoConfigs() {
         gpsRaioMetros: map.gps_raio_metros?.valor ?? '500',
         limiteDebito: map.jornada_limite_debito_horas?.valor ?? '0',
         exibirSaldo: map.jornada_exibir_saldo_vistoriador?.valor ?? 'true',
+        recusaExigirMotivo: map.recusa_exigir_motivo?.valor ?? 'true',
+        recusaLimiteAlerta: map.recusa_limite_alerta?.valor ?? '3',
       };
     },
     staleTime: 1000 * 60 * 5,
