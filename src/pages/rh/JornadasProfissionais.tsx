@@ -319,7 +319,7 @@ export default function JornadasProfissionais() {
 
       {/* Resumo de Horas */}
       {stats.encerrados > 0 && (
-        <div className="grid grid-cols-2 gap-4">
+        <div className="grid grid-cols-2 md:grid-cols-5 gap-4">
           <Card>
             <CardContent className="p-4 flex items-center gap-3">
               <TrendingUp className="h-5 w-5 text-green-500" />
@@ -340,6 +340,40 @@ export default function JornadasProfissionais() {
                   -{formatarMinutos(stats.horasFaltantes)}
                 </p>
                 <p className="text-xs text-muted-foreground">Horas Faltantes Total</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <AlertCircle className="h-5 w-5 text-red-500" />
+              <div>
+                <p className="text-lg font-bold">{stats.comDebito}</p>
+                <p className="text-xs text-muted-foreground">Com Débito</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <TrendingDown className="h-5 w-5 text-red-500" />
+              <div>
+                <p className="text-lg font-bold text-red-600">
+                  -{formatarMinutos(stats.debitoTotal)}
+                </p>
+                <p className="text-xs text-muted-foreground">Débito Consolidado</p>
+              </div>
+            </CardContent>
+          </Card>
+
+          <Card>
+            <CardContent className="p-4 flex items-center gap-3">
+              <TrendingUp className="h-5 w-5 text-green-500" />
+              <div>
+                <p className="text-lg font-bold text-green-600">
+                  +{formatarMinutos(stats.creditoTotal)}
+                </p>
+                <p className="text-xs text-muted-foreground">Crédito Consolidado</p>
               </div>
             </CardContent>
           </Card>
