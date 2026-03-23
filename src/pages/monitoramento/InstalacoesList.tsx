@@ -23,6 +23,7 @@ export default function InstalacoesList() {
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<StatusInstalacao | ''>('');
   const [periodoFilter, setPeriodoFilter] = useState<'hoje' | 'amanha' | 'semana' | ''>('');
+  const [urgentFilter, setUrgentFilter] = useState(false);
   const [atribuirDialogOpen, setAtribuirDialogOpen] = useState(false);
   const [selectedInstalacaoId, setSelectedInstalacaoId] = useState<string | null>(null);
   const [page, setPage] = useState(1);
