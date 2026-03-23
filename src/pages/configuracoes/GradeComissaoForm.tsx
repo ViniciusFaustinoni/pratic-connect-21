@@ -41,7 +41,7 @@ export default function GradeComissaoForm() {
     queryFn: async () => {
       const { data, error } = await (supabase as any)
         .from('grades_comissao')
-        .select('*, grades_comissao_niveis(id, nome, percentual, ordem)')
+        .select('*, grades_comissao_niveis(id, nome, percentual, ordem, role)')
         .eq('id', id!)
         .single();
       if (error) throw error;
