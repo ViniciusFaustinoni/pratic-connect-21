@@ -1,66 +1,64 @@
 
 
-# Plano: Preencher tipo_deslocamento automaticamente
+# Plano: Corrigir status "Pendente" da Softruck
 
-## CORREÇÃO 1 — Instalações novas
+## Problema raiz
 
-**Arquivo**: `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
+Existem duas tabelas de credenciais:
+- `integracoes_credenciais`: onde as credenciais criptografadas sao salvas pelo sheet de configuracao
+- `rastreadores_credenciais`: onde o UI le `configurado` e `teste_sucesso` para exibir o badge
 
-Antes da linha 364 (montagem do `instalacaoData`), adicionar consulta ao Mapa de Atendimento usando `endereco.cidade` e `endereco.estado` que já estão disponíveis no contexto:
+O edge function `rastreador-testar-conexao` atualiza apenas `integracoes_credenciais` (linha 168), mas nunca toca `rastreadores_credenciais`. Para Rede Veiculos alguem setou `configurado = true` manualmente, para Softruck ficou `false`.
+
+## Correcao
+
+### 1. `supabase/functions/rastreador-testar-conexao/index.ts`
+
+Apos o update em `integracoes_credenciais` (linha 177), adicionar update em `rastreadores_credenciais`:
 
 ```typescript
-// Determinar tipo_deslocamento pelo Mapa de Atendimento
-let tipoDeslocamento = 'volante';
+// Atualizar rastreadores_credenciais (usado pela UI)
 try {
-  const { data: municipio } = await supabase
-    .from('municipios_atendimento')
-    .select('tipo_atendimento')
-    .ilike('nome', (endereco.cidade || '').trim())
-    .ilike('uf', (endereco.estado || '').trim())
-    .maybeSingle();
+  const { data: plat } = await supabase
+    .from('rastreadores_config_plataformas')
+    .select('id')
+    .eq('plataforma', plataforma_codigo)
+    .single();
 
-  if (municipio?.tipo_atendimento === 'viagem') {
-    tipoDeslocamento = 'viagem';
-  } else if (municipio?.tipo_atendimento === 'prestador') {
-    tipoDeslocamento = 'prestador';
+  if (plat) {
+    await supabase
+      .from('rastreadores_credenciais')
+      .update({
+        configurado: testeSucesso,
+        teste_sucesso: testeSucesso,
+        testado_em: new Date().toISOString(),
+        teste_mensagem: mensagem,
+      })
+      .eq('plataforma_id', plat.id);
   }
-  console.log(`[CriarInstalacaoPosPagamento] tipo_deslocamento: ${tipoDeslocamento} (municipio: ${endereco.cidade}/${endereco.estado})`);
-} catch (err) {
-  console.warn('[CriarInstalacaoPosPagamento] Erro ao consultar municipio, usando volante:', err);
+} catch (e) {
+  console.log('[Testar Conexão] Erro ao atualizar rastreadores_credenciais:', e);
 }
 ```
 
-Adicionar `tipo_deslocamento: tipoDeslocamento` ao objeto `instalacaoData` (linha 385).
+### 2. Correcao retroativa (SQL via migration)
 
-Padrão segue o mesmo usado em `autentique-create/index.ts` (linhas 277-281) que já faz consulta idêntica.
-
----
-
-## CORREÇÃO 2 — Instalações existentes
-
-Executar UPDATE retroativo via insert tool (operação de dados, não migração):
+Atualizar o registro existente da Softruck para refletir que esta configurado:
 
 ```sql
-UPDATE instalacoes i
-SET tipo_deslocamento = CASE
-  WHEN m.tipo_atendimento = 'viagem' THEN 'viagem'
-  WHEN m.tipo_atendimento = 'prestador' THEN 'prestador'
-  ELSE 'volante'
-END
-FROM associados a
-LEFT JOIN municipios_atendimento m
-  ON LOWER(TRIM(m.nome)) = LOWER(TRIM(a.cidade))
-  AND LOWER(TRIM(m.uf)) = LOWER(TRIM(a.estado))
-WHERE i.associado_id = a.id
-  AND (i.tipo_deslocamento IS NULL OR i.tipo_deslocamento = '');
+UPDATE rastreadores_credenciais
+SET configurado = true
+WHERE plataforma_id = (
+  SELECT id FROM rastreadores_config_plataformas
+  WHERE plataforma = 'softruck'
+)
+AND configurado = false;
 ```
-
----
 
 ## Arquivos afetados
 
-| Arquivo | Alteração |
+| Arquivo | Alteracao |
 |---|---|
-| `supabase/functions/criar-instalacao-pos-pagamento/index.ts` | Consulta municípios + campo tipo_deslocamento no payload |
-| SQL (insert tool) | UPDATE retroativo nas instalações existentes |
+| `supabase/functions/rastreador-testar-conexao/index.ts` | Atualizar `rastreadores_credenciais` apos teste |
+| SQL (migracao) | Correcao retroativa do `configurado` da Softruck |
 
