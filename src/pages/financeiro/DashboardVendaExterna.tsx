@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { formatarMoeda } from '@/utils/format';
 import { format } from 'date-fns';
-import { CalendarDays, Clock, AlertTriangle, CheckCircle2, FileDown, Eye, DollarSign, Zap, Loader2 } from 'lucide-react';
+import { CalendarDays, Clock, AlertTriangle, CheckCircle2, FileDown, Eye, DollarSign, Zap, Loader2, RotateCcw } from 'lucide-react';
 
 type Filtro = 'todos' | 'com_saldo' | 'devedor' | 'antecipacao' | 'zerado';
 
