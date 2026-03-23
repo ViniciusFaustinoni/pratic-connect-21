@@ -14,11 +14,10 @@ import { Textarea } from '@/components/ui/textarea';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 
 const MOTIVOS_RECUSA = [
-  'Estou no trânsito',
-  'Veículo com problema',
-  'Muito longe da minha localização',
-  'Tarefa fora da minha capacidade técnica',
-  'Outro motivo',
+  'Acidente ou emergência pessoal',
+  'Veículo quebrado ou sinistro',
+  'Problema de saúde',
+  'Outro imprevisto grave',
 ] as const;
 
 interface ModalRecusaTarefaProps {
