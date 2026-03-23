@@ -51,6 +51,7 @@ import { useRastreadoresPorPortador } from '@/hooks/useRastreadoresPorPortador';
 import { usePerformanceSemanalCoordenador } from '@/hooks/usePerformanceSemanalCoordenador';
 import { AgendamentosBase } from '@/components/monitoramento/AgendamentosBase';
 import { VistoriadoresEmAlerta } from '@/components/monitoramento/VistoriadoresEmAlerta';
+import { PrestadoresAtivos } from '@/components/monitoramento/PrestadoresAtivos';
 import { cn } from '@/lib/utils';
 
 const acoesRapidas = [
@@ -58,6 +59,7 @@ const acoesRapidas = [
   { label: 'Vistorias e Instalações', href: '/diretoria/vistorias-instalacoes', icon: MapPin },
   { label: 'Equipe', href: '/monitoramento/equipe', icon: Users },
   { label: 'Instalações', href: '/monitoramento/instalacoes', icon: Wrench },
+  { label: 'Prestadores Parceiros', href: '/monitoramento/prestadores-parceiros', icon: Users },
 ];
 
 export default function DashboardCoordenador() {
@@ -427,6 +429,9 @@ export default function DashboardCoordenador() {
 
       {/* Vistoriadores em Alerta de Improdutividade */}
       <VistoriadoresEmAlerta />
+
+      {/* Prestadores Ativos */}
+      <PrestadoresAtivos />
 
       {/* Grid: Equipe + Alertas */}
       <div className="grid lg:grid-cols-3 gap-6">
