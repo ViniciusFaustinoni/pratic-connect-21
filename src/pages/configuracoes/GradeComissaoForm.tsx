@@ -25,6 +25,10 @@ export default function GradeComissaoForm() {
   const isEdit = !!id && id !== 'nova';
   const navigate = useNavigate();
   const queryClient = useQueryClient();
+  const { roles: appRoles } = useAppRoles();
+
+  // Filter to commercial roles only
+  const commercialRoles = appRoles.filter(r => ['vendedor_clt', 'vendedor_externo', 'agencia'].includes(r.role));
 
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
