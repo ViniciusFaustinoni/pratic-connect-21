@@ -82,6 +82,7 @@ export default function InstalacoesList() {
   const { data: contagem } = useInstalacoesContagem();
   const { cancelarInstalacao, isCancelando } = useInstalacaoActions();
   const deleteInstalacao = useDeleteInstalacao();
+  const { data: slaConfig } = useSlaConfig();
 
   // Extract instalacoes and pagination from data
   const { instalacoes, pagination } = useMemo(() => {
