@@ -27,6 +27,8 @@ interface TurnoProfissional {
 
 interface JornadaProfissionalCardProps {
   turno: TurnoProfissional;
+  recusasNoTurno?: number;
+  limiteRecusas?: number;
   className?: string;
 }
 
@@ -63,7 +65,7 @@ function calcularTempoReal(turno: TurnoProfissional): { trabalhados: number; alm
   return { trabalhados, almoco: minutosAlmoco };
 }
 
-export function JornadaProfissionalCard({ turno, className }: JornadaProfissionalCardProps) {
+export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecusas = 3, className }: JornadaProfissionalCardProps) {
   const { trabalhados, almoco } = calcularTempoReal(turno);
   const jornadaPadrao = 480;
   const jornadaAjustada = jornadaPadrao - (turno.saldo_anterior_minutos || 0);
@@ -104,6 +106,19 @@ export function JornadaProfissionalCard({ turno, className }: JornadaProfissiona
             </div>
           </div>
           {getStatusBadge()}
+          {recusasNoTurno > 0 && (
+            <Badge 
+              variant="outline"
+              className={cn(
+                "text-xs ml-1",
+                recusasNoTurno >= limiteRecusas
+                  ? "bg-destructive/15 text-destructive border-destructive/30"
+                  : "bg-amber-500/15 text-amber-700 border-amber-500/30"
+              )}
+            >
+              {recusasNoTurno} recusa{recusasNoTurno > 1 ? 's' : ''}
+            </Badge>
+          )}
         </div>
 
         {/* Horários */}

@@ -74,6 +74,8 @@ export default function JornadasProfissionais() {
           'gps_raio_metros',
           'jornada_limite_debito_horas',
           'jornada_exibir_saldo_vistoriador',
+          'recusa_exigir_motivo',
+          'recusa_limite_alerta',
         ]);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
@@ -89,6 +91,8 @@ export default function JornadasProfissionais() {
         gpsRaioMetros: map.gps_raio_metros || '500',
         limiteDebito: map.jornada_limite_debito_horas || '0',
         exibirSaldo: map.jornada_exibir_saldo_vistoriador || 'true',
+        recusaExigirMotivo: map.recusa_exigir_motivo || 'true',
+        recusaLimiteAlerta: map.recusa_limite_alerta || '3',
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -110,7 +114,27 @@ export default function JornadasProfissionais() {
       if (error) throw error;
       return data as TurnoComProfile[];
     },
-    refetchInterval: isHoje ? 60000 : false, // Atualizar a cada 1 minuto se for hoje
+    refetchInterval: isHoje ? 60000 : false,
+  });
+
+  // Buscar contagem de recusas por turno
+  const turnoIds = (turnos || []).map(t => t.id);
+  const { data: recusasPorTurno } = useQuery({
+    queryKey: ['recusas-por-turno-rh', turnoIds],
+    queryFn: async () => {
+      if (!turnoIds.length) return {};
+      const { data } = await (supabase as any)
+        .from('registros_recusa_tarefa')
+        .select('turno_id')
+        .in('turno_id', turnoIds);
+      
+      const counts: Record<string, number> = {};
+      (data || []).forEach((r: any) => {
+        counts[r.turno_id] = (counts[r.turno_id] || 0) + 1;
+      });
+      return counts;
+    },
+    enabled: turnoIds.length > 0,
   });
 
   // Calcular estatísticas
@@ -233,6 +257,14 @@ export default function JornadasProfissionais() {
                 <div className="rounded-lg bg-muted/30 p-3">
                   <p className="text-xs text-muted-foreground">Exibir saldo vistoriador</p>
                   <p className="text-sm font-semibold">{parametros?.exibirSaldo === 'false' ? 'Não' : 'Sim'}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Exigir motivo recusa</p>
+                  <p className="text-sm font-semibold">{parametros?.recusaExigirMotivo === 'false' ? 'Não' : 'Sim'}</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Limite recusas/turno</p>
+                  <p className="text-sm font-semibold">{parametros?.recusaLimiteAlerta || '3'}</p>
                 </div>
               </div>
               <div className="flex justify-end">
@@ -395,7 +427,7 @@ export default function JornadasProfissionais() {
           ) : turnos && turnos.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {turnos.map((turno) => (
-                <JornadaProfissionalCard key={turno.id} turno={turno} />
+                <JornadaProfissionalCard key={turno.id} turno={turno} recusasNoTurno={recusasPorTurno?.[turno.id] || 0} limiteRecusas={parseInt(parametros?.recusaLimiteAlerta || "3", 10)} />
               ))}
             </div>
           ) : (
@@ -409,7 +441,7 @@ export default function JornadasProfissionais() {
           {turnosAtivos.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {turnosAtivos.map((turno) => (
-                <JornadaProfissionalCard key={turno.id} turno={turno} />
+                <JornadaProfissionalCard key={turno.id} turno={turno} recusasNoTurno={recusasPorTurno?.[turno.id] || 0} limiteRecusas={parseInt(parametros?.recusaLimiteAlerta || "3", 10)} />
               ))}
             </div>
           ) : (
@@ -423,7 +455,7 @@ export default function JornadasProfissionais() {
           {turnosAlmoco.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {turnosAlmoco.map((turno) => (
-                <JornadaProfissionalCard key={turno.id} turno={turno} />
+                <JornadaProfissionalCard key={turno.id} turno={turno} recusasNoTurno={recusasPorTurno?.[turno.id] || 0} limiteRecusas={parseInt(parametros?.recusaLimiteAlerta || "3", 10)} />
               ))}
             </div>
           ) : (
@@ -437,7 +469,7 @@ export default function JornadasProfissionais() {
           {turnosEncerrados.length > 0 ? (
             <div className="grid gap-4 md:grid-cols-2 lg:grid-cols-3">
               {turnosEncerrados.map((turno) => (
-                <JornadaProfissionalCard key={turno.id} turno={turno} />
+                <JornadaProfissionalCard key={turno.id} turno={turno} recusasNoTurno={recusasPorTurno?.[turno.id] || 0} limiteRecusas={parseInt(parametros?.recusaLimiteAlerta || "3", 10)} />
               ))}
             </div>
           ) : (

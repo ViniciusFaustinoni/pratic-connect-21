@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   MapPin, Phone, Car, Clock, Navigation, Play, 
   CheckCircle2, User, ChevronRight, Loader2, Route, Zap,
-  MessageCircle, MessageSquareWarning, Timer
+  MessageCircle, MessageSquareWarning, Timer, XCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +29,11 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ImprevistoBotao } from './ImprevistoBotao';
 import { SlaIndicador } from '@/components/ui/SlaIndicador';
+import { ModalRecusaTarefa } from './ModalRecusaTarefa';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface TarefaAtualCardProps {
   tarefa: TarefaAtual & {
@@ -53,7 +58,29 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
   const { mutate: iniciarRota, isPending: isIniciandoRota } = useIniciarRota();
   const { buscarProximaTarefa, isLoading: isBuscandoProxima } = useIniciarServico();
   const { mutate: registrarContato, isPending: isRegistrandoContato } = useRegistrarContato();
+  const { profile } = useAuth();
+  const queryClient = useQueryClient();
   
+  const [showRecusaModal, setShowRecusaModal] = useState(false);
+  const [isRecusando, setIsRecusando] = useState(false);
+  
+  // Ler config de recusa
+  const { data: configRecusa } = useQuery({
+    queryKey: ['config-recusa-tarefa'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['recusa_exigir_motivo', 'recusa_limite_alerta']);
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        exigirMotivo: map.recusa_exigir_motivo !== 'false',
+        limiteAlerta: parseInt(map.recusa_limite_alerta || '3', 10),
+      };
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+
   // Estado para atualização em tempo real (a cada minuto)
   const [agora, setAgora] = useState(new Date());
   
@@ -145,6 +172,98 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
 
   const handleIniciarTarefa = () => {
     iniciarTarefa({ tarefaId: tarefa.id });
+  };
+
+  const handleRecusar = async (motivo: string, motivoLivre?: string) => {
+    setIsRecusando(true);
+    try {
+      // Buscar turno ativo
+      const { data: turnoAtivo } = await supabase
+        .from('turnos_profissionais')
+        .select('id')
+        .eq('profissional_id', profile?.id || '')
+        .eq('status', 'ativo')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const turnoId = turnoAtivo?.id || null;
+
+      // Registrar recusa
+      await (supabase as any).from('registros_recusa_tarefa').insert({
+        servico_id: tarefa.id,
+        profissional_id: profile?.id,
+        turno_id: turnoId,
+        motivo,
+        motivo_livre: motivoLivre || null,
+      });
+
+      // Desatribuir serviço
+      await supabase.from('servicos').update({
+        profissional_id: null,
+        status: 'pendente',
+      }).eq('id', tarefa.id);
+
+      // Verificar limite de recusas e enviar alerta
+      if (turnoId) {
+        const { count } = await (supabase as any)
+          .from('registros_recusa_tarefa')
+          .select('id', { count: 'exact', head: true })
+          .eq('turno_id', turnoId);
+
+        const limite = configRecusa?.limiteAlerta || 3;
+        if ((count || 0) >= limite) {
+          // Verificar se já existe alerta para este turno
+          const { data: alertaExistente } = await supabase
+            .from('notificacoes')
+            .select('id')
+            .eq('referencia_id', turnoId)
+            .eq('subtipo', 'recusa_limite_atingido')
+            .limit(1);
+
+          if (!alertaExistente?.length) {
+            // Buscar coordenadores/admins
+            const { data: coordenadores } = await supabase
+              .from('user_roles')
+              .select('user_id')
+              .in('role', ['coordenador_monitoramento', 'admin', 'diretor']);
+
+            for (const coord of (coordenadores || [])) {
+              await supabase.from('notificacoes').insert({
+                user_id: coord.user_id,
+                titulo: '⚠️ Vistoriador com muitas recusas',
+                mensagem: `Vistoriador ${profile?.nome || ''} recusou ${count} tarefas neste turno.`,
+                tipo: 'alerta',
+                subtipo: 'recusa_limite_atingido',
+                referencia_id: turnoId,
+                referencia_tipo: 'turno',
+                lida: false,
+                canal_sistema: true,
+                prioridade: 'alta',
+              });
+            }
+          }
+        }
+      }
+
+      // Buscar próxima tarefa
+      buscarProximaTarefa();
+      queryClient.invalidateQueries({ queryKey: ['tarefa-atual'] });
+      setShowRecusaModal(false);
+    } catch (err) {
+      console.error('Erro ao recusar tarefa:', err);
+      toast.error('Erro ao recusar tarefa');
+    } finally {
+      setIsRecusando(false);
+    }
+  };
+
+  const handleRecusarClick = () => {
+    if (configRecusa?.exigirMotivo) {
+      setShowRecusaModal(true);
+    } else {
+      handleRecusar('Sem motivo informado');
+    }
   };
 
   const handleExecutar = () => {
@@ -385,6 +504,21 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
                   )}
                   Iniciar Tarefa
                 </Button>
+
+                {/* Botão Recusar */}
+                <Button
+                  variant="outline"
+                  onClick={handleRecusarClick}
+                  disabled={isRecusando}
+                  className="w-full gap-2 text-destructive border-destructive/30 hover:bg-destructive/10"
+                >
+                  {isRecusando ? (
+                    <Loader2 className="h-4 w-4 animate-spin" />
+                  ) : (
+                    <XCircle className="h-4 w-4" />
+                  )}
+                  Recusar Tarefa
+                </Button>
                 
                 {/* Feedback visual quando bloqueado por horário */}
                 {!podeIniciarPorHorario && tarefa.hora_agendada && (
@@ -466,6 +600,14 @@ export function TarefaAtualCard({ tarefa }: TarefaAtualCardProps) {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Modal de Recusa */}
+      <ModalRecusaTarefa
+        open={showRecusaModal}
+        onOpenChange={setShowRecusaModal}
+        onConfirm={handleRecusar}
+        isPending={isRecusando}
+      />
     </>
   );
 }

@@ -71,7 +71,6 @@ export function InstalacaoDetailDrawer({
     queryKey: ['registro-presenca-instalacao', instalacaoId],
     queryFn: async () => {
       if (!instalacaoId) return null;
-      // Buscar serviço associado à instalação pelo associado_id e tipo instalacao
       const inst = await supabase.from('instalacoes').select('associado_id, veiculo_id').eq('id', instalacaoId).single();
       if (!inst.data) return null;
       
@@ -94,6 +93,36 @@ export function InstalacaoDetailDrawer({
         .maybeSingle();
       
       return data;
+    },
+    enabled: !!instalacaoId && open,
+  });
+
+  // Buscar histórico de recusas do serviço
+  const { data: historicoRecusas } = useQuery({
+    queryKey: ['historico-recusas-instalacao', instalacaoId],
+    queryFn: async () => {
+      if (!instalacaoId) return [];
+      // Buscar serviço associado
+      const inst = await supabase.from('instalacoes').select('associado_id').eq('id', instalacaoId).single();
+      if (!inst.data) return [];
+      
+      const { data: servicos } = await supabase
+        .from('servicos')
+        .select('id')
+        .eq('associado_id', inst.data.associado_id)
+        .eq('tipo', 'instalacao')
+        .order('created_at', { ascending: false })
+        .limit(1);
+      
+      if (!servicos?.length) return [];
+
+      const { data } = await (supabase as any)
+        .from('registros_recusa_tarefa')
+        .select('*, profissional:profiles(nome)')
+        .eq('servico_id', servicos[0].id)
+        .order('created_at', { ascending: false });
+
+      return data || [];
     },
     enabled: !!instalacaoId && open,
   });
@@ -337,6 +366,36 @@ export function InstalacaoDetailDrawer({
                         Ver localização no mapa
                       </a>
                     )}
+                  </div>
+                </section>
+              </>
+            )}
+
+            {/* Histórico de Atribuições (Recusas) */}
+            {historicoRecusas && historicoRecusas.length > 0 && (
+              <>
+                <Separator />
+                <section>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <RotateCcw className="h-4 w-4" />
+                    Histórico de Atribuições
+                  </h3>
+                  <div className="space-y-2">
+                    {historicoRecusas.map((rec: any) => (
+                      <div key={rec.id} className="flex items-start gap-2 text-sm border border-border/50 rounded-md p-2">
+                        <XCircle className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
+                        <div className="flex-1 min-w-0">
+                          <p className="font-medium">{rec.profissional?.nome || 'Profissional'}</p>
+                          <p className="text-muted-foreground text-xs">Recusou: {rec.motivo}</p>
+                          {rec.motivo_livre && (
+                            <p className="text-muted-foreground text-xs italic">"{rec.motivo_livre}"</p>
+                          )}
+                          <p className="text-muted-foreground text-xs">
+                            {format(new Date(rec.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                          </p>
+                        </div>
+                      </div>
+                    ))}
                   </div>
                 </section>
               </>

@@ -20922,6 +20922,72 @@ export type Database = {
           },
         ]
       }
+      registros_recusa_tarefa: {
+        Row: {
+          created_at: string
+          id: string
+          motivo: string
+          motivo_livre: string | null
+          profissional_id: string
+          servico_id: string
+          turno_id: string | null
+        }
+        Insert: {
+          created_at?: string
+          id?: string
+          motivo: string
+          motivo_livre?: string | null
+          profissional_id: string
+          servico_id: string
+          turno_id?: string | null
+        }
+        Update: {
+          created_at?: string
+          id?: string
+          motivo?: string
+          motivo_livre?: string | null
+          profissional_id?: string
+          servico_id?: string
+          turno_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "registros_recusa_tarefa_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registros_recusa_tarefa_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "registros_recusa_tarefa_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "registros_recusa_tarefa_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "registros_recusa_tarefa_turno_id_fkey"
+            columns: ["turno_id"]
+            isOneToOne: false
+            referencedRelation: "turnos_profissionais"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       regras_categorizacao: {
         Row: {
           ativo: boolean | null

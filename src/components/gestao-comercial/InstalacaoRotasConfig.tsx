@@ -44,6 +44,8 @@ const CONFIG_CHAVES = [
   'gps_raio_metros',
   'jornada_limite_debito_horas',
   'jornada_exibir_saldo_vistoriador',
+  'recusa_exigir_motivo',
+  'recusa_limite_alerta',
 ] as const;
 
 // ── Hook ───────────────────────────────────────────
@@ -80,6 +82,8 @@ function useInstalacaoConfigs() {
         gpsRaioMetros: map.gps_raio_metros?.valor ?? '500',
         limiteDebito: map.jornada_limite_debito_horas?.valor ?? '0',
         exibirSaldo: map.jornada_exibir_saldo_vistoriador?.valor ?? 'true',
+        recusaExigirMotivo: map.recusa_exigir_motivo?.valor ?? 'true',
+        recusaLimiteAlerta: map.recusa_limite_alerta?.valor ?? '3',
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -174,6 +178,11 @@ export function InstalacaoRotasConfig() {
   const [gpsRaio, setGpsRaio] = useState('500');
   const [savingB7, setSavingB7] = useState(false);
 
+  // ── Bloco 8 state (Recusas)
+  const [recusaExigirMotivo, setRecusaExigirMotivo] = useState(true);
+  const [recusaLimiteAlerta, setRecusaLimiteAlerta] = useState('3');
+  const [savingB8, setSavingB8] = useState(false);
+
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
@@ -195,6 +204,8 @@ export function InstalacaoRotasConfig() {
     setGpsRaio(config.gpsRaioMetros);
     setLimiteDebito(config.limiteDebito);
     setExibirSaldo(config.exibirSaldo !== 'false');
+    setRecusaExigirMotivo(config.recusaExigirMotivo !== 'false');
+    setRecusaLimiteAlerta(config.recusaLimiteAlerta);
   }, [config]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['configuracoes-instalacao-rotas'] });
@@ -643,6 +654,55 @@ export function InstalacaoRotasConfig() {
             }} disabled={savingB7} size="sm">
               {savingB7 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
               Salvar GPS
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+
+      {/* ── Bloco 8 — Recusas de Tarefa ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock className="h-4 w-4" />
+            Recusas de Tarefa
+          </CardTitle>
+          <CardDescription>
+            Configurações de registro e alerta para recusas de tarefas pelos vistoriadores.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label>Exigir motivo ao recusar tarefa</Label>
+              <p className="text-xs text-muted-foreground">Quando desativado, a recusa acontece sem pedir justificativa</p>
+            </div>
+            <Switch checked={recusaExigirMotivo} onCheckedChange={setRecusaExigirMotivo} />
+          </div>
+          <div className="space-y-2 max-w-xs">
+            <Label>Limite de recusas por turno para alerta</Label>
+            <Input type="number" min={1} max={20} value={recusaLimiteAlerta} onChange={e => setRecusaLimiteAlerta(e.target.value)} />
+            <p className="text-xs text-muted-foreground">Ao atingir esse número, o coordenador recebe um alerta</p>
+          </div>
+          <p className="text-xs text-amber-600">⚠ Alterações têm efeito imediato na operação. Informe a equipe antes de alterar.</p>
+          <div className="flex justify-end">
+            <Button onClick={async () => {
+              setSavingB8(true);
+              try {
+                await Promise.all([
+                  salvarConfig('recusa_exigir_motivo', recusaExigirMotivo ? 'true' : 'false', profile?.id),
+                  salvarConfig('recusa_limite_alerta', recusaLimiteAlerta, profile?.id),
+                ]);
+                toast.success('Configurações de recusa salvas com sucesso');
+                invalidate();
+              } catch {
+                toast.error('Erro ao salvar configurações de recusa');
+              } finally {
+                setSavingB8(false);
+              }
+            }} disabled={savingB8} size="sm">
+              {savingB8 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              Salvar Recusas
             </Button>
           </div>
         </CardContent>
