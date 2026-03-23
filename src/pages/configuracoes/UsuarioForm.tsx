@@ -534,15 +534,41 @@ export default function UsuarioForm() {
                     <Label htmlFor="nome">Nome completo *</Label>
                     <Input id="nome" value={formData.nome} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} className="bg-background" required />
                   </div>
-                  <div className="space-y-2">
-                    <Label htmlFor="cpf">CPF</Label>
-                    <Input id="cpf" value={formData.cpf} onChange={(e) => {
-                      setFormData({ ...formData, cpf: e.target.value });
-                      if (fieldErrors.cpf) setFieldErrors(prev => ({ ...prev, cpf: '' }));
-                    }} placeholder="000.000.000-00" className={`bg-background ${fieldErrors.cpf ? 'border-red-500 focus-visible:ring-red-500' : ''}`} />
-                    {fieldErrors.cpf && <p className="text-xs text-red-500 font-medium">{fieldErrors.cpf}</p>}
-                  </div>
+                  {formData.perfis.includes('agencia') ? (
+                    <div className="space-y-2">
+                      <Label htmlFor="cnpj">CNPJ *</Label>
+                      <Input id="cnpj" value={formData.cnpj} onChange={(e) => {
+                        const raw = e.target.value.replace(/\D/g, '').slice(0, 14);
+                        const masked = raw.replace(/^(\d{2})(\d)/, '$1.$2').replace(/^(\d{2})\.(\d{3})(\d)/, '$1.$2.$3').replace(/\.(\d{3})(\d)/, '.$1/$2').replace(/(\d{4})(\d)/, '$1-$2');
+                        setFormData({ ...formData, cnpj: masked });
+                        if (fieldErrors.cnpj) setFieldErrors(prev => ({ ...prev, cnpj: '' }));
+                      }} placeholder="00.000.000/0000-00" maxLength={18} className={`bg-background ${fieldErrors.cnpj ? 'border-destructive focus-visible:ring-destructive' : ''}`} required />
+                      {fieldErrors.cnpj && <p className="text-xs text-destructive font-medium">{fieldErrors.cnpj}</p>}
+                    </div>
+                  ) : (
+                    <div className="space-y-2">
+                      <Label htmlFor="cpf">CPF</Label>
+                      <Input id="cpf" value={formData.cpf} onChange={(e) => {
+                        setFormData({ ...formData, cpf: e.target.value });
+                        if (fieldErrors.cpf) setFieldErrors(prev => ({ ...prev, cpf: '' }));
+                      }} placeholder="000.000.000-00" className={`bg-background ${fieldErrors.cpf ? 'border-destructive focus-visible:ring-destructive' : ''}`} />
+                      {fieldErrors.cpf && <p className="text-xs text-destructive font-medium">{fieldErrors.cpf}</p>}
+                    </div>
+                  )}
                 </div>
+
+                {formData.perfis.includes('agencia') && (
+                  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="razao_social">Razão Social *</Label>
+                      <Input id="razao_social" value={formData.razao_social} onChange={(e) => setFormData({ ...formData, razao_social: e.target.value })} placeholder="Razão Social da empresa" className="bg-background" required />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="nome_fantasia">Nome Fantasia</Label>
+                      <Input id="nome_fantasia" value={formData.nome_fantasia} onChange={(e) => setFormData({ ...formData, nome_fantasia: e.target.value })} placeholder="Nome Fantasia" className="bg-background" />
+                    </div>
+                  </div>
+                )}
 
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">

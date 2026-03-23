@@ -162,8 +162,11 @@ serve(async (req) => {
     }
 
     // O trigger handle_new_user já cria o profile, mas precisamos atualizar campos adicionais
-    const updateData: any = { primeiro_acesso: !senha }; // Se tem senha, não é primeiro acesso
+    const updateData: any = { primeiro_acesso: !senha };
     if (cpf) updateData.cpf = cpf;
+    if (cnpj) updateData.cnpj = cnpj;
+    if (razao_social) updateData.razao_social = razao_social;
+    if (nome_fantasia) updateData.nome_fantasia = nome_fantasia;
     if (telefone) updateData.telefone = telefone;
     if (regioes_atendimento?.length) updateData.regioes_atendimento = regioes_atendimento;
     if (capacidade_diaria) updateData.capacidade_diaria = capacidade_diaria;
