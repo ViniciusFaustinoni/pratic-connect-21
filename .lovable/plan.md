@@ -1,52 +1,32 @@
 
-
-# Plano: Busca por Associado + CSV por Beneficiário
+# Correções na Landing Page /planos
 
 ## Arquivos a modificar
 
 | Arquivo | Alteração |
 |---|---|
-| `src/pages/financeiro/GestaoContaVendedor.tsx` | Coluna "Associado" + campo de busca |
-| `src/components/financeiro/ExportarRelatorioVendaExternaModal.tsx` | Botão "Exportar CSV" na aba beneficiário |
+| `src/pages/public/LandingPlanos.tsx` | Adicionar `onError` na img dos planos + atualizar copyright |
 
-## Parte 1 — Busca por Associado
+## Detalhamento
 
-### Coluna "Associado"
+### 1. Fallback de imagem quebrada (linha 135-140)
 
-Adicionar `<TableHead>Associado</TableHead>` após "Descrição" (linha 181). Na row, exibir `l.associado_nome || '—'`. Atualizar `colSpan` de 9 para 10 nas linhas de loading/empty.
+Adicionar handler `onError` na tag `<img>` que esconde a imagem e mostra o ícone Car. Implementação: usar estado local ou simplesmente substituir o `src` por vazio e esconder via `display:none`, revelando o fallback. Abordagem mais simples: converter para um componente inline que troca para o ícone no `onError`:
 
-### Campo de busca
-
-Adicionar estado `buscaAssociado` e um `Input` com placeholder "Buscar por associado..." na barra de filtros (após o Select de status, linha 168).
-
-Filtrar `lancamentos` no frontend antes de renderizar:
-
-```ts
-const lancamentosFiltrados = lancamentos.filter(l =>
-  !buscaAssociado || (l.associado_nome || '').toLowerCase().includes(buscaAssociado.toLowerCase())
-);
+```tsx
+<img
+  src={plano.imagem_landing_url}
+  alt={plano.nome}
+  className="h-full w-full object-cover"
+  loading="lazy"
+  onError={(e) => {
+    e.currentTarget.style.display = 'none';
+    e.currentTarget.nextElementSibling?.classList.remove('hidden');
+  }}
+/>
+<Car className="h-16 w-16 text-white/30 hidden" />
 ```
 
-Usar `lancamentosFiltrados` no `.map()` da tabela em vez de `lancamentos`.
+### 2. Copyright (linha 273)
 
-### Dado já disponível
-
-O hook `useContaCorrenteVendedor` já faz join e retorna `associado_nome` no `CCLancamento` — nenhuma alteração no hook.
-
-## Parte 2 — CSV por Beneficiário
-
-### Função `handleExportarBeneficiarioCSV`
-
-Reutilizar a mesma query já feita em `handleExportarBeneficiario` (linhas 72-100) para buscar lançamentos e vendedores.
-
-Gerar CSV com:
-- Header: `Vendedor;Data;Descrição;Tipo;Bruto;Abatimento;Líquido;Status`
-- Uma linha por lançamento, agrupado por vendedor
-- Linha de totais ao final
-- BOM + separador `;`
-- Arquivo: `comissoes-beneficiario-{dataInicio}-a-{dataFim}.csv`
-
-### Botão
-
-Na aba "Por beneficiário" (linha 510-516), adicionar botão "Exportar CSV" com ícone `FileSpreadsheet`, antes do botão PDF existente. Ambos compartilham o estado `loading`.
-
+Alterar `© 2025` para `© 2026`.
