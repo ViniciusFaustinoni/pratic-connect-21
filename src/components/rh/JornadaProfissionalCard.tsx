@@ -106,7 +106,19 @@ export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecus
             </div>
           </div>
           {getStatusBadge()}
-        </div>
+          {recusasNoTurno > 0 && (
+            <Badge 
+              variant="outline"
+              className={cn(
+                "text-xs ml-1",
+                recusasNoTurno >= limiteRecusas
+                  ? "bg-destructive/15 text-destructive border-destructive/30"
+                  : "bg-amber-500/15 text-amber-700 border-amber-500/30"
+              )}
+            >
+              {recusasNoTurno} recusa{recusasNoTurno > 1 ? 's' : ''}
+            </Badge>
+          )}
 
         {/* Horários */}
         <div className="grid grid-cols-2 gap-2 text-sm">
