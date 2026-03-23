@@ -209,7 +209,7 @@ function resolveStatus(
   if (card.plataformaCodigo === 'rede_veiculos') {
     const r = ctx.integracoes.rede_veiculos;
     return {
-      ativo: r.configurado && r.testado,
+      ativo: r.configurado,
       ultimoTeste: r.testado_em
         ? formatDistanceToNow(new Date(r.testado_em), { addSuffix: true, locale: ptBR })
         : undefined,

@@ -320,7 +320,7 @@ export function ServicosTab() {
     }
     if (servico.plataformaCodigo === 'rede_veiculos') {
       return {
-        ativo: integracoes.rede_veiculos.configurado && integracoes.rede_veiculos.testado,
+        ativo: integracoes.rede_veiculos.configurado,
         ultimaExecucao: integracoes.rede_veiculos.testado_em 
           ? formatDistanceToNow(new Date(integracoes.rede_veiculos.testado_em), { addSuffix: true, locale: ptBR })
           : undefined
