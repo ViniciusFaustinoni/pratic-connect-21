@@ -228,7 +228,6 @@ export default function GradeComissaoForm() {
                           <SelectItem
                             key={r.role}
                             value={r.role}
-                            disabled={niveis.some((n, i) => i !== idx && n.role === r.role)}
                           >
                             {r.label}
                           </SelectItem>
