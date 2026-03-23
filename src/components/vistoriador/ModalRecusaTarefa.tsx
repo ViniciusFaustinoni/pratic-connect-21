@@ -63,7 +63,7 @@ export function ModalRecusaTarefa({ open, onOpenChange, onConfirm, isPending }: 
           ))}
         </RadioGroup>
 
-        {motivo === 'Outro motivo' && (
+        {motivo === 'Outro imprevisto grave' && (
           <Textarea
             placeholder="Descreva o motivo..."
             value={motivoLivre}
