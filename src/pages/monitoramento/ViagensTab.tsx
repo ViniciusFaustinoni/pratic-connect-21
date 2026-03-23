@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { format, startOfMonth, endOfMonth } from 'date-fns';
@@ -10,7 +10,6 @@ import type { DateRange } from 'react-day-picker';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Skeleton } from '@/components/ui/skeleton';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
@@ -23,13 +22,14 @@ import { useInstaladores } from '@/hooks/useInstaladores';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS } from '@/types/database';
 import { formatarMoeda } from '@/utils/format';
 
-const OPEN_STATUSES = ['agendada', 'em_rota', 'em_andamento', 'reagendada'];
+type StatusInstalacao = keyof typeof STATUS_INSTALACAO_LABELS;
+
+const OPEN_STATUSES: StatusInstalacao[] = ['agendada', 'em_rota', 'em_andamento', 'reagendada'];
 
 export default function ViagensTab() {
   const navigate = useNavigate();
   const hoje = new Date();
 
-  // Filters
   const [statusFilter, setStatusFilter] = useState<string>('abertas');
   const [tecnicoFilter, setTecnicoFilter] = useState<string>('todos');
   const [dateRange, setDateRange] = useState<DateRange | undefined>({
@@ -53,7 +53,6 @@ export default function ViagensTab() {
 
   const showDiaria = (valorDiaria ?? 0) > 0;
 
-  // Instaladores list for filter
   const { data: instaladores } = useInstaladores();
 
   // Main query: viagem installations
@@ -65,7 +64,7 @@ export default function ViagensTab() {
         .select(`
           id, status, data_agendada, periodo, tipo_deslocamento, tipo_servico, created_at,
           cidade, uf, instalador_id, instalador_responsavel_id,
-          associados (id, nome),
+          associados!inner (id, nome),
           instalador:profiles!instalacoes_instalador_id_fkey (id, nome),
           instalador_responsavel:profiles!instalacoes_instalador_responsavel_id_fkey (id, nome)
         `)
@@ -91,26 +90,22 @@ export default function ViagensTab() {
 
       const { data, error } = await query;
       if (error) throw error;
-      return data || [];
+      return (data || []) as any[];
     },
   });
 
-  // Summary cards data
+  // Summary cards
   const { data: summaryData } = useQuery({
-    queryKey: ['viagens-summary', dateRange],
+    queryKey: ['viagens-summary'],
     queryFn: async () => {
       const hojeStr = format(hoje, 'yyyy-MM-dd');
-      const mesInicio = format(startOfMonth(hoje), 'yyyy-MM-dd');
-      const mesFim = format(endOfMonth(hoje), 'yyyy-MM-dd');
 
-      // Active viagens
       const { count: ativas } = await supabase
         .from('instalacoes')
         .select('*', { count: 'exact', head: true })
         .eq('tipo_deslocamento', 'viagem')
         .in('status', OPEN_STATUSES);
 
-      // Técnicos em viagem hoje
       const { data: tecnicosHoje } = await supabase
         .from('instalacoes')
         .select('instalador_id, instalador_responsavel_id')
@@ -120,35 +115,20 @@ export default function ViagensTab() {
 
       const tecnicoIds = new Set(
         (tecnicosHoje || [])
-          .flatMap(t => [t.instalador_id, t.instalador_responsavel_id])
+          .flatMap((t: any) => [t.instalador_id, t.instalador_responsavel_id])
           .filter(Boolean)
-      );
-
-      // Diárias no mês
-      const { data: turnos } = await supabase
-        .from('turnos_profissionais')
-        .select('bonus_viagem')
-        .gte('data', mesInicio)
-        .lte('data', mesFim)
-        .eq('em_viagem', true)
-        .gt('bonus_viagem', 0);
-
-      const totalDiarias = (turnos || []).reduce(
-        (sum, t) => sum + (Number(t.bonus_viagem) || 0), 0
       );
 
       return {
         ativas: ativas || 0,
         tecnicosHoje: tecnicoIds.size,
-        totalDiarias,
       };
     },
     enabled: showDiaria,
   });
 
-  const getTecnicoNome = (item: any) => {
-    return item.instalador?.nome || item.instalador_responsavel?.nome || null;
-  };
+  const getTecnicoNome = (item: any) =>
+    item.instalador?.nome || item.instalador_responsavel?.nome || null;
 
   return (
     <div className="space-y-6">
@@ -177,14 +157,12 @@ export default function ViagensTab() {
           </Card>
           <Card>
             <CardHeader className="flex flex-row items-center justify-between space-y-0 pb-2">
-              <CardTitle className="text-sm font-medium">Diárias no Mês</CardTitle>
+              <CardTitle className="text-sm font-medium">Valor Diária</CardTitle>
               <Wallet className="h-4 w-4 text-muted-foreground" />
             </CardHeader>
             <CardContent>
-              <div className="text-2xl font-bold">
-                {summaryData ? formatarMoeda(summaryData.totalDiarias) : '-'}
-              </div>
-              <p className="text-xs text-muted-foreground">Bônus de viagem registrados</p>
+              <div className="text-2xl font-bold">{formatarMoeda(valorDiaria!)}</div>
+              <p className="text-xs text-muted-foreground">Configurado por viagem</p>
             </CardContent>
           </Card>
         </div>
@@ -270,7 +248,7 @@ export default function ViagensTab() {
                           <span className="font-medium">{v.associados?.nome || '—'}</span>
                           <span className="text-xs text-muted-foreground flex items-center gap-1">
                             {v.cidade}{v.uf ? `/${v.uf}` : ''}
-                            <Badge variant="outline" className="text-[10px] px-1 py-0 bg-orange-500/15 text-orange-700 border-orange-500/30">
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 bg-orange-500/15 text-orange-700 border-orange-500/30 dark:text-orange-400">
                               Viagem
                             </Badge>
                           </span>
@@ -287,8 +265,8 @@ export default function ViagensTab() {
                           : '—'}
                       </TableCell>
                       <TableCell>
-                        <Badge className={STATUS_INSTALACAO_COLORS[v.status as keyof typeof STATUS_INSTALACAO_COLORS]}>
-                          {STATUS_INSTALACAO_LABELS[v.status as keyof typeof STATUS_INSTALACAO_LABELS] || v.status}
+                        <Badge className={STATUS_INSTALACAO_COLORS[v.status as StatusInstalacao]}>
+                          {STATUS_INSTALACAO_LABELS[v.status as StatusInstalacao] || v.status}
                         </Badge>
                       </TableCell>
                       <TableCell>

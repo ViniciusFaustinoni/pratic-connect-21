@@ -29,6 +29,10 @@ export default function VistoriasInstalacoesMon() {
             <Puzzle className="h-4 w-4" />
             Encaixes
           </TabsTrigger>
+          <TabsTrigger value="viagens" className="gap-2">
+            <Truck className="h-4 w-4" />
+            Viagens
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="instalacoes">
@@ -41,6 +45,10 @@ export default function VistoriasInstalacoesMon() {
 
         <TabsContent value="encaixes">
           <MonitoramentoEncaixes embedded />
+        </TabsContent>
+
+        <TabsContent value="viagens">
+          <ViagensTab />
         </TabsContent>
       </Tabs>
     </div>
