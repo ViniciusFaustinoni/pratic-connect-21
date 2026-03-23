@@ -1,90 +1,58 @@
 
 
-# Plano: Reformular Recusa para "Reportar Imprevisto"
+# Plano: Atribuição de Grade de Comissão a Usuários
 
-## Resumo
+## Problema
 
-Transformar o botao de recusa de tarefa de uma opcao rotineira para um recurso de emergencia, com motivos adequados, visual discreto e notificacao imediata ao coordenador.
+As grades de comissão são cadastradas mas não podem ser atribuídas a ninguém. Não existe coluna nem tabela de vínculo entre grades e usuários (consultores/agências). Sem isso, também é impossível testar o bloqueio de exclusão de grade em uso.
 
----
+## Solução
 
-## Alteracoes
+### 1. Migration — Criar tabela de vínculo
 
-### 1. `ModalRecusaTarefa.tsx` — Motivos, textos e botoes
+```sql
+CREATE TABLE public.usuario_grade_comissao (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  grade_id UUID NOT NULL REFERENCES public.grades_comissao(id) ON DELETE RESTRICT,
+  atribuido_por UUID REFERENCES auth.users(id),
+  created_at TIMESTAMPTZ DEFAULT now(),
+  UNIQUE(user_id)
+);
 
-- Renomear titulo de "Recusar Tarefa" para "Reportar Imprevisto"
-- Substituir descricao pelo texto de alerta solicitado
-- Substituir motivos por:
-  1. Acidente ou emergencia pessoal
-  2. Veiculo quebrado ou sinistro
-  3. Problema de saude
-  4. Outro imprevisto grave (abre campo texto obrigatorio)
-- Alterar condicao do campo livre de `'Outro motivo'` para `'Outro imprevisto grave'`
-- Botoes: "Confirmar imprevisto" (destructive) e "Cancelar"
+ALTER TABLE public.usuario_grade_comissao ENABLE ROW LEVEL SECURITY;
 
-### 2. `TarefaAtualCard.tsx` — Visual do botao (linhas 508-521)
+CREATE POLICY "Admins podem gerenciar vínculos de grade"
+ON public.usuario_grade_comissao FOR ALL TO authenticated
+USING (public.has_permission(auth.uid(), 'manage_users'))
+WITH CHECK (public.has_permission(auth.uid(), 'manage_users'));
 
-Substituir o `<Button variant="outline">` por um link discreto abaixo do botao principal:
-
-```tsx
-<button
-  type="button"
-  onClick={handleRecusarClick}
-  disabled={isRecusando}
-  className="text-sm text-muted-foreground underline hover:text-destructive disabled:opacity-50"
->
-  {isRecusando ? 'Reportando...' : 'Reportar Imprevisto'}
-</button>
+CREATE POLICY "Usuário vê própria grade"
+ON public.usuario_grade_comissao FOR SELECT TO authenticated
+USING (user_id = auth.uid());
 ```
 
-Remove o icone XCircle e o peso visual de botao.
+O `ON DELETE RESTRICT` na FK de `grade_id` impede exclusão de grade em uso diretamente no banco.
 
-### 3. `TarefaAtualCard.tsx` — Notificacao imediata (linhas 192-246)
+### 2. Tela de Grades — Botão "Atribuir" e bloqueio de exclusão
 
-Adicionar logo apos o insert em `registros_recusa_tarefa` (antes da verificacao de limite):
+**Arquivo**: `src/pages/configuracoes/GradesComissao.tsx`
 
-```typescript
-// Notificacao imediata ao coordenador
-const { data: coordenadores } = await supabase
-  .from('user_roles')
-  .select('user_id')
-  .in('role', ['coordenador_monitoramento', 'admin']);
+- Ao tentar excluir, verificar se existem registros em `usuario_grade_comissao` com aquele `grade_id`. Se sim, exibir toast: "Esta grade está atribuída a X usuário(s) e não pode ser excluída."
+- Adicionar coluna "Usuários" na listagem mostrando quantos estão vinculados.
 
-for (const coord of (coordenadores || [])) {
-  await supabase.from('notificacoes').insert({
-    user_id: coord.user_id,
-    titulo: '🚨 Imprevisto reportado',
-    mensagem: `${profile?.nome || 'Tecnico'} reportou: "${motivo}"${motivoLivre ? ` - ${motivoLivre}` : ''}. Instalacao #${tarefa.id.slice(0, 8)} retornou para a fila.`,
-    tipo: 'alerta',
-    subtipo: 'imprevisto_reportado',
-    referencia_id: tarefa.id,
-    referencia_tipo: 'servico',
-    lida: false,
-    canal_sistema: true,
-    prioridade: 'alta',
-  });
-}
-```
+### 3. Tela de Usuários — Campo de grade no formulário
 
-A logica existente de limite de recusas no turno permanece intacta como segunda camada de alerta.
+**Arquivo**: `src/pages/configuracoes/UsuarioForm.tsx`
 
-### 4. `InstalacaoRotasConfig.tsx` — Label de configuracao
+- Para usuários com roles operacionais de vendas (`consultor_interno`, `consultor_externo`, `agencia`), exibir um select de "Grade de Comissão" carregando as grades ativas de `grades_comissao`.
+- Ao salvar, inserir/atualizar o registro em `usuario_grade_comissao`.
 
-Atualizar o label "Exigir motivo ao recusar tarefa" para "Exigir motivo ao reportar imprevisto" (linha 677).
+### 4. Arquivos afetados
 
----
-
-## Arquivos afetados
-
-| Arquivo | Alteracao |
+| Arquivo | Alteração |
 |---|---|
-| `src/components/vistoriador/ModalRecusaTarefa.tsx` | Novos motivos, titulo, descricao, botoes |
-| `src/components/vistoriador/TarefaAtualCard.tsx` | Link discreto + notificacao imediata |
-| `src/components/gestao-comercial/InstalacaoRotasConfig.tsx` | Label atualizado |
-
-## Nao alterado
-
-- Logica de retorno para fila (`status: 'pendente'`, `profissional_id: null`)
-- Registro em `registros_recusa_tarefa`
-- Alerta de limite de recusas no turno (mantido como camada adicional)
+| Migration SQL | Criar tabela `usuario_grade_comissao` com RLS |
+| `GradesComissao.tsx` | Contagem de usuários, bloqueio de exclusão |
+| `UsuarioForm.tsx` | Select de grade para consultores/agências |
 
