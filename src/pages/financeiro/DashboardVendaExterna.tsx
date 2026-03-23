@@ -126,6 +126,15 @@ export default function DashboardVendaExterna() {
             <SelectItem value="zerado">Zerado</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={filtroTipo} onValueChange={v => setFiltroTipo(v as FiltroTipo)}>
+          <SelectTrigger className="w-52"><SelectValue placeholder="Tipo de beneficiário" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os tipos</SelectItem>
+            <SelectItem value="Vendedor">Vendedor</SelectItem>
+            <SelectItem value="Agência">Agência</SelectItem>
+            <SelectItem value="Supervisor">Supervisor</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Vendors Table */}
