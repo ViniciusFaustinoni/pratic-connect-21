@@ -3,7 +3,7 @@ import { useNavigate } from 'react-router-dom';
 import { 
   MapPin, Phone, Car, Clock, Navigation, Play, 
   CheckCircle2, User, ChevronRight, Loader2, Route, Zap,
-  MessageCircle, MessageSquareWarning, Timer
+  MessageCircle, MessageSquareWarning, Timer, XCircle
 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -29,6 +29,11 @@ import { format, parseISO } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { ImprevistoBotao } from './ImprevistoBotao';
 import { SlaIndicador } from '@/components/ui/SlaIndicador';
+import { ModalRecusaTarefa } from './ModalRecusaTarefa';
+import { supabase } from '@/integrations/supabase/client';
+import { useAuth } from '@/contexts/AuthContext';
+import { useQuery, useQueryClient } from '@tanstack/react-query';
+import { toast } from 'sonner';
 
 interface TarefaAtualCardProps {
   tarefa: TarefaAtual & {
