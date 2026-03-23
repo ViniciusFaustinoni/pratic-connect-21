@@ -172,6 +172,8 @@ export function InstalacaoRotasConfig() {
     setJornadaTolerancia(config.jornadaToleranciaAtraso);
     setJornadaProdMin(config.jornadaProdutividadeMinima);
     setJornadaAlertaImprod(config.jornadaAlertaImprodutividade);
+    setSlaInstalacao(config.slaInstalacao);
+    setSlaManutencao(config.slaManutencao);
   }, [config]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['configuracoes-instalacao-rotas'] });
