@@ -262,7 +262,7 @@ export default function InstalacoesList() {
           <TableBody>
             {instalacoes.length === 0 ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center">
+                <TableCell colSpan={8} className="h-32 text-center">
                   <div className="flex flex-col items-center gap-2 text-muted-foreground">
                     <Calendar className="h-8 w-8" />
                     <p>Nenhuma instalação encontrada</p>
