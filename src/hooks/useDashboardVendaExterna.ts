@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 export interface VendedorResumo {
   vendedor_id: string;
   vendedor_nome: string;
+  tipo: string;
   saldo_atual: number;
   a_pagar_mes: number;
   antecipacoes_abertas: number;
