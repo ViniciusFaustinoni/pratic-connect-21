@@ -66,7 +66,7 @@ export default function DefinirSenha() {
 
         // Se não é primeiro acesso, redirecionar para dashboard
         if (!profile.primeiro_acesso) {
-          const dest = profile.tipo === 'associado' ? '/app/home' : '/dashboard';
+          const dest = profile.tipo === 'associado' ? '/app/home' : profile.tipo === 'agencia' ? '/agencia' : '/dashboard';
           navigate(dest, { replace: true });
           return;
         }
@@ -116,7 +116,7 @@ export default function DefinirSenha() {
       });
 
       toast.success('Senha definida com sucesso!');
-      const destino = profileTipo === 'associado' ? '/app/home' : '/dashboard';
+      const destino = profileTipo === 'associado' ? '/app/home' : profileTipo === 'agencia' ? '/agencia' : '/dashboard';
       navigate(destino, { replace: true });
 
     } catch (error: any) {

@@ -14,7 +14,7 @@ import type { User, Session } from '@supabase/supabase-js';
 // TIPOS BASE
 // ============================================================
 
-export type TipoUsuario = 'funcionario' | 'associado' | 'prestador';
+export type TipoUsuario = 'funcionario' | 'associado' | 'prestador' | 'agencia';
 
 /**
  * Perfis de acesso — agora dinâmico (string).
@@ -86,6 +86,7 @@ export const TIPO_USUARIO_LABELS: Record<TipoUsuario, string> = {
   funcionario: 'Funcionário',
   associado: 'Associado',
   prestador: 'Prestador',
+  agencia: 'Agência',
 };
 
 /**

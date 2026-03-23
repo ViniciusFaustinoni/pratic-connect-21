@@ -13,6 +13,7 @@ import { AppLayout as AssociadoAppLayout } from "@/components/app/AppLayout";
 import { InstaladorLayout } from "@/components/instalador/InstaladorLayout";
 import { ReguladorLayout } from "@/components/regulador/ReguladorLayout";
 import { AnalistaEventosLayout } from "@/components/analista-eventos/AnalistaEventosLayout";
+import { AgenciaLayout } from "@/components/layout/AgenciaLayout";
 import InstaladorTarefas from "./pages/instalador/InstaladorTarefas";
 import InstaladorMapa from "./pages/instalador/InstaladorMapa";
 import InstaladorPerfil from "./pages/instalador/InstaladorPerfil";
@@ -544,8 +545,7 @@ const App = () => (
               <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
               <Route path="/perfil/conta-corrente" element={<ContaCorrenteVendedor />} />
               
-              {/* Agência */}
-              <Route path="/agencia" element={<AgenciaDashboard />} />
+              {/* Agência moved to dedicated layout below */}
               
               {/* Cobrança */}
               <Route path="/cobranca" element={<CobrancaDashboard />} />
@@ -777,6 +777,10 @@ const App = () => (
               <Route path="/app/ouvidoria/:id" element={<OuvidoriaDetalheApp />} />
             </Route>
             <Route path="/app" element={<Navigate to="/app/home" replace />} />
+            {/* Agência Routes */}
+            <Route element={<AgenciaLayout />}>
+              <Route path="/agencia" element={<AgenciaDashboard />} />
+            </Route>
             
             {/* Installer App Routes */}
             <Route path="/instalador/login" element={<InstaladorLogin />} />

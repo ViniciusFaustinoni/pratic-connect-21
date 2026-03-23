@@ -39,7 +39,7 @@ const usuarioSchema = z.object({
     .max(20, 'Telefone muito longo')
     .optional()
     .or(z.literal('')),
-  tipo: z.enum(['funcionario', 'associado', 'prestador'], {
+  tipo: z.enum(['funcionario', 'associado', 'prestador', 'agencia'], {
     required_error: 'Selecione o tipo de usuário',
   }),
   ativo: z.boolean(),
@@ -110,7 +110,7 @@ export default function UsuarioEditarPage() {
           nome: data.nome,
           email: data.email,
           telefone: data.telefone || null,
-          tipo: data.tipo,
+          tipo: data.tipo as 'funcionario' | 'associado' | 'prestador' | 'agencia',
           ativo: data.ativo,
         }
       },
