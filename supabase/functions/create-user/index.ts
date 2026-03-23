@@ -17,7 +17,7 @@ interface CreateUserRequest {
   senha?: string;
   perfil?: string;
   perfis?: string[];
-  tipo: 'funcionario' | 'associado' | 'prestador';
+  tipo: 'funcionario' | 'associado' | 'prestador' | 'agencia';
   regioes_atendimento?: string[];
   capacidade_diaria?: number;
 }
