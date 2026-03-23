@@ -1,65 +1,84 @@
 
 
-# Plano: Fila de Envio em Massa para Aprovacao Meta
+# Plano: Mapa de Atendimento — Inteligência Geográfica por Município
 
 ## Resumo
 
-Criar botao "Enviar todos os rascunhos" que coloca templates DRAFT em uma fila e os envia para a Meta **um de cada vez**, com intervalo entre cada envio, evitando bloqueio por rate limit.
+Criar tabela `municipios_atendimento` com classificação por tipo (volante/viagem/prestador/fora de cobertura), nova aba "Mapa de Atendimento" na Gestão Comercial da Diretoria, pré-carga dos municípios do RJ, e acoplamento na Cotação e no Cadastro.
 
 ---
 
-## Implementacao
+## PARTE 1 — Tabela `municipios_atendimento`
 
-### 1. Logica de fila no frontend (`WhatsAppMetaTemplates.tsx`)
-
-Adicionar estado e funcao de fila:
-
-- `filaEnvio: string[]` — IDs dos templates na fila
-- `envioEmMassa: boolean` — flag de processo ativo  
-- `envioProgresso: { atual: number; total: number; nome: string }` — progresso visual
-
-Funcao `enviarEmMassa()`:
-1. Filtrar templates com status `DRAFT`
-2. Se nenhum, toast.info("Nenhum rascunho para enviar")
-3. Iterar sequencialmente (for...of) com `await` em cada envio
-4. Entre cada envio, aguardar 15 segundos (`await new Promise(r => setTimeout(r, 15000))`)
-5. Usar `enviar.mutateAsync(id)` (ja existente) para cada template
-6. Se um falhar, registrar erro e continuar com o proximo
-7. Ao final, exibir toast com resumo: "X enviados, Y erros"
-
-Botao cancelar: setar flag `cancelado = true` que interrompe o loop.
-
-### 2. Botao na UI
-
-Adicionar botao "Enviar rascunhos para Meta" ao lado do "Sincronizar" e "Novo Template":
-- Icone: `Send` 
-- Visivel apenas quando ha templates DRAFT
-- Disabled durante o processo
-- Exibir progresso inline: "Enviando 3/12 — d5_ultimo_dia..."
-
-### 3. Barra de progresso
-
-Quando `envioEmMassa === true`, exibir acima da tabela um Alert com:
-- Barra de progresso visual (div com width percentual)
-- Nome do template sendo enviado
-- Contador "X de Y"
-- Tempo estimado restante (Y * 15s)
-- Botao "Cancelar" para interromper
+```sql
+CREATE TABLE municipios_atendimento (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome text NOT NULL,
+  uf text NOT NULL DEFAULT 'RJ',
+  tipo_atendimento text NOT NULL CHECK (tipo_atendimento IN ('volante','viagem','prestador','fora_cobertura')),
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now(),
+  UNIQUE(nome, uf)
+);
+ALTER TABLE municipios_atendimento ENABLE ROW LEVEL SECURITY;
+-- select para authenticated, insert/update/delete para admins
+```
 
 ---
 
-## Detalhes tecnicos
+## PARTE 2 — Nova aba "Mapa de Atendimento" na Gestão Comercial
 
-- Intervalo de 15s entre envios (Meta permite ~200 chamadas/hora para management API, mas conservadoramente usamos 4/min)
-- Nenhuma edge function nova — usa a existente `whatsapp-meta-templates` com `acao: 'enviar'`
-- Nenhuma tabela nova — tudo no estado do componente
-- Se o usuario sair da pagina, o processo para naturalmente
+**Novo arquivo**: `src/components/gestao-comercial/MapaAtendimento.tsx`
+
+- Lista de municípios da tabela `municipios_atendimento`
+- Busca por nome + filtro por tipo de atendimento
+- Cada linha: nome, UF, seletor de tipo (volante/viagem/prestador/fora_cobertura) com update inline
+- Botão "Adicionar Município" para inserir novo
+- Quando lista vazia: card com botão "Importar classificação padrão RJ" que insere os ~84 municípios com classificação pré-definida (hardcoded no componente)
+- Toast de sucesso ao salvar
+
+**Arquivos editados**:
+- `TabNavigation.tsx`: adicionar aba 8 "Mapa de Atendimento" (icon: `Globe`)
+- `GestaoComercial.tsx`: `{activeTab === 8 && <MapaAtendimento />}`
 
 ---
 
-## Arquivo afetado
+## PARTE 3 — Acoplamento na Cotação (`Cotador.tsx`)
 
-| Arquivo | Alteracao |
+Após o campo de região (linha ~1354), quando o consultor preencher dados do veículo/associado, buscar o município na tabela `municipios_atendimento`:
+
+- Hook/query simples: `useQuery` buscando `municipios_atendimento` por nome+UF
+- Baseado no `tipo_atendimento` retornado, exibir Alert inline:
+  - `fora_cobertura`: Alert destrutivo vermelho, bloquear botão de salvar cotação
+  - `prestador`: Alert amarelo informativo
+  - `viagem`: Alert laranja com SLA 72h
+  - `volante`: sem alerta
+
+Problema: o Cotador atual usa seletor de "região" (rj/lagos/sp), não município. Adicionar campo opcional "Município do associado" (input com autocomplete da tabela `municipios_atendimento`) abaixo do campo de região. A verificação só ocorre se preenchido.
+
+---
+
+## PARTE 4 — Badge no Cadastro (`AssociadoDetalhe.tsx`)
+
+Na linha "Cidade / UF" (linha 466), após o valor, buscar classificação do município na tabela e exibir Badge inline:
+
+- Cinza: "Volante"
+- Laranja: "Viagem"
+- Amarelo: "Prestador"
+- Vermelho: "Fora de cobertura"
+
+Query condicional: só executa se `associado.cidade` e `associado.uf` existirem.
+
+---
+
+## Arquivos afetados
+
+| Arquivo | Alteração |
 |---|---|
-| `src/components/integracoes/WhatsAppMetaTemplates.tsx` | Botao + logica de fila + barra de progresso |
+| DB migration | Tabela `municipios_atendimento` + RLS |
+| `src/components/gestao-comercial/MapaAtendimento.tsx` | **Novo** — CRUD + importação RJ |
+| `src/components/gestao-comercial/TabNavigation.tsx` | Aba 8 |
+| `src/pages/diretoria/GestaoComercial.tsx` | Render aba 8 |
+| `src/pages/vendas/Cotador.tsx` | Campo município + alertas por tipo |
+| `src/pages/cadastro/AssociadoDetalhe.tsx` | Badge tipo atendimento |
 
