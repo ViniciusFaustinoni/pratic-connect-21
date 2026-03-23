@@ -530,6 +530,7 @@ const App = () => (
               
               {/* Financeiro */}
               <Route path="/financeiro" element={<FinanceiroDashboard />} />
+              <Route path="/financeiro/dashboard" element={<FinanceiroDashboard />} />
               <Route path="/financeiro/cobrancas" element={<CobrancasList />} />
               <Route path="/financeiro/cobrancas/:id" element={<CobrancaDetalhe />} />
               <Route path="/financeiro/faturamento" element={<FaturamentoMensal />} />
