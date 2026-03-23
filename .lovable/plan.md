@@ -1,51 +1,53 @@
 
 
-# Plano: Adicionar rotas ocultas ao menu lateral
+# Plano: Mover "Gestao de Rotas" para dentro de "Vistorias e Instalacoes"
 
 ## Resumo
 
-Adicionar 6 itens de navegacao ao AppSidebar.tsx em 3 grupos existentes, sem alterar nenhuma pagina.
+Remover "Gestao de Rotas" como item separado na sidebar da Diretoria e adiciona-lo como uma nova aba dentro da pagina Rotas.tsx (que e renderizada em `/diretoria/vistorias-instalacoes`).
 
 ---
 
-## Alteracao unica: `src/components/layout/AppSidebar.tsx`
+## Alteracoes
 
-### 1. Imports de icones (linha 72)
+### 1. `src/components/layout/AppSidebar.tsx`
 
-Adicionar ao bloco de imports do lucide-react: `CalendarCheck`, `Settings2`, `GraduationCap`, `UserSearch`
-
-(`Truck`, `Route` ja estao importados)
-
-### 2. Grupo Monitoramento (apos "Aprovação de Associados", linha 228)
-
-Adicionar 3 itens:
-
-```tsx
-{ title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
-{ title: 'Encaixes', url: '/monitoramento/encaixes', icon: CalendarCheck },
-{ title: 'Config. Plataformas', url: '/monitoramento/config-plataformas', icon: Settings2, permission: 'canManageRastreadores' },
-```
-
-### 3. Grupo RH (apos "Benefícios", linha 356)
-
-Adicionar 2 itens:
-
-```tsx
-{ title: 'Treinamentos', url: '/rh/treinamentos', icon: GraduationCap },
-{ title: 'Recrutamento', url: '/rh/recrutamento', icon: UserSearch },
-```
-
-### 4. Grupo Diretoria (apos "Vistorias e Instalações", linha 404)
-
-Adicionar 1 item:
-
+Remover a linha:
 ```tsx
 { title: 'Gestão de Rotas', url: '/diretoria/gestao-vistorias-instalacoes', icon: Route },
 ```
 
+### 2. `src/pages/monitoramento/Rotas.tsx`
+
+Adicionar nova aba "Gestao de Rotas" na TabsList (visivel apenas para quem tem `canEditRotas`):
+
+```tsx
+{canEditRotas && (
+  <TabsTrigger value="gestao-rotas">
+    <Route className="mr-1 h-4 w-4" />
+    Gestão de Rotas
+  </TabsTrigger>
+)}
+```
+
+Adicionar o TabsContent correspondente que renderiza o componente `GestaoRotas` inline (importado de `./GestaoRotas`), sem o header proprio dele (ja que o header da pagina Rotas.tsx cobre isso).
+
+### 3. `src/pages/monitoramento/GestaoRotas.tsx`
+
+Exportar tambem uma versao "embedded" sem header, ou adicionar prop `embedded?: boolean` que oculta o titulo/descricao quando renderizado como aba.
+
+### 4. Rota no `App.tsx`
+
+Manter a rota `/diretoria/gestao-vistorias-instalacoes` como redirect para `/diretoria/vistorias-instalacoes` (para links antigos nao quebrarem).
+
 ---
 
-## Nenhuma outra alteracao
+## Arquivos afetados
 
-Nenhuma pagina criada ou modificada. Apenas navegacao.
+| Arquivo | Alteracao |
+|---|---|
+| `src/components/layout/AppSidebar.tsx` | Remover item "Gestao de Rotas" |
+| `src/pages/monitoramento/Rotas.tsx` | Nova aba + import GestaoRotas |
+| `src/pages/monitoramento/GestaoRotas.tsx` | Prop `embedded` para ocultar header |
+| `src/App.tsx` | Redirect da rota antiga |
 
