@@ -1366,6 +1366,67 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               </Select>
             </div>
 
+            {/* Município do associado */}
+            <div className="space-y-2">
+              <Label>Município do associado</Label>
+              <Input
+                placeholder="Digite o município..."
+                value={municipioBusca}
+                onChange={e => {
+                  setMunicipioBusca(e.target.value);
+                  setMunicipioSelecionado(null);
+                }}
+              />
+              {municipioBusca.length >= 2 && !municipioSelecionado && municipiosAtendimento && (
+                <div className="border rounded-md max-h-[150px] overflow-y-auto bg-popover">
+                  {municipiosAtendimento
+                    .filter(m => m.nome.toLowerCase().includes(municipioBusca.toLowerCase()))
+                    .slice(0, 8)
+                    .map(m => (
+                      <button
+                        key={m.id}
+                        type="button"
+                        className="w-full text-left px-3 py-2 text-sm hover:bg-accent flex items-center justify-between"
+                        onClick={() => {
+                          setMunicipioBusca(m.nome);
+                          setMunicipioSelecionado(m);
+                        }}
+                      >
+                        <span>{m.nome} - {m.uf}</span>
+                        <Badge className={
+                          m.tipo_atendimento === 'volante' ? 'bg-muted text-muted-foreground' :
+                          m.tipo_atendimento === 'viagem' ? 'bg-orange-100 text-orange-800' :
+                          m.tipo_atendimento === 'prestador' ? 'bg-yellow-100 text-yellow-800' :
+                          'bg-destructive/10 text-destructive'
+                        }>
+                          {m.tipo_atendimento === 'fora_cobertura' ? 'Fora de Cobertura' :
+                           m.tipo_atendimento.charAt(0).toUpperCase() + m.tipo_atendimento.slice(1)}
+                        </Badge>
+                      </button>
+                    ))
+                  }
+                </div>
+              )}
+              {municipioSelecionado?.tipo_atendimento === 'fora_cobertura' && (
+                <Alert variant="destructive">
+                  <AlertTriangle className="h-4 w-4" />
+                  <AlertDescription>Este município não é atendido pela Praticcar.</AlertDescription>
+                </Alert>
+              )}
+              {municipioSelecionado?.tipo_atendimento === 'prestador' && (
+                <Alert className="border-yellow-300 bg-yellow-50 dark:bg-yellow-900/20">
+                  <AlertCircle className="h-4 w-4 text-yellow-600" />
+                  <AlertDescription className="text-yellow-800 dark:text-yellow-200">Atendimento realizado por técnico parceiro nesta região.</AlertDescription>
+                </Alert>
+              )}
+              {municipioSelecionado?.tipo_atendimento === 'viagem' && (
+                <Alert className="border-orange-300 bg-orange-50 dark:bg-orange-900/20">
+                  <AlertCircle className="h-4 w-4 text-orange-600" />
+                  <AlertDescription className="text-orange-800 dark:text-orange-200">Atendimento com deslocamento estendido. SLA de instalação: 72 horas úteis.</AlertDescription>
+                </Alert>
+              )}
+            </div>
+
             {/* Uso para aplicativo */}
             <div className="space-y-2">
               <Label>Uso para aplicativo? (Uber, 99, etc)</Label>
