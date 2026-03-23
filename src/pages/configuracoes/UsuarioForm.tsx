@@ -476,6 +476,9 @@ export default function UsuarioForm() {
       if (errorMessage.includes('CPF já está cadastrado')) {
         setFieldErrors(prev => ({ ...prev, cpf: 'Este CPF já está cadastrado no sistema' }));
         toast.error('CPF já cadastrado.');
+      } else if (errorMessage.includes('CNPJ já está cadastrado')) {
+        setFieldErrors(prev => ({ ...prev, cnpj: 'Este CNPJ já está cadastrado no sistema' }));
+        toast.error('CNPJ já cadastrado.');
       } else if (errorMessage.includes('email já está em uso') || errorMessage.includes('already been registered')) {
         setFieldErrors(prev => ({ ...prev, email: 'Este email já está cadastrado no sistema' }));
         toast.error('Email já cadastrado.');
