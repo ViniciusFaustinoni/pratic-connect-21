@@ -1,57 +1,56 @@
 
 
-# Plano: Aba "Prestadores Parceiros" no Monitoramento
+# Plano: Corrigir Template `prestador_nova_instalacao_v1` Rejeitado
 
-## Resumo
+## Problema
 
-Criar pagina "Prestadores Parceiros" no modulo de Monitoramento (nao na Diretoria), acessivel apenas a Diretor, Admin Master e Coordenador de Monitoramento. Inclui lista com metricas, historico, e card resumo no dashboard do coordenador.
+O template foi rejeitado pela Meta por dois motivos:
+1. **Sem `variaveis_exemplo`** — a Meta exige exemplos para cada variavel
+2. **Corpo termina com texto fixo generico** — a Meta rejeita textos que parecem spam ou que nao identificam a empresa
 
----
+## Correcao
 
-## PARTE 1 — Nova pagina `src/pages/monitoramento/PrestadoresParceiros.tsx`
+### Migration SQL
 
-Pagina completa com:
+Atualizar o template no banco com:
 
-- **Lista de prestadores** da `prestadores_assistencia`:
-  - Nome, WhatsApp, status (toggle inline)
-  - Municipios de atuacao (badges dos municipios tipo `prestador` da `municipios_atendimento`)
-  - Metricas agregadas da `instalacao_prestador_links`: total recebidas, concluidas, taxa de conclusao (%)
-  - Botao "Editar" → abre `NovoPrestadorModal` existente
-  - Botao "Ver historico" → expande inline ultimos 10 registros de `instalacao_prestador_links`
-- **Botao "+ Novo Prestador"** → abre `NovoPrestadorModal` em modo criacao
-- **Busca** por nome e **filtro** por status
+**Corpo revisado** — adicionar identificacao da empresa antes do rodape, e mover o aviso de mensagem automatica para o campo `rodape` (que e o campo correto para isso):
 
-Protecao de acesso via `PermissionGate` ou check no hook: apenas perfis `diretor`, `admin_master`, `coordenador_monitoramento`.
+```
+Olá {{1}}! Nova instalação atribuída pela Praticcar.
 
-## PARTE 2 — Rota no App.tsx
+Associado: {{2}}
+Município: {{3}}
+Endereço: {{4}}
+Data prevista: {{5}}
 
-Adicionar rota `/monitoramento/prestadores-parceiros` apontando para `PrestadoresParceiros`.
+Acesse os detalhes e confirme pelo link:
+{{6}}
 
-## PARTE 3 — Link de acesso
+Equipe Praticcar.
+```
 
-Adicionar link na sidebar/navegacao do modulo de Monitoramento (ou nos `acoesRapidas` do `DashboardCoordenador`). Visivel apenas para os 3 perfis permitidos.
+**Rodape**: `Pratic Car - Proteção Veicular` (mesmo padrao dos templates aprovados)
 
-## PARTE 4 — Card "Prestadores Ativos" no DashboardCoordenador
+**Variaveis exemplo**:
+```json
+{
+  "1": "Auto Elétrica Silva",
+  "2": "João Carlos",
+  "3": "Araruama",
+  "4": "Rua das Flores, nº 123, Centro, Araruama, RJ",
+  "5": "25/03/2026",
+  "6": "https://pratic-connect-21.lovable.app/prestador/instalacao/abc123token"
+}
+```
 
-**Novo componente**: `src/components/monitoramento/PrestadoresAtivos.tsx`
+**Status**: voltar para `DRAFT` para reenvio
 
-Card com:
-- Prestadores com link ativo (status `aguardando` ou `em_execucao`, nao expirado)
-- Quantidade de instalacoes aguardando vs em execucao
-- Lista resumida: nome, municipio, status badge, tempo desde envio
-
-Renderizar no `DashboardCoordenador.tsx` apos `VistoriadoresEmAlerta`.
-
----
-
-## Arquivos afetados
+### Arquivo afetado
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/monitoramento/PrestadoresParceiros.tsx` | **Novo** — lista + metricas + historico |
-| `src/components/monitoramento/PrestadoresAtivos.tsx` | **Novo** — card dashboard |
-| `src/pages/monitoramento/DashboardCoordenador.tsx` | Renderizar PrestadoresAtivos + acao rapida |
-| `src/App.tsx` | Rota `/monitoramento/prestadores-parceiros` |
+| DB migration | UPDATE corpo, rodape, variaveis_exemplo, status do template |
 
-Nenhuma migration necessaria — usa tabelas existentes.
+Nenhuma alteracao de codigo — apenas correcao do template no banco. Apos a migration, o operador reenvia pelo painel existente.
 
