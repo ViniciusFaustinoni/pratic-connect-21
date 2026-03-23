@@ -200,7 +200,7 @@ function resolveStatus(
   if (card.plataformaCodigo === 'softruck') {
     const s = ctx.integracoes.softruck;
     return {
-      ativo: s.configurado && s.testado,
+      ativo: s.configurado,
       ultimoTeste: s.testado_em
         ? formatDistanceToNow(new Date(s.testado_em), { addSuffix: true, locale: ptBR })
         : undefined,
