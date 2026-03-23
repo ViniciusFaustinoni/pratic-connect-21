@@ -45,12 +45,42 @@ interface TurnoComProfile {
 }
 
 export default function JornadasProfissionais() {
+  const navigate = useNavigate();
   const [dataSelecionada, setDataSelecionada] = useState(
     getHojeBrasilia().toISOString().split('T')[0]
   );
+  const [parametrosAberto, setParametrosAberto] = useState(false);
 
   const hojeStr = getHojeBrasilia().toISOString().split('T')[0];
   const isHoje = dataSelecionada === hojeStr;
+
+  // Buscar parâmetros de jornada vigentes
+  const { data: parametros } = useQuery({
+    queryKey: ['config-jornada-rh'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', [
+          'jornada_duracao_turno_horas',
+          'jornada_horas_ate_almoco',
+          'jornada_duracao_almoco_minutos',
+          'jornada_tolerancia_atraso_minutos',
+          'jornada_produtividade_minima',
+          'jornada_horas_alerta_improdutividade',
+        ]);
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        duracaoTurno: map.jornada_duracao_turno_horas || '8',
+        horasAteAlmoco: map.jornada_horas_ate_almoco || '4',
+        duracaoAlmoco: map.jornada_duracao_almoco_minutos || '60',
+        toleranciaAtraso: map.jornada_tolerancia_atraso_minutos || '0',
+        produtividadeMinima: map.jornada_produtividade_minima || '1',
+        alertaImprodutividade: map.jornada_horas_alerta_improdutividade || '2',
+      };
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Buscar turnos do dia
   const { data: turnos, isLoading, refetch } = useQuery({
