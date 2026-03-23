@@ -70,6 +70,8 @@ export default function JornadasProfissionais() {
           'jornada_horas_alerta_improdutividade',
           'sla_horas_instalacao',
           'sla_horas_manutencao',
+          'gps_validacao_ativa',
+          'gps_raio_metros',
         ]);
       const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
       return {
