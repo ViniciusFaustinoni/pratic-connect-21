@@ -407,7 +407,7 @@ export default function UsuarioForm() {
   const saveUser = useMutation({
     mutationFn: async () => {
       if (isEditing && usuario) {
-        const isAgencia = formData.perfis.includes('agencia');
+        const isAgencia = formData.tipo === 'agencia';
         const profileUpdate: any = {
           nome: formData.nome, telefone: formData.telefone,
           tipo: formData.tipo as any, ativo: formData.ativo,
