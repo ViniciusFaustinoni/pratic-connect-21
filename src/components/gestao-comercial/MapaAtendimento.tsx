@@ -187,6 +187,7 @@ export function MapaAtendimento() {
   if (configViagem && !viagemLoaded) {
     setViagemDiaria(configViagem.diaria);
     setViagemSla(configViagem.sla);
+    setPrestadorHorasAlerta(configViagem.prestadorHoras);
     setViagemLoaded(true);
   }
 
