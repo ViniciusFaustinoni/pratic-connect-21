@@ -165,6 +165,10 @@ export function InstalacaoRotasConfig() {
   const [slaManutencao, setSlaManutencao] = useState('24');
   const [savingB6, setSavingB6] = useState(false);
 
+  // ── Bloco 5b state (Débito/Saldo)
+  const [limiteDebito, setLimiteDebito] = useState('0');
+  const [exibirSaldo, setExibirSaldo] = useState(true);
+
   // ── Bloco 7 state (GPS)
   const [gpsAtiva, setGpsAtiva] = useState(true);
   const [gpsRaio, setGpsRaio] = useState('500');
