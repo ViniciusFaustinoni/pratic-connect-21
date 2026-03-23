@@ -15,6 +15,14 @@ import { format } from 'date-fns';
 import { CalendarDays, Clock, AlertTriangle, CheckCircle2, FileDown, Eye, DollarSign, Zap, Loader2, RotateCcw } from 'lucide-react';
 
 type Filtro = 'todos' | 'com_saldo' | 'devedor' | 'antecipacao' | 'zerado';
+type FiltroTipo = 'todos' | 'Vendedor' | 'Agência' | 'Supervisor';
+
+const TIPO_BADGE_CLASSES: Record<string, string> = {
+  'Vendedor': 'bg-blue-100 text-blue-700 border-blue-200',
+  'Agência': 'bg-purple-100 text-purple-700 border-purple-200',
+  'Supervisor': 'bg-orange-100 text-orange-700 border-orange-200',
+  'Outro': 'bg-gray-100 text-gray-700 border-gray-200',
+};
 
 export default function DashboardVendaExterna() {
   const navigate = useNavigate();
@@ -22,6 +30,7 @@ export default function DashboardVendaExterna() {
   
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<Filtro>('todos');
+  const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>('todos');
   const [anteciparVendedor, setAnteciparVendedor] = useState<VendedorResumo | null>(null);
   const [pagarVendedor, setPagarVendedor] = useState<VendedorResumo | null>(null);
   const [showExportar, setShowExportar] = useState(false);
@@ -29,6 +38,7 @@ export default function DashboardVendaExterna() {
   // Filter vendors
   const filtrados = vendedores.filter(v => {
     if (busca && !v.vendedor_nome.toLowerCase().includes(busca.toLowerCase())) return false;
+    if (filtroTipo !== 'todos' && v.tipo !== filtroTipo) return false;
     if (filtro === 'com_saldo' && v.a_pagar_mes <= 0) return false;
     if (filtro === 'devedor' && v.saldo_atual >= 0) return false;
     if (filtro === 'antecipacao' && v.antecipacoes_abertas <= 0) return false;
@@ -116,6 +126,15 @@ export default function DashboardVendaExterna() {
             <SelectItem value="zerado">Zerado</SelectItem>
           </SelectContent>
         </Select>
+        <Select value={filtroTipo} onValueChange={v => setFiltroTipo(v as FiltroTipo)}>
+          <SelectTrigger className="w-52"><SelectValue placeholder="Tipo de beneficiário" /></SelectTrigger>
+          <SelectContent>
+            <SelectItem value="todos">Todos os tipos</SelectItem>
+            <SelectItem value="Vendedor">Vendedor</SelectItem>
+            <SelectItem value="Agência">Agência</SelectItem>
+            <SelectItem value="Supervisor">Supervisor</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       {/* Vendors Table */}
@@ -125,6 +144,7 @@ export default function DashboardVendaExterna() {
             <TableHeader>
               <TableRow>
                 <TableHead>Vendedor</TableHead>
+                <TableHead>Tipo</TableHead>
                 <TableHead className="text-right">Saldo atual</TableHead>
                 <TableHead className="text-right">A pagar este mês</TableHead>
                 <TableHead className="text-right">Antecipações</TableHead>
@@ -135,12 +155,17 @@ export default function DashboardVendaExterna() {
             </TableHeader>
             <TableBody>
               {isLoadingVendedores ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8"><Loader2 className="h-5 w-5 animate-spin mx-auto text-muted-foreground" /></TableCell></TableRow>
               ) : filtrados.length === 0 ? (
-                <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum vendedor encontrado</TableCell></TableRow>
+                <TableRow><TableCell colSpan={8} className="text-center py-8 text-muted-foreground">Nenhum vendedor encontrado</TableCell></TableRow>
               ) : filtrados.map(v => (
                 <TableRow key={v.vendedor_id}>
                   <TableCell className="font-medium">{v.vendedor_nome}</TableCell>
+                  <TableCell>
+                    <Badge variant="outline" className={TIPO_BADGE_CLASSES[v.tipo] || TIPO_BADGE_CLASSES['Outro']}>
+                      {v.tipo}
+                    </Badge>
+                  </TableCell>
                   <TableCell className="text-right">
                     <span className={v.saldo_atual > 0 ? 'text-green-600 font-semibold' : v.saldo_atual < 0 ? 'text-destructive font-semibold' : 'text-muted-foreground'}>
                       {formatarMoeda(v.saldo_atual)}

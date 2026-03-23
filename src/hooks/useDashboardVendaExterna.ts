@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 export interface VendedorResumo {
   vendedor_id: string;
   vendedor_nome: string;
+  tipo: string;
   saldo_atual: number;
   a_pagar_mes: number;
   antecipacoes_abertas: number;
@@ -115,14 +116,47 @@ export function useDashboardVendaExterna() {
 
       const vendedorIds = [...new Set((lancamentos as any[]).map((l: any) => l.vendedor_id))];
 
-      // Get vendor names
+      // Get vendor names and user_ids
       const { data: profiles } = await supabase
         .from('profiles')
-        .select('id, nome')
+        .select('id, nome, user_id')
         .in('id', vendedorIds);
 
       const nomeMap: Record<string, string> = {};
-      (profiles || []).forEach((p: any) => { nomeMap[p.id] = p.nome; });
+      const userIdMap: Record<string, string> = {};
+      (profiles || []).forEach((p: any) => {
+        nomeMap[p.id] = p.nome;
+        if (p.user_id) userIdMap[p.id] = p.user_id;
+      });
+
+      // Get roles for type classification
+      const userIds = Object.values(userIdMap).filter(Boolean);
+      let roleMap: Record<string, string> = {};
+      if (userIds.length > 0) {
+        const { data: roles } = await supabase
+          .from('user_roles')
+          .select('user_id, role')
+          .in('user_id', userIds);
+
+        const ROLE_TIPO: Record<string, string> = {
+          vendedor_externo: 'Vendedor',
+          agencia: 'Agência',
+          supervisor_vendas: 'Supervisor',
+        };
+
+        // Map profile.id → tipo (priority: vendedor_externo > agencia > supervisor_vendas)
+        const userRolesMap: Record<string, string[]> = {};
+        (roles || []).forEach((r: any) => {
+          if (!userRolesMap[r.user_id]) userRolesMap[r.user_id] = [];
+          userRolesMap[r.user_id].push(r.role);
+        });
+
+        for (const [profileId, userId] of Object.entries(userIdMap)) {
+          const uRoles = userRolesMap[userId] || [];
+          const matched = ['vendedor_externo', 'agencia', 'supervisor_vendas'].find(r => uRoles.includes(r));
+          roleMap[profileId] = matched ? ROLE_TIPO[matched] : 'Outro';
+        }
+      }
 
       const vendedorMap: Record<string, VendedorResumo> = {};
       
@@ -130,6 +164,7 @@ export function useDashboardVendaExterna() {
         vendedorMap[vid] = {
           vendedor_id: vid,
           vendedor_nome: nomeMap[vid] || 'Vendedor',
+          tipo: roleMap[vid] || 'Outro',
           saldo_atual: 0,
           a_pagar_mes: 0,
           antecipacoes_abertas: 0,
