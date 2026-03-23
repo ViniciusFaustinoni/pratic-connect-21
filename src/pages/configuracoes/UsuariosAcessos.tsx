@@ -1,12 +1,12 @@
 import { useState, lazy, Suspense } from 'react';
 import { useNavigate, useSearchParams } from 'react-router-dom';
 import { 
-  Users, UserCheck, UserX, BadgeDollarSign, Shield, FileText, 
+  Users, UserCheck, UserX, Shield, FileText, 
   Search, Plus, MoreHorizontal, Edit, Key, ExternalLink, 
   Upload, Download, Crown, Briefcase, UserPlus, FileCheck, 
   Megaphone, Scale, MapPin, Monitor, Wrench, User, LogIn, 
   LogOut, AlertTriangle, Trash, Settings, LucideIcon, Eye, EyeOff, Grid3X3,
-  RefreshCw, ChevronLeft, ChevronRight, Trash2
+  RefreshCw, ChevronLeft, ChevronRight, Trash2, ShieldCheck
 } from 'lucide-react';
 import * as XLSX from 'xlsx';
 import { format } from 'date-fns';
@@ -45,7 +45,6 @@ import {
 import {
   Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogDescription,
 } from '@/components/ui/dialog';
-import { Checkbox } from '@/components/ui/checkbox';
 import { Label } from '@/components/ui/label';
 
 import { useUsuarios, useUsuarioActions, ProfileWithRoles } from '@/hooks/useUsuarios';
@@ -57,66 +56,11 @@ const PerfisVisibilidade = lazy(() => import('@/pages/configuracoes/Perfis'));
 
 // ==================== CONFIGS ====================
 
-const perfisConfig: Record<string, { label: string; color: string }> = {
-  diretor: { label: 'Diretor', color: 'bg-purple-500/20 text-purple-400 border-purple-500/30' },
-  gerente_comercial: { label: 'Gerente Comercial', color: 'bg-blue-500/20 text-blue-400 border-blue-500/30' },
-  supervisor_vendas: { label: 'Supervisor', color: 'bg-cyan-500/20 text-cyan-400 border-cyan-500/30' },
-  vendedor_clt: { label: 'Vendedor CLT', color: 'bg-green-500/20 text-green-400 border-green-500/30' },
-  vendedor_externo: { label: 'Vendedor Externo', color: 'bg-emerald-500/20 text-emerald-400 border-emerald-500/30' },
-  agencia: { label: 'Agência', color: 'bg-fuchsia-500/20 text-fuchsia-400 border-fuchsia-500/30' },
-  analista_cadastro: { label: 'Analista Cadastro', color: 'bg-yellow-500/20 text-yellow-400 border-yellow-500/30' },
-  coordenador_monitoramento: { label: 'Coord. Monitoramento', color: 'bg-orange-500/20 text-orange-400 border-orange-500/30' },
-  analista_plataforma: { label: 'Analista Plataforma', color: 'bg-pink-500/20 text-pink-400 border-pink-500/30' },
-  instalador_vistoriador: { label: 'Instalador', color: 'bg-rose-500/20 text-rose-400 border-rose-500/30' },
-  analista_marketing: { label: 'Analista Marketing', color: 'bg-indigo-500/20 text-indigo-400 border-indigo-500/30' },
-  analista_juridico: { label: 'Analista Jurídico', color: 'bg-violet-500/20 text-violet-400 border-violet-500/30' },
-};
-
 const tiposUsuario: Record<string, { label: string; color: string }> = {
   funcionario: { label: 'Funcionário', color: 'bg-blue-500/20 text-blue-400' },
   associado: { label: 'Associado', color: 'bg-green-500/20 text-green-400' },
   prestador: { label: 'Prestador', color: 'bg-orange-500/20 text-orange-400' },
 };
-
-type AppRole = 
-  | 'diretor'
-  | 'gerente_comercial'
-  | 'supervisor_vendas'
-  | 'vendedor_clt'
-  | 'vendedor_externo'
-  | 'analista_cadastro'
-  | 'analista_marketing'
-  | 'analista_juridico'
-  | 'coordenador_monitoramento'
-  | 'analista_plataforma'
-  | 'instalador_vistoriador'
-  | 'associado'
-  | 'agencia';
-
-interface RoleConfig {
-  label: string;
-  desc: string;
-  icon: LucideIcon;
-  color: string;
-}
-
-const rolesConfig: Record<AppRole, RoleConfig> = {
-  diretor: { label: 'Diretor', desc: 'Acesso total ao sistema', icon: Crown, color: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-200' },
-  gerente_comercial: { label: 'Gerente Comercial', desc: 'Vendas, cadastro e relatórios', icon: Briefcase, color: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-200' },
-  supervisor_vendas: { label: 'Supervisor de Vendas', desc: 'Equipe e metas de vendas', icon: Users, color: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-200' },
-  vendedor_clt: { label: 'Vendedor CLT', desc: 'Leads e cotações', icon: UserCheck, color: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-200' },
-  vendedor_externo: { label: 'Vendedor Externo', desc: 'Leads e cotações (comissionado)', icon: UserPlus, color: 'bg-cyan-100 text-cyan-800 dark:bg-cyan-900 dark:text-cyan-200' },
-  analista_cadastro: { label: 'Analista de Cadastro', desc: 'Documentos e associados', icon: FileCheck, color: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-200' },
-  analista_marketing: { label: 'Analista de Marketing', desc: 'Campanhas e métricas', icon: Megaphone, color: 'bg-pink-100 text-pink-800 dark:bg-pink-900 dark:text-pink-200' },
-  analista_juridico: { label: 'Analista Jurídico', desc: 'Processos e consultas', icon: Scale, color: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-200' },
-  coordenador_monitoramento: { label: 'Coordenador de Monitoramento', desc: 'Rastreadores e rotas', icon: MapPin, color: 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-200' },
-  analista_plataforma: { label: 'Analista de Plataforma', desc: 'Monitoramento e alertas', icon: Monitor, color: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-200' },
-  instalador_vistoriador: { label: 'Instalador/Vistoriador', desc: 'App de campo', icon: Wrench, color: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-200' },
-  associado: { label: 'Associado', desc: 'App do associado', icon: User, color: 'bg-slate-100 text-slate-800 dark:bg-slate-800 dark:text-slate-200' },
-  agencia: { label: 'Agência', desc: 'Parceiro de vendas', icon: Briefcase, color: 'bg-fuchsia-100 text-fuchsia-800 dark:bg-fuchsia-900 dark:text-fuchsia-200' },
-};
-
-const allRoles = Object.keys(rolesConfig) as AppRole[];
 
 const acoesConfig: Record<string, { label: string; icon: LucideIcon; color: string }> = {
   login: { label: 'Login', icon: LogIn, color: 'text-green-500 bg-green-500/10' },
@@ -134,6 +78,15 @@ const acoesConfig: Record<string, { label: string; icon: LucideIcon; color: stri
 
 const PAGE_SIZE = 15;
 
+// Áreas para filtro rápido
+const AREA_FILTERS = [
+  { value: 'todos', label: 'Todas as áreas' },
+  { value: 'Comercial', label: 'Comercial' },
+  { value: 'Operacional', label: 'Operacional' },
+  { value: 'Administrativo', label: 'Administrativo' },
+  { value: 'Campo', label: 'Campo' },
+];
+
 // ==================== COMPONENT ====================
 
 export default function UsuariosAcessos() {
@@ -150,6 +103,7 @@ export default function UsuariosAcessos() {
   const [filterTipo, setFilterTipo] = useState<string>('todos');
   const [filterStatus, setFilterStatus] = useState<string>('todos');
   const [filterPerfil, setFilterPerfil] = useState<string>('todos');
+  const [filterArea, setFilterArea] = useState<string>('todos');
   const [page, setPage] = useState(1);
   const [showImportDialog, setShowImportDialog] = useState(false);
   
@@ -159,14 +113,6 @@ export default function UsuariosAcessos() {
   const [resetPasswordDialog, setResetPasswordDialog] = useState<ProfileWithRoles | null>(null);
   const [newPassword, setNewPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
-
-  // ===== VENDEDORES STATE =====
-  const [searchVendedor, setSearchVendedor] = useState('');
-  const [filterTipoVendedor, setFilterTipoVendedor] = useState<string>('todos');
-
-  // ===== PERFIS STATE =====
-  const [editingUser, setEditingUser] = useState<{ id: string; user_id: string | null; nome: string; email: string | null } | null>(null);
-  const [selectedRoles, setSelectedRoles] = useState<string[]>([]);
 
   // ===== LOGS STATE =====
   const [searchLogs, setSearchLogs] = useState('');
@@ -192,7 +138,7 @@ export default function UsuariosAcessos() {
     isDeletingUser 
   } = useUsuarioActions();
 
-  // ===== VENDEDORES HOOKS =====
+  // ===== VENDEDORES HOOKS (para colunas condicionais) =====
   const { data: vendedores, isLoading: isLoadingVendedores } = useVendedores();
   const { data: contagemVendedores } = useVendedoresContagem();
 
@@ -208,48 +154,6 @@ export default function UsuariosAcessos() {
     }
   });
 
-  const { data: usuariosPerfis } = useQuery({
-    queryKey: ['usuarios-roles'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('profiles').select('id, user_id, nome, email').eq('tipo', 'funcionario').order('nome');
-      if (error) throw error;
-      return data;
-    }
-  });
-
-  const { data: userRoles } = useQuery({
-    queryKey: ['user-roles-map'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('user_roles').select('user_id, role');
-      if (error) throw error;
-      const map: Record<string, string[]> = {};
-      data?.forEach(ur => { if (!map[ur.user_id]) map[ur.user_id] = []; map[ur.user_id].push(ur.role); });
-      return map;
-    }
-  });
-
-  const addRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const { error } = await supabase.from('user_roles').insert({ user_id: userId, role } as any);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-roles-map'] });
-      queryClient.invalidateQueries({ queryKey: ['roles-contagem'] });
-    },
-  });
-
-  const removeRole = useMutation({
-    mutationFn: async ({ userId, role }: { userId: string; role: string }) => {
-      const { error } = await supabase.from('user_roles').delete().eq('user_id', userId).eq('role', role as any);
-      if (error) throw error;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['user-roles-map'] });
-      queryClient.invalidateQueries({ queryKey: ['roles-contagem'] });
-    },
-  });
-
   // ===== LOGS HOOKS =====
   const { data: logs, isLoading: isLoadingLogs } = useQuery({
     queryKey: ['logs-auditoria', searchLogs, filterAcao],
@@ -263,12 +167,29 @@ export default function UsuariosAcessos() {
     }
   });
 
+  // ===== Derivar roles por área para filtro =====
+  const rolesByArea: Record<string, string[]> = {};
+  appRolesData.forEach(r => {
+    if (!rolesByArea[r.area]) rolesByArea[r.area] = [];
+    rolesByArea[r.area].push(r.role);
+  });
+
+  // Determinar se estamos mostrando colunas de vendas
+  const isCommercialFilter = filterArea === 'Comercial';
+
+  // Filtrar usuários por área (client-side, pois já temos roles no usuario)
+  const filteredUsuarios = filterArea === 'todos' 
+    ? usuarios 
+    : usuarios.filter(u => {
+        const areaRoles = rolesByArea[filterArea] || [];
+        return u.roles?.some(r => areaRoles.includes(r));
+      });
+
   // ===== STATS =====
   const stats = {
     total: pagination.total,
     ativos: usuarios.filter(u => u.ativo).length,
     inativos: usuarios.filter(u => !u.ativo).length,
-    vendedores: vendedores?.length || 0,
   };
 
   // ===== PAGINATION =====
@@ -349,44 +270,21 @@ export default function UsuariosAcessos() {
     XLSX.writeFile(wb, 'template-importacao-usuarios.xlsx');
   };
 
-  const handleOpenEditModal = (user: { id: string; user_id: string | null; nome: string; email: string | null }) => {
-    if (!user.user_id) { toast.error('Usuário sem conta vinculada'); return; }
-    setEditingUser(user);
-    setSelectedRoles((userRoles?.[user.user_id] || []) as string[]);
-  };
-
-  const handleCloseEditModal = () => {
-    setEditingUser(null);
-    setSelectedRoles([]);
-  };
-
-  const handleToggleRole = (role: string) => {
-    setSelectedRoles(prev => prev.includes(role) ? prev.filter(r => r !== role) : [...prev, role]);
-  };
-
-  const handleSaveRoles = async () => {
-    if (!editingUser?.user_id) return;
-    const currentRoles = (userRoles?.[editingUser.user_id] || []) as string[];
-    const toAdd = selectedRoles.filter(r => !currentRoles.includes(r));
-    const toRemove = currentRoles.filter(r => !selectedRoles.includes(r));
-    try {
-      for (const role of toAdd) await addRole.mutateAsync({ userId: editingUser.user_id, role });
-      for (const role of toRemove) await removeRole.mutateAsync({ userId: editingUser.user_id, role });
-      toast.success('Perfis atualizados!');
-      handleCloseEditModal();
-    } catch { /* handled */ }
-  };
-
-  const filteredVendedores = vendedores?.filter(v => {
-    const matchSearch = !searchVendedor || v.nome?.toLowerCase().includes(searchVendedor.toLowerCase());
-    const matchTipo = filterTipoVendedor === 'todos' || v.roles?.includes(filterTipoVendedor === 'clt' ? 'vendedor_clt' : 'vendedor_externo');
-    return matchSearch && matchTipo;
-  }) || [];
-
   // Reset page when filters change
   const handleFilterChange = (setter: React.Dispatch<React.SetStateAction<string>>, value: string) => {
     setter(value);
     setPage(1);
+  };
+
+  // Buscar dados de vendas para um usuário (quando filtro Comercial ativo)
+  const getVendedorData = (userId: string | null) => {
+    if (!userId) return null;
+    const contagem = contagemVendedores?.[userId];
+    if (!contagem) return { totalLeads: 0, conversao: 0 };
+    const totalLeads = contagem.total || 0;
+    const ganhos = contagem.ganhos || 0;
+    const conversao = totalLeads > 0 ? Math.round((ganhos / totalLeads) * 100) : 0;
+    return { totalLeads, conversao };
   };
 
   return (
@@ -395,7 +293,7 @@ export default function UsuariosAcessos() {
       <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-4">
         <div>
           <h1 className="text-2xl font-bold text-foreground">Usuários e Acessos</h1>
-          <p className="text-sm text-muted-foreground">Gerencie usuários, vendedores, perfis de acesso e logs do sistema</p>
+          <p className="text-sm text-muted-foreground">Gerencie usuários, permissões e auditoria do sistema</p>
         </div>
         <div className="flex gap-2">
           <Button variant="outline" onClick={downloadTemplate}>
@@ -413,13 +311,12 @@ export default function UsuariosAcessos() {
         </div>
       </div>
 
-      {/* Cards Métricas */}
-      <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
+      {/* Cards Métricas — 3 cards */}
+      <div className="grid grid-cols-3 gap-4">
         {[
           { label: 'Total', value: stats.total, icon: Users, color: 'text-blue-500 bg-blue-500/10' },
           { label: 'Ativos', value: stats.ativos, icon: UserCheck, color: 'text-green-500 bg-green-500/10' },
           { label: 'Inativos', value: stats.inativos, icon: UserX, color: 'text-red-500 bg-red-500/10' },
-          { label: 'Vendedores', value: stats.vendedores, icon: BadgeDollarSign, color: 'text-purple-500 bg-purple-500/10' },
         ].map((stat) => (
           <Card key={stat.label} className="border-border/50">
             <CardContent className="p-4">
@@ -437,32 +334,24 @@ export default function UsuariosAcessos() {
         ))}
       </div>
 
-      {/* Tabs */}
+      {/* 3 Tabs */}
       <Tabs value={activeTab} onValueChange={handleTabChange}>
         <TabsList className="bg-muted/50 rounded-lg p-1">
           <TabsTrigger value="usuarios" className="gap-2">
             <Users className="h-4 w-4" />
             Usuários
           </TabsTrigger>
-          <TabsTrigger value="vendedores" className="gap-2">
-            <BadgeDollarSign className="h-4 w-4" />
-            Vendedores
+          <TabsTrigger value="permissoes" className="gap-2">
+            <ShieldCheck className="h-4 w-4" />
+            Permissões
           </TabsTrigger>
-          <TabsTrigger value="perfis" className="gap-2">
-            <Shield className="h-4 w-4" />
-            Perfis de Acesso
-          </TabsTrigger>
-          <TabsTrigger value="logs" className="gap-2">
+          <TabsTrigger value="auditoria" className="gap-2">
             <FileText className="h-4 w-4" />
-            Logs de Atividade
-          </TabsTrigger>
-          <TabsTrigger value="visibilidade" className="gap-2">
-            <Grid3X3 className="h-4 w-4" />
-            Visibilidade
+            Auditoria
           </TabsTrigger>
         </TabsList>
 
-        {/* TAB: USUÁRIOS */}
+        {/* TAB: USUÁRIOS (unificada) */}
         <TabsContent value="usuarios" className="mt-6 space-y-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
@@ -474,13 +363,12 @@ export default function UsuariosAcessos() {
                 className="pl-10 bg-background" 
               />
             </div>
-            <Select value={filterTipo} onValueChange={(v) => handleFilterChange(setFilterTipo, v)}>
-              <SelectTrigger className="w-full sm:w-[150px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
+            <Select value={filterArea} onValueChange={(v) => handleFilterChange(setFilterArea, v)}>
+              <SelectTrigger className="w-full sm:w-[160px]"><SelectValue placeholder="Área" /></SelectTrigger>
               <SelectContent>
-                <SelectItem value="todos">Todos os tipos</SelectItem>
-                <SelectItem value="funcionario">Funcionário</SelectItem>
-                <SelectItem value="associado">Associado</SelectItem>
-                <SelectItem value="prestador">Prestador</SelectItem>
+                {AREA_FILTERS.map(a => (
+                  <SelectItem key={a.value} value={a.value}>{a.label}</SelectItem>
+                ))}
               </SelectContent>
             </Select>
             <Select value={filterPerfil} onValueChange={(v) => handleFilterChange(setFilterPerfil, v)}>
@@ -510,6 +398,12 @@ export default function UsuariosAcessos() {
                     <TableHead className="min-w-[200px]">Usuário</TableHead>
                     <TableHead className="hidden md:table-cell">Tipo</TableHead>
                     <TableHead className="hidden lg:table-cell">Perfis</TableHead>
+                    {isCommercialFilter && (
+                      <>
+                        <TableHead>Leads</TableHead>
+                        <TableHead>Conversão</TableHead>
+                      </>
+                    )}
                     <TableHead>Status</TableHead>
                     <TableHead className="hidden md:table-cell">Criado em</TableHead>
                     <TableHead className="w-[50px]"></TableHead>
@@ -522,86 +416,111 @@ export default function UsuariosAcessos() {
                         <TableCell><Skeleton className="h-10 w-48" /></TableCell>
                         <TableCell className="hidden md:table-cell"><Skeleton className="h-6 w-24" /></TableCell>
                         <TableCell className="hidden lg:table-cell"><Skeleton className="h-6 w-32" /></TableCell>
+                        {isCommercialFilter && (
+                          <>
+                            <TableCell><Skeleton className="h-6 w-12" /></TableCell>
+                            <TableCell><Skeleton className="h-6 w-12" /></TableCell>
+                          </>
+                        )}
                         <TableCell><Skeleton className="h-6 w-16" /></TableCell>
                         <TableCell className="hidden md:table-cell"><Skeleton className="h-6 w-24" /></TableCell>
                         <TableCell><Skeleton className="h-8 w-8" /></TableCell>
                       </TableRow>
                     ))
-                  ) : usuarios.length === 0 ? (
-                    <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
+                  ) : filteredUsuarios.length === 0 ? (
+                    <TableRow><TableCell colSpan={isCommercialFilter ? 8 : 6} className="text-center py-8 text-muted-foreground">Nenhum usuário encontrado</TableCell></TableRow>
                   ) : (
-                    usuarios.map((usuario) => (
-                      <TableRow key={usuario.id} className="border-border/50 cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/configuracoes/usuarios/${usuario.id}`)}>
-                        <TableCell>
-                          <div className="flex items-center gap-3 min-w-0">
-                            <Avatar className="h-10 w-10 shrink-0">
-                              <AvatarImage src={usuario.avatar_url || ''} />
-                              <AvatarFallback className="bg-primary/10 text-primary">{getInitials(usuario.nome)}</AvatarFallback>
-                            </Avatar>
-                            <div className="min-w-0">
-                              <p className="font-medium text-foreground truncate max-w-[180px]">{usuario.nome}</p>
-                              <p className="text-xs text-muted-foreground truncate max-w-[180px]">{usuario.email}</p>
+                    filteredUsuarios.map((usuario) => {
+                      const vendedorData = isCommercialFilter ? getVendedorData(usuario.user_id) : null;
+                      return (
+                        <TableRow key={usuario.id} className="border-border/50 cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/configuracoes/usuarios/${usuario.id}`)}>
+                          <TableCell>
+                            <div className="flex items-center gap-3 min-w-0">
+                              <Avatar className="h-10 w-10 shrink-0">
+                                <AvatarImage src={usuario.avatar_url || ''} />
+                                <AvatarFallback className="bg-primary/10 text-primary">{getInitials(usuario.nome)}</AvatarFallback>
+                              </Avatar>
+                              <div className="min-w-0">
+                                <p className="font-medium text-foreground truncate max-w-[180px]">{usuario.nome}</p>
+                                <p className="text-xs text-muted-foreground truncate max-w-[180px]">{usuario.email}</p>
+                              </div>
                             </div>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell">
-                          <Badge variant="outline" className={tiposUsuario[usuario.tipo]?.color}>{tiposUsuario[usuario.tipo]?.label || usuario.tipo}</Badge>
-                        </TableCell>
-                        <TableCell className="hidden lg:table-cell">
-                          <div className="flex flex-wrap gap-1">
-                            {usuario.roles?.slice(0, 2).map((role, idx) => (
-                              <Badge key={idx} variant="outline" className={`text-xs ${getRoleBadgeClass(role)}`}>
-                                {getRoleLabel(role)}
-                              </Badge>
-                            ))}
-                            {(usuario.roles?.length || 0) > 2 && <Badge variant="outline" className="text-xs">+{(usuario.roles?.length || 0) - 2}</Badge>}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Badge variant={usuario.ativo ? 'default' : 'secondary'} className="gap-1">
-                            <span className={`w-1.5 h-1.5 rounded-full ${usuario.ativo ? 'bg-green-500' : 'bg-gray-500'}`} />
-                            {usuario.ativo ? 'Ativo' : 'Inativo'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-muted-foreground">{new Date(usuario.created_at).toLocaleDateString('pt-BR')}</TableCell>
-                        <TableCell>
-                          <DropdownMenu>
-                            <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
-                              <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button>
-                            </DropdownMenuTrigger>
-                            <DropdownMenuContent align="end">
-                              <DropdownMenuLabel>Ações</DropdownMenuLabel>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/configuracoes/usuarios/${usuario.id}`); }}>
-                                <Edit className="w-4 h-4 mr-2" /> Editar
-                              </DropdownMenuItem>
-                              <DropdownMenuItem 
-                                onClick={(e) => { e.stopPropagation(); setResetPasswordDialog(usuario); }}
-                                disabled={!usuario.user_id}
-                              >
-                                <Key className="w-4 h-4 mr-2" /> Redefinir senha
-                              </DropdownMenuItem>
-                              <DropdownMenuSeparator />
-                              {usuario.ativo ? (
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setDeactivateConfirm(usuario.id); }} className="text-orange-500">
-                                  <UserX className="w-4 h-4 mr-2" /> Desativar
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell">
+                            <Badge variant="outline" className={tiposUsuario[usuario.tipo]?.color}>{tiposUsuario[usuario.tipo]?.label || usuario.tipo}</Badge>
+                          </TableCell>
+                          <TableCell className="hidden lg:table-cell">
+                            <div className="flex flex-wrap gap-1">
+                              {usuario.roles?.slice(0, 2).map((role, idx) => (
+                                <Badge key={idx} variant="outline" className={`text-xs ${getRoleBadgeClass(role)}`}>
+                                  {getRoleLabel(role)}
+                                </Badge>
+                              ))}
+                              {(usuario.roles?.length || 0) > 2 && <Badge variant="outline" className="text-xs">+{(usuario.roles?.length || 0) - 2}</Badge>}
+                            </div>
+                          </TableCell>
+                          {isCommercialFilter && vendedorData && (
+                            <>
+                              <TableCell className="font-medium">{vendedorData.totalLeads}</TableCell>
+                              <TableCell>
+                                <span className={vendedorData.conversao >= 30 ? 'text-green-500' : vendedorData.conversao >= 15 ? 'text-yellow-500' : 'text-red-500'}>
+                                  {vendedorData.conversao}%
+                                </span>
+                              </TableCell>
+                            </>
+                          )}
+                          {isCommercialFilter && !vendedorData && (
+                            <>
+                              <TableCell className="text-muted-foreground">—</TableCell>
+                              <TableCell className="text-muted-foreground">—</TableCell>
+                            </>
+                          )}
+                          <TableCell>
+                            <Badge variant={usuario.ativo ? 'default' : 'secondary'} className="gap-1">
+                              <span className={`w-1.5 h-1.5 rounded-full ${usuario.ativo ? 'bg-green-500' : 'bg-gray-500'}`} />
+                              {usuario.ativo ? 'Ativo' : 'Inativo'}
+                            </Badge>
+                          </TableCell>
+                          <TableCell className="hidden md:table-cell text-muted-foreground">{new Date(usuario.created_at).toLocaleDateString('pt-BR')}</TableCell>
+                          <TableCell>
+                            <DropdownMenu>
+                              <DropdownMenuTrigger asChild onClick={(e) => e.stopPropagation()}>
+                                <Button variant="ghost" size="icon" className="h-8 w-8"><MoreHorizontal className="w-4 h-4" /></Button>
+                              </DropdownMenuTrigger>
+                              <DropdownMenuContent align="end">
+                                <DropdownMenuLabel>Ações</DropdownMenuLabel>
+                                <DropdownMenuSeparator />
+                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); navigate(`/configuracoes/usuarios/${usuario.id}`); }}>
+                                  <Edit className="w-4 h-4 mr-2" /> Editar
                                 </DropdownMenuItem>
-                              ) : (
-                                <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleAtivar(usuario.id); }} className="text-green-500">
-                                  <UserCheck className="w-4 h-4 mr-2" /> Ativar
+                                <DropdownMenuItem 
+                                  onClick={(e) => { e.stopPropagation(); setResetPasswordDialog(usuario); }}
+                                  disabled={!usuario.user_id}
+                                >
+                                  <Key className="w-4 h-4 mr-2" /> Redefinir senha
                                 </DropdownMenuItem>
-                              )}
-                              <DropdownMenuItem 
-                                onClick={(e) => { e.stopPropagation(); setDeleteConfirm(usuario); }} 
-                                className="text-red-500"
-                              >
-                                <Trash2 className="w-4 h-4 mr-2" /> Excluir permanentemente
-                              </DropdownMenuItem>
-                            </DropdownMenuContent>
-                          </DropdownMenu>
-                        </TableCell>
-                      </TableRow>
-                    ))
+                                <DropdownMenuSeparator />
+                                {usuario.ativo ? (
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); setDeactivateConfirm(usuario.id); }} className="text-orange-500">
+                                    <UserX className="w-4 h-4 mr-2" /> Desativar
+                                  </DropdownMenuItem>
+                                ) : (
+                                  <DropdownMenuItem onClick={(e) => { e.stopPropagation(); handleAtivar(usuario.id); }} className="text-green-500">
+                                    <UserCheck className="w-4 h-4 mr-2" /> Ativar
+                                  </DropdownMenuItem>
+                                )}
+                                <DropdownMenuItem 
+                                  onClick={(e) => { e.stopPropagation(); setDeleteConfirm(usuario); }} 
+                                  className="text-red-500"
+                                >
+                                  <Trash2 className="w-4 h-4 mr-2" /> Excluir permanentemente
+                                </DropdownMenuItem>
+                              </DropdownMenuContent>
+                            </DropdownMenu>
+                          </TableCell>
+                        </TableRow>
+                      );
+                    })
                   )}
                 </TableBody>
               </Table>
@@ -663,162 +582,50 @@ export default function UsuariosAcessos() {
           </Card>
         </TabsContent>
 
-        {/* TAB: VENDEDORES */}
-        <TabsContent value="vendedores" className="mt-6 space-y-4">
-          <div className="flex flex-col sm:flex-row gap-4">
-            <div className="relative flex-1">
-              <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
-              <Input placeholder="Buscar vendedor..." value={searchVendedor} onChange={(e) => setSearchVendedor(e.target.value)} className="pl-10 bg-background" />
+        {/* TAB: PERMISSÕES (Perfis + Visibilidade) */}
+        <TabsContent value="permissoes" className="mt-6 space-y-8">
+          {/* Seção 1: Cards de Perfis */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Shield className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-foreground">Perfis do Sistema</h2>
             </div>
-            <Select value={filterTipoVendedor} onValueChange={setFilterTipoVendedor}>
-              <SelectTrigger className="w-full sm:w-[180px]"><SelectValue placeholder="Tipo" /></SelectTrigger>
-              <SelectContent>
-                <SelectItem value="todos">Todos</SelectItem>
-                <SelectItem value="clt">CLT</SelectItem>
-                <SelectItem value="externo">Externo</SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-
-          <Card className="border-border/50">
-            <Table>
-              <TableHeader>
-                <TableRow className="border-border/50 hover:bg-transparent">
-                  <TableHead>Vendedor</TableHead>
-                  <TableHead className="hidden md:table-cell">Email</TableHead>
-                  <TableHead>Tipo</TableHead>
-                  <TableHead>Leads</TableHead>
-                  <TableHead>Conversão</TableHead>
-                  <TableHead className="w-[50px]"></TableHead>
-                </TableRow>
-              </TableHeader>
-              <TableBody>
-                {isLoadingVendedores ? (
-                  Array.from({ length: 5 }).map((_, i) => (
-                    <TableRow key={i} className="border-border/50">
-                      <TableCell><Skeleton className="h-10 w-48" /></TableCell>
-                      <TableCell className="hidden md:table-cell"><Skeleton className="h-6 w-32" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-16" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-12" /></TableCell>
-                      <TableCell><Skeleton className="h-6 w-12" /></TableCell>
-                      <TableCell><Skeleton className="h-8 w-8" /></TableCell>
-                    </TableRow>
-                  ))
-                ) : filteredVendedores.length === 0 ? (
-                  <TableRow><TableCell colSpan={6} className="text-center py-8 text-muted-foreground">Nenhum vendedor encontrado</TableCell></TableRow>
-                ) : (
-                  filteredVendedores.map((vendedor) => {
-                    const contagem = contagemVendedores?.[vendedor.user_id || ''];
-                    const totalLeads = contagem?.total || 0;
-                    const ganhos = contagem?.ganhos || 0;
-                    const conversao = totalLeads > 0 ? Math.round((ganhos / totalLeads) * 100) : 0;
-                    const isCLT = vendedor.roles?.includes('vendedor_clt');
-
-                    return (
-                      <TableRow key={vendedor.id} className="border-border/50 cursor-pointer hover:bg-muted/50" onClick={() => navigate(`/vendas/vendedores/${vendedor.user_id}`)}>
-                        <TableCell>
-                          <div className="flex items-center gap-3">
-                            <Avatar className="h-10 w-10">
-                              <AvatarImage src={vendedor.avatar_url || ''} />
-                              <AvatarFallback className="bg-primary/10 text-primary">{getInitials(vendedor.nome || '')}</AvatarFallback>
-                            </Avatar>
-                            <p className="font-medium text-foreground truncate max-w-[150px]">{vendedor.nome}</p>
-                          </div>
-                        </TableCell>
-                        <TableCell className="hidden md:table-cell text-muted-foreground truncate max-w-[200px]">{vendedor.email}</TableCell>
-                        <TableCell>
-                          <Badge variant="outline" className={isCLT ? 'bg-emerald-500/20 text-emerald-400' : 'bg-amber-500/20 text-amber-400'}>
-                            {isCLT ? 'CLT' : 'Externo'}
-                          </Badge>
-                        </TableCell>
-                        <TableCell className="font-medium">{totalLeads}</TableCell>
-                        <TableCell>
-                          <span className={conversao >= 30 ? 'text-green-500' : conversao >= 15 ? 'text-yellow-500' : 'text-red-500'}>
-                            {conversao}%
-                          </span>
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="ghost" size="icon" className="h-8 w-8" onClick={(e) => { e.stopPropagation(); navigate(`/vendas/vendedores/${vendedor.user_id}`); }}>
-                            <ExternalLink className="w-4 h-4" />
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })
-                )}
-              </TableBody>
-            </Table>
-          </Card>
-        </TabsContent>
-
-        {/* TAB: PERFIS DE ACESSO */}
-        <TabsContent value="perfis" className="mt-6 space-y-6">
-          <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {allRoles.map(role => {
-              const roleConfig = appRolesData.find(r => r.role === role);
-              const count = contagemPerfis?.[role] || 0;
-              return (
-                <Card key={role} className="border-l-4 border-border/50" style={{ borderLeftColor: `var(--${roleConfig?.color || 'gray'}-500, #9ca3af)` }}>
-                  <CardHeader className="pb-3">
-                    <div className="flex items-start justify-between">
-                      <div className={`p-2 rounded-lg bg-${roleConfig?.color || 'gray'}-500/10 text-${roleConfig?.color || 'gray'}-500`}>
-                        <Shield className="h-5 w-5" />
+            <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
+              {allRoles.map(role => {
+                const roleConfig = appRolesData.find(r => r.role === role);
+                const count = contagemPerfis?.[role] || 0;
+                return (
+                  <Card key={role} className="border-l-4 border-border/50" style={{ borderLeftColor: `var(--${roleConfig?.color || 'gray'}-500, #9ca3af)` }}>
+                    <CardHeader className="pb-3">
+                      <div className="flex items-start justify-between">
+                        <div className={`p-2 rounded-lg bg-${roleConfig?.color || 'gray'}-500/10 text-${roleConfig?.color || 'gray'}-500`}>
+                          <Shield className="h-5 w-5" />
+                        </div>
+                        <Badge variant="secondary" className="text-xs">{count} usuário{count !== 1 ? 's' : ''}</Badge>
                       </div>
-                      <Badge variant="secondary" className="text-xs">{count} usuário{count !== 1 ? 's' : ''}</Badge>
-                    </div>
-                    <CardTitle className="text-lg mt-3">{getRoleLabel(role)}</CardTitle>
-                    <CardDescription>{roleConfig?.description || ''}</CardDescription>
-                  </CardHeader>
-                </Card>
-              );
-            })}
+                      <CardTitle className="text-lg mt-3">{getRoleLabel(role)}</CardTitle>
+                      <CardDescription>{roleConfig?.description || ''}</CardDescription>
+                    </CardHeader>
+                  </Card>
+                );
+              })}
+            </div>
           </div>
 
-          <Card>
-            <CardHeader>
-              <CardTitle>Gerenciar Perfis por Usuário</CardTitle>
-              <CardDescription>Atribua ou remova perfis de acesso</CardDescription>
-            </CardHeader>
-            <CardContent>
-              <Table>
-                <TableHeader>
-                  <TableRow>
-                    <TableHead>Nome</TableHead>
-                    <TableHead className="hidden md:table-cell">Email</TableHead>
-                    <TableHead>Perfis</TableHead>
-                    <TableHead className="w-[100px]">Ações</TableHead>
-                  </TableRow>
-                </TableHeader>
-                <TableBody>
-                  {usuariosPerfis?.map(user => {
-                    const roles = user.user_id && userRoles ? userRoles[user.user_id] || [] : [];
-                    return (
-                      <TableRow key={user.id}>
-                        <TableCell className="font-medium">{user.nome}</TableCell>
-                        <TableCell className="hidden md:table-cell text-muted-foreground">{user.email}</TableCell>
-                        <TableCell>
-                          <div className="flex flex-wrap gap-1">
-                            {roles.length === 0 ? <span className="text-muted-foreground text-sm">Nenhum perfil</span> : roles.map(role => (
-                              <Badge key={role} variant="secondary" className="text-xs">{getRoleLabel(role)}</Badge>
-                            ))}
-                          </div>
-                        </TableCell>
-                        <TableCell>
-                          <Button variant="outline" size="sm" onClick={() => handleOpenEditModal(user)} disabled={!user.user_id}>
-                            <Settings className="w-4 h-4 mr-1" /> Editar
-                          </Button>
-                        </TableCell>
-                      </TableRow>
-                    );
-                  })}
-                </TableBody>
-              </Table>
-            </CardContent>
-          </Card>
+          {/* Seção 2: Visibilidade de Módulos */}
+          <div>
+            <div className="flex items-center gap-2 mb-4">
+              <Grid3X3 className="h-5 w-5 text-primary" />
+              <h2 className="text-lg font-semibold text-foreground">Visibilidade de Módulos</h2>
+            </div>
+            <Suspense fallback={<div className="flex items-center justify-center py-12"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
+              <PerfisVisibilidade />
+            </Suspense>
+          </div>
         </TabsContent>
 
-        {/* TAB: LOGS */}
-        <TabsContent value="logs" className="mt-6 space-y-4">
+        {/* TAB: AUDITORIA */}
+        <TabsContent value="auditoria" className="mt-6 space-y-4">
           <div className="flex flex-col sm:flex-row gap-4">
             <div className="relative flex-1">
               <Search className="absolute left-3 top-1/2 -translate-y-1/2 w-4 h-4 text-muted-foreground" />
@@ -883,13 +690,6 @@ export default function UsuariosAcessos() {
               )}
             </CardContent>
           </Card>
-        </TabsContent>
-
-        {/* TAB: VISIBILIDADE */}
-        <TabsContent value="visibilidade" className="mt-6">
-          <Suspense fallback={<div className="flex items-center justify-center py-12"><RefreshCw className="h-6 w-6 animate-spin text-muted-foreground" /></div>}>
-            <PerfisVisibilidade />
-          </Suspense>
         </TabsContent>
       </Tabs>
 
@@ -1014,36 +814,6 @@ export default function UsuariosAcessos() {
                 'Redefinir Senha'
               )}
             </Button>
-          </DialogFooter>
-        </DialogContent>
-      </Dialog>
-
-      {/* Modal Editar Perfis */}
-      <Dialog open={!!editingUser} onOpenChange={() => handleCloseEditModal()}>
-        <DialogContent className="max-w-md">
-          <DialogHeader><DialogTitle>Editar Perfis</DialogTitle></DialogHeader>
-          <div className="py-4">
-            <p className="text-sm text-muted-foreground mb-4">Selecione os perfis para <strong>{editingUser?.nome}</strong></p>
-            <div className="space-y-3 max-h-[400px] overflow-y-auto">
-              {allRoles.map(role => {
-                const roleConfig = appRolesData.find(r => r.role === role);
-                const isSelected = selectedRoles.includes(role);
-                return (
-                  <div key={role} className={`flex items-center gap-3 p-3 rounded-lg border cursor-pointer transition-colors ${isSelected ? 'border-primary bg-primary/5' : 'hover:bg-muted'}`} onClick={() => handleToggleRole(role)}>
-                    <Checkbox checked={isSelected} />
-                    <div className={`p-1.5 rounded bg-${roleConfig?.color || 'gray'}-500/10 text-${roleConfig?.color || 'gray'}-500`}><Shield className="h-4 w-4" /></div>
-                    <div className="flex-1">
-                      <p className="font-medium text-sm">{getRoleLabel(role)}</p>
-                      <p className="text-xs text-muted-foreground">{roleConfig?.description || ''}</p>
-                    </div>
-                  </div>
-                );
-              })}
-            </div>
-          </div>
-          <DialogFooter>
-            <Button variant="outline" onClick={handleCloseEditModal}>Cancelar</Button>
-            <Button onClick={handleSaveRoles} disabled={addRole.isPending || removeRole.isPending}>Salvar</Button>
           </DialogFooter>
         </DialogContent>
       </Dialog>
