@@ -105,6 +105,9 @@ export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecus
               <h4 className="font-medium text-white">
                 {turno.profile?.nome || 'Profissional'}
               </h4>
+              {emViagem && (
+                <Badge className="text-[10px] px-1.5 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Viagem</Badge>
+              )}
             </div>
           </div>
           {getStatusBadge()}
