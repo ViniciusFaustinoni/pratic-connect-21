@@ -407,11 +407,24 @@ export default function UsuarioForm() {
   const saveUser = useMutation({
     mutationFn: async () => {
       if (isEditing && usuario) {
-        const { error: profileError } = await supabase.from('profiles').update({
-          nome: formData.nome, telefone: formData.telefone, cpf: formData.cpf,
+        const isAgencia = formData.perfis.includes('agencia');
+        const profileUpdate: any = {
+          nome: formData.nome, telefone: formData.telefone,
           tipo: formData.tipo as any, ativo: formData.ativo,
-          updated_at: new Date().toISOString()
-        }).eq('id', id);
+          updated_at: new Date().toISOString(),
+        };
+        if (isAgencia) {
+          profileUpdate.cnpj = formData.cnpj;
+          profileUpdate.razao_social = formData.razao_social;
+          profileUpdate.nome_fantasia = formData.nome_fantasia;
+          profileUpdate.cpf = null;
+        } else {
+          profileUpdate.cpf = formData.cpf;
+          profileUpdate.cnpj = null;
+          profileUpdate.razao_social = null;
+          profileUpdate.nome_fantasia = null;
+        }
+        const { error: profileError } = await supabase.from('profiles').update(profileUpdate).eq('id', id);
         if (profileError) throw profileError;
         await supabase.from('user_roles').delete().eq('user_id', usuario.user_id);
         if (formData.perfis.length > 0) {
