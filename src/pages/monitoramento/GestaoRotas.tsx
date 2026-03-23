@@ -67,7 +67,7 @@ const STATUS_TAREFA_CONFIG = {
   reagendada: { label: 'Reagendada', icon: Clock, className: 'text-blue-600' },
 };
 
-export default function GestaoRotas() {
+export default function GestaoRotas({ embedded = false }: { embedded?: boolean }) {
   const [dataSelecionada, setDataSelecionada] = useState<Date>(new Date());
   const [formRotaOpen, setFormRotaOpen] = useState(false);
   const [rotaParaEditar, setRotaParaEditar] = useState<RotaWithRelations | null>(null);
