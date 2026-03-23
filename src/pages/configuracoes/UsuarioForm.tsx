@@ -641,7 +641,7 @@ export default function UsuarioForm() {
             )}
 
             {/* Grade de Comissão — para consultores e agências */}
-            {formData.perfis.some(p => ['consultor_interno', 'consultor_externo', 'agencia'].includes(p)) && (
+            {formData.perfis.some(p => ['vendedor_clt', 'vendedor_externo', 'agencia'].includes(p)) && (
               <Card className="border-border/50 border-green-500/30">
                 <CardHeader>
                   <CardTitle className="flex items-center gap-2 text-lg">
