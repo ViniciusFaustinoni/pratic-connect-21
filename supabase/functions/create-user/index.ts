@@ -81,7 +81,7 @@ serve(async (req) => {
     }
 
     const body: CreateUserRequest = await req.json();
-    const { nome, email, cpf, telefone, senha, perfil, perfis, tipo, regioes_atendimento, capacidade_diaria } = body;
+    const { nome, email, cpf, cnpj, razao_social, nome_fantasia, telefone, senha, perfil, perfis, tipo, regioes_atendimento, capacidade_diaria } = body;
     
     // Determinar perfis a adicionar
     const perfisParaAdicionar = perfis?.length ? perfis : (perfil ? [perfil] : ['vendedor_clt']);
