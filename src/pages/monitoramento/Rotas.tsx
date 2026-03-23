@@ -187,6 +187,12 @@ export default function Rotas() {
           {canEditRotas && (
             <TabsTrigger value="configuracoes">Configurações</TabsTrigger>
           )}
+          {canEditRotas && (
+            <TabsTrigger value="gestao-rotas">
+              <Route className="mr-1 h-4 w-4" />
+              Gestão de Rotas
+            </TabsTrigger>
+          )}
         </TabsList>
 
         {/* Aba Tempo Real */}

@@ -415,7 +415,6 @@ const menuConfig: {
         { title: 'Logs', url: '/diretoria/logs', icon: FileText },
         { title: 'Relatórios', url: '/diretoria/relatorios', icon: ClipboardList },
         { title: 'Vistorias e Instalações', url: '/diretoria/vistorias-instalacoes', icon: ClipboardList },
-        { title: 'Gestão de Rotas', url: '/diretoria/gestao-vistorias-instalacoes', icon: Route },
       ],
     },
     {
