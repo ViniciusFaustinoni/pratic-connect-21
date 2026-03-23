@@ -60,7 +60,7 @@ export default function LandingPlanos() {
             Proteja seu veículo com quem entende de proteção
           </h1>
           <p className="mt-5 text-base text-gray-300 md:text-lg max-w-xl mx-auto">
-            Mais de 10.000 associados confiam na Praticcar. Proteção completa, assistência 24h e rastreamento veicular.
+            Mais de 10.000 associados confiam na Praticcar. Proteção 360º, assistência 24h e rastreamento veicular.
           </p>
           <a
             href={WHATSAPP_BASE}
