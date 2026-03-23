@@ -66,7 +66,7 @@ export default function DefinirSenha() {
 
         // Se não é primeiro acesso, redirecionar para dashboard
         if (!profile.primeiro_acesso) {
-          const dest = profile.tipo === 'associado' ? '/app/home' : '/dashboard';
+          const dest = profile.tipo === 'associado' ? '/app/home' : profile.tipo === 'agencia' ? '/agencia' : '/dashboard';
           navigate(dest, { replace: true });
           return;
         }
