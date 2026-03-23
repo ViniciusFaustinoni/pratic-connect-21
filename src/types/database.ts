@@ -12,7 +12,7 @@
  */
 export type AppRole = string;
 
-export type TipoUsuario = 'funcionario' | 'associado' | 'prestador';
+export type TipoUsuario = 'funcionario' | 'associado' | 'prestador' | 'agencia';
 
 // Etapas do funil de vendas (11 etapas conforme PRD)
 export type EtapaLead =
