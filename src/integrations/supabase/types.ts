@@ -6266,9 +6266,13 @@ export type Database = {
           deducoes_detalhes: Json | null
           id: string
           mes_referencia: number
+          nivel_nome: string | null
           observacoes: string | null
           pago_em: string | null
+          parcela_numero: number | null
+          parcela_total: number | null
           percentual_aplicado: number
+          plano_id: string | null
           recalculada: boolean | null
           recalculada_em: string | null
           recalculada_motivo: string | null
@@ -6300,9 +6304,13 @@ export type Database = {
           deducoes_detalhes?: Json | null
           id?: string
           mes_referencia: number
+          nivel_nome?: string | null
           observacoes?: string | null
           pago_em?: string | null
+          parcela_numero?: number | null
+          parcela_total?: number | null
           percentual_aplicado?: number
+          plano_id?: string | null
           recalculada?: boolean | null
           recalculada_em?: string | null
           recalculada_motivo?: string | null
@@ -6334,9 +6342,13 @@ export type Database = {
           deducoes_detalhes?: Json | null
           id?: string
           mes_referencia?: number
+          nivel_nome?: string | null
           observacoes?: string | null
           pago_em?: string | null
+          parcela_numero?: number | null
+          parcela_total?: number | null
           percentual_aplicado?: number
+          plano_id?: string | null
           recalculada?: boolean | null
           recalculada_em?: string | null
           recalculada_motivo?: string | null
@@ -6441,6 +6453,20 @@ export type Database = {
             isOneToOne: true
             referencedRelation: "view_acompanhamento"
             referencedColumns: ["contrato_id"]
+          },
+          {
+            foreignKeyName: "comissoes_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "comissoes_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
           },
           {
             foreignKeyName: "comissoes_vendedor_id_fkey"
@@ -28100,6 +28126,15 @@ export type Database = {
       fn_fechamento_mensal_comissoes: {
         Args: { p_ano: number; p_mes: number; p_usuario_id?: string }
         Returns: Json
+      }
+      fn_gerar_comissao_plano_nivel: {
+        Args: {
+          p_cobranca_id: string
+          p_contrato_id: string
+          p_tipo?: string
+          p_valor_pago: number
+        }
+        Returns: number
       }
       fn_get_cotas_por_fipe: { Args: { p_valor_fipe: number }; Returns: number }
       fn_get_cotas_veiculo: { Args: { p_veiculo_id: string }; Returns: number }
