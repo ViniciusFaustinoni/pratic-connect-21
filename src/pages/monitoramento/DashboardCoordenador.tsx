@@ -51,6 +51,7 @@ import { useRastreadoresPorPortador } from '@/hooks/useRastreadoresPorPortador';
 import { usePerformanceSemanalCoordenador } from '@/hooks/usePerformanceSemanalCoordenador';
 import { AgendamentosBase } from '@/components/monitoramento/AgendamentosBase';
 import { VistoriadoresEmAlerta } from '@/components/monitoramento/VistoriadoresEmAlerta';
+import { PrestadoresAtivos } from '@/components/monitoramento/PrestadoresAtivos';
 import { cn } from '@/lib/utils';
 
 const acoesRapidas = [
