@@ -59,6 +59,7 @@ const acoesRapidas = [
   { label: 'Vistorias e Instalações', href: '/diretoria/vistorias-instalacoes', icon: MapPin },
   { label: 'Equipe', href: '/monitoramento/equipe', icon: Users },
   { label: 'Instalações', href: '/monitoramento/instalacoes', icon: Wrench },
+  { label: 'Prestadores Parceiros', href: '/monitoramento/prestadores-parceiros', icon: Users },
 ];
 
 export default function DashboardCoordenador() {
