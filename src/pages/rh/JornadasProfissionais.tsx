@@ -114,7 +114,27 @@ export default function JornadasProfissionais() {
       if (error) throw error;
       return data as TurnoComProfile[];
     },
-    refetchInterval: isHoje ? 60000 : false, // Atualizar a cada 1 minuto se for hoje
+    refetchInterval: isHoje ? 60000 : false,
+  });
+
+  // Buscar contagem de recusas por turno
+  const turnoIds = (turnos || []).map(t => t.id);
+  const { data: recusasPorTurno } = useQuery({
+    queryKey: ['recusas-por-turno-rh', turnoIds],
+    queryFn: async () => {
+      if (!turnoIds.length) return {};
+      const { data } = await (supabase as any)
+        .from('registros_recusa_tarefa')
+        .select('turno_id')
+        .in('turno_id', turnoIds);
+      
+      const counts: Record<string, number> = {};
+      (data || []).forEach((r: any) => {
+        counts[r.turno_id] = (counts[r.turno_id] || 0) + 1;
+      });
+      return counts;
+    },
+    enabled: turnoIds.length > 0,
   });
 
   // Calcular estatísticas
