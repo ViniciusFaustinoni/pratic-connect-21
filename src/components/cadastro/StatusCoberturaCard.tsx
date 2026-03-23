@@ -89,7 +89,7 @@ export function StatusCoberturaCard({
               <p className="text-sm text-muted-foreground">
                 {aguardandoAtivacao
                   ? 'Rastreador precisa ser ativado na plataforma'
-                  : 'Proteção completa com rastreamento ativo'}
+                  : 'Proteção 360º com rastreamento ativo'}
               </p>
               {coberturaTotal && carenciaLabel && (
                 <p className="text-xs text-success mt-0.5">{carenciaLabel}</p>

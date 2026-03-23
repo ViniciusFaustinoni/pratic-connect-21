@@ -60,7 +60,7 @@ export default function LandingPlanos() {
             Proteja seu veículo com quem entende de proteção
           </h1>
           <p className="mt-5 text-base text-gray-300 md:text-lg max-w-xl mx-auto">
-            Mais de 10.000 associados confiam na Praticcar. Proteção completa, assistência 24h e rastreamento veicular.
+            Mais de 10.000 associados confiam na Praticcar. Proteção 360º, assistência 24h e rastreamento veicular.
           </p>
           <a
             href={WHATSAPP_BASE}
@@ -84,7 +84,7 @@ export default function LandingPlanos() {
             { icon: Users, label: '+10.000', sub: 'Associados Ativos' },
             { icon: Wrench, label: '+600', sub: 'Instalações por Mês' },
             { icon: PhoneCall, label: '24h', sub: 'Assistência em Todo Brasil' },
-            { icon: Shield, label: '100%', sub: 'Proteção Total' },
+            { icon: Shield, label: '100%', sub: 'Proteção 360º' },
           ].map((item) => (
             <div key={item.sub} className="flex flex-col items-center rounded-2xl bg-white/5 p-6 text-center backdrop-blur-sm">
               <item.icon className="mb-3 h-8 w-8 text-[#C41230]" />
@@ -102,7 +102,7 @@ export default function LandingPlanos() {
             Escolha o plano ideal para você
           </h2>
           <p className="mx-auto mt-3 max-w-lg text-center text-gray-500">
-            Proteção completa a partir de uma contribuição mensal acessível
+            Proteção 360º a partir de uma contribuição mensal acessível
           </p>
 
           {loading ? (
