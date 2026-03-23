@@ -184,6 +184,7 @@ export default function GestaoContaVendedor() {
                   <TableRow>
                     <TableHead>Data</TableHead>
                     <TableHead>Descrição</TableHead>
+                    <TableHead>Associado</TableHead>
                     <TableHead>Tipo</TableHead>
                     <TableHead className="text-right">Bruto</TableHead>
                     <TableHead className="text-right">Abatimento</TableHead>
