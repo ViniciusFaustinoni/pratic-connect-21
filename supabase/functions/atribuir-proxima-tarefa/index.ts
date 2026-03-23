@@ -250,14 +250,22 @@ serve(async (req) => {
       );
     }
 
-    // Forçar almoço se atingiu 4h sem iniciar
+    // Forçar almoço se atingiu limite configurado sem iniciar
     if (turnoHoje && turnoHoje.status === 'ativo' && !turnoHoje.inicio_almoco && turnoHoje.inicio_turno) {
       const inicioTurno = new Date(turnoHoje.inicio_turno);
       const agora = new Date();
       const minutosTrabalhados = Math.floor((agora.getTime() - inicioTurno.getTime()) / 60000);
 
-      if (minutosTrabalhados >= 240) { // 4 horas
-        console.log(`[atribuir-proxima-tarefa] Profissional trabalhou ${minutosTrabalhados} min. Forçando almoço.`);
+      // Ler limite configurável do banco (fallback 4h = 240min)
+      const { data: cfgAlmoco } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'jornada_horas_ate_almoco')
+        .maybeSingle();
+      const limiteAlmocoMinutos = cfgAlmoco?.valor ? Math.round(parseFloat(cfgAlmoco.valor) * 60) : 240;
+
+      if (minutosTrabalhados >= limiteAlmocoMinutos) {
+        console.log(`[atribuir-proxima-tarefa] Profissional trabalhou ${minutosTrabalhados} min (limite: ${limiteAlmocoMinutos}). Forçando almoço.`);
         
         await supabase
           .from('turnos_profissionais')

@@ -32,6 +32,12 @@ const CONFIG_CHAVES = [
   'instalacao_custo_fora_horario',
   'instalacao_prazos_por_estado',
   'instalacao_regioes_rotas',
+  'jornada_duracao_turno_horas',
+  'jornada_horas_ate_almoco',
+  'jornada_duracao_almoco_minutos',
+  'jornada_tolerancia_atraso_minutos',
+  'jornada_produtividade_minima',
+  'jornada_horas_alerta_improdutividade',
 ] as const;
 
 // ── Hook ───────────────────────────────────────────
@@ -56,6 +62,12 @@ function useInstalacaoConfigs() {
         prazosEstado: parsePrazos(map.instalacao_prazos_por_estado?.valor),
         regioes: parseRegioes(map.instalacao_regioes_rotas?.valor),
         updatedAt: map.instalacao_max_por_dia?.updated_at ?? null,
+        jornadaDuracaoTurno: map.jornada_duracao_turno_horas?.valor ?? '8',
+        jornadaHorasAteAlmoco: map.jornada_horas_ate_almoco?.valor ?? '4',
+        jornadaDuracaoAlmoco: map.jornada_duracao_almoco_minutos?.valor ?? '60',
+        jornadaToleranciaAtraso: map.jornada_tolerancia_atraso_minutos?.valor ?? '0',
+        jornadaProdutividadeMinima: map.jornada_produtividade_minima?.valor ?? '1',
+        jornadaAlertaImprodutividade: map.jornada_horas_alerta_improdutividade?.valor ?? '2',
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -127,6 +139,15 @@ export function InstalacaoRotasConfig() {
   const [novaRegiaoLabel, setNovaRegiaoLabel] = useState('');
   const [savingB4, setSavingB4] = useState(false);
 
+  // ── Bloco 5 state (Jornada)
+  const [jornadaTurno, setJornadaTurno] = useState('8');
+  const [jornadaAlmoco, setJornadaAlmoco] = useState('4');
+  const [jornadaDuracaoAlmoco, setJornadaDuracaoAlmoco] = useState('60');
+  const [jornadaTolerancia, setJornadaTolerancia] = useState('0');
+  const [jornadaProdMin, setJornadaProdMin] = useState('1');
+  const [jornadaAlertaImprod, setJornadaAlertaImprod] = useState('2');
+  const [savingB5, setSavingB5] = useState(false);
+
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
@@ -136,6 +157,12 @@ export function InstalacaoRotasConfig() {
     setCustoFora(config.custoForaHorario);
     setPrazos(config.prazosEstado);
     setRegioes(config.regioes);
+    setJornadaTurno(config.jornadaDuracaoTurno);
+    setJornadaAlmoco(config.jornadaHorasAteAlmoco);
+    setJornadaDuracaoAlmoco(config.jornadaDuracaoAlmoco);
+    setJornadaTolerancia(config.jornadaToleranciaAtraso);
+    setJornadaProdMin(config.jornadaProdutividadeMinima);
+    setJornadaAlertaImprod(config.jornadaAlertaImprodutividade);
   }, [config]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['configuracoes-instalacao-rotas'] });
@@ -404,6 +431,78 @@ export function InstalacaoRotasConfig() {
             <Button onClick={handleSaveCusto} disabled={savingB3} size="sm">
               {savingB3 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
               Salvar Custo
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Bloco 5 — Jornada dos Vistoriadores ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock className="h-4 w-4" />
+            Jornada dos Vistoriadores
+          </CardTitle>
+          <CardDescription>
+            Parâmetros que controlam a jornada de trabalho dos vistoriadores e instaladores.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Duração do turno (horas)</Label>
+              <Input type="number" min={1} max={24} step={0.5} value={jornadaTurno} onChange={e => setJornadaTurno(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Horas até almoço automático</Label>
+              <Input type="number" min={1} max={12} step={0.5} value={jornadaAlmoco} onChange={e => setJornadaAlmoco(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Duração do almoço (minutos)</Label>
+              <Input type="number" min={15} max={120} value={jornadaDuracaoAlmoco} onChange={e => setJornadaDuracaoAlmoco(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Tolerância atraso almoço (minutos)</Label>
+              <Input type="number" min={0} max={60} value={jornadaTolerancia} onChange={e => setJornadaTolerancia(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Produtividade mínima (serviços/turno)</Label>
+              <Input type="number" min={0} max={20} value={jornadaProdMin} onChange={e => setJornadaProdMin(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Horas sem serviço para alerta</Label>
+              <Input type="number" min={0.5} max={8} step={0.5} value={jornadaAlertaImprod} onChange={e => setJornadaAlertaImprod(e.target.value)} />
+            </div>
+          </div>
+
+          <div className="rounded-md border border-amber-500/30 bg-amber-500/5 p-3">
+            <p className="text-xs text-amber-600">
+              ⚠ Alterações têm efeito imediato na operação. Informe a equipe antes de alterar.
+            </p>
+          </div>
+
+          <div className="flex justify-end">
+            <Button onClick={async () => {
+              setSavingB5(true);
+              try {
+                await Promise.all([
+                  salvarConfig('jornada_duracao_turno_horas', jornadaTurno, profile?.id),
+                  salvarConfig('jornada_horas_ate_almoco', jornadaAlmoco, profile?.id),
+                  salvarConfig('jornada_duracao_almoco_minutos', jornadaDuracaoAlmoco, profile?.id),
+                  salvarConfig('jornada_tolerancia_atraso_minutos', jornadaTolerancia, profile?.id),
+                  salvarConfig('jornada_produtividade_minima', jornadaProdMin, profile?.id),
+                  salvarConfig('jornada_horas_alerta_improdutividade', jornadaAlertaImprod, profile?.id),
+                ]);
+                toast.success('Parâmetros de jornada salvos com sucesso');
+                invalidate();
+              } catch {
+                toast.error('Erro ao salvar parâmetros de jornada');
+              } finally {
+                setSavingB5(false);
+              }
+            }} disabled={savingB5} size="sm">
+              {savingB5 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              Salvar Jornada
             </Button>
           </div>
         </CardContent>

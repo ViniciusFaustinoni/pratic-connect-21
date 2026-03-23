@@ -12,13 +12,17 @@ import {
   Calendar,
   RefreshCw,
   TrendingUp,
-  TrendingDown
+  TrendingDown,
+  ChevronDown,
+  Settings2
 } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { JornadaProfissionalCard } from '@/components/rh/JornadaProfissionalCard';
 import { getHojeBrasilia } from '@/lib/date-utils';
+import { useNavigate } from 'react-router-dom';
 
 interface TurnoComProfile {
   id: string;
@@ -41,12 +45,42 @@ interface TurnoComProfile {
 }
 
 export default function JornadasProfissionais() {
+  const navigate = useNavigate();
   const [dataSelecionada, setDataSelecionada] = useState(
     getHojeBrasilia().toISOString().split('T')[0]
   );
+  const [parametrosAberto, setParametrosAberto] = useState(false);
 
   const hojeStr = getHojeBrasilia().toISOString().split('T')[0];
   const isHoje = dataSelecionada === hojeStr;
+
+  // Buscar parâmetros de jornada vigentes
+  const { data: parametros } = useQuery({
+    queryKey: ['config-jornada-rh'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', [
+          'jornada_duracao_turno_horas',
+          'jornada_horas_ate_almoco',
+          'jornada_duracao_almoco_minutos',
+          'jornada_tolerancia_atraso_minutos',
+          'jornada_produtividade_minima',
+          'jornada_horas_alerta_improdutividade',
+        ]);
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        duracaoTurno: map.jornada_duracao_turno_horas || '8',
+        horasAteAlmoco: map.jornada_horas_ate_almoco || '4',
+        duracaoAlmoco: map.jornada_duracao_almoco_minutos || '60',
+        toleranciaAtraso: map.jornada_tolerancia_atraso_minutos || '0',
+        produtividadeMinima: map.jornada_produtividade_minima || '1',
+        alertaImprodutividade: map.jornada_horas_alerta_improdutividade || '2',
+      };
+    },
+    staleTime: 1000 * 60 * 5,
+  });
 
   // Buscar turnos do dia
   const { data: turnos, isLoading, refetch } = useQuery({
@@ -113,6 +147,59 @@ export default function JornadasProfissionais() {
           </Button>
         </div>
       </div>
+
+      {/* Painel de Parâmetros Ativos */}
+      <Collapsible open={parametrosAberto} onOpenChange={setParametrosAberto}>
+        <Card className="border-border/50">
+          <CollapsibleTrigger asChild>
+            <CardHeader className="cursor-pointer hover:bg-muted/30 transition-colors py-3">
+              <div className="flex items-center justify-between">
+                <CardTitle className="flex items-center gap-2 text-sm font-medium">
+                  <Settings2 className="h-4 w-4 text-muted-foreground" />
+                  Parâmetros Ativos da Jornada
+                </CardTitle>
+                <ChevronDown className={`h-4 w-4 text-muted-foreground transition-transform ${parametrosAberto ? 'rotate-180' : ''}`} />
+              </div>
+            </CardHeader>
+          </CollapsibleTrigger>
+          <CollapsibleContent>
+            <CardContent className="pt-0 pb-4 space-y-3">
+              <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Duração do turno</p>
+                  <p className="text-sm font-semibold">{parametros?.duracaoTurno || '8'}h</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Horas até almoço</p>
+                  <p className="text-sm font-semibold">{parametros?.horasAteAlmoco || '4'}h</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Duração do almoço</p>
+                  <p className="text-sm font-semibold">{parametros?.duracaoAlmoco || '60'} min</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Tolerância atraso</p>
+                  <p className="text-sm font-semibold">{parametros?.toleranciaAtraso || '0'} min</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Produtividade mínima</p>
+                  <p className="text-sm font-semibold">{parametros?.produtividadeMinima || '1'} serviço(s)</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Alerta improdutividade</p>
+                  <p className="text-sm font-semibold">{parametros?.alertaImprodutividade || '2'}h</p>
+                </div>
+              </div>
+              <div className="flex justify-end">
+                <Button variant="outline" size="sm" onClick={() => navigate('/diretoria/gestao-comercial')}>
+                  <Settings2 className="h-3.5 w-3.5 mr-1" />
+                  Editar configurações
+                </Button>
+              </div>
+            </CardContent>
+          </CollapsibleContent>
+        </Card>
+      </Collapsible>
 
       {/* Cards de Estatísticas */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-4">
