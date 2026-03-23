@@ -36,18 +36,19 @@ export default function DadosPagamento() {
     (async () => {
       const { data, error } = await supabase
         .from('profiles')
-        .select('banco, agencia_bancaria, conta_bancaria, tipo_conta, pix_tipo, pix_chave')
+        .select('banco, agencia_bancaria, conta_bancaria, tipo_conta, pix_tipo, pix_chave' as '*')
         .eq('id', user.id)
         .single();
 
       if (!error && data) {
+        const d = data as any;
         setDados({
-          banco: data.banco || '',
-          agencia_bancaria: data.agencia_bancaria || '',
-          conta_bancaria: data.conta_bancaria || '',
-          tipo_conta: data.tipo_conta || '',
-          pix_tipo: data.pix_tipo || '',
-          pix_chave: data.pix_chave || '',
+          banco: d.banco || '',
+          agencia_bancaria: d.agencia_bancaria || '',
+          conta_bancaria: d.conta_bancaria || '',
+          tipo_conta: d.tipo_conta || '',
+          pix_tipo: d.pix_tipo || '',
+          pix_chave: d.pix_chave || '',
         });
       }
       setLoading(false);
