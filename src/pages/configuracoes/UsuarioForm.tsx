@@ -639,6 +639,41 @@ export default function UsuarioForm() {
                 </CardContent>
               </Card>
             )}
+
+            {/* Grade de Comissão — para consultores e agências */}
+            {formData.perfis.some(p => ['consultor_interno', 'consultor_externo', 'agencia'].includes(p)) && (
+              <Card className="border-border/50 border-green-500/30">
+                <CardHeader>
+                  <CardTitle className="flex items-center gap-2 text-lg">
+                    <TrendingUp className="w-5 h-5 text-green-500" />
+                    Grade de Comissão
+                  </CardTitle>
+                  <CardDescription>Atribua uma grade de comissionamento a este usuário</CardDescription>
+                </CardHeader>
+                <CardContent>
+                  <div className="space-y-2">
+                    <Label htmlFor="grade_comissao">Grade</Label>
+                    <Select
+                      value={formData.grade_comissao_id || 'none'}
+                      onValueChange={(v) => setFormData(prev => ({ ...prev, grade_comissao_id: v === 'none' ? '' : v }))}
+                    >
+                      <SelectTrigger className="bg-background">
+                        <SelectValue placeholder="Selecione uma grade" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="none">Nenhuma grade</SelectItem>
+                        {gradesDisponiveis.map((g) => (
+                          <SelectItem key={g.id} value={g.id}>{g.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                    <p className="text-xs text-muted-foreground">
+                      Define os percentuais de comissão aplicados a este consultor/agência
+                    </p>
+                  </div>
+                </CardContent>
+              </Card>
+            )}
           </div>
 
           {/* Coluna Lateral */}
