@@ -147,11 +147,22 @@ export function WhatsAppMetaTemplates() {
           </h3>
         </div>
         <div className="flex gap-2">
-          <Button variant="outline" size="sm" onClick={() => sincronizar.mutate()} disabled={sincronizar.isPending}>
+          <Button variant="outline" size="sm" onClick={() => sincronizar.mutate()} disabled={sincronizar.isPending || envioEmMassa}>
             {sincronizar.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <RefreshCw className="h-4 w-4 mr-1" />}
             Sincronizar
           </Button>
-          <Button size="sm" onClick={() => { setEditTemplate(null); setDrawerOpen(true); }}>
+          {drafts.length > 0 && (
+            <Button
+              variant="outline"
+              size="sm"
+              onClick={enviarEmMassa}
+              disabled={envioEmMassa}
+            >
+              {envioEmMassa ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <ListChecks className="h-4 w-4 mr-1" />}
+              Enviar {drafts.length} rascunho{drafts.length > 1 ? 's' : ''}
+            </Button>
+          )}
+          <Button size="sm" onClick={() => { setEditTemplate(null); setDrawerOpen(true); }} disabled={envioEmMassa}>
             <Plus className="h-4 w-4 mr-1" />
             Novo Template
           </Button>
