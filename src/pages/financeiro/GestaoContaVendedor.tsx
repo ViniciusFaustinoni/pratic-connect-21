@@ -196,10 +196,14 @@ export default function GestaoContaVendedor() {
                 </TableHeader>
                 <TableBody>
                   {isLoadingLancamentos ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
-                  ) : lancamentos.length === 0 ? (
-                    <TableRow><TableCell colSpan={9} className="text-center py-8 text-muted-foreground">Nenhum lançamento</TableCell></TableRow>
-                  ) : lancamentos.map((l: CCLancamento) => (
+                    <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Carregando...</TableCell></TableRow>
+                  ) : (() => {
+                    const lancamentosFiltrados = lancamentos.filter((l: CCLancamento) =>
+                      !buscaAssociado || (l.associado_nome || '').toLowerCase().includes(buscaAssociado.toLowerCase())
+                    );
+                    return lancamentosFiltrados.length === 0 ? (
+                    <TableRow><TableCell colSpan={10} className="text-center py-8 text-muted-foreground">Nenhum lançamento</TableCell></TableRow>
+                  ) : lancamentosFiltrados.map((l: CCLancamento) => (
                     <TableRow key={l.id}>
                       <TableCell className="whitespace-nowrap">{format(new Date(l.data_lancamento), 'dd/MM/yyyy')}</TableCell>
                       <TableCell className="max-w-xs truncate">{l.descricao}</TableCell>
