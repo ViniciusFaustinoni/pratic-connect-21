@@ -106,12 +106,12 @@ export default function ViagensTab() {
         .eq('tipo_deslocamento', 'viagem')
         .in('status', OPEN_STATUSES) as any);
 
-      const { data: tecnicosHoje } = await supabase
+      const { data: tecnicosHoje } = await (supabase
         .from('instalacoes')
         .select('instalador_id, instalador_responsavel_id')
         .eq('tipo_deslocamento', 'viagem')
         .eq('data_agendada', hojeStr)
-        .in('status', OPEN_STATUSES);
+        .in('status', OPEN_STATUSES) as any);
 
       const tecnicoIds = new Set(
         (tecnicosHoje || [])
