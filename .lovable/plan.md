@@ -1,56 +1,83 @@
 
 
-# Plano: Historico de Jornadas no Perfil do Vistoriador
+# Plano: Templates Meta para Regua de Cobranca e Relacionamento
 
 ## Resumo
 
-Adicionar aba "Historico" na tela InstaladorPerfil.tsx com lista dos ultimos 30 turnos, accordion para detalhes, e card de resumo mensal no topo. Sem nova rota.
+Cadastrar 14 templates de WhatsApp Meta na tabela `whatsapp_meta_templates` correspondentes a cada etapa da regua de relacionamento, atualizar a pagina ReguaCobranca para vincular templates Meta reais em vez de opcoes hardcoded, e configurar as etapas padrao da regua com os novos templates.
 
 ---
 
-## PARTE 1 — Reestruturar InstaladorPerfil com Tabs
+## PARTE 1 — Cadastro dos 14 Templates na tabela `whatsapp_meta_templates`
 
-Transformar o conteudo atual em sistema de 2 abas usando `Tabs` do shadcn:
+Inserir via migration os 14 templates com status `DRAFT`, categoria `UTILITY`, e variaveis de exemplo. Nomes seguindo convencao Meta (snake_case, sem acentos):
 
-- Card de avatar/nome permanece fixo acima das abas
-- **Aba "Meu Perfil"**: contem tudo que existe hoje (Minha Jornada, menu, botao sair, versao)
-- **Aba "Historico"**: novo componente `HistoricoJornadas`
+| Nome | Dias | Descricao curta |
+|---|---|---|
+| `boleto_gerado_v1` | Emissao | Boleto disponivel com PDF |
+| `lembrete_desconto_v1` | D-6 | Desconto 5% ate amanha |
+| `boleto_vence_hoje_v1` | D+0 | Vence hoje, veiculo desprotegido |
+| `boleto_vencido_urgente_v1` | D+1 a D+4 | Boleto vencido, pague hoje |
+| `ultimo_dia_sem_revistoria_v1` | D+5 | Ultimo dia sem revistoria |
+| `impedimento_pagamento_v1` | D+6 | Revistoria necessaria |
+| `reforco_contato_v1` | D+7 | Revistoria por fotos ou presencial |
+| `urgencia_revistoria_v1` | D+8 | Solicitar retorno urgente |
+| `alerta_retirada_v1` | D+9 | Possivel retirada rastreador |
+| `ultima_tentativa_v1` | D+10 | Retirada se nao agendar |
+| `aviso_negativacao_v1` | D+11 | Alerta SPC/Serasa em 5 dias |
+| `debito_com_multa_v1` | D+12 | Multa R$400 + negativacao |
+| `regularize_cadastro_v1` | D+13 | Ultimo aviso antes negativacao |
+| `reativacao_protecao_v1` | D+14 e D+61 | Convite reativacao com opcoes |
+
+Cada template tera:
+- `corpo`: texto exato fornecido pela Julia, com variaveis no formato Meta `{{1}}`, `{{2}}`, etc.
+- `variaveis_exemplo`: mapeamento `{"1": "João", "2": "Toyota Corolla", ...}`
+- `rodape`: "ESSA MENSAGEM E AUTOMATICA. FAVOR NAO RESPONDER!" (quando aplicavel)
+- `header_tipo`: `none` ou `text` conforme necessidade
+
+**Nota sobre variaveis**: A Meta exige formato `{{1}}`, `{{2}}`. Os templates serao convertidos de `{nome}`, `{veiculos}` etc para `{{1}}`, `{{2}}`, `{{3}}` com mapeamento documentado em `variaveis_exemplo`.
 
 ---
 
-## PARTE 2 — Componente `HistoricoJornadas`
+## PARTE 2 — Atualizar ReguaCobranca.tsx
 
-**Novo arquivo**: `src/components/vistoriador/HistoricoJornadas.tsx`
+### 2a. Substituir lista hardcoded de templates
 
-### Resumo do mes (card no topo)
-Calculado dos dados ja carregados (turnos do mes corrente):
-- Dias trabalhados, total horas, saldo acumulado do mes, total servicos concluidos
+Remover o array `templates` estatico (linhas 34-41) e usar query dinamica na tabela `whatsapp_meta_templates` para popular o seletor de templates. Exibir nome + status (APPROVED/PENDING/DRAFT) como badge ao lado.
 
-### Lista de turnos (ultimos 30 dias)
-Query `turnos_profissionais` com `profissional_id`, `status = 'encerrado'`, ultimos 30 dias, order desc, limit 30.
+### 2b. Atualizar etapas padrao
 
-Para servicos concluidos por dia: query separada em `servicos` agrupando por data (ou buscar todos do periodo e agrupar client-side).
+Substituir `etapasPadrao` (linhas 43-52) por etapas alinhadas com a regua fornecida:
 
-Cada card compacto:
-- Data formatada ("Segunda, 20 jan"), badge de status, horas trabalhadas, servicos, saldo (condicional)
+```text
+D-6  → whatsapp → lembrete_desconto_v1
+D+0  → whatsapp → boleto_vence_hoje_v1
+D+1  → whatsapp → boleto_vencido_urgente_v1
+D+2  → whatsapp → boleto_vencido_urgente_v1
+D+3  → whatsapp → boleto_vencido_urgente_v1
+D+4  → whatsapp → boleto_vencido_urgente_v1
+D+5  → whatsapp → ultimo_dia_sem_revistoria_v1
+D+6  → whatsapp → impedimento_pagamento_v1
+D+7  → whatsapp → reforco_contato_v1
+D+8  → whatsapp → urgencia_revistoria_v1
+D+9  → whatsapp → alerta_retirada_v1
+D+10 → whatsapp → ultima_tentativa_v1
+D+11 → whatsapp → aviso_negativacao_v1
+D+12 → whatsapp → debito_com_multa_v1
+D+13 → whatsapp → regularize_cadastro_v1
+D+14 → whatsapp → reativacao_protecao_v1
+D+61 → whatsapp → reativacao_protecao_v1
+```
 
-Status:
-- "Concluido": `minutos_trabalhados >= (jornada_duracao_turno * 60 - 10)`
-- "Incompleto": menos horas que esperado
-- "Improdutivo": 0 servicos concluidos
+### 2c. Badge de status do template
 
-### Accordion expand
-Ao tocar, expandir inline com `Accordion` do shadcn:
-- `inicio_turno` / `fim_turno` formatados
-- `minutos_almoco` utilizado
-- Recusas do dia (query `registros_recusa_tarefa`)
-- `minutos_extras` / `minutos_faltantes`
+No seletor de template de cada etapa, exibir badge com o status Meta do template selecionado (verde=APPROVED, amarelo=PENDING, cinza=DRAFT, vermelho=REJECTED). Isso permite ao coordenador saber quais templates ja estao aprovados.
 
-### Paginacao
-Botao "Carregar mais" incrementando offset em 30.
+---
 
-### Configs lidas
-- `jornada_exibir_saldo_vistoriador` e `jornada_duracao_turno_horas` da query de configs ja existente
+## PARTE 3 — Template do boleto gerado (envio com PDF)
+
+O template `boleto_gerado_v1` e especial — e enviado no momento da geracao do boleto (fechamento mensal), nao pela regua. Registrar na tabela para que possa ser enviado para aprovacao da Meta e usado pelo `asaas-webhook` ou `FechamentoMensal`.
 
 ---
 
@@ -58,6 +85,16 @@ Botao "Carregar mais" incrementando offset em 30.
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/pages/instalador/InstaladorPerfil.tsx` | Reestruturar com Tabs, mover conteudo para aba "Meu Perfil" |
-| `src/components/vistoriador/HistoricoJornadas.tsx` | **Novo** — lista de turnos + resumo mensal |
+| DB migration (insert) | 14 registros em `whatsapp_meta_templates` |
+| `src/pages/cobranca/ReguaCobranca.tsx` | Query templates Meta + etapas padrao atualizadas + badge status |
+
+---
+
+## Proximos passos apos aprovacao
+
+Apos implementar, os templates ficam com status DRAFT. O operador devera:
+1. Ir em Integracoes > WhatsApp > Templates Meta
+2. Enviar cada template para aprovacao da Meta
+3. Sincronizar para verificar status
+4. Apos APPROVED, a regua pode executar automaticamente
 
