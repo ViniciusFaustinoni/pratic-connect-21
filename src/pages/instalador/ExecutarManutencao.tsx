@@ -853,6 +853,14 @@ export default function ExecutarManutencao() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+      <ModalValidacaoPresenca
+        open={showGpsModal}
+        onOpenChange={setShowGpsModal}
+        loading={gpsLoading}
+        resultado={gpsResultado}
+        onConfirmarPresenca={handleGpsConfirmar}
+        onCancelar={handleGpsCancelar}
+      />
     </div>
   );
 }
