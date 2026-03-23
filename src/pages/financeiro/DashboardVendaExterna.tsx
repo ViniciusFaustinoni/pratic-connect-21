@@ -30,6 +30,7 @@ export default function DashboardVendaExterna() {
   
   const [busca, setBusca] = useState('');
   const [filtro, setFiltro] = useState<Filtro>('todos');
+  const [filtroTipo, setFiltroTipo] = useState<FiltroTipo>('todos');
   const [anteciparVendedor, setAnteciparVendedor] = useState<VendedorResumo | null>(null);
   const [pagarVendedor, setPagarVendedor] = useState<VendedorResumo | null>(null);
   const [showExportar, setShowExportar] = useState(false);
