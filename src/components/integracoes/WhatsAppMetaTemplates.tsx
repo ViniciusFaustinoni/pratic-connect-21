@@ -178,6 +178,35 @@ export function WhatsAppMetaTemplates() {
         </AlertDescription>
       </Alert>
 
+      {/* Barra de progresso envio em massa */}
+      {envioEmMassa && envioProgresso && (
+        <Alert className="border-primary/30 bg-primary/5">
+          <ListChecks className="h-4 w-4" />
+          <AlertDescription>
+            <div className="space-y-2">
+              <div className="flex items-center justify-between">
+                <span className="text-sm font-medium">
+                  Enviando {envioProgresso.atual}/{envioProgresso.total} — <span className="font-mono text-xs">{envioProgresso.nome}</span>
+                </span>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 text-xs"
+                  onClick={() => { cancelarFilaRef.current = true; }}
+                >
+                  <X className="h-3 w-3 mr-1" />
+                  Cancelar
+                </Button>
+              </div>
+              <Progress value={(envioProgresso.atual / envioProgresso.total) * 100} className="h-2" />
+              <p className="text-[10px] text-muted-foreground">
+                Tempo estimado: ~{Math.max(0, (envioProgresso.total - envioProgresso.atual)) * 15}s restantes • Intervalo de 15s entre envios
+              </p>
+            </div>
+          </AlertDescription>
+        </Alert>
+      )}
+
       {/* Resumo */}
       <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
         {[
