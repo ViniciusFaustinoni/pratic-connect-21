@@ -13521,6 +13521,7 @@ export type Database = {
           rastreador_id: string | null
           rota_id: string | null
           status: Database["public"]["Enums"]["status_instalacao"]
+          tipo_deslocamento: string | null
           uf: string | null
           updated_at: string
           veiculo_id: string
@@ -13560,6 +13561,7 @@ export type Database = {
           rastreador_id?: string | null
           rota_id?: string | null
           status?: Database["public"]["Enums"]["status_instalacao"]
+          tipo_deslocamento?: string | null
           uf?: string | null
           updated_at?: string
           veiculo_id: string
@@ -13599,6 +13601,7 @@ export type Database = {
           rastreador_id?: string | null
           rota_id?: string | null
           status?: Database["public"]["Enums"]["status_instalacao"]
+          tipo_deslocamento?: string | null
           uf?: string | null
           updated_at?: string
           veiculo_id?: string

@@ -358,6 +358,26 @@ serve(async (req) => {
       const permiteEncaixe = cotacao.vistoria_permite_encaixe || false;
       console.log(`[CriarInstalacaoPosPagamento] permite_encaixe: ${permiteEncaixe}`);
 
+      // 5.3 Determinar tipo_deslocamento pelo Mapa de Atendimento
+      let tipoDeslocamento = 'volante';
+      try {
+        const { data: municipio } = await supabase
+          .from('municipios_atendimento')
+          .select('tipo_atendimento')
+          .ilike('nome', (endereco.cidade || '').trim())
+          .ilike('uf', (endereco.estado || '').trim())
+          .maybeSingle();
+
+        if (municipio?.tipo_atendimento === 'viagem') {
+          tipoDeslocamento = 'viagem';
+        } else if (municipio?.tipo_atendimento === 'prestador') {
+          tipoDeslocamento = 'prestador';
+        }
+        console.log(`[CriarInstalacaoPosPagamento] tipo_deslocamento: ${tipoDeslocamento} (municipio: ${endereco.cidade}/${endereco.estado})`);
+      } catch (err) {
+        console.warn('[CriarInstalacaoPosPagamento] Erro ao consultar municipio, usando volante:', err);
+      }
+
       // 6. CRIAR INSTALAÇÃO
       const periodoValido = ['manha', 'tarde'].includes(periodoAgendado || '') ? periodoAgendado : null;
       
@@ -382,6 +402,7 @@ serve(async (req) => {
         permite_encaixe: permiteEncaixe,
         local_vistoria: 'cliente',
         instalador_responsavel_id: null,
+        tipo_deslocamento: tipoDeslocamento,
       };
       
       console.log('[CriarInstalacaoPosPagamento] Criando instalação:', JSON.stringify(instalacaoData));
