@@ -85,10 +85,9 @@ export default function InstalacoesList() {
   const { data: slaConfig } = useSlaConfig();
 
   // Extract instalacoes and pagination from data
-  const { instalacoes, pagination } = useMemo(() => {
+  const { instalacoes: rawInstalacoes, pagination } = useMemo(() => {
     if (!data) return { instalacoes: [] as InstalacaoWithRelations[], pagination: undefined };
     
-    // If data has instalacoes property, it's the paginated format
     if ('instalacoes' in data) {
       return { 
         instalacoes: data.instalacoes, 
@@ -96,9 +95,19 @@ export default function InstalacoesList() {
       };
     }
     
-    // Otherwise it's just an array
     return { instalacoes: data as InstalacaoWithRelations[], pagination: undefined };
   }, [data]);
+
+  // Apply urgent filter client-side
+  const instalacoes = useMemo(() => {
+    if (!urgentFilter || !slaConfig) return rawInstalacoes;
+    return rawInstalacoes.filter(inst => {
+      if (inst.status === 'concluida' || inst.status === 'cancelada') return false;
+      const prazoHoras = slaConfig.instalacao;
+      const { percentual } = calcularPercentualSla(inst.created_at, prazoHoras);
+      return percentual <= 25;
+    });
+  }, [rawInstalacoes, urgentFilter, slaConfig]);
 
   const handleFilterChange = <T,>(setter: (v: T) => void, value: T) => {
     setter(value);
