@@ -19376,13 +19376,16 @@ export type Database = {
       }
       profiles: {
         Row: {
+          agencia_bancaria: string | null
           ativo: boolean
           avatar_url: string | null
+          banco: string | null
           bloqueado: boolean | null
           capacidade_diaria: number | null
           categoria_profissional: string | null
           cnpj: string | null
           codigo_sga_voluntario: string | null
+          conta_bancaria: string | null
           cpf: string | null
           created_at: string
           created_by: string | null
@@ -19396,24 +19399,30 @@ export type Database = {
           notif_documentos_pendentes: boolean | null
           notif_novos_leads: boolean | null
           notif_resumo_diario: boolean | null
+          pix_chave: string | null
+          pix_tipo: string | null
           primeiro_acesso: boolean
           razao_social: string | null
           regioes_atendimento: string[] | null
           telefone: string | null
           tipo: Database["public"]["Enums"]["tipo_usuario"]
+          tipo_conta: string | null
           updated_at: string
           updated_by: string | null
           user_id: string
           whatsapp: string | null
         }
         Insert: {
+          agencia_bancaria?: string | null
           ativo?: boolean
           avatar_url?: string | null
+          banco?: string | null
           bloqueado?: boolean | null
           capacidade_diaria?: number | null
           categoria_profissional?: string | null
           cnpj?: string | null
           codigo_sga_voluntario?: string | null
+          conta_bancaria?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
@@ -19427,24 +19436,30 @@ export type Database = {
           notif_documentos_pendentes?: boolean | null
           notif_novos_leads?: boolean | null
           notif_resumo_diario?: boolean | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
           primeiro_acesso?: boolean
           razao_social?: string | null
           regioes_atendimento?: string[] | null
           telefone?: string | null
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
+          tipo_conta?: string | null
           updated_at?: string
           updated_by?: string | null
           user_id: string
           whatsapp?: string | null
         }
         Update: {
+          agencia_bancaria?: string | null
           ativo?: boolean
           avatar_url?: string | null
+          banco?: string | null
           bloqueado?: boolean | null
           capacidade_diaria?: number | null
           categoria_profissional?: string | null
           cnpj?: string | null
           codigo_sga_voluntario?: string | null
+          conta_bancaria?: string | null
           cpf?: string | null
           created_at?: string
           created_by?: string | null
@@ -19458,11 +19473,14 @@ export type Database = {
           notif_documentos_pendentes?: boolean | null
           notif_novos_leads?: boolean | null
           notif_resumo_diario?: boolean | null
+          pix_chave?: string | null
+          pix_tipo?: string | null
           primeiro_acesso?: boolean
           razao_social?: string | null
           regioes_atendimento?: string[] | null
           telefone?: string | null
           tipo?: Database["public"]["Enums"]["tipo_usuario"]
+          tipo_conta?: string | null
           updated_at?: string
           updated_by?: string | null
           user_id?: string
