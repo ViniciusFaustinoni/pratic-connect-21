@@ -8,7 +8,7 @@ interface ProtectedRouteProps {
   /** Roles permitidos (usa canAccess para verificar) */
   allowedRoles?: PerfilAcesso[];
   /** Tipos de usuário permitidos */
-  allowedTipos?: ('funcionario' | 'associado' | 'prestador')[];
+  allowedTipos?: ('funcionario' | 'associado' | 'prestador' | 'agencia')[];
   /** URL de redirect quando não autenticado */
   authRedirect?: string;
   /** Pular autenticação (usado para modo de teste) */
