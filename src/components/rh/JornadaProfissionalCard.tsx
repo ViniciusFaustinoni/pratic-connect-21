@@ -119,6 +119,7 @@ export function JornadaProfissionalCard({ turno, recusasNoTurno = 0, limiteRecus
               {recusasNoTurno} recusa{recusasNoTurno > 1 ? 's' : ''}
             </Badge>
           )}
+        </div>
 
         {/* Horários */}
         <div className="grid grid-cols-2 gap-2 text-sm">
