@@ -306,6 +306,11 @@ export default function InstalacoesList() {
                     )}
                   </TableCell>
                   <TableCell>
+                    {inst.status !== 'concluida' && inst.status !== 'cancelada' && (
+                      <SlaIndicador criadoEm={inst.created_at} tipoServico="instalacao" />
+                    )}
+                  </TableCell>
+                  <TableCell>
                     <Badge className={cn("text-xs", STATUS_INSTALACAO_COLORS[inst.status as StatusInstalacao])}>
                       {STATUS_INSTALACAO_LABELS[inst.status as StatusInstalacao]}
                     </Badge>

@@ -519,6 +519,51 @@ export function InstalacaoRotasConfig() {
         </CardContent>
       </Card>
 
+      {/* ── Bloco 6 — Prazos de SLA ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock className="h-4 w-4" />
+            Prazos de SLA (Atendimento)
+          </CardTitle>
+          <CardDescription>
+            Prazo máximo para atendimento de cada tipo de serviço. Usado no indicador de prazo visível no app e no painel.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+            <div className="space-y-2">
+              <Label>Prazo instalação/vistoria (horas)</Label>
+              <Input type="number" min={1} max={168} value={slaInstalacao} onChange={e => setSlaInstalacao(e.target.value)} />
+            </div>
+            <div className="space-y-2">
+              <Label>Prazo manutenção/retirada (horas)</Label>
+              <Input type="number" min={1} max={168} value={slaManutencao} onChange={e => setSlaManutencao(e.target.value)} />
+            </div>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={async () => {
+              setSavingB6(true);
+              try {
+                await Promise.all([
+                  salvarConfig('sla_horas_instalacao', slaInstalacao, profile?.id),
+                  salvarConfig('sla_horas_manutencao', slaManutencao, profile?.id),
+                ]);
+                toast.success('Prazos de SLA salvos com sucesso');
+                invalidate();
+              } catch {
+                toast.error('Erro ao salvar prazos de SLA');
+              } finally {
+                setSavingB6(false);
+              }
+            }} disabled={savingB6} size="sm">
+              {savingB6 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              Salvar SLA
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── Bloco 4 — Regiões de Atendimento ── */}
       <Card>
         <CardHeader>

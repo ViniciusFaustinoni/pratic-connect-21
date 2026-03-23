@@ -193,6 +193,14 @@ export default function JornadasProfissionais() {
                   <p className="text-xs text-muted-foreground">Alerta improdutividade</p>
                   <p className="text-sm font-semibold">{parametros?.alertaImprodutividade || '2'}h</p>
                 </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Prazo instalação/vistoria</p>
+                  <p className="text-sm font-semibold">{parametros?.slaInstalacao || '48'}h</p>
+                </div>
+                <div className="rounded-lg bg-muted/30 p-3">
+                  <p className="text-xs text-muted-foreground">Prazo manutenção/retirada</p>
+                  <p className="text-sm font-semibold">{parametros?.slaManutencao || '24'}h</p>
+                </div>
               </div>
               <div className="flex justify-end">
                 <Button variant="outline" size="sm" onClick={() => navigate('/diretoria/gestao-comercial')}>
