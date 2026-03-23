@@ -1,8 +1,9 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wrench, ClipboardCheck, Puzzle } from 'lucide-react';
+import { Wrench, ClipboardCheck, Puzzle, Truck } from 'lucide-react';
 import Instalacoes from './Instalacoes';
 import Vistorias from './Vistorias';
 import MonitoramentoEncaixes from './Encaixes';
+import ViagensTab from './ViagensTab';
 
 export default function VistoriasInstalacoesMon() {
   return (
@@ -28,6 +29,10 @@ export default function VistoriasInstalacoesMon() {
             <Puzzle className="h-4 w-4" />
             Encaixes
           </TabsTrigger>
+          <TabsTrigger value="viagens" className="gap-2">
+            <Truck className="h-4 w-4" />
+            Viagens
+          </TabsTrigger>
         </TabsList>
 
         <TabsContent value="instalacoes">
@@ -40,6 +45,10 @@ export default function VistoriasInstalacoesMon() {
 
         <TabsContent value="encaixes">
           <MonitoramentoEncaixes embedded />
+        </TabsContent>
+
+        <TabsContent value="viagens">
+          <ViagensTab />
         </TabsContent>
       </Tabs>
     </div>
