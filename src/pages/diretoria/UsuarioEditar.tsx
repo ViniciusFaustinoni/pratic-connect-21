@@ -110,7 +110,7 @@ export default function UsuarioEditarPage() {
           nome: data.nome,
           email: data.email,
           telefone: data.telefone || null,
-          tipo: data.tipo,
+          tipo: data.tipo as 'funcionario' | 'associado' | 'prestador' | 'agencia',
           ativo: data.ativo,
         }
       },
