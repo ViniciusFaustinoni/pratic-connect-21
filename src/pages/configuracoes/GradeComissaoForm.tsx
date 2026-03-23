@@ -119,6 +119,7 @@ export default function GradeComissaoForm() {
           nome: n.nome.trim(),
           percentual: n.percentual,
           ordem: i,
+          role: n.role,
         })));
       if (nErr) throw nErr;
 
