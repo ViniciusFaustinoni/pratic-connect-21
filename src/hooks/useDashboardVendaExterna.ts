@@ -164,6 +164,7 @@ export function useDashboardVendaExterna() {
         vendedorMap[vid] = {
           vendedor_id: vid,
           vendedor_nome: nomeMap[vid] || 'Vendedor',
+          tipo: roleMap[vid] || 'Outro',
           saldo_atual: 0,
           a_pagar_mes: 0,
           antecipacoes_abertas: 0,
