@@ -31,24 +31,24 @@ const acoes = [
   { value: 'cancelamento', label: 'Cancelamento', icon: XCircle, cor: 'bg-red-200 text-red-900 dark:bg-red-950 dark:text-red-200' },
 ];
 
-const templates = [
-  { value: 'lembrete_vencimento', label: 'Lembrete de Vencimento' },
-  { value: 'boleto_vence_hoje', label: 'Boleto Vence Hoje' },
-  { value: 'boleto_vencido', label: 'Boleto Vencido' },
-  { value: 'aviso_suspensao', label: 'Aviso de Suspensão' },
-  { value: 'aviso_negativacao', label: 'Aviso de Negativação' },
-  { value: 'aviso_cancelamento', label: 'Aviso de Cancelamento' },
-];
-
 const etapasPadrao: Etapa[] = [
-  { id: crypto.randomUUID(), dias: -3, acao: 'whatsapp', template: 'lembrete_vencimento', ativa: true },
-  { id: crypto.randomUUID(), dias: 0, acao: 'whatsapp', template: 'boleto_vence_hoje', ativa: true },
-  { id: crypto.randomUUID(), dias: 3, acao: 'whatsapp', template: 'boleto_vencido', ativa: true },
-  { id: crypto.randomUUID(), dias: 7, acao: 'ligacao', ativa: true },
-  { id: crypto.randomUUID(), dias: 15, acao: 'sms', template: 'aviso_suspensao', ativa: true },
-  { id: crypto.randomUUID(), dias: 30, acao: 'suspensao', ativa: true },
-  { id: crypto.randomUUID(), dias: 60, acao: 'negativacao', ativa: true },
-  { id: crypto.randomUUID(), dias: 90, acao: 'cancelamento', ativa: true },
+  { id: crypto.randomUUID(), dias: -6, acao: 'whatsapp', template: 'lembrete_desconto_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 0, acao: 'whatsapp', template: 'boleto_vence_hoje_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 1, acao: 'whatsapp', template: 'boleto_vencido_urgente_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 2, acao: 'whatsapp', template: 'boleto_vencido_urgente_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 3, acao: 'whatsapp', template: 'boleto_vencido_urgente_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 4, acao: 'whatsapp', template: 'boleto_vencido_urgente_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 5, acao: 'whatsapp', template: 'ultimo_dia_sem_revistoria_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 6, acao: 'whatsapp', template: 'impedimento_pagamento_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 7, acao: 'whatsapp', template: 'reforco_contato_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 8, acao: 'whatsapp', template: 'urgencia_revistoria_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 9, acao: 'whatsapp', template: 'alerta_retirada_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 10, acao: 'whatsapp', template: 'ultima_tentativa_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 11, acao: 'whatsapp', template: 'aviso_negativacao_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 12, acao: 'whatsapp', template: 'debito_com_multa_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 13, acao: 'whatsapp', template: 'regularize_cadastro_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 14, acao: 'whatsapp', template: 'reativacao_protecao_v1', ativa: true },
+  { id: crypto.randomUUID(), dias: 61, acao: 'whatsapp', template: 'reativacao_protecao_v1', ativa: true },
 ];
 
 const formatDias = (dias: number) => {
@@ -64,11 +64,37 @@ const getDiasColor = (dias: number) => {
   return 'bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300';
 };
 
+const getStatusBadge = (status: string) => {
+  switch (status) {
+    case 'APPROVED':
+      return <Badge className="bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300 text-[10px] px-1.5">Aprovado</Badge>;
+    case 'PENDING':
+      return <Badge className="bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300 text-[10px] px-1.5">Pendente</Badge>;
+    case 'REJECTED':
+      return <Badge className="bg-red-100 text-red-800 dark:bg-red-900 dark:text-red-300 text-[10px] px-1.5">Rejeitado</Badge>;
+    default:
+      return <Badge variant="secondary" className="text-[10px] px-1.5">Rascunho</Badge>;
+  }
+};
+
 export default function ReguaCobranca() {
   const queryClient = useQueryClient();
   const [etapas, setEtapas] = useState<Etapa[]>([]);
   const [novaEtapaOpen, setNovaEtapaOpen] = useState(false);
   const [novaEtapa, setNovaEtapa] = useState<Partial<Etapa>>({ dias: 0, acao: 'whatsapp', ativa: true });
+
+  // Query templates Meta reais
+  const { data: metaTemplates } = useQuery({
+    queryKey: ['whatsapp-meta-templates-regua'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('whatsapp_meta_templates')
+        .select('id, nome, status, categoria')
+        .order('nome');
+      if (error) throw error;
+      return data || [];
+    },
+  });
 
   const { data: regua, isLoading } = useQuery({
     queryKey: ['regua-cobranca'],
@@ -149,7 +175,36 @@ export default function ReguaCobranca() {
   const getAcaoInfo = (acao: string) => acoes.find(a => a.value === acao) || acoes[0];
   const acoesMensagem = ['whatsapp', 'sms', 'email'];
 
+  const getTemplateStatus = (templateNome?: string) => {
+    if (!templateNome || !metaTemplates) return null;
+    const found = metaTemplates.find(t => t.nome === templateNome);
+    return found?.status || null;
+  };
+
   const etapasOrdenadas = [...etapas].sort((a, b) => a.dias - b.dias);
+
+  const renderTemplateSelect = (value: string | undefined, onChange: (v: string) => void) => {
+    const status = getTemplateStatus(value);
+    return (
+      <div className="flex items-center gap-2">
+        <Select value={value || ''} onValueChange={onChange}>
+          <SelectTrigger className="w-[200px]">
+            <SelectValue placeholder="Selecionar template" />
+          </SelectTrigger>
+          <SelectContent>
+            {metaTemplates?.map((t) => (
+              <SelectItem key={t.nome} value={t.nome}>
+                <div className="flex items-center gap-2">
+                  <span>{t.nome}</span>
+                </div>
+              </SelectItem>
+            ))}
+          </SelectContent>
+        </Select>
+        {status && getStatusBadge(status)}
+      </div>
+    );
+  };
 
   return (
     <div className="space-y-6">
@@ -169,9 +224,9 @@ export default function ReguaCobranca() {
       <Alert>
         <Info className="h-4 w-4" />
         <AlertDescription>
-          <strong>Como funciona:</strong> Configure as ações automáticas baseadas no vencimento.
+          <strong>Como funciona:</strong> Configure as ações automáticas baseadas no vencimento. Os templates são enviados via API Oficial da Meta e precisam estar com status <strong>Aprovado</strong> para funcionar.
           <br />
-          <span className="text-blue-600 dark:text-blue-400">Dias negativos (D-3)</span> = antes do vencimento |{' '}
+          <span className="text-blue-600 dark:text-blue-400">Dias negativos (D-6)</span> = antes do vencimento |{' '}
           <span className="text-yellow-600 dark:text-yellow-400">D+0</span> = dia do vencimento |{' '}
           <span className="text-red-600 dark:text-red-400">Dias positivos (D+7)</span> = após vencimento
         </AlertDescription>
@@ -181,7 +236,7 @@ export default function ReguaCobranca() {
       <Card>
         <CardHeader>
           <CardTitle className="text-lg">Linha do Tempo</CardTitle>
-          <CardDescription>Visualização do fluxo de cobrança</CardDescription>
+          <CardDescription>Visualização do fluxo de cobrança — {etapasOrdenadas.length} etapas</CardDescription>
         </CardHeader>
         <CardContent>
           <div className="relative">
@@ -262,22 +317,9 @@ export default function ReguaCobranca() {
                   </Select>
                 </div>
 
-                {mostraTemplate && (
-                  <Select
-                    value={etapa.template || ''}
-                    onValueChange={(v) => handleChangeTemplate(etapa.id, v)}
-                  >
-                    <SelectTrigger className="w-[180px]">
-                      <SelectValue placeholder="Selecionar template" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {templates.map((t) => (
-                        <SelectItem key={t.value} value={t.value}>
-                          {t.label}
-                        </SelectItem>
-                      ))}
-                    </SelectContent>
-                  </Select>
+                {mostraTemplate && renderTemplateSelect(
+                  etapa.template,
+                  (v) => handleChangeTemplate(etapa.id, v)
                 )}
 
                 <div className="flex items-center gap-3 ml-auto">
@@ -364,9 +406,12 @@ export default function ReguaCobranca() {
                     <SelectValue placeholder="Selecione o template" />
                   </SelectTrigger>
                   <SelectContent>
-                    {templates.map((t) => (
-                      <SelectItem key={t.value} value={t.value}>
-                        {t.label}
+                    {metaTemplates?.map((t) => (
+                      <SelectItem key={t.nome} value={t.nome}>
+                        <div className="flex items-center gap-2">
+                          <span>{t.nome}</span>
+                          {getStatusBadge(t.status || 'DRAFT')}
+                        </div>
                       </SelectItem>
                     ))}
                   </SelectContent>
