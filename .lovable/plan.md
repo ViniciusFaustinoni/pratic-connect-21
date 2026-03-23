@@ -1,44 +1,37 @@
 
 
-# Plano: Mover "Gestao de Rotas" para dentro de "Vistorias e Instalacoes"
+# Plano: Sidebar + Correcao Status Softruck
 
-## Resumo
+## PARTE 1 — Sidebar
 
-Remover "Gestao de Rotas" como item separado na sidebar da Diretoria e adiciona-lo como uma nova aba dentro da pagina Rotas.tsx (que e renderizada em `/diretoria/vistorias-instalacoes`).
+Auditoria confirma que **todos os itens ja existem** no sidebar:
+- Monitoramento: "Prestadores Parceiros" (L232), "Encaixes" (L233) ✅
+- RH: "Treinamentos" (L368), "Recrutamento" (L369) ✅
+- Diretoria: "Gestao de Rotas" foi consolidado como aba dentro de "Vistorias e Instalacoes" (prompt anterior aprovado)
+
+**Nenhuma alteracao necessaria na sidebar.**
 
 ---
 
-## Alteracoes
+## PARTE 2 — Correcao Status Softruck
 
-### 1. `src/components/layout/AppSidebar.tsx`
+### Problema
 
-Remover a linha:
-```tsx
-{ title: 'Gestão de Rotas', url: '/diretoria/gestao-vistorias-instalacoes', icon: Route },
-```
+Softruck exige `configurado && testado` para mostrar "Conectado" (linha 203 de Integracoes.tsx). Se nenhum health check foi executado, `testado` e `false` e o status fica "Pendente".
 
-### 2. `src/pages/monitoramento/Rotas.tsx`
+### Correcao
 
-Adicionar nova aba "Gestao de Rotas" na TabsList (visivel apenas para quem tem `canEditRotas`):
+Alterar para `ativo: s.configurado` em dois arquivos:
 
-```tsx
-{canEditRotas && (
-  <TabsTrigger value="gestao-rotas">
-    <Route className="mr-1 h-4 w-4" />
-    Gestão de Rotas
-  </TabsTrigger>
-)}
-```
+**Arquivo 1**: `src/pages/configuracoes/Integracoes.tsx` (linha 203)
+- De: `ativo: s.configurado && s.testado`
+- Para: `ativo: s.configurado`
 
-Adicionar o TabsContent correspondente que renderiza o componente `GestaoRotas` inline (importado de `./GestaoRotas`), sem o header proprio dele (ja que o header da pagina Rotas.tsx cobre isso).
+**Arquivo 2**: `src/components/integracoes/ServicosTab.tsx` (linha 315)
+- De: `ativo: integracoes.softruck.configurado && integracoes.softruck.testado`
+- Para: `ativo: integracoes.softruck.configurado`
 
-### 3. `src/pages/monitoramento/GestaoRotas.tsx`
-
-Exportar tambem uma versao "embedded" sem header, ou adicionar prop `embedded?: boolean` que oculta o titulo/descricao quando renderizado como aba.
-
-### 4. Rota no `App.tsx`
-
-Manter a rota `/diretoria/gestao-vistorias-instalacoes` como redirect para `/diretoria/vistorias-instalacoes` (para links antigos nao quebrarem).
+Aplicar a mesma correcao para `rede_veiculos` por consistencia (linhas 212 e 323 respectivamente).
 
 ---
 
@@ -46,8 +39,6 @@ Manter a rota `/diretoria/gestao-vistorias-instalacoes` como redirect para `/dir
 
 | Arquivo | Alteracao |
 |---|---|
-| `src/components/layout/AppSidebar.tsx` | Remover item "Gestao de Rotas" |
-| `src/pages/monitoramento/Rotas.tsx` | Nova aba + import GestaoRotas |
-| `src/pages/monitoramento/GestaoRotas.tsx` | Prop `embedded` para ocultar header |
-| `src/App.tsx` | Redirect da rota antiga |
+| `src/pages/configuracoes/Integracoes.tsx` | Softruck e Rede Veiculos: remover `&& testado` |
+| `src/components/integracoes/ServicosTab.tsx` | Mesma correcao |
 
