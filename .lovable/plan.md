@@ -1,58 +1,94 @@
 
 
-# Plano: Atribuição de Grade de Comissão a Usuários
+# Plano: Configurar Perfil de Agência com Acesso Restrito
 
-## Problema
+## Contexto
 
-As grades de comissão são cadastradas mas não podem ser atribuídas a ninguém. Não existe coluna nem tabela de vínculo entre grades e usuários (consultores/agências). Sem isso, também é impossível testar o bloqueio de exclusão de grade em uso.
+O role `agencia` ja existe em `app_roles_config` com 41 usuarios vinculados. Porem:
+- Nao esta configurado como operacional (nao tem redirect_path)
+- Tem permissoes genericas (`canManageLeads`, `canViewDashboard`) que dao acesso amplo
+- A rota `/perfil/conta-corrente` ja existe e funciona para vendedores
+- Nao existe vinculo hierarquico agencia→vendedores (apenas `equipes_comerciais` com supervisor→vendedor)
+- Nao existe pagina dedicada de dashboard para agencia
 
-## Solução
+## Solucao
 
-### 1. Migration — Criar tabela de vínculo
+### 1. Migration — Tabela de vinculo agencia→vendedores + config do role
+
+**Tabela `agencia_vendedores`**: vincula vendedores a uma agencia para que a agencia veja comissoes de todos abaixo dela.
 
 ```sql
-CREATE TABLE public.usuario_grade_comissao (
+CREATE TABLE public.agencia_vendedores (
   id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-  user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
-  grade_id UUID NOT NULL REFERENCES public.grades_comissao(id) ON DELETE RESTRICT,
-  atribuido_por UUID REFERENCES auth.users(id),
+  agencia_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
+  vendedor_user_id UUID NOT NULL REFERENCES auth.users(id) ON DELETE CASCADE,
   created_at TIMESTAMPTZ DEFAULT now(),
-  UNIQUE(user_id)
+  UNIQUE(agencia_user_id, vendedor_user_id)
 );
-
-ALTER TABLE public.usuario_grade_comissao ENABLE ROW LEVEL SECURITY;
-
-CREATE POLICY "Admins podem gerenciar vínculos de grade"
-ON public.usuario_grade_comissao FOR ALL TO authenticated
-USING (public.has_permission(auth.uid(), 'manage_users'))
-WITH CHECK (public.has_permission(auth.uid(), 'manage_users'));
-
-CREATE POLICY "Usuário vê própria grade"
-ON public.usuario_grade_comissao FOR SELECT TO authenticated
-USING (user_id = auth.uid());
 ```
 
-O `ON DELETE RESTRICT` na FK de `grade_id` impede exclusão de grade em uso diretamente no banco.
+**Atualizar `app_roles_config`**: marcar agencia como operacional com redirect para `/agencia`, permissoes restritas a comissoes.
 
-### 2. Tela de Grades — Botão "Atribuir" e bloqueio de exclusão
+```sql
+UPDATE app_roles_config SET
+  is_operational = true,
+  redirect_path = '/agencia',
+  permissions = '["canViewContaCorrente","canViewComissoesEquipe"]'::jsonb
+WHERE role = 'agencia';
+```
 
-**Arquivo**: `src/pages/configuracoes/GradesComissao.tsx`
+### 2. Criar pagina `/agencia` — Dashboard da Agencia
 
-- Ao tentar excluir, verificar se existem registros em `usuario_grade_comissao` com aquele `grade_id`. Se sim, exibir toast: "Esta grade está atribuída a X usuário(s) e não pode ser excluída."
-- Adicionar coluna "Usuários" na listagem mostrando quantos estão vinculados.
+**Novo arquivo**: `src/pages/agencia/AgenciaDashboard.tsx`
 
-### 3. Tela de Usuários — Campo de grade no formulário
+Pagina com duas abas:
+- **Conta Corrente**: reutiliza o mesmo hook `useContaCorrenteVendedor` com o `profile.id` da agencia logada — mostra saldo, extrato, filtros por periodo/tipo/status
+- **Comissoes da Equipe**: busca comissoes de todos os vendedores vinculados via `agencia_vendedores`, mostrando tabela com nome do vendedor, valor, status, mes/ano, com totalizadores
 
-**Arquivo**: `src/pages/configuracoes/UsuarioForm.tsx`
+A agencia so ve dados proprios e dos vendedores vinculados — nenhum outro modulo e acessivel.
 
-- Para usuários com roles operacionais de vendas (`consultor_interno`, `consultor_externo`, `agencia`), exibir um select de "Grade de Comissão" carregando as grades ativas de `grades_comissao`.
-- Ao salvar, inserir/atualizar o registro em `usuario_grade_comissao`.
+### 3. Rota no App.tsx
 
-### 4. Arquivos afetados
+Adicionar dentro do `<Route element={<AppLayout />}>`:
 
-| Arquivo | Alteração |
+```tsx
+<Route path="/agencia" element={<AgenciaDashboard />} />
+```
+
+### 4. Registro no MODULE_ROUTES
+
+Em `useModuleVisibility.ts`, adicionar:
+
+```typescript
+agencia: ['/agencia', '/perfil/conta-corrente'],
+```
+
+### 5. Criar usuario fake para teste
+
+Via insert no banco (nao no codigo):
+- Criar auth user com email `agencia.teste@praticcar.org`
+- Criar profile vinculado
+- Atribuir role `agencia` em `user_roles`
+- Vincular 2-3 vendedores existentes em `agencia_vendedores`
+
+### 6. Sidebar — item para agencia
+
+O `useRouteGuard` ja redireciona perfis operacionais para o `redirect_path`. O sidebar precisa mostrar apenas o item "Minha Conta" para o role agencia — isso ja e controlado por `user_module_visibility`, que sera configurado para o usuario de teste.
+
+## Arquivos afetados
+
+| Arquivo | Alteracao |
 |---|---|
-| Migration SQL | Criar tabela `usuario_grade_comissao` com RLS |
-| `GradesComissao.tsx` | Contagem de usuários, bloqueio de exclusão |
-| `UsuarioForm.tsx` | Select de grade para consultores/agências |
+| Migration SQL | Criar `agencia_vendedores`, atualizar `app_roles_config` |
+| `src/pages/agencia/AgenciaDashboard.tsx` | **Novo** — dashboard com conta corrente + comissoes equipe |
+| `src/App.tsx` | Adicionar rota `/agencia` |
+| `src/hooks/useModuleVisibility.ts` | Adicionar `agencia` ao MODULE_ROUTES |
+| Dados no banco | Usuario fake + vinculos para teste |
+
+## O que nao muda
+
+- Pagina de Perfis de Acesso (o role `agencia` ja aparece la)
+- Formulario de usuario (ja permite atribuir role `agencia`)
+- Logica de login/auth
+- Conta corrente existente dos vendedores
 
