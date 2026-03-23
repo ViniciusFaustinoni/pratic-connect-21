@@ -14992,6 +14992,33 @@ export type Database = {
           },
         ]
       }
+      municipios_atendimento: {
+        Row: {
+          created_at: string | null
+          id: string
+          nome: string
+          tipo_atendimento: string
+          uf: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          id?: string
+          nome: string
+          tipo_atendimento: string
+          uf?: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          id?: string
+          nome?: string
+          tipo_atendimento?: string
+          uf?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       negativacoes: {
         Row: {
           acordo_id: string | null
