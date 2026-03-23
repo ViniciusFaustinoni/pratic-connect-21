@@ -425,6 +425,9 @@ export default function DashboardCoordenador() {
       {/* Agendamentos na Base */}
       <AgendamentosBase />
 
+      {/* Vistoriadores em Alerta de Improdutividade */}
+      <VistoriadoresEmAlerta />
+
       {/* Grid: Equipe + Alertas */}
       <div className="grid lg:grid-cols-3 gap-6">
         {/* Equipe de Hoje - 2 colunas */}
