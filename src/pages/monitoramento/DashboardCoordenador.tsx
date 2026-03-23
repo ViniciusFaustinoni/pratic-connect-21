@@ -78,6 +78,9 @@ export default function DashboardCoordenador() {
   const { data: rastreadoresPortador, isLoading: loadingRastreadoresPortador } = useRastreadoresPorPortador();
   const { data: performanceSemanal, isLoading: loadingPerformance } = usePerformanceSemanalCoordenador();
 
+  // Monitor silencioso de prestadores sem resposta
+  useMonitorPrestadorSemResposta();
+
   const isLoading = loadingVistorias || loadingInstalacoes || loadingRotas;
 
   const kpiCards = [
