@@ -413,7 +413,7 @@ export default function UsuarioForm() {
         }
 
         // Salvar grade de comissão
-        const isVendas = formData.perfis.some(p => ['consultor_interno', 'consultor_externo', 'agencia'].includes(p));
+        const isVendas = formData.perfis.some(p => ['vendedor_clt', 'vendedor_externo', 'agencia'].includes(p));
         if (isVendas && formData.grade_comissao_id) {
           const { data: session } = await supabase.auth.getSession();
           await (supabase as any).from('usuario_grade_comissao').delete().eq('user_id', usuario.user_id);
