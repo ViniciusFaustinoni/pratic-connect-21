@@ -383,7 +383,7 @@ export default function UsuarioForm() {
       cnpj: (usuario as any).cnpj || '',
       razao_social: (usuario as any).razao_social || '',
       nome_fantasia: (usuario as any).nome_fantasia || '',
-      senha: '', tipo: usuario.tipo || 'funcionario', ativo: usuario.ativo ?? true,
+      senha: '', tipo: (usuario.roles || []).includes('agencia') ? 'agencia' : (usuario.tipo || 'funcionario'), ativo: usuario.ativo ?? true,
       perfis: usuario.roles || [], regioes_atendimento: usuario.regioes_atendimento || [],
       capacidade_diaria: usuario.capacidade_diaria || 10,
       grade_comissao_id: userGrade || '',
@@ -407,7 +407,7 @@ export default function UsuarioForm() {
   const saveUser = useMutation({
     mutationFn: async () => {
       if (isEditing && usuario) {
-        const isAgencia = formData.perfis.includes('agencia');
+        const isAgencia = formData.tipo === 'agencia';
         const profileUpdate: any = {
           nome: formData.nome, telefone: formData.telefone,
           tipo: formData.tipo as any, ativo: formData.ativo,
@@ -449,7 +449,7 @@ export default function UsuarioForm() {
       } else {
         setFieldErrors({});
         const isVistoriador = formData.perfis.some(p => ['instalador_vistoriador', 'vistoriador_base'].includes(p));
-        const isAgenciaNew = formData.perfis.includes('agencia');
+        const isAgenciaNew = formData.tipo === 'agencia';
         const { data, error } = await supabase.functions.invoke('create-user', {
           body: {
             nome: formData.nome, email: formData.email, telefone: formData.telefone,
@@ -523,21 +523,49 @@ export default function UsuarioForm() {
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
           {/* Coluna Principal */}
           <div className="lg:col-span-2 space-y-6">
+            {/* Tipo de Usuário — primeiro campo */}
+            <Card className="border-border/50">
+              <CardHeader>
+                <CardTitle className="text-lg">Tipo de Usuário *</CardTitle>
+                <CardDescription>Selecione o tipo para definir o cadastro</CardDescription>
+              </CardHeader>
+              <CardContent>
+                <Select value={formData.tipo} onValueChange={(v) => {
+                  const updates: any = { tipo: v };
+                  if (v === 'agencia' && !formData.perfis.includes('agencia')) {
+                    updates.perfis = [...formData.perfis.filter(p => p !== 'agencia'), 'agencia'];
+                  }
+                  if (v !== 'agencia') {
+                    updates.perfis = formData.perfis.filter(p => p !== 'agencia');
+                  }
+                  setFormData(prev => ({ ...prev, ...updates }));
+                }}>
+                  <SelectTrigger className="bg-background"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
+                  <SelectContent>
+                    <SelectItem value="funcionario">Funcionário</SelectItem>
+                    <SelectItem value="associado">Associado</SelectItem>
+                    <SelectItem value="prestador">Prestador</SelectItem>
+                    <SelectItem value="agencia">Agência</SelectItem>
+                  </SelectContent>
+                </Select>
+              </CardContent>
+            </Card>
+
             {/* Informações Básicas */}
             <Card className="border-border/50">
               <CardHeader>
                 <CardTitle className="flex items-center gap-2 text-lg">
                   <User className="w-5 h-5" />
-                  Informações Básicas
+                  {formData.tipo === 'agencia' ? 'Dados da Empresa' : 'Informações Básicas'}
                 </CardTitle>
               </CardHeader>
               <CardContent className="space-y-4">
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                   <div className="space-y-2">
-                    <Label htmlFor="nome">Nome completo *</Label>
+                    <Label htmlFor="nome">{formData.tipo === 'agencia' ? 'Nome do responsável *' : 'Nome completo *'}</Label>
                     <Input id="nome" value={formData.nome} onChange={(e) => setFormData({ ...formData, nome: e.target.value })} className="bg-background" required />
                   </div>
-                  {formData.perfis.includes('agencia') ? (
+                  {formData.tipo === 'agencia' ? (
                     <div className="space-y-2">
                       <Label htmlFor="cnpj">CNPJ *</Label>
                       <Input id="cnpj" value={formData.cnpj} onChange={(e) => {
@@ -560,7 +588,7 @@ export default function UsuarioForm() {
                   )}
                 </div>
 
-                {formData.perfis.includes('agencia') && (
+                {formData.tipo === 'agencia' && (
                   <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     <div className="space-y-2">
                       <Label htmlFor="razao_social">Razão Social *</Label>
@@ -600,18 +628,6 @@ export default function UsuarioForm() {
                     <p className="text-xs text-muted-foreground">Senha inicial para o usuário acessar o sistema</p>
                   </div>
                 )}
-
-                <div className="space-y-2">
-                  <Label htmlFor="tipo">Tipo de usuário *</Label>
-                  <Select value={formData.tipo} onValueChange={(v) => setFormData(prev => ({ ...prev, tipo: v }))}>
-                    <SelectTrigger className="bg-background"><SelectValue placeholder="Selecione o tipo" /></SelectTrigger>
-                    <SelectContent>
-                      <SelectItem value="funcionario">Funcionário</SelectItem>
-                      <SelectItem value="associado">Associado</SelectItem>
-                      <SelectItem value="prestador">Prestador</SelectItem>
-                    </SelectContent>
-                  </Select>
-                </div>
               </CardContent>
             </Card>
 
