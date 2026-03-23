@@ -161,43 +161,6 @@ export function MapaAtendimento() {
     onError: () => toast.error('Erro ao importar municípios'),
   });
 
-  const filtered = municipios.filter(m => {
-    const matchBusca = !busca || m.nome.toLowerCase().includes(busca.toLowerCase());
-    const matchTipo = filtroTipo === 'todos' || m.tipo_atendimento === filtroTipo;
-    return matchBusca && matchTipo;
-  });
-
-  const counts = {
-    volante: municipios.filter(m => m.tipo_atendimento === 'volante').length,
-    viagem: municipios.filter(m => m.tipo_atendimento === 'viagem').length,
-    prestador: municipios.filter(m => m.tipo_atendimento === 'prestador').length,
-    fora_cobertura: municipios.filter(m => m.tipo_atendimento === 'fora_cobertura').length,
-  };
-
-  if (isLoading) {
-    return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
-  }
-
-  if (municipios.length === 0) {
-    return (
-      <Card>
-        <CardContent className="py-12 text-center space-y-4">
-          <MapPin className="h-12 w-12 mx-auto text-muted-foreground/50" />
-          <div>
-            <h3 className="text-lg font-semibold">Nenhum município cadastrado</h3>
-            <p className="text-sm text-muted-foreground mt-1">
-              Importe a classificação padrão do Rio de Janeiro para começar.
-            </p>
-          </div>
-          <Button onClick={() => importMutation.mutate()} disabled={importMutation.isPending}>
-            {importMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
-            Importar classificação padrão RJ ({MUNICIPIOS_RJ.length} municípios)
-          </Button>
-        </CardContent>
-      </Card>
-    );
-  }
-
   // ===== Regras de Viagem =====
   const [viagemDiaria, setViagemDiaria] = useState('');
   const [viagemSla, setViagemSla] = useState('');
@@ -246,6 +209,43 @@ export function MapaAtendimento() {
     },
     onError: () => toast.error('Erro ao salvar regras de viagem'),
   });
+
+  const filtered = municipios.filter(m => {
+    const matchBusca = !busca || m.nome.toLowerCase().includes(busca.toLowerCase());
+    const matchTipo = filtroTipo === 'todos' || m.tipo_atendimento === filtroTipo;
+    return matchBusca && matchTipo;
+  });
+
+  const counts = {
+    volante: municipios.filter(m => m.tipo_atendimento === 'volante').length,
+    viagem: municipios.filter(m => m.tipo_atendimento === 'viagem').length,
+    prestador: municipios.filter(m => m.tipo_atendimento === 'prestador').length,
+    fora_cobertura: municipios.filter(m => m.tipo_atendimento === 'fora_cobertura').length,
+  };
+
+  if (isLoading) {
+    return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+  }
+
+  if (municipios.length === 0) {
+    return (
+      <Card>
+        <CardContent className="py-12 text-center space-y-4">
+          <MapPin className="h-12 w-12 mx-auto text-muted-foreground/50" />
+          <div>
+            <h3 className="text-lg font-semibold">Nenhum município cadastrado</h3>
+            <p className="text-sm text-muted-foreground mt-1">
+              Importe a classificação padrão do Rio de Janeiro para começar.
+            </p>
+          </div>
+          <Button onClick={() => importMutation.mutate()} disabled={importMutation.isPending}>
+            {importMutation.isPending ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Download className="h-4 w-4 mr-2" />}
+            Importar classificação padrão RJ ({MUNICIPIOS_RJ.length} municípios)
+          </Button>
+        </CardContent>
+      </Card>
+    );
+  }
 
   return (
     <div className="space-y-4">
