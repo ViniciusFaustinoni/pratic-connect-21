@@ -388,7 +388,100 @@ export function InstalacaoDetailDrawer({
               </div>
             </section>
 
-            {/* Registro de Presença GPS */}
+            {/* Seção Prestador */}
+            {prestadorLink && (
+              <>
+                <Separator />
+                <section>
+                  <h3 className="text-sm font-medium text-muted-foreground mb-2 flex items-center gap-1.5">
+                    <Send className="h-4 w-4" />
+                    Prestador
+                  </h3>
+                  <div className="space-y-3">
+                    <div className="flex items-center justify-between">
+                      <span className="text-sm font-medium">
+                        {prestadorLink.prestador?.nome_fantasia || prestadorLink.prestador?.razao_social || 'Prestador'}
+                      </span>
+                      <Badge variant="outline" className={cn(
+                        prestadorLink.status === 'aguardando' && 'bg-amber-500/15 text-amber-700 border-amber-500/30',
+                        prestadorLink.status === 'em_execucao' && 'bg-blue-500/15 text-blue-700 border-blue-500/30',
+                        prestadorLink.status === 'concluida' && 'bg-green-500/15 text-green-700 border-green-500/30',
+                      )}>
+                        {prestadorLink.status === 'aguardando' && '⏳ Aguardando'}
+                        {prestadorLink.status === 'em_execucao' && '🔧 Em execução'}
+                        {prestadorLink.status === 'concluida' && '✅ Concluído'}
+                      </Badge>
+                    </div>
+
+                    {prestadorLink.chegada_em && (
+                      <p className="text-xs text-muted-foreground">
+                        Chegada: {format(new Date(prestadorLink.chegada_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      </p>
+                    )}
+                    {prestadorLink.concluida_em && (
+                      <p className="text-xs text-muted-foreground">
+                        Concluído: {format(new Date(prestadorLink.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                      </p>
+                    )}
+
+                    {prestadorLink.foto_comprovante_url && (
+                      <div
+                        className="cursor-pointer"
+                        onClick={() => setFotoDialogUrl(prestadorLink.foto_comprovante_url)}
+                      >
+                        <img
+                          src={prestadorLink.foto_comprovante_url}
+                          alt="Comprovante"
+                          className="h-20 w-20 object-cover rounded-md border"
+                        />
+                        <p className="text-xs text-primary mt-1">Clique para ampliar</p>
+                      </div>
+                    )}
+
+                    <div className="flex gap-2">
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => {
+                          const url = `https://pratic-connect-21.lovable.app/prestador/instalacao/${prestadorLink.token}`;
+                          navigator.clipboard.writeText(url);
+                          toast({ title: 'Link copiado!' });
+                        }}
+                      >
+                        <Copy className="h-4 w-4 mr-1" />
+                        Copiar Link
+                      </Button>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        onClick={() => enviarLinkPrestador.mutate()}
+                        disabled={enviarLinkPrestador.isPending}
+                      >
+                        {enviarLinkPrestador.isPending ? (
+                          <Loader2 className="h-4 w-4 animate-spin mr-1" />
+                        ) : (
+                          <Send className="h-4 w-4 mr-1" />
+                        )}
+                        Reenviar
+                      </Button>
+                    </div>
+                  </div>
+                </section>
+              </>
+            )}
+
+            {/* Dialog para foto ampliada */}
+            <Dialog open={!!fotoDialogUrl} onOpenChange={() => setFotoDialogUrl(null)}>
+              <DialogContent className="max-w-lg">
+                <DialogHeader>
+                  <DialogTitle>Comprovante do Prestador</DialogTitle>
+                </DialogHeader>
+                {fotoDialogUrl && (
+                  <img src={fotoDialogUrl} alt="Comprovante" className="w-full rounded-md" />
+                )}
+              </DialogContent>
+            </Dialog>
+
             {registroPresenca && (
               <>
                 <Separator />
