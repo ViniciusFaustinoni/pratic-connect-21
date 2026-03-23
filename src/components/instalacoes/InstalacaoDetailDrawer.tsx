@@ -70,10 +70,66 @@ export function InstalacaoDetailDrawer({
   onEdit 
 }: InstalacaoDetailDrawerProps) {
   const { toast } = useToast();
+  const queryClient = useQueryClient();
   const [confirmDeleteOpen, setConfirmDeleteOpen] = useState(false);
+  const [fotoDialogUrl, setFotoDialogUrl] = useState<string | null>(null);
   const { data: instalacao, isLoading } = useInstalacao(instalacaoId || undefined);
   const updateStatus = useUpdateInstalacaoStatus();
   const deleteInstalacao = useDeleteInstalacao();
+
+  // Buscar link do prestador (se houver)
+  const { data: prestadorLink } = useQuery({
+    queryKey: ['prestador-link-instalacao', instalacaoId],
+    queryFn: async () => {
+      if (!instalacaoId) return null;
+      const { data } = await (supabase as any)
+        .from('instalacao_prestador_links')
+        .select('*, prestador:prestador_id(razao_social, nome_fantasia, whatsapp, telefone)')
+        .eq('instalacao_id', instalacaoId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      return data;
+    },
+    enabled: !!instalacaoId && open,
+  });
+
+  // Enviar/reenviar link do prestador
+  const enviarLinkPrestador = useMutation({
+    mutationFn: async () => {
+      if (!instalacao) throw new Error('Sem instalação');
+      // Precisamos de um prestador_id — buscar do serviço
+      const { data: servico } = await supabase
+        .from('servicos')
+        .select('prestador_id')
+        .eq('associado_id', instalacao.associado_id)
+        .eq('tipo', 'instalacao')
+        .not('prestador_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      const prestadorId = servico?.prestador_id;
+      if (!prestadorId) throw new Error('Nenhum prestador vinculado a esta instalação');
+
+      const { data, error } = await supabase.functions.invoke('gerar-link-prestador', {
+        body: { instalacao_id: instalacaoId, prestador_id: prestadorId },
+      });
+      if (error) throw error;
+      if (!data.success) throw new Error(data.error);
+      return data;
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['prestador-link-instalacao', instalacaoId] });
+      toast({
+        title: 'Link enviado!',
+        description: data.whatsapp_enviado
+          ? `WhatsApp enviado para ${data.prestador_nome}`
+          : `Link gerado para ${data.prestador_nome}`,
+      });
+    },
+    onError: (e: any) => toast({ title: 'Erro', description: e.message, variant: 'destructive' }),
+  });
 
   // Buscar registro de presença GPS
   const { data: registroPresenca } = useQuery({
