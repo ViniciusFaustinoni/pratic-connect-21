@@ -73,6 +73,28 @@ export function useJornadaTrabalho() {
 
   const hojeStr = getHojeBrasilia().toISOString().split('T')[0];
 
+  // Query para buscar configs de jornada do banco
+  const { data: configJornada } = useQuery({
+    queryKey: ['config-jornada'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['jornada_duracao_turno_horas', 'jornada_horas_ate_almoco', 'jornada_duracao_almoco_minutos']);
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        jornadaMinutos: Math.round((parseFloat(map.jornada_duracao_turno_horas) || 8) * 60),
+        ateAlmocoMinutos: Math.round((parseFloat(map.jornada_horas_ate_almoco) || 4) * 60),
+        duracaoAlmocoMinutos: parseInt(map.jornada_duracao_almoco_minutos) || 60,
+      };
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const JORNADA_PADRAO_MINUTOS = configJornada?.jornadaMinutos ?? FALLBACK_JORNADA;
+  const TEMPO_ATE_ALMOCO_MINUTOS = configJornada?.ateAlmocoMinutos ?? FALLBACK_ATE_ALMOCO;
+  const DURACAO_ALMOCO_MINUTOS = configJornada?.duracaoAlmocoMinutos ?? FALLBACK_DURACAO_ALMOCO;
+
   // Query para buscar turno de hoje
   const { data: turno, refetch: refetchTurno, isLoading } = useQuery({
     queryKey: ['turno-profissional', profile?.id, hojeStr],

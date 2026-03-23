@@ -265,7 +265,7 @@ serve(async (req) => {
       const limiteAlmocoMinutos = cfgAlmoco?.valor ? Math.round(parseFloat(cfgAlmoco.valor) * 60) : 240;
 
       if (minutosTrabalhados >= limiteAlmocoMinutos) {
-        console.log(`[atribuir-proxima-tarefa] Profissional trabalhou ${minutosTrabalhados} min. Forçando almoço.`);
+        console.log(`[atribuir-proxima-tarefa] Profissional trabalhou ${minutosTrabalhados} min (limite: ${limiteAlmocoMinutos}). Forçando almoço.`);
         
         await supabase
           .from('turnos_profissionais')
