@@ -149,6 +149,9 @@ serve(async (req) => {
 
     const atribuicoes: { profissional_id: string; servico_id: string; distancia_km: number; tipo_atribuicao: string }[] = [];
 
+    // Dedup: rastrear encaixes que já tiveram confirmação enviada nesta execução
+    const encaixesJaEnviados = new Set<string>();
+
     // 2. Para cada profissional, verificar se já tem tarefa e tentar atribuir
     for (const prof of profissionais as ProfissionalDisponivel[]) {
       // ========== VERIFICAR STATUS DE JORNADA (ALMOÇO) ==========
