@@ -433,7 +433,9 @@ export default function Integracoes() {
             {cat.titulo}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {cat.items.map((card) => (
+            {cat.items
+              .filter((card) => !card.diretorOnly || isDiretor)
+              .map((card) => (
               <IntegracaoCardUI
                 key={card.id}
                 card={card}
