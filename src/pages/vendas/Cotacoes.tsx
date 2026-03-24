@@ -811,7 +811,7 @@ export default function Cotacoes() {
         onExcluir={handleExcluir}
         copiandoWhatsAppId={copiandoWhatsApp}
         getPermissions={getPermissions}
-        selectable={permissions.cotacao.canDelete}
+        selectable={true}
         selectedIds={selectedIds}
         onToggleSelect={toggleSelect}
         onToggleAll={toggleSelectAll}
