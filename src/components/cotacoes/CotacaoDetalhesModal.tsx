@@ -85,6 +85,7 @@ interface CotacaoDetalhesModalProps {
   onEmail: (cotacao: CotacaoWithRelations) => void;
   onGerarContrato: (id: string) => void;
   onAceitar: (id: string) => void;
+  onDuplicar?: (cotacao: CotacaoWithRelations) => void;
   isCopiandoWhatsApp: boolean;
   isGerandoContrato: boolean;
   canGenerateContract: boolean;
