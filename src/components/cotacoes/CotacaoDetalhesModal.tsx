@@ -1,7 +1,7 @@
 import { useState } from 'react';
 import { format, formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { FileText, Send, Check, X, Eye, Car, Phone, User, ClipboardCopy, ExternalLink, Link2, FileDown, Mail, FileSignature, Loader2, Calendar, DollarSign, Shield, MapPin } from 'lucide-react';
+import { FileText, Send, Check, X, Eye, Car, Phone, User, ClipboardCopy, ExternalLink, Link2, FileDown, Mail, FileSignature, Loader2, Calendar, DollarSign, Shield, MapPin, Copy } from 'lucide-react';
 import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogDescription } from '@/components/ui/dialog';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -85,6 +85,7 @@ interface CotacaoDetalhesModalProps {
   onEmail: (cotacao: CotacaoWithRelations) => void;
   onGerarContrato: (id: string) => void;
   onAceitar: (id: string) => void;
+  onDuplicar?: (cotacao: CotacaoWithRelations) => void;
   isCopiandoWhatsApp: boolean;
   isGerandoContrato: boolean;
   canGenerateContract: boolean;
@@ -100,6 +101,7 @@ export function CotacaoDetalhesModal({
   onEmail,
   onGerarContrato,
   onAceitar,
+  onDuplicar,
   isCopiandoWhatsApp,
   isGerandoContrato,
   canGenerateContract,
@@ -245,6 +247,19 @@ export function CotacaoDetalhesModal({
                 <Button variant="outline" onClick={() => onAceitar(cotacao.id)}>
                   <Check className="h-4 w-4 mr-2" />
                   Marcar Aceita
+                </Button>
+              )}
+              
+              {onDuplicar && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    onDuplicar(cotacao);
+                    onOpenChange(false);
+                  }}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Duplicar
                 </Button>
               )}
             </div>
