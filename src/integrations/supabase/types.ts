@@ -26115,6 +26115,100 @@ export type Database = {
           },
         ]
       }
+      vistoria_prestador_links: {
+        Row: {
+          atribuido_por: string | null
+          chegada_em: string | null
+          concluida_em: string | null
+          created_at: string
+          foto_comprovante_url: string | null
+          id: string
+          instalacao_id: string
+          status: string
+          token: string
+          updated_at: string
+          valor: number | null
+          vistoriador_prestador_id: string
+          whatsapp_enviado: boolean | null
+          whatsapp_erro: string | null
+        }
+        Insert: {
+          atribuido_por?: string | null
+          chegada_em?: string | null
+          concluida_em?: string | null
+          created_at?: string
+          foto_comprovante_url?: string | null
+          id?: string
+          instalacao_id: string
+          status?: string
+          token?: string
+          updated_at?: string
+          valor?: number | null
+          vistoriador_prestador_id: string
+          whatsapp_enviado?: boolean | null
+          whatsapp_erro?: string | null
+        }
+        Update: {
+          atribuido_por?: string | null
+          chegada_em?: string | null
+          concluida_em?: string | null
+          created_at?: string
+          foto_comprovante_url?: string | null
+          id?: string
+          instalacao_id?: string
+          status?: string
+          token?: string
+          updated_at?: string
+          valor?: number | null
+          vistoriador_prestador_id?: string
+          whatsapp_enviado?: boolean | null
+          whatsapp_erro?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vistoria_prestador_links_atribuido_por_fkey"
+            columns: ["atribuido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistoria_prestador_links_atribuido_por_fkey"
+            columns: ["atribuido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistoria_prestador_links_atribuido_por_fkey"
+            columns: ["atribuido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistoria_prestador_links_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "instalacoes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistoria_prestador_links_instalacao_id_fkey"
+            columns: ["instalacao_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["instalacao_id"]
+          },
+          {
+            foreignKeyName: "vistoria_prestador_links_vistoriador_prestador_id_fkey"
+            columns: ["vistoriador_prestador_id"]
+            isOneToOne: false
+            referencedRelation: "vistoriadores_prestadores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vistoriador_cidades: {
         Row: {
           cidade: string
