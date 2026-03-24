@@ -10,6 +10,7 @@ interface VideoCaptureProps {
   uploading?: boolean;
   maxDuration?: number; // em segundos
   label?: string;
+  cameraOnly?: boolean; // Se true, remove opção de galeria
 }
 
 export function VideoCapture({
