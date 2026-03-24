@@ -422,6 +422,7 @@ serve(async (req) => {
         latitude,
         longitude,
         permite_encaixe,
+        confirmacao_whatsapp,
         status,
         logradouro,
         numero,
