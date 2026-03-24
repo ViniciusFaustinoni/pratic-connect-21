@@ -131,9 +131,6 @@ export default function InstaladorHome() {
 
   return (
     <>
-      {/* Overlay de bloqueio durante almoço */}
-      <AlmocoBloqueioOverlay />
-      
       <div className="bg-slate-900">
       {/* Banner Offline */}
       {!isOnline && (
