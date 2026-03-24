@@ -238,6 +238,16 @@ export default function AnaliseVistoria() {
         <Badge variant={statusBadge.variant}>{statusBadge.label}</Badge>
       </div>
 
+      {/* ALERTA PROEMINENTE: Chassi divergente — para análise de Roubo/Furto */}
+      {vistoria.chassi_validacao === 'diverge' && (
+        <Alert className="border-destructive bg-destructive/10 mb-6">
+          <AlertTriangle className="h-5 w-5 text-destructive" />
+          <AlertDescription className="text-destructive font-semibold text-base">
+            ⚠️ ATENÇÃO: Chassi divergente do CRLV — verificar antes de aprovar cobertura de Roubo/Furto
+          </AlertDescription>
+        </Alert>
+      )}
+
       <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
         {/* Coluna Esquerda - Dados e Fotos */}
         <div className="space-y-6">
