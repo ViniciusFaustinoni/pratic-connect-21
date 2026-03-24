@@ -1,51 +1,54 @@
 
 
-# Corrigir Responsividade no Safari/iPhone
+# Detectar técnicos offline por inatividade de localização
 
 ## Problema
-O sistema de gestao (layout principal com sidebar) nao funciona bem no Safari do iPhone:
-- Conteudo cortado por causa de `h-screen` (100vh), que no Safari inclui a barra de endereco do navegador
-- Sem safe-area insets para iPhones com notch
-- Botoes e cards podem sobrepor em telas estreitas
+Quando um técnico fecha o app sem encerrar o serviço, o campo `em_servico` permanece `true` no banco. O hook `useEquipe.ts` usa apenas esse boolean para determinar se o técnico está online — nunca verifica há quanto tempo a última localização foi enviada. Resultado: técnicos aparecem "online" indefinidamente.
 
-## Causa Raiz
-O `AppLayout` (gestao) usa `h-screen` que equivale a `100vh`. No Safari iOS, `100vh` inclui a area coberta pela barra de endereco, fazendo com que o conteudo fique "atras" dela e nao seja acessivel. O `InstaladorLayout` ja usa `h-[100dvh]` corretamente.
+O técnico envia localização a cada ~5 minutos via `useIniciarServico`. Se parou de enviar há mais de 10-15 minutos, está com o app fechado.
 
-## Alteracoes
+## Solução
+Duas camadas: detecção no frontend (visual) + limpeza automática no backend.
 
-### 1. `src/components/layout/AppLayout.tsx` — Usar `100dvh` em vez de `h-screen`
+### 1. `src/hooks/useEquipe.ts` — Verificar freshness do `updated_at`
 
-Trocar `h-screen` por `h-[100dvh]` no container principal para respeitar a viewport dinamica do Safari iOS.
+Na lógica que determina `status_operacional` (linha 177), além de checar `em_servico`, verificar se `updated_at` é recente (últimos 15 minutos). Se `em_servico=true` mas `updated_at` é antigo, marcar como `offline`.
 
-### 2. `src/components/layout/AppHeader.tsx` — Safe area no header
+```
+if (localizacao?.em_servico) {
+  const updatedAt = new Date(localizacao.updated_at).getTime();
+  const agoraMs = Date.now();
+  const LIMITE_INATIVIDADE_MS = 15 * 60 * 1000; // 15 minutos
+  
+  if (agoraMs - updatedAt > LIMITE_INATIVIDADE_MS) {
+    status_operacional = 'offline'; // App provavelmente fechado
+  } else {
+    // lógica existente de em_andamento/em_rota/etc
+  }
+}
+```
 
-Adicionar `pt-safe` no header para evitar sobreposicao com o notch em modo standalone (PWA).
+### 2. `src/hooks/useVistoriadoresRealtime.ts` — Mesma verificação
 
-### 3. `src/index.css` — Fallback global para `100dvh`
+Aplicar a mesma lógica de freshness. Atualmente o default é `disponivel_operacional` — deve ser `offline` se `updated_at` ultrapassou o limite.
 
-Adicionar regra CSS que garante que `h-screen` tenha fallback para `100dvh` quando suportado, e melhorar o suporte a safe-area no body/html.
+### 3. Edge Function `limpar-servico-inativo` — Limpeza automática (nova)
 
-### 4. `src/pages/Dashboard.tsx` — Responsividade dos KPIs e acoes rapidas
+Criar uma Edge Function agendada (cron a cada 10 minutos) que:
+- Busca registros em `vistoriadores_localizacao` com `em_servico=true` e `updated_at` mais antigo que 20 minutos
+- Atualiza `em_servico=false` para esses registros
+- Isso garante que mesmo sem o frontend aberto, o dado fica correto
 
-- Garantir que os cards KPI nao transbordem em telas de ~375px (iPhone SE)
-- Ajustar `QuickActions` para wrap correto em mobile
-- Ajustar texto de valores grandes (`R$ 407,3`) para nao quebrar layout
+### 4. Cron job via `pg_cron`
 
-### 5. `src/components/layout/AppSidebar.tsx` — Safe area no sidebar mobile
+Agendar a Edge Function para rodar a cada 10 minutos usando `pg_cron` + `pg_net`.
 
-Verificar se o Sheet do sidebar mobile respeita safe-area-inset no iPhone.
+## Resumo de alterações
 
-### 6. `src/components/analista-eventos/AnalistaEventosLayout.tsx` — Consistencia
-
-Ja usa `h-dvh`, verificar e garantir consistencia com outros layouts mobile.
-
-## Detalhes Tecnicos
-
-Mudancas CSS principais:
-- `h-screen` → `h-[100dvh]` nos layouts (suportado por todos navegadores modernos)
-- Adicionar `@supports (height: 100dvh)` fallback no CSS global
-- Padding com `env(safe-area-inset-*)` nos elementos fixos/sticky
-- `-webkit-overflow-scrolling: touch` ja presente, manter
-
-Arquivos: 4-5 arquivos, mudancas pontuais de classes CSS.
+| Arquivo | Mudança |
+|---------|---------|
+| `src/hooks/useEquipe.ts` | Adicionar check de freshness do `updated_at` (15 min) |
+| `src/hooks/useVistoriadoresRealtime.ts` | Mesma verificação de freshness |
+| `supabase/functions/limpar-servico-inativo/index.ts` | Nova Edge Function para limpar `em_servico` de registros inativos |
+| Cron job (SQL insert) | Agendar execução a cada 10 minutos |
 
