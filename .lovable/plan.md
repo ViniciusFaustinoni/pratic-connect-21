@@ -1,28 +1,50 @@
 
 
-# Corrigir atalho "Nova Cotação" para abrir o modal de tipos
+# Instalação sem autovistoria: enviar para aprovação do monitoramento
 
 ## Problema
-O botão "Nova Cotação" no Dashboard navega para `/vendas/cotacoes?novo=true`. No `Cotacoes.tsx`, o parâmetro `novo=true` abre diretamente o formulário de cotação (`setShowCotacaoForm(true)`), pulando o modal `NovaEntradaDialog` que oferece as opções: nova cotação, migração, troca de titularidade, substituição, inclusão, etc.
+Quando o associado escolhe vistoria agendada (não faz autovistoria), ao final da instalação o veículo vai para `status: 'ativo'` imediatamente (linha 1021 de `useServicos.ts`). O correto é que esse veículo apareça na aba **Aprovação de Associados** do Monitoramento para ser aprovado manualmente antes de ativar a Proteção 360.
 
-## Solução
-Uma alteração simples em `src/pages/vendas/Cotacoes.tsx`: no `useEffect` que lê o parâmetro `novo`, trocar `setShowCotacaoForm(true)` por `setShowNovaEntrada(true)`. Isso faz o atalho abrir o mesmo modal de seleção de tipo que o botão "Nova Cotação" da própria página de Cotações usa.
+O filtro atual da Aprovação de Associados (`useAprovacaoMonitoramento.ts`, linha 41) só mostra veículos com `cobertura_roubo_furto = true AND cobertura_total = false`. Veículos sem autovistoria têm `cobertura_roubo_furto = false`, então nunca aparecem na fila.
 
-## Alteração
+## Alterações
 
-**Arquivo**: `src/pages/vendas/Cotacoes.tsx` (linhas 137-138)
+### 1. `src/hooks/useServicos.ts` — `useAprovarVeiculoServico` (~linha 1016-1031)
 
-Trocar:
-```ts
-} else if (novoParam === 'true') {
-  setShowCotacaoForm(true);
+Condicionar o status do veículo após instalação:
+
+- **Com autovistoria** (`cobertura_roubo_furto = true`): manter comportamento atual — veículo `ativo`, aguarda monitoramento para `cobertura_total`
+- **Sem autovistoria** (`cobertura_roubo_furto = false/null`): veículo vai para `em_analise` em vez de `ativo`
+
+Também ajustar o toast (linha 1138) para diferenciar as mensagens.
+
+### 2. `src/hooks/useAprovacaoMonitoramento.ts` — Ampliar filtro da fila
+
+**`useInstalacoesAguardandoAprovacao`** (linha 39-42): incluir também veículos sem autovistoria. Trocar o filtro de:
 ```
-
-Por:
-```ts
-} else if (novoParam === 'true') {
-  setShowNovaEntrada(true);
+cobertura_roubo_furto === true && cobertura_total === false
 ```
+Para:
+```
+cobertura_total === false (ou null)
+```
+Isso captura ambos os fluxos: com e sem autovistoria.
 
-Uma única linha alterada. O fluxo do `leadParam` (que vem do detalhe do lead) continua abrindo o formulário direto, pois já tem o lead vinculado.
+**`useAprovacaoMonitoramentoStats`** (linha 68-70): aplicar o mesmo filtro ampliado.
+
+### 3. `src/hooks/useAprovacaoMonitoramento.ts` — `useAprovarInstalacaoMonitoramento`
+
+Na aprovação (linha 114-121), além de `cobertura_total = true`, também setar `cobertura_roubo_furto = true` caso ainda esteja false (veículo sem autovistoria prévia).
+
+Se o veículo estava `em_analise`, atualizar para `ativo`.
+
+### Resumo
+
+| Arquivo | Mudança |
+|---------|---------|
+| `useServicos.ts` | Veículo sem autovistoria → `em_analise` (não `ativo`) |
+| `useAprovacaoMonitoramento.ts` | Filtro aceita veículos sem `cobertura_roubo_furto` |
+| `useAprovacaoMonitoramento.ts` | Aprovação seta `cobertura_roubo_furto + cobertura_total + veículo ativo` |
+
+3 blocos de alteração em 2 arquivos.
 
