@@ -79,14 +79,14 @@ interface CalcularPlanosParams {
 
 export function usePlanosCotacao(params: CalcularPlanosParams) {
   // Buscar regiões do banco (ainda usada para validação)
-  const { data: regioes } = useRegioesAtivas();
+  const { data: regioes, isLoading: regioesLoading } = useRegioesAtivas();
   
   // Buscar taxas fallback do banco
   const { data: taxaFallbackCarro = 0.025 } = useTaxaFallbackCarro();
   const { data: taxaFallbackMoto = 0.03 } = useTaxaFallbackMoto();
   
   // Buscar decomposição do banco
-  const { data: decomposicao } = useConfigDecomposicao();
+  const { data: decomposicao, isLoading: decomposicaoLoading } = useConfigDecomposicao();
 
   // Defaults de cota do banco
   const { data: cotaParticipacaoDefault = 6 } = useCotaParticipacaoDefault();
@@ -95,10 +95,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   const { data: cotaMinimaDesagioDefault = 2000 } = useCotaMinimaDesagioDefault();
 
   // Adicional app do banco
-  const { data: adicionalApp = 35.90 } = useConfiguracaoNumero('adicional_app', 35.90);
+  const { data: adicionalApp = 35.90, isLoading: adicionalAppLoading } = useConfiguracaoNumero('adicional_app', 35.90);
 
   // Buscar regiões com adicional app do banco
-  const { data: regioesComAdicionalRaw } = useQuery({
+  const { data: regioesComAdicionalRaw, isLoading: regioesComAdicionalLoading } = useQuery({
     queryKey: ['configuracoes', 'regioes_com_adicional_app'],
     queryFn: async () => {
       const { data } = await supabase
@@ -113,7 +113,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   // Buscar categorias de deságio do banco
-  const { data: categoriasDesagio = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
+  const { data: categoriasDesagio = CATEGORIAS_DESAGIO_FALLBACK, isLoading: categoriasDesagioLoading } = useQuery({
     queryKey: ['configuracoes', 'categorias_desagio'],
     queryFn: async () => {
       const { data } = await supabase
@@ -128,7 +128,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   // Buscar linhas com deságio do banco
-  const { data: linhasComDesagio = LINHAS_COM_DESAGIO_FALLBACK } = useQuery({
+  const { data: linhasComDesagio = LINHAS_COM_DESAGIO_FALLBACK, isLoading: linhasComDesagioLoading } = useQuery({
     queryKey: ['configuracoes', 'linhas_com_desagio'],
     queryFn: async () => {
       const { data } = await supabase
@@ -143,7 +143,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   // Buscar categorias que sobrepõem APP (deságio anula adicional APP)
-  const { data: categoriasQueSobrepoeApp = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
+  const { data: categoriasQueSobrepoeApp = CATEGORIAS_DESAGIO_FALLBACK, isLoading: categoriasQueSobrepoeAppLoading } = useQuery({
     queryKey: ['configuracoes', 'categorias_que_sobrepoe_app'],
     queryFn: async () => {
       const { data } = await supabase
@@ -158,7 +158,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   // Buscar planos reais do banco de dados com product_lines
-  const { data: planosBanco, isLoading } = useQuery({
+  const { data: planosBanco, isLoading: planosBancoLoading } = useQuery({
     queryKey: ['planos_cotacao'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -179,7 +179,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   // Buscar mapeamento plano → linha_slug (nova tabela)
-  const { data: planoPrecoMap } = useQuery({
+  const { data: planoPrecoMap, isLoading: planoPrecoMapLoading } = useQuery({
     queryKey: ['plano_preco_map'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -192,7 +192,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   // Buscar tabelas de preço mensalidade (nova tabela)
-  const { data: tabelasMensalidade } = useQuery({
+  const { data: tabelasMensalidade, isLoading: tabelasMensalidadeLoading } = useQuery({
     queryKey: ['tabelas_preco_mensalidade'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -207,7 +207,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   // Buscar overrides de cota por categoria (planos_cotas_categoria)
-  const { data: cotasCategoriaData } = useQuery({
+  const { data: cotasCategoriaData, isLoading: cotasCategoriaLoading } = useQuery({
     queryKey: ['planos_cotas_categoria'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -234,7 +234,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   // Buscar exclusões de benefícios por categoria
-  const { data: benefitExclusions } = useQuery({
+  const { data: benefitExclusions, isLoading: benefitExclusionsLoading } = useQuery({
     queryKey: ['benefit_exclusions_cotacao'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -360,10 +360,25 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     };
   }, [planosBanco, tabelasMensalidade, regioesComAdicionalRaw]);
 
+  const dependenciasCriticasLoading =
+    planosBancoLoading ||
+    planoPrecoMapLoading ||
+    tabelasMensalidadeLoading ||
+    elegibilidadeLoading ||
+    cotasCategoriaLoading ||
+    benefitExclusionsLoading ||
+    decomposicaoLoading ||
+    adicionalAppLoading ||
+    regioesComAdicionalLoading ||
+    categoriasDesagioLoading ||
+    linhasComDesagioLoading ||
+    categoriasQueSobrepoeAppLoading ||
+    regioesLoading;
+
   const { planos, planosNegados } = useMemo<{ planos: PlanoCotacao[]; planosNegados: PlanoNegadoInfo[] }>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
 
-    if (!valorFipe || valorFipe <= 0 || !planosBanco || elegibilidadeLoading) {
+    if (!valorFipe || valorFipe <= 0 || !planosBanco || dependenciasCriticasLoading) {
       return { planos: [], planosNegados: [] };
     }
 
@@ -667,12 +682,12 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     return { planos: sorted, planosNegados: negados };
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeLoading, configApp, cotasCategoriaData, categoriasQueSobrepoeApp]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, configApp, cotasCategoriaData, categoriasQueSobrepoeApp, dependenciasCriticasLoading]);
 
   return {
     planos,
     planosNegados,
-    isLoading: isLoading || elegibilidadeLoading,
+    isLoading: dependenciasCriticasLoading,
   };
 }
 
