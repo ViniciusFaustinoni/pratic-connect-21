@@ -714,11 +714,12 @@ serve(async (req) => {
                   .single();
 
                 if (profProfile?.telefone) {
+                  const periodoTexto = instCompleta.periodo ? `\n🕐 Período: ${instCompleta.periodo}` : '';
                   const msgInstalador = `🔧 *Nova Instalação Atribuída*\n\n` +
                     `👤 Cliente: ${assocData?.nome || servico.associado_nome}\n` +
                     `📱 WhatsApp: ${telefoneCliente}\n` +
                     `🚗 Veículo: ${veicData?.marca || ''} ${veicData?.modelo || ''} - ${veicData?.placa || servico.veiculo_placa}\n` +
-                    `📍 Endereço: ${enderecoCompleto}\n` +
+                    `📍 Endereço: ${enderecoCompleto}${periodoTexto}\n` +
                     `${servico.is_encaixe ? '⚡ ENCAIXE' : ''}`;
 
                   await supabase.functions.invoke('whatsapp-send-text', {
