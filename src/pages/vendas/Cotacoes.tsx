@@ -827,6 +827,7 @@ export default function Cotacoes() {
         onEmail={handleOpenEmailModal}
         onGerarContrato={handleOpenContratoWizard}
         onAceitar={(id) => updateCotacao.mutate({ id, status: 'aceita' })}
+        onDuplicar={handleDuplicar}
         isCopiandoWhatsApp={copiandoWhatsApp === cotacaoSelecionada?.id}
         isGerandoContrato={gerarContrato.isPending}
         canGenerateContract={cotacaoSelecionada ? getPermissions(cotacaoSelecionada).canGenerateContract : false}
