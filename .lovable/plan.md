@@ -1,75 +1,85 @@
 
 
-# Exclusão de cotação pelo próprio vendedor — plano seguro
-
-## Situação atual
-
-A exclusão de cotações já existe via edge function `delete-cotacao`, que faz cascata completa (contratos, serviços, instalações, vistorias, etc.). Porém:
-
-1. A permissão `canDeleteCotacao` é restrita a diretores
-2. A edge function exige essa permissão para qualquer exclusão
-3. O botão "Excluir" na tabela só aparece para quem tem `cotacao.canDelete`
+# Fix: Scroll não funciona nas páginas públicas de cotação
 
 ## Problema
 
-Um vendedor que criou uma cotação errada, duplicada ou cancelada não consegue removê-la. Isso gera poluição na lista e desorganização.
+As páginas públicas `/cotacao/:token` e `/q/:token` não permitem scroll (desktop e mobile). O conteúdo que excede a viewport fica inacessível.
 
-## Solução proposta: exclusão condicional pelo criador
+## Causa raiz
 
-Permitir que o **próprio vendedor** exclua cotações **que ainda não geraram contrato ativo/assinado**, mantendo a exclusão irrestrita (com cascata total) apenas para diretores.
+A combinação de estilos globais no `index.css` (linhas 177-183) aplica `overscroll-behavior: none` ao `html`, `body` e `#root`. Em conjunto com a camada de background `fixed inset-0 overflow-hidden` presente nas páginas públicas, o scroll natural do body é comprometido em certos browsers (especialmente mobile Safari e Chrome mobile).
 
-### Regras de negócio
+## Correção
 
-- **Vendedor pode excluir**: cotações que ele criou (`vendedor_id = user_id`) **E** que não tenham contrato com status `assinado` ou `ativo`
-- **Diretor pode excluir**: qualquer cotação (comportamento atual mantido)
-- Motivo obrigatório em ambos os casos (já implementado no dialog)
-- Log de auditoria registra quem excluiu (já implementado na edge function)
+### 1. `src/pages/public/CotacaoContratacao.tsx` — Tornar a página explicitamente scrollável
 
-### Arquivos
+Envolver o conteúdo em um container com scroll explícito:
+
+```tsx
+// Linha 314: trocar
+<div className="dark min-h-screen public-premium-bg relative">
+
+// Para
+<div className="dark min-h-screen public-premium-bg relative overflow-y-auto overflow-x-hidden">
+```
+
+### 2. `src/pages/public/CotacaoPublicaCompleta.tsx` — Mesma correção
+
+```tsx
+// Linha 639: trocar
+<div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100">
+
+// Para
+<div className="min-h-screen bg-gradient-to-br from-blue-50 to-indigo-100 overflow-y-auto overflow-x-hidden">
+```
+
+### 3. `src/index.css` — Remover `overscroll-behavior: none` do `html`
+
+O `overscroll-behavior: none` no `html` pode bloquear o scroll chain em browsers mobile. Manter apenas no `body` (para prevenir pull-to-refresh) e remover do `html` e `#root`:
+
+```css
+/* Linhas 176-183: trocar */
+html,
+body,
+#root {
+  overflow-x: hidden;
+  max-width: 100vw;
+  overscroll-behavior: none;
+}
+
+/* Para */
+html {
+  overflow-x: hidden;
+  max-width: 100vw;
+}
+
+body,
+#root {
+  overflow-x: hidden;
+  max-width: 100vw;
+  overscroll-behavior-y: none;
+}
+```
+
+Usar `overscroll-behavior-y` (eixo Y apenas) no `body` e `#root` permite scroll normal enquanto previne pull-to-refresh. Remover do `html` evita conflito na cadeia de scroll.
+
+### 4. CSS safeguard para páginas públicas (index.css)
+
+Adicionar regra específica para garantir scroll nas páginas públicas:
+
+```css
+.public-premium-bg {
+  /* ... estilos existentes ... */
+  -webkit-overflow-scrolling: touch;
+}
+```
+
+## Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/delete-cotacao/index.ts` | **Editar** — aceitar exclusão pelo próprio vendedor quando cotação não tem contrato ativo |
-| `src/pages/vendas/Cotacoes.tsx` | **Editar** — ajustar `getPermissions` para permitir exclusão pelo dono |
-| `src/pages/vendas/CotacaoDetalhe.tsx` | **Verificar** — garantir que o botão excluir respeita a mesma lógica |
-
-### Detalhes técnicos
-
-**1. Edge function `delete-cotacao` (alteração principal)**
-
-Trocar a verificação rígida de `has_permission('canDeleteCotacao')` por lógica dual:
-
-```
-SE tem permissão canDeleteCotacao → permite (diretor)
-SENÃO SE vendedor_id da cotação == userId:
-  - Verificar se cotação NÃO tem contrato ativo/assinado
-  - Se não tem → permite exclusão
-  - Se tem → bloqueia com mensagem clara
-SENÃO → bloqueia (sem permissão)
-```
-
-**2. Frontend `Cotacoes.tsx` — ajuste na linha 577**
-
-A permissão `canDelete` por cotação já considera `isOwner`:
-```typescript
-canDelete: permissions.cotacao.canDelete || (isOwner && !['assinado', 'ativo'].includes(cotacao.contrato?.status || ''))
-```
-Isso já está correto — o botão aparece para o dono quando não há contrato ativo. A única mudança necessária é no backend (edge function) que hoje bloqueia mesmo sendo dono.
-
-**3. Nenhuma migration necessária**
-
-Não há alteração de schema. A lógica toda é resolvida na edge function existente.
-
-### Fluxo resultante
-
-```text
-Vendedor clica "Excluir" na cotação que ele criou
-  │
-  ├── Cotação sem contrato ativo → Dialog pede motivo → Edge function executa cascata → Sucesso
-  ├── Cotação com contrato ativo/assinado → Botão nem aparece (frontend já filtra)
-  └── Cotação de outro vendedor → Botão nem aparece (frontend já filtra)
-
-Diretor clica "Excluir" em qualquer cotação
-  └── Dialog pede motivo → Edge function executa cascata → Sucesso (sem restrição)
-```
+| `src/index.css` | Editar — ajustar overscroll-behavior |
+| `src/pages/public/CotacaoContratacao.tsx` | Editar — adicionar overflow-y-auto |
+| `src/pages/public/CotacaoPublicaCompleta.tsx` | Editar — adicionar overflow-y-auto |
 
