@@ -46,17 +46,10 @@ Deno.serve(async (req) => {
     const adminClient = createClient(supabaseUrl, supabaseServiceKey)
 
     // Verificar permissão dinâmica via has_permission
-    const { data: temPermissao } = await adminClient.rpc('has_permission', {
+    const { data: temPermissaoDiretor } = await adminClient.rpc('has_permission', {
       _user_id: userId,
       _permission: 'canDeleteCotacao',
     })
-
-    if (!temPermissao) {
-      return new Response(
-        JSON.stringify({ success: false, error: 'Sem permissão para excluir cotações com dependências' }),
-        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      )
-    }
 
     // Obter cotacaoId do body
     const { cotacaoId } = await req.json()
