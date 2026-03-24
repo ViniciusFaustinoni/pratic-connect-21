@@ -1,47 +1,51 @@
 
 
-# Permitir acesso a multiplos apps para usuarios com roles mistos
+# Corrigir Responsividade no Safari/iPhone
 
-## Problema identificado
+## Problema
+O sistema de gestao (layout principal com sidebar) nao funciona bem no Safari do iPhone:
+- Conteudo cortado por causa de `h-screen` (100vh), que no Safari inclui a barra de endereco do navegador
+- Sem safe-area insets para iPhones com notch
+- Botoes e cards podem sobrepor em telas estreitas
 
-No `Dashboard.tsx` (linha 297-301), existe um check **hardcoded** que redireciona para `/instalador`:
-
-```ts
-const isInstaladorVistoriadorOnly = isInstaladorVistoriador && 
-  !isDiretor && !isGerencia && !isDesenvolvedor && !isAdminMaster;
-```
-
-Este check nao considera `coordenador_monitoramento` (nem outros roles nao-operacionais). Resultado: um usuario com `coordenador_monitoramento` + `instalador_vistoriador` e redirecionado para `/instalador` e nunca consegue acessar o app de gestao.
-
-O hook `usePermissions` ja calcula `isInstaladorVistoriadorOnly` corretamente (usa `userIsOnlyOperational` que verifica se TODOS os roles sao operacionais). Como `coordenador_monitoramento` tem `is_operational = false` no banco, a flag correta seria `false` — o usuario deveria ficar no app de gestao.
+## Causa Raiz
+O `AppLayout` (gestao) usa `h-screen` que equivale a `100vh`. No Safari iOS, `100vh` inclui a area coberta pela barra de endereco, fazendo com que o conteudo fique "atras" dela e nao seja acessivel. O `InstaladorLayout` ja usa `h-[100dvh]` corretamente.
 
 ## Alteracoes
 
-### 1. `src/pages/Dashboard.tsx` — Remover check hardcoded
+### 1. `src/components/layout/AppLayout.tsx` — Usar `100dvh` em vez de `h-screen`
 
-Remover as linhas 297-301 que recalculam `isInstaladorVistoriadorOnly` localmente. Usar a flag `isInstaladorVistoriadorOnly` que ja vem do `usePermissions()` (importada na linha 294).
+Trocar `h-screen` por `h-[100dvh]` no container principal para respeitar a viewport dinamica do Safari iOS.
 
-Tambem remover o `useEffect` de redirect (linhas 304-308) e o loading guard (linhas 331-337), substituindo por um unico check usando a flag correta do `usePermissions`.
+### 2. `src/components/layout/AppHeader.tsx` — Safe area no header
 
-### 2. `src/components/instalador/InstaladorLayout.tsx` — Adicionar botao "App de Gestao"
+Adicionar `pt-safe` no header para evitar sobreposicao com o notch em modo standalone (PWA).
 
-Para usuarios que tem `instalador_vistoriador` MAS tambem tem roles nao-operacionais (ex: coordenador_monitoramento), adicionar um item no dropdown menu do header:
-- "Ir para Gestao" com icone `LayoutDashboard`
-- Navega para `/dashboard`
+### 3. `src/index.css` — Fallback global para `100dvh`
 
-Isso permite que o usuario alterne entre os dois apps. Usar `usePermissions` para verificar se `!userIsOnlyOperational` (tem roles alem de operacionais).
+Adicionar regra CSS que garante que `h-screen` tenha fallback para `100dvh` quando suportado, e melhorar o suporte a safe-area no body/html.
 
-### 3. `src/components/layout/AppHeader.tsx` — Adicionar botao "App do Instalador"
+### 4. `src/pages/Dashboard.tsx` — Responsividade dos KPIs e acoes rapidas
 
-No header do app de gestao, para usuarios que tem `hasRole('instalador_vistoriador')`, adicionar um botao/link para `/instalador` para facilitar a navegacao de volta.
+- Garantir que os cards KPI nao transbordem em telas de ~375px (iPhone SE)
+- Ajustar `QuickActions` para wrap correto em mobile
+- Ajustar texto de valores grandes (`R$ 407,3`) para nao quebrar layout
 
-## Resumo
+### 5. `src/components/layout/AppSidebar.tsx` — Safe area no sidebar mobile
 
-| Arquivo | Mudanca |
-|---------|---------|
-| `Dashboard.tsx` | Usar `isInstaladorVistoriadorOnly` do `usePermissions` em vez de check hardcoded |
-| `InstaladorLayout.tsx` | Botao "Ir para Gestao" no dropdown para usuarios com roles mistos |
-| `AppHeader.tsx` | Botao "App Instalador" para usuarios com role instalador |
+Verificar se o Sheet do sidebar mobile respeita safe-area-inset no iPhone.
 
-3 arquivos, correcao de logica + navegacao bidirecional entre apps.
+### 6. `src/components/analista-eventos/AnalistaEventosLayout.tsx` — Consistencia
+
+Ja usa `h-dvh`, verificar e garantir consistencia com outros layouts mobile.
+
+## Detalhes Tecnicos
+
+Mudancas CSS principais:
+- `h-screen` → `h-[100dvh]` nos layouts (suportado por todos navegadores modernos)
+- Adicionar `@supports (height: 100dvh)` fallback no CSS global
+- Padding com `env(safe-area-inset-*)` nos elementos fixos/sticky
+- `-webkit-overflow-scrolling: touch` ja presente, manter
+
+Arquivos: 4-5 arquivos, mudancas pontuais de classes CSS.
 
