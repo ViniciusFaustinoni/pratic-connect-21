@@ -874,7 +874,7 @@ Aguardamos sua confirmação! ⚡`;
               // Buscar dados completos da vistoria (associado + veículo)
               const { data: vistCompleta } = await supabase
                 .from('vistorias')
-                .select('associado_id, associados!vistorias_associado_id_fkey(nome, telefone1, whatsapp), veiculos!vistorias_veiculo_id_fkey(placa, marca, modelo), logradouro, numero, bairro, cidade, uf, periodo, observacoes')
+                .select('associado_id, associados!vistorias_associado_id_fkey(nome, telefone, whatsapp), veiculos!vistorias_veiculo_id_fkey(placa, marca, modelo), logradouro, numero, bairro, cidade, uf, periodo, observacoes')
                 .eq('id', servico.vistoria_origem_id)
                 .single();
 
