@@ -1,21 +1,28 @@
 
 
-# Alterar historico do app do vistoriador para mostrar o mes inteiro
+# Corrigir atalho "Nova Cotação" para abrir o modal de tipos
 
 ## Problema
-O historico de tarefas no app do vistoriador (`InstaladorTarefas.tsx`) busca apenas os ultimos 7 dias. O usuario quer ver todas as tarefas do mes atual.
+O botão "Nova Cotação" no Dashboard navega para `/vendas/cotacoes?novo=true`. No `Cotacoes.tsx`, o parâmetro `novo=true` abre diretamente o formulário de cotação (`setShowCotacaoForm(true)`), pulando o modal `NovaEntradaDialog` que oferece as opções: nova cotação, migração, troca de titularidade, substituição, inclusão, etc.
 
-## Alteracoes
+## Solução
+Uma alteração simples em `src/pages/vendas/Cotacoes.tsx`: no `useEffect` que lê o parâmetro `novo`, trocar `setShowCotacaoForm(true)` por `setShowNovaEntrada(true)`. Isso faz o atalho abrir o mesmo modal de seleção de tipo que o botão "Nova Cotação" da própria página de Cotações usa.
 
-### 1. `src/hooks/useTarefaAtual.ts` — `useTarefasHistorico`
-- Trocar o parametro `dias: number = 7` por logica que calcula o inicio do mes atual (`startOfMonth`)
-- Usar `startOfMonth(new Date())` como `dataLimite` em vez de `new Date() - dias`
-- Atualizar a queryKey para refletir o mes
+## Alteração
 
-### 2. `src/pages/instalador/InstaladorTarefas.tsx`
-- Remover o argumento `7` da chamada `useTarefasHistorico(7)` → `useTarefasHistorico()`
-- Atualizar a mensagem de estado vazio de "últimos 7 dias" para "neste mês"
+**Arquivo**: `src/pages/vendas/Cotacoes.tsx` (linhas 137-138)
 
-### 3. `src/hooks/usePerformanceSemanalCoordenador.ts` (opcional — dashboard do coordenador)
-- Manter como esta, pois e um grafico semanal separado do historico do vistoriador
+Trocar:
+```ts
+} else if (novoParam === 'true') {
+  setShowCotacaoForm(true);
+```
+
+Por:
+```ts
+} else if (novoParam === 'true') {
+  setShowNovaEntrada(true);
+```
+
+Uma única linha alterada. O fluxo do `leadParam` (que vem do detalhe do lead) continua abrindo o formulário direto, pois já tem o lead vinculado.
 
