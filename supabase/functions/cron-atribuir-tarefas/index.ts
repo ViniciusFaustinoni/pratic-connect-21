@@ -558,7 +558,7 @@ serve(async (req) => {
           try {
             // Buscar dados do associado para enviar confirmação
             const assocEncaixe = (servico as any).associado;
-            const telefoneEncaixe = assocEncaixe?.whatsapp || assocEncaixe?.telefone1 || '';
+            const telefoneEncaixe = assocEncaixe?.whatsapp || assocEncaixe?.telefone || '';
             const nomeEncaixe = assocEncaixe?.nome || 'Cliente';
             const associadoIdEncaixe = (servico as any).associado_id;
             
