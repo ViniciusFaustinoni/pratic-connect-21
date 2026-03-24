@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, ClipboardList, Map, User, LogOut } from 'lucide-react';
+import { Home, ClipboardList, Map, User, LogOut, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
