@@ -62,10 +62,10 @@ Deno.serve(async (req) => {
 
     console.log(`[delete-cotacao] Iniciando exclusão da cotação ${cotacaoId} por usuário ${userId}`)
 
-    // Buscar dados da cotação para log
+    // Buscar dados da cotação para log e verificação de ownership
     const { data: cotacao, error: cotacaoError } = await adminClient
       .from('cotacoes')
-      .select('numero, lead_id, vistoria_id')
+      .select('numero, lead_id, vistoria_id, vendedor_id')
       .eq('id', cotacaoId)
       .maybeSingle()
 
