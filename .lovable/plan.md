@@ -1,64 +1,42 @@
 
 
-# Plano: Encaixe com confirmação obrigatória do associado
+# Causa Raiz: Keyword "riva" classifica MERIVA como moto
 
-## Problema
-Quando um profissional clica "Assumir" em um encaixe (ou um coordenador atribui manualmente), o sistema atribui diretamente sem confirmar com o associado. A confirmação via WhatsApp já existe no fluxo automático do cron, mas os fluxos manuais (client-side) a contornam completamente.
+## O problema
 
-## O que já funciona
-Os cron jobs (`cron-atribuir-tarefas` e `atribuir-proxima-tarefa`) já:
-- Enviam WhatsApp de confirmação antes de atribuir encaixe
-- Marcam `confirmacao_whatsapp: 'aguardando_confirmacao_encaixe'`
-- Criam registro em `confirmacoes_agendamento`
-- Só atribuem após resposta "SIM" (processada pela IA no webhook)
+Na lista `MOTO_KEYWORDS` em `src/data/vistoriaConfigCompleta.ts` (linha 166), existe a keyword `'riva'` (modelo de scooter). O modelo **"MERIVA MAXX"** contém a substring **"riva"** dentro de "Me**riva**", fazendo o sistema classificar o veículo como **moto**.
 
-## O que NÃO funciona
-Os hooks client-side contornam tudo:
-- `usePuxarEncaixe` — profissional clica "Assumir" → atribui direto
-- `useAtribuirEncaixe` — coordenador atribui → atribui direto
+Fluxo detalhado:
+1. Placa buscada → veículo retorna marca "Chevrolet", modelo "Meriva Maxx"
+2. `useDetectarTipoVeiculo` consulta `plano_elegibilidade_modelos` com `ILIKE '%MERIVA MAXX%'`
+3. No banco, o modelo é cadastrado apenas como "MERIVA" (sem "MAXX") → **nenhum match** na query
+4. Hook retorna `null` → fallback síncrono por keywords
+5. `detectarTipoVeiculo(undefined, "Meriva Maxx", "Chevrolet")` → verifica MOTO_KEYWORDS → **"riva"** faz match em "me**riva**" → retorna **'moto'**
+6. `tipoVeiculoDetectado = 'moto'` → todos os planos de carro são filtrados → **nenhum plano aparece**
 
-## Solução
+O fix anterior (priorizar `veiculoEncontrado`) não resolve porque `tipoFromHook` já vem errado — o hook em si retorna 'moto'.
 
-Criar uma **edge function `solicitar-encaixe`** que centraliza a lógica de confirmação. Os hooks client-side passam a chamar essa função em vez de fazer update direto.
+## Solução (duas camadas)
 
-### Fluxo novo
+### 1. Corrigir keyword "riva" — `src/data/vistoriaConfigCompleta.ts`
 
-```text
-Profissional clica "Assumir"
-  → Chama edge function solicitar-encaixe
-    → Envia WhatsApp de confirmação ao associado
-    → Marca confirmacao_whatsapp = 'aguardando_confirmacao_encaixe'
-    → Cria registro em confirmacoes_agendamento (com profissional_id)
-    → Retorna { status: 'aguardando_confirmacao' }
-  → UI mostra feedback "Confirmação enviada ao cliente"
+Trocar `'riva'` por `' riva'` (com espaço antes) para exigir que "riva" seja início de palavra, não substring de "meriva".
 
-Associado responde SIM (webhook já trata isso)
-  → confirmacao_whatsapp = 'confirmada'
-  → Próxima execução do cron atribui o serviço ao profissional salvo no contexto
-```
+### 2. Usar `tipo_de_veiculo` da API de placa — `src/hooks/useDetectarTipoVeiculo.ts`
 
-### Alterações
+Aceitar um parâmetro opcional `tipoVeiculoApi` (campo `tipo_de_veiculo` retornado pela API: "Automovel", "Motocicleta" etc.). Quando disponível, usar como fonte primária antes de qualquer fallback por keyword.
 
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/solicitar-encaixe/index.ts` | **Criar** — Edge function que envia confirmação WhatsApp e marca serviço como aguardando |
-| `src/hooks/useEncaixesDisponiveis.ts` | **Alterar** `usePuxarEncaixe` — chamar `solicitar-encaixe` em vez de update direto. Ajustar feedback para "Confirmação enviada" |
-| `src/components/vistoriador/EncaixeCard.tsx` | **Alterar** — Atualizar labels dos botões e feedback (de "Assumindo..." para "Solicitando...") |
+### 3. Passar o campo no CotacaoFormDialog — `src/components/cotacoes/CotacaoFormDialog.tsx`
 
-### Edge function `solicitar-encaixe`
+Passar `veiculoEncontrado?.vehicleData?.tipo_de_veiculo` para o hook de detecção.
 
-Recebe: `{ servico_id, tipo, profissional_id, isAdiantamento }`
+## Impacto
 
-Lógica:
-1. Buscar dados do serviço e associado (telefone, nome)
-2. Enviar WhatsApp via `whatsapp-send-text` com template `confirmacao_agendamento_v1`
-3. Atualizar `servicos.confirmacao_whatsapp = 'aguardando_confirmacao_encaixe'`
-4. Inserir em `confirmacoes_agendamento` com `contexto_ia` incluindo `profissional_id`
-5. Retornar sucesso
+Apenas corrige a classificação de tipo. Nenhuma alteração em preços, elegibilidade ou regras de negócio.
 
-### O que NÃO muda
-- Webhook de resposta (já funciona)
-- Cron de atribuição (já respeita confirmação)
-- Cron de expiração (já expira confirmações não respondidas)
-- Fluxo do coordenador (`useAtribuirEncaixe`) — mantém atribuição direta, pois é decisão manual da diretoria
+| Arquivo | Alteração |
+|---------|-----------|
+| `src/data/vistoriaConfigCompleta.ts` | Trocar `'riva'` por `' riva'` em MOTO_KEYWORDS |
+| `src/hooks/useDetectarTipoVeiculo.ts` | Adicionar parâmetro `tipoVeiculoApi` e usar como prioridade no fallback |
+| `src/components/cotacoes/CotacaoFormDialog.tsx` | Passar `tipo_de_veiculo` ao hook |
 
