@@ -68,10 +68,18 @@ export function useVistoriadoresRealtime() {
         }
       });
 
+      const LIMITE_INATIVIDADE_MS = 15 * 60 * 1000; // 15 minutos
+      const agoraMs = Date.now();
+
       return data.map((item: any) => {
         const tarefa = tarefaPorProfissional[item.vistoriador_id];
+        const updatedAt = new Date(item.updated_at).getTime();
+        const estaInativo = agoraMs - updatedAt > LIMITE_INATIVIDADE_MS;
+
         let status_operacional: StatusOperacional = 'disponivel_operacional';
-        if (tarefa?.status === 'em_andamento') {
+        if (estaInativo) {
+          status_operacional = 'offline';
+        } else if (tarefa?.status === 'em_andamento') {
           status_operacional = 'em_andamento';
         } else if (tarefa?.status === 'em_rota') {
           status_operacional = 'em_rota';

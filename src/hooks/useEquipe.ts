@@ -174,9 +174,17 @@ export function useProfissionaisEquipe() {
         const tarefaAtiva = tarefaAtivaPorProfissional[profile.id];
         
         // Determinar status operacional
+        // Determinar status operacional com verificação de freshness
+        const LIMITE_INATIVIDADE_MS = 15 * 60 * 1000; // 15 minutos
         let status_operacional: StatusOperacional = 'offline';
         if (localizacao?.em_servico) {
-          if (tarefaAtiva?.status === 'em_andamento') {
+          const updatedAt = new Date(localizacao.updated_at).getTime();
+          const agoraMs = Date.now();
+          const estaInativo = agoraMs - updatedAt > LIMITE_INATIVIDADE_MS;
+
+          if (estaInativo) {
+            status_operacional = 'offline'; // App provavelmente fechado
+          } else if (tarefaAtiva?.status === 'em_andamento') {
             status_operacional = 'em_andamento';
           } else if (tarefaAtiva?.status === 'em_rota') {
             status_operacional = 'em_rota';

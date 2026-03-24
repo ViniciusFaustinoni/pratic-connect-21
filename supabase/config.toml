@@ -177,4 +177,6 @@ verify_jwt = false
 
 [functions.solicitar-encaixe]
 verify_jwt = false
+
+[functions.limpar-servico-inativo]
 verify_jwt = false
