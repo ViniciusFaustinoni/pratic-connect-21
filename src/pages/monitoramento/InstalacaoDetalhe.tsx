@@ -238,6 +238,12 @@ export default function InstalacaoDetalhePage() {
             <Badge className={cn("text-white", isAtrasada ? "bg-orange-500" : STATUS_INSTALACAO_COLORS[instalacao.status])}>
               {isAtrasada ? "Atrasada" : STATUS_INSTALACAO_LABELS[instalacao.status]}
             </Badge>
+            {tipoCobertura === 'area_prestador' && (
+              <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Área Prestador</Badge>
+            )}
+            {tipoCobertura === 'fora_cobertura' && (
+              <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Sem Cobertura</Badge>
+            )}
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4" />
