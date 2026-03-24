@@ -7,8 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronUp, Save, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Save, Loader2, AlertTriangle, Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { formatarMoeda } from '@/utils/format';
 
 interface NivelConfig {
