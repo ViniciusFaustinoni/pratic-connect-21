@@ -973,18 +973,41 @@ const desenharCardPlanoExpandido = (
     currentY += lineHeight;
   });
   
-  currentY += 4;
+  currentY += 6;
   
+  // Separador visual antes da seção de investimento
   doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
+  doc.setLineWidth(0.5);
   doc.line(x + padding, currentY - 4, x + width - padding, currentY - 4);
   
+  // Mini-seção "Investimento" com fundo diferenciado
+  const investBoxY = currentY - 2;
+  const investBoxH = 22;
+  doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
+  doc.roundedRect(x + 3, investBoxY, width - 6, investBoxH, 2, 2, 'F');
+  
+  // Label "INVESTIMENTO"
+  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+  doc.setFontSize(6);
+  doc.setFont('helvetica', 'bold');
+  doc.text('INVESTIMENTO', x + width / 2, investBoxY + 5, { align: 'center' });
+  
+  // Filiação (taxa de adesão)
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
-  doc.text('Filiação:', x + padding, currentY);
+  doc.text('Taxa de Filiação:', x + padding + 2, investBoxY + 13);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(plano.valorAdesao), x + width - padding, currentY, { align: 'right' });
+  doc.text(formatCurrency(plano.valorAdesao), x + width - padding - 2, investBoxY + 13, { align: 'right' });
+
+  // Primeiro pagamento
+  const primPag = plano.valorAdesao + plano.valorMensal;
+  doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+  doc.setFontSize(7);
+  doc.setFont('helvetica', 'bold');
+  doc.text('1º Pagamento:', x + padding + 2, investBoxY + 19);
+  doc.text(formatCurrency(primPag), x + width - padding - 2, investBoxY + 19, { align: 'right' });
   
   return cardHeight;
 };
