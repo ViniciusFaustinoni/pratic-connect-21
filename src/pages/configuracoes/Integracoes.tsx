@@ -25,15 +25,12 @@ interface IntegracaoCard {
   nome: string;
   descricao: string;
   icon: React.ElementType;
-  // Navigation to sub-page
   href?: string;
-  // Or open config sheet
   integracaoTipo?: IntegracaoTipo;
-  // Status helpers
   statusKey?: string;
   plataformaCodigo?: 'softruck' | 'rede_veiculos';
   sempreAtivo?: boolean;
-  // Extra info line
+  diretorOnly?: boolean;
   extraInfo?: (ctx: StatusContext) => string | null;
 }
 
