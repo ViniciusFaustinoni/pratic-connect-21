@@ -13,7 +13,7 @@ import { useState, useEffect } from 'react';
 import { Button } from '@/components/ui/button';
 import { useNavigate } from 'react-router-dom';
 import { JornadaStatusBar } from '@/components/vistoriador/JornadaStatusBar';
-import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOverlay';
+
 import { useIniciarServico } from '@/hooks/useIniciarServico';
 import { useAlocacaoDiaria } from '@/hooks/useAlocacaoDiaria';
 import { useServicosRealtime } from '@/hooks/useServicosRealtime';
@@ -131,9 +131,6 @@ export default function InstaladorHome() {
 
   return (
     <>
-      {/* Overlay de bloqueio durante almoço */}
-      <AlmocoBloqueioOverlay />
-      
       <div className="bg-slate-900">
       {/* Banner Offline */}
       {!isOnline && (
