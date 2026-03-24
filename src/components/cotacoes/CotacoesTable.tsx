@@ -591,7 +591,7 @@ export function CotacoesTable({
                             </>
                           )}
                           
-                          {permissions.canDelete && cotacao.status === 'rascunho' && (
+                          {permissions.canDelete && (
                             <>
                               <DropdownMenuSeparator />
                               <DropdownMenuItem 
