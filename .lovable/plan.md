@@ -1,72 +1,60 @@
 
 
-# Ações Pós-Confirmação da Atribuição de Vistoriador Prestador
+# Página Pública de Vistoria Prestador — Redesign Completo
 
 ## Resumo
 
-Ao confirmar a atribuição no `PainelAtribuicaoPrestador`, encadear 3 ações: gerar link tokenizado, enviar WhatsApp com dados completos da instalação, e registrar lançamento financeiro. Tudo via uma nova edge function `gerar-link-vistoriador-prestador`.
+Reescrever `VistoriaPrestador.tsx` com design mobile-first completo, reutilizando componentes existentes (`ChecklistItem`, `FotoCapture`, `SignaturePad`), e adicionar colunas ao `vistoria_prestador_links` para armazenar checklist, fotos e assinatura.
+
+## Migration SQL
+
+Adicionar colunas à tabela `vistoria_prestador_links`:
+
+- `checklist_data` jsonb DEFAULT null — armazena estado do checklist
+- `fotos_vistoria` jsonb DEFAULT null — array de URLs das fotos enviadas
+- `assinatura_url` text DEFAULT null — URL da assinatura do associado
+
+Criar bucket de storage `vistoria-prestador-fotos` (público) se não existir, com política RLS permitindo upload anon.
+
+## Componente `VistoriaPrestador.tsx` — Reescrita
+
+### Dados carregados
+
+- `vistoria_prestador_links` pelo token (com join em `instalacoes`, `associados`, `veiculos`)
+- Rastreadores vinculados: query em `instalacoes` → `rastreador_id` para buscar código/modelo do rastreador
+
+### 4 Estados
+
+**Estado 1 — Validando**: Spinner + "Validando acesso..."
+
+**Estado 2 — Inválido**: Ícone cadeado, "Link inválido", mensagem, sem botões. Exibido quando token não existe, ou status é `concluida` ou `cancelada`.
+
+**Estado 3 — Tela principal** (status `aguardando` ou `em_execucao`):
+
+- Header: Logo PraticCar + tag "VISTORIA EXTERNA"
+- Seção 1 — Dados da instalação (card): marca/modelo/ano, placa em destaque, endereço, data/hora, associado
+- Seção 2 — Equipamentos para instalação: rastreador(es) vinculados (somente leitura)
+- Seção 3 — Checklist: Reutilizar `ChecklistItem` com `CHECKLIST_ITEMS` (mesmos itens do `InstaladorChecklist`). Estado salvo via auto-save em `checklist_data` da tabela
+- Seção 4 — Fotos: Reutilizar `FotoCapture` com as categorias de `vistoriaConfigCompleta`. Upload para bucket `vistoria-prestador-fotos`. Mínimo de fotos obrigatórias
+- Seção 5 — Assinatura: Reutilizar `SignaturePad`. Upload do blob para storage, URL salva em `assinatura_url`
+- Botão fixo no rodapé: "Finalizar Vistoria" — habilitado quando checklist 100% + mínimo fotos + assinatura. AlertDialog de confirmação antes de concluir.
+
+**Estado 4 — Concluído**: Check verde, "Vistoria concluída!", "Os dados foram enviados ao coordenador."
+
+### Fluxo de conclusão
+
+Ao confirmar: atualizar `vistoria_prestador_links` com `status: 'concluida'`, `concluida_em`, `checklist_data`, `fotos_vistoria` (array de URLs), `assinatura_url`. Qualquer acesso futuro ao token exibe Estado 2.
+
+### Diferenças do fluxo interno
+
+- Não tem etapa de "Confirmar Chegada" separada — o prestador já está na tela principal
+- Ao abrir a página com status `aguardando`, automaticamente muda para `em_execucao` e registra `chegada_em`
+- Componentes reutilizados mas com tema claro (fundo branco) em vez do tema escuro do instalador
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| Migration SQL | **Criar** — tabela `vistoria_prestador_links` |
-| `supabase/functions/gerar-link-vistoriador-prestador/index.ts` | **Criar** — Edge function com as 3 ações |
-| `src/pages/public/VistoriaPrestador.tsx` | **Criar** — Página pública `/vistoria-prestador/:token` |
-| `src/components/instalacoes/PainelAtribuicaoPrestador.tsx` | **Editar** — Chamar edge function em vez de update direto |
-| `src/App.tsx` | **Editar** — Adicionar rota pública |
-
-## 1. Migration SQL — `vistoria_prestador_links`
-
-Nova tabela separada da `instalacao_prestador_links` (que é para prestadores de assistência):
-
-| Coluna | Tipo |
-|--------|------|
-| id | uuid PK |
-| instalacao_id | uuid FK → instalacoes |
-| vistoriador_prestador_id | uuid FK → vistoriadores_prestadores |
-| token | text UNIQUE, default `gen_random_uuid()` |
-| status | text DEFAULT 'aguardando' (aguardando/em_execucao/concluida/cancelada) |
-| valor | numeric(10,2) |
-| chegada_em | timestamptz |
-| concluida_em | timestamptz |
-| foto_comprovante_url | text |
-| whatsapp_enviado | boolean DEFAULT false |
-| whatsapp_erro | text |
-| atribuido_por | uuid FK → profiles |
-| created_at / updated_at | timestamptz |
-
-Sem `expires_at` — válido até conclusão ou cancelamento, conforme requisito.
-
-RLS: SELECT público (para acesso via token sem login), INSERT/UPDATE restrito a authenticated + service_role.
-
-## 2. Edge Function `gerar-link-vistoriador-prestador`
-
-Recebe: `{ instalacao_id, vistoriador_prestador_id, valor, atribuido_por }`
-
-**Ação 1 — Gerar link**: Verificar se já existe link ativo para esta instalação+prestador. Se sim, reusar o token. Se não, inserir em `vistoria_prestador_links`. URL: `https://pratic-connect-21.lovable.app/vistoria-prestador/{token}`
-
-**Ação 2 — WhatsApp**: Buscar dados completos (instalação com veículo, associado, endereço) e prestador. Validar que nenhum campo obrigatório está vazio. Invocar `whatsapp-send-text` com mensagem formatada conforme template especificado (veículo, placa, endereço, data, associado, link). Registrar sucesso/falha na coluna `whatsapp_enviado`/`whatsapp_erro`.
-
-**Ação 3 — Financeiro**: Inserir em `lancamentos_contabeis` + `lancamentos_partidas` com origem `vistoria_prestador`, histórico descritivo, conta débito = conta de despesa de vistoria prestador, conta crédito = provisão. Registrar também um lançamento mais simples se a tabela de contabilidade não tiver a categoria — usar `useLancamentosContabeis` pattern mas no server-side.
-
-**Ação 4 — Auditoria**: Inserir em `logs_auditoria` com módulo `instalacoes`, ação `atribuir`, dados incluindo prestador, valor, token, resultado do WhatsApp.
-
-**Retorno**: `{ success, token, url, whatsapp_enviado }`
-
-## 3. Página pública `VistoriaPrestador.tsx`
-
-Rota: `/vistoria-prestador/:token`
-
-Estrutura idêntica à `PrestadorInstalacao.tsx` existente, mas consultando `vistoria_prestador_links` em vez de `instalacao_prestador_links`. Mesmos estados (aguardando → em_execução → concluída) com upload de foto. Quando status é `concluida` ou `cancelada`, exibir tela de encerramento amigável.
-
-## 4. `PainelAtribuicaoPrestador.tsx` — Alterações
-
-**`handleConfirmar`**: Substituir o update direto + `abrirWhatsAppWeb` pela chamada `supabase.functions.invoke('gerar-link-vistoriador-prestador', { body: {...} })`. O update de `vistoriador_prestador_id`, `valor_prestador`, `prestador_atribuido_em` na tabela `instalacoes` passa a ser feito pela edge function.
-
-**`EstadoAtribuido`**: No botão "Reenviar link por WhatsApp", buscar o token existente em `vistoria_prestador_links` e reinvocar a edge function com flag `reenviar: true` (que não gera novo token, apenas reenvia WhatsApp).
-
-## 5. `App.tsx`
-
-Adicionar: `<Route path="/vistoria-prestador/:token" element={<VistoriaPrestador />} />`
+| Migration SQL | **Criar** — colunas + bucket |
+| `src/pages/public/VistoriaPrestador.tsx` | **Reescrever** — Página completa com 4 estados |
 
