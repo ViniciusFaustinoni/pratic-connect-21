@@ -1,67 +1,61 @@
 
 
-# Diagnóstico: Filtro de planos ESPECIAL/SELECT em SP
+# Plano: Exclusão de cotação pelo usuário (organização)
 
-## Investigação realizada
+## Situação atual
 
-Analisei o fluxo completo de elegibilidade em `usePlanosCotacao.ts`, as tabelas de preços, as regras de elegibilidade (`plano_elegibilidade_modelos`), e os componentes de cotação (`Cotacao.tsx`, `Cotador.tsx`, `CotacaoFormDialog.tsx`).
+O sistema **já possui** toda a infraestrutura de exclusão:
 
-## Causa raiz identificada
+- Edge Function `delete-cotacao` com cascata completa (agendamentos, serviços, instalações, vistorias, contratos, documentos, comissões, cobranças)
+- Lógica de permissão: **diretor** pode excluir qualquer cotação; **dono** (vendedor) pode excluir as suas, desde que não tenha contrato ativo/assinado
+- UI com botão de exclusão nos componentes `CotacoesTable`, `CotacaoCard` e `CotacaoDetalhe`
+- Dialog de confirmação com motivo obrigatório (`ConfirmacaoExclusaoCotacaoDialog`)
 
-O filtro de elegibilidade é **idêntico para todas as regiões** — não há diferença de código entre RJ e SP. A lógica de whitelist funciona corretamente na teoria. Porém, encontrei **duas vulnerabilidades** que podem causar o problema:
+## O que precisa ser ajustado
 
-### 1. Falha silenciosa quando dados de elegibilidade não carregam
-Em `usePlanosCotacao.ts` (linha 480), se a query de `plano_elegibilidade_modelos` falhar (erro de rede, timeout), `elegibilidadeData` fica `undefined`. Nesse caso:
-- `temRegrasElegibilidade = false` (pois `undefined?.some()` → `false`)
-- O check de elegibilidade é **completamente ignorado**
-- **Todos os planos aparecem sem filtro**
+O botão de exclusão na UI está **condicionado à permissão `canDeleteCotacao`** (perfil Diretor). Usuários comuns não veem o botão, mesmo sendo donos da cotação. A edge function já aceita donos, mas a UI bloqueia.
 
-Esse é o cenário mais provável: um erro intermittente na query faz o filtro "desligar" silenciosamente.
+### Arquivo: `src/pages/vendas/Cotacoes.tsx`
 
-### 2. Dados com `ano_max = NULL` na tabela ESPECIAL
-Dois modelos na whitelist ESPECIAL têm `ano_max = NULL` (SONIC e STILO), aceitando qualquer ano >= 2002. Isso é provavelmente um erro de cadastro.
+Atualmente o botão de excluir só aparece se `hasPerm('canDeleteCotacao')`. Ajustar para mostrar também quando o usuário é o vendedor da cotação e o status não é `contrato_assinado`/`contrato_ativo`.
 
-## Plano de correção
+### Arquivo: `src/components/cotacoes/CotacoesTable.tsx`
 
-### Arquivo: `src/hooks/usePlanosCotacao.ts`
+Mesma lógica: o item "Excluir" no dropdown menu deve aparecer para o dono da cotação (comparando `vendedor_id` com o `user.id` do contexto de auth), com restrição de status.
 
-**Correção 1 — Tratar elegibilidadeData undefined como "tem regras" (fail-safe)**
+### Arquivo: `src/components/cotacoes/CotacaoCard.tsx`
 
-Na verificação de `temRegrasElegibilidade` (linha 480), se `elegibilidadeData` for undefined (erro de carregamento), assumir que planos que possuem `product_line` com regras configuradas devem ser **negados** por precaução, em vez de aprovados.
+Idem ao anterior — garantir que o card mobile também mostre a opção.
 
-```typescript
-// ANTES (linha 480):
-const temRegrasElegibilidade = elegibilidadeData?.some(e => planosNaLinhaIds.includes(e.plano_id)) ?? false;
+### Arquivo: `src/pages/vendas/CotacaoDetalhe.tsx`
 
-// DEPOIS:
-const temRegrasElegibilidade = elegibilidadeData === undefined
-  ? true  // fail-safe: se dados não carregaram, assume que há regras → nega
-  : elegibilidadeData.some(e => planosNaLinhaIds.includes(e.plano_id));
-```
+A página de detalhe já tem o botão, mas condicionado a `isDiretor`. Expandir para incluir donos.
 
-Isso garante que, se a query falhar, planos com elegibilidade configurada sejam **bloqueados** (não liberados).
+## Regras de negócio
 
-**Correção 2 — Log de diagnóstico para depuração**
+| Quem | Pode excluir | Condição |
+|------|-------------|----------|
+| Diretor (`canDeleteCotacao`) | Qualquer cotação | Sem restrição |
+| Vendedor (dono) | Suas próprias cotações | Sem contrato ativo/assinado vinculado |
+| Outro usuário | Não | — |
 
-Adicionar console.warn quando `elegibilidadeData` estiver undefined, para facilitar debug futuro.
+A edge function já implementa exatamente essas regras. A mudança é apenas na **visibilidade do botão** no frontend.
 
-**Correção 3 — Incluir `isError` na verificação de dependências críticas**
-
-Capturar o `isError` da query de elegibilidade e incluí-lo na lógica, para que erros de carregamento sejam tratados explicitamente.
-
-### Arquivo: Dados no Supabase (verificação manual)
-
-Os 2 registros com `ano_max = NULL` na tabela ESPECIAL (SONIC e STILO) devem ser corrigidos manualmente para ter `ano_max = 2004`, alinhado com as demais regras da linha.
-
-## Resumo das alterações
+## Alterações
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/usePlanosCotacao.ts` | Fail-safe para elegibilidadeData undefined + log de diagnóstico |
+| `src/pages/vendas/Cotacoes.tsx` | Mostrar botão excluir para dono da cotação (sem contrato ativo) |
+| `src/components/cotacoes/CotacoesTable.tsx` | Receber `currentUserId` e mostrar "Excluir" para donos |
+| `src/components/cotacoes/CotacaoCard.tsx` | Idem |
+| `src/pages/vendas/CotacaoDetalhe.tsx` | Expandir condição do botão para incluir dono |
 
-## Impacto
+## Segurança
 
-- Quando dados de elegibilidade carregam normalmente: comportamento idêntico ao atual
-- Quando dados falham: planos com regras são **negados** (hoje são aprovados — o bug)
-- Corrige o cenário onde SP (ou qualquer região) mostra planos indevidamente por falha de carregamento
+Nenhuma mudança na edge function. A validação server-side já existe e bloqueia:
+- Usuários não autenticados
+- Usuários sem permissão e que não são donos
+- Donos tentando excluir cotação com contrato ativo
+
+O frontend apenas passa a refletir corretamente o que o backend já permite.
 
