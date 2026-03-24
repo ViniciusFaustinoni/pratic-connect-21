@@ -1,60 +1,65 @@
 
 
-# Página Pública de Vistoria Prestador — Redesign Completo
+# Ações Pós-Conclusão da Vistoria Prestador (VP-M03)
 
 ## Resumo
 
-Reescrever `VistoriaPrestador.tsx` com design mobile-first completo, reutilizando componentes existentes (`ChecklistItem`, `FotoCapture`, `SignaturePad`), e adicionar colunas ao `vistoria_prestador_links` para armazenar checklist, fotos e assinatura.
-
-## Migration SQL
-
-Adicionar colunas à tabela `vistoria_prestador_links`:
-
-- `checklist_data` jsonb DEFAULT null — armazena estado do checklist
-- `fotos_vistoria` jsonb DEFAULT null — array de URLs das fotos enviadas
-- `assinatura_url` text DEFAULT null — URL da assinatura do associado
-
-Criar bucket de storage `vistoria-prestador-fotos` (público) se não existir, com política RLS permitindo upload anon.
-
-## Componente `VistoriaPrestador.tsx` — Reescrita
-
-### Dados carregados
-
-- `vistoria_prestador_links` pelo token (com join em `instalacoes`, `associados`, `veiculos`)
-- Rastreadores vinculados: query em `instalacoes` → `rastreador_id` para buscar código/modelo do rastreador
-
-### 4 Estados
-
-**Estado 1 — Validando**: Spinner + "Validando acesso..."
-
-**Estado 2 — Inválido**: Ícone cadeado, "Link inválido", mensagem, sem botões. Exibido quando token não existe, ou status é `concluida` ou `cancelada`.
-
-**Estado 3 — Tela principal** (status `aguardando` ou `em_execucao`):
-
-- Header: Logo PraticCar + tag "VISTORIA EXTERNA"
-- Seção 1 — Dados da instalação (card): marca/modelo/ano, placa em destaque, endereço, data/hora, associado
-- Seção 2 — Equipamentos para instalação: rastreador(es) vinculados (somente leitura)
-- Seção 3 — Checklist: Reutilizar `ChecklistItem` com `CHECKLIST_ITEMS` (mesmos itens do `InstaladorChecklist`). Estado salvo via auto-save em `checklist_data` da tabela
-- Seção 4 — Fotos: Reutilizar `FotoCapture` com as categorias de `vistoriaConfigCompleta`. Upload para bucket `vistoria-prestador-fotos`. Mínimo de fotos obrigatórias
-- Seção 5 — Assinatura: Reutilizar `SignaturePad`. Upload do blob para storage, URL salva em `assinatura_url`
-- Botão fixo no rodapé: "Finalizar Vistoria" — habilitado quando checklist 100% + mínimo fotos + assinatura. AlertDialog de confirmação antes de concluir.
-
-**Estado 4 — Concluído**: Check verde, "Vistoria concluída!", "Os dados foram enviados ao coordenador."
-
-### Fluxo de conclusão
-
-Ao confirmar: atualizar `vistoria_prestador_links` com `status: 'concluida'`, `concluida_em`, `checklist_data`, `fotos_vistoria` (array de URLs), `assinatura_url`. Qualquer acesso futuro ao token exibe Estado 2.
-
-### Diferenças do fluxo interno
-
-- Não tem etapa de "Confirmar Chegada" separada — o prestador já está na tela principal
-- Ao abrir a página com status `aguardando`, automaticamente muda para `em_execucao` e registra `chegada_em`
-- Componentes reutilizados mas com tema claro (fundo branco) em vez do tema escuro do instalador
+Criar uma edge function `concluir-vistoria-prestador` que encadeia 6 ações ao prestador finalizar a vistoria na tela pública. A página `VistoriaPrestador.tsx` passa a chamar essa edge function em vez de fazer update direto.
 
 ## Arquivos
 
-| Arquivo | Ação |
+| Arquivo | Acao |
 |---------|------|
-| Migration SQL | **Criar** — colunas + bucket |
-| `src/pages/public/VistoriaPrestador.tsx` | **Reescrever** — Página completa com 4 estados |
+| `supabase/functions/concluir-vistoria-prestador/index.ts` | **Criar** — Edge function com as 6 ações |
+| `src/pages/public/VistoriaPrestador.tsx` | **Editar** — Chamar edge function no handleConfirmConcluir |
+
+## Edge Function `concluir-vistoria-prestador`
+
+**Input**: `{ token, checklist_data, fotos_vistoria, assinatura_url }`
+
+### Ação 1 — Atualizar status da instalação
+
+Buscar o `vistoria_prestador_links` pelo token. Obter `instalacao_id`. UPDATE na `instalacoes` com `status: 'concluida'`.
+
+### Ação 2 — Invalidar o token
+
+UPDATE em `vistoria_prestador_links` com `status: 'concluida'`, `concluida_em`, `checklist_data`, `fotos_vistoria`, `assinatura_url`. Qualquer acesso futuro ao token retorna Estado 2.
+
+### Ação 3 — Salvar evidências
+
+Os dados já são persistidos na Ação 2 (checklist_data, fotos_vistoria, assinatura_url). As fotos e assinatura já estão no Storage (`vistoria-prestador-fotos`) — o upload ocorre durante o preenchimento na tela pública. A edge function apenas garante que os dados finais estão salvos no registro.
+
+### Ação 4 — Atualizar lançamento financeiro
+
+Buscar o `lancamentos_contabeis` com `origem: 'vistoria_prestador'` e `origem_id: link.id`. Adicionar `complemento` com data/hora de conclusão e referência ao link de execução. O status não muda para "Pago" — permanece "ativo" (previsto) para aprovação manual do financeiro.
+
+### Ação 5 — Notificar coordenador via WhatsApp
+
+Buscar dados completos da instalação (veículo, cidade, placa) e do prestador. Buscar o `atribuido_por` (profile) do link para obter o telefone do coordenador. Enviar mensagem WhatsApp formatada via `whatsapp-send-text` com o template de conclusão especificado.
+
+### Ação 6 — Notificação interna no painel
+
+Inserir em `notificacoes_sistema` com:
+- `titulo`: "✅ Vistoria Prestador Concluída"
+- `mensagem`: descritiva com prestador, veículo, placa, cidade
+- `destino`: 'role' (para atingir coordenadores de monitoramento)
+- `destino_role`: role adequada do coordenador
+- `tipo`: 'vistoria_prestador_concluida'
+- `link`: `/monitoramento/instalacoes/{instalacao_id}`
+
+### Auditoria
+
+Registrar em `logs_auditoria` a conclusão pelo prestador.
+
+## `VistoriaPrestador.tsx` — Alteração
+
+No `handleConfirmConcluir` (linhas ~278-304), substituir o update direto por:
+
+```typescript
+const { data, error } = await publicSupabase.functions.invoke('concluir-vistoria-prestador', {
+  body: { token, checklist_data: checklist, fotos_vistoria: fotosMap, assinatura_url: assinaturaUrl }
+});
+```
+
+Remover o update direto em `vistoria_prestador_links`. O resto do fluxo (invalidação de query, toast, estados) permanece igual.
 
