@@ -635,7 +635,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Armazenar dados do veículo - SEM chamar API FIPE adicional
         setVeiculoEncontrado(resultado);
         
-        // Limpar seleções manuais (não serão usadas)
+        // Limpar seleções manuais para não contaminar detecção de tipo
+        setTipoFipeSelecionado('carros');
         setMarcaSelecionada('');
         setModeloSelecionado('');
         setAnoSelecionado('');
