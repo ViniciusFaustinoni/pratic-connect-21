@@ -26099,6 +26099,65 @@ export type Database = {
           },
         ]
       }
+      vistoriador_cidades: {
+        Row: {
+          cidade: string
+          created_at: string
+          id: string
+          tipo_vistoriador: Database["public"]["Enums"]["tipo_vistoriador"]
+          uf: string
+          vistoriador_comum_id: string | null
+          vistoriador_prestador_id: string | null
+        }
+        Insert: {
+          cidade: string
+          created_at?: string
+          id?: string
+          tipo_vistoriador: Database["public"]["Enums"]["tipo_vistoriador"]
+          uf: string
+          vistoriador_comum_id?: string | null
+          vistoriador_prestador_id?: string | null
+        }
+        Update: {
+          cidade?: string
+          created_at?: string
+          id?: string
+          tipo_vistoriador?: Database["public"]["Enums"]["tipo_vistoriador"]
+          uf?: string
+          vistoriador_comum_id?: string | null
+          vistoriador_prestador_id?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "vistoriador_cidades_vistoriador_comum_id_fkey"
+            columns: ["vistoriador_comum_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "vistoriador_cidades_vistoriador_comum_id_fkey"
+            columns: ["vistoriador_comum_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistoriador_cidades_vistoriador_comum_id_fkey"
+            columns: ["vistoriador_comum_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "vistoriador_cidades_vistoriador_prestador_id_fkey"
+            columns: ["vistoriador_prestador_id"]
+            isOneToOne: false
+            referencedRelation: "vistoriadores_prestadores"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       vistoriadores_localizacao: {
         Row: {
           em_servico: boolean | null
@@ -26147,6 +26206,42 @@ export type Database = {
             referencedColumns: ["vendedor_id"]
           },
         ]
+      }
+      vistoriadores_prestadores: {
+        Row: {
+          ativo: boolean
+          cpf_cnpj: string | null
+          created_at: string
+          email: string | null
+          id: string
+          nome: string
+          observacoes: string | null
+          telefone: string | null
+          updated_at: string
+        }
+        Insert: {
+          ativo?: boolean
+          cpf_cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome: string
+          observacoes?: string | null
+          telefone?: string | null
+          updated_at?: string
+        }
+        Update: {
+          ativo?: boolean
+          cpf_cnpj?: string | null
+          created_at?: string
+          email?: string | null
+          id?: string
+          nome?: string
+          observacoes?: string | null
+          telefone?: string | null
+          updated_at?: string
+        }
+        Relationships: []
       }
       vistorias: {
         Row: {
@@ -27965,6 +28060,10 @@ export type Database = {
       atualizar_cobrancas_vencidas: { Args: never; Returns: number }
       atualizar_parcelas_vencidas: { Args: never; Returns: number }
       atualizar_valor_os: { Args: { os_id: string }; Returns: undefined }
+      buscar_cobertura_vistoria: {
+        Args: { p_cidade: string; p_uf: string }
+        Returns: Json
+      }
       buscar_tarefa_atual_profissional: {
         Args: { p_profissional_id: string }
         Returns: {
@@ -28593,6 +28692,7 @@ export type Database = {
         | "terceiros"
       tipo_usuario: "funcionario" | "associado" | "prestador" | "agencia"
       tipo_vistoria: "entrada" | "saida" | "sinistro"
+      tipo_vistoriador: "comum" | "prestador"
     }
     CompositeTypes: {
       [_ in never]: never
@@ -29020,6 +29120,7 @@ export const Constants = {
       ],
       tipo_usuario: ["funcionario", "associado", "prestador", "agencia"],
       tipo_vistoria: ["entrada", "saida", "sinistro"],
+      tipo_vistoriador: ["comum", "prestador"],
     },
   },
 } as const
