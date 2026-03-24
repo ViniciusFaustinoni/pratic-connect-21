@@ -1,32 +1,45 @@
 
 
-# Diagnostico: OCR de Documentos com Falhas
+# Diagnostico: Disparo Duplicado de WhatsApp para Encaixe
 
-## Investigacao
+## Causa Raiz
 
-Analisei completamente a edge function `document-ocr/index.ts` (811 linhas) e os hooks que a chamam. **Nao ha logs recentes** da funcao, o que indica que ela pode estar falhando no boot ou nao sendo invocada corretamente.
+O cron `cron-atribuir-tarefas` roda a cada 5 minutos. Quando encontra um servico com `permite_encaixe=true`, ele itera sobre **cada profissional online** separadamente. Para CADA profissional, faz uma nova query de servicos e encontra o mesmo servico de encaixe.
 
-## Problemas identificados
+O problema esta na **ordem das operacoes** (linhas 555-632):
 
-### 1. Import XHR obsoleto causa crash no boot (CRITICO)
-Linha 1: `import "https://deno.land/x/xhr@0.1.0/mod.ts"` — este polyfill XHR e antigo e pode causar falha de inicializacao em versoes mais recentes do Deno runtime usado pelo Supabase Edge Functions. A funcao `odometro-ocr` (que funciona) **nao usa este import**.
+```text
+1. Query servicos (encontra encaixe com confirmacao_whatsapp = NULL)
+2. Envia WhatsApp  ← mensagem duplicada
+3. Atualiza confirmacao_whatsapp = 'aguardando_confirmacao_encaixe'
+4. continue
+```
 
-### 2. Modelo sem sufixo `-image` para visao (CRITICO)
-Linha 246: `const OCR_MODEL = 'google/gemini-2.5-flash'` — a funcao `odometro-ocr` (que funciona) usa `google/gemini-2.5-flash-image`. O modelo sem sufixo pode nao suportar inputs de imagem, causando erro 400 do gateway.
+Se 5 profissionais estao online, cada um executa sua propria query. Mesmo com `await`, ha uma **race condition real**: entre a query do profissional 1 retornar e o update ser commitado, o profissional 2 ja pode ter iniciado sua query. Alem disso, se 2 execucoes do cron se sobrepuserem (timeout > 5min), o problema dobra.
 
-### 3. `getClaims` pode nao existir na versao do SDK (MEDIO)
-Linha 268: `supabase.auth.getClaims(token)` — este metodo foi adicionado recentemente ao supabase-js. Embora esteja em try-catch, se o import do SDK falhar por incompatibilidade, toda a funcao cai.
+**Resultado**: 10+ mensagens identicas em 1 minuto, como visto no screenshot.
 
-### 4. Extracao nativa de PDF extremamente fragil (BAIXO)
-Linhas 757-811: `extractTextFromPDFBuffer` faz parsing via regex de bytes brutos. Nao funciona com streams comprimidos (a maioria dos PDFs modernos). Isso nao causa erro, mas o fallback visual via IA pode falhar se o modelo estiver errado (item 2).
+## Plano de Correcao
 
-## Plano de correcao
+### 1. Dedup em memoria (dentro da mesma execucao)
+Criar um `Set<string>` antes do loop de profissionais para rastrear servicos que ja tiveram confirmacao de encaixe enviada. Se o servico ja esta no Set, pular.
 
-| Alteracao | Arquivo | Detalhes |
-|-----------|---------|----------|
-| Remover import XHR | `supabase/functions/document-ocr/index.ts` | Deletar linha 1 — `fetch` nativo do Deno e suficiente |
-| Corrigir modelo de IA | `supabase/functions/document-ocr/index.ts` | `OCR_MODEL = 'google/gemini-2.5-flash-image'` e `OCR_RETRY_MODEL = 'google/gemini-2.5-pro'` (retry pode manter sem sufixo pois usa tool calling) |
-| Redeploy e testar | Edge Function | Redeployar e verificar logs para confirmar que o boot e as chamadas funcionam |
+### 2. Update atomico ANTES do envio (prevenir corrida entre execucoes)
+Inverter a ordem: primeiro fazer `UPDATE servicos SET confirmacao_whatsapp = 'aguardando_confirmacao_encaixe' WHERE id = X AND confirmacao_whatsapp IS NULL` com `.select()`. Se o update nao retornar nenhuma linha (outro processo ja atualizou), pular o envio.
 
-Sao 2 alteracoes simples no mesmo arquivo + redeploy. Nenhuma funcionalidade sera removida ou alterada.
+### 3. Mover query de encaixe para FORA do loop de profissionais
+A busca de servicos de encaixe e identica para todos os profissionais. Buscar uma unica vez e distribuir, em vez de repetir a query N vezes.
+
+### Alteracoes
+
+**Arquivo**: `supabase/functions/cron-atribuir-tarefas/index.ts`
+
+| Local | Mudanca |
+|-------|---------|
+| Antes do loop de profissionais (~linha 150) | Adicionar `const encaixesJaEnviados = new Set<string>()` |
+| Linha 555 (condicao de encaixe) | Adicionar check: `if (encaixesJaEnviados.has(servico.id)) continue` |
+| Linhas 604-607 (update confirmacao) | Mover para ANTES do envio WhatsApp, usando update condicional com `.is('confirmacao_whatsapp', null).select()` e verificar se retornou row |
+| Apos envio bem-sucedido | Adicionar `encaixesJaEnviados.add(servico.id)` |
+
+**Redeploy** da edge function apos a correcao.
 
