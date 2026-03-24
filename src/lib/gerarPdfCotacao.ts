@@ -1723,10 +1723,20 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
 
   const numPlanos = cotacao.planosComparar.length;
   
-  const totalPaginas = 2; // Capa + comparativo de coberturas
+  // totalPaginas = 1 (capa) + N (detalhes por plano) + 1 (comparativo)
+  const totalPaginas = 1 + numPlanos + 1;
 
   // ============= PÁGINA 1: CAPA COM CARDS DOS PLANOS =============
   desenharPaginaCapa(doc, cotacao, logoBase64, pageWidth, pageHeight, margin, totalPaginas, false, logoAspect, config);
+
+  // ============= PÁGINAS DE DETALHAMENTO POR PLANO =============
+  cotacao.planosComparar.forEach((plano, index) => {
+    doc.addPage();
+    desenharPaginaDetalhesPlano(
+      doc, cotacao, plano, index + 1, numPlanos, logoBase64,
+      pageWidth, pageHeight, margin, index + 2, totalPaginas, logoAspect, config
+    );
+  });
 
   // ============= PÁGINA FINAL: COMPARATIVO DE COBERTURAS =============
   const dadosVeiculoComparativo = {
@@ -1738,7 +1748,7 @@ export async function gerarPdfCotacaoComparativa(cotacao: CotacaoComparativaPara
 
   doc.addPage();
   desenharPaginaComparativoCoberturas(
-    doc, dadosVeiculoComparativo, cotacao.planosComparar, logoBase64, pageWidth, pageHeight, margin, 2, totalPaginas, logoAspect, config
+    doc, dadosVeiculoComparativo, cotacao.planosComparar, logoBase64, pageWidth, pageHeight, margin, totalPaginas, totalPaginas, logoAspect, config
   );
 
   // ============= DOWNLOAD =============
