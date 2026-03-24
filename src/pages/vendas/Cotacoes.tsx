@@ -742,7 +742,7 @@ export default function Cotacoes() {
           </Select>
         )}
 
-        {permissions.cotacao.canDelete && (
+        {(permissions.cotacao.canDelete || permissions.userId) && (
           <Button
             variant={filtroOrfas ? 'default' : 'outline'}
             size="sm"
