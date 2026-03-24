@@ -1,73 +1,36 @@
 
 
-# Suporte a Vistoriador Prestador — Dados e Serviço de Consulta
+# Página "Regiões de Atendimento" para Coordenador de Monitoramento
 
-## Contexto
+## Resumo
 
-Hoje, vistoriadores são usuários do sistema (tabela `profiles` com role `instalador_vistoriador`). O novo tipo "prestador" **não tem login**, portanto precisa de uma estrutura separada.
+Criar a página `/monitoramento/configuracoes/regioes` que permite ao Coordenador de Monitoramento gerenciar vínculos cidade ↔ vistoriador usando os hooks e tabelas já criados (`useVistoriadorCidades`, `useVistoriadoresPrestadores`, tabela `vistoriador_cidades`).
 
-## Alterações
+## Arquivos
 
-### 1. Migration SQL — Novas tabelas e enum
+| Arquivo | Ação |
+|---------|------|
+| `src/pages/monitoramento/RegioesAtendimento.tsx` | **Criar** — Página completa |
+| `src/App.tsx` | **Editar** — Adicionar rota e import |
 
-**Tabela `vistoriadores_prestadores`** — cadastro dos prestadores de vistoria (sem login):
+## Detalhes técnicos
 
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| id | uuid PK | Identificador |
-| nome | text NOT NULL | Nome completo |
-| telefone | text | Telefone/WhatsApp |
-| email | text | Email de contato |
-| cpf_cnpj | text | CPF ou CNPJ |
-| ativo | boolean DEFAULT true | Se está ativo |
-| observacoes | text | Notas internas |
-| created_at / updated_at | timestamptz | Timestamps |
+### 1. `RegioesAtendimento.tsx`
 
-**Tabela `vistoriador_cidades`** — vínculo cidade ↔ vistoriador (ambos os tipos):
+Segue o padrão de `PrestadoresParceiros.tsx`:
 
-| Coluna | Tipo | Descrição |
-|--------|------|-----------|
-| id | uuid PK | Identificador |
-| cidade | text NOT NULL | Nome do município |
-| uf | text NOT NULL | Estado (2 chars) |
-| tipo_vistoriador | enum `tipo_vistoriador` ('comum', 'prestador') | Tipo |
-| vistoriador_comum_id | uuid FK → profiles(id) | Preenchido se tipo = comum |
-| vistoriador_prestador_id | uuid FK → vistoriadores_prestadores(id) | Preenchido se tipo = prestador |
-| created_at | timestamptz | Timestamp |
+- **Acesso**: `PermissionGate` com `isCoordenadorMonitoramento`, `isDiretor`, `isAdminMaster`
+- **Dados**: 
+  - `useVistoriadorCidades()` (sem filtro) para listar todos os vínculos
+  - `useVistoriadoresPrestadores()` para popular checkboxes de prestadores
+  - Query de profiles com role `instalador_vistoriador` via `user_roles` para popular checkboxes de vistoriadores comuns
+- **Tabela**: Agrupa registros por cidade+UF, exibe badge azul/laranja por tipo, nomes dos vistoriadores (2 + tooltip), ações editar/remover
+- **Modal**: Dialog com campos cidade (text), UF (select 27 estados), tipo (radio comum/prestador), checkboxes dinâmicos. Ao trocar tipo, limpa seleções
+- **Remoção**: AlertDialog de confirmação, chama `desvincular` para cada registro da cidade
+- **Estado vazio**: Ícone Map, mensagem, botão adicionar
+- **Banner**: Alert com ícone Info, fundo azul claro
 
-Constraint CHECK: exatamente um dos dois IDs preenchido conforme o tipo.
+### 2. `App.tsx`
 
-**Função SQL `buscar_cobertura_vistoria(p_cidade text, p_uf text)`** — retorna JSON com:
-- `tem_comum: boolean` + lista de vistoriadores comuns
-- `tem_prestador: boolean` + lista de vistoriadores prestadores  
-- `fora_de_cobertura: boolean`
-
-**RLS**: Leitura para autenticados; escrita restrita a `coordenador_monitoramento`, `admin`, `diretor`.
-
-### 2. Hook frontend — `useCoberturaCidade.ts`
-
-Hook que chama a função RPC `buscar_cobertura_vistoria` com município/UF e retorna o resultado tipado. Será consumido por telas futuras da série VP.
-
-### 3. Hook frontend — `useVistoriadoresPrestadores.ts`
-
-CRUD básico para a tabela `vistoriadores_prestadores` (listar, criar, editar, ativar/desativar).
-
-### 4. Hook frontend — `useVistoriadorCidades.ts`
-
-CRUD para vínculos cidade ↔ vistoriador na tabela `vistoriador_cidades`.
-
-### Arquivos novos
-
-| Arquivo | Descrição |
-|---------|-----------|
-| `supabase/migrations/xxx.sql` | Enum, tabelas, função RPC, RLS |
-| `src/hooks/useVistoriadoresPrestadores.ts` | CRUD prestadores |
-| `src/hooks/useVistoriadorCidades.ts` | CRUD vínculos cidade |
-| `src/hooks/useCoberturaCidade.ts` | Consulta de cobertura |
-
-### Sem alteração
-
-- Fluxo de atribuição de vistoriadores comuns (inalterado)
-- Tabela `profiles` (sem nova coluna — tipo "comum" é implícito pelo role)
-- Nenhuma tela nova (conforme solicitado)
+Adicionar rota: `<Route path="/monitoramento/configuracoes/regioes" element={<RegioesAtendimento />} />`
 
