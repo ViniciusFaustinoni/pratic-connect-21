@@ -1,45 +1,21 @@
 
 
-# Diagnostico: Disparo Duplicado de WhatsApp para Encaixe
+# Alterar historico do app do vistoriador para mostrar o mes inteiro
 
-## Causa Raiz
+## Problema
+O historico de tarefas no app do vistoriador (`InstaladorTarefas.tsx`) busca apenas os ultimos 7 dias. O usuario quer ver todas as tarefas do mes atual.
 
-O cron `cron-atribuir-tarefas` roda a cada 5 minutos. Quando encontra um servico com `permite_encaixe=true`, ele itera sobre **cada profissional online** separadamente. Para CADA profissional, faz uma nova query de servicos e encontra o mesmo servico de encaixe.
+## Alteracoes
 
-O problema esta na **ordem das operacoes** (linhas 555-632):
+### 1. `src/hooks/useTarefaAtual.ts` — `useTarefasHistorico`
+- Trocar o parametro `dias: number = 7` por logica que calcula o inicio do mes atual (`startOfMonth`)
+- Usar `startOfMonth(new Date())` como `dataLimite` em vez de `new Date() - dias`
+- Atualizar a queryKey para refletir o mes
 
-```text
-1. Query servicos (encontra encaixe com confirmacao_whatsapp = NULL)
-2. Envia WhatsApp  ← mensagem duplicada
-3. Atualiza confirmacao_whatsapp = 'aguardando_confirmacao_encaixe'
-4. continue
-```
+### 2. `src/pages/instalador/InstaladorTarefas.tsx`
+- Remover o argumento `7` da chamada `useTarefasHistorico(7)` → `useTarefasHistorico()`
+- Atualizar a mensagem de estado vazio de "últimos 7 dias" para "neste mês"
 
-Se 5 profissionais estao online, cada um executa sua propria query. Mesmo com `await`, ha uma **race condition real**: entre a query do profissional 1 retornar e o update ser commitado, o profissional 2 ja pode ter iniciado sua query. Alem disso, se 2 execucoes do cron se sobrepuserem (timeout > 5min), o problema dobra.
-
-**Resultado**: 10+ mensagens identicas em 1 minuto, como visto no screenshot.
-
-## Plano de Correcao
-
-### 1. Dedup em memoria (dentro da mesma execucao)
-Criar um `Set<string>` antes do loop de profissionais para rastrear servicos que ja tiveram confirmacao de encaixe enviada. Se o servico ja esta no Set, pular.
-
-### 2. Update atomico ANTES do envio (prevenir corrida entre execucoes)
-Inverter a ordem: primeiro fazer `UPDATE servicos SET confirmacao_whatsapp = 'aguardando_confirmacao_encaixe' WHERE id = X AND confirmacao_whatsapp IS NULL` com `.select()`. Se o update nao retornar nenhuma linha (outro processo ja atualizou), pular o envio.
-
-### 3. Mover query de encaixe para FORA do loop de profissionais
-A busca de servicos de encaixe e identica para todos os profissionais. Buscar uma unica vez e distribuir, em vez de repetir a query N vezes.
-
-### Alteracoes
-
-**Arquivo**: `supabase/functions/cron-atribuir-tarefas/index.ts`
-
-| Local | Mudanca |
-|-------|---------|
-| Antes do loop de profissionais (~linha 150) | Adicionar `const encaixesJaEnviados = new Set<string>()` |
-| Linha 555 (condicao de encaixe) | Adicionar check: `if (encaixesJaEnviados.has(servico.id)) continue` |
-| Linhas 604-607 (update confirmacao) | Mover para ANTES do envio WhatsApp, usando update condicional com `.is('confirmacao_whatsapp', null).select()` e verificar se retornou row |
-| Apos envio bem-sucedido | Adicionar `encaixesJaEnviados.add(servico.id)` |
-
-**Redeploy** da edge function apos a correcao.
+### 3. `src/hooks/usePerformanceSemanalCoordenador.ts` (opcional — dashboard do coordenador)
+- Manter como esta, pois e um grafico semanal separado do historico do vistoriador
 
