@@ -23,6 +23,7 @@ import { AppErrorBoundary } from "@/components/app/AppErrorBoundary";
 import AssociadoVistoria from "./pages/public/AssociadoVistoria";
 import LandingPlanos from "./pages/public/LandingPlanos";
 import PrestadorInstalacao from "./pages/public/PrestadorInstalacao";
+import VistoriaPrestador from "./pages/public/VistoriaPrestador";
 
 // Internal System Pages
 import Auth from "./pages/Auth";
@@ -437,6 +438,9 @@ const App = () => (
             
             {/* Public Prestador Instalação */}
             <Route path="/prestador/instalacao/:token" element={<PrestadorInstalacao />} />
+            
+            {/* Public Vistoria Prestador */}
+            <Route path="/vistoria-prestador/:token" element={<VistoriaPrestador />} />
             
             {/* Public Portal Terceiro */}
             <Route path="/terceiro/:token" element={<PortalTerceiro />} />

@@ -13,7 +13,6 @@ import { Users, Search, MessageSquare, CheckCircle, RefreshCw, Loader2 } from 'l
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useVistoriadoresPrestadores, VistoriadorPrestador } from '@/hooks/useVistoriadoresPrestadores';
-import { useEnviarWhatsApp } from '@/hooks/useEnviarWhatsApp';
 import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { formatarMoeda } from '@/utils/format';
@@ -51,20 +50,32 @@ export function PainelAtribuicaoPrestador({ instalacao, tipoCobertura, cobertura
 /* ── Estado pós-confirmação ── */
 function EstadoAtribuido({ instalacao }: { instalacao: any }) {
   const { data: prestadores } = useVistoriadoresPrestadores();
-  const { abrirWhatsAppWeb } = useEnviarWhatsApp();
+  const [reenviando, setReenviando] = useState(false);
 
   const prestador = useMemo(() => {
     if (!prestadores) return null;
     return prestadores.find((p) => p.id === (instalacao as any).vistoriador_prestador_id) ?? null;
   }, [prestadores, instalacao]);
 
-  const handleReenviar = () => {
-    if (!prestador?.telefone) {
-      toast.error('Prestador sem telefone cadastrado');
-      return;
+  const handleReenviar = async () => {
+    if (!prestador) return;
+    setReenviando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('gerar-link-vistoriador-prestador', {
+        body: {
+          instalacao_id: instalacao.id,
+          vistoriador_prestador_id: prestador.id,
+          reenviar: true,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao reenviar');
+      toast.success(data.whatsapp_enviado ? 'Link reenviado via WhatsApp!' : 'Link gerado, mas houve falha no envio do WhatsApp');
+    } catch (e: any) {
+      toast.error('Erro ao reenviar: ' + e.message);
+    } finally {
+      setReenviando(false);
     }
-    const msg = `Olá ${prestador.nome}, segue o link para a instalação em ${instalacao.cidade}/${instalacao.uf}.`;
-    abrirWhatsAppWeb(prestador.telefone, msg);
   };
 
   return (
@@ -83,8 +94,9 @@ function EstadoAtribuido({ instalacao }: { instalacao: any }) {
           Aguardando execução
         </Badge>
       </div>
-      <Button variant="outline" size="sm" className="w-full" onClick={handleReenviar}>
-        <RefreshCw className="mr-2 h-4 w-4" /> Reenviar link por WhatsApp
+      <Button variant="outline" size="sm" className="w-full" onClick={handleReenviar} disabled={reenviando}>
+        {reenviando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+        Reenviar link por WhatsApp
       </Button>
     </div>
   );
@@ -107,7 +119,7 @@ function EstadoSelecao({
   const [busca, setBusca] = useState('');
   const valorRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
-  const { abrirWhatsAppWeb } = useEnviarWhatsApp();
+  
 
   // All prestadores for Cenário C search
   const { data: todosPrestadores } = useVistoriadoresPrestadores();
@@ -144,23 +156,25 @@ function EstadoSelecao({
     if (!selectedPrestador || valor <= 0) return;
     setSalvando(true);
     try {
-      const { error } = await (supabase as any)
-        .from('instalacoes')
-        .update({
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { data, error } = await supabase.functions.invoke('gerar-link-vistoriador-prestador', {
+        body: {
+          instalacao_id: instalacao.id,
           vistoriador_prestador_id: selectedPrestador.id,
-          valor_prestador: valor,
-          prestador_atribuido_em: new Date().toISOString(),
-        })
-        .eq('id', instalacao.id);
+          valor,
+          atribuido_por: user?.id,
+        },
+      });
+
       if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao atribuir');
 
-      // Notificar via WhatsApp
-      if (selectedPrestador.telefone) {
-        const msg = `Olá ${selectedPrestador.nome}, você foi atribuído a uma instalação em ${instalacao.cidade}/${instalacao.uf} no dia ${new Date(instalacao.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR')}. Valor: ${formatarMoeda(valor)}.`;
-        abrirWhatsAppWeb(selectedPrestador.telefone, msg);
-      }
-
-      toast.success('Prestador atribuído com sucesso!');
+      toast.success(
+        data.whatsapp_enviado
+          ? 'Prestador atribuído e notificado via WhatsApp!'
+          : 'Prestador atribuído! (WhatsApp não enviado — verifique o telefone)'
+      );
       queryClient.invalidateQueries({ queryKey: ['instalacao', instalacao.id] });
       setConfirmarOpen(false);
     } catch (e: any) {
