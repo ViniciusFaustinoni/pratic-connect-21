@@ -1,4 +1,3 @@
-import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
@@ -243,7 +242,7 @@ function extractCPFFromRaw(raw: string): string | null {
 }
 
 // Modelo estável para OCR (evitar modelos preview em fluxo crítico)
-const OCR_MODEL = 'google/gemini-2.5-flash';
+const OCR_MODEL = 'google/gemini-2.5-flash-image';
 const OCR_RETRY_MODEL = 'google/gemini-2.5-pro';
 
 serve(async (req) => {
