@@ -474,7 +474,7 @@ Ficou com alguma dúvida? Estou à disposição!
             isExcluindo={excluirMutation.isPending}
             isGerando={isGerando}
             isDuplicando={duplicarMutation.isPending}
-            canDelete={isDiretor}
+            canDelete={isDiretor || (cotacao?.vendedor_id === profile?.id && !contratoAssinado)}
             contratoAssinado={contratoAssinado}
           />
 
