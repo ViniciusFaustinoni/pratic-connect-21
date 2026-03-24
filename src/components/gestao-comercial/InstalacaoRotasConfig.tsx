@@ -46,6 +46,7 @@ const CONFIG_CHAVES = [
   'jornada_exibir_saldo_vistoriador',
   'recusa_exigir_motivo',
   'recusa_limite_alerta',
+  'prazo_confirmacao_agendamento_horas',
 ] as const;
 
 // ── Hook ───────────────────────────────────────────
@@ -84,6 +85,7 @@ function useInstalacaoConfigs() {
         exibirSaldo: map.jornada_exibir_saldo_vistoriador?.valor ?? 'true',
         recusaExigirMotivo: map.recusa_exigir_motivo?.valor ?? 'true',
         recusaLimiteAlerta: map.recusa_limite_alerta?.valor ?? '3',
+        prazoConfirmacao: map.prazo_confirmacao_agendamento_horas?.valor ?? '4',
       };
     },
     staleTime: 1000 * 60 * 5,
@@ -183,6 +185,10 @@ export function InstalacaoRotasConfig() {
   const [recusaLimiteAlerta, setRecusaLimiteAlerta] = useState('3');
   const [savingB8, setSavingB8] = useState(false);
 
+  // ── Bloco 9 state (Prazo confirmação)
+  const [prazoConfirmacao, setPrazoConfirmacao] = useState('4');
+  const [savingB9, setSavingB9] = useState(false);
+
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
@@ -206,6 +212,7 @@ export function InstalacaoRotasConfig() {
     setExibirSaldo(config.exibirSaldo !== 'false');
     setRecusaExigirMotivo(config.recusaExigirMotivo !== 'false');
     setRecusaLimiteAlerta(config.recusaLimiteAlerta);
+    setPrazoConfirmacao(config.prazoConfirmacao);
   }, [config]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['configuracoes-instalacao-rotas'] });
@@ -703,6 +710,51 @@ export function InstalacaoRotasConfig() {
             }} disabled={savingB8} size="sm">
               {savingB8 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
               Salvar Recusas
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
+      {/* ── Bloco 9 — Prazo de Confirmação ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock className="h-4 w-4" />
+            Prazo para Confirmação de Agendamento
+          </CardTitle>
+          <CardDescription>
+            Tempo máximo que o associado tem para confirmar o agendamento via WhatsApp. Após esse prazo, o serviço é cancelado automaticamente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2 max-w-xs">
+            <Label>Prazo para confirmação (horas)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={48}
+              value={prazoConfirmacao}
+              onChange={e => setPrazoConfirmacao(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Padrão: 4 horas. Após esse prazo sem resposta, o sistema cancela o agendamento e notifica o associado.
+            </p>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={async () => {
+              setSavingB9(true);
+              try {
+                await salvarConfig('prazo_confirmacao_agendamento_horas', prazoConfirmacao, profile?.id);
+                toast.success('Prazo de confirmação salvo com sucesso');
+                invalidate();
+              } catch {
+                toast.error('Erro ao salvar prazo de confirmação');
+              } finally {
+                setSavingB9(false);
+              }
+            }} disabled={savingB9} size="sm">
+              {savingB9 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              Salvar Prazo
             </Button>
           </div>
         </CardContent>
