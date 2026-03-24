@@ -552,7 +552,7 @@ serve(async (req) => {
         console.log(`[cron-atribuir-tarefas] Tentando atribuir ${servico.tipo} ${servico.id} (${servico.distancia_km.toFixed(2)} km, tipo: ${tipoAtribuicao})`);
 
         // ========== ENCAIXE: CONFIRMAÇÃO VIA WHATSAPP ANTES DE ATRIBUIR ==========
-        if (servico.permite_encaixe && !(servico as any).confirmacao_whatsapp) {
+        if (servico.is_encaixe && !(servico as any).confirmacao_whatsapp) {
           console.log(`[cron-atribuir-tarefas] ⏳ Encaixe ${servico.id} precisa de confirmação do associado antes de atribuir`);
           
           try {
