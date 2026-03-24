@@ -95,8 +95,9 @@ function EstadoAtribuido({ instalacao }: { instalacao: any }) {
           Aguardando execução
         </Badge>
       </div>
-      <Button variant="outline" size="sm" className="w-full" onClick={handleReenviar}>
-        <RefreshCw className="mr-2 h-4 w-4" /> Reenviar link por WhatsApp
+      <Button variant="outline" size="sm" className="w-full" onClick={handleReenviar} disabled={reenviando}>
+        {reenviando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <RefreshCw className="mr-2 h-4 w-4" />}
+        Reenviar link por WhatsApp
       </Button>
     </div>
   );
