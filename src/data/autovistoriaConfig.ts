@@ -12,126 +12,14 @@ export interface FotoAutovistoria {
   categoria?: string;
 }
 
-// CARROS (15 fotos - associado)
-// Ordem: fluxo físico lógico — exterior (caminhada ao redor) → pneus (segunda volta) → interior
+// CARROS (2 fotos - associado) + vídeo 360° obrigatório
 export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
-  // ===== 1. EXTERIOR — Caminhada ao redor do veículo =====
-  { 
-    id: 'selfie_veiculo', 
-    label: 'Selfie com o Veículo ao Fundo', 
-    descricao: 'Tire uma selfie com o veículo aparecendo atrás de você',
-    ordem: 1,
-    categoria: 'exterior',
-    instrucoes: [
-      'Posicione-se à frente do veículo',
-      'Seu rosto deve aparecer claramente na foto',
-      'O veículo deve estar visível ao fundo',
-      'Mantenha boa iluminação no rosto',
-    ],
-    evitar: [
-      'Óculos escuros ou bonés que cubram o rosto',
-      'Fotos muito escuras ou com flash estourado',
-      'Veículo cortado ou muito distante',
-    ],
-    dicaExtra: 'Esta foto comprova que você está presente no local da vistoria.',
-  },
-  { 
-    id: 'frente', 
-    label: 'Frente do Veículo', 
-    descricao: 'Foto centralizada da frente do veículo',
-    ordem: 2,
-    categoria: 'exterior',
-    instrucoes: [
-      'Posicione-se a 2-3 metros de distância',
-      'Centralize o veículo na foto',
-      'A placa dianteira deve estar legível',
-      'Faróis e grade devem estar visíveis',
-    ],
-    evitar: [
-      'Fotos muito de perto ou muito longe',
-      'Veículo cortado na imagem',
-      'Sombras cobrindo a placa',
-    ],
-  },
-  { 
-    id: 'lateral_direita', 
-    label: 'Lateral Direita Completa', 
-    descricao: 'Foto da lateral direita completa do veículo',
-    ordem: 3,
-    categoria: 'exterior',
-    instrucoes: [
-      'Enquadre o veículo inteiro na horizontal',
-      'Mantenha a câmera na altura da linha da cintura',
-      'Mostre desde o para-choque dianteiro até o traseiro',
-      'Todas as portas e janelas devem aparecer',
-    ],
-    evitar: [
-      'Ângulo muito inclinado',
-      'Veículo cortado nas extremidades',
-      'Objetos ou pessoas na frente do veículo',
-    ],
-  },
-  { 
-    id: 'traseira', 
-    label: 'Traseira Completa', 
-    descricao: 'Foto da traseira do veículo, mostrando lanternas e placa',
-    ordem: 4,
-    categoria: 'exterior',
-    instrucoes: [
-      'Posicione-se a 2-3 metros de distância',
-      'Centralize a traseira na foto',
-      'A placa traseira deve estar legível',
-      'Lanternas e para-choque visíveis',
-    ],
-    evitar: [
-      'Veículo muito próximo ou cortado',
-      'Placa ilegível por reflexo ou distância',
-      'Objetos bloqueando a visão',
-    ],
-  },
-  { 
-    id: 'lateral_esquerda', 
-    label: 'Lateral Esquerda Completa', 
-    descricao: 'Foto da lateral esquerda completa do veículo',
-    ordem: 5,
-    categoria: 'exterior',
-    instrucoes: [
-      'Enquadre o veículo inteiro na horizontal',
-      'Mantenha a câmera na altura da linha da cintura',
-      'Mostre desde o para-choque dianteiro até o traseiro',
-      'Todas as portas e janelas devem aparecer',
-    ],
-    evitar: [
-      'Ângulo muito inclinado',
-      'Veículo cortado nas extremidades',
-      'Sombras escurecendo detalhes',
-    ],
-  },
-  { 
-    id: 'capo_aberto_placa', 
-    label: 'Capô Aberto com Placa', 
-    descricao: 'Foto do veículo com capô aberto e placa visível',
-    ordem: 6,
-    categoria: 'exterior',
-    instrucoes: [
-      'Abra o capô completamente',
-      'Posicione-se de frente para o veículo',
-      'A placa dianteira DEVE estar legível na foto',
-      'O capô aberto e a frente do carro devem aparecer',
-    ],
-    evitar: [
-      'Placa ilegível ou cortada',
-      'Foto muito de perto que corte o veículo',
-      'Capô parcialmente aberto',
-    ],
-    dicaExtra: 'Esta foto vincula o motor ao veículo pela placa.',
-  },
   { 
     id: 'chassi', 
     label: 'Número do Chassi', 
     descricao: 'Foto do número do chassi gravado no veículo (legível)',
-    ordem: 7,
-    categoria: 'exterior',
+    ordem: 1,
+    categoria: 'identificacao',
     instrucoes: [
       'Localize o chassi (geralmente na base do para-brisa, lado do motorista)',
       'Aproxime a câmera para que TODOS os números fiquem legíveis',
@@ -143,158 +31,26 @@ export const FOTOS_AUTOVISTORIA_CARRO: FotoAutovistoria[] = [
       'Chassi sujo ou coberto',
       'Reflexos que atrapalhem a leitura',
     ],
-    dicaExtra: 'O chassi geralmente está visível olhando pelo para-brisa, no canto inferior esquerdo.',
-  },
-
-  // ===== 2. PNEUS — Segunda volta rápida =====
-  { 
-    id: 'pneu_dianteiro_direito', 
-    label: 'Sola do Pneu Dianteiro Direito', 
-    descricao: 'Foto da sola do pneu dianteiro direito mostrando estado',
-    ordem: 8,
-    categoria: 'pneus',
-    instrucoes: [
-      'Fotografe a SOLA (banda de rodagem) do pneu',
-      'Mostre os sulcos e o estado da borracha',
-      'Aproxime para ver os detalhes do desgaste',
-      'Vire o volante para facilitar a foto',
-    ],
-    evitar: [
-      'Apenas a lateral do pneu',
-      'Foto de longe sem detalhes',
-      'Pneu sujo demais para ver a sola',
-    ],
-    dicaExtra: 'Vire o volante totalmente para a direita para expor melhor a sola do pneu.',
+    dicaExtra: 'O chassi será validado automaticamente com o CRLV. Capriche na nitidez!',
   },
   { 
-    id: 'pneu_traseiro_direito', 
-    label: 'Sola do Pneu Traseiro Direito', 
-    descricao: 'Foto da sola do pneu traseiro direito mostrando estado',
-    ordem: 9,
-    categoria: 'pneus',
+    id: 'motor', 
+    label: 'Foto do Motor', 
+    descricao: 'Foto do motor aberto mostrando o compartimento',
+    ordem: 2,
+    categoria: 'identificacao',
     instrucoes: [
-      'Fotografe a SOLA (banda de rodagem) do pneu',
-      'Mostre os sulcos e o estado da borracha',
-      'Aproxime para ver os detalhes do desgaste',
-      'Abaixe-se para melhor ângulo',
+      'Abra o capô completamente',
+      'Fotografe o compartimento do motor por inteiro',
+      'O número do motor deve estar visível (se possível)',
+      'Boa iluminação é essencial',
     ],
     evitar: [
-      'Apenas a lateral do pneu',
-      'Foto de longe sem detalhes',
-      'Pneu sujo demais para ver a sola',
-    ],
-  },
-  { 
-    id: 'pneu_traseiro_esquerdo', 
-    label: 'Sola do Pneu Traseiro Esquerdo', 
-    descricao: 'Foto da sola do pneu traseiro esquerdo mostrando estado',
-    ordem: 10,
-    categoria: 'pneus',
-    instrucoes: [
-      'Fotografe a SOLA (banda de rodagem) do pneu',
-      'Mostre os sulcos e o estado da borracha',
-      'Aproxime para ver os detalhes do desgaste',
-      'Abaixe-se para melhor ângulo',
-    ],
-    evitar: [
-      'Apenas a lateral do pneu',
-      'Foto de longe sem detalhes',
-      'Pneu sujo demais para ver a sola',
-    ],
-  },
-  { 
-    id: 'pneu_dianteiro_esquerdo', 
-    label: 'Sola do Pneu Dianteiro Esquerdo', 
-    descricao: 'Foto da sola do pneu dianteiro esquerdo mostrando estado',
-    ordem: 11,
-    categoria: 'pneus',
-    instrucoes: [
-      'Fotografe a SOLA (banda de rodagem) do pneu',
-      'Mostre os sulcos e o estado da borracha',
-      'Aproxime para ver os detalhes do desgaste',
-      'Vire o volante para facilitar a foto',
-    ],
-    evitar: [
-      'Apenas a lateral do pneu',
-      'Foto de longe sem detalhes',
-      'Pneu sujo demais para ver a sola',
-    ],
-    dicaExtra: 'Vire o volante totalmente para a esquerda para expor melhor a sola do pneu.',
-  },
-
-  // ===== 3. INTERIOR — Entra no veículo =====
-  { 
-    id: 'banco_motorista', 
-    label: 'Banco Dianteiro do Motorista', 
-    descricao: 'Foto do banco do motorista mostrando estado de conservação',
-    ordem: 12,
-    categoria: 'interior',
-    instrucoes: [
-      'Abra a porta do motorista',
-      'Fotografe o banco do motorista por completo',
-      'Mostre o estado do estofado (rasgos, manchas, etc.)',
-      'Boa iluminação interna',
-    ],
-    evitar: [
+      'Capô parcialmente aberto',
       'Foto muito escura',
-      'Banco parcialmente visível',
-      'Objetos sobre o banco',
+      'Motor coberto por objetos',
     ],
-  },
-  { 
-    id: 'banco_passageiro', 
-    label: 'Banco Dianteiro do Passageiro', 
-    descricao: 'Foto do banco do passageiro mostrando estado de conservação',
-    ordem: 13,
-    categoria: 'interior',
-    instrucoes: [
-      'Abra a porta do passageiro',
-      'Fotografe o banco do passageiro por completo',
-      'Mostre o estado do estofado',
-      'Boa iluminação interna',
-    ],
-    evitar: [
-      'Foto muito escura',
-      'Banco parcialmente visível',
-      'Objetos sobre o banco',
-    ],
-  },
-  { 
-    id: 'banco_traseiro', 
-    label: 'Banco Traseiro', 
-    descricao: 'Foto do banco traseiro mostrando estado de conservação',
-    ordem: 14,
-    categoria: 'interior',
-    instrucoes: [
-      'Abra a porta traseira',
-      'Fotografe o banco traseiro completo',
-      'Mostre o estado do estofado',
-      'Boa iluminação interna',
-    ],
-    evitar: [
-      'Foto muito escura',
-      'Banco parcialmente visível',
-      'Objetos cobrindo o banco',
-    ],
-  },
-  { 
-    id: 'odometro', 
-    label: 'Odômetro (Veículo Ligado)', 
-    descricao: 'Foto do painel com o odômetro visível (veículo ligado)',
-    ordem: 15,
-    categoria: 'interior',
-    instrucoes: [
-      'LIGUE O VEÍCULO antes de fotografar',
-      'A quilometragem (KM) deve estar visível e legível',
-      'Aproxime a câmera focando no número do odômetro',
-      'Certifique-se de que o display está bem iluminado',
-    ],
-    evitar: [
-      'Painel apagado (veículo desligado)',
-      'Reflexos no painel ou vidro',
-      'Foto tremida ou fora de foco',
-    ],
-    dicaExtra: 'Esta é a última foto! Após enviar, conclua a vistoria.',
+    dicaExtra: 'Se possível, localize e fotografe o número gravado no motor.',
   },
 ];
 // MOTOS (7 fotos)
