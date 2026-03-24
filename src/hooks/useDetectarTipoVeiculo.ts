@@ -122,6 +122,12 @@ export function useDetectarTipoVeiculo(
   // Regra 3: Fallback síncrono por keywords (último recurso)
   const tipoVeiculo: TipoVeiculoResult = (() => {
     if (tipoFromDb) return tipoFromDb;
+    // Prioridade: tipo explícito da API de placa
+    if (tipoVeiculoApi) {
+      const apiNorm = tipoVeiculoApi.toUpperCase();
+      if (apiNorm.includes('MOTO') || apiNorm.includes('CICLO') || apiNorm.includes('TRICICLO')) return 'moto';
+      if (apiNorm.includes('AUTO') || apiNorm.includes('CAMION') || apiNorm.includes('UTILITARIO')) return 'carro';
+    }
     if (!marca && !modelo) return 'carro';
     const tipo = detectarTipoVeiculo(undefined, modelo, marca);
     return tipo === 'moto' ? 'moto' : 'carro';
