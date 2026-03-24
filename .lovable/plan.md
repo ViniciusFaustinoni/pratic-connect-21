@@ -1,32 +1,32 @@
 
 
-# Causa Raiz: Atribuicao automatica quebrada por coluna inexistente
+# Diagnostico: OCR de Documentos com Falhas
 
-## Problema
+## Investigacao
 
-A edge function `cron-atribuir-tarefas` falha em **todas as execucoes** com o erro:
+Analisei completamente a edge function `document-ocr/index.ts` (811 linhas) e os hooks que a chamam. **Nao ha logs recentes** da funcao, o que indica que ela pode estar falhando no boot ou nao sendo invocada corretamente.
 
-```
-column associados_1.telefone1 does not exist
-```
+## Problemas identificados
 
-A tabela `associados` tem a coluna `telefone` (e `whatsapp`), mas o codigo referencia `telefone1` em 7 pontos da funcao. Isso faz a query de busca de servicos retornar erro, e o `continue` no loop pula o profissional sem atribuir nada.
+### 1. Import XHR obsoleto causa crash no boot (CRITICO)
+Linha 1: `import "https://deno.land/x/xhr@0.1.0/mod.ts"` — este polyfill XHR e antigo e pode causar falha de inicializacao em versoes mais recentes do Deno runtime usado pelo Supabase Edge Functions. A funcao `odometro-ocr` (que funciona) **nao usa este import**.
 
-Os 5 profissionais online sao encontrados, mas nenhum servico e retornado porque a query quebra antes.
+### 2. Modelo sem sufixo `-image` para visao (CRITICO)
+Linha 246: `const OCR_MODEL = 'google/gemini-2.5-flash'` — a funcao `odometro-ocr` (que funciona) usa `google/gemini-2.5-flash-image`. O modelo sem sufixo pode nao suportar inputs de imagem, causando erro 400 do gateway.
 
-## Solucao
+### 3. `getClaims` pode nao existir na versao do SDK (MEDIO)
+Linha 268: `supabase.auth.getClaims(token)` — este metodo foi adicionado recentemente ao supabase-js. Embora esteja em try-catch, se o import do SDK falhar por incompatibilidade, toda a funcao cai.
 
-Alterar `supabase/functions/cron-atribuir-tarefas/index.ts`: substituir todas as ocorrencias de `telefone1` por `telefone`.
+### 4. Extracao nativa de PDF extremamente fragil (BAIXO)
+Linhas 757-811: `extractTextFromPDFBuffer` faz parsing via regex de bytes brutos. Nao funciona com streams comprimidos (a maioria dos PDFs modernos). Isso nao causa erro, mas o fallback visual via IA pode falhar se o modelo estiver errado (item 2).
 
-| Linha | De | Para |
-|-------|----|------|
-| 316 | `associado:associados!...fkey(nome, telefone1, whatsapp)` | `associado:associados!...fkey(nome, telefone, whatsapp)` |
-| 353 | idem | idem |
-| 561 | `assocEncaixe?.telefone1` | `assocEncaixe?.telefone` |
-| 736 | `associados!...fkey(nome, telefone1, whatsapp)` | `associados!...fkey(nome, telefone, whatsapp)` |
-| 792 | `assocData?.telefone1` | `assocData?.telefone` |
-| 877 | `associados!...fkey(nome, telefone1, whatsapp)` | `associados!...fkey(nome, telefone, whatsapp)` |
-| 891 | `assocVist?.telefone1` | `assocVist?.telefone` |
+## Plano de correcao
 
-Sao 7 substituicoes no mesmo arquivo, seguida de redeploy da edge function.
+| Alteracao | Arquivo | Detalhes |
+|-----------|---------|----------|
+| Remover import XHR | `supabase/functions/document-ocr/index.ts` | Deletar linha 1 — `fetch` nativo do Deno e suficiente |
+| Corrigir modelo de IA | `supabase/functions/document-ocr/index.ts` | `OCR_MODEL = 'google/gemini-2.5-flash-image'` e `OCR_RETRY_MODEL = 'google/gemini-2.5-pro'` (retry pode manter sem sufixo pois usa tool calling) |
+| Redeploy e testar | Edge Function | Redeployar e verificar logs para confirmar que o boot e as chamadas funcionam |
+
+Sao 2 alteracoes simples no mesmo arquivo + redeploy. Nenhuma funcionalidade sera removida ou alterada.
 
