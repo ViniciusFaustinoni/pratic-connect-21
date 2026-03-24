@@ -1,6 +1,6 @@
 import { Outlet, useNavigate, useLocation } from 'react-router-dom';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider';
+
 import { useAuth } from '@/contexts/AuthContext';
 import { Button } from '@/components/ui/button';
 import { LogOut, Building2, CreditCard, LayoutDashboard } from 'lucide-react';
