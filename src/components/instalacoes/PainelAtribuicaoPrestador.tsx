@@ -14,7 +14,6 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useVistoriadoresPrestadores, VistoriadorPrestador } from '@/hooks/useVistoriadoresPrestadores';
 import { useQueryClient } from '@tanstack/react-query';
-import { useQueryClient } from '@tanstack/react-query';
 import { toast } from 'sonner';
 import { formatarMoeda } from '@/utils/format';
 import { CoberturaVistoria } from '@/hooks/useCoberturaCidade';
