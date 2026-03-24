@@ -104,6 +104,7 @@ import AprovacaoAssociadosMonitoramento from "./pages/monitoramento/Acionamentos
 import AprovacaoInstalacaoDetalhe from "./pages/monitoramento/AprovacaoInstalacaoDetalhe";
 import ImprevistosPainel from "./pages/monitoramento/ImprevistosPainel";
 import PrestadoresParceiros from "./pages/monitoramento/PrestadoresParceiros";
+import RegioesAtendimento from "./pages/monitoramento/RegioesAtendimento";
 import Oficinas from "./pages/oficinas/Oficinas";
 import AutoCenters from "./pages/oficinas/AutoCenters";
 import OficinasRelatorios from "./pages/oficinas/OficinasRelatorios";
@@ -636,6 +637,7 @@ const App = () => (
               <Route path="/monitoramento/aprovacao-associados/:id" element={<AprovacaoInstalacaoDetalhe />} />
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
               <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
+              <Route path="/monitoramento/configuracoes/regioes" element={<RegioesAtendimento />} />
               
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />
