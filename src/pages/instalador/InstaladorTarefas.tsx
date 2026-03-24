@@ -18,7 +18,7 @@ import { EncaixeUrgenteCard } from '@/components/vistoriador/EncaixeUrgenteCard'
 export default function InstaladorTarefas() {
   const navigate = useNavigate();
   const { data: tarefaAtual, isLoading: isLoadingAtual } = useTarefaAtual();
-  const { data: historico, isLoading: isLoadingHistorico } = useTarefasHistorico(7);
+  const { data: historico, isLoading: isLoadingHistorico } = useTarefasHistorico();
   const { data: encaixesUrgentes = [], isLoading: isLoadingEncaixes } = useEncaixesUrgentes();
 
   // Separar tarefas de hoje do histórico
@@ -186,7 +186,7 @@ export default function InstaladorTarefas() {
                   <ClipboardList className="h-12 w-12 text-slate-600" />
                   <h3 className="mt-4 text-lg font-semibold text-white">Sem histórico</h3>
                   <p className="mt-1 text-center text-sm text-slate-400">
-                    Nenhuma tarefa concluída nos últimos 7 dias.
+                    Nenhuma tarefa concluída neste mês.
                   </p>
                 </CardContent>
               </Card>

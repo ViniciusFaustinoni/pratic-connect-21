@@ -341,17 +341,18 @@ export function useConcluirTarefa() {
  * Hook para buscar histórico de tarefas concluídas
  * Agora usa a tabela servicos unificada
  */
-export function useTarefasHistorico(dias: number = 7) {
+export function useTarefasHistorico() {
   const { profile } = useAuth();
   const profissionalId = profile?.id;
+  const mesAtual = new Date().getMonth();
+  const anoAtual = new Date().getFullYear();
 
   return useQuery({
-    queryKey: ['servicos-historico', profissionalId, dias],
+    queryKey: ['servicos-historico', profissionalId, anoAtual, mesAtual],
     queryFn: async () => {
       if (!profissionalId) return [];
 
-      const dataLimite = new Date();
-      dataLimite.setDate(dataLimite.getDate() - dias);
+      const dataLimite = new Date(anoAtual, mesAtual, 1); // primeiro dia do mês
 
       // Uma única query na tabela servicos
       const { data, error } = await supabase
