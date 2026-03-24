@@ -1,47 +1,75 @@
 
 
-# Investigação: Por que os planos não aparecem para Meriva 2009 (FIPE R$ 26.860)
+# Exclusão de cotação pelo próprio vendedor — plano seguro
 
-## Análise completa — por plano
+## Situação atual
 
-| Plano | Resultado | Motivo |
-|-------|-----------|--------|
-| LANÇAMENTO BASIC/PREMIUM/EXCLUSIVE | Filtrado | `ano_minimo = 2024`, veículo é 2009 |
-| ELÉTRICOS | Filtrado | `ano_minimo = 2020`, veículo é 2009 |
-| ESPECIAL | Negado (elegibilidade) | Whitelist aceita Meriva apenas 2002-2004 (`ano_max = 2004`) |
-| ESPECIAL PLUS | Negado (elegibilidade) | Meriva não está na whitelist (só Sprinter, Boxer, etc.) |
-| ADVANCED / ADVANCED+ | Negado (elegibilidade) | Whitelist contém apenas marcas de moto (Honda, Yamaha, etc.) |
-| **SELECT BASIC** | **BUG** | `plano_preco_map.tipo_uso = 'passeio'` em vez de `'particular'` → busca preço com tipo_uso inexistente → `valorMensal = 0` → plano oculto |
-| SELECT EXCLUSIVE | Filtrado | `tipo_uso = 'aplicativo'` no plano, cotação é passeio |
-| SELECT PREMIUM | **Deveria aparecer** | Mapeamento correto (`tipo_uso = 'particular'`), Meriva na whitelist (2005+, aceito), faixa FIPE existe para `select/rj/particular/gasolina` |
-| SELECT ONE | **Deveria aparecer** | Mapeamento correto, Meriva na whitelist (2005+, aceito), faixa FIPE existe para `select-one/rj/particular/null` |
-| SELECT ONE 5% PROMO | Sem preço | `linha_slug = null` no `plano_preco_map` → sem mapeamento → oculto |
+A exclusão de cotações já existe via edge function `delete-cotacao`, que faz cascata completa (contratos, serviços, instalações, vistorias, etc.). Porém:
 
-## Bug confirmado
+1. A permissão `canDeleteCotacao` é restrita a diretores
+2. A edge function exige essa permissão para qualquer exclusão
+3. O botão "Excluir" na tabela só aparece para quem tem `cotacao.canDelete`
 
-Na tabela `plano_preco_map`, o plano **SELECT BASIC** tem `tipo_uso = 'passeio'`. O código em `usePlanosCotacao.ts` (linha 501) trata 'passeio' como um tipo_uso proprietário (igual a 'advanced'), fazendo a busca na tabela de preços com `tipo_uso = 'passeio'` — que não existe. Resultado: `valorMensal = 0` → plano é ocultado.
+## Problema
 
-## Correção
+Um vendedor que criou uma cotação errada, duplicada ou cancelada não consegue removê-la. Isso gera poluição na lista e desorganização.
 
-### 1. Corrigir dado no banco (migration)
-Atualizar `plano_preco_map` para SELECT BASIC: `tipo_uso = 'particular'`.
+## Solução proposta: exclusão condicional pelo criador
 
-### 2. Safeguard no código (`usePlanosCotacao.ts`)
-Adicionar 'passeio' como sinônimo de 'particular' na lógica de `isLinhaTipoUsoProprio` (linha 501), para que qualquer futuro erro de configuração não oculte planos silenciosamente:
+Permitir que o **próprio vendedor** exclua cotações **que ainda não geraram contrato ativo/assinado**, mantendo a exclusão irrestrita (com cascata total) apenas para diretores.
 
-```typescript
-const isLinhaTipoUsoProprio = mappingTipoUso !== 'particular' 
-  && mappingTipoUso !== 'aplicativo'
-  && mappingTipoUso !== 'passeio';  // ← safeguard
-```
+### Regras de negócio
 
-### 3. Investigar SELECT PREMIUM e SELECT ONE
-Estes dois planos deveriam ter aparecido (dados e filtros corretos). Se não apareceram, provavelmente foi um problema de timing (query de elegibilidade ainda carregando quando o usuário olhou). Nenhuma correção de código necessária — a correção do SELECT BASIC é suficiente para garantir que pelo menos 3 planos (BASIC, PREMIUM, ONE) apareçam.
+- **Vendedor pode excluir**: cotações que ele criou (`vendedor_id = user_id`) **E** que não tenham contrato com status `assinado` ou `ativo`
+- **Diretor pode excluir**: qualquer cotação (comportamento atual mantido)
+- Motivo obrigatório em ambos os casos (já implementado no dialog)
+- Log de auditoria registra quem excluiu (já implementado na edge function)
 
-## Arquivos
+### Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `supabase/migrations/` | **Criar** — corrigir `plano_preco_map` tipo_uso de 'passeio' para 'particular' |
-| `src/hooks/usePlanosCotacao.ts` | **Editar** — safeguard para 'passeio' = 'particular' |
+| `supabase/functions/delete-cotacao/index.ts` | **Editar** — aceitar exclusão pelo próprio vendedor quando cotação não tem contrato ativo |
+| `src/pages/vendas/Cotacoes.tsx` | **Editar** — ajustar `getPermissions` para permitir exclusão pelo dono |
+| `src/pages/vendas/CotacaoDetalhe.tsx` | **Verificar** — garantir que o botão excluir respeita a mesma lógica |
+
+### Detalhes técnicos
+
+**1. Edge function `delete-cotacao` (alteração principal)**
+
+Trocar a verificação rígida de `has_permission('canDeleteCotacao')` por lógica dual:
+
+```
+SE tem permissão canDeleteCotacao → permite (diretor)
+SENÃO SE vendedor_id da cotação == userId:
+  - Verificar se cotação NÃO tem contrato ativo/assinado
+  - Se não tem → permite exclusão
+  - Se tem → bloqueia com mensagem clara
+SENÃO → bloqueia (sem permissão)
+```
+
+**2. Frontend `Cotacoes.tsx` — ajuste na linha 577**
+
+A permissão `canDelete` por cotação já considera `isOwner`:
+```typescript
+canDelete: permissions.cotacao.canDelete || (isOwner && !['assinado', 'ativo'].includes(cotacao.contrato?.status || ''))
+```
+Isso já está correto — o botão aparece para o dono quando não há contrato ativo. A única mudança necessária é no backend (edge function) que hoje bloqueia mesmo sendo dono.
+
+**3. Nenhuma migration necessária**
+
+Não há alteração de schema. A lógica toda é resolvida na edge function existente.
+
+### Fluxo resultante
+
+```text
+Vendedor clica "Excluir" na cotação que ele criou
+  │
+  ├── Cotação sem contrato ativo → Dialog pede motivo → Edge function executa cascata → Sucesso
+  ├── Cotação com contrato ativo/assinado → Botão nem aparece (frontend já filtra)
+  └── Cotação de outro vendedor → Botão nem aparece (frontend já filtra)
+
+Diretor clica "Excluir" em qualquer cotação
+  └── Dialog pede motivo → Edge function executa cascata → Sucesso (sem restrição)
+```
 
