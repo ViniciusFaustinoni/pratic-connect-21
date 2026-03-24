@@ -84,8 +84,8 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
   const progresso = (fotosCompletadas / totalFotos) * 100;
   const todasFotosEnviadas = fotosCompletadas === totalFotos;
-  const videoObrigatorio = tipoVeiculo === 'carro';
-  const todasEnviadas = todasFotosEnviadas && (!videoObrigatorio || !!videoUrl);
+  const videoObrigatorio = true; // Vídeo obrigatório para TODOS os tipos
+  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
   
   const fotoAtual = fotos[indiceAtual];
   const isUltimaFoto = indiceAtual === totalFotos - 1;
