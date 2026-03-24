@@ -106,6 +106,7 @@ import AprovacaoInstalacaoDetalhe from "./pages/monitoramento/AprovacaoInstalaca
 import ImprevistosPainel from "./pages/monitoramento/ImprevistosPainel";
 import PrestadoresParceiros from "./pages/monitoramento/PrestadoresParceiros";
 import RegioesAtendimento from "./pages/monitoramento/RegioesAtendimento";
+import VistoriasPrestadoresDashboard from "./pages/monitoramento/VistoriasPrestadoresDashboard";
 import Oficinas from "./pages/oficinas/Oficinas";
 import AutoCenters from "./pages/oficinas/AutoCenters";
 import OficinasRelatorios from "./pages/oficinas/OficinasRelatorios";
@@ -643,6 +644,7 @@ const App = () => (
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
               <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
               <Route path="/monitoramento/configuracoes/regioes" element={<RegioesAtendimento />} />
+              <Route path="/monitoramento/vistorias-prestadores" element={<VistoriasPrestadoresDashboard />} />
               
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />
