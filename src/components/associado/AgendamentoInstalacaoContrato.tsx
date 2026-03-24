@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -11,6 +11,12 @@ import { buscarCep } from '@/lib/cep';
 import { Badge } from '@/components/ui/badge';
 import { useAgendarInstalacaoContrato } from '@/hooks/useContratoLink';
 import { isDomingo, getHorariosParaDia } from '@/data/autovistoriaConfig';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
+
+interface PrazoEstado {
+  estado: string;
+  prazo_horas: number;
+}
 
 interface AgendamentoInstalacaoContratoProps {
   contratoId: string;
@@ -35,19 +41,62 @@ export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: Agend
   const [responsavelNome, setResponsavelNome] = useState('');
   const [responsavelTelefone, setResponsavelTelefone] = useState('');
   
+  // Prazos por estado
+  const [prazosEstado, setPrazosEstado] = useState<PrazoEstado[]>([]);
+  
   const agendarMutation = useAgendarInstalacaoContrato();
   
-  // Gerar próximos 7 dias úteis (incluindo sábados)
-  const hoje = new Date();
-  const datasDisponiveis: Date[] = [];
-  let dia = addDays(hoje, 1);
+  // Buscar prazos da tabela configuracoes
+  useEffect(() => {
+    publicSupabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'instalacao_prazos_por_estado')
+      .maybeSingle()
+      .then(({ data }) => {
+        if (data?.valor) {
+          try {
+            setPrazosEstado(JSON.parse(data.valor));
+          } catch { /* fallback vazio */ }
+        }
+      });
+  }, []);
   
-  while (datasDisponiveis.length < 7) {
-    if (!isDomingo(dia)) { // Só bloqueia domingo
-      datasDisponiveis.push(dia);
+  // Calcular dias úteis com base no prazo do estado
+  const diasUteis = useMemo(() => {
+    const FALLBACK_HORAS = 48;
+    const prazoConfig = prazosEstado.find(p => p.estado === estado.toUpperCase());
+    const prazoHoras = prazoConfig?.prazo_horas ?? FALLBACK_HORAS;
+    return Math.ceil(prazoHoras / 24);
+  }, [estado, prazosEstado]);
+  
+  // Gerar datas disponíveis dinamicamente
+  const datasDisponiveis = useMemo(() => {
+    const hoje = new Date();
+    const datas: Date[] = [];
+    let dia = addDays(hoje, 1);
+    
+    while (datas.length < diasUteis) {
+      if (!isDomingo(dia)) {
+        datas.push(dia);
+      }
+      dia = addDays(dia, 1);
     }
-    dia = addDays(dia, 1);
-  }
+    return datas;
+  }, [diasUteis]);
+  
+  // Reset data selecionada se mudar de estado e a data não estiver mais disponível
+  useEffect(() => {
+    if (dataSelecionada) {
+      const aindaDisponivel = datasDisponiveis.some(
+        d => format(d, 'yyyy-MM-dd') === format(dataSelecionada, 'yyyy-MM-dd')
+      );
+      if (!aindaDisponivel) {
+        setDataSelecionada(null);
+        setHorarioSelecionado(null);
+      }
+    }
+  }, [datasDisponiveis]);
   
   // Obter horários baseado na data selecionada
   const horariosDisponiveis = dataSelecionada 
