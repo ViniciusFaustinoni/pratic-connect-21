@@ -74,7 +74,7 @@ export default function VistoriasPrestadoresDashboard() {
 
   return (
     <PermissionGate
-      permission={['isDiretor', 'isAdminMaster', 'isCoordenadorMonitoramento', 'isFinanceiro']}
+      permission={['isDiretor', 'isAdminMaster', 'isCoordenadorMonitoramento', 'canManageContabilidade']}
       mode="any"
       fallback={<div className="p-8 text-center text-muted-foreground">Acesso restrito</div>}
     >
