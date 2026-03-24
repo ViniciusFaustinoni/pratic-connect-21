@@ -113,6 +113,28 @@ export function AgendamentoVistoria({
     ? getPeriodosDisponivelsPorHora(dataSelecionada) 
     : PERIODOS_DISPONIVEIS;
 
+  // Auto-complete endereço via ViaCEP se tem CEP mas falta bairro
+  useEffect(() => {
+    const cep = endereco.cep?.replace(/\D/g, '');
+    if (cep?.length === 8 && !endereco.bairro) {
+      fetch(`https://viacep.com.br/ws/${cep}/json/`)
+        .then(r => r.json())
+        .then(data => {
+          if (!data.erro) {
+            setEndereco(prev => ({
+              ...prev,
+              bairro: prev.bairro || data.bairro || '',
+              logradouro: prev.logradouro || data.logradouro || '',
+              cidade: prev.cidade || data.localidade || '',
+              estado: prev.estado || data.uf || '',
+            }));
+          }
+        })
+        .catch(() => {});
+    }
+  // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
+
   // Reset período se mudar a data e o período selecionado não estiver disponível
   useEffect(() => {
     if (dataSelecionada && periodoSelecionado) {

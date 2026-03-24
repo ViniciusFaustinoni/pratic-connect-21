@@ -209,6 +209,25 @@ export function EtapaDadosPessoaisDocumentos({
         if (dados.bairro) novosDados.bairro = dados.bairro;
         if (dados.cidade) novosDados.cidade = dados.cidade;
         if (dados.uf) novosDados.uf = dados.uf;
+
+        // Auto-complete via ViaCEP se tem CEP mas falta bairro
+        const cepLimpo = (dados.cep || novosDados.cep || '').replace(/\D/g, '');
+        if (cepLimpo.length === 8 && !novosDados.bairro) {
+          fetch(`https://viacep.com.br/ws/${cepLimpo}/json/`)
+            .then(r => r.json())
+            .then(viaCepData => {
+              if (!viaCepData.erro) {
+                setDadosExtraidos(prev => ({
+                  ...prev,
+                  bairro: prev.bairro || viaCepData.bairro || '',
+                  logradouro: prev.logradouro || viaCepData.logradouro || '',
+                  cidade: prev.cidade || viaCepData.localidade || '',
+                  uf: prev.uf || viaCepData.uf || '',
+                }));
+              }
+            })
+            .catch(() => {});
+        }
       }
       
       // De CRLV: dados do veículo (expandido)
