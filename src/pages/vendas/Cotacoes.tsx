@@ -135,7 +135,7 @@ export default function Cotacoes() {
       searchParams.delete('lead');
       setSearchParams(searchParams, { replace: true });
     } else if (novoParam === 'true') {
-      setShowCotacaoForm(true);
+      setShowNovaEntrada(true);
       searchParams.delete('novo');
       setSearchParams(searchParams, { replace: true });
     }
