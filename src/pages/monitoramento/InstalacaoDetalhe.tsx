@@ -22,6 +22,7 @@ import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } fr
 import type { PeriodoInstalacao } from '@/types/database';
 import { AtribuirInstaladorDialog } from '@/components/instalacoes/AtribuirInstaladorDialog';
 import { useCoberturaInstalacao } from '@/hooks/useCoberturaInstalacao';
+import { PainelAtribuicaoPrestador } from '@/components/instalacoes/PainelAtribuicaoPrestador';
 
 const formatDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
 const formatPhone = (p: string | null | undefined) => {
@@ -200,7 +201,7 @@ export default function InstalacaoDetalhePage() {
   const instaladorInfo = instalacao.profiles || instalacao.instalador_responsavel;
 
   // Avaliar cobertura da cidade
-  const { tipo: tipoCobertura } = useCoberturaInstalacao({
+  const { tipo: tipoCobertura, cobertura } = useCoberturaInstalacao({
     cidade: instalacao.cidade,
     uf: instalacao.uf,
     status: instalacao.status,
@@ -418,17 +419,11 @@ export default function InstalacaoDetalhePage() {
                 </div>
               </>
             ) : tipoCobertura === 'area_prestador' || tipoCobertura === 'fora_cobertura' ? (
-              <div className="text-center py-4 space-y-2">
-                <Badge className={tipoCobertura === 'area_prestador' ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"}>
-                  {tipoCobertura === 'area_prestador' ? '🟠 Área de Prestador' : '🔴 Sem Cobertura'}
-                </Badge>
-                <p className="text-sm text-muted-foreground">
-                  {tipoCobertura === 'area_prestador'
-                    ? 'Esta cidade é atendida por vistoriador prestador'
-                    : 'Esta cidade não possui cobertura — atribuição manual necessária'}
-                </p>
-                <p className="text-xs text-muted-foreground italic">Painel de atribuição a prestador será adicionado em breve (VP-M02)</p>
-              </div>
+              <PainelAtribuicaoPrestador
+                instalacao={instalacao}
+                tipoCobertura={tipoCobertura}
+                cobertura={cobertura}
+              />
             ) : (
               <div className="text-center py-4 space-y-3">
                 <p className="text-muted-foreground">Não atribuído</p>

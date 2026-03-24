@@ -13567,6 +13567,7 @@ export type Database = {
           observacoes: string | null
           periodo: Database["public"]["Enums"]["periodo_instalacao"]
           permite_encaixe: boolean | null
+          prestador_atribuido_em: string | null
           quilometragem: number | null
           rastreador_id: string | null
           rota_id: string | null
@@ -13574,7 +13575,9 @@ export type Database = {
           tipo_deslocamento: string | null
           uf: string | null
           updated_at: string
+          valor_prestador: number | null
           veiculo_id: string
+          vistoriador_prestador_id: string | null
         }
         Insert: {
           assinatura_cliente_url?: string | null
@@ -13607,6 +13610,7 @@ export type Database = {
           observacoes?: string | null
           periodo?: Database["public"]["Enums"]["periodo_instalacao"]
           permite_encaixe?: boolean | null
+          prestador_atribuido_em?: string | null
           quilometragem?: number | null
           rastreador_id?: string | null
           rota_id?: string | null
@@ -13614,7 +13618,9 @@ export type Database = {
           tipo_deslocamento?: string | null
           uf?: string | null
           updated_at?: string
+          valor_prestador?: number | null
           veiculo_id: string
+          vistoriador_prestador_id?: string | null
         }
         Update: {
           assinatura_cliente_url?: string | null
@@ -13647,6 +13653,7 @@ export type Database = {
           observacoes?: string | null
           periodo?: Database["public"]["Enums"]["periodo_instalacao"]
           permite_encaixe?: boolean | null
+          prestador_atribuido_em?: string | null
           quilometragem?: number | null
           rastreador_id?: string | null
           rota_id?: string | null
@@ -13654,7 +13661,9 @@ export type Database = {
           tipo_deslocamento?: string | null
           uf?: string | null
           updated_at?: string
+          valor_prestador?: number | null
           veiculo_id?: string
+          vistoriador_prestador_id?: string | null
         }
         Relationships: [
           {
@@ -13837,6 +13846,13 @@ export type Database = {
             columns: ["veiculo_id"]
             isOneToOne: false
             referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "instalacoes_vistoriador_prestador_id_fkey"
+            columns: ["vistoriador_prestador_id"]
+            isOneToOne: false
+            referencedRelation: "vistoriadores_prestadores"
             referencedColumns: ["id"]
           },
         ]
