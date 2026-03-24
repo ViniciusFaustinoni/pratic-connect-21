@@ -22,6 +22,7 @@ import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } fr
 import type { PeriodoInstalacao } from '@/types/database';
 import { AtribuirInstaladorDialog } from '@/components/instalacoes/AtribuirInstaladorDialog';
 import { useCoberturaInstalacao } from '@/hooks/useCoberturaInstalacao';
+import { PainelAtribuicaoPrestador } from '@/components/instalacoes/PainelAtribuicaoPrestador';
 
 const formatDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
 const formatPhone = (p: string | null | undefined) => {
