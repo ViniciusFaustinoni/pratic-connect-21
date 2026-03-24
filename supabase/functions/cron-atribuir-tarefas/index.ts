@@ -350,7 +350,7 @@ serve(async (req) => {
           instalacao_origem_id,
           vistoria_origem_id,
           associado_id,
-          associado:associados!servicos_associado_id_fkey(nome, telefone1, whatsapp),
+          associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(placa)
         `)
         .is('profissional_id', null)
