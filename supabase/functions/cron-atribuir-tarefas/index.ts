@@ -308,10 +308,12 @@ serve(async (req) => {
           latitude,
           longitude,
           permite_encaixe,
+          confirmacao_whatsapp,
           local_vistoria,
           instalacao_origem_id,
           vistoria_origem_id,
-          associado:associados!servicos_associado_id_fkey(nome),
+          associado_id,
+          associado:associados!servicos_associado_id_fkey(nome, telefone1, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(placa)
         `)
         .is('profissional_id', null)
@@ -322,7 +324,7 @@ serve(async (req) => {
         .not('latitude', 'is', null)
         .not('longitude', 'is', null)
         // FILTRO DE CONFIRMAÇÃO: Só atribuir serviços confirmados ou sem fluxo de confirmação
-        .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada,permite_encaixe.eq.true');
+        .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada');
 
       if (servicosNormaisError) {
         console.error('[cron-atribuir-tarefas] Erro ao buscar serviços normais:', servicosNormaisError);
