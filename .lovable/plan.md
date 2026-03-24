@@ -1,50 +1,36 @@
 
 
-# Instalação sem autovistoria: enviar para aprovação do monitoramento
+# Adicionar Video 360 na Autovistoria da Cotacao
 
 ## Problema
-Quando o associado escolhe vistoria agendada (não faz autovistoria), ao final da instalação o veículo vai para `status: 'ativo'` imediatamente (linha 1021 de `useServicos.ts`). O correto é que esse veículo apareça na aba **Aprovação de Associados** do Monitoramento para ser aprovado manualmente antes de ativar a Proteção 360.
+O componente `AutovistoriaCotacao` (fluxo de cotacao publica) exige apenas 2 fotos (chassi e motor). O componente `Autovistoria` (fluxo de contrato/associado) ja exige video 360 + 2 fotos corretamente. O video 360 precisa ser adicionado ao fluxo de cotacao tambem.
 
-O filtro atual da Aprovação de Associados (`useAprovacaoMonitoramento.ts`, linha 41) só mostra veículos com `cobertura_roubo_furto = true AND cobertura_total = false`. Veículos sem autovistoria têm `cobertura_roubo_furto = false`, então nunca aparecem na fila.
+## Referencia
+O componente `src/components/associado/Autovistoria.tsx` ja implementa o fluxo completo: video 360 primeiro, depois fotos. Vou replicar essa logica no `AutovistoriaCotacao`.
 
-## Alterações
+## Alteracoes
 
-### 1. `src/hooks/useServicos.ts` — `useAprovarVeiculoServico` (~linha 1016-1031)
+### 1. `src/components/cotacao-publica/AutovistoriaCotacao.tsx`
 
-Condicionar o status do veículo após instalação:
+Adicionar o video 360 como etapa obrigatoria antes das fotos:
 
-- **Com autovistoria** (`cobertura_roubo_furto = true`): manter comportamento atual — veículo `ativo`, aguarda monitoramento para `cobertura_total`
-- **Sem autovistoria** (`cobertura_roubo_furto = false/null`): veículo vai para `em_analise` em vez de `ativo`
+- Importar `VideoCapture` de `@/components/instalador/VideoCapture`
+- Adicionar estados: `videoUrl`, `uploadingVideo`
+- Criar `handleVideoCapture` que faz upload via `useUploadFotoCotacaoVistoria` com `fotoId: 'video_360'`
+- Criar `handleVideoReset` para permitir regravar
+- Reidratar video existente (se `fotosExistentes` tiver tipo `video_360`)
+- Mudar condicao `todasEnviadas` para incluir `!!videoUrl`
+- Atualizar progresso para `fotos + video` (ex: "2/2 fotos • 1/1 video")
+- Renderizar: se nao tem video ainda, mostrar tela de instrucoes + `VideoCapture` (igual ao `Autovistoria.tsx`). Apos video gravado, mostrar fluxo de fotos existente
+- Usar `cameraOnly={true}` no `VideoCapture`
 
-Também ajustar o toast (linha 1138) para diferenciar as mensagens.
+### 2. Fluxo resultante
 
-### 2. `src/hooks/useAprovacaoMonitoramento.ts` — Ampliar filtro da fila
-
-**`useInstalacoesAguardandoAprovacao`** (linha 39-42): incluir também veículos sem autovistoria. Trocar o filtro de:
+```text
+1. Tela de instrucoes do video 360 + componente VideoCapture (camera only)
+2. Video gravado → mostrar fotos (chassi, motor) — fluxo existente
+3. Todas fotos + video OK → botao "Concluir Vistoria"
 ```
-cobertura_roubo_furto === true && cobertura_total === false
-```
-Para:
-```
-cobertura_total === false (ou null)
-```
-Isso captura ambos os fluxos: com e sem autovistoria.
 
-**`useAprovacaoMonitoramentoStats`** (linha 68-70): aplicar o mesmo filtro ampliado.
-
-### 3. `src/hooks/useAprovacaoMonitoramento.ts` — `useAprovarInstalacaoMonitoramento`
-
-Na aprovação (linha 114-121), além de `cobertura_total = true`, também setar `cobertura_roubo_furto = true` caso ainda esteja false (veículo sem autovistoria prévia).
-
-Se o veículo estava `em_analise`, atualizar para `ativo`.
-
-### Resumo
-
-| Arquivo | Mudança |
-|---------|---------|
-| `useServicos.ts` | Veículo sem autovistoria → `em_analise` (não `ativo`) |
-| `useAprovacaoMonitoramento.ts` | Filtro aceita veículos sem `cobertura_roubo_furto` |
-| `useAprovacaoMonitoramento.ts` | Aprovação seta `cobertura_roubo_furto + cobertura_total + veículo ativo` |
-
-3 blocos de alteração em 2 arquivos.
+Nenhuma alteracao em hooks ou config — o upload do video usa o mesmo `useUploadFotoCotacaoVistoria` com `fotoId: 'video_360'`, e o bucket `cotacoes-vistoria` ja aceita qualquer tipo de arquivo.
 
