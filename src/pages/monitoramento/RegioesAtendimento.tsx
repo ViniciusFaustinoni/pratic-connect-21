@@ -74,16 +74,16 @@ export default function RegioesAtendimento() {
   const [formSelecionados, setFormSelecionados] = useState<string[]>([]);
 
   // Agrupar vínculos por cidade+uf
-  const agrupados = useMemo(() => {
-    const map = new Map<string, CidadeAgrupada>();
+  const agrupados = useMemo((): CidadeAgrupada[] => {
+    const map: Record<string, CidadeAgrupada> = {};
     vinculos.forEach((v: VistoriadorCidade) => {
       const key = `${v.cidade}|${v.uf}`;
-      if (!map.has(key)) {
-        map.set(key, { cidade: v.cidade, uf: v.uf, registros: [] });
+      if (!map[key]) {
+        map[key] = { cidade: v.cidade, uf: v.uf, registros: [] };
       }
-      map.get(key)!.registros.push(v);
+      map[key].registros.push(v);
     });
-    return Array.from(map.values()).sort((a, b) => a.cidade.localeCompare(b.cidade));
+    return Object.values(map).sort((a, b) => a.cidade.localeCompare(b.cidade));
   }, [vinculos]);
 
   const getNomeVistoriador = (reg: VistoriadorCidade): string => {
