@@ -311,6 +311,7 @@ export default function InstalacoesList() {
                       {(inst as any).tipo_deslocamento === 'viagem' && (
                         <Badge className="ml-1 text-[10px] px-1.5 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Viagem</Badge>
                       )}
+                      <CoberturaBadgeCell cidade={inst.cidade} uf={inst.uf} status={inst.status} instalador_id={inst.instalador_id} />
                     </div>
                   </TableCell>
                   <TableCell>
