@@ -1,54 +1,72 @@
 
 
-# Painel de Atribuição — Vistoriador Prestador (VP-M02)
+# Ações Pós-Confirmação da Atribuição de Vistoriador Prestador
 
 ## Resumo
 
-Substituir o placeholder VP-M02 no card Instalador da página de detalhe por um painel completo de seleção, definição de valor e confirmação de atribuição a prestador, com envio de notificação via WhatsApp.
-
-## 1. Migration SQL
-
-Adicionar colunas à tabela `instalacoes`:
-
-- `vistoriador_prestador_id` uuid FK → `vistoriadores_prestadores(id)`, nullable
-- `valor_prestador` numeric(10,2), nullable
-- `prestador_atribuido_em` timestamptz, nullable
-
-## 2. Novo componente `PainelAtribuicaoPrestador.tsx`
-
-`src/components/instalacoes/PainelAtribuicaoPrestador.tsx`
-
-**Props**: `instalacao` (dados completos), `tipoCobertura` ('area_prestador' | 'fora_cobertura'), `cobertura` (dados do RPC com lista de prestadores)
-
-**Estados do painel**:
-
-- **Já atribuído** (`instalacao.vistoriador_prestador_id` preenchido): exibe nome, valor, badge "Aguardando execução", botão "Reenviar link por WhatsApp"
-- **Seleção** (não atribuído):
-  - Cabeçalho com título e badge de contexto (laranja/vermelho)
-  - Cenário B: lista cards dos prestadores da cobertura
-  - Cenário C: campo de busca + query de `vistoriadores_prestadores` filtrada por nome
-  - Ao selecionar: destaque azul no card, campo "Valor desta tarefa (R$)" com autofocus
-  - Botão "Atribuir e Notificar via WhatsApp" (desabilitado sem valor)
-  - Modal de confirmação com resumo (nome, cidade, data, associado, valor, aviso sobre link)
-
-**Ação de confirmação**: UPDATE na `instalacoes` com `vistoriador_prestador_id`, `valor_prestador`, `prestador_atribuido_em`. Envio WhatsApp via `abrirWhatsAppWeb` (fallback — link tokenizado será implementado em tarefa futura).
-
-## 3. Editar `InstalacaoDetalhe.tsx`
-
-No card Instalador (linhas ~420-431), substituir o placeholder VP-M02 pelo `<PainelAtribuicaoPrestador>`. Passar `instalacao`, `tipoCobertura` e `cobertura` como props. O hook `useCoberturaInstalacao` já retorna `cobertura`.
-
-Ajustar a chamada do hook para capturar `cobertura`:
-```
-const { tipo: tipoCobertura, cobertura } = useCoberturaInstalacao({...});
-```
-
-Condição de "já atribuído": se `(instalacao as any).vistoriador_prestador_id` estiver preenchido, o painel renderiza o estado pós-confirmação diretamente.
+Ao confirmar a atribuição no `PainelAtribuicaoPrestador`, encadear 3 ações: gerar link tokenizado, enviar WhatsApp com dados completos da instalação, e registrar lançamento financeiro. Tudo via uma nova edge function `gerar-link-vistoriador-prestador`.
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| Migration SQL | **Criar** — 3 colunas em `instalacoes` |
-| `src/components/instalacoes/PainelAtribuicaoPrestador.tsx` | **Criar** — Componente completo |
-| `src/pages/monitoramento/InstalacaoDetalhe.tsx` | **Editar** — Integrar painel |
+| Migration SQL | **Criar** — tabela `vistoria_prestador_links` |
+| `supabase/functions/gerar-link-vistoriador-prestador/index.ts` | **Criar** — Edge function com as 3 ações |
+| `src/pages/public/VistoriaPrestador.tsx` | **Criar** — Página pública `/vistoria-prestador/:token` |
+| `src/components/instalacoes/PainelAtribuicaoPrestador.tsx` | **Editar** — Chamar edge function em vez de update direto |
+| `src/App.tsx` | **Editar** — Adicionar rota pública |
+
+## 1. Migration SQL — `vistoria_prestador_links`
+
+Nova tabela separada da `instalacao_prestador_links` (que é para prestadores de assistência):
+
+| Coluna | Tipo |
+|--------|------|
+| id | uuid PK |
+| instalacao_id | uuid FK → instalacoes |
+| vistoriador_prestador_id | uuid FK → vistoriadores_prestadores |
+| token | text UNIQUE, default `gen_random_uuid()` |
+| status | text DEFAULT 'aguardando' (aguardando/em_execucao/concluida/cancelada) |
+| valor | numeric(10,2) |
+| chegada_em | timestamptz |
+| concluida_em | timestamptz |
+| foto_comprovante_url | text |
+| whatsapp_enviado | boolean DEFAULT false |
+| whatsapp_erro | text |
+| atribuido_por | uuid FK → profiles |
+| created_at / updated_at | timestamptz |
+
+Sem `expires_at` — válido até conclusão ou cancelamento, conforme requisito.
+
+RLS: SELECT público (para acesso via token sem login), INSERT/UPDATE restrito a authenticated + service_role.
+
+## 2. Edge Function `gerar-link-vistoriador-prestador`
+
+Recebe: `{ instalacao_id, vistoriador_prestador_id, valor, atribuido_por }`
+
+**Ação 1 — Gerar link**: Verificar se já existe link ativo para esta instalação+prestador. Se sim, reusar o token. Se não, inserir em `vistoria_prestador_links`. URL: `https://pratic-connect-21.lovable.app/vistoria-prestador/{token}`
+
+**Ação 2 — WhatsApp**: Buscar dados completos (instalação com veículo, associado, endereço) e prestador. Validar que nenhum campo obrigatório está vazio. Invocar `whatsapp-send-text` com mensagem formatada conforme template especificado (veículo, placa, endereço, data, associado, link). Registrar sucesso/falha na coluna `whatsapp_enviado`/`whatsapp_erro`.
+
+**Ação 3 — Financeiro**: Inserir em `lancamentos_contabeis` + `lancamentos_partidas` com origem `vistoria_prestador`, histórico descritivo, conta débito = conta de despesa de vistoria prestador, conta crédito = provisão. Registrar também um lançamento mais simples se a tabela de contabilidade não tiver a categoria — usar `useLancamentosContabeis` pattern mas no server-side.
+
+**Ação 4 — Auditoria**: Inserir em `logs_auditoria` com módulo `instalacoes`, ação `atribuir`, dados incluindo prestador, valor, token, resultado do WhatsApp.
+
+**Retorno**: `{ success, token, url, whatsapp_enviado }`
+
+## 3. Página pública `VistoriaPrestador.tsx`
+
+Rota: `/vistoria-prestador/:token`
+
+Estrutura idêntica à `PrestadorInstalacao.tsx` existente, mas consultando `vistoria_prestador_links` em vez de `instalacao_prestador_links`. Mesmos estados (aguardando → em_execução → concluída) com upload de foto. Quando status é `concluida` ou `cancelada`, exibir tela de encerramento amigável.
+
+## 4. `PainelAtribuicaoPrestador.tsx` — Alterações
+
+**`handleConfirmar`**: Substituir o update direto + `abrirWhatsAppWeb` pela chamada `supabase.functions.invoke('gerar-link-vistoriador-prestador', { body: {...} })`. O update de `vistoriador_prestador_id`, `valor_prestador`, `prestador_atribuido_em` na tabela `instalacoes` passa a ser feito pela edge function.
+
+**`EstadoAtribuido`**: No botão "Reenviar link por WhatsApp", buscar o token existente em `vistoria_prestador_links` e reinvocar a edge function com flag `reenviar: true` (que não gera novo token, apenas reenvia WhatsApp).
+
+## 5. `App.tsx`
+
+Adicionar: `<Route path="/vistoria-prestador/:token" element={<VistoriaPrestador />} />`
 
