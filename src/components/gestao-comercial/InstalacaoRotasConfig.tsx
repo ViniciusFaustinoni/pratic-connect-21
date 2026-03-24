@@ -85,6 +85,7 @@ function useInstalacaoConfigs() {
         exibirSaldo: map.jornada_exibir_saldo_vistoriador?.valor ?? 'true',
         recusaExigirMotivo: map.recusa_exigir_motivo?.valor ?? 'true',
         recusaLimiteAlerta: map.recusa_limite_alerta?.valor ?? '3',
+        prazoConfirmacao: map.prazo_confirmacao_agendamento_horas?.valor ?? '4',
       };
     },
     staleTime: 1000 * 60 * 5,
