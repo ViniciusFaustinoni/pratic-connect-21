@@ -249,6 +249,19 @@ export function CotacaoDetalhesModal({
                   Marcar Aceita
                 </Button>
               )}
+              
+              {onDuplicar && (
+                <Button 
+                  variant="outline" 
+                  onClick={() => {
+                    onDuplicar(cotacao);
+                    onOpenChange(false);
+                  }}
+                >
+                  <Copy className="h-4 w-4 mr-2" />
+                  Duplicar
+                </Button>
+              )}
             </div>
             
             <Separator />
