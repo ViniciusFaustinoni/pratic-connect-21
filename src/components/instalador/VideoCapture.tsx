@@ -255,15 +255,19 @@ export function VideoCapture({
                 <Play className="h-4 w-4" />
                 Gravar Vídeo
               </Button>
-              <span className="text-xs text-slate-500">ou</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => inputRef.current?.click()}
-                className="border-slate-600 text-slate-400"
-              >
-                Selecionar da Galeria
-              </Button>
+              {!cameraOnly && (
+                <>
+                  <span className="text-xs text-slate-500">ou</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => inputRef.current?.click()}
+                    className="border-slate-600 text-slate-400"
+                  >
+                    Selecionar da Galeria
+                  </Button>
+                </>
+              )}
             </div>
             <span className="text-xs text-slate-500">
               Máximo {formatTime(maxDuration)}
