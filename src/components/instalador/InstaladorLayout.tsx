@@ -21,6 +21,7 @@ import { toast } from 'sonner';
 import { PWAInstallPromptProfissional } from '@/components/pwa/PWAInstallPromptProfissional';
 import { PushNotificationBanner } from './PushNotificationBanner';
 import { useAppResume } from '@/hooks/useAppResume';
+import { AlmocoBloqueioOverlay } from '@/components/vistoriador/AlmocoBloqueioOverlay';
 import logoFullDark from '@/assets/logos/logo-full-dark.png';
 
 const NAV_ITEMS = [
