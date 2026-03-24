@@ -201,7 +201,7 @@ export default function InstalacaoDetalhePage() {
   const instaladorInfo = instalacao.profiles || instalacao.instalador_responsavel;
 
   // Avaliar cobertura da cidade
-  const { tipo: tipoCobertura } = useCoberturaInstalacao({
+  const { tipo: tipoCobertura, cobertura } = useCoberturaInstalacao({
     cidade: instalacao.cidade,
     uf: instalacao.uf,
     status: instalacao.status,
