@@ -157,23 +157,25 @@ function EstadoSelecao({
     if (!selectedPrestador || valor <= 0) return;
     setSalvando(true);
     try {
-      const { error } = await (supabase as any)
-        .from('instalacoes')
-        .update({
+      const { data: { user } } = await supabase.auth.getUser();
+      
+      const { data, error } = await supabase.functions.invoke('gerar-link-vistoriador-prestador', {
+        body: {
+          instalacao_id: instalacao.id,
           vistoriador_prestador_id: selectedPrestador.id,
-          valor_prestador: valor,
-          prestador_atribuido_em: new Date().toISOString(),
-        })
-        .eq('id', instalacao.id);
+          valor,
+          atribuido_por: user?.id,
+        },
+      });
+
       if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao atribuir');
 
-      // Notificar via WhatsApp
-      if (selectedPrestador.telefone) {
-        const msg = `Olá ${selectedPrestador.nome}, você foi atribuído a uma instalação em ${instalacao.cidade}/${instalacao.uf} no dia ${new Date(instalacao.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR')}. Valor: ${formatarMoeda(valor)}.`;
-        abrirWhatsAppWeb(selectedPrestador.telefone, msg);
-      }
-
-      toast.success('Prestador atribuído com sucesso!');
+      toast.success(
+        data.whatsapp_enviado
+          ? 'Prestador atribuído e notificado via WhatsApp!'
+          : 'Prestador atribuído! (WhatsApp não enviado — verifique o telefone)'
+      );
       queryClient.invalidateQueries({ queryKey: ['instalacao', instalacao.id] });
       setConfirmarOpen(false);
     } catch (e: any) {
