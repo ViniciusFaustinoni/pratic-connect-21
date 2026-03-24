@@ -66,7 +66,7 @@ export function useAprovacaoMonitoramentoStats() {
         .eq('status', 'concluida');
 
       const aguardando = (pendentes || []).filter((s: any) => 
-        s.veiculo?.cobertura_roubo_furto === true && s.veiculo?.cobertura_total === false
+        s.veiculo?.cobertura_total !== true
       ).length;
 
       // Aprovados hoje = histórico com tipo aprovação do monitoramento hoje
