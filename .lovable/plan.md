@@ -1,43 +1,54 @@
 
 
-# Avaliação Automática de Cobertura nas Instalações
+# Painel de Atribuição — Vistoriador Prestador (VP-M02)
+
+## Resumo
+
+Substituir o placeholder VP-M02 no card Instalador da página de detalhe por um painel completo de seleção, definição de valor e confirmação de atribuição a prestador, com envio de notificação via WhatsApp.
+
+## 1. Migration SQL
+
+Adicionar colunas à tabela `instalacoes`:
+
+- `vistoriador_prestador_id` uuid FK → `vistoriadores_prestadores(id)`, nullable
+- `valor_prestador` numeric(10,2), nullable
+- `prestador_atribuido_em` timestamptz, nullable
+
+## 2. Novo componente `PainelAtribuicaoPrestador.tsx`
+
+`src/components/instalacoes/PainelAtribuicaoPrestador.tsx`
+
+**Props**: `instalacao` (dados completos), `tipoCobertura` ('area_prestador' | 'fora_cobertura'), `cobertura` (dados do RPC com lista de prestadores)
+
+**Estados do painel**:
+
+- **Já atribuído** (`instalacao.vistoriador_prestador_id` preenchido): exibe nome, valor, badge "Aguardando execução", botão "Reenviar link por WhatsApp"
+- **Seleção** (não atribuído):
+  - Cabeçalho com título e badge de contexto (laranja/vermelho)
+  - Cenário B: lista cards dos prestadores da cobertura
+  - Cenário C: campo de busca + query de `vistoriadores_prestadores` filtrada por nome
+  - Ao selecionar: destaque azul no card, campo "Valor desta tarefa (R$)" com autofocus
+  - Botão "Atribuir e Notificar via WhatsApp" (desabilitado sem valor)
+  - Modal de confirmação com resumo (nome, cidade, data, associado, valor, aviso sobre link)
+
+**Ação de confirmação**: UPDATE na `instalacoes` com `vistoriador_prestador_id`, `valor_prestador`, `prestador_atribuido_em`. Envio WhatsApp via `abrirWhatsAppWeb` (fallback — link tokenizado será implementado em tarefa futura).
+
+## 3. Editar `InstalacaoDetalhe.tsx`
+
+No card Instalador (linhas ~420-431), substituir o placeholder VP-M02 pelo `<PainelAtribuicaoPrestador>`. Passar `instalacao`, `tipoCobertura` e `cobertura` como props. O hook `useCoberturaInstalacao` já retorna `cobertura`.
+
+Ajustar a chamada do hook para capturar `cobertura`:
+```
+const { tipo: tipoCobertura, cobertura } = useCoberturaInstalacao({...});
+```
+
+Condição de "já atribuído": se `(instalacao as any).vistoriador_prestador_id` estiver preenchido, o painel renderiza o estado pós-confirmação diretamente.
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/useCoberturaInstalacao.ts` | **Criar** |
-| `src/pages/monitoramento/InstalacoesList.tsx` | **Editar** |
-| `src/pages/monitoramento/InstalacaoDetalhe.tsx` | **Editar** |
-
-## Detalhes
-
-### 1. `useCoberturaInstalacao.ts` — Novo hook
-
-Recebe `{ cidade, uf, status, instalador_id }`. Se `instalador_id` preenchido ou status em `['concluida','cancelada','em_andamento','em_rota']`, retorna `tipo: null` sem chamar RPC. Caso contrário, usa `useCoberturaCidade(cidade, uf)` e classifica:
-
-- `tem_comum` → `'coberta_comum'`
-- `!tem_comum && tem_prestador` → `'area_prestador'`
-- `fora_de_cobertura` → `'fora_cobertura'`
-
-Exporta `{ tipo, isLoading, cobertura }`.
-
-### 2. `InstalacoesList.tsx` — Badge na coluna Endereço
-
-Criar componente interno `CoberturaBadgeCell` que recebe `cidade, uf, status, instalador_id`, chama `useCoberturaInstalacao` e renderiza:
-
-- `area_prestador` → Badge laranja "Área Prestador"
-- `fora_cobertura` → Badge vermelha "Sem Cobertura"
-- Demais → nada
-
-Inserir após `{inst.bairro}, {inst.cidade}` (linha ~297), ao lado do badge "Viagem" existente. React-query deduplicará chamadas para a mesma cidade/UF.
-
-### 3. `InstalacaoDetalhe.tsx` — Header + Card Instalador
-
-**Header** (linha ~229): Adicionar badge de cobertura ao lado do badge de status existente.
-
-**Card Instalador** (linhas ~405-411): Quando `tipo === 'area_prestador'` ou `tipo === 'fora_cobertura'`, substituir o bloco "Não atribuído" + botão "Atribuir Instalador" por mensagem informativa:
-- Cenário B: "Esta cidade é atendida por vistoriador prestador"
-- Cenário C: "Esta cidade não possui cobertura — atribuição manual necessária"
-- Placeholder para painel VP-M02
+| Migration SQL | **Criar** — 3 colunas em `instalacoes` |
+| `src/components/instalacoes/PainelAtribuicaoPrestador.tsx` | **Criar** — Componente completo |
+| `src/pages/monitoramento/InstalacaoDetalhe.tsx` | **Editar** — Integrar painel |
 
