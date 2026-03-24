@@ -10,6 +10,7 @@ interface VideoCaptureProps {
   uploading?: boolean;
   maxDuration?: number; // em segundos
   label?: string;
+  cameraOnly?: boolean; // Se true, remove opção de galeria
 }
 
 export function VideoCapture({
@@ -19,6 +20,7 @@ export function VideoCapture({
   uploading = false,
   maxDuration = 120, // 2 minutos padrão
   label = 'Vídeo 360°',
+  cameraOnly = false,
 }: VideoCaptureProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
@@ -253,15 +255,19 @@ export function VideoCapture({
                 <Play className="h-4 w-4" />
                 Gravar Vídeo
               </Button>
-              <span className="text-xs text-slate-500">ou</span>
-              <Button
-                variant="outline"
-                size="sm"
-                onClick={() => inputRef.current?.click()}
-                className="border-slate-600 text-slate-400"
-              >
-                Selecionar da Galeria
-              </Button>
+              {!cameraOnly && (
+                <>
+                  <span className="text-xs text-slate-500">ou</span>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => inputRef.current?.click()}
+                    className="border-slate-600 text-slate-400"
+                  >
+                    Selecionar da Galeria
+                  </Button>
+                </>
+              )}
             </div>
             <span className="text-xs text-slate-500">
               Máximo {formatTime(maxDuration)}

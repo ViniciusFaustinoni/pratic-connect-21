@@ -84,8 +84,8 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   const fotosCompletadas = Object.keys(fotosEnviadas).length;
   const progresso = (fotosCompletadas / totalFotos) * 100;
   const todasFotosEnviadas = fotosCompletadas === totalFotos;
-  const videoObrigatorio = tipoVeiculo === 'carro';
-  const todasEnviadas = todasFotosEnviadas && (!videoObrigatorio || !!videoUrl);
+  const videoObrigatorio = true; // Vídeo obrigatório para TODOS os tipos
+  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
   
   const fotoAtual = fotos[indiceAtual];
   const isUltimaFoto = indiceAtual === totalFotos - 1;
@@ -261,11 +261,33 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   };
 
   const handleVideoCapture = async (file: File) => {
-    if (!vistoriaId) return;
+    // Criar vistoria se ainda não existir
+    let currentVistoriaId = vistoriaId;
+    if (!currentVistoriaId) {
+      if (!coordenadas) {
+        toast.error('Por favor, permita o acesso à sua localização antes de gravar o vídeo.');
+        return;
+      }
+      try {
+        const result = await criarAutovistoria.mutateAsync({ 
+          contratoId, 
+          associadoId, 
+          veiculoId,
+          latitude: coordenadas.latitude,
+          longitude: coordenadas.longitude,
+        });
+        currentVistoriaId = result.id;
+        setVistoriaId(result.id);
+      } catch (error) {
+        toast.error('Erro ao iniciar autovistoria');
+        return;
+      }
+    }
+    
     setUploadingVideo(true);
     try {
       const result = await uploadFoto.mutateAsync({
-        vistoriaId,
+        vistoriaId: currentVistoriaId!,
         fotoId: 'video_360',
         file,
         contratoId,
@@ -278,6 +300,12 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     } finally {
       setUploadingVideo(false);
     }
+  };
+
+  const handleVideoReset = () => {
+    // O vídeo anterior já foi salvo silenciosamente no servidor
+    // Apenas limpar a referência local para permitir nova gravação
+    setVideoUrl(null);
   };
 
   const handleContinuar = () => {
@@ -298,36 +326,84 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     );
   }
 
-  // Se todas as fotos foram enviadas mas falta vídeo, mostrar etapa de vídeo
-  if (todasFotosEnviadas && videoObrigatorio && !videoUrl) {
+  // NOVO FLUXO: Vídeo com instruções PRIMEIRO, depois fotos
+  // Etapa 1: Se ainda não tem vídeo, mostrar instruções + gravação
+  if (!videoUrl && !todasFotosEnviadas) {
     return (
       <Card className="max-w-lg mx-auto">
         <CardContent className="pt-8 pb-8 space-y-6">
+          {/* Captura de Localização - OBRIGATÓRIO */}
+          <LocationCapture 
+            onLocationCapture={setCoordenadas}
+            coordenadas={coordenadas}
+            disabled={readOnly}
+          />
+
           <div className="text-center space-y-4">
             <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
               <Video className="h-10 w-10 text-primary" />
             </div>
             <div>
               <h2 className="text-xl font-bold text-foreground">
-                Agora grave o Vídeo 360°
+                Etapa 1: Grave o Vídeo 360°
               </h2>
               <p className="text-muted-foreground mt-1">
-                Todas as {totalFotos} fotos foram enviadas! Agora grave um vídeo dando a volta completa no veículo (máx. 2 min).
+                Siga as instruções abaixo para gravar o vídeo do veículo.
               </p>
+            </div>
+          </div>
+
+          {/* Instruções de gravação */}
+          <div className="bg-muted/50 rounded-lg p-4 space-y-3 border">
+            <h4 className="font-semibold text-sm flex items-center gap-2">
+              <Lightbulb className="h-4 w-4 text-amber-500" />
+              Instruções de Gravação
+            </h4>
+            <ol className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>
+                <span>Comece filmando a <strong className="text-foreground">frente do veículo com a placa visível</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">2</span>
+                <span>Caminhe lentamente pela <strong className="text-foreground">lateral direita</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">3</span>
+                <span>Filme a <strong className="text-foreground">traseira com a placa visível</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">4</span>
+                <span>Continue pela <strong className="text-foreground">lateral esquerda</strong> até voltar à frente</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">5</span>
+                <span>Filme o <strong className="text-foreground">interior: painel, bancos e odômetro</strong></span>
+              </li>
+            </ol>
+            <div className="flex items-center gap-2 pt-2 border-t text-xs text-muted-foreground">
+              <AlertTriangle className="h-3 w-3 text-amber-500" />
+              <span>Duração mínima: <strong>30 segundos</strong> / Máxima: <strong>2 minutos</strong></span>
             </div>
           </div>
 
           <VideoCapture
             onCapture={handleVideoCapture}
-            onReset={() => setVideoUrl(null)}
+            onReset={handleVideoReset}
             videoUrl={videoUrl || undefined}
             uploading={uploadingVideo}
             maxDuration={120}
-            label="Vídeo 360°"
+            label="Vídeo 360° do Veículo"
+            cameraOnly={true}
           />
         </CardContent>
       </Card>
     );
+  }
+
+  // Etapa 1.5: Vídeo gravado mas fotos pendentes - mostrar vídeo OK + ir para fotos
+  if (videoUrl && !todasFotosEnviadas) {
+    // Continua para a tela de fotos abaixo (fluxo normal de fotos)
   }
 
   // Se todas foram enviadas (fotos + vídeo), mostrar tela de conclusão
@@ -344,7 +420,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
                 Autovistoria Concluída!
               </h2>
               <p className="text-muted-foreground mt-1">
-                Todas as {totalFotos} fotos{videoObrigatorio ? ' e o vídeo 360°' : ''} foram enviados com sucesso.
+                Todas as {totalFotos} fotos e o vídeo 360° foram enviados com sucesso.
               </p>
             </div>
           </div>
@@ -444,7 +520,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
           </Button>
           <div className="flex-1 flex items-center justify-between">
             <CardTitle className="text-lg">
-              Foto {indiceAtual + 1} de {totalFotos}
+              Etapa 2: Foto {indiceAtual + 1} de {totalFotos}
             </CardTitle>
             {fotoAtualEnviada && (
               <Badge variant="default" className="bg-green-600 hover:bg-green-700">

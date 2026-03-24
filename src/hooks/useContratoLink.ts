@@ -461,17 +461,47 @@ export function useUploadFotoAutovistoria() {
       
       const publicUrl = urlData.publicUrl;
       
-      // Persistir/atualizar em vistoria_fotos (upsert por vistoria_id + tipo)
-      const { error: fotoDbError } = await supabase
-        .from('vistoria_fotos')
-        .upsert(
-          { vistoria_id: vistoriaId, tipo: fotoId, arquivo_url: publicUrl },
-          { onConflict: 'vistoria_id,tipo' }
-        );
-      
-      if (fotoDbError) {
-        console.error('Erro ao salvar foto no banco:', fotoDbError);
-        throw fotoDbError;
+      // Se for video_360, salvar o anterior silenciosamente em vez de upsert
+      if (fotoId === 'video_360') {
+        // Verificar se já existe um vídeo anterior
+        const { data: existingVideo } = await supabase
+          .from('vistoria_fotos')
+          .select('id, tipo')
+          .eq('vistoria_id', vistoriaId)
+          .eq('tipo', 'video_360')
+          .maybeSingle();
+        
+        if (existingVideo) {
+          // Renomear o anterior para histórico (silenciosamente)
+          const timestamp = Date.now();
+          await supabase
+            .from('vistoria_fotos')
+            .update({ tipo: `video_360_historico_${timestamp}` })
+            .eq('id', existingVideo.id);
+        }
+        
+        // Inserir novo vídeo como video_360
+        const { error: fotoDbError } = await supabase
+          .from('vistoria_fotos')
+          .insert({ vistoria_id: vistoriaId, tipo: 'video_360', arquivo_url: publicUrl });
+        
+        if (fotoDbError) {
+          console.error('Erro ao salvar vídeo no banco:', fotoDbError);
+          throw fotoDbError;
+        }
+      } else {
+        // Persistir/atualizar em vistoria_fotos (upsert por vistoria_id + tipo)
+        const { error: fotoDbError } = await supabase
+          .from('vistoria_fotos')
+          .upsert(
+            { vistoria_id: vistoriaId, tipo: fotoId, arquivo_url: publicUrl },
+            { onConflict: 'vistoria_id,tipo' }
+          );
+        
+        if (fotoDbError) {
+          console.error('Erro ao salvar foto no banco:', fotoDbError);
+          throw fotoDbError;
+        }
       }
       
       // Se for foto do odômetro, extrair quilometragem via IA
