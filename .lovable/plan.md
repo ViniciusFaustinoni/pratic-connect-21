@@ -1,41 +1,45 @@
 
 
-# Permitir vendedor responsavel excluir cotacao antes da assinatura
+# Permitir vendedor editar cotação (incluir/remover planos) antes da assinatura
 
 ## Resumo
 
-Atualmente apenas diretores (permissao `canDeleteCotacao`) podem excluir cotacoes. A mudanca permite que o vendedor responsavel pela cotacao tambem possa exclui-la, desde que o contrato ainda nao tenha sido assinado.
+A infraestrutura de edição já existe e as permissões já permitem que o vendedor responsável edite sua própria cotação. O problema principal é que **ao abrir o modal de edição, os planos previamente selecionados não são restaurados** — o vendedor vê a lista de planos vazia e perde a seleção anterior. Além disso, o `canEdit` na listagem não bloqueia edição após contrato assinado.
 
 ## Arquivos
 
-| Arquivo | Acao |
+| Arquivo | Ação |
 |---------|------|
-| `src/pages/vendas/CotacaoDetalhe.tsx` | **Editar** — expandir logica de `canDelete` |
-| `src/pages/vendas/Cotacoes.tsx` | **Editar** — expandir `canDelete` nas permissoes da tabela |
-| `src/components/cotacoes/CotacaoAcoes.tsx` | **Editar** — ajustar label/texto quando vendedor (nao diretor) exclui |
+| `src/components/cotacoes/CotacaoFormDialog.tsx` | **Editar** — restaurar `planosSelecionados` a partir de `dados_extras.planos_comparacao` |
+| `src/pages/vendas/Cotacoes.tsx` | **Editar** — bloquear `canEdit` quando contrato assinado/ativo |
 
 ## Detalhes
 
-### 1. CotacaoDetalhe.tsx (linha ~477)
+### 1. CotacaoFormDialog.tsx — Restaurar planos no modo edição (linha ~790-863)
 
-Alterar a logica de `canDelete` para:
+No `useEffect` que preenche o formulário quando `cotacaoParaEditar && open`, adicionar lógica para restaurar `planosSelecionados`:
+
 ```
-const isVendedorResponsavel = cotacao?.vendedor_id === profile?.id;
-const canDelete = isDiretor || (isVendedorResponsavel && !contratoAssinado);
-```
-
-Diretor sempre pode excluir. Vendedor responsavel pode excluir somente se `contratoAssinado === false`.
-
-### 2. Cotacoes.tsx (linha ~577)
-
-Na funcao `getPermissions`, expandir `canDelete`:
-```
-canDelete: permissions.cotacao.canDelete || (isOwner && !contratoAssinadoCheck),
+// Após os outros preenchimentos (~linha 837), adicionar:
+if (cotacaoParaEditar.dados_extras?.planos_comparacao) {
+  const planosRestaurados = cotacaoParaEditar.dados_extras.planos_comparacao;
+  // Aguardar que planosDisponiveis estejam carregados para fazer match
+  // e restaurar com dados completos (valorMensal, coberturas, etc)
+}
 ```
 
-Verificar se a cotacao tem contrato com status `assinado` ou `ativo` — se sim, bloquear. Caso contrario, o vendedor dono pode excluir.
+A restauração precisa cruzar os IDs de `planos_comparacao` com os `planosDisponiveis` (do hook `usePlanosCotacao`) para obter os objetos `PlanoCotacao` completos com `valorMensal`, `coberturas`, etc. Se o plano disponível já estiver carregado, fazer `setPlanosSelecionados` com os matches. Isso garante que ao abrir o editor, os planos apareçam pré-selecionados e o vendedor possa adicionar ou remover planos livremente.
 
-### 3. CotacaoAcoes.tsx (linha ~261-263)
+Será necessário um segundo `useEffect` que observe `planosDisponiveis` para fazer o match após carregamento assíncrono.
 
-Manter o dialog de confirmacao existente. Nenhuma mudanca estrutural necessaria — o botao ja aparece condicionalmente via `canDelete`. Opcionalmente ajustar o texto da descricao para indicar que a exclusao e permitida porque o contrato ainda nao foi assinado.
+### 2. Cotacoes.tsx — Bloquear edição após assinatura (linha ~576)
+
+Expandir a lógica de `canEdit` no `getPermissions`:
+
+```ts
+canEdit: (permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner))
+  && !['assinado', 'ativo'].includes(cotacao.contrato?.status || ''),
+```
+
+Isso impede que o botão de edição apareça na listagem quando o contrato já foi assinado, alinhando com o comportamento da página de detalhe.
 
