@@ -1,61 +1,26 @@
 
 
-# Reestruturar Autovistoria: Vídeo + 2 Fotos + Histórico Oculto de Vídeos
+# Limitar datas de agendamento de instalação pelo prazo do estado
 
 ## Resumo
 
-Simplificar a autovistoria para exigir apenas **1 vídeo (câmera only) + 1 foto do chassi + 1 foto do motor**. O vídeo deve incluir instruções de gravação, ser capturável somente pela câmera (sem galeria), e todas as versões de vídeo (mesmo excluídas pelo associado) devem ser salvas silenciosamente e exibidas ao analista de cadastro. Na análise, mostrar a validação chassi vs CRLV para aprovação de roubo/furto.
+Atualmente o agendamento de instalação exibe sempre 7 dias disponíveis, independente do estado. O correto é limitar as datas ao prazo configurado por estado (ex: RJ = 48h = ~2 dias uteis, SP = 72h = ~3 dias uteis). O componente deve ler o estado informado no endereço e buscar o prazo na tabela `configuracoes` (chave `instalacao_prazos_por_estado`).
 
-## Arquivos
+## Arquivo
 
 | Arquivo | Acao |
 |---------|------|
-| `src/data/autovistoriaConfig.ts` | **Editar** — Reduzir fotos de carro para 2 (chassi + motor), moto para 2 (chassi + motor) |
-| `src/components/associado/Autovistoria.tsx` | **Editar** — Reestruturar fluxo: vídeo com instruções primeiro, depois 2 fotos; salvar vídeos antigos silenciosamente |
-| `src/components/instalador/VideoCapture.tsx` | **Editar** — Remover opção "Selecionar da Galeria", forçar `capture="environment"` |
-| `src/hooks/useContratoLink.ts` | **Editar** — Ao substituir vídeo, NÃO deletar o anterior; salvar histórico em `vistoria_fotos` com tipo `video_360_historico_N` |
-| `src/pages/cadastro/AnaliseVistoria.tsx` | **Editar** — Exibir todos os vídeos (incluindo histórico oculto) e destaque da validação chassi vs CRLV |
-| Migration SQL | **Criar** — Nenhuma migration necessária; `vistoria_fotos` já suporta múltiplos registros |
+| `src/components/associado/AgendamentoInstalacaoContrato.tsx` | **Editar** |
 
-## Detalhes Técnicos
+## Detalhes
 
-### 1. Reduzir fotos (autovistoriaConfig.ts)
-- `FOTOS_AUTOVISTORIA_CARRO`: manter apenas `chassi` (ordem 1) e `motor` (ordem 2, novo item — foto aproximada do motor/número do motor)
-- `FOTOS_AUTOVISTORIA_MOTO`: manter apenas `motor_chassi` (ordem 1) e `motor` (ordem 2)
-- Adicionar nova entrada `motor` para carro com instruções de como fotografar o motor
+1. Adicionar query ao Supabase para buscar a configuração `instalacao_prazos_por_estado` (JSON com array `[{estado, prazo_horas}]`).
 
-### 2. VideoCapture — Camera only (VideoCapture.tsx)
-- Remover botão "Selecionar da Galeria" e o `<input type="file">` associado
-- Manter apenas o botão "Gravar Vídeo" que usa `navigator.mediaDevices.getUserMedia`
-- Adicionar prop `cameraOnly?: boolean` (default false) para manter retrocompatibilidade com outros usos do componente
+2. Quando o associado preencher o CEP e o campo `estado` for preenchido automaticamente, calcular quantos dias uteis correspondem ao prazo daquele estado (48h = 2 dias, 72h = 3 dias, etc). Fallback: 48h se o estado nao estiver configurado.
 
-### 3. Instruções de gravação do vídeo (Autovistoria.tsx)
-- Antes da gravação, exibir card com instruções passo-a-passo:
-  - "Comece filmando a frente do veículo com a placa visível"
-  - "Caminhe lentamente pela lateral direita"
-  - "Filme a traseira com a placa visível"
-  - "Continue pela lateral esquerda até voltar à frente"
-  - "Filme o interior: painel, bancos e odômetro"
-  - "Duração mínima: 30 segundos / Máxima: 2 minutos"
-- O fluxo agora é: **Instruções → Vídeo → Foto Chassi → Foto Motor → Conclusão**
-- Vídeo obrigatório para TODOS os tipos (carro e moto), não apenas carro
+3. Gerar `datasDisponiveis` dinamicamente com base nesse calculo, em vez do fixo `7`. As datas devem comecar a partir de amanha e respeitar o limite do prazo (ex: para 48h, mostrar ate 2 dias uteis; para 72h, ate 3 dias uteis).
 
-### 4. Salvar vídeos substituídos silenciosamente (useContratoLink.ts)
-- No `handleVideoCapture` / `useUploadFotoAutovistoria`:
-  - Quando o tipo é `video_360` e já existe um registro anterior, NÃO fazer upsert
-  - Em vez disso, renomear o registro existente para `video_360_historico_{timestamp}` (INSERT novo registro)
-  - O novo vídeo entra como `video_360` normalmente
-  - O associado só vê o vídeo atual; os históricos ficam "invisíveis" para ele
-- O arquivo no Storage NÃO é deletado (manter para o analista)
+4. Se o estado ainda nao foi preenchido, mostrar uma mensagem orientando o associado a preencher o endereco primeiro, antes de selecionar a data. A secao de datas fica desabilitada ate o endereco estar completo.
 
-### 5. Exibir todos os vídeos ao analista (AnaliseVistoria.tsx)
-- Na seção de mídias, buscar todas as `vistoria_fotos` com tipo `LIKE 'video_360%'`
-- Exibir o vídeo principal + seção colapsável "Vídeos anteriores (N)" com os históricos
-- Badge de alerta se houver múltiplos vídeos: "Associado substituiu o vídeo N vez(es)"
-- Manter o card de validação do chassi existente — já funciona com `chassi_validacao` e `chassi_ocr`
-
-### 6. Validação Chassi vs CRLV para Roubo/Furto
-- A validação via IA (chassi-ocr) já existe e já salva `chassi_validacao`, `chassi_ocr`, `chassi_ocr_confianca` na vistoria
-- A tela `AnaliseVistoria.tsx` já exibe o card de comparação caractere por caractere
-- Adicionar destaque visual extra: se `chassi_validacao === 'diverge'`, mostrar alerta vermelho proeminente com texto "⚠️ ATENÇÃO: Chassi divergente do CRLV — verificar antes de aprovar cobertura de Roubo/Furto"
+5. Reordenar o formulario: **Endereco primeiro, depois Data/Horario**, para que o prazo esteja calculado antes da selecao de data.
 
