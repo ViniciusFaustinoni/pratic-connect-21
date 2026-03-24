@@ -556,6 +556,28 @@ serve(async (req) => {
 
         // ========== ENCAIXE: CONFIRMAÇÃO VIA WHATSAPP ANTES DE ATRIBUIR ==========
         if (servico.is_encaixe && !(servico as any).confirmacao_whatsapp) {
+          // DEDUP: pular se já enviamos confirmação para este serviço nesta execução
+          if (encaixesJaEnviados.has(servico.id)) {
+            console.log(`[cron-atribuir-tarefas] 🔄 Encaixe ${servico.id} já teve confirmação enviada nesta execução - pulando`);
+            continue;
+          }
+
+          // UPDATE ATÔMICO ANTES DO ENVIO: previne race condition entre execuções
+          const { data: lockResult, error: lockError } = await supabase
+            .from('servicos')
+            .update({ confirmacao_whatsapp: 'aguardando_confirmacao_encaixe' })
+            .eq('id', servico.id)
+            .is('confirmacao_whatsapp', null)
+            .select('id');
+
+          if (lockError || !lockResult || lockResult.length === 0) {
+            console.log(`[cron-atribuir-tarefas] 🔒 Encaixe ${servico.id} já está sendo processado por outra execução - pulando`);
+            encaixesJaEnviados.add(servico.id);
+            continue;
+          }
+
+          // Lock obtido com sucesso - marcar no Set local
+          encaixesJaEnviados.add(servico.id);
           console.log(`[cron-atribuir-tarefas] ⏳ Encaixe ${servico.id} precisa de confirmação do associado antes de atribuir`);
           
           try {
@@ -602,12 +624,6 @@ Aguardamos sua confirmação! ⚡`;
                   ],
                 }
               });
-
-              // Marcar como aguardando confirmação
-              await supabase
-                .from('servicos')
-                .update({ confirmacao_whatsapp: 'aguardando_confirmacao_encaixe' })
-                .eq('id', servico.id);
 
               // Criar registro de confirmação para o webhook tratar a resposta
               await supabase.from('confirmacoes_agendamento').insert({
