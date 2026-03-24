@@ -789,7 +789,7 @@ Aguardamos sua confirmação! ⚡`;
               if (instCompleta) {
                 const assocData = (instCompleta as any).associados;
                 const veicData = (instCompleta as any).veiculos;
-                const telefoneCliente = assocData?.whatsapp || assocData?.telefone1 || '';
+                const telefoneCliente = assocData?.whatsapp || assocData?.telefone || '';
                 const enderecoCompleto = [instCompleta.logradouro, instCompleta.numero, instCompleta.bairro, instCompleta.cidade, instCompleta.uf].filter(Boolean).join(', ');
 
                 // Buscar telefone do instalador
