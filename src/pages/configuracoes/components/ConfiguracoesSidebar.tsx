@@ -42,6 +42,7 @@ const menuItems: MenuSection[] = [
     items: [
       
       { path: '/configuracoes/integracoes', label: 'Integrações', icon: Plug },
+      { path: '/configuracoes/api', label: 'API do Sistema', icon: Code2, diretorOnly: true },
       { path: '/configuracoes/sistema', label: 'Sistema', icon: Settings },
     ]
   }
