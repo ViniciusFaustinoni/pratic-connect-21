@@ -365,6 +365,7 @@ function IntegracaoCardUI({
 type DraftValues = Partial<Record<IntegracaoTipo, Record<string, string>>>;
 
 export default function Integracoes() {
+  const { isDiretor } = usePermissions();
   const navigate = useNavigate();
   const integracoes = useIntegracoesStatus();
   const { data: credenciais, refetch: refetchCredenciais } = useTodasIntegracoesCredenciais();
