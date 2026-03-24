@@ -4,7 +4,7 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider';
+
 import { ColaboradorOnboarding } from './ColaboradorOnboarding';
 import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
 import { useNotificacoesPreferencias } from '@/hooks/useNotificacoesPreferencias';
