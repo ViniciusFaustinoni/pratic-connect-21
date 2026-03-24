@@ -186,7 +186,7 @@ export default function InstaladorTarefas() {
                   <ClipboardList className="h-12 w-12 text-slate-600" />
                   <h3 className="mt-4 text-lg font-semibold text-white">Sem histórico</h3>
                   <p className="mt-1 text-center text-sm text-slate-400">
-                    Nenhuma tarefa concluída nos últimos 7 dias.
+                    Nenhuma tarefa concluída neste mês.
                   </p>
                 </CardContent>
               </Card>
