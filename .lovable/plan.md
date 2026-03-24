@@ -1,93 +1,63 @@
 
 
-# Encaixe com confirmação via WhatsApp antes da atribuição
+# Gatilho de prazo expirado para confirmação de vistoria/instalação
 
-## Problema atual
+## Resumo
 
-Serviços com `permite_encaixe = true` **ignoram** o fluxo de confirmação WhatsApp — são atribuídos automaticamente sem consultar o associado. Isso acontece porque os filtros nas funções de atribuição incluem `permite_encaixe.eq.true` como exceção ao requisito de confirmação.
+Atualmente o sistema envia confirmações matinais via WhatsApp (`confirmar-vistorias-manha-cron`) e aguarda resposta "SIM", mas **não existe nenhum mecanismo para expirar confirmações não respondidas**. O serviço fica eternamente em `aguardando_confirmacao_manha` sem consequência.
 
-## Solução
-
-Criar um fluxo de confirmação específico para encaixes: quando o sistema detectar um encaixe elegível para atribuição, primeiro envia uma mensagem de confirmação ao associado e só atribui após resposta positiva.
+A solução é criar uma nova edge function cron que verifica confirmações pendentes e, se o prazo configurável expirar sem resposta, envia um template Meta informando o associado e cancela/reagenda o serviço.
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/cron-atribuir-tarefas/index.ts` | **Editar** — remover bypass de encaixe no filtro de confirmação; adicionar lógica para enviar confirmação a encaixes pendentes |
-| `supabase/functions/atribuir-proxima-tarefa/index.ts` | **Editar** — remover bypass de encaixe no filtro de confirmação; adicionar lógica para enviar confirmação |
-| `supabase/functions/whatsapp-webhook/index.ts` | **Verificar** — já trata resposta "SIM" e marca `confirmacao_whatsapp = 'confirmada'` (sem mudança necessária) |
+| `supabase/functions/cron-expirar-confirmacoes/index.ts` | **Criar** — nova cron que expira confirmações não respondidas |
+| `supabase/functions/cron-atribuir-tarefas/index.ts` | **Editar** — ignorar serviços com `confirmacao_whatsapp = 'expirada'` |
+| `src/pages/diretoria/ConfigInstalacaoRotas.tsx` | **Editar** — adicionar campo configurável "Prazo para confirmação (horas)" |
 
 ## Detalhes
 
-### 1. Remover bypass de encaixe nos filtros de atribuição
+### 1. Configuração dinâmica (tabela `configuracoes`)
 
-Nas 3 queries de busca de serviços (BUSCA 1, BUSCA 2, BUSCA 3) em ambas as funções, alterar o filtro:
+Nova chave: `prazo_confirmacao_agendamento_horas` com valor padrão `4` (horas). O Diretor poderá ajustar na aba Instalação e Rotas.
 
-**Antes:**
-```
-.or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada,permite_encaixe.eq.true')
-```
+### 2. Nova edge function `cron-expirar-confirmacoes`
 
-**Depois:**
-```
-.or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada')
-```
+Lógica:
+1. Ler prazo configurável via `getConfiguracaoNumero(supabase, 'prazo_confirmacao_agendamento_horas', 4)`
+2. Buscar serviços com `confirmacao_whatsapp IN ('aguardando_confirmacao_manha', 'aguardando_confirmacao_encaixe')` onde o registro em `confirmacoes_agendamento` tem `mensagem_enviada_em` mais antigo que X horas atrás
+3. Para cada serviço expirado:
+   - Atualizar `confirmacao_whatsapp = 'expirada'` e `status = 'cancelada'`
+   - Enviar template WhatsApp Meta ao associado informando que o prazo de confirmação expirou e orientando a reagendar
+   - Atualizar `confirmacoes_agendamento.status = 'expirada'`
+   - Criar notificação interna para o coordenador
 
-Porém, serviços com `confirmacao_whatsapp IS NULL` ainda passam. Para encaixes, precisamos interceptá-los antes da atribuição.
+### 3. Template WhatsApp
 
-### 2. Lógica de confirmação pré-atribuição para encaixes
+Usar o template `notificacao_geral_v1` (fallback seguro) com mensagem informando:
+- "Seu agendamento de [tipo] para [data] não foi confirmado no prazo"
+- "Entre em contato para reagendar"
 
-Em ambas as funções (`cron-atribuir-tarefas` e `atribuir-proxima-tarefa`), **antes de atribuir** um serviço com `permite_encaixe = true` e `confirmacao_whatsapp IS NULL`:
+### 4. Ajuste no `cron-atribuir-tarefas`
 
-1. **Não atribuir** — em vez disso, enviar confirmação via WhatsApp ao associado
-2. Marcar `confirmacao_whatsapp = 'aguardando_confirmacao_encaixe'` no serviço
-3. Pular para o próximo serviço na fila
+Adicionar `'expirada'` à lista de status de `confirmacao_whatsapp` que devem ser ignorados nos filtros de busca de serviços, para que serviços expirados não entrem na fila de atribuição.
 
-O fluxo fica:
+### 5. Config na Diretoria
 
-```text
-Encaixe detectado (permite_encaixe=true, confirmacao_whatsapp=null)
-  ├── Enviar WhatsApp: "Temos um profissional disponível próximo a você. Confirma encaixe HOJE?"
-  ├── Marcar confirmacao_whatsapp = 'aguardando_confirmacao_encaixe'
-  └── NÃO atribuir ainda
-
-Associado responde "SIM" (webhook já existente)
-  └── confirmacao_whatsapp = 'confirmada'
-      └── Próxima execução do cron → serviço é atribuído normalmente
-```
-
-### 3. Implementação na lógica de atribuição
-
-Após selecionar o melhor serviço para um profissional, adicionar verificação:
-
-```typescript
-// Antes de atribuir, verificar se encaixe precisa de confirmação
-if (servico.permite_encaixe && !servico.confirmacao_whatsapp) {
-  // Buscar dados do associado para envio
-  // Enviar template de confirmação via whatsapp-send-text
-  // Marcar como 'aguardando_confirmacao_encaixe'
-  // Continuar para próximo serviço (não atribuir)
-  continue;
-}
-```
-
-A mensagem de confirmação usará o template `confirmacao_agendamento_v1` (já existente) com parâmetros adaptados para encaixe, informando que há um profissional disponível na região.
-
-### 4. Webhook — sem mudança
-
-O `whatsapp-webhook` já trata respostas de confirmação e marca `confirmacao_whatsapp = 'confirmada'`. Encaixes confirmados serão atribuídos na próxima execução do cron normalmente.
+Adicionar um campo numérico "Prazo para confirmação do agendamento (horas)" na aba de Instalação e Rotas, vinculado à chave `prazo_confirmacao_agendamento_horas`.
 
 ### Fluxo resultante
 
 ```text
-Serviço com encaixe criado
-  │
-  ├── Cron detecta profissional próximo disponível
-  │   ├── Se confirmacao_whatsapp IS NULL → envia confirmação, marca 'aguardando_confirmacao_encaixe'
-  │   ├── Se 'aguardando_confirmacao_encaixe' → pula (aguardando resposta)
-  │   └── Se 'confirmada' → atribui normalmente
-  │
-  └── Associado responde SIM → confirmada → próximo cron atribui
+7h: Confirmação matinal enviada → confirmacao_whatsapp = 'aguardando_confirmacao_manha'
+│
+├── Associado responde SIM → 'confirmada' → entra na fila de atribuição
+├── Associado responde NÃO → reagendamento (fluxo existente)
+└── Sem resposta após X horas → cron-expirar-confirmacoes:
+    ├── confirmacao_whatsapp = 'expirada'
+    ├── status = 'cancelada'
+    ├── WhatsApp: "Prazo expirado, reagende"
+    └── Notificação interna ao coordenador
 ```
 
