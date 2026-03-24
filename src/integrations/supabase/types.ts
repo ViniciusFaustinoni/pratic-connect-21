@@ -26117,11 +26117,14 @@ export type Database = {
       }
       vistoria_prestador_links: {
         Row: {
+          assinatura_url: string | null
           atribuido_por: string | null
+          checklist_data: Json | null
           chegada_em: string | null
           concluida_em: string | null
           created_at: string
           foto_comprovante_url: string | null
+          fotos_vistoria: Json | null
           id: string
           instalacao_id: string
           status: string
@@ -26133,11 +26136,14 @@ export type Database = {
           whatsapp_erro: string | null
         }
         Insert: {
+          assinatura_url?: string | null
           atribuido_por?: string | null
+          checklist_data?: Json | null
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string
           foto_comprovante_url?: string | null
+          fotos_vistoria?: Json | null
           id?: string
           instalacao_id: string
           status?: string
@@ -26149,11 +26155,14 @@ export type Database = {
           whatsapp_erro?: string | null
         }
         Update: {
+          assinatura_url?: string | null
           atribuido_por?: string | null
+          checklist_data?: Json | null
           chegada_em?: string | null
           concluida_em?: string | null
           created_at?: string
           foto_comprovante_url?: string | null
+          fotos_vistoria?: Json | null
           id?: string
           instalacao_id?: string
           status?: string
