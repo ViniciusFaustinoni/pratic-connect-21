@@ -51,20 +51,32 @@ export function PainelAtribuicaoPrestador({ instalacao, tipoCobertura, cobertura
 /* ── Estado pós-confirmação ── */
 function EstadoAtribuido({ instalacao }: { instalacao: any }) {
   const { data: prestadores } = useVistoriadoresPrestadores();
-  const { abrirWhatsAppWeb } = useEnviarWhatsApp();
+  const [reenviando, setReenviando] = useState(false);
 
   const prestador = useMemo(() => {
     if (!prestadores) return null;
     return prestadores.find((p) => p.id === (instalacao as any).vistoriador_prestador_id) ?? null;
   }, [prestadores, instalacao]);
 
-  const handleReenviar = () => {
-    if (!prestador?.telefone) {
-      toast.error('Prestador sem telefone cadastrado');
-      return;
+  const handleReenviar = async () => {
+    if (!prestador) return;
+    setReenviando(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('gerar-link-vistoriador-prestador', {
+        body: {
+          instalacao_id: instalacao.id,
+          vistoriador_prestador_id: prestador.id,
+          reenviar: true,
+        },
+      });
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao reenviar');
+      toast.success(data.whatsapp_enviado ? 'Link reenviado via WhatsApp!' : 'Link gerado, mas houve falha no envio do WhatsApp');
+    } catch (e: any) {
+      toast.error('Erro ao reenviar: ' + e.message);
+    } finally {
+      setReenviando(false);
     }
-    const msg = `Olá ${prestador.nome}, segue o link para a instalação em ${instalacao.cidade}/${instalacao.uf}.`;
-    abrirWhatsAppWeb(prestador.telefone, msg);
   };
 
   return (
