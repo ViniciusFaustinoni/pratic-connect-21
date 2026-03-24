@@ -715,6 +715,51 @@ export function InstalacaoRotasConfig() {
         </CardContent>
       </Card>
 
+      {/* ── Bloco 9 — Prazo de Confirmação ── */}
+      <Card>
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Clock className="h-4 w-4" />
+            Prazo para Confirmação de Agendamento
+          </CardTitle>
+          <CardDescription>
+            Tempo máximo que o associado tem para confirmar o agendamento via WhatsApp. Após esse prazo, o serviço é cancelado automaticamente.
+          </CardDescription>
+        </CardHeader>
+        <CardContent className="space-y-4">
+          <div className="space-y-2 max-w-xs">
+            <Label>Prazo para confirmação (horas)</Label>
+            <Input
+              type="number"
+              min={1}
+              max={48}
+              value={prazoConfirmacao}
+              onChange={e => setPrazoConfirmacao(e.target.value)}
+            />
+            <p className="text-xs text-muted-foreground">
+              Padrão: 4 horas. Após esse prazo sem resposta, o sistema cancela o agendamento e notifica o associado.
+            </p>
+          </div>
+          <div className="flex justify-end">
+            <Button onClick={async () => {
+              setSavingB9(true);
+              try {
+                await salvarConfig('prazo_confirmacao_agendamento_horas', prazoConfirmacao, profile?.id);
+                toast.success('Prazo de confirmação salvo com sucesso');
+                invalidate();
+              } catch {
+                toast.error('Erro ao salvar prazo de confirmação');
+              } finally {
+                setSavingB9(false);
+              }
+            }} disabled={savingB9} size="sm">
+              {savingB9 ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : <Save className="h-4 w-4 mr-1" />}
+              Salvar Prazo
+            </Button>
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── Bloco 4 — Regiões de Atendimento ── */}
       <Card>
         <CardHeader>
