@@ -467,6 +467,7 @@ serve(async (req) => {
       latitude: s.latitude,
       longitude: s.longitude,
       permite_encaixe: s.permite_encaixe || false,
+      confirmacao_whatsapp: s.confirmacao_whatsapp || null,
       periodo: s.periodo || null,
       status: s.status,
       associado_id: s.associado_id,
