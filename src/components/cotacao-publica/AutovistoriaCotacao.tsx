@@ -13,6 +13,9 @@ import {
   Info,
   X,
   RefreshCw,
+  Video,
+  Lightbulb,
+  AlertTriangle,
 } from 'lucide-react';
 import { getFotosAutovistoria, type TipoVeiculo, type FotoAutovistoria } from '@/data/autovistoriaConfig';
 import { useFotosCotacaoVistoria, useUploadFotoCotacaoVistoria, useFinalizarVistoriaCotacao } from '@/hooks/useCotacaoVistoria';
@@ -20,6 +23,7 @@ import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
 import { motion, AnimatePresence } from 'framer-motion';
 import { compressImage, createOptimizedPreview, revokePreview } from '@/lib/imageCompressor';
+import { VideoCapture } from '@/components/instalador/VideoCapture';
 
 
 interface AutovistoriaCotacaoProps {
@@ -37,6 +41,8 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const [kmIdentificado, setKmIdentificado] = useState<number | null>(null);
   const [previewLocal, setPreviewLocal] = useState<string | null>(null);
   const [hidratado, setHidratado] = useState(false);
+  const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [uploadingVideo, setUploadingVideo] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
   const finalizandoRef = useRef(false);
@@ -46,29 +52,44 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const finalizarMutation = useFinalizarVistoriaCotacao();
   
   const fotoAtual = fotos[fotoAtualIndex];
-  const progresso = (Object.keys(fotosEnviadas).length / totalFotos) * 100;
-  const todasFotosEnviadas = Object.keys(fotosEnviadas).length >= totalFotos;
-  const todasEnviadas = todasFotosEnviadas;
+  const fotosCompletadas = Object.keys(fotosEnviadas).length;
+  const progresso = ((fotosCompletadas + (videoUrl ? 1 : 0)) / (totalFotos + 1)) * 100;
+  const todasFotosEnviadas = fotosCompletadas >= totalFotos;
+  const todasEnviadas = todasFotosEnviadas && !!videoUrl;
   
   // Reidratar fotos existentes (refresh mantém progresso)
   useEffect(() => {
     if (fotosExistentes && fotosExistentes.length > 0 && !hidratado) {
       const fotosMap: Record<string, string> = {};
+      let videoExistente: string | null = null;
+      
       for (const foto of fotosExistentes) {
         if (foto.tipo && foto.arquivo_url) {
-          fotosMap[foto.tipo] = foto.arquivo_url;
+          if (foto.tipo === 'video_360') {
+            videoExistente = foto.arquivo_url;
+          } else {
+            fotosMap[foto.tipo] = foto.arquivo_url;
+          }
         }
       }
       
       if (Object.keys(fotosMap).length > 0) {
         setFotosEnviadas(fotosMap);
-        toast.success(`${Object.keys(fotosMap).length} foto(s) carregadas de sessão anterior`);
-        
-        // Ir para próxima foto pendente
-        const indexPendente = fotos.findIndex(f => !fotosMap[f.id]);
-        if (indexPendente >= 0) {
-          setFotoAtualIndex(indexPendente);
-        }
+      }
+      
+      if (videoExistente) {
+        setVideoUrl(videoExistente);
+      }
+      
+      const totalCarregados = Object.keys(fotosMap).length + (videoExistente ? 1 : 0);
+      if (totalCarregados > 0) {
+        toast.success(`${totalCarregados} arquivo(s) carregado(s) de sessão anterior`);
+      }
+      
+      // Ir para próxima foto pendente
+      const indexPendente = fotos.findIndex(f => !fotosMap[f.id]);
+      if (indexPendente >= 0) {
+        setFotoAtualIndex(indexPendente);
       }
       
       setHidratado(true);
@@ -99,7 +120,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
       return;
     }
     
-    // Preview local imediato usando Object URL (muito mais eficiente que base64)
+    // Preview local imediato usando Object URL
     if (previewLocal) {
       revokePreview(previewLocal);
     }
@@ -109,7 +130,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     try {
       // Comprimir imagem para economizar memória e acelerar upload
       let arquivoFinal = file;
-      if (file.size > 500 * 1024) { // Comprimir se > 500KB
+      if (file.size > 500 * 1024) {
         toast.loading('Otimizando imagem...', { id: 'compress' });
         try {
           arquivoFinal = await compressImage(file, { 
@@ -174,23 +195,40 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
       }
     } catch (error: any) {
       console.error('[AutovistoriaCotacao] Erro no upload:', error);
-      // Mensagem amigável
       toast.error('Não foi possível enviar a foto. Tente novamente.', {
         action: {
           label: 'Tentar novamente',
           onClick: () => inputRef.current?.click(),
         },
       });
-      // Manter preview para o usuário poder tentar novamente
     }
     
-    // Limpar input para permitir reenvio
     e.target.value = '';
   };
 
+  const handleVideoCapture = async (file: File) => {
+    setUploadingVideo(true);
+    try {
+      const result = await uploadMutation.mutateAsync({
+        cotacaoId,
+        fotoId: 'video_360',
+        file,
+      });
+      setVideoUrl(result.url);
+      toast.success('Vídeo 360° enviado com sucesso!');
+    } catch (error) {
+      console.error('[AutovistoriaCotacao] Erro no upload do vídeo:', error);
+      toast.error('Erro ao enviar vídeo. Tente novamente.');
+    } finally {
+      setUploadingVideo(false);
+    }
+  };
+
+  const handleVideoReset = () => {
+    setVideoUrl(null);
+  };
   
   const handleFinalizar = async () => {
-    // Prevenir duplo clique
     if (finalizandoRef.current || finalizarMutation.isPending) return;
     finalizandoRef.current = true;
     
@@ -206,9 +244,8 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
     }
   };
   
-  
-  const fotoJaEnviada = !!fotosEnviadas[fotoAtual.id];
-  const isUploading = uploadMutation.isPending;
+  const fotoJaEnviada = !!fotosEnviadas[fotoAtual?.id];
+  const isUploading = uploadMutation.isPending && !uploadingVideo;
   
   if (carregandoFotos) {
     return (
@@ -220,7 +257,93 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
       </Card>
     );
   }
+
+  // ETAPA 1: Vídeo 360° (obrigatório antes das fotos)
+  if (!videoUrl) {
+    return (
+      <Card className="border-border/50 bg-card/80 backdrop-blur-xl overflow-hidden">
+        <CardHeader className="pb-3 space-y-3">
+          <div className="flex items-center justify-between">
+            <CardTitle className="text-lg">Autovistoria</CardTitle>
+            <Badge variant="secondary" className="bg-primary/10 text-primary">
+              Etapa 1 de 2
+            </Badge>
+          </div>
+          <Progress value={0} className="h-2" />
+        </CardHeader>
+        
+        <CardContent className="space-y-6">
+          <div className="text-center space-y-4">
+            <div className="w-20 h-20 rounded-full bg-primary/10 flex items-center justify-center mx-auto">
+              <Video className="h-10 w-10 text-primary" />
+            </div>
+            <div>
+              <h2 className="text-xl font-bold text-foreground">
+                Grave o Vídeo 360°
+              </h2>
+              <p className="text-sm text-muted-foreground mt-1">
+                Siga as instruções abaixo para gravar o vídeo do veículo.
+              </p>
+            </div>
+          </div>
+
+          {/* Instruções de gravação */}
+          <div className="bg-muted/30 rounded-lg p-4 space-y-3 border border-border/50">
+            <h4 className="font-semibold text-sm flex items-center gap-2">
+              <Lightbulb className="h-4 w-4 text-amber-500" />
+              Instruções de Gravação
+            </h4>
+            <ol className="space-y-2 text-sm text-muted-foreground">
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">1</span>
+                <span>Comece filmando a <strong className="text-foreground">frente do veículo com a placa visível</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">2</span>
+                <span>Caminhe lentamente pela <strong className="text-foreground">lateral direita</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">3</span>
+                <span>Filme a <strong className="text-foreground">traseira com a placa visível</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">4</span>
+                <span>Continue pela <strong className="text-foreground">lateral esquerda</strong> até voltar à frente</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">5</span>
+                <span>Entre no veículo e filme o <strong className="text-foreground">interior: bancos, forração e teto</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">6</span>
+                <span><strong className="text-foreground">Ligue o veículo</strong> e filme o <strong className="text-foreground">painel ligado</strong> mostrando hodômetro e indicadores</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">7</span>
+                <span>Filme o <strong className="text-foreground">compartimento do motor</strong> com o capô aberto</span>
+              </li>
+            </ol>
+            <div className="flex items-center gap-2 pt-2 border-t border-border/50 text-xs text-muted-foreground">
+              <AlertTriangle className="h-3 w-3 text-amber-500" />
+              <span>Duração mínima: <strong>30 segundos</strong> / Máxima: <strong>2 minutos</strong></span>
+            </div>
+          </div>
+
+          <VideoCapture
+            onCapture={handleVideoCapture}
+            onReset={handleVideoReset}
+            videoUrl={undefined}
+            uploading={uploadingVideo}
+            maxDuration={120}
+            label="Vídeo 360° do Veículo"
+            cameraOnly={true}
+          />
+        </CardContent>
+      </Card>
+    );
+  }
   
+  // ETAPA 2: Fotos (chassi + motor)
   return (
     <Card className="border-border/50 bg-card/80 backdrop-blur-xl overflow-hidden">
       {/* Header com progresso */}
@@ -228,13 +351,28 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
         <div className="flex items-center justify-between">
           <CardTitle className="text-lg">Autovistoria</CardTitle>
           <Badge variant="secondary" className="bg-primary/10 text-primary">
-            {Object.keys(fotosEnviadas).length}/{totalFotos} fotos
+            {fotosCompletadas}/{totalFotos} fotos • 1/1 vídeo
           </Badge>
         </div>
         <Progress value={progresso} className="h-2" />
       </CardHeader>
       
       <CardContent className="space-y-4">
+        {/* Vídeo OK indicator */}
+        <div className="flex items-center gap-2 bg-success/10 text-success rounded-lg p-2.5 border border-success/20">
+          <CheckCircle2 className="h-4 w-4 flex-shrink-0" />
+          <span className="text-sm font-medium">Vídeo 360° enviado</span>
+          <Button
+            variant="ghost"
+            size="sm"
+            className="ml-auto h-7 text-xs text-muted-foreground hover:text-foreground"
+            onClick={handleVideoReset}
+          >
+            <RefreshCw className="h-3 w-3 mr-1" />
+            Regravar
+          </Button>
+        </div>
+
         {/* Indicadores de fotos (miniaturas) */}
         <div className="flex gap-1.5 overflow-x-auto pb-2 scrollbar-thin">
           {fotos.map((foto, index) => {
@@ -285,7 +423,6 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
             
             {/* Área de preview / captura */}
             <div className="relative aspect-[4/3] bg-muted/30 rounded-xl border border-border/50 overflow-hidden">
-              {/* Preview da foto */}
               {(previewLocal || fotosEnviadas[fotoAtual.id]) ? (
                 <div className="relative w-full h-full">
                   <img
