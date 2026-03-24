@@ -35,10 +35,10 @@ export function useInstalacoesAguardandoAprovacao() {
 
       if (error) throw error;
 
-      // Filtrar: veículo com cobertura_roubo_furto = true e cobertura_total = false
+      // Filtrar: veículo sem cobertura_total (inclui com e sem autovistoria)
       const pendentes = (servicos || []).filter((s: any) => {
         const v = s.veiculo;
-        return v && v.cobertura_roubo_furto === true && v.cobertura_total === false;
+        return v && v.cobertura_total !== true;
       });
 
       return pendentes;
