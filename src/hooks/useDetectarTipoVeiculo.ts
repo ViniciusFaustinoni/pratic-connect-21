@@ -12,7 +12,8 @@ type TipoVeiculoResult = 'carro' | 'moto';
  */
 export function useDetectarTipoVeiculo(
   marca: string | undefined | null,
-  modelo: string | undefined | null
+  modelo: string | undefined | null,
+  tipoVeiculoApi?: string | null
 ) {
   const marcaNorm = (marca || '').trim().toUpperCase();
   const modeloNorm = (modelo || '').trim().toUpperCase();

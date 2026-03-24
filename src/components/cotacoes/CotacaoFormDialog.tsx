@@ -312,7 +312,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Detectar tipo de veículo automaticamente (moto vs carro)
   const marcaParaDeteccao = veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || '';
   const modeloParaDeteccao = veiculoEncontrado?.vehicleData?.modelo || '';
-  const { tipoVeiculo: tipoFromHook } = useDetectarTipoVeiculo(marcaParaDeteccao, modeloParaDeteccao);
+  const tipoVeiculoApiPlaca = veiculoEncontrado?.vehicleData?.tipo_de_veiculo || null;
+  const { tipoVeiculo: tipoFromHook } = useDetectarTipoVeiculo(marcaParaDeteccao, modeloParaDeteccao, tipoVeiculoApiPlaca);
   
   const tipoVeiculoDetectado = useMemo(() => {
     // Se veículo foi encontrado por placa/lead/cotação, usar apenas detecção do hook (ignora seleção manual)
