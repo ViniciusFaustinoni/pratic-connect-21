@@ -498,7 +498,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);
       const linhaSlug = mapping?.linha_slug;
       const mappingTipoUso = mapping?.tipo_uso || 'particular';
-      const isLinhaTipoUsoProprio = mappingTipoUso !== 'particular' && mappingTipoUso !== 'aplicativo';
+      const isLinhaTipoUsoProprio = mappingTipoUso !== 'particular' && mappingTipoUso !== 'aplicativo' && mappingTipoUso !== 'passeio';
       const tipoUsoOriginal = isLinhaTipoUsoProprio ? mappingTipoUso : (params.usoApp ? 'aplicativo' : 'particular');
       // Resolver tipo_uso para query (regras de adicional app)
       const tipoUsoPricing = linhaSlug
