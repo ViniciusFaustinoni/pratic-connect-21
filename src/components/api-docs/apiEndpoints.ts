@@ -1,0 +1,313 @@
+export interface ApiField {
+  name: string;
+  type: string;
+  required: boolean;
+  description: string;
+}
+
+export interface ApiEndpoint {
+  id: string;
+  method: 'GET' | 'POST' | 'PUT' | 'DELETE';
+  path: string;
+  title: string;
+  description: string;
+  group: string;
+  fields?: ApiField[];
+  responseExample: Record<string, unknown>;
+  errorExample?: Record<string, unknown>;
+}
+
+const BASE_PATH = '/api-externa';
+
+export const apiEndpoints: ApiEndpoint[] = [
+  // ASSOCIADOS
+  {
+    id: 'post-associados',
+    method: 'POST',
+    path: `${BASE_PATH}/associados`,
+    title: 'Criar Associado',
+    description: 'Cadastra um novo associado no sistema com status "em_analise".',
+    group: 'Associados',
+    fields: [
+      { name: 'nome', type: 'string', required: true, description: 'Nome completo do associado' },
+      { name: 'cpf', type: 'string', required: true, description: 'CPF (apenas números ou com formatação)' },
+      { name: 'email', type: 'string', required: true, description: 'E-mail do associado' },
+      { name: 'telefone', type: 'string', required: true, description: 'Telefone principal' },
+      { name: 'rg', type: 'string', required: false, description: 'Documento de identidade' },
+      { name: 'data_nascimento', type: 'string (YYYY-MM-DD)', required: false, description: 'Data de nascimento' },
+      { name: 'sexo', type: 'string', required: false, description: '"masculino" ou "feminino"' },
+      { name: 'estado_civil', type: 'string', required: false, description: 'Estado civil' },
+      { name: 'profissao', type: 'string', required: false, description: 'Profissão' },
+      { name: 'whatsapp', type: 'string', required: false, description: 'Número do WhatsApp' },
+      { name: 'cep', type: 'string', required: false, description: 'CEP do endereço' },
+      { name: 'logradouro', type: 'string', required: false, description: 'Rua/Avenida' },
+      { name: 'numero', type: 'string', required: false, description: 'Número do endereço' },
+      { name: 'complemento', type: 'string', required: false, description: 'Complemento' },
+      { name: 'bairro', type: 'string', required: false, description: 'Bairro' },
+      { name: 'cidade', type: 'string', required: false, description: 'Cidade' },
+      { name: 'uf', type: 'string', required: false, description: 'Estado (sigla)' },
+      { name: 'plano_id', type: 'uuid', required: false, description: 'ID do plano de proteção' },
+      { name: 'dia_vencimento', type: 'number', required: false, description: 'Dia de vencimento do boleto (1-28)' },
+    ],
+    responseExample: {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      nome: 'João da Silva',
+      cpf: '12345678901',
+      status: 'em_analise',
+      created_at: '2026-03-24T10:00:00Z',
+    },
+    errorExample: { error: 'CPF já cadastrado no sistema', code: 'DUPLICATE_CPF' },
+  },
+  {
+    id: 'get-associados',
+    method: 'GET',
+    path: `${BASE_PATH}/associados/:id`,
+    title: 'Consultar Associado',
+    description: 'Retorna os dados completos de um associado pelo ID.',
+    group: 'Associados',
+    fields: [
+      { name: 'id', type: 'uuid', required: true, description: 'ID do associado (parâmetro de URL)' },
+    ],
+    responseExample: {
+      id: '550e8400-e29b-41d4-a716-446655440000',
+      nome: 'João da Silva',
+      cpf: '12345678901',
+      email: 'joao@email.com',
+      telefone: '11999999999',
+      status: 'ativo',
+      plano_id: '...',
+      cidade: 'São Paulo',
+      uf: 'SP',
+    },
+  },
+  // VEÍCULOS
+  {
+    id: 'post-veiculos',
+    method: 'POST',
+    path: `${BASE_PATH}/veiculos`,
+    title: 'Criar Veículo',
+    description: 'Cadastra um novo veículo vinculado a um associado.',
+    group: 'Veículos',
+    fields: [
+      { name: 'associado_id', type: 'uuid', required: false, description: 'ID do associado (obrigatório se não enviar associado_cpf)' },
+      { name: 'associado_cpf', type: 'string', required: false, description: 'CPF do associado (alternativa ao associado_id)' },
+      { name: 'placa', type: 'string', required: true, description: 'Placa do veículo' },
+      { name: 'marca', type: 'string', required: true, description: 'Marca do veículo' },
+      { name: 'modelo', type: 'string', required: true, description: 'Modelo do veículo' },
+      { name: 'ano_fabricacao', type: 'number', required: true, description: 'Ano de fabricação' },
+      { name: 'ano_modelo', type: 'number', required: true, description: 'Ano do modelo' },
+      { name: 'chassi', type: 'string', required: false, description: 'Número do chassi' },
+      { name: 'renavam', type: 'string', required: false, description: 'Renavam' },
+      { name: 'cor', type: 'string', required: false, description: 'Cor do veículo' },
+      { name: 'combustivel', type: 'string', required: false, description: 'Tipo de combustível' },
+      { name: 'valor_fipe', type: 'number', required: false, description: 'Valor FIPE em centavos' },
+      { name: 'codigo_fipe', type: 'string', required: false, description: 'Código FIPE' },
+      { name: 'uso_aplicativo', type: 'boolean', required: false, description: 'Veículo usado em app de transporte' },
+      { name: 'blindado', type: 'boolean', required: false, description: 'Veículo blindado' },
+    ],
+    responseExample: {
+      id: '660e8400-e29b-41d4-a716-446655440000',
+      placa: 'ABC1D23',
+      marca: 'Volkswagen',
+      modelo: 'Gol',
+      status: 'em_analise',
+    },
+    errorExample: { error: 'Associado não encontrado', code: 'ASSOCIADO_NOT_FOUND' },
+  },
+  {
+    id: 'get-veiculos',
+    method: 'GET',
+    path: `${BASE_PATH}/veiculos/:id`,
+    title: 'Consultar Veículo',
+    description: 'Retorna os dados de um veículo pelo ID.',
+    group: 'Veículos',
+    fields: [
+      { name: 'id', type: 'uuid', required: true, description: 'ID do veículo (parâmetro de URL)' },
+    ],
+    responseExample: {
+      id: '660e8400-e29b-41d4-a716-446655440000',
+      placa: 'ABC1D23',
+      marca: 'Volkswagen',
+      modelo: 'Gol',
+      ano_fabricacao: 2022,
+      ano_modelo: 2023,
+      associado_id: '...',
+      status: 'ativo',
+    },
+  },
+  // PRESTADORES
+  {
+    id: 'post-prestadores',
+    method: 'POST',
+    path: `${BASE_PATH}/prestadores`,
+    title: 'Criar Prestador',
+    description: 'Cadastra um novo prestador de assistência.',
+    group: 'Prestadores',
+    fields: [
+      { name: 'razao_social', type: 'string', required: true, description: 'Razão social do prestador' },
+      { name: 'telefone', type: 'string', required: true, description: 'Telefone principal' },
+      { name: 'cidade', type: 'string', required: true, description: 'Cidade de atuação' },
+      { name: 'estado', type: 'string', required: true, description: 'Estado (sigla)' },
+      { name: 'nome_fantasia', type: 'string', required: false, description: 'Nome fantasia' },
+      { name: 'cnpj', type: 'string', required: false, description: 'CNPJ' },
+      { name: 'cpf', type: 'string', required: false, description: 'CPF (pessoa física)' },
+      { name: 'tipo_pessoa', type: 'string', required: false, description: '"fisica" ou "juridica"' },
+      { name: 'whatsapp', type: 'string', required: false, description: 'WhatsApp' },
+      { name: 'email', type: 'string', required: false, description: 'E-mail' },
+      { name: 'cep', type: 'string', required: false, description: 'CEP' },
+      { name: 'logradouro', type: 'string', required: false, description: 'Endereço' },
+      { name: 'numero', type: 'string', required: false, description: 'Número' },
+      { name: 'bairro', type: 'string', required: false, description: 'Bairro' },
+      { name: 'raio_atendimento_km', type: 'number', required: false, description: 'Raio de atendimento em km' },
+      { name: 'cidades_atendidas', type: 'string[]', required: false, description: 'Lista de cidades atendidas' },
+      { name: 'tipos_servico', type: 'string[]', required: false, description: 'Tipos de serviço oferecidos' },
+      { name: 'banco', type: 'string', required: false, description: 'Banco para pagamento' },
+      { name: 'agencia', type: 'string', required: false, description: 'Agência' },
+      { name: 'conta', type: 'string', required: false, description: 'Conta' },
+      { name: 'pix_tipo', type: 'string', required: false, description: 'Tipo da chave PIX' },
+      { name: 'pix_chave', type: 'string', required: false, description: 'Chave PIX' },
+    ],
+    responseExample: {
+      id: '770e8400-e29b-41d4-a716-446655440000',
+      razao_social: 'Reboque Express LTDA',
+      cidade: 'São Paulo',
+      estado: 'SP',
+      status: 'ativo',
+    },
+  },
+  // SINISTROS / EVENTOS
+  {
+    id: 'post-sinistros',
+    method: 'POST',
+    path: `${BASE_PATH}/sinistros`,
+    title: 'Criar Sinistro/Evento',
+    description: 'Registra um novo sinistro (evento) no sistema.',
+    group: 'Eventos',
+    fields: [
+      { name: 'associado_id', type: 'uuid', required: false, description: 'ID do associado (obrigatório se não enviar associado_cpf)' },
+      { name: 'associado_cpf', type: 'string', required: false, description: 'CPF do associado (alternativa)' },
+      { name: 'veiculo_id', type: 'uuid', required: false, description: 'ID do veículo (obrigatório se não enviar veiculo_placa)' },
+      { name: 'veiculo_placa', type: 'string', required: false, description: 'Placa do veículo (alternativa)' },
+      { name: 'tipo', type: 'string', required: true, description: '"colisao", "roubo", "furto", "incendio", "alagamento", "terceiros", etc.' },
+      { name: 'data_ocorrencia', type: 'string (ISO 8601)', required: true, description: 'Data e hora da ocorrência' },
+      { name: 'canal', type: 'string', required: true, description: '"telefone", "whatsapp", "presencial", "api"' },
+      { name: 'descricao', type: 'string', required: false, description: 'Descrição detalhada do evento' },
+      { name: 'local_descricao', type: 'string', required: false, description: 'Local da ocorrência' },
+      { name: 'cidade_ocorrencia', type: 'string', required: false, description: 'Cidade da ocorrência' },
+      { name: 'estado_ocorrencia', type: 'string', required: false, description: 'Estado da ocorrência' },
+      { name: 'bo_numero', type: 'string', required: false, description: 'Número do Boletim de Ocorrência' },
+      { name: 'condutor_nome', type: 'string', required: false, description: 'Nome do condutor' },
+      { name: 'condutor_cnh', type: 'string', required: false, description: 'CNH do condutor' },
+      { name: 'condutor_relacao', type: 'string', required: false, description: 'Relação com o associado' },
+      { name: 'houve_vitima', type: 'boolean', required: false, description: 'Indica se houve vítimas' },
+      { name: 'necessita_reboque', type: 'boolean', required: false, description: 'Necessita de reboque' },
+    ],
+    responseExample: {
+      id: '880e8400-e29b-41d4-a716-446655440000',
+      protocolo: 'SIN-2026-0001',
+      tipo: 'colisao',
+      status: 'aberto',
+      data_ocorrencia: '2026-03-24T15:30:00Z',
+    },
+    errorExample: { error: 'Veículo não encontrado para a placa informada', code: 'VEICULO_NOT_FOUND' },
+  },
+  {
+    id: 'get-sinistros',
+    method: 'GET',
+    path: `${BASE_PATH}/sinistros/:id`,
+    title: 'Consultar Sinistro',
+    description: 'Retorna os dados de um sinistro pelo ID.',
+    group: 'Eventos',
+    fields: [
+      { name: 'id', type: 'uuid', required: true, description: 'ID do sinistro (parâmetro de URL)' },
+    ],
+    responseExample: {
+      id: '880e8400-e29b-41d4-a716-446655440000',
+      protocolo: 'SIN-2026-0001',
+      tipo: 'colisao',
+      status: 'aberto',
+      associado_id: '...',
+      veiculo_id: '...',
+      data_ocorrencia: '2026-03-24T15:30:00Z',
+      descricao: 'Colisão traseira...',
+    },
+  },
+  // FATURAS
+  {
+    id: 'post-faturas',
+    method: 'POST',
+    path: `${BASE_PATH}/faturas`,
+    title: 'Criar Fatura',
+    description: 'Cria uma fatura (cobrança). Cria o cliente no Asaas automaticamente se não existir. A cobrança é registrada no Asaas e no sistema.',
+    group: 'Faturas',
+    fields: [
+      { name: 'associado_id', type: 'uuid', required: false, description: 'ID do associado (obrigatório se não enviar associado_cpf)' },
+      { name: 'associado_cpf', type: 'string', required: false, description: 'CPF do associado (alternativa)' },
+      { name: 'valor', type: 'number', required: true, description: 'Valor em reais (ex: 150.00)' },
+      { name: 'data_vencimento', type: 'string (YYYY-MM-DD)', required: true, description: 'Data de vencimento' },
+      { name: 'tipo', type: 'string', required: true, description: '"mensalidade", "adesao", "cota", "avulsa"' },
+      { name: 'descricao', type: 'string', required: false, description: 'Descrição da cobrança' },
+      { name: 'forma_pagamento', type: 'string', required: false, description: '"BOLETO", "PIX" (default: "BOLETO")' },
+    ],
+    responseExample: {
+      id: '990e8400-e29b-41d4-a716-446655440000',
+      asaas_id: 'pay_abc123',
+      valor: 150.0,
+      status: 'PENDING',
+      boleto_url: 'https://...',
+      pix_copia_cola: 'payload-pix...',
+    },
+    errorExample: { error: 'Associado não encontrado', code: 'ASSOCIADO_NOT_FOUND' },
+  },
+  {
+    id: 'get-faturas',
+    method: 'GET',
+    path: `${BASE_PATH}/faturas/:id`,
+    title: 'Consultar Fatura',
+    description: 'Retorna os dados de uma fatura pelo ID.',
+    group: 'Faturas',
+    fields: [
+      { name: 'id', type: 'uuid', required: true, description: 'ID da fatura (parâmetro de URL)' },
+    ],
+    responseExample: {
+      id: '990e8400-e29b-41d4-a716-446655440000',
+      asaas_id: 'pay_abc123',
+      valor: 150.0,
+      status: 'RECEIVED',
+      data_vencimento: '2026-04-01',
+      data_pagamento: '2026-03-30',
+    },
+  },
+  // CHAMADOS
+  {
+    id: 'post-chamados',
+    method: 'POST',
+    path: `${BASE_PATH}/chamados`,
+    title: 'Criar Chamado de Assistência',
+    description: 'Abre um novo chamado de assistência (reboque, pane, etc.).',
+    group: 'Chamados',
+    fields: [
+      { name: 'associado_id', type: 'uuid', required: true, description: 'ID do associado' },
+      { name: 'tipo_servico', type: 'string', required: true, description: '"reboque", "pane_seca", "troca_pneu", "chaveiro", etc.' },
+      { name: 'canal', type: 'string', required: true, description: '"telefone", "whatsapp", "api"' },
+      { name: 'veiculo_id', type: 'uuid', required: false, description: 'ID do veículo' },
+      { name: 'descricao', type: 'string', required: false, description: 'Descrição do problema' },
+      { name: 'origem_endereco', type: 'string', required: false, description: 'Endereço de origem' },
+      { name: 'origem_cidade', type: 'string', required: false, description: 'Cidade de origem' },
+      { name: 'origem_uf', type: 'string', required: false, description: 'UF de origem' },
+      { name: 'origem_cep', type: 'string', required: false, description: 'CEP de origem' },
+      { name: 'destino_endereco', type: 'string', required: false, description: 'Endereço de destino' },
+      { name: 'destino_cidade', type: 'string', required: false, description: 'Cidade de destino' },
+      { name: 'destino_uf', type: 'string', required: false, description: 'UF de destino' },
+      { name: 'destino_cep', type: 'string', required: false, description: 'CEP de destino' },
+    ],
+    responseExample: {
+      id: 'aa0e8400-e29b-41d4-a716-446655440000',
+      protocolo: 'CH-2026-0001',
+      tipo_servico: 'reboque',
+      status: 'aberto',
+    },
+  },
+];
+
+export const apiGroups = [...new Set(apiEndpoints.map(e => e.group))];
