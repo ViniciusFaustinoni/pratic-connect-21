@@ -934,8 +934,10 @@ const desenharCardPlanoExpandido = (
   });
   
   let currentY = y + 6;
-  
-  doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
+
+  // Card header with brand primary color
+  const brandBlueForCard = { r: 20, g: 55, b: 110 };
+  doc.setFillColor(brandBlueForCard.r, brandBlueForCard.g, brandBlueForCard.b);
   doc.roundedRect(x + 3, currentY - 2, width - 6, 16, 2, 2, 'F');
   
   doc.setTextColor(255, 255, 255);
