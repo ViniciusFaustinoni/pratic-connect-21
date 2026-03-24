@@ -1,36 +1,54 @@
 
 
-# Adicionar Video 360 na Autovistoria da Cotacao
+# Corrigir preenchimento automático do bairro via CEP
 
 ## Problema
-O componente `AutovistoriaCotacao` (fluxo de cotacao publica) exige apenas 2 fotos (chassi e motor). O componente `Autovistoria` (fluxo de contrato/associado) ja exige video 360 + 2 fotos corretamente. O video 360 precisa ser adicionado ao fluxo de cotacao tambem.
+Quando o associado preenche os dados na etapa de dados pessoais (via OCR do comprovante de residência), o bairro pode não ser extraído corretamente. O CEP e outros campos ficam preenchidos, mas o bairro fica vazio no banco de dados. Isso acontece porque:
 
-## Referencia
-O componente `src/components/associado/Autovistoria.tsx` ja implementa o fluxo completo: video 360 primeiro, depois fotos. Vou replicar essa logica no `AutovistoriaCotacao`.
+1. A extração OCR do comprovante de residência nem sempre retorna o bairro
+2. Nenhum componente faz auto-complete via ViaCEP ao carregar com CEP preexistente
 
-## Alteracoes
+Confirmado no banco: a cotação com CEP 22730-541 tem `cliente_bairro` vazio, apesar de ter logradouro, numero, cidade e UF preenchidos.
 
-### 1. `src/components/cotacao-publica/AutovistoriaCotacao.tsx`
+## Solução
+Adicionar auto-complete via ViaCEP em dois pontos-chave para preencher campos faltantes quando já existe um CEP:
 
-Adicionar o video 360 como etapa obrigatoria antes das fotos:
+### 1. `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`
+Adicionar um `useEffect` que, após a extração OCR do comprovante de residência, verifica se tem CEP mas falta bairro (ou logradouro/cidade/uf). Se faltar, busca no ViaCEP e completa os campos vazios.
 
-- Importar `VideoCapture` de `@/components/instalador/VideoCapture`
-- Adicionar estados: `videoUrl`, `uploadingVideo`
-- Criar `handleVideoCapture` que faz upload via `useUploadFotoCotacaoVistoria` com `fotoId: 'video_360'`
-- Criar `handleVideoReset` para permitir regravar
-- Reidratar video existente (se `fotosExistentes` tiver tipo `video_360`)
-- Mudar condicao `todasEnviadas` para incluir `!!videoUrl`
-- Atualizar progresso para `fotos + video` (ex: "2/2 fotos • 1/1 video")
-- Renderizar: se nao tem video ainda, mostrar tela de instrucoes + `VideoCapture` (igual ao `Autovistoria.tsx`). Apos video gravado, mostrar fluxo de fotos existente
-- Usar `cameraOnly={true}` no `VideoCapture`
+Isso garante que os dados salvos no banco já terão o bairro.
 
-### 2. Fluxo resultante
+### 2. `src/components/cotacao-publica/AgendamentoVistoria.tsx`
+Adicionar um `useEffect` no mount que verifica se o `enderecoInicial` tem CEP mas falta bairro. Se faltar, faz busca no ViaCEP e preenche os campos vazios. Isso corrige cotações que já estão no banco sem bairro.
 
-```text
-1. Tela de instrucoes do video 360 + componente VideoCapture (camera only)
-2. Video gravado → mostrar fotos (chassi, motor) — fluxo existente
-3. Todas fotos + video OK → botao "Concluir Vistoria"
+### Detalhes da implementação
+
+Em ambos os componentes, a logica é a mesma:
+
+```ts
+useEffect(() => {
+  // Se tem CEP válido mas falta bairro, buscar via ViaCEP
+  const cep = endereco.cep?.replace(/\D/g, '');
+  if (cep?.length === 8 && !endereco.bairro) {
+    fetch(`https://viacep.com.br/ws/${cep}/json/`)
+      .then(r => r.json())
+      .then(data => {
+        if (!data.erro) {
+          setEndereco(prev => ({
+            ...prev,
+            bairro: prev.bairro || data.bairro || '',
+            logradouro: prev.logradouro || data.logradouro || '',
+            cidade: prev.cidade || data.localidade || '',
+            estado: prev.estado || data.uf || '',
+          }));
+        }
+      })
+      .catch(() => {});
+  }
+}, []); // Apenas no mount
 ```
 
-Nenhuma alteracao em hooks ou config — o upload do video usa o mesmo `useUploadFotoCotacaoVistoria` com `fotoId: 'video_360'`, e o bucket `cotacoes-vistoria` ja aceita qualquer tipo de arquivo.
+No `EtapaDadosPessoaisDocumentos`, a mesma logica se aplica ao `dadosExtraidos` — apos extrair dados do comprovante de residencia, se tem CEP mas falta bairro, complementar via ViaCEP antes de exibir o resumo ao usuario.
+
+2 arquivos alterados, adicionando 1 useEffect em cada.
 
