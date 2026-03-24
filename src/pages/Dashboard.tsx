@@ -291,7 +291,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const { isAnalistaCadastroOnly, isAnalistaEventosOnly, isCoordenadorMonitoramentoOnly, isCoordenadorMonitoramento, isInstaladorVistoriador, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
+  const { isAnalistaCadastroOnly, isAnalistaEventosOnly, isCoordenadorMonitoramentoOnly, isCoordenadorMonitoramento, isInstaladorVistoriador, isInstaladorVistoriadorOnly, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
 
   // Se é APENAS instalador/vistoriador (sem perfis de gestão), redirecionar
   useEffect(() => {
