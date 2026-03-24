@@ -888,7 +888,7 @@ Aguardamos sua confirmação! ⚡`;
               if (vistProfile?.telefone) {
                 const assocVist = (vistCompleta as any)?.associados;
                 const veicVist = (vistCompleta as any)?.veiculos;
-                const telefoneCliente = assocVist?.whatsapp || assocVist?.telefone1 || '';
+                const telefoneCliente = assocVist?.whatsapp || assocVist?.telefone || '';
                 const enderecoCompleto = [vistCompleta?.logradouro, vistCompleta?.numero, vistCompleta?.bairro, vistCompleta?.cidade, vistCompleta?.uf].filter(Boolean).join(', ') || 'A definir';
                 const dataFormatada = new Date(servico.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR');
                 const periodoTexto = vistCompleta?.periodo ? `\n🕐 Período: ${vistCompleta.periodo}` : '';
