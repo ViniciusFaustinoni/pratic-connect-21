@@ -32,8 +32,11 @@ import {
   Radio,
   MapPin,
   Copy,
-  ExternalLink
+  ExternalLink,
+  Video,
+  ChevronDown
 } from 'lucide-react';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 
