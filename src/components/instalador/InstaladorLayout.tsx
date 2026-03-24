@@ -118,6 +118,7 @@ export function InstaladorLayout() {
 
   return (
     <InstaladorGuard>
+      <AlmocoBloqueioOverlay />
       {deveBloqueiarPorLocalizacao && (
         <TelaLocalizacaoBloqueada 
           onRetry={tentarNovamente} 
