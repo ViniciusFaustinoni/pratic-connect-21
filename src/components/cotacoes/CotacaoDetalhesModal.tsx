@@ -101,6 +101,7 @@ export function CotacaoDetalhesModal({
   onEmail,
   onGerarContrato,
   onAceitar,
+  onDuplicar,
   isCopiandoWhatsApp,
   isGerandoContrato,
   canGenerateContract,
