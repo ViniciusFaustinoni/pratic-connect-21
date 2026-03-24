@@ -1045,47 +1045,98 @@ const desenharPaginaCapa = (
     y += 14;
   }
 
-  // Dados do solicitante e veículo compactos
+  // Dados do solicitante, veículo e consultor
   if (config?.mostrar_dados_solicitante !== false || config?.mostrar_dados_veiculo !== false) {
     const showSolicitante = config?.mostrar_dados_solicitante !== false;
     const showVeiculo = config?.mostrar_dados_veiculo !== false;
-    const boxHeight = (showSolicitante && showVeiculo) ? 22 : 12;
+    const showConsultor = !!cotacao.vendedor;
+    const numRows = (showSolicitante ? 1 : 0) + (showVeiculo ? 1 : 0) + (showConsultor ? 1 : 0);
+    const rowH = 12;
+    const boxHeight = numRows * rowH + 4;
 
     doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
     doc.roundedRect(margin, y, contentWidth, boxHeight, 2, 2, 'F');
 
+    let lineY = y + 9;
+
     if (showSolicitante) {
       doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-      doc.setFontSize(7);
+      doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
       
-      doc.text('Cliente:', margin + 4, y + 7);
+      doc.text('Cliente:', margin + 4, lineY);
       doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text(truncateText(cotacao.nome_solicitante, 30) || 'Não informado', margin + 22, y + 7);
+      doc.text(truncateText(cotacao.nome_solicitante, 35) || 'Não informado', margin + 24, lineY);
       
       doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text('Tel:', pageWidth / 2 + 5, y + 7);
+      doc.text('Tel:', pageWidth / 2 + 5, lineY);
       doc.setTextColor(textLight.r, textLight.g, textLight.b);
-      doc.text(formatPhone(cotacao.telefone1_solicitante), pageWidth / 2 + 16, y + 7);
+      doc.setFontSize(9);
+      doc.text(formatPhone(cotacao.telefone1_solicitante), pageWidth / 2 + 16, lineY);
+      lineY += rowH;
     }
 
     if (showVeiculo) {
-      const veiculoLineY = showSolicitante ? y + 15 : y + 7;
       doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text('Veículo:', margin + 4, veiculoLineY);
+      doc.text('Veículo:', margin + 4, lineY);
       doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text(truncateText(`${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}`, 35), margin + 22, veiculoLineY);
+      // Use splitTextToSize to avoid truncation of long model names
+      const veiculoFull = `${cotacao.veiculo_marca || ''} ${cotacao.veiculo_modelo || ''} ${cotacao.veiculo_ano || ''}`.trim();
+      const veiculoMaxWidth = pageWidth / 2 - margin - 28;
+      const veiculoLines = doc.splitTextToSize(veiculoFull, veiculoMaxWidth);
+      doc.text(veiculoLines[0], margin + 24, lineY);
+      if (veiculoLines.length > 1) {
+        doc.setFontSize(8);
+        doc.text(veiculoLines[1], margin + 24, lineY + 4);
+      }
       
       doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(8);
       doc.setFont('helvetica', 'normal');
-      doc.text('FIPE:', pageWidth / 2 + 5, veiculoLineY);
+      doc.text('Placa:', pageWidth / 2 + 5, lineY);
+      doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.setFontSize(9);
+      doc.text(formatPlaca(cotacao.veiculo_placa), pageWidth / 2 + 20, lineY);
+      
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text('FIPE:', pageWidth - margin - 45, lineY);
       doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
+      doc.setFontSize(9);
       doc.setFont('helvetica', 'bold');
-      doc.text(formatCurrency(cotacao.valor_fipe), pageWidth / 2 + 18, veiculoLineY);
+      doc.text(formatCurrency(cotacao.valor_fipe), pageWidth - margin - 4, lineY, { align: 'right' });
+      lineY += rowH;
+    }
+
+    if (showConsultor) {
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(8);
+      doc.setFont('helvetica', 'normal');
+      doc.text('Consultor:', margin + 4, lineY);
+      doc.setTextColor(glowBlue.r, glowBlue.g, glowBlue.b);
+      doc.setFontSize(9);
+      doc.setFont('helvetica', 'bold');
+      doc.text(cotacao.vendedor?.nome || 'Vendedor', margin + 28, lineY);
+      
+      if (cotacao.vendedor?.whatsapp) {
+        doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+        doc.setFontSize(8);
+        doc.setFont('helvetica', 'normal');
+        doc.text('WhatsApp:', pageWidth / 2 + 5, lineY);
+        doc.setTextColor(textLight.r, textLight.g, textLight.b);
+        doc.setFontSize(9);
+        doc.text(formatPhone(cotacao.vendedor.whatsapp), pageWidth / 2 + 28, lineY);
+      }
+      lineY += rowH;
     }
 
     y += boxHeight + 6;
