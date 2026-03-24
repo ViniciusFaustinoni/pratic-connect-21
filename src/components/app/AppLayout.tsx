@@ -4,7 +4,7 @@ import { AppHeader } from './AppHeader';
 import { AppBottomNav } from './AppBottomNav';
 import { TestModeBanner } from './TestModeBanner';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider';
+
 import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
 import { AssociadoContext } from '@/contexts/AssociadoContext';
 import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
@@ -33,7 +33,6 @@ export function AppLayout() {
 
   return (
     <ProtectedRoute allowedTipos={['associado']} authRedirect="/app/login" skipAuth={isTestMode}>
-      <SessionTimeoutProvider variant="app">
         <div className="flex min-h-screen flex-col bg-muted/30">
           <TestModeBanner />
           <AppHeader />
@@ -45,7 +44,6 @@ export function AppLayout() {
           <AppBottomNav />
           <PWAInstallPrompt />
         </div>
-      </SessionTimeoutProvider>
     </ProtectedRoute>
   );
 }

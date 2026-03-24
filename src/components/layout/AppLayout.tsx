@@ -4,7 +4,7 @@ import { SidebarProvider, SidebarInset } from '@/components/ui/sidebar';
 import { AppSidebar } from './AppSidebar';
 import { AppHeader } from './AppHeader';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider';
+
 import { ColaboradorOnboarding } from './ColaboradorOnboarding';
 import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
 import { useNotificacoesPreferencias } from '@/hooks/useNotificacoesPreferencias';
@@ -31,7 +31,6 @@ export function AppLayout() {
 
   return (
     <ProtectedRoute allowedTipos={['funcionario']}>
-      <SessionTimeoutProvider variant="internal">
         <SidebarProvider>
           <div className="flex h-screen w-full bg-background overflow-x-hidden">
             <AppSidebar />
@@ -52,7 +51,6 @@ export function AppLayout() {
           open={showOnboarding} 
           onOpenChange={setShowOnboarding} 
         />
-      </SessionTimeoutProvider>
     </ProtectedRoute>
   );
 }
