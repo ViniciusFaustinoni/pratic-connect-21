@@ -4,7 +4,7 @@ import { AppHeader } from './AppHeader';
 import { AppBottomNav } from './AppBottomNav';
 import { TestModeBanner } from './TestModeBanner';
 import { ProtectedRoute } from '@/components/ProtectedRoute';
-import { SessionTimeoutProvider } from '@/components/auth/SessionTimeoutProvider';
+
 import { useNotificacoesRealtime } from '@/hooks/useNotificacoesRealtime';
 import { AssociadoContext } from '@/contexts/AssociadoContext';
 import { PWAInstallPrompt } from '@/components/pwa/PWAInstallPrompt';
