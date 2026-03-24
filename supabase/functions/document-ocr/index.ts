@@ -7,7 +7,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type, x-supabase-client-platform, x-supabase-client-platform-version, x-supabase-client-runtime, x-supabase-client-runtime-version',
 };
 
-// Validação de CPF por dígito verificador (mesmo algoritmo do frontend)
+// Validação de CPF por dígito verificador
 function validateCPF(cpf: string): boolean {
   const cleaned = cpf.replace(/\D/g, '');
   if (cleaned.length !== 11) return false;
@@ -37,11 +37,6 @@ const DIGIT_CONFUSIONS: Record<number, number[]> = {
   9: [4, 7],
 };
 
-/**
- * Tenta corrigir um CPF inválido trocando um único dígito por alternativas
- * visualmente similares e validando o checksum. Retorna o CPF corrigido
- * apenas se houver exatamente UMA permutação válida (sem ambiguidade).
- */
 function tryFixCPFByPermutation(cpf: string): string | null {
   const digits = cpf.replace(/\D/g, '').split('').map(Number);
   if (digits.length !== 11) return null;
@@ -58,7 +53,6 @@ function tryFixCPFByPermutation(cpf: string): string | null {
       candidate[pos] = alt;
       const candidateStr = candidate.join('');
       if (validateCPF(candidateStr)) {
-        // Formatar como XXX.XXX.XXX-XX
         const formatted = candidateStr.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
         if (!validResults.includes(formatted)) {
           validResults.push(formatted);
@@ -70,8 +64,6 @@ function tryFixCPFByPermutation(cpf: string): string | null {
   if (validResults.length === 1) {
     return validResults[0];
   }
-
-  // Ambíguo (múltiplos) ou nenhum encontrado
   return null;
 }
 
@@ -118,41 +110,19 @@ Compare nome_titular com nomeEsperado:
 ## JSON de resposta:
 {"tipo_detectado":"cnh"|"rg"|"crlv"|"nota_fiscal_veiculo"|"comprovante_residencia"|"outro","sucesso":bool,"dados":{...},"legivel":bool,"valido":bool,"sugestao":"aprovar"|"reprovar"|"revisar","motivo":"...","confianca":0.0-1.0}`;
 
-// Prompt específico para retry de extração de CPF
-const cpfRetryPrompt = `TAREFA ÚNICA: Extraia o CPF desta CNH brasileira.
-
-O CPF é um número de 11 dígitos no formato XXX.XXX.XXX-XX.
-
-Locais comuns do CPF na CNH:
-- Próximo ao nome do condutor
-- Abaixo da foto
-- Campo rotulado "CPF" ou "CPF/MF"
-
-IMPORTANTE:
-- Ignore todos os outros campos (nome, RG, validade, etc.)
-- Foque APENAS em encontrar a sequência de 11 dígitos do CPF
-- Se encontrar, retorne APENAS: {"cpf": "XXX.XXX.XXX-XX"}
-- Se realmente não conseguir ler, retorne: {"cpf": "ilegivel"}`;
-
 /**
  * Tenta reparar um JSON truncado pela IA (max_tokens atingido).
- * Estratégia: remover string incompleta no final, fechar chaves/colchetes pendentes.
  */
 function tryRepairTruncatedJSON(raw: string): object | null {
   let s = raw.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
   
-  // Corrigir placeholders
   s = s.replace(/_CONFIDENCE_/g, '0.95');
   s = s.replace(/:\s*_[A-Z_]+_/g, ': null');
 
-  // Tentar parse direto primeiro (caso já funcione)
   try { return JSON.parse(s); } catch { /* continue */ }
 
-  // Remover trailing comma antes de tentar fechar
   s = s.replace(/,\s*$/, '');
 
-  // Se termina no meio de uma string (aspas não fechadas), truncar a última string
-  // Contar aspas (ignorando escaped)
   let inString = false;
   let lastQuoteIndex = -1;
   for (let i = 0; i < s.length; i++) {
@@ -164,14 +134,7 @@ function tryRepairTruncatedJSON(raw: string): object | null {
   }
 
   if (inString && lastQuoteIndex >= 0) {
-    // Estamos dentro de uma string não fechada - truncar no início dessa string
-    // Encontrar o início do valor da string (a aspas de abertura)
-    // Precisamos remover desde a última key:value incompleta
-    // Estratégia: cortar tudo após a última aspas de abertura e fechar com aspas
     s = s.substring(0, lastQuoteIndex + 1);
-    // Agora s termina com uma aspas de abertura - precisamos adicionar conteúdo vazio + fechar
-    // Voltar mais: remover a key incompleta
-    // Encontrar a última vírgula ou { ou [ antes dessa posição
     const beforeKey = s.lastIndexOf(',', lastQuoteIndex - 1);
     const beforeBrace = s.lastIndexOf('{', lastQuoteIndex - 1);
     const beforeBracket = s.lastIndexOf('[', lastQuoteIndex - 1);
@@ -179,17 +142,15 @@ function tryRepairTruncatedJSON(raw: string): object | null {
     
     if (cutPoint >= 0) {
       if (s[cutPoint] === ',') {
-        s = s.substring(0, cutPoint); // remover a vírgula e tudo depois
+        s = s.substring(0, cutPoint);
       } else {
-        s = s.substring(0, cutPoint + 1); // manter o { ou [
+        s = s.substring(0, cutPoint + 1);
       }
     }
   }
 
-  // Remover trailing comma novamente
   s = s.replace(/,\s*$/, '');
 
-  // Contar chaves e colchetes abertos
   let openBraces = 0;
   let openBrackets = 0;
   inString = false;
@@ -203,7 +164,6 @@ function tryRepairTruncatedJSON(raw: string): object | null {
     if (s[i] === ']') openBrackets--;
   }
 
-  // Fechar pendentes
   for (let i = 0; i < openBrackets; i++) s += ']';
   for (let i = 0; i < openBraces; i++) s += '}';
 
@@ -213,7 +173,6 @@ function tryRepairTruncatedJSON(raw: string): object | null {
     console.error('[OCR] Reparo de JSON falhou. Tentando extração via regex...');
   }
 
-  // Fallback: extrair campos básicos via regex
   try {
     const tipoMatch = raw.match(/"tipo_detectado"\s*:\s*"([^"]+)"/);
     const sugestaoMatch = raw.match(/"sugestao"\s*:\s*"([^"]+)"/);
@@ -224,14 +183,12 @@ function tryRepairTruncatedJSON(raw: string): object | null {
     const sucessoMatch = raw.match(/"sucesso"\s*:\s*(true|false)/);
 
     if (tipoMatch) {
-      // Extrair dados básicos também
       const dados: Record<string, string | null> = {};
       const dadosFields = ['nome', 'cpf', 'rg', 'placa', 'renavam', 'chassi', 'marca', 'modelo', 'cor', 'combustivel', 'motor', 'nome_proprietario', 'categoria', 'numero_registro', 'validade'];
       for (const field of dadosFields) {
         const m = raw.match(new RegExp(`"${field}"\\s*:\\s*"([^"]+)"`));
         if (m) dados[field] = m[1];
       }
-      // Extrair anos
       const anoFabMatch = raw.match(/"ano_fabricacao"\s*:\s*(\d+)/);
       const anoModMatch = raw.match(/"ano_modelo"\s*:\s*(\d+)/);
       if (anoFabMatch) dados['ano_fabricacao'] = anoFabMatch[1];
@@ -255,6 +212,39 @@ function tryRepairTruncatedJSON(raw: string): object | null {
 
   return null;
 }
+
+/**
+ * Extrai CPF de uma resposta truncada/malformada via regex
+ */
+function extractCPFFromRaw(raw: string): string | null {
+  // Tentar JSON repair primeiro
+  const repaired = tryRepairTruncatedJSON(raw);
+  if (repaired && typeof repaired === 'object' && 'cpf' in repaired) {
+    return (repaired as any).cpf;
+  }
+  
+  // Fallback: regex para CPF formatado
+  const cpfMatch = raw.match(/(\d{3}\.\d{3}\.\d{3}-\d{2})/);
+  if (cpfMatch) return cpfMatch[1];
+  
+  // Fallback: regex para 11 dígitos seguidos
+  const digitsMatch = raw.match(/(\d{11})/);
+  if (digitsMatch) {
+    const d = digitsMatch[1];
+    return `${d.slice(0,3)}.${d.slice(3,6)}.${d.slice(6,9)}-${d.slice(9,11)}`;
+  }
+  
+  // Verificar se contém "ilegivel"
+  if (raw.toLowerCase().includes('ilegivel') || raw.toLowerCase().includes('ilegível')) {
+    return 'ilegivel';
+  }
+  
+  return null;
+}
+
+// Modelo estável para OCR (evitar modelos preview em fluxo crítico)
+const OCR_MODEL = 'google/gemini-2.5-flash';
+const OCR_RETRY_MODEL = 'google/gemini-2.5-pro';
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -288,7 +278,7 @@ serve(async (req) => {
     
     console.log('Request mode:', isAuthenticated ? 'authenticated' : 'public');
 
-    const { url, cpfEsperado, nomeEsperado } = await req.json();
+    const { url, tipoEsperado, cpfEsperado, nomeEsperado, extrairDados } = await req.json();
 
     if (!url) {
       return new Response(
@@ -298,7 +288,6 @@ serve(async (req) => {
     }
 
     // Validação de segurança para requisições públicas
-    // URLs devem ser do storage do próprio projeto
     const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
     const allowedBuckets = ['cotacoes-docs', 'contratos-documentos', 'documentos'];
     const isAllowedUrl = allowedBuckets.some(bucket => 
@@ -317,7 +306,7 @@ serve(async (req) => {
       );
     }
 
-    console.log('Processing OCR for URL:', url, '| Authenticated:', isAuthenticated);
+    console.log('Processing OCR for URL:', url, '| Authenticated:', isAuthenticated, '| tipoEsperado:', tipoEsperado || 'auto');
 
     const LOVABLE_API_KEY = Deno.env.get('LOVABLE_API_KEY');
     if (!LOVABLE_API_KEY) {
@@ -328,8 +317,23 @@ serve(async (req) => {
       );
     }
 
-    // Adicionar contexto extra ao prompt se tivermos dados esperados
-    let userPrompt = 'Analise este documento e extraia todas as informações. DETECTE AUTOMATICAMENTE o tipo do documento.';
+    // Construir prompt com contexto de tipo esperado
+    let userPrompt = '';
+    if (tipoEsperado) {
+      const tipoLabels: Record<string, string> = {
+        cnh: 'CNH (Carteira Nacional de Habilitação)',
+        crlv: 'CRLV (Certificado de Registro e Licenciamento de Veículo)',
+        rg: 'RG (Registro Geral)',
+        comprovante_residencia: 'Comprovante de Residência',
+        laudo_vistoria: 'Laudo de Vistoria',
+        nota_fiscal_veiculo: 'Nota Fiscal de Veículo',
+      };
+      const tipoLabel = tipoLabels[tipoEsperado] || tipoEsperado;
+      userPrompt = `Este documento é um(a) ${tipoLabel}. Extraia todas as informações do tipo ${tipoEsperado}. Se o documento não corresponder ao tipo esperado, indique no campo motivo.`;
+    } else {
+      userPrompt = 'Analise este documento e extraia todas as informações. DETECTE AUTOMATICAMENTE o tipo do documento.';
+    }
+    
     if (cpfEsperado) {
       userPrompt += ` CPF esperado no cadastro: ${cpfEsperado}. Verifique se confere.`;
     }
@@ -347,22 +351,21 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
     console.log('Calling Lovable AI Gateway for document OCR:', url);
 
-    // Sempre baixar o arquivo e enviar como base64 para evitar problemas de acesso à URL pelo gateway
-    const isPdfUrl = url.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf?');
+    // Baixar arquivo e converter para base64
+    const isPdfUrl = url.toLowerCase().endsWith('.pdf') || url.toLowerCase().includes('.pdf?') || url.toLowerCase().includes('.pdf_');
     const isDataUri = url.startsWith('data:');
     let contentParts: any[];
+    let extractedPdfText = '';
 
     if (isDataUri) {
-      // Já é base64 data URI, enviar direto
       console.log('Data URI detected, sending directly...');
       contentParts = [
         { type: 'text', text: userPrompt },
         { type: 'image_url', image_url: { url } },
       ];
     } else {
-      // Baixar arquivo (PDF ou imagem) e converter para base64
       const fileType = isPdfUrl ? 'PDF' : 'image';
-      console.log(`${fileType} detected, downloading and converting to base64...`);
+      console.log(`${fileType} detected, downloading...`);
       try {
         const fileResponse = await fetch(url);
         if (!fileResponse.ok) {
@@ -371,7 +374,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         const fileBuffer = await fileResponse.arrayBuffer();
         const uint8Array = new Uint8Array(fileBuffer);
         
-        // Converter para base64 em chunks para evitar stack overflow em arquivos grandes
+        // Converter para base64
         let base64 = '';
         const chunkSize = 8192;
         for (let i = 0; i < uint8Array.length; i += chunkSize) {
@@ -380,17 +383,46 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         }
         base64 = btoa(base64);
         
-        // Detectar MIME type
         const mimeType = isPdfUrl 
           ? 'application/pdf' 
           : (fileResponse.headers.get('content-type') || 'image/jpeg');
         const dataUri = `data:${mimeType};base64,${base64}`;
         console.log(`${fileType} downloaded: ${fileBuffer.byteLength} bytes, mime: ${mimeType}`);
         
+        // Para PDFs, tentar extrair texto nativo
+        if (isPdfUrl) {
+          try {
+            // Decodificar o PDF e procurar texto embutido
+            const pdfText = extractTextFromPDFBuffer(uint8Array);
+            if (pdfText && pdfText.length > 50) {
+              extractedPdfText = pdfText;
+              console.log(`[OCR] Texto nativo extraído do PDF: ${pdfText.length} chars`);
+            } else {
+              console.log(`[OCR] PDF sem texto nativo suficiente (${pdfText?.length || 0} chars), usando OCR visual`);
+            }
+          } catch (pdfErr) {
+            console.warn('[OCR] Falha ao extrair texto nativo do PDF:', pdfErr);
+          }
+        }
+
         contentParts = [
           { type: 'text', text: userPrompt },
           { type: 'image_url', image_url: { url: dataUri } },
         ];
+
+        // Se temos texto nativo do PDF, adicionar ao prompt para melhorar precisão
+        if (extractedPdfText) {
+          const textHint = extractedPdfText.length > 3000 
+            ? extractedPdfText.substring(0, 3000) + '...' 
+            : extractedPdfText;
+          contentParts = [
+            { 
+              type: 'text', 
+              text: `${userPrompt}\n\n--- TEXTO EXTRAÍDO DO PDF (use como referência principal para dados textuais como CPF, nome, números) ---\n${textHint}\n--- FIM DO TEXTO ---\n\nA imagem do documento também está anexada. Use o texto extraído como fonte primária para campos numéricos (CPF, RG, etc.) e a imagem para confirmar layout e campos visuais.`
+            },
+            { type: 'image_url', image_url: { url: dataUri } },
+          ];
+        }
       } catch (downloadError) {
         console.error(`Failed to download ${fileType}:`, downloadError);
         return new Response(
@@ -407,7 +439,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'google/gemini-3-flash-preview',
+        model: OCR_MODEL,
         messages: [
           { role: 'system', content: systemPrompt },
           {
@@ -443,7 +475,7 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       );
     }
 
-    // Ler resposta com tratamento robusto de erro
+    // Ler resposta
     let data;
     try {
       const responseText = await response.text();
@@ -473,16 +505,12 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
       );
     }
 
-    // Tentar parsear o JSON da resposta
+    // Parsear JSON da resposta
     let result;
     try {
-      // Remover possíveis backticks de markdown
       let cleanContent = content.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-      
-      // Corrigir placeholders que a IA pode retornar ao invés de valores reais
       cleanContent = cleanContent.replace(/_CONFIDENCE_/g, '0.95');
       cleanContent = cleanContent.replace(/:\s*_[A-Z_]+_/g, ': null');
-      
       result = JSON.parse(cleanContent);
     } catch (parseError) {
       console.warn('[OCR] JSON.parse falhou, tentando reparar JSON truncado...');
@@ -504,6 +532,30 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
 
     console.log('OCR result:', result);
 
+    // Se temos texto nativo do PDF e o CPF extraído está em conflito, tentar pegar do texto
+    if (result.tipo_detectado === 'cnh' && result.dados && extractedPdfText) {
+      const cpfExtraido = result.dados.cpf;
+      if (cpfExtraido && cpfExtraido !== 'ilegivel') {
+        const cpfClean = cpfExtraido.replace(/\D/g, '');
+        if (!validateCPF(cpfClean)) {
+          // Tentar encontrar CPF válido no texto nativo do PDF
+          const cpfRegex = /\d{3}\.?\d{3}\.?\d{3}-?\d{2}/g;
+          const matches = extractedPdfText.match(cpfRegex);
+          if (matches) {
+            for (const match of matches) {
+              const cleaned = match.replace(/\D/g, '');
+              if (cleaned.length === 11 && validateCPF(cleaned)) {
+                const formatted = cleaned.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4');
+                console.log(`[OCR] CPF corrigido via texto nativo do PDF: ${cpfExtraido} → ${formatted}`);
+                result.dados.cpf = formatted;
+                break;
+              }
+            }
+          }
+        }
+      }
+    }
+
     // Validar CPF extraído por checksum quando for CNH
     if (result.tipo_detectado === 'cnh' && result.dados) {
       const cpfExtraido = result.dados.cpf;
@@ -516,8 +568,8 @@ Se for COMPROVANTE DE RESIDÊNCIA: compare OBRIGATORIAMENTE o nome do titular co
           : `CPF extraído (${cpfExtraido}) falhou na validação de dígito verificador`;
         console.log(`[OCR] ${motivoRetry}, tentando extração específica...`);
         
-        // Prompt corretivo com feedback sobre o erro
-        const retryPromptCorretivo = cpfExtraido && cpfExtraido !== null
+        // Prompt corretivo com tool calling para resposta estruturada
+        const retrySystemPrompt = cpfExtraido && cpfExtraido !== null
           ? `TAREFA ÚNICA: Re-leia o CPF desta CNH brasileira.
 
 A leitura anterior retornou "${cpfExtraido}", mas este CPF é MATEMATICAMENTE INVÁLIDO (falha no dígito verificador).
@@ -526,9 +578,31 @@ INSTRUÇÕES:
 1. Localize o campo "CPF" ou "CPF/MF" no documento
 2. Leia CADA DÍGITO individualmente, da esquerda para a direita
 3. Preste atenção especial aos dígitos que podem ser confundidos: 1/7, 3/8, 5/6, 0/8, 4/9
-4. Se não tiver certeza absoluta de algum dígito, retorne: {"cpf": "ilegivel"}
-5. Se tiver certeza, retorne: {"cpf": "XXX.XXX.XXX-XX"}`
-          : cpfRetryPrompt;
+4. Se não tiver certeza absoluta de algum dígito, use a função com cpf="ilegivel"
+5. Se tiver certeza, use a função com o CPF no formato XXX.XXX.XXX-XX`
+          : `TAREFA ÚNICA: Extraia o CPF desta CNH brasileira.
+
+O CPF é um número de 11 dígitos no formato XXX.XXX.XXX-XX.
+
+Locais comuns do CPF na CNH:
+- Próximo ao nome do condutor
+- Abaixo da foto
+- Campo rotulado "CPF" ou "CPF/MF"
+
+Use a função para retornar o CPF encontrado ou "ilegivel" se não conseguir ler.`;
+
+        // Adicionar texto nativo como contexto extra se disponível
+        let retryUserContent: any[] = [
+          { type: 'text', text: 'Extraia o CPF desta CNH.' },
+          contentParts[1], // imagem
+        ];
+        
+        if (extractedPdfText) {
+          retryUserContent = [
+            { type: 'text', text: `Extraia o CPF desta CNH.\n\nTexto nativo do PDF:\n${extractedPdfText.substring(0, 2000)}` },
+            contentParts[1],
+          ];
+        }
 
         try {
           const retryResponse = await fetch('https://ai.gateway.lovable.dev/v1/chat/completions', {
@@ -538,76 +612,114 @@ INSTRUÇÕES:
               'Content-Type': 'application/json',
             },
             body: JSON.stringify({
-              model: 'google/gemini-2.5-pro',
+              model: OCR_RETRY_MODEL,
               messages: [
-                { role: 'system', content: retryPromptCorretivo },
-                {
-                  role: 'user',
-                  content: [
-                    { type: 'text', text: 'Extraia o CPF desta CNH.' },
-                    contentParts[1],
-                  ],
-                },
+                { role: 'system', content: retrySystemPrompt },
+                { role: 'user', content: retryUserContent },
               ],
               max_tokens: 200,
               temperature: 0,
+              tools: [{
+                type: 'function',
+                function: {
+                  name: 'report_cpf',
+                  description: 'Reportar o CPF extraído da CNH',
+                  parameters: {
+                    type: 'object',
+                    properties: {
+                      cpf: { 
+                        type: 'string', 
+                        description: 'CPF no formato XXX.XXX.XXX-XX ou "ilegivel" se não conseguir ler' 
+                      }
+                    },
+                    required: ['cpf'],
+                    additionalProperties: false,
+                  }
+                }
+              }],
+              tool_choice: { type: 'function', function: { name: 'report_cpf' } },
             }),
           });
 
           if (retryResponse.ok) {
             const retryData = await retryResponse.json();
-            const retryContent = retryData.choices?.[0]?.message?.content;
             
-            if (retryContent) {
+            // Tentar extrair CPF do tool call primeiro
+            let retryCpf: string | null = null;
+            
+            const toolCall = retryData.choices?.[0]?.message?.tool_calls?.[0];
+            if (toolCall?.function?.arguments) {
               try {
-                const cleanRetryContent = retryContent.replace(/```json\n?/g, '').replace(/```\n?/g, '').trim();
-                const cpfResult = JSON.parse(cleanRetryContent);
-                
-                if (cpfResult.cpf && cpfResult.cpf !== 'ilegivel') {
-                  // Validar o CPF da segunda tentativa também
-                  if (validateCPF(cpfResult.cpf.replace(/\D/g, ''))) {
-                    console.log('[OCR] CPF válido extraído na segunda tentativa:', cpfResult.cpf);
-                    result.dados.cpf = cpfResult.cpf;
-                  } else {
-                    console.log('[OCR] CPF da segunda tentativa também inválido:', cpfResult.cpf, '→ tentando correção por permutação');
-                    // Tentar corrigir por permutação de dígitos confusos
-                    const cpfCorrigido = tryFixCPFByPermutation(cpfResult.cpf);
-                    if (cpfCorrigido) {
-                      console.log(`[OCR] CPF corrigido por permutação: ${cpfResult.cpf} → ${cpfCorrigido}`);
-                      result.dados.cpf = cpfCorrigido;
-                    } else {
-                      // Tentar também com o CPF da primeira tentativa (pode ser diferente)
-                      const cpfCorrigido1 = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
-                      if (cpfCorrigido1) {
-                        console.log(`[OCR] CPF corrigido por permutação (1ª tentativa): ${cpfExtraido} → ${cpfCorrigido1}`);
-                        result.dados.cpf = cpfCorrigido1;
-                      } else {
-                        result.dados.cpf = 'ilegivel';
-                        result.motivo = (result.motivo || '') + ' CPF não pôde ser lido com precisão (dígito verificador inválido em ambas tentativas).';
-                      }
-                    }
-                  }
-                } else {
-                  console.log('[OCR] CPF marcado como ilegível na segunda tentativa');
-                  result.dados.cpf = 'ilegivel';
-                  result.motivo = (result.motivo || '') + ' CPF não pôde ser lido (documento danificado ou cortado).';
-                }
-              } catch (retryParseError) {
-                console.error('[OCR] Falha ao parsear resultado do retry de CPF:', retryContent);
-                // Mesmo com erro de parse, tentar permutação com o CPF da 1ª tentativa
-                const cpfCorrigido = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
+                const args = JSON.parse(toolCall.function.arguments);
+                retryCpf = args.cpf || null;
+                console.log('[OCR] CPF extraído via tool calling:', retryCpf);
+              } catch {
+                console.warn('[OCR] Falha ao parsear tool call arguments, tentando content...');
+              }
+            }
+            
+            // Fallback: tentar extrair do content (caso o modelo não use tool calling)
+            if (!retryCpf) {
+              const retryContent = retryData.choices?.[0]?.message?.content;
+              if (retryContent) {
+                retryCpf = extractCPFFromRaw(retryContent);
+                console.log('[OCR] CPF extraído via content fallback:', retryCpf);
+              }
+            }
+
+            if (retryCpf && retryCpf !== 'ilegivel') {
+              if (validateCPF(retryCpf.replace(/\D/g, ''))) {
+                console.log('[OCR] CPF válido extraído na segunda tentativa:', retryCpf);
+                result.dados.cpf = retryCpf;
+              } else {
+                console.log('[OCR] CPF da segunda tentativa também inválido:', retryCpf, '→ tentando correção por permutação');
+                const cpfCorrigido = tryFixCPFByPermutation(retryCpf);
                 if (cpfCorrigido) {
-                  console.log(`[OCR] CPF corrigido por permutação após erro de parse: ${cpfExtraido} → ${cpfCorrigido}`);
+                  console.log(`[OCR] CPF corrigido por permutação: ${retryCpf} → ${cpfCorrigido}`);
                   result.dados.cpf = cpfCorrigido;
                 } else {
-                  result.dados.cpf = 'ilegivel';
+                  const cpfCorrigido1 = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
+                  if (cpfCorrigido1) {
+                    console.log(`[OCR] CPF corrigido por permutação (1ª tentativa): ${cpfExtraido} → ${cpfCorrigido1}`);
+                    result.dados.cpf = cpfCorrigido1;
+                  } else {
+                    result.dados.cpf = 'ilegivel';
+                    result.motivo = (result.motivo || '') + ' CPF não pôde ser lido com precisão (dígito verificador inválido em ambas tentativas).';
+                  }
                 }
               }
+            } else if (retryCpf === 'ilegivel') {
+              console.log('[OCR] CPF marcado como ilegível na segunda tentativa');
+              // Ainda tentar permutação com CPF da 1ª tentativa
+              const cpfCorrigido = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
+              if (cpfCorrigido) {
+                console.log(`[OCR] CPF corrigido por permutação após ilegível: ${cpfExtraido} → ${cpfCorrigido}`);
+                result.dados.cpf = cpfCorrigido;
+              } else {
+                result.dados.cpf = 'ilegivel';
+                result.motivo = (result.motivo || '') + ' CPF não pôde ser lido (documento danificado ou cortado).';
+              }
+            } else {
+              // Nenhum CPF extraído no retry - tentar permutação
+              const cpfCorrigido = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
+              if (cpfCorrigido) {
+                console.log(`[OCR] CPF corrigido por permutação (fallback): ${cpfExtraido} → ${cpfCorrigido}`);
+                result.dados.cpf = cpfCorrigido;
+              } else {
+                result.dados.cpf = 'ilegivel';
+              }
+            }
+          } else {
+            console.error('[OCR] Retry response not ok:', retryResponse.status);
+            const cpfCorrigido = cpfExtraido ? tryFixCPFByPermutation(cpfExtraido) : null;
+            if (cpfCorrigido) {
+              result.dados.cpf = cpfCorrigido;
+            } else {
+              result.dados.cpf = 'ilegivel';
             }
           }
         } catch (retryError) {
           console.error('[OCR] Erro no retry de extração de CPF:', retryError);
-          // Tentar permutação mesmo quando retry falha por erro de rede
           if (cpfExtraido && cpfExtraido !== 'ilegivel' && !validateCPF(cpfExtraido.replace(/\D/g, ''))) {
             const cpfCorrigido = tryFixCPFByPermutation(cpfExtraido);
             if (cpfCorrigido) {
@@ -637,3 +749,63 @@ INSTRUÇÕES:
     );
   }
 });
+
+/**
+ * Extrai texto nativo de um buffer PDF (extração simples de strings de texto).
+ * Não depende de bibliotecas externas - faz parsing direto dos operadores de texto do PDF.
+ */
+function extractTextFromPDFBuffer(buffer: Uint8Array): string {
+  const decoder = new TextDecoder('latin1');
+  const pdfString = decoder.decode(buffer);
+  
+  const textParts: string[] = [];
+  
+  // Extrair texto entre parênteses em operadores de texto PDF (Tj, TJ, ', ")
+  // Padrão: (texto) Tj  ou  [(texto1) (texto2)] TJ
+  const textRegex = /\(([^)]*)\)/g;
+  let match;
+  
+  while ((match = textRegex.exec(pdfString)) !== null) {
+    let text = match[1];
+    if (!text || text.length === 0) continue;
+    
+    // Decodificar escapes do PDF
+    text = text
+      .replace(/\\n/g, '\n')
+      .replace(/\\r/g, '\r')
+      .replace(/\\t/g, '\t')
+      .replace(/\\\\/g, '\\')
+      .replace(/\\'/g, "'")
+      .replace(/\\"/g, '"')
+      .replace(/\\\(/g, '(')
+      .replace(/\\\)/g, ')')
+      .replace(/\\(\d{3})/g, (_, oct) => String.fromCharCode(parseInt(oct, 8)));
+    
+    // Filtrar lixo binário (manter apenas texto legível)
+    const cleanText = text.replace(/[^\x20-\x7E\xA0-\xFF\u0100-\u024F]/g, '');
+    if (cleanText.length > 1) {
+      textParts.push(cleanText);
+    }
+  }
+  
+  // Também tentar extrair texto de streams descomprimidos
+  // Procurar por sequências que parecem texto real
+  const unicodeRegex = /<([0-9A-Fa-f]+)>\s*Tj/g;
+  while ((match = unicodeRegex.exec(pdfString)) !== null) {
+    const hex = match[1];
+    if (hex.length < 4) continue;
+    let text = '';
+    for (let i = 0; i < hex.length; i += 4) {
+      const charCode = parseInt(hex.substring(i, i + 4), 16);
+      if (charCode > 31 && charCode < 65535) {
+        text += String.fromCharCode(charCode);
+      }
+    }
+    if (text.length > 1) {
+      textParts.push(text);
+    }
+  }
+  
+  const result = textParts.join(' ').replace(/\s+/g, ' ').trim();
+  return result;
+}
