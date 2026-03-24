@@ -313,7 +313,7 @@ serve(async (req) => {
           instalacao_origem_id,
           vistoria_origem_id,
           associado_id,
-          associado:associados!servicos_associado_id_fkey(nome, telefone1, whatsapp),
+          associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(placa)
         `)
         .is('profissional_id', null)
@@ -350,7 +350,7 @@ serve(async (req) => {
           instalacao_origem_id,
           vistoria_origem_id,
           associado_id,
-          associado:associados!servicos_associado_id_fkey(nome, telefone1, whatsapp),
+          associado:associados!servicos_associado_id_fkey(nome, telefone, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(placa)
         `)
         .is('profissional_id', null)
@@ -558,7 +558,7 @@ serve(async (req) => {
           try {
             // Buscar dados do associado para enviar confirmação
             const assocEncaixe = (servico as any).associado;
-            const telefoneEncaixe = assocEncaixe?.whatsapp || assocEncaixe?.telefone1 || '';
+            const telefoneEncaixe = assocEncaixe?.whatsapp || assocEncaixe?.telefone || '';
             const nomeEncaixe = assocEncaixe?.nome || 'Cliente';
             const associadoIdEncaixe = (servico as any).associado_id;
             
@@ -733,7 +733,7 @@ Aguardamos sua confirmação! ⚡`;
             try {
               const { data: instCompleta } = await supabase
                 .from('instalacoes')
-                .select('associado_id, associados!instalacoes_associado_id_fkey(nome, telefone1, whatsapp), veiculos!instalacoes_veiculo_id_fkey(placa, marca, modelo), logradouro, numero, bairro, cidade, uf, periodo')
+                .select('associado_id, associados!instalacoes_associado_id_fkey(nome, telefone, whatsapp), veiculos!instalacoes_veiculo_id_fkey(placa, marca, modelo), logradouro, numero, bairro, cidade, uf, periodo')
                 .eq('id', servico.instalacao_origem_id)
                 .single();
 
@@ -789,7 +789,7 @@ Aguardamos sua confirmação! ⚡`;
               if (instCompleta) {
                 const assocData = (instCompleta as any).associados;
                 const veicData = (instCompleta as any).veiculos;
-                const telefoneCliente = assocData?.whatsapp || assocData?.telefone1 || '';
+                const telefoneCliente = assocData?.whatsapp || assocData?.telefone || '';
                 const enderecoCompleto = [instCompleta.logradouro, instCompleta.numero, instCompleta.bairro, instCompleta.cidade, instCompleta.uf].filter(Boolean).join(', ');
 
                 // Buscar telefone do instalador
@@ -874,7 +874,7 @@ Aguardamos sua confirmação! ⚡`;
               // Buscar dados completos da vistoria (associado + veículo)
               const { data: vistCompleta } = await supabase
                 .from('vistorias')
-                .select('associado_id, associados!vistorias_associado_id_fkey(nome, telefone1, whatsapp), veiculos!vistorias_veiculo_id_fkey(placa, marca, modelo), logradouro, numero, bairro, cidade, uf, periodo, observacoes')
+                .select('associado_id, associados!vistorias_associado_id_fkey(nome, telefone, whatsapp), veiculos!vistorias_veiculo_id_fkey(placa, marca, modelo), logradouro, numero, bairro, cidade, uf, periodo, observacoes')
                 .eq('id', servico.vistoria_origem_id)
                 .single();
 
@@ -888,7 +888,7 @@ Aguardamos sua confirmação! ⚡`;
               if (vistProfile?.telefone) {
                 const assocVist = (vistCompleta as any)?.associados;
                 const veicVist = (vistCompleta as any)?.veiculos;
-                const telefoneCliente = assocVist?.whatsapp || assocVist?.telefone1 || '';
+                const telefoneCliente = assocVist?.whatsapp || assocVist?.telefone || '';
                 const enderecoCompleto = [vistCompleta?.logradouro, vistCompleta?.numero, vistCompleta?.bairro, vistCompleta?.cidade, vistCompleta?.uf].filter(Boolean).join(', ') || 'A definir';
                 const dataFormatada = new Date(servico.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR');
                 const periodoTexto = vistCompleta?.periodo ? `\n🕐 Período: ${vistCompleta.periodo}` : '';
