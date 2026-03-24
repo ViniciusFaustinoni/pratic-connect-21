@@ -783,37 +783,82 @@ serve(async (req) => {
               console.error('[cron-atribuir-tarefas] Erro ao enviar push:', pushErr);
             }
 
-            // Enviar template WhatsApp ao vistoriador
+            // ========== NOTIFICAÇÕES PARA VISTORIAS ==========
             try {
+              // Buscar dados completos da vistoria (associado + veículo)
+              const { data: vistCompleta } = await supabase
+                .from('vistorias')
+                .select('associado_id, associados!vistorias_associado_id_fkey(nome, telefone1, whatsapp), veiculos!vistorias_veiculo_id_fkey(placa, marca, modelo), logradouro, numero, bairro, cidade, uf, periodo, observacoes')
+                .eq('id', servico.vistoria_origem_id)
+                .single();
+
               const { data: vistProfile } = await supabase
                 .from('profiles')
                 .select('telefone, nome')
                 .eq('id', prof.vistoriador_id)
                 .single();
 
+              // 1. WhatsApp ao VISTORIADOR com dados completos
               if (vistProfile?.telefone) {
+                const assocVist = (vistCompleta as any)?.associados;
+                const veicVist = (vistCompleta as any)?.veiculos;
+                const telefoneCliente = assocVist?.whatsapp || assocVist?.telefone1 || '';
+                const enderecoCompleto = [vistCompleta?.logradouro, vistCompleta?.numero, vistCompleta?.bairro, vistCompleta?.cidade, vistCompleta?.uf].filter(Boolean).join(', ') || 'A definir';
                 const dataFormatada = new Date(servico.data_agendada + 'T12:00:00').toLocaleDateString('pt-BR');
-                const endereco = [servico.logradouro, servico.numero, servico.bairro, servico.cidade].filter(Boolean).join(', ') || servico.local_vistoria || 'A definir';
+                const periodoTexto = vistCompleta?.periodo ? `\n🕐 Período: ${vistCompleta.periodo}` : '';
+                const obsTexto = vistCompleta?.observacoes ? `\n📝 Obs: ${vistCompleta.observacoes}` : '';
+
+                const msgVistoriador = `🔍 *Nova Vistoria Atribuída*\n\n` +
+                  `👤 Cliente: ${assocVist?.nome || servico.associado_nome}\n` +
+                  `📱 WhatsApp: ${telefoneCliente}\n` +
+                  `🚗 Veículo: ${veicVist?.marca || ''} ${veicVist?.modelo || ''} - ${veicVist?.placa || servico.veiculo_placa}\n` +
+                  `📍 Endereço: ${enderecoCompleto}\n` +
+                  `📅 Data: ${dataFormatada}${periodoTexto}${obsTexto}\n` +
+                  `${servico.is_encaixe ? '⚡ ENCAIXE' : ''}`;
 
                 await supabase.functions.invoke('whatsapp-send-text', {
                   body: {
                     telefone: vistProfile.telefone,
-                    mensagem: `Nova vistoria atribuída: ${servico.associado_nome} - ${endereco} - ${dataFormatada}`,
-                    template_name: 'tarefa_vistoriador_v2',
+                    mensagem: msgVistoriador,
+                    template_name: 'servico_atribuido_v1',
                     template_params: [
                       vistProfile.nome?.split(' ')[0] || 'Vistoriador',
-                      servico.associado_nome,
-                      endereco,
-                      dataFormatada,
+                      'Vistoria',
+                      `${assocVist?.nome || servico.associado_nome} - ${veicVist?.placa || servico.veiculo_placa}`,
                     ],
                     referencia_tipo: 'vistoria',
                     referencia_id: servico.vistoria_origem_id,
                   }
                 });
-                console.log(`[cron-atribuir-tarefas] ✓ WhatsApp template enviado ao vistoriador ${vistProfile.nome}`);
+                console.log(`[cron-atribuir-tarefas] ✓ WhatsApp completo enviado ao vistoriador ${vistProfile.nome}`);
+              }
+
+              // 2. Notificar ASSOCIADO que técnico foi atribuído (template tecnico_a_caminho_1)
+              if (vistCompleta?.associado_id && vistProfile) {
+                const tecNomeVist = vistProfile.nome || 'Vistoriador PRATIC';
+                const tecTelVist = (vistProfile.telefone || '').replace(/\D/g, '');
+                const tecWhatsLinkVist = tecTelVist ? `https://wa.me/55${tecTelVist}` : '';
+
+                try {
+                  await supabase.functions.invoke('notificar-cliente', {
+                    body: {
+                      associado_id: vistCompleta.associado_id,
+                      tipo: 'tecnico_em_rota',
+                      dados: {
+                        tecnico_nome: tecNomeVist,
+                        tecnico_telefone: tecTelVist,
+                        tecnico_whatsapp_link: tecWhatsLinkVist,
+                        tipo_servico: 'vistoria',
+                      }
+                    }
+                  });
+                  console.log(`[cron-atribuir-tarefas] ✓ WhatsApp "técnico a caminho" enviado ao associado ${vistCompleta.associado_id}`);
+                } catch (notifAssocVistErr) {
+                  console.error('[cron-atribuir-tarefas] Erro ao notificar associado (vistoria):', notifAssocVistErr);
+                }
               }
             } catch (whatsErr) {
-              console.error('[cron-atribuir-tarefas] Erro ao enviar WhatsApp ao vistoriador:', whatsErr);
+              console.error('[cron-atribuir-tarefas] Erro ao enviar notificações de vistoria:', whatsErr);
             }
           }
 
