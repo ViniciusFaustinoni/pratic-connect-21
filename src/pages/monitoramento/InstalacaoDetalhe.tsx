@@ -199,6 +199,14 @@ export default function InstalacaoDetalhePage() {
   // Pegar instalador (prioriza profiles que já tem fallback no hook)
   const instaladorInfo = instalacao.profiles || instalacao.instalador_responsavel;
 
+  // Avaliar cobertura da cidade
+  const { tipo: tipoCobertura } = useCoberturaInstalacao({
+    cidade: instalacao.cidade,
+    uf: instalacao.uf,
+    status: instalacao.status,
+    instalador_id: instalacao.instalador_id,
+  });
+
   // Contar fotos e documentos
   const totalFotos = fotosData?.fotos?.length || 0;
   const totalDocs = documentos?.length || 0;
