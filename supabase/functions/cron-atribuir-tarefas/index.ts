@@ -733,7 +733,7 @@ Aguardamos sua confirmação! ⚡`;
             try {
               const { data: instCompleta } = await supabase
                 .from('instalacoes')
-                .select('associado_id, associados!instalacoes_associado_id_fkey(nome, telefone1, whatsapp), veiculos!instalacoes_veiculo_id_fkey(placa, marca, modelo), logradouro, numero, bairro, cidade, uf, periodo')
+                .select('associado_id, associados!instalacoes_associado_id_fkey(nome, telefone, whatsapp), veiculos!instalacoes_veiculo_id_fkey(placa, marca, modelo), logradouro, numero, bairro, cidade, uf, periodo')
                 .eq('id', servico.instalacao_origem_id)
                 .single();
 
