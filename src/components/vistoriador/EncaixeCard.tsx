@@ -160,7 +160,7 @@ export function EncaixeCard({ encaixe }: EncaixeCardProps) {
             {assumindo ? (
               <>
                 <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                {encaixe.isAdiantamento ? (isHoje ? 'Iniciando...' : 'Adiantando...') : 'Assumindo...'}
+                Solicitando...
               </>
             ) : encaixe.isAdiantamento ? (
               <>
@@ -168,7 +168,7 @@ export function EncaixeCard({ encaixe }: EncaixeCardProps) {
                 {isHoje ? 'Executar Agora' : 'Adiantar para Hoje'}
               </>
             ) : (
-              'Assumir'
+              'Solicitar Encaixe'
             )}
           </Button>
         </div>
