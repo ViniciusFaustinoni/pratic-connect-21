@@ -477,7 +477,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const planosNaLinhaIds = linha
         ? (planosBanco || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
         : [plano.id];
-      const temRegrasElegibilidade = elegibilidadeData?.some(e => planosNaLinhaIds.includes(e.plano_id)) ?? false;
+      // Fail-safe: se dados de elegibilidade não carregaram (undefined/erro), assumir que há regras → negar
+      const temRegrasElegibilidade = (elegibilidadeData === undefined || elegibilidadeError)
+        ? true
+        : elegibilidadeData.some(e => planosNaLinhaIds.includes(e.plano_id));
+      
+      if (elegibilidadeData === undefined && !elegibilidadeLoading) {
+        console.warn('[usePlanosCotacao] elegibilidadeData undefined — fail-safe ativado, planos com regras serão negados');
+      }
 
       if (temRegrasElegibilidade) {
         if (params.marca && params.modelo && anoVeiculoNum) {
