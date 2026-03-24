@@ -220,7 +220,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   // Buscar elegibilidade de modelos por plano
-  const { data: elegibilidadeData, isLoading: elegibilidadeLoading } = useQuery({
+  const { data: elegibilidadeData, isLoading: elegibilidadeLoading, isError: elegibilidadeError } = useQuery({
     queryKey: ['plano_elegibilidade_modelos'],
     queryFn: async () => {
       const { data, error } = await supabase
@@ -477,7 +477,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const planosNaLinhaIds = linha
         ? (planosBanco || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
         : [plano.id];
-      const temRegrasElegibilidade = elegibilidadeData?.some(e => planosNaLinhaIds.includes(e.plano_id)) ?? false;
+      // Fail-safe: se dados de elegibilidade não carregaram (undefined/erro), assumir que há regras → negar
+      const temRegrasElegibilidade = (elegibilidadeData === undefined || elegibilidadeError)
+        ? true
+        : elegibilidadeData.some(e => planosNaLinhaIds.includes(e.plano_id));
+      
+      if (elegibilidadeData === undefined && !elegibilidadeLoading) {
+        console.warn('[usePlanosCotacao] elegibilidadeData undefined — fail-safe ativado, planos com regras serão negados');
+      }
 
       if (temRegrasElegibilidade) {
         if (params.marca && params.modelo && anoVeiculoNum) {
@@ -682,7 +689,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     return { planos: sorted, planosNegados: negados };
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, configApp, cotasCategoriaData, categoriasQueSobrepoeApp, dependenciasCriticasLoading]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeError, elegibilidadeLoading, configApp, cotasCategoriaData, categoriasQueSobrepoeApp, dependenciasCriticasLoading]);
 
   return {
     planos,
