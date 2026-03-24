@@ -164,7 +164,7 @@ export default function VistoriaPrestador() {
   }, [link?.status, token]);
 
   // ── Auto-save checklist ──
-  const saveTimeoutRef = useRef<NodeJS.Timeout>();
+  const saveTimeoutRef = useRef<ReturnType<typeof setTimeout>>();
   const autoSave = useCallback((data: Partial<{ checklist_data: any; fotos_vistoria: any; assinatura_url: string }>) => {
     if (!token) return;
     if (saveTimeoutRef.current) clearTimeout(saveTimeoutRef.current);
