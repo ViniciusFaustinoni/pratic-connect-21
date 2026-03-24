@@ -170,3 +170,6 @@ verify_jwt = false
 
 [functions.concluir-vistoria-prestador]
 verify_jwt = false
+
+[functions.api-externa]
+verify_jwt = false

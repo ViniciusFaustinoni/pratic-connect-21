@@ -2,7 +2,7 @@ import { NavLink, useLocation } from 'react-router-dom';
 import { cn } from '@/lib/utils';
 import { 
   User, Shield, Bell, Building2, Settings,
-  Users, KeyRound, Plug, ScrollText, Calculator
+  Users, KeyRound, Plug, ScrollText, Calculator, Code2
 } from 'lucide-react';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -42,6 +42,7 @@ const menuItems: MenuSection[] = [
     items: [
       
       { path: '/configuracoes/integracoes', label: 'Integrações', icon: Plug },
+      { path: '/configuracoes/api', label: 'API do Sistema', icon: Code2, diretorOnly: true },
       { path: '/configuracoes/sistema', label: 'Sistema', icon: Settings },
     ]
   }
