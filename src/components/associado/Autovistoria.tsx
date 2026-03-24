@@ -378,7 +378,15 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
               </li>
               <li className="flex items-start gap-2">
                 <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">5</span>
-                <span>Filme o <strong className="text-foreground">interior: painel, bancos e odômetro</strong></span>
+                <span>Entre no veículo e filme o <strong className="text-foreground">interior: bancos, forração e teto</strong></span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">6</span>
+                <span><strong className="text-foreground">Ligue o veículo</strong> e filme o <strong className="text-foreground">painel ligado</strong> mostrando hodômetro e indicadores</span>
+              </li>
+              <li className="flex items-start gap-2">
+                <span className="bg-primary text-primary-foreground w-5 h-5 rounded-full flex items-center justify-center text-xs flex-shrink-0 mt-0.5">7</span>
+                <span>Filme o <strong className="text-foreground">compartimento do motor</strong> com o capô aberto</span>
               </li>
             </ol>
             <div className="flex items-center gap-2 pt-2 border-t text-xs text-muted-foreground">
