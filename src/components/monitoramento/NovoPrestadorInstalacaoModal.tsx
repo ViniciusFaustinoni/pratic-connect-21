@@ -56,7 +56,8 @@ export function NovoPrestadorInstalacaoModal({ open, onClose, onSuccess, prestad
   const municipiosAgrupados = useMemo(() => {
     const mapa: Record<string, string[]> = {};
     for (const m of municipiosIBGE) {
-      const uf = m.microrregiao.mesorregiao.UF.sigla;
+      const uf = m.microrregiao?.mesorregiao?.UF?.sigla;
+      if (!uf) continue;
       if (!mapa[uf]) mapa[uf] = [];
       mapa[uf].push(m.nome);
     }
