@@ -153,6 +153,15 @@ const categorias: Categoria[] = [
         href: '/configuracoes/integracoes/api-keys',
         extraInfo: (ctx) => ctx.apiKeysCount > 0 ? `${ctx.apiKeysCount} chave(s) ativa(s)` : null,
       },
+      {
+        id: 'api-docs',
+        nome: 'API do Sistema',
+        descricao: 'Documentação interativa e testes de endpoints',
+        icon: Code2,
+        href: '/configuracoes/api',
+        sempreAtivo: true,
+        diretorOnly: true,
+      },
     ],
   },
   {
