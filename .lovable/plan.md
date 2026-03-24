@@ -1,36 +1,43 @@
 
 
-# Página "Regiões de Atendimento" para Coordenador de Monitoramento
-
-## Resumo
-
-Criar a página `/monitoramento/configuracoes/regioes` que permite ao Coordenador de Monitoramento gerenciar vínculos cidade ↔ vistoriador usando os hooks e tabelas já criados (`useVistoriadorCidades`, `useVistoriadoresPrestadores`, tabela `vistoriador_cidades`).
+# Avaliação Automática de Cobertura nas Instalações
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `src/pages/monitoramento/RegioesAtendimento.tsx` | **Criar** — Página completa |
-| `src/App.tsx` | **Editar** — Adicionar rota e import |
+| `src/hooks/useCoberturaInstalacao.ts` | **Criar** |
+| `src/pages/monitoramento/InstalacoesList.tsx` | **Editar** |
+| `src/pages/monitoramento/InstalacaoDetalhe.tsx` | **Editar** |
 
-## Detalhes técnicos
+## Detalhes
 
-### 1. `RegioesAtendimento.tsx`
+### 1. `useCoberturaInstalacao.ts` — Novo hook
 
-Segue o padrão de `PrestadoresParceiros.tsx`:
+Recebe `{ cidade, uf, status, instalador_id }`. Se `instalador_id` preenchido ou status em `['concluida','cancelada','em_andamento','em_rota']`, retorna `tipo: null` sem chamar RPC. Caso contrário, usa `useCoberturaCidade(cidade, uf)` e classifica:
 
-- **Acesso**: `PermissionGate` com `isCoordenadorMonitoramento`, `isDiretor`, `isAdminMaster`
-- **Dados**: 
-  - `useVistoriadorCidades()` (sem filtro) para listar todos os vínculos
-  - `useVistoriadoresPrestadores()` para popular checkboxes de prestadores
-  - Query de profiles com role `instalador_vistoriador` via `user_roles` para popular checkboxes de vistoriadores comuns
-- **Tabela**: Agrupa registros por cidade+UF, exibe badge azul/laranja por tipo, nomes dos vistoriadores (2 + tooltip), ações editar/remover
-- **Modal**: Dialog com campos cidade (text), UF (select 27 estados), tipo (radio comum/prestador), checkboxes dinâmicos. Ao trocar tipo, limpa seleções
-- **Remoção**: AlertDialog de confirmação, chama `desvincular` para cada registro da cidade
-- **Estado vazio**: Ícone Map, mensagem, botão adicionar
-- **Banner**: Alert com ícone Info, fundo azul claro
+- `tem_comum` → `'coberta_comum'`
+- `!tem_comum && tem_prestador` → `'area_prestador'`
+- `fora_de_cobertura` → `'fora_cobertura'`
 
-### 2. `App.tsx`
+Exporta `{ tipo, isLoading, cobertura }`.
 
-Adicionar rota: `<Route path="/monitoramento/configuracoes/regioes" element={<RegioesAtendimento />} />`
+### 2. `InstalacoesList.tsx` — Badge na coluna Endereço
+
+Criar componente interno `CoberturaBadgeCell` que recebe `cidade, uf, status, instalador_id`, chama `useCoberturaInstalacao` e renderiza:
+
+- `area_prestador` → Badge laranja "Área Prestador"
+- `fora_cobertura` → Badge vermelha "Sem Cobertura"
+- Demais → nada
+
+Inserir após `{inst.bairro}, {inst.cidade}` (linha ~297), ao lado do badge "Viagem" existente. React-query deduplicará chamadas para a mesma cidade/UF.
+
+### 3. `InstalacaoDetalhe.tsx` — Header + Card Instalador
+
+**Header** (linha ~229): Adicionar badge de cobertura ao lado do badge de status existente.
+
+**Card Instalador** (linhas ~405-411): Quando `tipo === 'area_prestador'` ou `tipo === 'fora_cobertura'`, substituir o bloco "Não atribuído" + botão "Atribuir Instalador" por mensagem informativa:
+- Cenário B: "Esta cidade é atendida por vistoriador prestador"
+- Cenário C: "Esta cidade não possui cobertura — atribuição manual necessária"
+- Placeholder para painel VP-M02
 
