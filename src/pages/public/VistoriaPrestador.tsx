@@ -279,24 +279,22 @@ export default function VistoriaPrestador() {
     if (!token) return;
     setConcluding(true);
     try {
-      const { error } = await publicSupabase
-        .from('vistoria_prestador_links' as any)
-        .update({
-          status: 'concluida',
-          concluida_em: new Date().toISOString(),
+      const { data, error } = await publicSupabase.functions.invoke('concluir-vistoria-prestador', {
+        body: {
+          token,
           checklist_data: checklist,
           fotos_vistoria: fotosMap,
           assinatura_url: assinaturaUrl,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('token', token);
+        },
+      });
 
       if (error) throw error;
+      if (data && !data.success) throw new Error(data.error || 'Erro ao concluir');
 
       queryClient.invalidateQueries({ queryKey: ['vistoria-prestador-link', token] });
       toast.success('Vistoria concluída com sucesso!');
-    } catch {
-      toast.error('Erro ao concluir vistoria.');
+    } catch (err: any) {
+      toast.error(err?.message || 'Erro ao concluir vistoria.');
     } finally {
       setConcluding(false);
       setShowConfirmDialog(false);

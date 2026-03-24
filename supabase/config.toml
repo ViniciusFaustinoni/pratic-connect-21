@@ -167,3 +167,6 @@ verify_jwt = false
 
 [functions.gerar-link-vistoriador-prestador]
 verify_jwt = false
+
+[functions.concluir-vistoria-prestador]
+verify_jwt = false
