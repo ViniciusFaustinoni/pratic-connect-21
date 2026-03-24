@@ -172,7 +172,7 @@ export function InstaladorLayout() {
                         <p className="text-xs text-muted-foreground">{profile?.email}</p>
                       </div>
                       <DropdownMenuSeparator />
-                      {!usePermissions().userIsOnlyOperational && (
+                      {!userIsOnlyOperational && (
                         <DropdownMenuItem onClick={() => navigate('/dashboard')}>
                           <LayoutDashboard className="mr-2 h-4 w-4" />
                           Ir para Gestão
