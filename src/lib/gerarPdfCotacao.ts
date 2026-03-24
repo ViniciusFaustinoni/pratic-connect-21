@@ -926,7 +926,7 @@ const desenharCardPlanoExpandido = (
     28 +
     (numCoberturas * lineHeight) +
     (plano.coberturas.length > maxCoberturas ? 10 : 0) +
-    18;
+    36;
   
   drawPremiumCard(doc, x, y, width, cardHeight, { 
     isRecommended, 
