@@ -500,9 +500,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           );
           elegibilidadeStatus = resultado.status;
           elegibilidadeCoberturaFipe = resultado.coberturaFipe;
+          console.log(`[ELEGIBILIDADE] ${plano.nome} (linha=${linha}, região=${regiaoLower}): status=${resultado.status}, cobFipe=${resultado.coberturaFipe}, veículo=${params.marca} ${params.modelo} ${anoVeiculoNum} ${combustivelOriginal}`);
         } else {
           // Regras existem mas não temos dados do veículo para validar → negar
           elegibilidadeStatus = 'negado';
+          console.log(`[ELEGIBILIDADE] ${plano.nome} (linha=${linha}, região=${regiaoLower}): NEGADO (sem dados veículo)`);
         }
 
         if (elegibilidadeStatus === 'negado') {
