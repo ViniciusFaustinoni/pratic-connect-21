@@ -164,3 +164,6 @@ verify_jwt = false
 
 [functions.agente-consultor-ia]
 verify_jwt = false
+
+[functions.gerar-link-vistoriador-prestador]
+verify_jwt = false
