@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAnaliseVistoria } from '@/hooks/useAnaliseVistoria';
 import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
