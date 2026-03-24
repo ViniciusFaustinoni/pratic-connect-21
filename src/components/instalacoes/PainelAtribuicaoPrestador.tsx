@@ -119,7 +119,7 @@ function EstadoSelecao({
   const [busca, setBusca] = useState('');
   const valorRef = useRef<HTMLInputElement>(null);
   const queryClient = useQueryClient();
-  const { abrirWhatsAppWeb } = useEnviarWhatsApp();
+  
 
   // All prestadores for Cenário C search
   const { data: todosPrestadores } = useVistoriadoresPrestadores();
