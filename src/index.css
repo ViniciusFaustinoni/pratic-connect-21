@@ -174,12 +174,16 @@
   }
 
   /* Prevenir overflow horizontal global + iOS bounce */
-  html,
+  html {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   body,
   #root {
     overflow-x: hidden;
     max-width: 100vw;
-    overscroll-behavior: none;
+    overscroll-behavior-y: none;
   }
 
   body {
