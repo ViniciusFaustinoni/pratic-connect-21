@@ -211,7 +211,7 @@ export function PlanFormModal({
         footer_note: plan.footer_note || '',
         display_order: plan.display_order?.toString() || '0',
         is_active: plan.is_active ?? true,
-        linha_slug: '',
+        linha_slug: currentPrecoMap?.linha_slug || '',
         categorias_veiculo: categorias,
       });
       setSelectedBenefits(
@@ -224,6 +224,9 @@ export function PlanFormModal({
           display_order: pb.display_order ?? 0,
         })) || []
       );
+      if (currentRegioes) {
+        setSelectedRegioes(currentRegioes);
+      }
     } else {
       setFormData({
         name: '',
@@ -252,16 +255,16 @@ export function PlanFormModal({
       setSelectedBenefits([]);
       setSelectedRegioes([]);
     }
-  }, [plan, defaultProductLineId]);
+  }, [plan, defaultProductLineId, currentPrecoMap, currentRegioes]);
 
-  // Sync linha_slug from currentPrecoMap
+  // Sync linha_slug from currentPrecoMap (handles late async loading)
   useEffect(() => {
     if (currentPrecoMap?.linha_slug) {
       setFormData(prev => ({ ...prev, linha_slug: currentPrecoMap.linha_slug }));
     }
   }, [currentPrecoMap]);
 
-  // Sync selectedRegioes from DB when editing
+  // Sync selectedRegioes from DB when editing (handles late async loading)
   useEffect(() => {
     if (currentRegioes) {
       setSelectedRegioes(currentRegioes);
