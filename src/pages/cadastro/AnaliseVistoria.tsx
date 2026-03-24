@@ -563,6 +563,69 @@ export default function AnaliseVistoria() {
             </CardContent>
           </Card>
 
+          {/* Card Vídeo 360° Principal + Histórico */}
+          {(videoPrincipal || videosHistorico.length > 0) && (
+            <Card>
+              <CardHeader className="pb-3">
+                <div className="flex items-center justify-between">
+                  <CardTitle className="text-lg flex items-center gap-2">
+                    <Video className="w-5 h-5 text-purple-500" />
+                    Vídeo 360° do Veículo
+                  </CardTitle>
+                  {videosHistorico.length > 0 && (
+                    <Badge variant="outline" className="bg-amber-500/10 text-amber-600 border-amber-500/30">
+                      <AlertTriangle className="h-3 w-3 mr-1" />
+                      Substituído {videosHistorico.length}x
+                    </Badge>
+                  )}
+                </div>
+              </CardHeader>
+              <CardContent className="space-y-4">
+                {videoPrincipal && (
+                  <div className="rounded-lg overflow-hidden bg-muted/50 border">
+                    <video
+                      src={videoPrincipal.arquivo_url}
+                      controls
+                      className="w-full aspect-video object-contain bg-black"
+                      preload="metadata"
+                      playsInline
+                    />
+                  </div>
+                )}
+                
+                {/* Vídeos anteriores (histórico oculto do associado) */}
+                {videosHistorico.length > 0 && (
+                  <Collapsible>
+                    <CollapsibleTrigger className="flex items-center gap-2 text-sm text-muted-foreground hover:text-foreground transition-colors w-full justify-between p-2 rounded-lg hover:bg-muted/50">
+                      <span className="flex items-center gap-2">
+                        <Video className="h-4 w-4" />
+                        Vídeos anteriores ({videosHistorico.length})
+                      </span>
+                      <ChevronDown className="h-4 w-4" />
+                    </CollapsibleTrigger>
+                    <CollapsibleContent className="space-y-3 pt-2">
+                      {videosHistorico.map((video, idx) => (
+                        <div key={video.id} className="rounded-lg overflow-hidden border border-amber-500/30">
+                          <div className="bg-amber-500/10 px-3 py-1.5 text-xs text-amber-600 flex items-center gap-1">
+                            <AlertTriangle className="h-3 w-3" />
+                            Vídeo substituído #{videosHistorico.length - idx}
+                          </div>
+                          <video
+                            src={video.arquivo_url}
+                            controls
+                            className="w-full aspect-video object-contain bg-black"
+                            preload="metadata"
+                            playsInline
+                          />
+                        </div>
+                      ))}
+                    </CollapsibleContent>
+                  </Collapsible>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
           {/* Card Fotos */}
           <Card>
             <CardHeader className="pb-3">
