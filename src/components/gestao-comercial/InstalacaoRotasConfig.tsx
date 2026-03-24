@@ -185,6 +185,10 @@ export function InstalacaoRotasConfig() {
   const [recusaLimiteAlerta, setRecusaLimiteAlerta] = useState('3');
   const [savingB8, setSavingB8] = useState(false);
 
+  // ── Bloco 9 state (Prazo confirmação)
+  const [prazoConfirmacao, setPrazoConfirmacao] = useState('4');
+  const [savingB9, setSavingB9] = useState(false);
+
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
