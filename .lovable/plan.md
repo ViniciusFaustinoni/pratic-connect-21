@@ -1,54 +1,41 @@
 
 
-# Dashboard de Vistorias de Prestadores Externos
+# Permitir vendedor responsavel excluir cotacao antes da assinatura
 
 ## Resumo
 
-Criar uma nova pagina dedicada ao acompanhamento em tempo real de todas as vistorias atribuidas a vistoriadores prestadores externos, com valores de cada tarefa, acessivel por coordenadores, diretores e financeiro.
+Atualmente apenas diretores (permissao `canDeleteCotacao`) podem excluir cotacoes. A mudanca permite que o vendedor responsavel pela cotacao tambem possa exclui-la, desde que o contrato ainda nao tenha sido assinado.
 
 ## Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `src/pages/monitoramento/VistoriasPrestadoresDashboard.tsx` | **Criar** |
-| `src/hooks/useVistoriasPrestadoresDashboard.ts` | **Criar** |
-| `src/App.tsx` | **Editar** — adicionar rota `/monitoramento/vistorias-prestadores` |
+| `src/pages/vendas/CotacaoDetalhe.tsx` | **Editar** — expandir logica de `canDelete` |
+| `src/pages/vendas/Cotacoes.tsx` | **Editar** — expandir `canDelete` nas permissoes da tabela |
+| `src/components/cotacoes/CotacaoAcoes.tsx` | **Editar** — ajustar label/texto quando vendedor (nao diretor) exclui |
 
 ## Detalhes
 
-### 1. Hook de dados (useVistoriasPrestadoresDashboard.ts)
+### 1. CotacaoDetalhe.tsx (linha ~477)
 
-- Query principal: buscar `vistoria_prestador_links` com join em `vistoriadores_prestadores` (nome, telefone) e `instalacoes` (associado_nome, cidade, bairro, data_agendada)
-- Retornar metricas agregadas: total de links, aguardando, em execucao, concluidas, valor total previsto, valor total concluido
-- Realtime: subscribe no canal `vistoria_prestador_links` para invalidar queries automaticamente
-- `refetchInterval: 30000` como fallback
+Alterar a logica de `canDelete` para:
+```
+const isVendedorResponsavel = cotacao?.vendedor_id === profile?.id;
+const canDelete = isDiretor || (isVendedorResponsavel && !contratoAssinado);
+```
 
-### 2. Pagina Dashboard (VistoriasPrestadoresDashboard.tsx)
+Diretor sempre pode excluir. Vendedor responsavel pode excluir somente se `contratoAssinado === false`.
 
-**KPI Cards (topo):**
-- Total de vistorias atribuidas
-- Aguardando resposta (status `aguardando`)
-- Em execucao (status `em_execucao`)
-- Concluidas (status `concluida`)
-- Valor total previsto (soma de `valor` de todos os links)
-- Valor total pago (soma de `valor` dos concluidos)
+### 2. Cotacoes.tsx (linha ~577)
 
-**Filtros:**
-- Periodo (hoje, 7 dias, 30 dias, todos)
-- Status (todos, aguardando, em_execucao, concluida)
-- Prestador (select com lista dos vistoriadores)
+Na funcao `getPermissions`, expandir `canDelete`:
+```
+canDelete: permissions.cotacao.canDelete || (isOwner && !contratoAssinadoCheck),
+```
 
-**Tabela principal:**
-- Colunas: Prestador, Associado, Cidade, Status, Valor (R$), Atribuido em, Chegada, Conclusao, WhatsApp enviado
-- Badge colorido por status
-- Valor formatado com `formatarMoeda`
-- Linha clicavel para expandir detalhes (fotos, checklist)
+Verificar se a cotacao tem contrato com status `assinado` ou `ativo` — se sim, bloquear. Caso contrario, o vendedor dono pode excluir.
 
-**Permissoes:**
-- `PermissionGate` com `isDiretor`, `isAdminMaster`, `isCoordenadorMonitoramento`, `isFinanceiro` (mode: any)
+### 3. CotacaoAcoes.tsx (linha ~261-263)
 
-### 3. Rota (App.tsx)
-
-- Adicionar `<Route path="/monitoramento/vistorias-prestadores" element={<VistoriasPrestadoresDashboard />} />`
-- Na linha ~644, junto das rotas de monitoramento existentes
+Manter o dialog de confirmacao existente. Nenhuma mudanca estrutural necessaria — o botao ja aparece condicionalmente via `canDelete`. Opcionalmente ajustar o texto da descricao para indicar que a exclusao e permitida porque o contrato ainda nao foi assinado.
 
