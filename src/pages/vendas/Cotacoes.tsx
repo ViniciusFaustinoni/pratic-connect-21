@@ -777,7 +777,7 @@ export default function Cotacoes() {
       </div>
 
       {/* Barra de seleção em lote */}
-      {permissions.cotacao.canDelete && selectedIds.size > 0 && (
+      {selectedIds.size > 0 && (
         <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/20 animate-in fade-in-0 slide-in-from-top-2 duration-200">
           <span className="text-sm font-medium text-destructive">
             {selectedIds.size} cotação(ões) selecionada(s)
