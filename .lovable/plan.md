@@ -1,67 +1,55 @@
 
 
-# Plano: Redesign do PDF Comparativo de Cotação
+# Redesign: Gestao Comercial — Navegacao Intuitiva com Guias Didaticos
 
-## Problemas identificados
+## Problema atual
+- 9 abas horizontais comprimidas em uma linha, dificil de ler e navegar
+- Sem explicacao do que cada secao faz — usuario precisa adivinhar
+- Layout plano sem hierarquia visual entre secoes relacionadas
 
-| # | Problema | Causa no código |
-|---|----------|----------------|
-| 1 | Modelo do carro cortado | `truncateText(..., 35)` na linha 1081 — "Fiat Idea A.Ext./A..Ext.Loc.Dual. 1.8 Flex 5p" excede 35 chars |
-| 2 | Falta dados do Consultor | `vendedor` só é usado no botão WhatsApp do rodapé, não há seção dedicada |
-| 3 | Layout genérico | Tema escuro padrão, sem usar a identidade visual da marca de forma destacada |
-| 4 | Fonte pequena | Dados do cliente/veículo usam `setFontSize(7)` — praticamente ilegível |
-| 5 | Filiação perto da mensalidade | No card, "Filiação: R$494,61" fica logo abaixo das coberturas, sem destaque visual separando da mensalidade |
-| 6 | Falta detalhamento de cobertura | A função `desenharPaginaDetalhesPlano` existe mas NÃO é chamada no fluxo comparativo (`gerarPdfCotacaoComparativa` gera só 2 páginas: capa + comparativo) |
+## Solucao
 
-## Solução
+Substituir a barra de abas horizontal por um layout de **sidebar lateral com categorias agrupadas** e descricoes curtas em cada item. A sidebar organiza as 9 secoes em 3 grupos logicos, cada item com subtitulo explicativo. O conteudo principal ocupa o restante da tela.
 
-Todas as alterações concentradas em um único arquivo: `src/lib/gerarPdfCotacao.ts`
+### Agrupamento proposto
 
-### 1. Modelo do carro sem truncar
-- Usar `splitTextToSize` em vez de `truncateText` para o nome do veículo
-- Permitir que o texto quebre em 2 linhas se necessário
-- Aumentar a altura do box de dados do veículo dinamicamente
+**Produtos e Precos** (icone de loja)
+- Planos, Produtos e Precos — "Crie e edite planos, vincule linhas e defina precos por faixa FIPE"
+- Beneficios e Coberturas — "Gerencie os beneficios exibidos nos cards e coberturas de marketing"
+- Adicionais — "Configure beneficios adicionais opcionais com valor extra"
 
-### 2. Seção do Consultor/Vendedor na capa
-- Adicionar uma barra com dados do vendedor (nome + WhatsApp) logo abaixo dos dados do cliente
-- Usar o campo `cotacao.vendedor` que já existe na interface `CotacaoComparativaParaPdf`
-- Estilo: ícone de telefone + nome do consultor em destaque
+**Financeiro e Rateio** (icone de calculadora)
+- Simulador de Rateio — "Simule a distribuicao de custos entre associados"
+- Configuracao do Rateio — "Defina os parametros e regras do calculo de rateio"
 
-### 3. Identidade visual melhorada
-- Header: logo maior, gradiente mais pronunciado usando cores da marca
-- Cards dos planos: usar cor primária da config como fundo do header do card (em vez do azul genérico `glowBlue`)
-- Barra de validade: cor primária como fundo em vez do cinza escuro
+**Regras e Operacao** (icone de engrenagem)
+- Elegibilidade — "Defina quais veiculos (marca, modelo, ano) cada plano aceita"
+- Regras de Venda — "Configure limites FIPE, comissoes e taxas administrativas"
+- Instalacao e Rotas — "Gerencie pontos de instalacao e rotas de atendimento"
+- Mapa de Atendimento — "Visualize a cobertura geografica de atendimento"
 
-### 4. Fontes maiores
-- Dados do cliente/veículo: de `7pt` para `9pt`
-- Labels (Cliente:, Tel:, Veículo:): de `7pt` para `8pt`
-- Coberturas nos cards: de `7pt`/`9pt` para `8pt`/`9pt` (compact/normal)
-- Aumentar altura das caixas de dados de `22px` para `30px` para acomodar
+### Alteracoes
 
-### 5. Separar filiação da mensalidade
-- Adicionar separador visual mais espesso entre coberturas e filiação
-- Mover filiação para fora do card principal, em uma barra separada abaixo
-- Ou: criar mini-card de "Investimento" no rodapé do card com fundo diferenciado contendo mensalidade + filiação lado a lado
+| Arquivo | Acao |
+|---------|------|
+| `src/components/gestao-comercial/TabNavigation.tsx` | **Reescrever** — Substituir abas horizontais por sidebar vertical com grupos, icones, descricoes e estado ativo destacado |
+| `src/pages/diretoria/GestaoComercial.tsx` | **Alterar** — Trocar layout de `space-y-6` para `flex` com sidebar (w-72) + area de conteudo. Adicionar banner contextual no topo da area de conteudo com titulo e descricao da secao ativa |
+| `src/components/gestao-comercial/PageHeader.tsx` | **Manter** — KPIs continuam no topo, acima do layout sidebar+conteudo |
 
-### 6. Adicionar páginas de detalhamento por plano
-- Na função `gerarPdfCotacaoComparativa`, após a capa e antes do comparativo, inserir uma página de detalhes para cada plano usando `desenharPaginaDetalhesPlano` (que já existe)
-- Atualizar `totalPaginas` para refletir: 1 (capa) + N (detalhes por plano) + 1 (comparativo)
-- Cada página de detalhes mostra: coberturas incluídas, não incluídas, removidas, valores, cota, alerta de deságio
+### Detalhes da sidebar
 
-## Detalhes técnicos
+- Largura fixa `w-72`, fundo `bg-card`, borda direita
+- Cada grupo tem titulo em `uppercase text-xs text-muted-foreground`
+- Cada item: icone + label + descricao em `text-xs text-muted-foreground`
+- Item ativo: fundo `bg-accent`, borda lateral esquerda colorida
+- Responsivo: em telas menores (`lg:hidden`), colapsa para um dropdown/sheet como ja existe no `ConfiguracoesMobileNav`
 
-Arquivo: `src/lib/gerarPdfCotacao.ts`
+### Banner contextual
 
-### Alteração na `desenharPaginaCapa`
-- Box de dados: aumentar altura, fontes maiores, `splitTextToSize` para modelo
-- Nova linha de vendedor dentro do box de dados
-- Cards: filiação em mini-seção separada com fundo diferenciado
+Acima do conteudo de cada secao, um bloco com:
+- Titulo da secao ativa (h2)
+- Descricao expandida de 1-2 frases explicando o que fazer ali
+- Separador visual antes do conteudo real
 
-### Alteração na `gerarPdfCotacaoComparativa`
-- Calcular `totalPaginas = 1 + numPlanos + 1`
-- Loop para gerar página de detalhes por plano entre capa e comparativo
-- Chamar `desenharPaginaDetalhesPlano` para cada plano
-
-### Ajustes de fonte globais
-- Constantes `FONT_DATA = 9`, `FONT_LABEL = 8` para consistência
+Nenhuma funcionalidade sera removida — apenas a navegacao e a apresentacao mudam.
 
