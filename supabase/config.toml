@@ -174,5 +174,7 @@ verify_jwt = false
 [functions.api-externa]
 verify_jwt = false
 
-[functions.cron-expirar-confirmacoes]
+
+[functions.solicitar-encaixe]
+verify_jwt = false
 verify_jwt = false
