@@ -7,8 +7,10 @@ import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Badge } from '@/components/ui/badge';
-import { ChevronDown, ChevronUp, Save, Loader2 } from 'lucide-react';
+import { ChevronDown, ChevronUp, Save, Loader2, AlertTriangle, Info } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { toast } from 'sonner';
+import { Alert, AlertTitle, AlertDescription } from '@/components/ui/alert';
 import { formatarMoeda } from '@/utils/format';
 
 interface NivelConfig {
@@ -146,11 +148,28 @@ export default function ComissionamentoPlano() {
       </div>
 
       {(!niveisDistintos || niveisDistintos.length === 0) && (
-        <Card>
-          <CardContent className="py-8 text-center text-sm text-muted-foreground">
-            Nenhum nível de comissão encontrado. Cadastre grades de comissão primeiro.
-          </CardContent>
-        </Card>
+        <Alert variant="destructive">
+          <AlertTriangle className="h-4 w-4" />
+          <AlertTitle>Nenhum nível de comissão encontrado</AlertTitle>
+          <AlertDescription className="space-y-2">
+            <p>Crie a hierarquia comercial nas Grades de Comissão antes de configurar o comissionamento por plano.</p>
+            <Link to="/configuracoes/grades-comissao">
+              <Button variant="outline" size="sm" className="mt-2">Configurar Grades de Comissão</Button>
+            </Link>
+          </AlertDescription>
+        </Alert>
+      )}
+
+      {niveisDistintos && niveisDistintos.length > 0 && niveisDistintos.length <= 2 && (
+        <Alert>
+          <Info className="h-4 w-4" />
+          <AlertDescription>
+            Apenas {niveisDistintos.length} nível(is) cadastrado(s). Para uma hierarquia completa, configure mais níveis em{' '}
+            <Link to="/configuracoes/grades-comissao" className="font-medium text-primary underline underline-offset-4 hover:text-primary/80">
+              Grades de Comissão
+            </Link>.
+          </AlertDescription>
+        </Alert>
       )}
 
       {planos?.map(plano => {
