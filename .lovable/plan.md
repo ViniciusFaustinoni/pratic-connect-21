@@ -1,28 +1,54 @@
 
 
-# Mostrar todas as cidades do Brasil agrupadas por estado no modal de Prestador
+# Dashboard de Vistorias de Prestadores Externos
 
 ## Resumo
 
-Substituir a query atual (que busca apenas municípios tipo "prestador" da tabela `municipios_atendimento`) por uma chamada à API pública do IBGE para listar todas as cidades do Brasil, agrupadas por estado, com busca/filtro e seleção por estado inteiro.
+Criar uma nova pagina dedicada ao acompanhamento em tempo real de todas as vistorias atribuidas a vistoriadores prestadores externos, com valores de cada tarefa, acessivel por coordenadores, diretores e financeiro.
 
-## Arquivo
+## Arquivos
 
 | Arquivo | Acao |
 |---------|------|
-| `src/components/monitoramento/NovoPrestadorInstalacaoModal.tsx` | **Editar** |
+| `src/pages/monitoramento/VistoriasPrestadoresDashboard.tsx` | **Criar** |
+| `src/hooks/useVistoriasPrestadoresDashboard.ts` | **Criar** |
+| `src/App.tsx` | **Editar** — adicionar rota `/monitoramento/vistorias-prestadores` |
 
 ## Detalhes
 
-1. **Buscar cidades do IBGE**: Substituir a query ao Supabase por um fetch à API `https://servicodados.ibge.gov.br/api/v1/localidades/municipios?orderBy=nome` (cachear com `staleTime` longo). Agrupar o resultado por UF.
+### 1. Hook de dados (useVistoriasPrestadoresDashboard.ts)
 
-2. **Campo de busca**: Adicionar um `Input` de filtro acima da lista para buscar cidades por nome.
+- Query principal: buscar `vistoria_prestador_links` com join em `vistoriadores_prestadores` (nome, telefone) e `instalacoes` (associado_nome, cidade, bairro, data_agendada)
+- Retornar metricas agregadas: total de links, aguardando, em execucao, concluidas, valor total previsto, valor total concluido
+- Realtime: subscribe no canal `vistoria_prestador_links` para invalidar queries automaticamente
+- `refetchInterval: 30000` como fallback
 
-3. **Agrupamento por estado**: Renderizar as cidades em seções colapsáveis por UF (ex: "RJ", "SP"), com um checkbox "Selecionar todos" por estado. Cada estado aparece como um accordion/collapsible com suas cidades dentro.
+### 2. Pagina Dashboard (VistoriasPrestadoresDashboard.tsx)
 
-4. **Badges dos selecionados**: Manter o comportamento atual de exibir badges clicáveis para remover municípios selecionados.
+**KPI Cards (topo):**
+- Total de vistorias atribuidas
+- Aguardando resposta (status `aguardando`)
+- Em execucao (status `em_execucao`)
+- Concluidas (status `concluida`)
+- Valor total previsto (soma de `valor` de todos os links)
+- Valor total pago (soma de `valor` dos concluidos)
 
-5. **Armazenamento**: Continuar salvando como `municipios_atuacao: string[]` no formato `"Nome da Cidade - UF"`.
+**Filtros:**
+- Periodo (hoje, 7 dias, 30 dias, todos)
+- Status (todos, aguardando, em_execucao, concluida)
+- Prestador (select com lista dos vistoriadores)
 
-6. **UX**: Aumentar a altura do ScrollArea para `h-60` dado o volume de dados. Expandir o modal para `sm:max-w-lg`.
+**Tabela principal:**
+- Colunas: Prestador, Associado, Cidade, Status, Valor (R$), Atribuido em, Chegada, Conclusao, WhatsApp enviado
+- Badge colorido por status
+- Valor formatado com `formatarMoeda`
+- Linha clicavel para expandir detalhes (fotos, checklist)
+
+**Permissoes:**
+- `PermissionGate` com `isDiretor`, `isAdminMaster`, `isCoordenadorMonitoramento`, `isFinanceiro` (mode: any)
+
+### 3. Rota (App.tsx)
+
+- Adicionar `<Route path="/monitoramento/vistorias-prestadores" element={<VistoriasPrestadoresDashboard />} />`
+- Na linha ~644, junto das rotas de monitoramento existentes
 
