@@ -315,10 +315,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { tipoVeiculo: tipoFromHook } = useDetectarTipoVeiculo(marcaParaDeteccao, modeloParaDeteccao);
   
   const tipoVeiculoDetectado = useMemo(() => {
+    // Se veículo foi encontrado por placa/lead/cotação, usar apenas detecção do hook (ignora seleção manual)
+    if (veiculoEncontrado) return tipoFromHook;
     // Se o vendedor selecionou marca manualmente como moto, usar direto
     if (marcaSelecionada && tipoFipeSelecionado === 'motos') return 'moto' as const;
     return tipoFromHook;
-  }, [marcaSelecionada, tipoFipeSelecionado, tipoFromHook]);
+  }, [veiculoEncontrado, marcaSelecionada, tipoFipeSelecionado, tipoFromHook]);
 
   // Resolver marca/modelo para elegibilidade
   const marcaResolvida = useMemo(() => {
@@ -633,7 +635,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Armazenar dados do veículo - SEM chamar API FIPE adicional
         setVeiculoEncontrado(resultado);
         
-        // Limpar seleções manuais (não serão usadas)
+        // Limpar seleções manuais para não contaminar detecção de tipo
+        setTipoFipeSelecionado('carros');
         setMarcaSelecionada('');
         setModeloSelecionado('');
         setAnoSelecionado('');
