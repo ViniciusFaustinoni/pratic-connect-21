@@ -573,7 +573,7 @@ export default function Cotacoes() {
   const getPermissions = (cotacao: CotacaoWithRelations): CotacoesTablePermissions => {
     const isOwner = cotacao.vendedor_id === permissions.userId;
     return {
-      canEdit: permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner),
+      canEdit: (permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner)) && !['assinado', 'ativo'].includes(cotacao.contrato?.status || ''),
       canDelete: permissions.cotacao.canDelete || (isOwner && !['assinado', 'ativo'].includes(cotacao.contrato?.status || '')),
       canSend: permissions.cotacao.canSend && (!permissions.cotacao.canEditOwnOnly || isOwner),
       canDuplicate: permissions.cotacao.canDuplicate,

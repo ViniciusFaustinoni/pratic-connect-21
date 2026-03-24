@@ -862,6 +862,26 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     }
   }, [cotacaoParaEditar, open, form]);
 
+  // Restaurar planos selecionados ao editar cotação (após planosCalculados carregarem)
+  useEffect(() => {
+    if (!cotacaoParaEditar || !open) return;
+    const planosComparacao = cotacaoParaEditar.dados_extras?.planos_comparacao;
+    if (!planosComparacao || planosComparacao.length === 0) return;
+    if (planosCalculados.length === 0) return;
+
+    // Cruzar IDs salvos com planos disponíveis para obter objetos completos
+    const idsRestaurar = new Set(planosComparacao.map(p => p.id));
+    const matches = planosCalculados.filter(p => idsRestaurar.has(p.id));
+
+    if (matches.length > 0) {
+      setPlanosSelecionados(prev => {
+        // Só restaurar se ainda não tiver planos selecionados (evitar loop)
+        if (prev.length > 0) return prev;
+        return matches;
+      });
+    }
+  }, [cotacaoParaEditar, open, planosCalculados]);
+
   const handleTogglePlano = (plano: PlanoCotacao) => {
     setPlanosSelecionados(prev => {
       const jaExiste = prev.some(p => p.id === plano.id);
