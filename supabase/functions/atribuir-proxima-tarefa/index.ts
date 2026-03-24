@@ -118,6 +118,7 @@ interface ServicoDisponivel {
   latitude: number | null;
   longitude: number | null;
   permite_encaixe: boolean;
+  confirmacao_whatsapp: string | null;
   periodo: string | null;
   status: string;
   associado_id: string | null;
