@@ -1,5 +1,5 @@
 import { useNavigate } from 'react-router-dom';
-import { LogOut, Settings, User } from 'lucide-react';
+import { LogOut, Settings, User, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   DropdownMenu,
@@ -94,6 +94,12 @@ export function AppHeader() {
               <DropdownMenuItem onClick={() => navigate('/configuracoes')} className="cursor-pointer">
                 <Settings className="mr-2 h-4 w-4" />
                 Configurações
+              </DropdownMenuItem>
+            )}
+            {roles.includes('instalador_vistoriador') && (
+              <DropdownMenuItem onClick={() => navigate('/instalador')} className="cursor-pointer">
+                <Wrench className="mr-2 h-4 w-4" />
+                App Instalador
               </DropdownMenuItem>
             )}
             <DropdownMenuSeparator className="bg-border" />

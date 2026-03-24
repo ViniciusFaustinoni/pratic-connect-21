@@ -1,8 +1,9 @@
 import { useState, useEffect, useCallback } from 'react';
 import { Outlet, useNavigate, useLocation, Link } from 'react-router-dom';
 import { useAuth } from '@/contexts/AuthContext';
-import { Home, ClipboardList, Map, User, LogOut } from 'lucide-react';
+import { Home, ClipboardList, Map, User, LogOut, LayoutDashboard } from 'lucide-react';
 import { cn } from '@/lib/utils';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Avatar, AvatarFallback } from '@/components/ui/avatar';
 import { Button } from '@/components/ui/button';
 import {
@@ -33,6 +34,7 @@ const NAV_ITEMS = [
 
 export function InstaladorLayout() {
   const { profile, signOut } = useAuth();
+  const { userIsOnlyOperational } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
@@ -170,6 +172,12 @@ export function InstaladorLayout() {
                         <p className="text-xs text-muted-foreground">{profile?.email}</p>
                       </div>
                       <DropdownMenuSeparator />
+                      {!userIsOnlyOperational && (
+                        <DropdownMenuItem onClick={() => navigate('/dashboard')}>
+                          <LayoutDashboard className="mr-2 h-4 w-4" />
+                          Ir para Gestão
+                        </DropdownMenuItem>
+                      )}
                       <DropdownMenuItem onClick={handleSignOut}>
                         <LogOut className="mr-2 h-4 w-4" />
                         Sair

@@ -291,16 +291,9 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const { isAnalistaCadastroOnly, isAnalistaEventosOnly, isCoordenadorMonitoramentoOnly, isCoordenadorMonitoramento, isInstaladorVistoriador, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
+  const { isAnalistaCadastroOnly, isAnalistaEventosOnly, isCoordenadorMonitoramentoOnly, isCoordenadorMonitoramento, isInstaladorVistoriador, isInstaladorVistoriadorOnly, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
 
-  // Verificar se é APENAS instalador/vistoriador (sem perfis de gerência ou admin)
-  const isInstaladorVistoriadorOnly = isInstaladorVistoriador && 
-    !isDiretor && 
-    !isGerencia && 
-    !isDesenvolvedor && 
-    !isAdminMaster;
-
-  // Se é instalador/vistoriador apenas, redirecionar para dashboard próprio
+  // Se é APENAS instalador/vistoriador (sem perfis de gestão), redirecionar
   useEffect(() => {
     if (isInstaladorVistoriadorOnly) {
       navigate('/instalador', { replace: true });
