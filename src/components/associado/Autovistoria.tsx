@@ -261,11 +261,33 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
   };
 
   const handleVideoCapture = async (file: File) => {
-    if (!vistoriaId) return;
+    // Criar vistoria se ainda não existir
+    let currentVistoriaId = vistoriaId;
+    if (!currentVistoriaId) {
+      if (!coordenadas) {
+        toast.error('Por favor, permita o acesso à sua localização antes de gravar o vídeo.');
+        return;
+      }
+      try {
+        const result = await criarAutovistoria.mutateAsync({ 
+          contratoId, 
+          associadoId, 
+          veiculoId,
+          latitude: coordenadas.latitude,
+          longitude: coordenadas.longitude,
+        });
+        currentVistoriaId = result.id;
+        setVistoriaId(result.id);
+      } catch (error) {
+        toast.error('Erro ao iniciar autovistoria');
+        return;
+      }
+    }
+    
     setUploadingVideo(true);
     try {
       const result = await uploadFoto.mutateAsync({
-        vistoriaId,
+        vistoriaId: currentVistoriaId!,
         fotoId: 'video_360',
         file,
         contratoId,
@@ -278,6 +300,12 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
     } finally {
       setUploadingVideo(false);
     }
+  };
+
+  const handleVideoReset = () => {
+    // O vídeo anterior já foi salvo silenciosamente no servidor
+    // Apenas limpar a referência local para permitir nova gravação
+    setVideoUrl(null);
   };
 
   const handleContinuar = () => {
