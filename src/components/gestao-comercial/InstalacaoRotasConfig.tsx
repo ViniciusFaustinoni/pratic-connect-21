@@ -212,6 +212,7 @@ export function InstalacaoRotasConfig() {
     setExibirSaldo(config.exibirSaldo !== 'false');
     setRecusaExigirMotivo(config.recusaExigirMotivo !== 'false');
     setRecusaLimiteAlerta(config.recusaLimiteAlerta);
+    setPrazoConfirmacao(config.prazoConfirmacao);
   }, [config]);
 
   const invalidate = () => qc.invalidateQueries({ queryKey: ['configuracoes-instalacao-rotas'] });
