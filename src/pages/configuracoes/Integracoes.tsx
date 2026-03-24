@@ -3,8 +3,9 @@ import { useNavigate } from 'react-router-dom';
 import {
   Plug, MessageSquare, CreditCard, MapPin, FileSignature, Zap, Mail,
   Search, Building2, CheckCircle, XCircle, Key, Inbox, ArrowRight,
-  Loader2, Settings, ExternalLink, HeartPulse,
+  Loader2, Settings, ExternalLink, HeartPulse, Code2,
 } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
@@ -24,15 +25,12 @@ interface IntegracaoCard {
   nome: string;
   descricao: string;
   icon: React.ElementType;
-  // Navigation to sub-page
   href?: string;
-  // Or open config sheet
   integracaoTipo?: IntegracaoTipo;
-  // Status helpers
   statusKey?: string;
   plataformaCodigo?: 'softruck' | 'rede_veiculos';
   sempreAtivo?: boolean;
-  // Extra info line
+  diretorOnly?: boolean;
   extraInfo?: (ctx: StatusContext) => string | null;
 }
 
@@ -154,6 +152,15 @@ const categorias: Categoria[] = [
         icon: Key,
         href: '/configuracoes/integracoes/api-keys',
         extraInfo: (ctx) => ctx.apiKeysCount > 0 ? `${ctx.apiKeysCount} chave(s) ativa(s)` : null,
+      },
+      {
+        id: 'api-docs',
+        nome: 'API do Sistema',
+        descricao: 'Documentação interativa e testes de endpoints',
+        icon: Code2,
+        href: '/configuracoes/api',
+        sempreAtivo: true,
+        diretorOnly: true,
       },
     ],
   },
@@ -358,6 +365,7 @@ function IntegracaoCardUI({
 type DraftValues = Partial<Record<IntegracaoTipo, Record<string, string>>>;
 
 export default function Integracoes() {
+  const { isDiretor } = usePermissions();
   const navigate = useNavigate();
   const integracoes = useIntegracoesStatus();
   const { data: credenciais, refetch: refetchCredenciais } = useTodasIntegracoesCredenciais();
@@ -425,7 +433,9 @@ export default function Integracoes() {
             {cat.titulo}
           </h2>
           <div className="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-4">
-            {cat.items.map((card) => (
+            {cat.items
+              .filter((card) => !card.diretorOnly || isDiretor)
+              .map((card) => (
               <IntegracaoCardUI
                 key={card.id}
                 card={card}
