@@ -345,10 +345,12 @@ serve(async (req) => {
           latitude,
           longitude,
           permite_encaixe,
+          confirmacao_whatsapp,
           local_vistoria,
           instalacao_origem_id,
           vistoria_origem_id,
-          associado:associados!servicos_associado_id_fkey(nome),
+          associado_id,
+          associado:associados!servicos_associado_id_fkey(nome, telefone1, whatsapp),
           veiculo:veiculos!servicos_veiculo_id_fkey(placa)
         `)
         .is('profissional_id', null)
