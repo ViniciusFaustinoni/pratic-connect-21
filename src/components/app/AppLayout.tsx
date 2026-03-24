@@ -33,7 +33,6 @@ export function AppLayout() {
 
   return (
     <ProtectedRoute allowedTipos={['associado']} authRedirect="/app/login" skipAuth={isTestMode}>
-      <SessionTimeoutProvider variant="app">
         <div className="flex min-h-screen flex-col bg-muted/30">
           <TestModeBanner />
           <AppHeader />
@@ -45,7 +44,6 @@ export function AppLayout() {
           <AppBottomNav />
           <PWAInstallPrompt />
         </div>
-      </SessionTimeoutProvider>
     </ProtectedRoute>
   );
 }

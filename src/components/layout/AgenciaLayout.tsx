@@ -24,7 +24,6 @@ export function AgenciaLayout() {
 
   return (
     <ProtectedRoute allowedTipos={['agencia']} authRedirect="/auth">
-      <SessionTimeoutProvider variant="internal">
         <div className="flex min-h-screen flex-col bg-background">
           {/* Header */}
           <header className="sticky top-0 z-50 border-b bg-card px-4 py-3">
@@ -69,7 +68,6 @@ export function AgenciaLayout() {
             </div>
           </main>
         </div>
-      </SessionTimeoutProvider>
     </ProtectedRoute>
   );
 }

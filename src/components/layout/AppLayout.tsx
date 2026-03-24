@@ -31,7 +31,6 @@ export function AppLayout() {
 
   return (
     <ProtectedRoute allowedTipos={['funcionario']}>
-      <SessionTimeoutProvider variant="internal">
         <SidebarProvider>
           <div className="flex h-screen w-full bg-background overflow-x-hidden">
             <AppSidebar />
@@ -52,7 +51,6 @@ export function AppLayout() {
           open={showOnboarding} 
           onOpenChange={setShowOnboarding} 
         />
-      </SessionTimeoutProvider>
     </ProtectedRoute>
   );
 }
