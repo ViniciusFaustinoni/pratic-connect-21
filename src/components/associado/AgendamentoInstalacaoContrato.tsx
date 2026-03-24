@@ -217,72 +217,7 @@ export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: Agend
         </CardHeader>
         
         <CardContent className="space-y-6">
-          {/* Seleção de data */}
-          <div>
-            <label className="text-sm font-medium text-foreground flex items-center gap-2 mb-3">
-              <Calendar className="h-4 w-4 text-primary" />
-              Data
-            </label>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {datasDisponiveis.map((data) => {
-                const selecionada = dataSelecionada && 
-                  format(dataSelecionada, 'yyyy-MM-dd') === format(data, 'yyyy-MM-dd');
-                
-                return (
-                  <button
-                    key={data.toISOString()}
-                    onClick={() => setDataSelecionada(data)}
-                    className={cn(
-                      "p-3 rounded-lg border text-center transition-all",
-                      selecionada
-                        ? "border-primary bg-primary/10 ring-2 ring-primary/20"
-                        : "border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50"
-                    )}
-                  >
-                    <div className="text-xs text-muted-foreground">
-                      {format(data, 'EEE', { locale: ptBR })}
-                    </div>
-                    <div className="font-semibold text-lg text-foreground">
-                      {format(data, 'd')}
-                    </div>
-                    <div className="text-xs text-muted-foreground">
-                      {format(data, 'MMM', { locale: ptBR })}
-                    </div>
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          
-          {/* Seleção de horário */}
-          <div>
-            <label className="text-sm font-medium text-foreground flex items-center gap-2 mb-3">
-              <Clock className="h-4 w-4 text-primary" />
-              Horário
-            </label>
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {horariosDisponiveis.map((horario) => {
-                const selecionado = horarioSelecionado === horario;
-                
-                return (
-                  <button
-                    key={horario}
-                    onClick={() => setHorarioSelecionado(horario)}
-                    className={cn(
-                      "p-2.5 rounded-lg border text-center font-medium transition-all",
-                      selecionado
-                        ? "border-primary bg-primary/10 ring-2 ring-primary/20 text-primary"
-                        : "border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 text-foreground"
-                    )}
-                  >
-                    {horario}
-                  </button>
-                );
-              })}
-            </div>
-          </div>
-          
-          {/* Local da Instalação */}
+          {/* Local da Instalação — PRIMEIRO para determinar o prazo */}
           <div className="space-y-4">
             <label className="text-sm font-medium text-foreground flex items-center gap-2">
               <MapPin className="h-4 w-4 text-primary" />
@@ -305,7 +240,7 @@ export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: Agend
                     <Loader2 className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 animate-spin text-muted-foreground" />
                   )}
                   {!buscandoCep && cep.replace(/\D/g, '').length === 8 && (
-                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-emerald-500" />
+                    <Search className="absolute right-3 top-1/2 -translate-y-1/2 h-4 w-4 text-success" />
                   )}
                 </div>
               </div>
@@ -362,6 +297,82 @@ export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: Agend
                   maxLength={2}
                 />
               </div>
+            </div>
+          </div>
+
+          {/* Seleção de data */}
+          <div>
+            <label className="text-sm font-medium text-foreground flex items-center gap-2 mb-3">
+              <Calendar className="h-4 w-4 text-primary" />
+              Data
+              {estado && (
+                <span className="text-xs font-normal text-muted-foreground">
+                  (prazo {estado.toUpperCase()}: {diasUteis * 24}h — {diasUteis} dia{diasUteis > 1 ? 's' : ''})
+                </span>
+              )}
+            </label>
+            {!estado ? (
+              <p className="text-sm text-muted-foreground bg-muted/50 rounded-lg p-3 text-center">
+                Preencha o endereço acima para ver as datas disponíveis
+              </p>
+            ) : (
+              <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                {datasDisponiveis.map((data) => {
+                  const selecionada = dataSelecionada && 
+                    format(dataSelecionada, 'yyyy-MM-dd') === format(data, 'yyyy-MM-dd');
+                  
+                  return (
+                    <button
+                      key={data.toISOString()}
+                      onClick={() => setDataSelecionada(data)}
+                      className={cn(
+                        "p-3 rounded-lg border text-center transition-all",
+                        selecionada
+                          ? "border-primary bg-primary/10 ring-2 ring-primary/20"
+                          : "border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50"
+                      )}
+                    >
+                      <div className="text-xs text-muted-foreground">
+                        {format(data, 'EEE', { locale: ptBR })}
+                      </div>
+                      <div className="font-semibold text-lg text-foreground">
+                        {format(data, 'd')}
+                      </div>
+                      <div className="text-xs text-muted-foreground">
+                        {format(data, 'MMM', { locale: ptBR })}
+                      </div>
+                    </button>
+                  );
+                })}
+              </div>
+            )}
+          </div>
+          
+          {/* Seleção de horário */}
+          <div>
+            <label className="text-sm font-medium text-foreground flex items-center gap-2 mb-3">
+              <Clock className="h-4 w-4 text-primary" />
+              Horário
+            </label>
+            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+              {horariosDisponiveis.map((horario) => {
+                const selecionado = horarioSelecionado === horario;
+                
+                return (
+                  <button
+                    key={horario}
+                    onClick={() => setHorarioSelecionado(horario)}
+                    className={cn(
+                      "p-2.5 rounded-lg border text-center font-medium transition-all",
+                      selecionado
+                        ? "border-primary bg-primary/10 ring-2 ring-primary/20 text-primary"
+                        : "border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 text-foreground"
+                    )}
+                  >
+                    {horario}
+                  </button>
+                );
+              })}
             </div>
           </div>
           
