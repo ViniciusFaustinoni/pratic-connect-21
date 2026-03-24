@@ -594,7 +594,7 @@ export function useTodosEncaixes() {
   });
 }
 
-// Hook para assumir um encaixe (para o próprio profissional)
+// Hook para solicitar encaixe com confirmação do associado
 export function usePuxarEncaixe() {
   const queryClient = useQueryClient();
   const { profile } = useAuth();
@@ -611,65 +611,35 @@ export function usePuxarEncaixe() {
     }) => {
       if (!profile?.id) throw new Error('Usuário não autenticado');
 
-      const hoje = new Date().toISOString().split('T')[0];
+      const { data, error } = await supabase.functions.invoke('solicitar-encaixe', {
+        body: {
+          servico_id: id,
+          tipo,
+          profissional_id: profile.id,
+          isAdiantamento: !!isAdiantamento,
+        },
+      });
 
-      if (isAdiantamento) {
-        if (tipo === 'instalacao') {
-          const { error } = await supabase
-            .from('instalacoes')
-            .update({ data_agendada: hoje, permite_encaixe: false })
-            .eq('id', id);
-          if (error) throw error;
-        } else if (tipo === 'vistoria') {
-          const { error } = await supabase
-            .from('vistorias')
-            .update({ data_agendada: hoje, permite_encaixe: false })
-            .eq('id', id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from('vistorias_evento')
-            .update({ data_agendada: hoje, permite_encaixe: false })
-            .eq('id', id);
-          if (error) throw error;
-        }
-      } else {
-        if (tipo === 'instalacao') {
-          const { error } = await supabase
-            .from('instalacoes')
-            .update({ instalador_responsavel_id: profile.id, permite_encaixe: false })
-            .eq('id', id);
-          if (error) throw error;
-        } else if (tipo === 'vistoria') {
-          const { error } = await supabase
-            .from('vistorias')
-            .update({ vistoriador_id: profile.id, permite_encaixe: false })
-            .eq('id', id);
-          if (error) throw error;
-        } else {
-          const { error } = await supabase
-            .from('vistorias_evento')
-            .update({ regulador_id: profile.id, permite_encaixe: false })
-            .eq('id', id);
-          if (error) throw error;
-        }
-      }
+      if (error) throw error;
+      if (!data?.success) throw new Error(data?.error || 'Erro ao solicitar encaixe');
+
+      return data;
     },
-    onSuccess: (_, variables) => {
+    onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['encaixes-disponiveis'] });
       queryClient.invalidateQueries({ queryKey: ['adiantamentos-proprios'] });
       queryClient.invalidateQueries({ queryKey: ['tarefas-proximas'] });
 
-      if (variables.isAdiantamento) {
-        toast.success('Tarefa adiantada para hoje!');
-      } else {
-        const labels = { instalacao: 'Instalação', vistoria: 'Vistoria', vistoria_evento: 'Vistoria de Evento' };
-        toast.success(`${labels[variables.tipo]} assumida com sucesso!`);
-      }
+      toast.success('Confirmação enviada ao cliente via WhatsApp! Aguarde a resposta.');
     },
-    onError: (error) => {
+    onError: (error: any) => {
       console.error('[usePuxarEncaixe] Erro:', error);
-      toast.error('Erro ao processar o serviço');
+      const msg = error?.message || 'Erro ao solicitar encaixe';
+      if (msg.includes('confirmação pendente')) {
+        toast.warning(msg);
+      } else {
+        toast.error(msg);
+      }
     },
   });
 }
