@@ -34,6 +34,7 @@ const NAV_ITEMS = [
 
 export function InstaladorLayout() {
   const { profile, signOut } = useAuth();
+  const { userIsOnlyOperational } = usePermissions();
   const navigate = useNavigate();
   const location = useLocation();
   const [isOnline, setIsOnline] = useState(navigator.onLine);
