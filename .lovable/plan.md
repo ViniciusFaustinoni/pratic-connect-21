@@ -1,45 +1,33 @@
 
 
-# Permitir vendedor editar cotação (incluir/remover planos) antes da assinatura
+# Ajustar instruções de gravação do vídeo na autovistoria
 
-## Resumo
+## Situacao Atual
 
-A infraestrutura de edição já existe e as permissões já permitem que o vendedor responsável edite sua própria cotação. O problema principal é que **ao abrir o modal de edição, os planos previamente selecionados não são restaurados** — o vendedor vê a lista de planos vazia e perde a seleção anterior. Além disso, o `canEdit` na listagem não bloqueia edição após contrato assinado.
+O sistema **ja implementa** quase tudo que foi solicitado:
+- Apenas 1 video + foto do chassi + foto do motor (config em `autovistoriaConfig.ts`)
+- Video somente pela camera, sem galeria (`cameraOnly={true}`)
+- Historico silencioso de videos substituidos (renomeia para `video_360_historico_N`)
+- Validacao do chassi via OCR com alerta para o analista na tela de analise
+- Analista ve todos os videos historicos na pagina de analise
 
-## Arquivos
+## Unica Mudanca Necessaria
 
-| Arquivo | Ação |
+As instrucoes de gravacao do video (passo 5) nao mencionam explicitamente **entrar no veiculo** e **ligar o veiculo**. O usuario pediu que isso fique claro.
+
+## Arquivo
+
+| Arquivo | Acao |
 |---------|------|
-| `src/components/cotacoes/CotacaoFormDialog.tsx` | **Editar** — restaurar `planosSelecionados` a partir de `dados_extras.planos_comparacao` |
-| `src/pages/vendas/Cotacoes.tsx` | **Editar** — bloquear `canEdit` quando contrato assinado/ativo |
+| `src/components/associado/Autovistoria.tsx` | **Editar** — expandir instrucoes de gravacao |
 
 ## Detalhes
 
-### 1. CotacaoFormDialog.tsx — Restaurar planos no modo edição (linha ~790-863)
+Substituir o passo 5 atual por 3 passos mais detalhados (5, 6, 7):
 
-No `useEffect` que preenche o formulário quando `cotacaoParaEditar && open`, adicionar lógica para restaurar `planosSelecionados`:
+- **Passo 5**: "Entre no veículo e filme o **interior: bancos, forração e teto**"
+- **Passo 6**: "**Ligue o veículo** e filme o **painel ligado** mostrando o hodômetro e indicadores"
+- **Passo 7**: "Filme o **compartimento do motor** com o capô aberto"
 
-```
-// Após os outros preenchimentos (~linha 837), adicionar:
-if (cotacaoParaEditar.dados_extras?.planos_comparacao) {
-  const planosRestaurados = cotacaoParaEditar.dados_extras.planos_comparacao;
-  // Aguardar que planosDisponiveis estejam carregados para fazer match
-  // e restaurar com dados completos (valorMensal, coberturas, etc)
-}
-```
-
-A restauração precisa cruzar os IDs de `planos_comparacao` com os `planosDisponiveis` (do hook `usePlanosCotacao`) para obter os objetos `PlanoCotacao` completos com `valorMensal`, `coberturas`, etc. Se o plano disponível já estiver carregado, fazer `setPlanosSelecionados` com os matches. Isso garante que ao abrir o editor, os planos apareçam pré-selecionados e o vendedor possa adicionar ou remover planos livremente.
-
-Será necessário um segundo `useEffect` que observe `planosDisponiveis` para fazer o match após carregamento assíncrono.
-
-### 2. Cotacoes.tsx — Bloquear edição após assinatura (linha ~576)
-
-Expandir a lógica de `canEdit` no `getPermissions`:
-
-```ts
-canEdit: (permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner))
-  && !['assinado', 'ativo'].includes(cotacao.contrato?.status || ''),
-```
-
-Isso impede que o botão de edição apareça na listagem quando o contrato já foi assinado, alinhando com o comportamento da página de detalhe.
+Isso alinha as instrucoes com o que o usuario descreveu: filmar toda a parte externa, entrar no veiculo, ligar o veiculo, filmar painel e parte interna.
 
