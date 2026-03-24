@@ -420,7 +420,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
                 Autovistoria Concluída!
               </h2>
               <p className="text-muted-foreground mt-1">
-                Todas as {totalFotos} fotos{videoObrigatorio ? ' e o vídeo 360°' : ''} foram enviados com sucesso.
+                Todas as {totalFotos} fotos e o vídeo 360° foram enviados com sucesso.
               </p>
             </div>
           </div>
