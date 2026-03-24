@@ -1,56 +1,93 @@
 
 
-# Corrigir notificações WhatsApp na atribuição de vistoria/instalação
+# Encaixe com confirmação via WhatsApp antes da atribuição
 
-## Problema
+## Problema atual
 
-Na `cron-atribuir-tarefas`, quando uma tarefa de vistoria ou instalação é atribuída:
-
-1. **Associado NAO recebe notificação** — para vistorias, nenhuma notificação é enviada ao associado em nenhum momento; para instalações, foi removida da atribuição e adiada para o "Iniciar Tarefa"
-2. **Vistoriador recebe mensagem genérica** (linha 785: apenas nome + endereço + data) — faltam dados do veículo, telefone do associado, período, e observações
+Serviços com `permite_encaixe = true` **ignoram** o fluxo de confirmação WhatsApp — são atribuídos automaticamente sem consultar o associado. Isso acontece porque os filtros nas funções de atribuição incluem `permite_encaixe.eq.true` como exceção ao requisito de confirmação.
 
 ## Solução
 
-Editar a edge function `cron-atribuir-tarefas` para adicionar notificações completas no momento da atribuição.
+Criar um fluxo de confirmação específico para encaixes: quando o sistema detectar um encaixe elegível para atribuição, primeiro envia uma mensagem de confirmação ao associado e só atribui após resposta positiva.
 
-## Arquivo
+## Arquivos
 
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/cron-atribuir-tarefas/index.ts` | **Editar** |
+| `supabase/functions/cron-atribuir-tarefas/index.ts` | **Editar** — remover bypass de encaixe no filtro de confirmação; adicionar lógica para enviar confirmação a encaixes pendentes |
+| `supabase/functions/atribuir-proxima-tarefa/index.ts` | **Editar** — remover bypass de encaixe no filtro de confirmação; adicionar lógica para enviar confirmação |
+| `supabase/functions/whatsapp-webhook/index.ts` | **Verificar** — já trata resposta "SIM" e marca `confirmacao_whatsapp = 'confirmada'` (sem mudança necessária) |
 
 ## Detalhes
 
-### 1. Notificar ASSOCIADO via `notificar-cliente` (tipo `tecnico_em_rota`)
+### 1. Remover bypass de encaixe nos filtros de atribuição
 
-Após a atribuição de **vistorias** (bloco `vistoria_origem_id`, após linha 801), adicionar chamada ao `notificar-cliente` com tipo `tecnico_em_rota` — o mesmo template `tecnico_a_caminho_1` já mapeado na função `notificar-cliente`. Buscar `associado_id` da tabela `vistorias` (join com `associados` para obter nome/telefone) e dados do vistoriador atribuído.
+Nas 3 queries de busca de serviços (BUSCA 1, BUSCA 2, BUSCA 3) em ambas as funções, alterar o filtro:
 
-Fazer o mesmo para **instalações** (reverter a remoção da linha 668-670): chamar `notificar-cliente` com tipo `tecnico_em_rota` usando dados do técnico atribuído.
+**Antes:**
+```
+.or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada,permite_encaixe.eq.true')
+```
 
-### 2. Melhorar mensagem WhatsApp ao VISTORIADOR (linha 782-796)
+**Depois:**
+```
+.or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada')
+```
 
-Substituir a mensagem genérica por uma completa com:
-- Nome e telefone/WhatsApp do associado
-- Veículo (placa, marca, modelo)
-- Endereço completo
-- Data e período
-- Observações (se houver)
+Porém, serviços com `confirmacao_whatsapp IS NULL` ainda passam. Para encaixes, precisamos interceptá-los antes da atribuição.
 
-Isso requer buscar dados da vistoria com join em `associados` e `veiculos` (similar ao que já é feito para instalações na linha 648-651).
+### 2. Lógica de confirmação pré-atribuição para encaixes
 
-### 3. Melhorar mensagem WhatsApp ao INSTALADOR (linha 702-707)
+Em ambas as funções (`cron-atribuir-tarefas` e `atribuir-proxima-tarefa`), **antes de atribuir** um serviço com `permite_encaixe = true` e `confirmacao_whatsapp IS NULL`:
 
-A mensagem ao instalador (instalações) já está boa, mas falta o período. Adicionar `periodo` à mensagem.
+1. **Não atribuir** — em vez disso, enviar confirmação via WhatsApp ao associado
+2. Marcar `confirmacao_whatsapp = 'aguardando_confirmacao_encaixe'` no serviço
+3. Pular para o próximo serviço na fila
+
+O fluxo fica:
+
+```text
+Encaixe detectado (permite_encaixe=true, confirmacao_whatsapp=null)
+  ├── Enviar WhatsApp: "Temos um profissional disponível próximo a você. Confirma encaixe HOJE?"
+  ├── Marcar confirmacao_whatsapp = 'aguardando_confirmacao_encaixe'
+  └── NÃO atribuir ainda
+
+Associado responde "SIM" (webhook já existente)
+  └── confirmacao_whatsapp = 'confirmada'
+      └── Próxima execução do cron → serviço é atribuído normalmente
+```
+
+### 3. Implementação na lógica de atribuição
+
+Após selecionar o melhor serviço para um profissional, adicionar verificação:
+
+```typescript
+// Antes de atribuir, verificar se encaixe precisa de confirmação
+if (servico.permite_encaixe && !servico.confirmacao_whatsapp) {
+  // Buscar dados do associado para envio
+  // Enviar template de confirmação via whatsapp-send-text
+  // Marcar como 'aguardando_confirmacao_encaixe'
+  // Continuar para próximo serviço (não atribuir)
+  continue;
+}
+```
+
+A mensagem de confirmação usará o template `confirmacao_agendamento_v1` (já existente) com parâmetros adaptados para encaixe, informando que há um profissional disponível na região.
+
+### 4. Webhook — sem mudança
+
+O `whatsapp-webhook` já trata respostas de confirmação e marca `confirmacao_whatsapp = 'confirmada'`. Encaixes confirmados serão atribuídos na próxima execução do cron normalmente.
 
 ### Fluxo resultante
 
 ```text
-Atribuição automática (cron)
-├── Instalação
-│   ├── WhatsApp ao INSTALADOR: dados completos do cliente + veículo + endereço
-│   └── WhatsApp ao ASSOCIADO: "técnico a caminho" (template tecnico_a_caminho_1)
-└── Vistoria
-    ├── WhatsApp ao VISTORIADOR: dados completos do cliente + veículo + endereço
-    └── WhatsApp ao ASSOCIADO: "técnico a caminho" (template tecnico_a_caminho_1)
+Serviço com encaixe criado
+  │
+  ├── Cron detecta profissional próximo disponível
+  │   ├── Se confirmacao_whatsapp IS NULL → envia confirmação, marca 'aguardando_confirmacao_encaixe'
+  │   ├── Se 'aguardando_confirmacao_encaixe' → pula (aguardando resposta)
+  │   └── Se 'confirmada' → atribui normalmente
+  │
+  └── Associado responde SIM → confirmada → próximo cron atribui
 ```
 
