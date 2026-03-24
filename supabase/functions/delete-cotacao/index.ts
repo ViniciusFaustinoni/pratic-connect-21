@@ -90,6 +90,32 @@ Deno.serve(async (req) => {
       )
     }
 
+    // Verificar autorização: diretor OU dono sem contrato ativo
+    const isOwner = cotacao.vendedor_id === userId
+    
+    if (!temPermissaoDiretor && !isOwner) {
+      return new Response(
+        JSON.stringify({ success: false, error: 'Sem permissão para excluir esta cotação' }),
+        { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      )
+    }
+
+    // Se é dono (sem permissão de diretor), verificar se não há contrato ativo/assinado
+    if (!temPermissaoDiretor && isOwner) {
+      const { data: contratosAtivos } = await adminClient
+        .from('contratos')
+        .select('id, status')
+        .eq('cotacao_id', cotacaoId)
+        .in('status', ['assinado', 'ativo'])
+      
+      if (contratosAtivos && contratosAtivos.length > 0) {
+        return new Response(
+          JSON.stringify({ success: false, error: 'Não é possível excluir cotação com contrato ativo/assinado' }),
+          { status: 403, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        )
+      }
+    }
+
     // Buscar contratos vinculados
     const { data: contratos } = await adminClient
       .from('contratos')
