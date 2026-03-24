@@ -1013,20 +1013,25 @@ export function useAprovarVeiculoServico() {
         .eq('id', data.veiculoId)
         .single();
 
-      // 5. Atualizar veículo como ativo (SEM cobertura_total — aguarda aprovação do monitoramento)
+      // 5. Atualizar veículo — status depende de ter autovistoria prévia
       {
+        const temAutovistoria = veiculoAtual?.cobertura_roubo_furto === true;
+        const novoStatusVeiculo = temAutovistoria ? 'ativo' : 'em_analise';
+
         const { error: veiculoError } = await supabase
           .from('veiculos')
           .update({
-            status: 'ativo',
+            status: novoStatusVeiculo,
             updated_at: agora,
           })
           .eq('id', data.veiculoId);
 
         if (veiculoError) throw veiculoError;
         
-        if (veiculoAtual?.cobertura_roubo_furto && !veiculoAtual?.cobertura_total) {
-          console.log('[useAprovarVeiculoServico] Autovistoria prévia detectada — cobertura_total ficará pendente de aprovação do monitoramento');
+        if (temAutovistoria) {
+          console.log('[useAprovarVeiculoServico] Autovistoria prévia detectada — veículo ativo, aguarda monitoramento para cobertura_total');
+        } else {
+          console.log('[useAprovarVeiculoServico] Sem autovistoria — veículo em_analise, aguarda aprovação do monitoramento');
         }
       }
 
@@ -1135,7 +1140,7 @@ export function useAprovarVeiculoServico() {
       queryClient.invalidateQueries({ queryKey: ['rastreadores-meu-porte'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
-      toast.success('Instalação concluída! Aguardando aprovação do monitoramento.');
+      toast.success('Instalação concluída! Aguardando aprovação do monitoramento para ativar a Proteção 360.');
     },
     onError: (error) => {
       console.error('Erro ao aprovar veículo:', error);

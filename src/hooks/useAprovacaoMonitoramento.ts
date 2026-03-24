@@ -35,10 +35,10 @@ export function useInstalacoesAguardandoAprovacao() {
 
       if (error) throw error;
 
-      // Filtrar: veículo com cobertura_roubo_furto = true e cobertura_total = false
+      // Filtrar: veículo sem cobertura_total (inclui com e sem autovistoria)
       const pendentes = (servicos || []).filter((s: any) => {
         const v = s.veiculo;
-        return v && v.cobertura_roubo_furto === true && v.cobertura_total === false;
+        return v && v.cobertura_total !== true;
       });
 
       return pendentes;
@@ -66,7 +66,7 @@ export function useAprovacaoMonitoramentoStats() {
         .eq('status', 'concluida');
 
       const aguardando = (pendentes || []).filter((s: any) => 
-        s.veiculo?.cobertura_roubo_furto === true && s.veiculo?.cobertura_total === false
+        s.veiculo?.cobertura_total !== true
       ).length;
 
       // Aprovados hoje = histórico com tipo aprovação do monitoramento hoje
@@ -111,11 +111,13 @@ export function useAprovarInstalacaoMonitoramento() {
     mutationFn: async (data: AprovarData) => {
       const agora = new Date().toISOString();
 
-      // 1. Ativar cobertura total no veículo
+      // 1. Ativar cobertura total + roubo/furto (caso não tenha autovistoria) e status ativo
       const { error: veiculoError } = await supabase
         .from('veiculos')
         .update({
+          cobertura_roubo_furto: true,
           cobertura_total: true,
+          status: 'ativo',
           updated_at: agora,
         })
         .eq('id', data.veiculoId);
