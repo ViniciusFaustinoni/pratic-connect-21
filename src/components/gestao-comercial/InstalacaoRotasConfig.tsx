@@ -46,6 +46,7 @@ const CONFIG_CHAVES = [
   'jornada_exibir_saldo_vistoriador',
   'recusa_exigir_motivo',
   'recusa_limite_alerta',
+  'prazo_confirmacao_agendamento_horas',
 ] as const;
 
 // ── Hook ───────────────────────────────────────────

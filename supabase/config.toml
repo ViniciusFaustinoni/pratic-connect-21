@@ -173,3 +173,6 @@ verify_jwt = false
 
 [functions.api-externa]
 verify_jwt = false
+
+[functions.cron-expirar-confirmacoes]
+verify_jwt = false
