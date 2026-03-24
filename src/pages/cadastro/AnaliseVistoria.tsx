@@ -158,9 +158,13 @@ export default function AnaliseVistoria() {
     );
   }
 
-  // Preparar fotos para visualizador
-  const fotos = vistoria.fotos
-    .filter(f => f.arquivo_url)
+  // Separar fotos normais de vídeos
+  const videoPrincipal = vistoria.fotos.find(f => f.tipo === 'video_360' && f.arquivo_url);
+  const videosHistorico = vistoria.fotos.filter(f => f.tipo.startsWith('video_360_historico') && f.arquivo_url);
+  const fotosNormais = vistoria.fotos.filter(f => !f.tipo.startsWith('video_360') && f.arquivo_url);
+
+  // Preparar fotos para visualizador (sem vídeos)
+  const fotos = fotosNormais
     .map(f => ({
       url: f.arquivo_url,
       label: FOTO_LABELS[f.tipo] || f.tipo,
