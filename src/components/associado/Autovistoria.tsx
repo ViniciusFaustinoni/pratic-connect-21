@@ -520,7 +520,7 @@ export function Autovistoria({ contratoId, associadoId, veiculoId, tipoVeiculo, 
           </Button>
           <div className="flex-1 flex items-center justify-between">
             <CardTitle className="text-lg">
-              Foto {indiceAtual + 1} de {totalFotos}
+              Etapa 2: Foto {indiceAtual + 1} de {totalFotos}
             </CardTitle>
             {fotoAtualEnviada && (
               <Badge variant="default" className="bg-green-600 hover:bg-green-700">

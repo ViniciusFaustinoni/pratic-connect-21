@@ -1,8 +1,8 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import { useAnaliseVistoria } from '@/hooks/useAnaliseVistoria';
 import { VisualizadorFoto } from '@/components/analise/VisualizadorFoto';
-import { Button } from '@/components/ui/button';
+import { Video360Card } from '@/components/cadastro/Video360Card';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
