@@ -20,6 +20,7 @@ export function VideoCapture({
   uploading = false,
   maxDuration = 120, // 2 minutos padrão
   label = 'Vídeo 360°',
+  cameraOnly = false,
 }: VideoCaptureProps) {
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
