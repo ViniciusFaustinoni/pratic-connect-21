@@ -21,6 +21,7 @@ import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS } from '@/types/database';
 import type { PeriodoInstalacao } from '@/types/database';
 import { AtribuirInstaladorDialog } from '@/components/instalacoes/AtribuirInstaladorDialog';
+import { useCoberturaInstalacao } from '@/hooks/useCoberturaInstalacao';
 
 const formatDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
 const formatPhone = (p: string | null | undefined) => {
@@ -198,6 +199,14 @@ export default function InstalacaoDetalhePage() {
   // Pegar instalador (prioriza profiles que já tem fallback no hook)
   const instaladorInfo = instalacao.profiles || instalacao.instalador_responsavel;
 
+  // Avaliar cobertura da cidade
+  const { tipo: tipoCobertura } = useCoberturaInstalacao({
+    cidade: instalacao.cidade,
+    uf: instalacao.uf,
+    status: instalacao.status,
+    instalador_id: instalacao.instalador_id,
+  });
+
   // Contar fotos e documentos
   const totalFotos = fotosData?.fotos?.length || 0;
   const totalDocs = documentos?.length || 0;
@@ -229,6 +238,12 @@ export default function InstalacaoDetalhePage() {
             <Badge className={cn("text-white", isAtrasada ? "bg-orange-500" : STATUS_INSTALACAO_COLORS[instalacao.status])}>
               {isAtrasada ? "Atrasada" : STATUS_INSTALACAO_LABELS[instalacao.status]}
             </Badge>
+            {tipoCobertura === 'area_prestador' && (
+              <Badge className="bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Área Prestador</Badge>
+            )}
+            {tipoCobertura === 'fora_cobertura' && (
+              <Badge className="bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Sem Cobertura</Badge>
+            )}
           </div>
           <div className="flex items-center gap-2 text-muted-foreground">
             <Calendar className="h-4 w-4" />
@@ -402,6 +417,18 @@ export default function InstalacaoDetalhePage() {
                   </div>
                 </div>
               </>
+            ) : tipoCobertura === 'area_prestador' || tipoCobertura === 'fora_cobertura' ? (
+              <div className="text-center py-4 space-y-2">
+                <Badge className={tipoCobertura === 'area_prestador' ? "bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300" : "bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300"}>
+                  {tipoCobertura === 'area_prestador' ? '🟠 Área de Prestador' : '🔴 Sem Cobertura'}
+                </Badge>
+                <p className="text-sm text-muted-foreground">
+                  {tipoCobertura === 'area_prestador'
+                    ? 'Esta cidade é atendida por vistoriador prestador'
+                    : 'Esta cidade não possui cobertura — atribuição manual necessária'}
+                </p>
+                <p className="text-xs text-muted-foreground italic">Painel de atribuição a prestador será adicionado em breve (VP-M02)</p>
+              </div>
             ) : (
               <div className="text-center py-4 space-y-3">
                 <p className="text-muted-foreground">Não atribuído</p>

@@ -15,7 +15,19 @@ import { SlaIndicador, useSlaConfig, calcularPercentualSla } from '@/components/
 import { cn } from '@/lib/utils';
 import { STATUS_INSTALACAO_LABELS, STATUS_INSTALACAO_COLORS, PERIODO_LABELS, StatusInstalacao, PeriodoInstalacao } from '@/types/database';
 import { AtribuirInstaladorDialog } from '@/components/instalacoes/AtribuirInstaladorDialog';
+import { useCoberturaInstalacao, TipoCobertura } from '@/hooks/useCoberturaInstalacao';
 const formatDate = (d: string) => new Date(d + 'T12:00:00').toLocaleDateString('pt-BR');
+
+function CoberturaBadgeCell({ cidade, uf, status, instalador_id }: { cidade?: string; uf?: string; status?: string; instalador_id?: string | null }) {
+  const { tipo } = useCoberturaInstalacao({ cidade, uf, status, instalador_id });
+  if (tipo === 'area_prestador') {
+    return <Badge className="ml-1 text-[10px] px-1.5 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Área Prestador</Badge>;
+  }
+  if (tipo === 'fora_cobertura') {
+    return <Badge className="ml-1 text-[10px] px-1.5 py-0 bg-red-100 text-red-800 dark:bg-red-900/30 dark:text-red-300">Sem Cobertura</Badge>;
+  }
+  return null;
+}
 
 export default function InstalacoesList() {
   const navigate = useNavigate();
@@ -299,6 +311,7 @@ export default function InstalacoesList() {
                       {(inst as any).tipo_deslocamento === 'viagem' && (
                         <Badge className="ml-1 text-[10px] px-1.5 py-0 bg-orange-100 text-orange-800 dark:bg-orange-900/30 dark:text-orange-300">Viagem</Badge>
                       )}
+                      <CoberturaBadgeCell cidade={inst.cidade} uf={inst.uf} status={inst.status} instalador_id={inst.instalador_id} />
                     </div>
                   </TableCell>
                   <TableCell>
