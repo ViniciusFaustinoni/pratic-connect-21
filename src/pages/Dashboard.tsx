@@ -114,12 +114,12 @@ function KPICard({ titulo, valor, variacao, emoji, loading }: KPICardProps) {
   }
 
   return (
-    <Card className="border-border bg-card hover:border-border-hover transition-all duration-200 group">
-      <CardContent className="p-6">
-        <div className="flex items-start justify-between">
-          <div className="space-y-1">
-            <div className="flex items-center gap-2">
-              <span className="text-2xl">{emoji}</span>
+    <Card className="border-border bg-card hover:border-border-hover transition-all duration-200 group overflow-hidden">
+      <CardContent className="p-3 sm:p-6">
+        <div className="flex items-start justify-between min-w-0">
+          <div className="space-y-1 min-w-0 flex-1">
+            <div className="flex items-center gap-1.5 sm:gap-2 flex-wrap">
+              <span className="text-xl sm:text-2xl">{emoji}</span>
               {variacao !== undefined && (
                 <Badge 
                   variant="outline" 
@@ -140,8 +140,8 @@ function KPICard({ titulo, valor, variacao, emoji, loading }: KPICardProps) {
                 </Badge>
               )}
             </div>
-            <p className="text-sm text-muted-foreground">{titulo}</p>
-            <p className="text-2xl font-bold text-foreground">{valor}</p>
+            <p className="text-xs sm:text-sm text-muted-foreground truncate">{titulo}</p>
+            <p className="text-lg sm:text-2xl font-bold text-foreground truncate">{valor}</p>
           </div>
         </div>
       </CardContent>
