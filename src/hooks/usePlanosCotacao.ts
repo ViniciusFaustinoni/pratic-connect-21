@@ -220,7 +220,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   });
 
   // Buscar elegibilidade de modelos por plano
-  const { data: elegibilidadeData, isLoading: elegibilidadeLoading } = useQuery({
+  const { data: elegibilidadeData, isLoading: elegibilidadeLoading, isError: elegibilidadeError } = useQuery({
     queryKey: ['plano_elegibilidade_modelos'],
     queryFn: async () => {
       const { data, error } = await supabase
