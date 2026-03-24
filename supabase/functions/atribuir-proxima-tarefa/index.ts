@@ -118,6 +118,7 @@ interface ServicoDisponivel {
   latitude: number | null;
   longitude: number | null;
   permite_encaixe: boolean;
+  confirmacao_whatsapp: string | null;
   periodo: string | null;
   status: string;
   associado_id: string | null;
@@ -379,6 +380,7 @@ serve(async (req) => {
         latitude,
         longitude,
         permite_encaixe,
+        confirmacao_whatsapp,
         status,
         logradouro,
         numero,
@@ -398,7 +400,7 @@ serve(async (req) => {
       .lte('data_agendada', amanha)
       .order('data_agendada', { ascending: true })
       // FILTRO DE CONFIRMAÇÃO: Só atribuir serviços confirmados ou sem fluxo de confirmação
-      .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada,permite_encaixe.eq.true');
+        .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada');
 
     if (servicosNormaisError) {
       console.error('[atribuir-proxima-tarefa] Erro ao buscar serviços normais:', servicosNormaisError);
@@ -420,6 +422,7 @@ serve(async (req) => {
         latitude,
         longitude,
         permite_encaixe,
+        confirmacao_whatsapp,
         status,
         logradouro,
         numero,
@@ -465,6 +468,7 @@ serve(async (req) => {
       latitude: s.latitude,
       longitude: s.longitude,
       permite_encaixe: s.permite_encaixe || false,
+      confirmacao_whatsapp: s.confirmacao_whatsapp || null,
       periodo: s.periodo || null,
       status: s.status,
       associado_id: s.associado_id,
@@ -712,6 +716,74 @@ serve(async (req) => {
     // 5. Tentar atribuir o serviço mais próximo
     for (const servico of servicosParaAtribuir) {
       console.log(`[atribuir-proxima-tarefa] Tentando atribuir ${servico.tipo} ${servico.id} (${servico.distancia_km.toFixed(2)} km)`);
+
+      // ========== ENCAIXE: CONFIRMAÇÃO VIA WHATSAPP ANTES DE ATRIBUIR ==========
+      if (servico.permite_encaixe && !servico.confirmacao_whatsapp) {
+        console.log(`[atribuir-proxima-tarefa] ⏳ Encaixe ${servico.id} precisa de confirmação do associado`);
+        
+        try {
+          const telefoneEncaixe = servico.associado_whatsapp || servico.associado_telefone || '';
+          const nomeEncaixe = servico.associado_nome || 'Cliente';
+          
+          if (telefoneEncaixe && servico.associado_id) {
+            const telefoneFormatado = telefoneEncaixe.replace(/\D/g, '');
+            const tipoServicoEncaixe = servico.tipo === 'instalacao' ? 'instalação do rastreador' : 'vistoria veicular';
+            
+            const mensagemEncaixe = `Olá, *${nomeEncaixe.split(' ')[0]}*! 👋
+
+Aqui é a *PRATIC Proteção Veicular*.
+
+Temos um profissional disponível *próximo de você agora*! 🚗
+
+Podemos antecipar sua *${tipoServicoEncaixe}* para *HOJE*?
+
+✅ Responda *SIM* para confirmar o encaixe
+❌ Ou *NÃO* para manter a data original
+
+Aguardamos sua confirmação! ⚡`;
+
+            await supabase.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone: telefoneFormatado,
+                mensagem: mensagemEncaixe,
+                template_name: 'confirmacao_agendamento_v1',
+                template_params: [
+                  nomeEncaixe.split(' ')[0],
+                  tipoServicoEncaixe,
+                  'Encaixe HOJE - profissional disponível na região',
+                ],
+              }
+            });
+
+            // Marcar como aguardando confirmação
+            await supabase
+              .from('servicos')
+              .update({ confirmacao_whatsapp: 'aguardando_confirmacao_encaixe' })
+              .eq('id', servico.id);
+
+            // Criar registro para o webhook tratar a resposta
+            await supabase.from('confirmacoes_agendamento').insert({
+              servico_id: servico.id,
+              telefone: telefoneFormatado,
+              status: 'enviada',
+              mensagem_enviada_em: new Date().toISOString(),
+              contexto_ia: {
+                nome_cliente: nomeEncaixe,
+                tipo_servico: servico.tipo,
+                tipo_confirmacao: 'encaixe',
+                profissional_id: profissionalId,
+              }
+            });
+
+            console.log(`[atribuir-proxima-tarefa] ✓ Confirmação de encaixe enviada para ${telefoneFormatado}`);
+          }
+        } catch (encaixeErr) {
+          console.error(`[atribuir-proxima-tarefa] Erro confirmação encaixe:`, encaixeErr);
+        }
+        
+        continue; // NÃO atribuir - aguardar confirmação
+      }
+      // ========== FIM ENCAIXE CONFIRMAÇÃO ==========
       
       const agora = new Date().toISOString();
       
