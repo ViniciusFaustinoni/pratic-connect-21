@@ -1140,7 +1140,7 @@ export function useAprovarVeiculoServico() {
       queryClient.invalidateQueries({ queryKey: ['rastreadores-meu-porte'] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
       queryClient.invalidateQueries({ queryKey: ['vistorias-mapa'] });
-      toast.success('Instalação concluída! Aguardando aprovação do monitoramento.');
+      toast.success('Instalação concluída! Aguardando aprovação do monitoramento para ativar a Proteção 360.');
     },
     onError: (error) => {
       console.error('Erro ao aprovar veículo:', error);

@@ -111,11 +111,13 @@ export function useAprovarInstalacaoMonitoramento() {
     mutationFn: async (data: AprovarData) => {
       const agora = new Date().toISOString();
 
-      // 1. Ativar cobertura total no veículo
+      // 1. Ativar cobertura total + roubo/furto (caso não tenha autovistoria) e status ativo
       const { error: veiculoError } = await supabase
         .from('veiculos')
         .update({
+          cobertura_roubo_furto: true,
           cobertura_total: true,
+          status: 'ativo',
           updated_at: agora,
         })
         .eq('id', data.veiculoId);
