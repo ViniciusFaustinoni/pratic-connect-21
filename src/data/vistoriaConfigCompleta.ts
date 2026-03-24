@@ -163,7 +163,7 @@ const MOTO_KEYWORDS = [
   'titan', 'fan', 'xre', 'lander', 'tenere', 'crosser', 'fazer', 'ybr',
   'neo', 'fluo', 'burgman', 'intruder', 'yes', 'gsr', 'v-strom', 'factor',
   'dl ', 'crf', 'sahara', 'twister', 'hornet', 'africa twin', 'ninja',
-  'z900', 'z800', 'z750', 'z400', 'versys', 'vulcan', 'next', 'riva',
+  'z900', 'z800', 'z750', 'z400', 'versys', 'vulcan', 'next', ' riva',
   'citycom', 'maxsym', 'boulevard', 'bandit', 'hayabusa', 'gsxr', 'gsx',
   // Modelos Honda moto faltantes (fallback)
   'elite', 'adv', 'sh ', 'sh-', 'lead', 'xadv', 'x-adv', 'transalp',
