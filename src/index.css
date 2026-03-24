@@ -174,12 +174,16 @@
   }
 
   /* Prevenir overflow horizontal global + iOS bounce */
-  html,
+  html {
+    overflow-x: hidden;
+    max-width: 100vw;
+  }
+
   body,
   #root {
     overflow-x: hidden;
     max-width: 100vw;
-    overscroll-behavior: none;
+    overscroll-behavior-y: none;
   }
 
   body {
@@ -548,6 +552,7 @@
     radial-gradient(ellipse 80% 50% at 50% -10%, hsl(218 67% 36% / 0.15), transparent 60%),
     radial-gradient(ellipse 60% 40% at 80% 50%, hsl(351 84% 49% / 0.05), transparent 50%),
     linear-gradient(180deg, hsl(214 63% 6%) 0%, hsl(215 65% 9%) 50%, hsl(214 63% 6%) 100%);
+  -webkit-overflow-scrolling: touch;
 }
 
 /* Header premium com glow */
