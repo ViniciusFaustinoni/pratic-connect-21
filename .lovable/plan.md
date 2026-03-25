@@ -1,48 +1,39 @@
 
 
-# Corrigir upload de vídeo 360° na autovistoria pública
+# Corrigir erros de enum e RLS para coordenador de monitoramento
 
-## Problema
-O vídeo é gravado com sucesso e o componente `VideoCapture` mostra o checkmark verde (preview local), mas o upload para o Supabase falha silenciosamente. O `videoUrl` no componente pai continua `null`, impedindo a transição para a Etapa 2.
+## Problemas identificados
 
-**Causa raiz**: O hook `useUploadFotoCotacaoVistoria` usa o cliente `supabase` autenticado. Na página pública de cotação, o usuário não tem sessão, então o upload ao storage e o insert na tabela `cotacoes_vistoria_fotos` falham por RLS.
+1. **Erro de enum**: `invalid input value for enum app_role: "analista_monitoramento"` — o valor nunca foi adicionado ao tipo `app_role`. A migration anterior inseriu em `app_roles_config` (tabela com coluna text), mas a tabela `user_roles` usa a coluna `role` do tipo `app_role` (enum). Ao tentar atribuir o role, falha.
 
-## Solução
+2. **RLS em `user_module_visibility`**: Apenas `diretor` e `desenvolvedor` podem gerenciar essa tabela. O coordenador de monitoramento (com `canCreateUser`) não consegue salvar os acessos a módulos dos membros da equipe.
 
-### 1. `src/hooks/useCotacaoVistoria.ts` — Usar `publicSupabase` no upload
-- Substituir `supabase` por `publicSupabase` nas operações de storage upload e upsert da tabela no `useUploadFotoCotacaoVistoria`
-- Isso já é feito no `useFinalizarVistoriaCotacao` (linha 164), então é uma questão de consistência
+## Solução — 1 migration SQL
 
-### 2. `src/components/instalador/VideoCapture.tsx` — Feedback visual correto
-- Não mostrar checkmark verde até o upload ser confirmado pelo pai
-- Adicionar prop `confirmed?: boolean` para que o pai sinalize quando o upload foi concluído
-- Enquanto `uploading` estiver true, mostrar spinner no lugar do check
-- Se o upload falhar (previewUrl existe mas confirmed=false e uploading=false), mostrar estado de "tentar novamente"
-
-### 3. `src/components/cotacao-publica/AutovistoriaCotacao.tsx` — Melhor tratamento de erro no vídeo
-- Quando o upload falhar, resetar o vídeo local chamando `handleVideoReset` para que o usuário possa tentar novamente
-- Ou manter o preview local e exibir botão de retry
-
-## Detalhes técnicos
-
-```text
-Fluxo atual (quebrado):
-VideoCapture.onstop → setPreviewUrl + onCapture(file)
-                       ↓ (local ✓)     ↓ (async upload)
-                     Mostra check     Upload falha (RLS)
-                                      videoUrl = null
-                                      → Preso na Etapa 1
-
-Fluxo corrigido:
-VideoCapture.onstop → setPreviewUrl + onCapture(file)
-                       ↓ (local)       ↓ (async upload com publicSupabase)
-                     Mostra spinner   Upload sucesso
-                                      videoUrl = url
-                                      → Avança para Etapa 2
+### 1. Adicionar valor ao enum
+```sql
+ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'analista_monitoramento';
 ```
 
-## Arquivos editados
-1. `src/hooks/useCotacaoVistoria.ts` — trocar `supabase` por `publicSupabase` no upload
-2. `src/components/instalador/VideoCapture.tsx` — prop `confirmed` para feedback correto
-3. `src/components/cotacao-publica/AutovistoriaCotacao.tsx` — passar `confirmed` e melhor tratamento de erro
+### 2. Nova política RLS em `user_module_visibility`
+Reutilizar a função `can_manage_users` (já criada) para permitir que coordenadores gerenciem visibilidade de módulos:
+
+```sql
+CREATE POLICY "Team managers can manage user visibility"
+  ON public.user_module_visibility FOR ALL TO authenticated
+  USING (public.can_manage_users(auth.uid()))
+  WITH CHECK (public.can_manage_users(auth.uid()));
+```
+
+### 3. Nova política RLS em `user_module_item_visibility` (mesma lógica)
+```sql
+CREATE POLICY "Team managers can manage user item visibility"
+  ON public.user_module_item_visibility FOR ALL TO authenticated
+  USING (public.can_manage_users(auth.uid()))
+  WITH CHECK (public.can_manage_users(auth.uid()));
+```
+
+## Arquivos
+- 1 migration SQL (enum + 2 políticas RLS)
+- Zero alterações no frontend
 
