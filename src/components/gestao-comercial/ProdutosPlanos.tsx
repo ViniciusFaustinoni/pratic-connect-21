@@ -928,6 +928,16 @@ export function ProdutosPlanos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+
+      {/* Dialog para gerenciar linhas de produto */}
+      <Dialog open={linhasDialogOpen} onOpenChange={setLinhasDialogOpen}>
+        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
+          <DialogHeader>
+            <DialogTitle>Gerenciar Linhas de Produto</DialogTitle>
+          </DialogHeader>
+          <LinhasTab />
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
