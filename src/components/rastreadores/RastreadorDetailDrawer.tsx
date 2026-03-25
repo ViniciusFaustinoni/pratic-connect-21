@@ -84,6 +84,7 @@ export function RastreadorDetailDrawer({
   const { data: rastreador, isLoading } = useRastreador(rastreadorId || undefined);
   const updateStatus = useUpdateRastreadorStatus();
   const deleteRastreador = useDeleteRastreador();
+  const { isDiretor } = usePermissions();
   const enviarComando = useEnviarComando();
 
   const [comandoDialog, setComandoDialog] = useState<{
