@@ -1,51 +1,80 @@
 
 
-# Detalhar carência e adicionar toggle de migração com upload
+# Adicionar tooltip "Excluir" com motivo quando sem permissão
 
-## Problema
-1. O alerta de carência mostra apenas "120 dias" sem especificar que é carência **geral** — e omite a carência de **vidros e faróis** (também configurável)
-2. A migração aparece como banner informativo passivo — o vendedor precisa sair do fluxo de cotação para solicitar migração separadamente
+## Contexto
+
+Hoje, quando o usuário não tem permissão para excluir, o botão/item simplesmente não aparece nos menus. Isso gera confusão pois o usuário não entende por que a opção sumiu. A melhoria é: em vez de esconder, mostrar o item desabilitado com tooltip explicando o motivo.
+
+## Locais afetados
+
+Há 3 componentes de cotação + 3 páginas com lógica similar:
+
+### Cotações (prioridade)
+1. **`CotacoesTable.tsx`** (linha ~594) — item "Excluir" no dropdown, escondido por `permissions.canDelete`
+2. **`CotacaoCard.tsx`** (linha ~588) — item "Excluir" no dropdown, escondido por `permissions?.canDelete !== false`
+3. **`CotacaoAcoes.tsx`** (linha ~241) — botão "Excluir Cotação" na página de detalhe, escondido por `canDelete`
+
+### Outros módulos (mesmo padrão)
+4. **`Contratos.tsx`** — "Excluir" escondido por `canDeleteContratos`
+5. **`AtivacoesList.tsx`** — "Excluir" escondido por `canDeleteAtivacoes`
+6. **`Associados.tsx`** — "Excluir" escondido por `canDeleteAssociados`
 
 ## Alterações
 
-### 1. `src/pages/vendas/Cotador.tsx` — Detalhar carência
+### Em cada local acima:
 
-Substituir o alerta único "Carência: 120 dias" por dois itens:
-- **Carência geral:** X dias (ou "Sem carência" se migração aprovada)
-- **Carência vidros/faróis:** Y dias (usando `useCarenciaVidrosDias()` que já existe no hook)
+Trocar o padrão:
+```tsx
+{canDelete && (
+  <DropdownMenuItem onClick={...}>Excluir</DropdownMenuItem>
+)}
+```
 
-Ambos na mesma Alert, em duas linhas.
+Por:
+```tsx
+<Tooltip>
+  <TooltipTrigger asChild>
+    <span> {/* span wrapper necessário para tooltip em item disabled */}
+      <DropdownMenuItem 
+        disabled={!canDelete}
+        onClick={canDelete ? handler : undefined}
+      >
+        Excluir
+      </DropdownMenuItem>
+    </span>
+  </TooltipTrigger>
+  {!canDelete && (
+    <TooltipContent>
+      Apenas o vendedor responsável ou diretores podem excluir
+    </TooltipContent>
+  )}
+</Tooltip>
+```
 
-### 2. `src/components/cotacoes/CotacaoFormDialog.tsx` — Mesma mudança
+A mensagem do tooltip varia por contexto:
+- **Cotações**: "Apenas o vendedor responsável ou diretores podem excluir" / "Cotações com contrato assinado/ativo não podem ser excluídas"
+- **Contratos**: "Apenas diretores podem excluir contratos"
+- **Associados**: "Apenas diretores podem excluir associados"
+- **Ativações**: "Apenas diretores podem excluir ativações"
 
-Aplicar a mesma alteração no dialog de cotação: importar `useCarenciaVidrosDias` e exibir as duas carências detalhadas.
+### `CotacaoAcoes.tsx` — Caso especial (botão, não dropdown)
 
-### 3. `src/pages/vendas/Cotador.tsx` — Toggle de migração
+Aqui o "Excluir" é um `Button` fora de dropdown. Mostrar sempre, desabilitado com tooltip quando `!canDelete`.
 
-Substituir o banner informativo de migração por:
-- Um **Switch** (interruptor) com label "É migração de outra associação?"
-- Quando ativado, exibir:
-  - Campo de texto para **nome da associação de origem**
-  - Área de **upload de comprovantes** (usando o storage bucket existente)
-  - Texto informativo: "X comprovantes exigidos · Prazo Yh"
-- Os documentos ficam vinculados à cotação para análise posterior
+### Adicionar `deleteReason` ao tipo de permissões
 
-### 4. `src/components/cotacoes/CotacaoFormDialog.tsx` — Mesmo toggle
+Expandir `CotacoesTablePermissions` e `CotacaoCardPermissions` com campo opcional `deleteReason?: string` para transportar o motivo contextual (ex: "contrato ativo" vs "não é o vendedor").
 
-Replicar o toggle de migração com upload no dialog de cotação.
+### Atualizar `getPermissions` em `Cotacoes.tsx`
 
-### 5. Novo componente `src/components/cotacoes/MigracaoToggle.tsx`
+Adicionar lógica para definir `deleteReason`:
+- Se tem contrato assinado/ativo → "Cotação com contrato ativo não pode ser excluída"
+- Se não é owner nem diretor → "Apenas o vendedor responsável ou diretores podem excluir"
 
-Componente reutilizável para ambos os locais (Cotador e CotacaoFormDialog):
-- Switch on/off
-- Campo associação de origem
-- Upload de comprovantes (drag & drop ou botão)
-- Upload para bucket `migracao-documentos` no Supabase Storage
-- Retorna `{ ativo, associacaoOrigem, arquivos[] }` via callback
+### Imports necessários
 
-### 6. Criar bucket `migracao-documentos` (migration SQL)
+Adicionar `TooltipProvider, Tooltip, TooltipTrigger, TooltipContent` nos 6 arquivos afetados (já existem no projeto via `@/components/ui/tooltip`).
 
-Bucket de storage para os comprovantes de migração enviados durante a cotação.
-
-4 arquivos alterados/criados, 1 migration.
+6 arquivos editados, nenhum arquivo novo.
 
