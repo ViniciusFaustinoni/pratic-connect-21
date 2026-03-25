@@ -67,7 +67,7 @@ export function PlacaDuplicadaModal({
           </div>
           <AlertDialogDescription className="text-left space-y-4">
             <p className="text-base">
-              A placa <span className="font-semibold text-foreground">{formatarPlaca(placa)}</span> já está vinculada a outro consultor e não pode ser utilizada para uma nova cotação no momento.
+              A placa <span className="font-semibold text-foreground">{formatarPlaca(placa)}</span> já está reservada para outro consultor por <strong>48 horas</strong> e não pode ser utilizada para uma nova cotação neste momento.
             </p>
             
             <div className="bg-muted/50 rounded-lg p-4 space-y-3 border">
