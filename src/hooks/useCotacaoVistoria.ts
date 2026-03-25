@@ -28,7 +28,7 @@ export function useFotosCotacaoVistoria(cotacaoId: string | null) {
     queryKey: ['cotacao-vistoria-fotos', cotacaoId],
     queryFn: async () => {
       if (!cotacaoId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await publicSupabase
         .from('cotacoes_vistoria_fotos')
         .select('*')
         .eq('cotacao_id', cotacaoId)
