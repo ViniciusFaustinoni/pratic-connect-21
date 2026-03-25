@@ -261,6 +261,31 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                 Dados Pessoais
               </h3>
               
+              {/* Tipo de profissional - apenas para novos */}
+              {!isEditing && (
+                <FormField
+                  control={form.control}
+                  name="tipoVistoriador"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de Profissional *</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="instalador_vistoriador">Vistoriador / Instalador</SelectItem>
+                          <SelectItem value="analista_monitoramento">Analista de Monitoramento</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
