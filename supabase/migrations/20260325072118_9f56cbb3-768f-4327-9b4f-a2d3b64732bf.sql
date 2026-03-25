@@ -1,0 +1,1 @@
+UPDATE planos SET ano_fabricacao_maximo = 2004 WHERE codigo IN ('especial', 'especial-plus');
