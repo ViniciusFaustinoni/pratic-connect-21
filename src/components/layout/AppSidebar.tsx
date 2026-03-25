@@ -230,7 +230,6 @@ const menuConfig: {
           icon: ShieldAlert,
         },
         { title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
-        },
       ],
     },
     {
