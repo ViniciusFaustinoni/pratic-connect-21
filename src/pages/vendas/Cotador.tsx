@@ -62,6 +62,8 @@ import { DadosProposta } from '@/types/proposta';
 import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { PlacaBlacklistModal } from '@/components/cotacoes/PlacaBlacklistModal';
+import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
+import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Switch } from '@/components/ui/switch';
