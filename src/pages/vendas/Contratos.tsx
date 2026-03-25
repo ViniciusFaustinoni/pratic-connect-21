@@ -648,7 +648,25 @@ export default function Contratos() {
                                 <DropdownMenuItem onClick={() => setDrawerContratoId(contrato.id)}>
                                   <Eye className="mr-2 h-4 w-4" /> Ver Detalhes
                                 </DropdownMenuItem>
-                                {canDeleteContratos && (
+                                {!canDeleteContratos ? (
+                                  <>
+                                    <DropdownMenuSeparator />
+                                    <TooltipProvider delayDuration={200}>
+                                      <Tooltip>
+                                        <TooltipTrigger asChild>
+                                          <span className="w-full">
+                                            <DropdownMenuItem disabled className="text-destructive">
+                                              <Trash className="mr-2 h-4 w-4" /> Excluir
+                                            </DropdownMenuItem>
+                                          </span>
+                                        </TooltipTrigger>
+                                        <TooltipContent side="left">
+                                          Apenas diretores podem excluir contratos
+                                        </TooltipContent>
+                                      </Tooltip>
+                                    </TooltipProvider>
+                                  </>
+                                ) : (
                                   <>
                                     <DropdownMenuSeparator />
                                     <DropdownMenuItem 

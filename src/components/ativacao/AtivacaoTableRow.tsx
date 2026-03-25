@@ -171,7 +171,7 @@ export function AtivacaoTableRow({
                   </DropdownMenuItem>
                 )}
 
-                {canDelete && (
+                {canDelete ? (
                   <>
                     <DropdownMenuSeparator />
                     <AlertDialog>
@@ -207,6 +207,25 @@ export function AtivacaoTableRow({
                         </AlertDialogFooter>
                       </AlertDialogContent>
                     </AlertDialog>
+                  </>
+                ) : (
+                  <>
+                    <DropdownMenuSeparator />
+                    <TooltipProvider delayDuration={200}>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span className="w-full">
+                            <DropdownMenuItem disabled className="text-destructive">
+                              <Trash2 className="h-4 w-4 mr-2" />
+                              Excluir
+                            </DropdownMenuItem>
+                          </span>
+                        </TooltipTrigger>
+                        <TooltipContent side="left">
+                          Apenas diretores podem excluir ativações
+                        </TooltipContent>
+                      </Tooltip>
+                    </TooltipProvider>
                   </>
                 )}
               </DropdownMenuContent>

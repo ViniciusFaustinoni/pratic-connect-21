@@ -475,6 +475,13 @@ Ficou com alguma dúvida? Estou à disposição!
             isGerando={isGerando}
             isDuplicando={duplicarMutation.isPending}
             canDelete={isDiretor || (cotacao?.vendedor_id === profile?.id && !contratoAssinado)}
+            deleteReason={
+              contratoAssinado 
+                ? 'Cotações com contrato ativo não podem ser excluídas'
+                : !(isDiretor || cotacao?.vendedor_id === profile?.id)
+                  ? 'Apenas o vendedor responsável ou diretores podem excluir'
+                  : undefined
+            }
             contratoAssinado={contratoAssinado}
           />
 
