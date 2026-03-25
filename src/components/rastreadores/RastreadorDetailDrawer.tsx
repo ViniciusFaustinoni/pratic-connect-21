@@ -1,4 +1,11 @@
 import { useState } from 'react';
+import { usePermissions } from '@/hooks/usePermissions';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
