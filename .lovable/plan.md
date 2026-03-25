@@ -1,54 +1,27 @@
 
 
-# Detectar técnicos offline por inatividade de localização
+# Ativar filtro de regiões na cotação
 
 ## Problema
-Quando um técnico fecha o app sem encerrar o serviço, o campo `em_servico` permanece `true` no banco. O hook `useEquipe.ts` usa apenas esse boolean para determinar se o técnico está online — nunca verifica há quanto tempo a última localização foi enviada. Resultado: técnicos aparecem "online" indefinidamente.
-
-O técnico envia localização a cada ~5 minutos via `useIniciarServico`. Se parou de enviar há mais de 10-15 minutos, está com o app fechado.
+O checkbox "Regiões Disponíveis" salva corretamente na tabela `planos_regioes`, mas o motor de cotação (`usePlanosCotacao.ts`) nunca consulta essa tabela — portanto nunca filtra planos por região. Os planos aparecem em todas as regiões desde que exista preço na tabela de mensalidade.
 
 ## Solução
-Duas camadas: detecção no frontend (visual) + limpeza automática no backend.
+Adicionar `planos_regioes` como filtro adicional no motor de cotação. Um plano só aparece se:
+1. Tem preço na `tabelas_preco_mensalidade` para a região (já existe)
+2. **E** tem a região vinculada em `planos_regioes` (novo filtro)
 
-### 1. `src/hooks/useEquipe.ts` — Verificar freshness do `updated_at`
+Se um plano não tem nenhuma região configurada em `planos_regioes`, ele será tratado como disponível em todas (para não quebrar planos existentes sem configuração).
 
-Na lógica que determina `status_operacional` (linha 177), além de checar `em_servico`, verificar se `updated_at` é recente (últimos 15 minutos). Se `em_servico=true` mas `updated_at` é antigo, marcar como `offline`.
+## Alterações
 
-```
-if (localizacao?.em_servico) {
-  const updatedAt = new Date(localizacao.updated_at).getTime();
-  const agoraMs = Date.now();
-  const LIMITE_INATIVIDADE_MS = 15 * 60 * 1000; // 15 minutos
-  
-  if (agoraMs - updatedAt > LIMITE_INATIVIDADE_MS) {
-    status_operacional = 'offline'; // App provavelmente fechado
-  } else {
-    // lógica existente de em_andamento/em_rota/etc
-  }
-}
-```
+### 1. `src/hooks/usePlanosCotacao.ts` — Buscar e filtrar por regiões do plano
 
-### 2. `src/hooks/useVistoriadoresRealtime.ts` — Mesma verificação
+- Na query de `planos_cotacao` (linha ~164), adicionar join: `planos_regioes(regiao_id)`
+- No `useMemo` que calcula os planos, adicionar verificação: se o plano tem `planos_regioes` configuradas E a região do cliente não está entre elas, negar o plano com motivo "Plano não disponível nesta região"
+- Se `planos_regioes` está vazio (sem configuração), manter comportamento atual (aceita todas)
 
-Aplicar a mesma lógica de freshness. Atualmente o default é `disponivel_operacional` — deve ser `offline` se `updated_at` ultrapassou o limite.
+### 2. `src/components/admin/planos/planFieldHints.ts` — Atualizar hint
 
-### 3. Edge Function `limpar-servico-inativo` — Limpeza automática (nova)
+Atualizar o texto do hint `regioes` para deixar claro que agora é um filtro ativo na cotação.
 
-Criar uma Edge Function agendada (cron a cada 10 minutos) que:
-- Busca registros em `vistoriadores_localizacao` com `em_servico=true` e `updated_at` mais antigo que 20 minutos
-- Atualiza `em_servico=false` para esses registros
-- Isso garante que mesmo sem o frontend aberto, o dado fica correto
-
-### 4. Cron job via `pg_cron`
-
-Agendar a Edge Function para rodar a cada 10 minutos usando `pg_cron` + `pg_net`.
-
-## Resumo de alterações
-
-| Arquivo | Mudança |
-|---------|---------|
-| `src/hooks/useEquipe.ts` | Adicionar check de freshness do `updated_at` (15 min) |
-| `src/hooks/useVistoriadoresRealtime.ts` | Mesma verificação de freshness |
-| `supabase/functions/limpar-servico-inativo/index.ts` | Nova Edge Function para limpar `em_servico` de registros inativos |
-| Cron job (SQL insert) | Agendar execução a cada 10 minutos |
-
+2 arquivos, mudança pontual no motor de cotação.
