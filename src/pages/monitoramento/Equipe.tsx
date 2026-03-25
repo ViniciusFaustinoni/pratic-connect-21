@@ -140,9 +140,9 @@ export default function Equipe() {
       {/* Header */}
       <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-4">
         <div>
-          <h1 className="text-2xl font-bold text-foreground">Equipe de Campo</h1>
+          <h1 className="text-2xl font-bold text-foreground">Equipe de Monitoramento</h1>
           <p className="text-muted-foreground">
-            Gerencie vistoriadores e instaladores em tempo real
+            Gerencie vistoriadores, instaladores e analistas de monitoramento
           </p>
         </div>
         <Button onClick={handleNovoProfissional} className="gap-2">
