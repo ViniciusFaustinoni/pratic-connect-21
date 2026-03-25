@@ -25,6 +25,7 @@ const tabGroups: TabGroup[] = [
     icon: Store,
     items: [
       { label: 'Planos, Produtos e Preços', shortLabel: 'Planos & Preços', icon: Package, description: 'Planos, linhas e faixas FIPE' },
+      { label: 'Linhas de Produto', shortLabel: 'Linhas de Produto', icon: Layers, description: 'Categorias e tipos de plano' },
       { label: 'Benefícios & Coberturas', shortLabel: 'Benefícios', icon: Shield, description: 'Cards de venda e marketing' },
       { label: 'Adicionais', shortLabel: 'Adicionais', icon: Gift, description: 'Opcionais com valor extra' },
     ],
