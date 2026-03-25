@@ -2,7 +2,9 @@ import { useState, useEffect } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { z } from 'zod';
-import { Loader2 } from 'lucide-react';
+import { Loader2, KeyRound, Mail } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 import {
   Dialog,
   DialogContent,
@@ -43,6 +45,7 @@ export type StatusProfissional = 'disponivel' | 'indisponivel';
 
 export interface Profissional {
   id: string;
+  userId?: string;
   nome: string;
   cpf: string;
   email: string;
@@ -155,6 +158,10 @@ type FormSchema = z.infer<typeof profissionalSchema>;
 
 export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: ProfissionalModalProps) {
   const [loadingCep, setLoadingCep] = useState(false);
+  const [novoEmail, setNovoEmail] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [loadingEmail, setLoadingEmail] = useState(false);
+  const [loadingSenha, setLoadingSenha] = useState(false);
   const isEditing = !!profissional;
 
   const defaultValues: FormSchema = {
@@ -233,6 +240,51 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
       form.setValue('regioes', current.filter(r => r !== value));
     } else {
       form.setValue('regioes', [...current, value]);
+    }
+  };
+
+  const handleAlterarEmail = async () => {
+    if (!profissional?.userId || !novoEmail) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(novoEmail)) {
+      toast.error('Email inválido');
+      return;
+    }
+    setLoadingEmail(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-update-email', {
+        body: { userId: profissional.userId, novoEmail },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success('Email alterado com sucesso');
+      setNovoEmail('');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alterar email');
+    } finally {
+      setLoadingEmail(false);
+    }
+  };
+
+  const handleRedefinirSenha = async () => {
+    if (!profissional?.userId || !novaSenha) return;
+    if (novaSenha.length < 8) {
+      toast.error('A senha deve ter pelo menos 8 caracteres');
+      return;
+    }
+    setLoadingSenha(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+        body: { userId: profissional.userId, novaSenha },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success('Senha redefinida com sucesso');
+      setNovaSenha('');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao redefinir senha');
+    } finally {
+      setLoadingSenha(false);
     }
   };
 
@@ -602,6 +654,67 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                     </FormItem>
                   )}
                 />
+              </div>
+            )}
+            {/* Seção: Gerenciar Acesso - apenas para edição com userId */}
+            {isEditing && profissional?.userId && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <KeyRound className="h-4 w-4" />
+                  Gerenciar Acesso
+                </h3>
+
+                <div className="space-y-3 p-4 border border-border rounded-lg bg-muted/30">
+                  {/* Alterar Email */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Alterar Email</label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="email"
+                        placeholder="Novo email"
+                        value={novoEmail}
+                        onChange={(e) => setNovoEmail(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!novoEmail || loadingEmail}
+                        onClick={handleAlterarEmail}
+                        className="gap-1 whitespace-nowrap"
+                      >
+                        {loadingEmail ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />}
+                        Alterar
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Redefinir Senha */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Redefinir Senha</label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        placeholder="Nova senha (mín. 8 caracteres)"
+                        value={novaSenha}
+                        onChange={(e) => setNovaSenha(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!novaSenha || loadingSenha}
+                        onClick={handleRedefinirSenha}
+                        className="gap-1 whitespace-nowrap"
+                      >
+                        {loadingSenha ? <Loader2 className="h-3 w-3 animate-spin" /> : <KeyRound className="h-3 w-3" />}
+                        Redefinir
+                      </Button>
+                    </div>
+                  </div>
+                </div>
               </div>
             )}
 

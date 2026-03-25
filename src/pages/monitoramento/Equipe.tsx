@@ -160,6 +160,7 @@ export default function Equipe() {
         onOpenChange={setModalOpen}
         profissional={profissionalSelecionado ? {
           id: profissionalSelecionado.id,
+          userId: profissionalSelecionado.user_id,
           nome: profissionalSelecionado.nome,
           cpf: profissionalSelecionado.cpf || '',
           email: profissionalSelecionado.email,
