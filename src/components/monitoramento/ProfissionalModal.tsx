@@ -565,6 +565,7 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                 />
               </div>
             </div>
+            )}
 
             {/* Seção: Acesso ao Sistema - apenas para novos profissionais */}
             {!isEditing && (
