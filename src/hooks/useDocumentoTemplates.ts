@@ -96,6 +96,7 @@ function transformTemplate(data: TemplateFromDB & { categoria: DocumentoCategori
     is_default_saida: (data as any).is_default_saida || false,
     is_default_rastreador: (data as any).is_default_rastreador || false,
     anexar_proposta: (data as any).anexar_proposta || false,
+    ordem_anexo: (data as any).ordem_anexo ?? 0,
   };
 }
 
