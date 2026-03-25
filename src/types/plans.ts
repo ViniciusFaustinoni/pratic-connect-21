@@ -12,7 +12,9 @@ export type ProductLine = Tables<'product_lines'>;
 export type Plan = Tables<'planos'>; // Atualizado: agora usa tabela unificada
 export type Benefit = Tables<'benefits'>;
 export type PlanBenefit = Tables<'planos_beneficios'>; // Atualizado: agora usa tabela unificada
+/** @deprecated Use Cobertura instead */
 export type MainCoverage = Tables<'main_coverages'>;
+export type Cobertura = Tables<'coberturas'>;
 
 // Alias para manter compatibilidade
 export type Plano = Plan;

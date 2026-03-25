@@ -5485,11 +5485,14 @@ export type Database = {
           codigo: string
           created_at: string | null
           descricao: string | null
+          display_order: number | null
           franquia_percentual: number | null
           franquia_valor: number | null
+          icon: string | null
           id: string
           nome: string
           percentual_cobertura: number | null
+          subtitle: string | null
           tipo: string
           valor_limite: number | null
         }
@@ -5499,11 +5502,14 @@ export type Database = {
           codigo: string
           created_at?: string | null
           descricao?: string | null
+          display_order?: number | null
           franquia_percentual?: number | null
           franquia_valor?: number | null
+          icon?: string | null
           id?: string
           nome: string
           percentual_cobertura?: number | null
+          subtitle?: string | null
           tipo: string
           valor_limite?: number | null
         }
@@ -5513,11 +5519,14 @@ export type Database = {
           codigo?: string
           created_at?: string | null
           descricao?: string | null
+          display_order?: number | null
           franquia_percentual?: number | null
           franquia_valor?: number | null
+          icon?: string | null
           id?: string
           nome?: string
           percentual_cobertura?: number | null
+          subtitle?: string | null
           tipo?: string
           valor_limite?: number | null
         }

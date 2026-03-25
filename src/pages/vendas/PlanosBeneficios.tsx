@@ -21,7 +21,7 @@ import { formatarMoeda } from '@/utils/format';
 import { LeadsDevGuard } from '@/components/leads/LeadsDevGuard';
 
 // Hooks para dados do Supabase
-import { useProductLines, usePlans, useMainCoverages } from '@/hooks/usePlans';
+import { useProductLines, usePlans, useCoberturas } from '@/hooks/usePlans';
 import { useBeneficiosAtivos } from '@/hooks/useBeneficiosAdmin';
 import { useResumoSaudeBeneficios, useCustoBeneficios, type CustoBeneficio } from '@/hooks/useCustoBeneficios';
 import { ResumoSaudeCard } from '@/components/beneficios/ResumoSaudeCard';
@@ -125,7 +125,7 @@ export default function PlanosBeneficios() {
   // Hooks para dados do Supabase
   const { data: productLines, isLoading: loadingLines, error: errorLines } = useProductLines();
   const { data: plans, isLoading: loadingPlans, error: errorPlans } = usePlans();
-  const { data: mainCoverages, isLoading: loadingCoverages } = useMainCoverages();
+  const { data: coberturas, isLoading: loadingCoverages } = useCoberturas(true);
   const { data: beneficiosAdicionais, isLoading: loadingBeneficios } = useBeneficiosAtivos();
   const { data: resumoSaude, isLoading: loadingResumo } = useResumoSaudeBeneficios();
   const { data: custosReais } = useCustoBeneficios();
@@ -298,14 +298,14 @@ export default function PlanosBeneficios() {
           ))}
 
           {/* Coberturas Principais */}
-          {!loadingCoverages && mainCoverages && mainCoverages.length > 0 && (
+           {!loadingCoverages && coberturas && coberturas.length > 0 && (
             <section>
               <h2 className="text-xl font-semibold mb-4">Coberturas Principais</h2>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {mainCoverages.map((coverage) => (
+                {coberturas.map((coverage) => (
                   <Card key={coverage.id} className="text-center p-4 hover:shadow-md transition-shadow">
                     <div className="text-3xl mb-2">{coverage.icon}</div>
-                    <p className="font-medium text-sm">{coverage.name}</p>
+                    <p className="font-medium text-sm">{coverage.nome}</p>
                     <p className="text-xs text-muted-foreground">{coverage.subtitle}</p>
                   </Card>
                 ))}
@@ -369,14 +369,14 @@ export default function PlanosBeneficios() {
           ))}
 
           {/* Coberturas Principais */}
-          {!loadingCoverages && mainCoverages && mainCoverages.length > 0 && (
+           {!loadingCoverages && coberturas && coberturas.length > 0 && (
             <section>
               <h2 className="text-xl font-semibold mb-4">Coberturas Principais</h2>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {mainCoverages.map((coverage) => (
+                {coberturas.map((coverage) => (
                   <Card key={coverage.id} className="text-center p-4 hover:shadow-md transition-shadow">
                     <div className="text-3xl mb-2">{coverage.icon}</div>
-                    <p className="font-medium text-sm">{coverage.name}</p>
+                    <p className="font-medium text-sm">{coverage.nome}</p>
                     <p className="text-xs text-muted-foreground">{coverage.subtitle}</p>
                   </Card>
                 ))}

@@ -4,6 +4,7 @@ import type {
   ProductLine, 
   Benefit, 
   MainCoverage,
+  Cobertura,
 } from '@/types/plans';
 
 // IDs de benefícios conhecidos
@@ -410,7 +411,7 @@ export function useBenefitsByCategory(category: string) {
 }
 
 /**
- * Hook para buscar as coberturas principais
+ * @deprecated Use useCoberturas instead
  */
 export function useMainCoverages() {
   return useQuery({
@@ -424,6 +425,30 @@ export function useMainCoverages() {
       
       if (error) throw error;
       return data as MainCoverage[];
+    },
+  });
+}
+
+/**
+ * Hook para buscar coberturas da tabela unificada `coberturas`
+ * @param onlyActive - Se true, filtra apenas ativas (default: false para gestão)
+ */
+export function useCoberturas(onlyActive = false) {
+  return useQuery({
+    queryKey: ['coberturas', onlyActive],
+    queryFn: async () => {
+      let query = supabase
+        .from('coberturas')
+        .select('*')
+        .order('display_order', { ascending: true, nullsFirst: false });
+      
+      if (onlyActive) {
+        query = query.eq('ativo', true);
+      }
+      
+      const { data, error } = await query;
+      if (error) throw error;
+      return data as Cobertura[];
     },
   });
 }
