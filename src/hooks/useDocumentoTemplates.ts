@@ -263,6 +263,7 @@ interface UpdateTemplateInput {
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
+  ordem_anexo?: number;
 }
 
 export function useUpdateTemplate() {
