@@ -63,6 +63,7 @@ export function RastreadorTableView({
   onNewRastreador,
   getPlataformaLabel,
   isDiretor,
+  canManageEquipe,
   onViewMap,
 }: RastreadorTableViewProps) {
   const rastreadoresEstoque = rastreadores?.filter(r => r.status === 'estoque') || [];
