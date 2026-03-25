@@ -318,6 +318,9 @@ export function PlanFormModal({
       badge_color: formData.badge_color || null,
       coverage_type: formData.coverage_type || null,
       min_vehicle_year: formData.min_vehicle_year || null,
+      ano_fabricacao_maximo: formData.ano_fabricacao_maximo
+        ? parseInt(formData.ano_fabricacao_maximo)
+        : null,
       additional_price: formData.additional_price
         ? parseFloat(formData.additional_price)
         : null,
