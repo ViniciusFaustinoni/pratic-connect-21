@@ -77,7 +77,7 @@ export interface ProfissionalFormData {
   status: StatusProfissional;
   criarAcesso: boolean;
   senhaProvisoria: string;
-  tipoVistoriador: 'instalador_vistoriador';
+  tipoVistoriador: 'instalador_vistoriador' | 'analista_monitoramento';
 }
 
 interface ProfissionalModalProps {
