@@ -405,7 +405,22 @@ export function ProdutosPlanos() {
                     <DropdownMenuItem onClick={() => duplicatePlan.mutate(selectedPlan.id)}>
                       <Copy className="h-4 w-4 mr-2" /> Duplicar
                     </DropdownMenuItem>
-                    {selectedPlan.ativo ? (
+                    {!canDelete ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <DropdownMenuItem
+                              className="text-destructive opacity-50 cursor-not-allowed"
+                              onClick={(e) => e.preventDefault()}
+                              disabled
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                            </DropdownMenuItem>
+                          </TooltipTrigger>
+                          <TooltipContent>Apenas diretores podem excluir planos</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : selectedPlan.ativo ? (
                       <DropdownMenuItem
                         className="text-destructive opacity-50 cursor-not-allowed"
                         onClick={(e) => { e.preventDefault(); toast.error('Inative o plano antes de excluir'); }}

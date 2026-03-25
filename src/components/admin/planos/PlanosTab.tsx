@@ -219,6 +219,7 @@ export function PlanosTab() {
                     onEdit={() => handleEdit(plan)}
                     onDuplicate={() => handleDuplicate(plan.id)}
                     onDelete={() => setDeleteId(plan.id)}
+                    canDelete={canDelete}
                   />
                 ))}
             </div>

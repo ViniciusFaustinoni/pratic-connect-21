@@ -173,9 +173,18 @@ export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete, canDe
               <Button size="icon" variant="ghost" onClick={onDuplicate}>
                 <Copy className="h-4 w-4" />
               </Button>
-              <Button size="icon" variant="ghost" onClick={onDelete}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button size="icon" variant="ghost" onClick={onDelete} disabled={!canDelete}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!canDelete && <TooltipContent>Apenas diretores podem excluir planos</TooltipContent>}
+                </Tooltip>
+              </TooltipProvider>
               <CollapsibleTrigger asChild>
                 <Button size="icon" variant="ghost">
                   {expanded ? (

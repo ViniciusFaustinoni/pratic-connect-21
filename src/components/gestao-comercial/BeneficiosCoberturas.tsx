@@ -231,14 +231,24 @@ export function BeneficiosCoberturas() {
                     >
                       <Edit className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => { setDeleteType('coverage'); setDeleteConfirmId(cov.id); }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive"
+                              onClick={() => { setDeleteType('coverage'); setDeleteConfirmId(cov.id); }}
+                              disabled={!canDelete}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        {!canDelete && <TooltipContent>Apenas diretores podem excluir coberturas</TooltipContent>}
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                 </div>
                 {cov.icon && (
