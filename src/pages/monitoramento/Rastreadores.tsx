@@ -176,6 +176,7 @@ export default function Rastreadores() {
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             isDiretor={isDiretor}
+            canManageEquipe={canManageEquipeEstoque}
             onViewMap={handleViewMap}
           />
         </TabsContent>
