@@ -443,6 +443,7 @@ serve(async (req) => {
         .select('nome, conteudo')
         .eq('anexar_proposta', true)
         .eq('ativo', true)
+        .order('ordem_anexo')
         .order('nome');
 
       if (templatesAnexos && templatesAnexos.length > 0) {

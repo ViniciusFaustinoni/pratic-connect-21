@@ -39,6 +39,7 @@ const templateSchema = z.object({
   is_default_saida: z.boolean().default(false),
   is_default_rastreador: z.boolean().default(false),
   anexar_proposta: z.boolean().default(false),
+  ordem_anexo: z.coerce.number().int().min(0).default(0),
 });
 
 type TemplateFormData = z.infer<typeof templateSchema>;
@@ -69,6 +70,7 @@ export default function TemplateForm() {
       is_default_saida: false,
       is_default_rastreador: false,
       anexar_proposta: false,
+      ordem_anexo: 0,
     },
   });
 
@@ -87,6 +89,7 @@ export default function TemplateForm() {
         is_default_saida: (template as any).is_default_saida || false,
         is_default_rastreador: (template as any).is_default_rastreador || false,
         anexar_proposta: (template as any).anexar_proposta || false,
+        ordem_anexo: (template as any).ordem_anexo ?? 0,
       });
     }
   }, [template, isEditing, form]);
@@ -144,6 +147,7 @@ export default function TemplateForm() {
           is_default_saida: data.is_default_saida,
           is_default_rastreador: data.is_default_rastreador,
           anexar_proposta: data.anexar_proposta,
+          ordem_anexo: data.ordem_anexo,
         });
       }
       navigate('/documentos/templates');
@@ -436,6 +440,31 @@ export default function TemplateForm() {
                       </FormItem>
                     )}
                   />
+
+                  {form.watch('anexar_proposta') && (
+                    <FormField
+                      control={form.control}
+                      name="ordem_anexo"
+                      render={({ field }) => (
+                        <FormItem className="ml-8 max-w-xs">
+                          <FormLabel>Ordem de anexação</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              min={0}
+                              placeholder="0"
+                              {...field}
+                              onChange={(e) => field.onChange(Number(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Menor número = aparece primeiro no documento
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
 
                   <FormField
                     control={form.control}

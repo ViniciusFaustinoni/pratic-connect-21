@@ -36,6 +36,7 @@ interface TemplateFromDB {
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
+  ordem_anexo?: number;
 }
 
 // Tipo transformado para uso no frontend
@@ -69,6 +70,7 @@ export interface DocumentoTemplateView {
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
+  ordem_anexo?: number;
 }
 
 // Função para transformar dados do banco para o tipo do frontend
@@ -95,6 +97,7 @@ function transformTemplate(data: TemplateFromDB & { categoria: DocumentoCategori
     is_default_saida: (data as any).is_default_saida || false,
     is_default_rastreador: (data as any).is_default_rastreador || false,
     anexar_proposta: (data as any).anexar_proposta || false,
+    ordem_anexo: (data as any).ordem_anexo ?? 0,
   };
 }
 
@@ -179,6 +182,7 @@ interface CreateTemplateInput {
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
+  ordem_anexo?: number;
 }
 
 export function useCreateTemplate() {
@@ -217,6 +221,7 @@ export function useCreateTemplate() {
           is_default_saida: input.is_default_saida || false,
           is_default_rastreador: input.is_default_rastreador || false,
           anexar_proposta: input.anexar_proposta || false,
+          ordem_anexo: input.ordem_anexo ?? 0,
         })
         .select()
         .single();
@@ -259,6 +264,7 @@ interface UpdateTemplateInput {
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
+  ordem_anexo?: number;
 }
 
 export function useUpdateTemplate() {
@@ -297,6 +303,7 @@ export function useUpdateTemplate() {
       if (input.is_default_saida !== undefined) updateData.is_default_saida = input.is_default_saida;
       if (input.is_default_rastreador !== undefined) updateData.is_default_rastreador = input.is_default_rastreador;
       if (input.anexar_proposta !== undefined) updateData.anexar_proposta = input.anexar_proposta;
+      if (input.ordem_anexo !== undefined) updateData.ordem_anexo = input.ordem_anexo;
 
       const { data, error } = await supabase
         .from('documento_templates')

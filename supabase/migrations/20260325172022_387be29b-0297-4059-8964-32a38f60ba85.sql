@@ -1,0 +1,1 @@
+ALTER TABLE documento_templates ADD COLUMN ordem_anexo integer DEFAULT 0;
