@@ -336,6 +336,10 @@ export default function CotadorPage() {
     created_at: string;
   } | null>(null);
   const [showBlacklistModal, setShowBlacklistModal] = useState(false);
+  
+  // Estado para modal SGA
+  const [showSGAModal, setShowSGAModal] = useState(false);
+  const verificarVeiculoSGA = useVerificarVeiculoSGA();
 
   // Município de atendimento
   const [municipioBusca, setMunicipioBusca] = useState('');
