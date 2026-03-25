@@ -18,7 +18,7 @@ import { cn } from '@/lib/utils';
 const sectionBanners: Record<number, { title: string; help: string }> = {
   0: { title: 'Planos, Produtos e Preços', help: 'Cadastre planos, vincule produtos e defina a tabela de preços por faixa FIPE.' },
   1: { title: 'Linhas de Produto', help: 'Gerencie as linhas (categorias) dos seus planos: crie, edite, ordene e ative/desative.' },
-  2: { title: 'Benefícios & Coberturas', help: 'Gerencie benefícios dos cards de venda e coberturas de marketing.' },
+  2: { title: 'Coberturas & Benefícios', help: 'Catálogo global de coberturas e benefícios. Vincule aos planos em Planos & Preços.' },
   3: { title: 'Adicionais', help: 'Configure benefícios opcionais que o associado contrata por valor extra.' },
   4: { title: 'Simulador de Rateio', help: 'Simule a distribuição de custos entre associados antes de aplicar.' },
   5: { title: 'Configuração do Rateio', help: 'Defina percentuais, tetos, fundo de reserva e variáveis do rateio.' },
