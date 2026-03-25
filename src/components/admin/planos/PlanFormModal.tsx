@@ -234,7 +234,7 @@ export function PlanFormModal({
         name: '',
         slug: '',
         product_line_id: defaultProductLineId || '',
-        tipo_uso: 'passeio',
+        // tipo_uso derivado das categorias
         badge_text: '',
         badge_color: '',
         coverage_type: '',
