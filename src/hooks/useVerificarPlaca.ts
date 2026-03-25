@@ -25,7 +25,7 @@ const normalizarPlaca = (placa: string): string => {
  * 
  * Regras:
  * - Cotações ativas: status = rascunho, enviada, aceita
- * - Período: últimos 7 dias
+ * - Período: últimas 48 horas
  * - Retorna dados do vendedor responsável se existir
  */
 export function useVerificarPlacaDuplicada() {

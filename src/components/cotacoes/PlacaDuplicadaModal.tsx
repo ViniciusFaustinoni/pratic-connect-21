@@ -94,10 +94,18 @@ export function PlacaDuplicadaModal({
                 <span className="text-muted-foreground">Status:</span>
                 <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
               </div>
+
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Liberação em:</span>
+                <span className="font-medium text-foreground">
+                  {formatarData(addHours(new Date(info.createdAt), 48).toISOString())}
+                </span>
+              </div>
             </div>
             
             <p className="text-sm text-muted-foreground">
-              Para atender este cliente, entre em contato com o consultor responsável.
+              A placa será liberada automaticamente após 48h. Para atender este cliente antes disso, entre em contato com o consultor responsável.
             </p>
           </AlertDialogDescription>
         </AlertDialogHeader>
