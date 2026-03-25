@@ -314,6 +314,10 @@ export function ProdutosPlanos() {
             </SelectContent>
           </Select>
           <Badge variant="secondary">{plans?.length ?? 0} planos</Badge>
+          <Button variant="outline" size="sm" onClick={() => setLinhasDialogOpen(true)}>
+            <Layers className="h-4 w-4 mr-2" />
+            Gerenciar Linhas
+          </Button>
         </div>
         <Button onClick={() => { setProdutoEdit(null); setModalOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" />
