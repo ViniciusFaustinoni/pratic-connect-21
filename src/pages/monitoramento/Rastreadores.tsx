@@ -428,6 +428,7 @@ function RastreadoresContent({
         selectedCount={selectedIds.size}
         onAssignPortador={() => setLoteDialogOpen(true)}
         onClear={() => setSelectedIds(new Set())}
+        canAssign={canManageEquipe}
       />
 
       <AtribuirPortadorDialog

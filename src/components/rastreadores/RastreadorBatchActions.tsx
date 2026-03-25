@@ -43,14 +43,32 @@ export function RastreadorBatchActions({
               
               <div className="h-6 w-px bg-border" />
               
-              <Button
-                size="sm"
-                onClick={onAssignPortador}
-                className="gap-2"
-              >
-                <UserPlus className="h-4 w-4" />
-                Atribuir Portador
-              </Button>
+              {canAssign ? (
+                <Button
+                  size="sm"
+                  onClick={onAssignPortador}
+                  className="gap-2"
+                >
+                  <UserPlus className="h-4 w-4" />
+                  Atribuir Portador
+                </Button>
+              ) : (
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <span>
+                        <Button size="sm" className="gap-2" disabled>
+                          <UserPlus className="h-4 w-4" />
+                          Atribuir Portador
+                        </Button>
+                      </span>
+                    </TooltipTrigger>
+                    <TooltipContent>
+                      <p>Sem permissão para atribuir portador</p>
+                    </TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              )}
 
               {onBatchMaintenance && (
                 <Button
