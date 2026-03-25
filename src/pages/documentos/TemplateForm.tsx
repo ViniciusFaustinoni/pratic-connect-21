@@ -441,6 +441,31 @@ export default function TemplateForm() {
                     )}
                   />
 
+                  {form.watch('anexar_proposta') && (
+                    <FormField
+                      control={form.control}
+                      name="ordem_anexo"
+                      render={({ field }) => (
+                        <FormItem className="ml-8 max-w-xs">
+                          <FormLabel>Ordem de anexação</FormLabel>
+                          <FormControl>
+                            <Input 
+                              type="number" 
+                              min={0}
+                              placeholder="0"
+                              {...field}
+                              onChange={(e) => field.onChange(Number(e.target.value))}
+                            />
+                          </FormControl>
+                          <FormDescription>
+                            Menor número = aparece primeiro no documento
+                          </FormDescription>
+                          <FormMessage />
+                        </FormItem>
+                      )}
+                    />
+                  )}
+
                   <FormField
                     control={form.control}
                     name="descricao"
