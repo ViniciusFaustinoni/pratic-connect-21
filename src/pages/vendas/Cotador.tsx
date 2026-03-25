@@ -534,7 +534,7 @@ export default function CotadorPage() {
   // Verificar se pode calcular
   const podeCalcular = (modo === 'busca_placa' 
     ? veiculoEncontrado !== null 
-    : marca && modelo && ano) && categoriaVeiculo;
+    : marca && modelo && ano && placaBusca.replace(/[^A-Za-z0-9]/g, '').length >= 7) && categoriaVeiculo;
 
   // ============================================
   // HANDLERS
