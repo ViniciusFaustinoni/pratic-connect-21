@@ -37,9 +37,9 @@ export function useVerificarPlacaDuplicada() {
         return null;
       }
       
-      // Calcula data limite (7 dias atrás)
+      // Calcula data limite (48 horas atrás)
       const dataLimite = new Date();
-      dataLimite.setDate(dataLimite.getDate() - 7);
+      dataLimite.setHours(dataLimite.getHours() - 48);
       
       const { data, error } = await supabase
         .from('cotacoes')
