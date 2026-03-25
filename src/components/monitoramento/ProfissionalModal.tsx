@@ -243,6 +243,51 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
     }
   };
 
+  const handleAlterarEmail = async () => {
+    if (!profissional?.userId || !novoEmail) return;
+    const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
+    if (!emailRegex.test(novoEmail)) {
+      toast.error('Email inválido');
+      return;
+    }
+    setLoadingEmail(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-update-email', {
+        body: { userId: profissional.userId, novoEmail },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success('Email alterado com sucesso');
+      setNovoEmail('');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao alterar email');
+    } finally {
+      setLoadingEmail(false);
+    }
+  };
+
+  const handleRedefinirSenha = async () => {
+    if (!profissional?.userId || !novaSenha) return;
+    if (novaSenha.length < 8) {
+      toast.error('A senha deve ter pelo menos 8 caracteres');
+      return;
+    }
+    setLoadingSenha(true);
+    try {
+      const { data, error } = await supabase.functions.invoke('admin-reset-password', {
+        body: { userId: profissional.userId, novaSenha },
+      });
+      if (error) throw error;
+      if (data?.error) throw new Error(data.error);
+      toast.success('Senha redefinida com sucesso');
+      setNovaSenha('');
+    } catch (err: any) {
+      toast.error(err.message || 'Erro ao redefinir senha');
+    } finally {
+      setLoadingSenha(false);
+    }
+  };
+
   const onSubmit = (data: FormSchema) => {
     onSave(data as ProfissionalFormData);
     onOpenChange(false);
