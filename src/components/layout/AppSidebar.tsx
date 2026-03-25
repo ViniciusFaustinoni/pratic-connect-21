@@ -230,11 +230,6 @@ const menuConfig: {
           icon: ShieldAlert,
         },
         { title: 'Prestadores Parceiros', url: '/monitoramento/prestadores-parceiros', icon: Truck },
-        {
-          title: 'Config. Plataformas',
-          url: '/monitoramento/config-plataformas',
-          icon: Settings2,
-          permission: 'canManageRastreadores' as PermissionKey,
         },
       ],
     },
