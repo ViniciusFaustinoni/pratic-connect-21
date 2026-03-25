@@ -80,7 +80,7 @@ export default function Rastreadores() {
   const { data: rastreadores, isLoading } = useRastreadores(filters);
   const { data: metricas, isLoading: isLoadingMetricas } = useRastreadoresMetricas();
   const { data: plataformasLabels } = usePlataformasLabels();
-  const { isDiretor, isDesenvolvedor } = usePermissions();
+  const { isDiretor, isDesenvolvedor, canManageEquipeEstoque } = usePermissions();
 
   const canManagePlataformas = isDiretor || isDesenvolvedor;
 
