@@ -1,45 +1,25 @@
 
 
-# Restringir Exclusao de Planos e Beneficios ao Diretor
+# Gestão de Linhas de Produto dentro de Planos & Precos
 
 ## Problema
-Qualquer usuario com acesso a pagina de Gestao Comercial ou Gestao de Planos consegue excluir planos e beneficios. Apenas diretores (e super admins) devem ter essa permissao.
+Nao existe acesso para criar/editar Linhas de Produto dentro da Gestao Comercial. O componente `LinhasTab` existe em `/admin/planos` mas esta isolado.
 
 ## Solucao
-Adicionar verificacao `isDiretor || isSuperAdmin` nos componentes que exibem botoes de exclusao. Botoes ficam desabilitados com tooltip explicativo para quem nao tem permissao (seguindo a politica de feedback visual ja existente no projeto).
+Adicionar um botao "Gerenciar Linhas" ao lado do filtro de linhas no header da aba Planos & Precos. Ao clicar, abre um Dialog/Sheet com a listagem de linhas (cards com editar, duplicar, excluir, ativar/desativar) e botao "Nova Linha" — reaproveitando a logica ja existente no `LinhasTab` e `LinhaFormModal`.
 
 ## Alteracoes
 
 ### 1. `src/components/gestao-comercial/ProdutosPlanos.tsx`
-- Importar `usePermissions`
-- Extrair `isDiretor` e `isDesenvolvedor`/`isAdminMaster`
-- No dropdown de acoes do plano: desabilitar "Excluir" com tooltip "Apenas diretores podem excluir planos" quando o usuario nao for diretor/super admin
-- Manter a logica existente de "Inative antes de excluir" para planos ativos
+- Adicionar botao "Gerenciar Linhas" (icone Settings ou Layers) ao lado do Select de filtro de linhas (linha ~302)
+- Controlar state `linhasSheetOpen` para abrir um `Dialog` com o conteudo de gerenciamento
+- Dentro do Dialog, renderizar o componente `LinhasTab` existente
+- Importar `LinhasTab` de `@/components/admin/planos/LinhasTab`
+- Importar `Dialog, DialogContent, DialogHeader, DialogTitle` dos UI components
 
-### 2. `src/components/gestao-comercial/BeneficiosCoberturas.tsx`
-- Importar `usePermissions`
-- Desabilitar botao de excluir beneficio/cobertura com tooltip para usuarios sem permissao
-
-### 3. `src/components/admin/planos/PlanosTab.tsx`
-- Importar `usePermissions`
-- No `PlanCard`, passar prop `canDelete` baseada em `isDiretor || isSuperAdmin`
-- Desabilitar botao de excluir no card quando `canDelete` for false
-
-### 4. `src/components/admin/planos/PlanCard.tsx`
-- Aceitar prop opcional `canDelete?: boolean` (default true para retrocompatibilidade)
-- Quando `canDelete` for false, renderizar botao Trash2 desabilitado com Tooltip
-
-### 5. `src/components/admin/planos/BeneficiosTab.tsx`
-- Importar `usePermissions`
-- Desabilitar botao de excluir beneficio com tooltip quando usuario nao for diretor
-
-## Arquivos
+Resultado: o diretor filtra por linha E gerencia linhas no mesmo lugar, sem sair da pagina.
 
 | Arquivo | Tipo |
 |---|---|
 | `src/components/gestao-comercial/ProdutosPlanos.tsx` | Editado |
-| `src/components/gestao-comercial/BeneficiosCoberturas.tsx` | Editado |
-| `src/components/admin/planos/PlanosTab.tsx` | Editado |
-| `src/components/admin/planos/PlanCard.tsx` | Editado |
-| `src/components/admin/planos/BeneficiosTab.tsx` | Editado |
 
