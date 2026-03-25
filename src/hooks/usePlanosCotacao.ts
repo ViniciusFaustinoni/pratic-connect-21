@@ -421,6 +421,20 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
       if (!params.usoApp && tipoUsoPlano === 'aplicativo') continue;
 
+      // Filtrar por regiões disponíveis (planos_regioes)
+      const planoRegioes: { regiao_id: string }[] = (plano as any).planos_regioes || [];
+      if (planoRegioes.length > 0 && regioes && regioes.length > 0) {
+        // Encontrar o ID da região do cliente pelo código
+        const regiaoCliente = regioes.find(r => r.codigo.toLowerCase() === regiaoLower);
+        if (regiaoCliente) {
+          const planoTemRegiao = planoRegioes.some(pr => pr.regiao_id === regiaoCliente.id);
+          if (!planoTemRegiao) {
+            negados.push({ planoNome: plano.nome, motivo: 'Plano não disponível nesta região' });
+            continue;
+          }
+        }
+      }
+
       // Filtrar motos/carros/elétricos usando vehicle_type e linha_slug do banco
       const plSlug = plProductLine?.slug?.toLowerCase() || '';
       if (tipoVeiculo === 'moto' && vehicleType !== 'motorcycle') continue;
