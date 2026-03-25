@@ -240,47 +240,68 @@ export function CotacaoAcoes({
           </Select>
         </div>
 
-        {/* Excluir - apenas para diretores */}
-        {canDelete && (
-          <>
-            <Separator className="my-3" />
-            <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
-              <AlertDialogTrigger asChild>
-                <Button
-                  variant="destructive"
-                  className="w-full"
-                  disabled={isExcluindo}
-                >
-                  {isExcluindo ? (
-                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                  ) : (
-                    <Trash2 className="mr-2 h-4 w-4" />
-                  )}
-                  Excluir Cotação
-                </Button>
-              </AlertDialogTrigger>
-              <AlertDialogContent>
-                <AlertDialogHeader>
-                  <AlertDialogTitle>Excluir cotação?</AlertDialogTitle>
-                  <AlertDialogDescription>
-                    Esta ação não pode ser desfeita. A cotação e todos os registros vinculados (contratos, agendamentos, serviços) serão permanentemente removidos.
-                  </AlertDialogDescription>
-                </AlertDialogHeader>
-                <AlertDialogFooter>
-                  <AlertDialogCancel>Cancelar</AlertDialogCancel>
-                  <AlertDialogAction
-                    onClick={() => {
-                      onExcluir();
-                      setShowDeleteDialog(false);
-                    }}
-                    className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+        {/* Excluir */}
+        <Separator className="my-3" />
+        <TooltipProvider delayDuration={200}>
+          <Tooltip>
+            <TooltipTrigger asChild>
+              <span className="w-full">
+                {canDelete ? (
+                  <AlertDialog open={showDeleteDialog} onOpenChange={setShowDeleteDialog}>
+                    <AlertDialogTrigger asChild>
+                      <Button
+                        variant="destructive"
+                        className="w-full"
+                        disabled={isExcluindo}
+                      >
+                        {isExcluindo ? (
+                          <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                        ) : (
+                          <Trash2 className="mr-2 h-4 w-4" />
+                        )}
+                        Excluir Cotação
+                      </Button>
+                    </AlertDialogTrigger>
+                    <AlertDialogContent>
+                      <AlertDialogHeader>
+                        <AlertDialogTitle>Excluir cotação?</AlertDialogTitle>
+                        <AlertDialogDescription>
+                          Esta ação não pode ser desfeita. A cotação e todos os registros vinculados (contratos, agendamentos, serviços) serão permanentemente removidos.
+                        </AlertDialogDescription>
+                      </AlertDialogHeader>
+                      <AlertDialogFooter>
+                        <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                        <AlertDialogAction
+                          onClick={() => {
+                            onExcluir();
+                            setShowDeleteDialog(false);
+                          }}
+                          className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                        >
+                          Excluir
+                        </AlertDialogAction>
+                      </AlertDialogFooter>
+                    </AlertDialogContent>
+                  </AlertDialog>
+                ) : (
+                  <Button
+                    variant="destructive"
+                    className="w-full"
+                    disabled
                   >
-                    Excluir
-                  </AlertDialogAction>
-                </AlertDialogFooter>
-              </AlertDialogContent>
-            </AlertDialog>
-          </>
+                    <Trash2 className="mr-2 h-4 w-4" />
+                    Excluir Cotação
+                  </Button>
+                )}
+              </span>
+            </TooltipTrigger>
+            {!canDelete && deleteReason && (
+              <TooltipContent>
+                {deleteReason}
+              </TooltipContent>
+            )}
+          </Tooltip>
+        </TooltipProvider>
         )}
       </CardContent>
     </Card>
