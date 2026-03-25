@@ -1,20 +1,22 @@
 
 
-# Remover "Config. Plataformas" do menu Monitoramento
+# Corrigir sistema de imprevistos — cron crashando por enum inválido
 
-## Problema
-O item "Config. Plataformas" aparece no menu lateral de Monitoramento, mas essa funcionalidade já existe em Configurações > Integrações. É duplicado.
+## Diagnóstico
 
-## Alterações
+Encontrei a causa raiz nos logs do Supabase:
 
-### 1. `src/components/layout/AppSidebar.tsx` (~linha 233-237)
-Remover o item `Config. Plataformas` do array de itens do menu Monitoramento.
+```text
+[cron-reagendamento] Erro: invalid input value for enum tipo_servico: "vistoria_adesao"
+```
 
-### 2. `src/App.tsx` (~linha 631)
-Redirecionar a rota `/monitoramento/config-plataformas` para a página de configurações de integrações (em vez de manter a rota duplicada).
+O cron `cron-reagendamento-automatico` **crasha na Parte 2** porque filtra por tipos de serviço que **não existem no enum** do banco. O enum real é:
 
-### 3. `src/components/layout/GlobalBreadcrumb.tsx` (~linha 117)
-Remover a entrada de breadcrumb `/monitoramento/config-plataformas`.
-
-3 arquivos, remoção de item duplicado.
-
+| Enum real (`tipo_servico`) | O que o cron usa (errado) |
+|---|---|
+| `instalacao` | `instalacao` (OK) |
+| `vistoria_entrada` | `vistoria_adesao` (ERRADO) |
+| `vistoria_saida` | `vistoria_transferencia` (ERRADO) |
+| `vistoria_sinistro` | `vistoria_substituicao` (ERRADO) |
+| `vistoria_periodica` | `revistoria` (ERRADO) |
+| `vistoria_
