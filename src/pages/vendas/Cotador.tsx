@@ -614,7 +614,19 @@ export default function CotadorPage() {
         }
       }
       
-      // 3. Continuar com a busca do veículo
+      // 3. Verificar se veículo existe no SGA (Hinova)
+      try {
+        const sgaResult = await verificarVeiculoSGA.mutateAsync(placaBusca);
+        if (sgaResult.existe) {
+          setShowSGAModal(true);
+          setBuscandoPlaca(false);
+          return;
+        }
+      } catch (sgaError) {
+        console.warn('[SGA] Erro na verificação, continuando:', sgaError);
+      }
+      
+      // 4. Continuar com a busca do veículo
       const result = await getByPlaca(placaBusca.replace(/[^A-Za-z0-9]/g, ''));
       
       if (result.success && result.vehicleData) {
