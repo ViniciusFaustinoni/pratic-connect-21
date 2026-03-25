@@ -62,6 +62,8 @@ import { DadosProposta } from '@/types/proposta';
 import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { PlacaBlacklistModal } from '@/components/cotacoes/PlacaBlacklistModal';
+import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
+import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
 import { useAuth } from '@/contexts/AuthContext';
 import { usePermissions } from '@/hooks/usePermissions';
 import { Switch } from '@/components/ui/switch';
@@ -334,6 +336,10 @@ export default function CotadorPage() {
     created_at: string;
   } | null>(null);
   const [showBlacklistModal, setShowBlacklistModal] = useState(false);
+  
+  // Estado para modal SGA
+  const [showSGAModal, setShowSGAModal] = useState(false);
+  const verificarVeiculoSGA = useVerificarVeiculoSGA();
 
   // Município de atendimento
   const [municipioBusca, setMunicipioBusca] = useState('');
@@ -528,7 +534,7 @@ export default function CotadorPage() {
   // Verificar se pode calcular
   const podeCalcular = (modo === 'busca_placa' 
     ? veiculoEncontrado !== null 
-    : marca && modelo && ano) && categoriaVeiculo;
+    : marca && modelo && ano && placaBusca.replace(/[^A-Za-z0-9]/g, '').length >= 7) && categoriaVeiculo;
 
   // ============================================
   // HANDLERS
@@ -608,7 +614,19 @@ export default function CotadorPage() {
         }
       }
       
-      // 3. Continuar com a busca do veículo
+      // 3. Verificar se veículo existe no SGA (Hinova)
+      try {
+        const sgaResult = await verificarVeiculoSGA.mutateAsync(placaBusca);
+        if (sgaResult.existe) {
+          setShowSGAModal(true);
+          setBuscandoPlaca(false);
+          return;
+        }
+      } catch (sgaError) {
+        console.warn('[SGA] Erro na verificação, continuando:', sgaError);
+      }
+      
+      // 4. Continuar com a busca do veículo
       const result = await getByPlaca(placaBusca.replace(/[^A-Za-z0-9]/g, ''));
       
       if (result.success && result.vehicleData) {
@@ -726,7 +744,23 @@ export default function CotadorPage() {
 
     if (!podeCalcular) return;
 
-    setIsCalculando(true);
+    // No modo manual, verificar SGA antes de calcular
+    if (modo === 'manual') {
+      setIsCalculando(true);
+      try {
+        const sgaResult = await verificarVeiculoSGA.mutateAsync(placaBusca);
+        if (sgaResult.existe) {
+          setShowSGAModal(true);
+          setIsCalculando(false);
+          return;
+        }
+      } catch (sgaError) {
+        console.warn('[SGA] Erro na verificação manual, continuando:', sgaError);
+      }
+    } else {
+      setIsCalculando(true);
+    }
+
     await new Promise(resolve => setTimeout(resolve, 600));
     
     if (!valorFipe && marca && ano) {
@@ -1151,7 +1185,22 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               </>
             ) : (
               <>
-                {/* MODO MANUAL: Selects */}
+                {/* MODO MANUAL: Placa obrigatória + Selects */}
+                <div className="space-y-2 mb-4">
+                  <Label className="flex items-center gap-2">
+                    Placa do Veículo <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={placaBusca}
+                    onChange={(e) => setPlacaBusca(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                    placeholder="ABC1D23"
+                    className="uppercase font-mono text-lg"
+                    maxLength={8}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Placa obrigatória para verificação no sistema SGA
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   {/* Marca */}
                   <div className="space-y-2">
@@ -1999,6 +2048,13 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
         onOpenChange={setShowBlacklistModal}
         placa={placaBusca}
         info={blacklistInfo}
+      />
+      
+      {/* Modal Veículo já cadastrado no SGA */}
+      <VeiculoSGAModal
+        open={showSGAModal}
+        onOpenChange={setShowSGAModal}
+        placa={placaBusca}
       />
     </div>
   );

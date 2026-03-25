@@ -75,6 +75,8 @@ import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
+import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
+import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
 
 // Regiões disponíveis no sistema
 const REGIOES = [
@@ -193,6 +195,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Estado para modal de placa duplicada
   const [placaDuplicadaInfo, setPlacaDuplicadaInfo] = useState<PlacaDuplicadaInfo | null>(null);
   const [showPlacaDuplicadaModal, setShowPlacaDuplicadaModal] = useState(false);
+  
+  // Estado para modal SGA
+  const [showSGAModal, setShowSGAModal] = useState(false);
+  const verificarVeiculoSGA = useVerificarVeiculoSGA();
 
   // Estados para seleção FIPE manual
   type FipeMarcaComTipo = FipeMarca & { tipoFipe: 'carros' | 'motos' };
@@ -628,6 +634,18 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           // Placa é do MESMO vendedor - Apenas informa
           toast.info(`Você já possui uma cotação ativa para esta placa: ${placaDuplicada.numero}`);
         }
+      }
+      
+      // Verificar se veículo existe no SGA (Hinova)
+      try {
+        const sgaResult = await verificarVeiculoSGA.mutateAsync(placa);
+        if (sgaResult.existe) {
+          setShowSGAModal(true);
+          setBuscandoPlaca(false);
+          return;
+        }
+      } catch (sgaError) {
+        console.warn('[SGA] Erro na verificação, continuando:', sgaError);
       }
       
       const resultado = await getByPlaca(placa);
@@ -2560,6 +2578,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           info={placaDuplicadaInfo}
         />
       )}
+      
+      {/* Modal Veículo já cadastrado no SGA */}
+      <VeiculoSGAModal
+        open={showSGAModal}
+        onOpenChange={setShowSGAModal}
+        placa={placa}
+      />
     </>
   );
 }
