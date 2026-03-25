@@ -744,7 +744,23 @@ export default function CotadorPage() {
 
     if (!podeCalcular) return;
 
-    setIsCalculando(true);
+    // No modo manual, verificar SGA antes de calcular
+    if (modo === 'manual') {
+      setIsCalculando(true);
+      try {
+        const sgaResult = await verificarVeiculoSGA.mutateAsync(placaBusca);
+        if (sgaResult.existe) {
+          setShowSGAModal(true);
+          setIsCalculando(false);
+          return;
+        }
+      } catch (sgaError) {
+        console.warn('[SGA] Erro na verificação manual, continuando:', sgaError);
+      }
+    } else {
+      setIsCalculando(true);
+    }
+
     await new Promise(resolve => setTimeout(resolve, 600));
     
     if (!valorFipe && marca && ano) {
