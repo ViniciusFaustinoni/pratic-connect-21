@@ -636,6 +636,18 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         }
       }
       
+      // Verificar se veículo existe no SGA (Hinova)
+      try {
+        const sgaResult = await verificarVeiculoSGA.mutateAsync(placa);
+        if (sgaResult.existe) {
+          setShowSGAModal(true);
+          setBuscandoPlaca(false);
+          return;
+        }
+      } catch (sgaError) {
+        console.warn('[SGA] Erro na verificação, continuando:', sgaError);
+      }
+      
       const resultado = await getByPlaca(placa);
       
       if (resultado.success && resultado.vehicleData) {
