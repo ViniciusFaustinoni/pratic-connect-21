@@ -311,7 +311,7 @@ export default function CotacaoContratacao() {
   };
 
   return (
-    <div className="dark h-screen public-premium-bg relative overflow-y-auto overflow-x-hidden overscroll-y-none">
+    <div className="dark min-h-screen public-premium-bg relative overflow-x-hidden">
       {/* Ambient glow - simplified */}
       <div className="fixed inset-0 overflow-hidden pointer-events-none z-0">
         <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full h-[600px] bg-[radial-gradient(ellipse_80%_50%_at_50%_-20%,hsl(var(--primary)/0.12),transparent)]" />
