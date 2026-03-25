@@ -19,6 +19,7 @@ export function VideoCapture({
   onReset,
   videoUrl,
   uploading = false,
+  confirmed = false,
   maxDuration = 120, // 2 minutos padrão
   label = 'Vídeo 360°',
   cameraOnly = false,
