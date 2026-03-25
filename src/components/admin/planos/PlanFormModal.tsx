@@ -313,7 +313,7 @@ export function PlanFormModal({
       name: formData.name,
       slug: formData.slug,
       product_line_id: formData.product_line_id,
-      tipo_uso: formData.tipo_uso,
+      tipo_uso: formData.categorias_veiculo.includes('aplicativo') ? 'aplicativo' as const : 'passeio' as const,
       badge_text: formData.badge_text || null,
       badge_color: formData.badge_color || null,
       coverage_type: formData.coverage_type || null,
