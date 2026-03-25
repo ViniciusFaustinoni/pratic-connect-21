@@ -36,6 +36,7 @@ interface TemplateFromDB {
   is_default_saida?: boolean;
   is_default_rastreador?: boolean;
   anexar_proposta?: boolean;
+  ordem_anexo?: number;
 }
 
 // Tipo transformado para uso no frontend
