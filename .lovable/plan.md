@@ -1,39 +1,33 @@
 
 
-# Corrigir erros de enum e RLS para coordenador de monitoramento
+# Permitir coordenador de monitoramento alterar senha e email da equipe
 
-## Problemas identificados
+## Problema
+- A edge function `admin-update-email` verifica roles hardcoded (`diretor`/`admin_master`), bloqueando o coordenador de monitoramento.
+- A edge function `admin-reset-password` usa `has_permission('canResetPassword')` — funciona se a permissão estiver configurada no `app_roles_config`.
+- O modal de edição da Equipe (`ProfissionalModal`) não oferece campos para alterar senha ou email de profissionais existentes.
 
-1. **Erro de enum**: `invalid input value for enum app_role: "analista_monitoramento"` — o valor nunca foi adicionado ao tipo `app_role`. A migration anterior inseriu em `app_roles_config` (tabela com coluna text), mas a tabela `user_roles` usa a coluna `role` do tipo `app_role` (enum). Ao tentar atribuir o role, falha.
+## Solução
 
-2. **RLS em `user_module_visibility`**: Apenas `diretor` e `desenvolvedor` podem gerenciar essa tabela. O coordenador de monitoramento (com `canCreateUser`) não consegue salvar os acessos a módulos dos membros da equipe.
+### 1. Edge function `admin-update-email` — Usar permissão dinâmica
+Substituir o check hardcoded de roles por `has_permission(user_id, 'canUpdateEmail')`, igual ao padrão já usado em `admin-reset-password`.
 
-## Solução — 1 migration SQL
+### 2. Migration SQL — Adicionar permissões ao coordenador
+Atualizar o `app_roles_config` do `coordenador_monitoramento` para incluir `canResetPassword` e `canUpdateEmail` no array de permissions.
 
-### 1. Adicionar valor ao enum
-```sql
-ALTER TYPE public.app_role ADD VALUE IF NOT EXISTS 'analista_monitoramento';
-```
+### 3. `ProfissionalModal.tsx` — Seção de credenciais na edição
+Ao editar um profissional existente, exibir uma seção "Gerenciar Acesso" com:
+- Campo para alterar email + botão "Alterar Email"
+- Campo para nova senha + botão "Redefinir Senha"
+- Ambos chamam as edge functions `admin-update-email` e `admin-reset-password`
+- Usar o `user_id` do profissional (disponível via `ProfissionalEquipe`)
 
-### 2. Nova política RLS em `user_module_visibility`
-Reutilizar a função `can_manage_users` (já criada) para permitir que coordenadores gerenciem visibilidade de módulos:
+### 4. Passar `user_id` no fluxo de edição
+O `ProfissionalEquipe` já tem `user_id`. Atualizar a interface `Profissional` no modal para receber `userId` quando em modo edição, e adaptar `Equipe.tsx` para passar esse dado.
 
-```sql
-CREATE POLICY "Team managers can manage user visibility"
-  ON public.user_module_visibility FOR ALL TO authenticated
-  USING (public.can_manage_users(auth.uid()))
-  WITH CHECK (public.can_manage_users(auth.uid()));
-```
-
-### 3. Nova política RLS em `user_module_item_visibility` (mesma lógica)
-```sql
-CREATE POLICY "Team managers can manage user item visibility"
-  ON public.user_module_item_visibility FOR ALL TO authenticated
-  USING (public.can_manage_users(auth.uid()))
-  WITH CHECK (public.can_manage_users(auth.uid()));
-```
-
-## Arquivos
-- 1 migration SQL (enum + 2 políticas RLS)
-- Zero alterações no frontend
+## Arquivos editados
+1. `supabase/functions/admin-update-email/index.ts` — trocar check de roles por `has_permission`
+2. 1 migration SQL — adicionar `canResetPassword` e `canUpdateEmail` ao coordenador
+3. `src/components/monitoramento/ProfissionalModal.tsx` — seção de alteração de email/senha na edição
+4. `src/pages/monitoramento/Equipe.tsx` — passar `user_id` ao modal
 
