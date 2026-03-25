@@ -1,80 +1,41 @@
 
 
-# Adicionar tooltip "Excluir" com motivo quando sem permissão
+# Adicionar variáveis `{{oficina.*}}` nos Termos e Aditivos
 
-## Contexto
+## Problema
+As variáveis `{{oficina.nome}}`, `{{oficina.cnpj}}`, `{{oficina.telefone}}`, `{{oficina.whatsapp}}` e `{{oficina.endereco}}` já aparecem no seletor de variáveis do editor de templates, mas **não são substituídas** quando um termo ou aditivo é gerado via `autentique-create` / `autentique-create-by-token`. Apenas o fluxo de OS de saída (`autentique-os-saida-create`) já mapeia essas variáveis.
 
-Hoje, quando o usuário não tem permissão para excluir, o botão/item simplesmente não aparece nos menus. Isso gera confusão pois o usuário não entende por que a opção sumiu. A melhoria é: em vez de esconder, mostrar o item desabilitado com tooltip explicando o motivo.
-
-## Locais afetados
-
-Há 3 componentes de cotação + 3 páginas com lógica similar:
-
-### Cotações (prioridade)
-1. **`CotacoesTable.tsx`** (linha ~594) — item "Excluir" no dropdown, escondido por `permissions.canDelete`
-2. **`CotacaoCard.tsx`** (linha ~588) — item "Excluir" no dropdown, escondido por `permissions?.canDelete !== false`
-3. **`CotacaoAcoes.tsx`** (linha ~241) — botão "Excluir Cotação" na página de detalhe, escondido por `canDelete`
-
-### Outros módulos (mesmo padrão)
-4. **`Contratos.tsx`** — "Excluir" escondido por `canDeleteContratos`
-5. **`AtivacoesList.tsx`** — "Excluir" escondido por `canDeleteAtivacoes`
-6. **`Associados.tsx`** — "Excluir" escondido por `canDeleteAssociados`
+## Solução
+Adicionar suporte a oficina no fluxo principal de geração de documentos (termos/aditivos). Como contratos não possuem `oficina_id` diretamente, buscaremos a oficina vinculada pela **Ordem de Serviço** do contrato (se existir), permitindo que templates de termos e aditivos usem dados da oficina quando o contexto permitir.
 
 ## Alterações
 
-### Em cada local acima:
+### 1. `supabase/functions/_shared/termo-afiliacao-utils.ts`
+- Adicionar campo opcional `oficina?` à interface `TermoAfiliacaoData` com os campos: `nome`, `cnpj`, `telefone`, `whatsapp`, `logradouro`, `numero`, `bairro`, `cidade`, `estado`, `cep`
 
-Trocar o padrão:
-```tsx
-{canDelete && (
-  <DropdownMenuItem onClick={...}>Excluir</DropdownMenuItem>
-)}
-```
+### 2. `supabase/functions/_shared/template-utils.ts`
+- No `criarMapeamentoVariaveis`, adicionar bloco condicional `...(dados.oficina ? { ... } : {})` mapeando:
+  - `oficina.nome` → nome_fantasia ou razao_social
+  - `oficina.cnpj`
+  - `oficina.telefone`
+  - `oficina.whatsapp`
+  - `oficina.endereco` → endereço formatado completo (logradouro, numero - bairro - cidade/estado - CEP)
 
-Por:
-```tsx
-<Tooltip>
-  <TooltipTrigger asChild>
-    <span> {/* span wrapper necessário para tooltip em item disabled */}
-      <DropdownMenuItem 
-        disabled={!canDelete}
-        onClick={canDelete ? handler : undefined}
-      >
-        Excluir
-      </DropdownMenuItem>
-    </span>
-  </TooltipTrigger>
-  {!canDelete && (
-    <TooltipContent>
-      Apenas o vendedor responsável ou diretores podem excluir
-    </TooltipContent>
-  )}
-</Tooltip>
-```
+### 3. `supabase/functions/autentique-create/index.ts`
+- Após buscar o contrato, buscar OS vinculada (`ordens_servico` via `contrato_id` ou `veiculo_id + associado_id`) para obter `oficina_id`
+- Se encontrar `oficina_id`, buscar dados da oficina na tabela `oficinas`
+- Injetar em `templateData.oficina`
 
-A mensagem do tooltip varia por contexto:
-- **Cotações**: "Apenas o vendedor responsável ou diretores podem excluir" / "Cotações com contrato assinado/ativo não podem ser excluídas"
-- **Contratos**: "Apenas diretores podem excluir contratos"
-- **Associados**: "Apenas diretores podem excluir associados"
-- **Ativações**: "Apenas diretores podem excluir ativações"
+### 4. `supabase/functions/autentique-create-by-token/index.ts`
+- Mesma lógica: buscar OS → oficina e injetar nos dados do template
 
-### `CotacaoAcoes.tsx` — Caso especial (botão, não dropdown)
+### Comportamento
+- Se não houver oficina vinculada (ex: contrato novo sem OS), as variáveis `{{oficina.*}}` serão substituídas por "—" (comportamento padrão de limpeza já existente)
+- Nenhuma mudança no banco de dados necessária — as tabelas `oficinas` e `ordens_servico` já existem com os campos necessários
 
-Aqui o "Excluir" é um `Button` fora de dropdown. Mostrar sempre, desabilitado com tooltip quando `!canDelete`.
-
-### Adicionar `deleteReason` ao tipo de permissões
-
-Expandir `CotacoesTablePermissions` e `CotacaoCardPermissions` com campo opcional `deleteReason?: string` para transportar o motivo contextual (ex: "contrato ativo" vs "não é o vendedor").
-
-### Atualizar `getPermissions` em `Cotacoes.tsx`
-
-Adicionar lógica para definir `deleteReason`:
-- Se tem contrato assinado/ativo → "Cotação com contrato ativo não pode ser excluída"
-- Se não é owner nem diretor → "Apenas o vendedor responsável ou diretores podem excluir"
-
-### Imports necessários
-
-Adicionar `TooltipProvider, Tooltip, TooltipTrigger, TooltipContent` nos 6 arquivos afetados (já existem no projeto via `@/components/ui/tooltip`).
-
-6 arquivos editados, nenhum arquivo novo.
+### Arquivos editados
+1. `supabase/functions/_shared/termo-afiliacao-utils.ts` — interface
+2. `supabase/functions/_shared/template-utils.ts` — mapeamento
+3. `supabase/functions/autentique-create/index.ts` — busca e injeção
+4. `supabase/functions/autentique-create-by-token/index.ts` — busca e injeção
 
