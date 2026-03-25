@@ -268,6 +268,7 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
 export interface CotacoesTablePermissions {
   canEdit: boolean;
   canDelete: boolean;
+  deleteReason?: string;
   canSend: boolean;
   canDuplicate: boolean;
   canGenerateContract: boolean;
@@ -591,18 +592,26 @@ export function CotacoesTable({
                             </>
                           )}
                           
-                          {permissions.canDelete && (
-                            <>
-                              <DropdownMenuSeparator />
-                              <DropdownMenuItem 
-                                onClick={() => onExcluir(cotacao.id)}
-                                className="text-destructive focus:text-destructive"
-                              >
-                                <X className="h-4 w-4 mr-2" />
-                                Excluir
-                              </DropdownMenuItem>
-                            </>
-                          )}
+                          <DropdownMenuSeparator />
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span className="w-full">
+                                <DropdownMenuItem 
+                                  disabled={!permissions.canDelete}
+                                  onClick={permissions.canDelete ? () => onExcluir(cotacao.id) : undefined}
+                                  className="text-destructive focus:text-destructive"
+                                >
+                                  <X className="h-4 w-4 mr-2" />
+                                  Excluir
+                                </DropdownMenuItem>
+                              </span>
+                            </TooltipTrigger>
+                            {!permissions.canDelete && permissions.deleteReason && (
+                              <TooltipContent side="left">
+                                {permissions.deleteReason}
+                              </TooltipContent>
+                            )}
+                          </Tooltip>
                         </DropdownMenuContent>
                       </DropdownMenu>
                     </div>

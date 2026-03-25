@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent } from '@/components/ui/card';
 import { Separator } from '@/components/ui/separator';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -265,6 +266,7 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
 export interface CotacaoCardPermissions {
   canEdit: boolean;
   canDelete: boolean;
+  deleteReason?: string;
   canSend: boolean;
   canDuplicate: boolean;
   canGenerateContract: boolean;
@@ -585,18 +587,28 @@ export function CotacaoCard({
                   </DropdownMenuItem>
                 </>
               )}
-              {permissions?.canDelete !== false && (
-                <>
-                  <DropdownMenuSeparator />
-                  <DropdownMenuItem 
-                    className="text-destructive focus:text-destructive"
-                    onClick={() => onExcluir(cotacao.id)}
-                  >
-                    <Trash2 className="h-4 w-4 mr-2" />
-                    Excluir
-                  </DropdownMenuItem>
-                </>
-              )}
+              <DropdownMenuSeparator />
+              <TooltipProvider delayDuration={200}>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span className="w-full">
+                      <DropdownMenuItem 
+                        disabled={permissions?.canDelete === false}
+                        className="text-destructive focus:text-destructive"
+                        onClick={permissions?.canDelete !== false ? () => onExcluir(cotacao.id) : undefined}
+                      >
+                        <Trash2 className="h-4 w-4 mr-2" />
+                        Excluir
+                      </DropdownMenuItem>
+                    </span>
+                  </TooltipTrigger>
+                  {permissions?.canDelete === false && permissions?.deleteReason && (
+                    <TooltipContent side="left">
+                      {permissions.deleteReason}
+                    </TooltipContent>
+                  )}
+                </Tooltip>
+              </TooltipProvider>
             </DropdownMenuContent>
           </DropdownMenu>
         </div>

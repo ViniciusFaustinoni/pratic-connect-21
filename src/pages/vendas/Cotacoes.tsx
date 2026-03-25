@@ -572,9 +572,22 @@ export default function Cotacoes() {
   // Função para obter permissões de cada cotação
   const getPermissions = (cotacao: CotacaoWithRelations): CotacoesTablePermissions => {
     const isOwner = cotacao.vendedor_id === permissions.userId;
+    const contratoAtivo = ['assinado', 'ativo'].includes(cotacao.contrato?.status || '');
+    const canDelete = permissions.cotacao.canDelete || (isOwner && !contratoAtivo);
+    
+    let deleteReason: string | undefined;
+    if (!canDelete) {
+      if (contratoAtivo) {
+        deleteReason = 'Cotações com contrato ativo não podem ser excluídas';
+      } else {
+        deleteReason = 'Apenas o vendedor responsável ou diretores podem excluir';
+      }
+    }
+    
     return {
-      canEdit: (permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner)) && !['assinado', 'ativo'].includes(cotacao.contrato?.status || ''),
-      canDelete: permissions.cotacao.canDelete || (isOwner && !['assinado', 'ativo'].includes(cotacao.contrato?.status || '')),
+      canEdit: (permissions.cotacao.canEdit && (!permissions.cotacao.canEditOwnOnly || isOwner)) && !contratoAtivo,
+      canDelete,
+      deleteReason,
       canSend: permissions.cotacao.canSend && (!permissions.cotacao.canEditOwnOnly || isOwner),
       canDuplicate: permissions.cotacao.canDuplicate,
       canGenerateContract: permissions.cotacao.canGenerateContract && (!permissions.cotacao.canEditOwnOnly || isOwner),
