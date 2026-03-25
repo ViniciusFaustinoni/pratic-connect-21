@@ -89,6 +89,7 @@ export default function TemplateForm() {
         is_default_saida: (template as any).is_default_saida || false,
         is_default_rastreador: (template as any).is_default_rastreador || false,
         anexar_proposta: (template as any).anexar_proposta || false,
+        ordem_anexo: (template as any).ordem_anexo ?? 0,
       });
     }
   }, [template, isEditing, form]);
