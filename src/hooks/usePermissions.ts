@@ -118,6 +118,7 @@ export function usePermissions() {
   const isAnalistaCadastro = hasRole('analista_cadastro');
   const isCoordenadorMonitoramento = hasRole('coordenador_monitoramento');
   const isInstaladorVistoriador = hasRole('instalador_vistoriador');
+  const isAnalistaMonitoramento = hasRoleByName('analista_monitoramento');
   const isRegulador = hasRoleByName('regulador');
   const isAnalistaEventos = hasRoleByName('analista_eventos');
   const isSindicante = hasRoleByName('sindicante');
