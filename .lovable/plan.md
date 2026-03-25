@@ -1,52 +1,78 @@
 
 
-# Unificar "Tipo de Cliente" e "Categorias de Veículo Aceitas"
+# CRUD de Configuracoes na Gestao Comercial: Categorias, Categorias Especiais e Regioes
 
-## Problema
+## Situacao Atual
 
-O formulário de plano tem dois campos redundantes:
-- **Tipo de Cliente** (dropdown: Passeio/Aplicativo) — campo `tipo_uso` na tabela `planos`
-- **Categorias de Veículo Aceitas** (checkboxes: Passeio, Aplicativo, Moto, Diesel, etc.) — campo `categoria` na tabela `planos`
+Existem tres conjuntos de dados que o diretor precisa gerenciar, mas estao espalhados ou hardcoded:
 
-Ambos definem a mesma coisa: quais tipos de veículo o plano aceita. O "Tipo de Cliente" é restritivo (um valor) enquanto "Categorias" é flexível (múltiplos valores). A fonte de verdade deve ser apenas **Categorias de Veículo Aceitas**.
+1. **Categorias de Veiculo Aceitas** (passeio, aplicativo, moto, diesel, eletrico, especial_plus, lancamento) — hardcoded em `PlanFormModal.tsx` como `VEHICLE_CATEGORIES`. Usadas no formulario de plano para definir quais tipos de veiculo o plano aceita.
 
-## Impacto no Motor de Cotação
+2. **Categorias Especiais / Situacao do Veiculo** (chassi remarcado, placa vermelha, leilao, aplicativo, ex-taxi, etc.) — armazenadas na tabela `configuracoes` com chave `categorias_veiculo`. Usadas na cotacao para identificar a situacao especial do veiculo e aplicar depreciacao.
 
-Hoje o motor de cotação (`useCotacao.ts` linha 289-303) filtra planos por `tipo_uso`:
+3. **Regioes** — ja possuem tabela propria (`regioes`) com CRUD completo no hook `useRegioes.ts`, mas o gerenciamento esta no Mapa de Atendimento, sem interface dedicada na Gestao Comercial.
+
+## Plano
+
+### 1. Nova aba "Cadastros" no menu Gestao Comercial
+
+Adicionar ao grupo **Operacao** (ou criar grupo **Cadastros**) um novo item de menu: **"Cadastros Base"**. Essa aba tera 3 sub-abas internas:
+
+- **Categorias de Veiculo** — CRUD das categorias que aparecem no formulario de plano (passeio, moto, diesel...). Salvar na tabela `configuracoes` chave `categorias_veiculo_plano` como JSON array `[{value, label}]`.
+- **Categorias Especiais** — CRUD das situacoes especiais do veiculo na cotacao (chassi remarcado, leilao...). Ja usa `configuracoes` chave `categorias_veiculo`.
+- **Regioes** — CRUD completo usando a tabela `regioes` existente. Interface com lista, criar, editar, ativar/desativar.
+
+### 2. Migration: nova chave configuracoes
+
+Inserir `categorias_veiculo_plano` na tabela `configuracoes` com o JSON dos valores atuais hardcoded:
+```sql
+INSERT INTO configuracoes (chave, valor, categoria, descricao)
+VALUES ('categorias_veiculo_plano',
+  '[{"value":"passeio","label":"Passeio"},{"value":"aplicativo","label":"Aplicativo"},{"value":"moto","label":"Moto"},{"value":"diesel","label":"Diesel"},{"value":"eletrico","label":"Elétrico"},{"value":"especial_plus","label":"Especial Plus"},{"value":"lancamento","label":"Lançamento"}]',
+  'operacional',
+  'Categorias de veículo aceitas nos planos (usado no formulário de criação de plano)');
 ```
-planos.filter(p => p.tipo_uso === 'particular' || p.tipo_uso === 'passeio')
-```
 
-Precisamos migrar essa filtragem para usar `categorias_veiculo` (campo `categoria` no banco). Exemplo: se o veículo é "aplicativo", o plano só aparece se `categoria` contiver "aplicativo".
+### 3. Hook `useCategoriasVeiculoPlano`
 
-## Plano de Execução
+Novo hook em `useConteudosSistema.ts` que le a chave `categorias_veiculo_plano` do banco com fallback para os valores atuais.
 
-### 1. Remover campo "Tipo de Cliente" do formulário
-**Arquivo:** `PlanFormModal.tsx`
-- Remover o bloco `<Select>` de "Tipo de Cliente" (linhas 509-525)
-- Remover `tipo_uso` do state `formData` (linha 157)
-- Na submissão, derivar `tipo_uso` automaticamente das categorias selecionadas: se inclui "aplicativo" → `'aplicativo'`, senão → `'passeio'` (backward compatibility com banco)
+### 4. Componente `CadastrosBase.tsx`
 
-### 2. Atualizar motor de cotação para usar categorias
-**Arquivo:** `useCotacao.ts`
-- Trocar filtro de `tipo_uso` por verificação se a `categoria` do plano inclui a categoria do veículo sendo cotado
-- Manter fallback: plano sem categoria definida aceita qualquer veículo (backward compat)
+Novo componente com 3 sub-abas (Tabs):
 
-### 3. Atualizar motor avançado
-**Arquivo:** `useCotacaoAvancada.ts`
-- Mesma lógica: verificar `categoria` do plano em vez de `tipo_uso`
+**Sub-aba Categorias de Veiculo:**
+- Tabela com colunas: Valor (slug), Label, Acoes (editar/excluir)
+- Botao "Adicionar Categoria"
+- Dialog simples com campos: valor (slug auto-gerado), label
+- Salva via UPDATE na tabela `configuracoes` chave `categorias_veiculo_plano`
 
-### 4. Remover badge APP baseado em tipo_uso
-**Arquivo:** `PlanCard.tsx` (linha 114)
-- Derivar badge APP de `categorias_veiculo` em vez de `tipo_uso`
+**Sub-aba Categorias Especiais:**
+- Mesma mecanica, salva na chave `categorias_veiculo`
+- Campos: valor, label
+
+**Sub-aba Regioes:**
+- Lista de regioes da tabela `regioes` com useRegioes()
+- Botao criar, editar (dialog com campos: codigo, nome, descricao, cidades, multiplicador, ativa)
+- Toggle ativar/desativar inline
+- Botao excluir com confirmacao
+
+### 5. Atualizar PlanFormModal.tsx
+
+Substituir `VEHICLE_CATEGORIES` hardcoded pelo hook `useCategoriasVeiculoPlano()`, tornando as categorias dinamicas.
+
+### 6. Registrar na navegacao
+
+Adicionar item no `TabNavigation.tsx` e renderizar no `GestaoComercial.tsx`.
 
 ## Arquivos
 
-| Arquivo | Tipo |
+| Arquivo | Alteracao |
 |---|---|
-| `src/components/admin/planos/PlanFormModal.tsx` | Editado — remover campo Tipo de Cliente |
-| `src/hooks/useCotacao.ts` | Editado — filtrar por categoria |
-| `src/hooks/useCotacaoAvancada.ts` | Editado — filtrar por categoria |
-| `src/hooks/usePlansAdmin.ts` | Editado — derivar tipo_uso das categorias |
-| `src/components/admin/planos/PlanCard.tsx` | Editado — badge APP via categoria |
+| Nova migration | INSERT chave `categorias_veiculo_plano` |
+| `src/hooks/useConteudosSistema.ts` | Adicionar `useCategoriasVeiculoPlano` |
+| `src/components/gestao-comercial/CadastrosBase.tsx` | Novo — CRUD 3 sub-abas |
+| `src/components/gestao-comercial/TabNavigation.tsx` | Adicionar item "Cadastros Base" |
+| `src/pages/diretoria/GestaoComercial.tsx` | Renderizar CadastrosBase na nova aba |
+| `src/components/admin/planos/PlanFormModal.tsx` | Usar hook dinamico em vez de hardcoded |
 
