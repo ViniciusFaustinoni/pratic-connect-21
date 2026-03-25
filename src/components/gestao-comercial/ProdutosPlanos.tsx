@@ -1,5 +1,5 @@
 import { useState, useMemo, useRef } from 'react';
-import { Package, Plus, Users, DollarSign, Shield, ChevronRight, Edit, Copy, Trash2, MoreVertical, Star, Gift, MapPin, Upload, Download, History, Filter, Loader2, Layers } from 'lucide-react';
+import { Package, Plus, Users, DollarSign, Shield, ChevronRight, Edit, Copy, Trash2, MoreVertical, Star, Gift, MapPin, Upload, Download, History, Filter, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -33,8 +33,6 @@ import { VincularCoberturaModal, EditarCoberturaVinculadaModal, FaixaPrecoModal,
 import { VincularBeneficioModal } from '@/components/gestao-comercial/VincularBeneficioModal';
 import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
 import { TabelaPrecosTab } from '@/components/gestao-comercial/TabelaPrecosTab';
-import { LinhasTab } from '@/components/admin/planos/LinhasTab';
-import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { PlanWithDetails } from '@/hooks/usePlans';
 
 function formatCurrency(value: number) {
@@ -62,7 +60,6 @@ export function ProdutosPlanos() {
   const [planToggleConfirm, setPlanToggleConfirm] = useState<{ id: string; activate: boolean } | null>(null);
   // Beneficio modals
   const [vincularBeneficioOpen, setVincularBeneficioOpen] = useState(false);
-  const [linhasDialogOpen, setLinhasDialogOpen] = useState(false);
 
   // Faixa price modals (CRUD)
   const [faixaModalOpen, setFaixaModalOpen] = useState(false);
@@ -314,10 +311,6 @@ export function ProdutosPlanos() {
             </SelectContent>
           </Select>
           <Badge variant="secondary">{plans?.length ?? 0} planos</Badge>
-          <Button variant="outline" size="sm" onClick={() => setLinhasDialogOpen(true)}>
-            <Layers className="h-4 w-4 mr-2" />
-            Gerenciar Linhas
-          </Button>
         </div>
         <Button onClick={() => { setProdutoEdit(null); setModalOpen(true); }}>
           <Plus className="h-4 w-4 mr-2" />
@@ -928,16 +921,6 @@ export function ProdutosPlanos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
-
-      {/* Dialog para gerenciar linhas de produto */}
-      <Dialog open={linhasDialogOpen} onOpenChange={setLinhasDialogOpen}>
-        <DialogContent className="max-w-4xl max-h-[85vh] overflow-y-auto">
-          <DialogHeader>
-            <DialogTitle>Gerenciar Linhas de Produto</DialogTitle>
-          </DialogHeader>
-          <LinhasTab />
-        </DialogContent>
-      </Dialog>
     </div>
   );
 }
