@@ -24932,63 +24932,6 @@ export type Database = {
           },
         ]
       }
-      tabela_precos: {
-        Row: {
-          ativo: boolean | null
-          created_at: string | null
-          faixa_valor_max: number
-          faixa_valor_min: number
-          id: string
-          plano_id: string
-          updated_at: string | null
-          valor_adesao: number | null
-          valor_mensalidade: number
-          vigencia_fim: string | null
-          vigencia_inicio: string
-        }
-        Insert: {
-          ativo?: boolean | null
-          created_at?: string | null
-          faixa_valor_max: number
-          faixa_valor_min: number
-          id?: string
-          plano_id: string
-          updated_at?: string | null
-          valor_adesao?: number | null
-          valor_mensalidade: number
-          vigencia_fim?: string | null
-          vigencia_inicio?: string
-        }
-        Update: {
-          ativo?: boolean | null
-          created_at?: string | null
-          faixa_valor_max?: number
-          faixa_valor_min?: number
-          id?: string
-          plano_id?: string
-          updated_at?: string | null
-          valor_adesao?: number | null
-          valor_mensalidade?: number
-          vigencia_fim?: string | null
-          vigencia_inicio?: string
-        }
-        Relationships: [
-          {
-            foreignKeyName: "tabela_precos_plano_id_fkey"
-            columns: ["plano_id"]
-            isOneToOne: false
-            referencedRelation: "planos"
-            referencedColumns: ["id"]
-          },
-          {
-            foreignKeyName: "tabela_precos_plano_id_fkey"
-            columns: ["plano_id"]
-            isOneToOne: false
-            referencedRelation: "vw_plans_compat"
-            referencedColumns: ["id"]
-          },
-        ]
-      }
       tabelas_preco_mensalidade: {
         Row: {
           categoria: string | null
