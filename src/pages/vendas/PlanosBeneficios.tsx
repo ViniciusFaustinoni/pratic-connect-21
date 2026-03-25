@@ -21,7 +21,7 @@ import { formatarMoeda } from '@/utils/format';
 import { LeadsDevGuard } from '@/components/leads/LeadsDevGuard';
 
 // Hooks para dados do Supabase
-import { useProductLines, usePlans, useMainCoverages } from '@/hooks/usePlans';
+import { useProductLines, usePlans, useCoberturas } from '@/hooks/usePlans';
 import { useBeneficiosAtivos } from '@/hooks/useBeneficiosAdmin';
 import { useResumoSaudeBeneficios, useCustoBeneficios, type CustoBeneficio } from '@/hooks/useCustoBeneficios';
 import { ResumoSaudeCard } from '@/components/beneficios/ResumoSaudeCard';
