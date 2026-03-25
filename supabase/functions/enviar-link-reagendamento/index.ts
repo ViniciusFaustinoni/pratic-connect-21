@@ -60,13 +60,13 @@ Deno.serve(async (req) => {
     const primeiroNome = associado.nome?.split(" ")[0] || "Associado";
 
     const TIPO_LABELS: Record<string, string> = {
-      vistoria_adesao: "vistoria",
-      vistoria_transferencia: "vistoria",
-      vistoria_substituicao: "vistoria",
-      revistoria: "vistoria",
+      vistoria_entrada: "vistoria",
+      vistoria_saida: "vistoria",
+      vistoria_sinistro: "vistoria",
+      vistoria_periodica: "vistoria",
       instalacao: "instalação do rastreador",
-      manutencao: "manutenção do rastreador",
-      retirada: "retirada do rastreador",
+      vistoria_manutencao: "manutenção do rastreador",
+      vistoria_retirada: "retirada do rastreador",
     };
     const tipoLabel = TIPO_LABELS[servico.tipo] || "serviço";
 
