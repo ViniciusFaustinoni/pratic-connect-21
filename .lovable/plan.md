@@ -1,29 +1,44 @@
 
 
-# Bloquear FIPE Menor para veiculos com FIPE <= R$30.000
+# Ordenacao de Templates Anexados a Proposta
 
-## Alteracao
+## Problema
+Os templates marcados com "Anexar a Proposta" sao ordenados por `nome` (alfabetico). O usuario precisa controlar a ordem em que esses documentos aparecem no PDF e no contrato Autentique.
 
-No `useMemo` de `fipeMenorInfo` (linha 364 de `CotacaoFormDialog.tsx`), adicionar uma validacao no inicio: se `valorFipe <= 30000`, retornar `null` — o que oculta toda a secao "Solicitar FIPE Menor".
+## Solucao
+Adicionar coluna `ordem_anexo` (integer, default 0) na tabela `documento_templates`. Usar essa coluna para ordenar os templates anexados em vez de ordenar por nome.
 
-Opcionalmente, em vez de ocultar, podemos mostrar a secao desabilitada com uma mensagem explicativa ("Nao disponivel para veiculos com FIPE igual ou inferior a R$ 30.000,00"). A abordagem mais limpa e simplesmente nao renderizar o bloco, ja que o `null` ja faz isso automaticamente.
+## Alteracoes
 
-O valor limite (R$ 30.000) sera lido da tabela `configuracoes` para manter o padrao dinamico do projeto — chave `fipe_menor_limite_minimo`. Fallback para 30000 caso a config nao exista.
+### 1. Migration SQL
+```sql
+ALTER TABLE documento_templates ADD COLUMN ordem_anexo integer DEFAULT 0;
+```
+
+### 2. `src/pages/documentos/TemplateForm.tsx`
+Adicionar campo numerico "Ordem de anexacao" que aparece condicionalmente quando `anexar_proposta` esta ativo. Input numerico simples (0, 1, 2...) com descricao "Menor numero = aparece primeiro".
+
+### 3. `src/hooks/useDocumentoTemplates.ts`
+Incluir `ordem_anexo` nos tipos `DocumentoTemplateDB`, `CreateTemplateInput`, `UpdateTemplateInput` e nos mapeamentos de create/update.
+
+### 4. Queries de anexacao — trocar `.order('nome')` por `.order('ordem_anexo')`
+| Arquivo | Linha |
+|---|---|
+| `src/hooks/useGerarProposta.ts` | ~394 |
+| `supabase/functions/autentique-create/index.ts` | ~477 |
+| `supabase/functions/autentique-create-by-token/index.ts` | ~446 |
+
+### 5. Lista de templates — indicador visual de ordem
+Na listagem de templates (se houver), mostrar a ordem de anexacao como badge quando `anexar_proposta` esta ativo, para o usuario ter visibilidade.
 
 ## Arquivos editados
 
-| Arquivo | Alteracao |
+| Arquivo | Tipo |
 |---|---|
-| `src/components/cotacoes/CotacaoFormDialog.tsx` | No `useMemo` de `fipeMenorInfo`, retornar `null` quando `valorFipe <= limiteMinimo`. Adicionar query para buscar o limite da tabela `configuracoes`. |
-
-## Detalhe tecnico
-
-```
-// No useMemo fipeMenorInfo, logo apos o primeiro if:
-if (valorFipe <= fipeMenorLimiteMinimo) return null;
-```
-
-A config sera buscada com um hook inline (useQuery) similar ao padrao `useValorPorCota`:
-- Chave: `fipe_menor_limite_minimo`
-- Fallback: `30000`
+| Migration SQL | Novo |
+| `src/pages/documentos/TemplateForm.tsx` | Editado |
+| `src/hooks/useDocumentoTemplates.ts` | Editado |
+| `src/hooks/useGerarProposta.ts` | Editado |
+| `supabase/functions/autentique-create/index.ts` | Editado |
+| `supabase/functions/autentique-create-by-token/index.ts` | Editado |
 
