@@ -3124,7 +3124,7 @@ serve(async (req) => {
       .from('confirmacoes_agendamento')
       .select('*, servico:servicos(id, profissional_id, hora_agendada, confirmacao_whatsapp)')
       .in('telefone', telefonesBusca)
-      .in('status', ['enviada', 'reagendando'])
+      .in('status', ['enviada', 'reagendando', 'aguardando_confirmacao_vespera'])
       .order('created_at', { ascending: false })
       .limit(1)
       .maybeSingle();

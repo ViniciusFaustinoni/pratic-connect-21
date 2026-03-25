@@ -37,7 +37,7 @@ serve(async (req) => {
     const { data: pendentes, error: pendentesError } = await supabase
       .from('confirmacoes_agendamento')
       .select('id, servico_id, telefone, status, mensagem_enviada_em, contexto_ia')
-      .in('status', ['enviada', 'aguardando_confirmacao_manha', 'aguardando_confirmacao_encaixe'])
+      .in('status', ['enviada', 'aguardando_confirmacao_manha', 'aguardando_confirmacao_encaixe', 'aguardando_confirmacao_vespera'])
       .lt('mensagem_enviada_em', threshold.toISOString());
 
     if (pendentesError) {
