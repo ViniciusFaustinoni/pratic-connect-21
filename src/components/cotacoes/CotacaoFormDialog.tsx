@@ -75,6 +75,8 @@ import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
+import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
+import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
 
 // Regiões disponíveis no sistema
 const REGIOES = [
