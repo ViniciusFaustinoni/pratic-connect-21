@@ -39,6 +39,7 @@ const templateSchema = z.object({
   is_default_saida: z.boolean().default(false),
   is_default_rastreador: z.boolean().default(false),
   anexar_proposta: z.boolean().default(false),
+  ordem_anexo: z.coerce.number().int().min(0).default(0),
 });
 
 type TemplateFormData = z.infer<typeof templateSchema>;
