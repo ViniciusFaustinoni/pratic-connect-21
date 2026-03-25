@@ -487,8 +487,9 @@ export function useDeleteBenefit() {
   });
 }
 
-// ==================== MAIN COVERAGE MUTATIONS ====================
+// ==================== MAIN COVERAGE MUTATIONS (deprecated) ====================
 
+/** @deprecated Use cobertura mutations instead */
 export interface MainCoverageInput {
   name: string;
   subtitle?: string | null;
@@ -497,21 +498,78 @@ export interface MainCoverageInput {
   is_active?: boolean;
 }
 
+/** @deprecated */
 export function useCreateMainCoverage() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (input: MainCoverageInput) => {
+      const { data, error } = await supabase.from('main_coverages').insert(input).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['main_coverages'] }); toast.success('Cobertura criada!'); },
+    onError: (error: Error) => { toast.error(`Erro ao criar cobertura: ${error.message}`); },
+  });
+}
+
+/** @deprecated */
+export function useUpdateMainCoverage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, ...input }: MainCoverageInput & { id: string }) => {
+      const { data, error } = await supabase.from('main_coverages').update(input).eq('id', id).select().single();
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['main_coverages'] }); toast.success('Cobertura atualizada!'); },
+    onError: (error: Error) => { toast.error(`Erro ao atualizar cobertura: ${error.message}`); },
+  });
+}
+
+/** @deprecated */
+export function useDeleteMainCoverage() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { error } = await supabase.from('main_coverages').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { queryClient.invalidateQueries({ queryKey: ['main_coverages'] }); toast.success('Cobertura excluída!'); },
+    onError: (error: Error) => { toast.error(`Erro ao excluir cobertura: ${error.message}`); },
+  });
+}
+
+// ==================== COBERTURA MUTATIONS (unified) ====================
+
+export interface CoberturaInput {
+  nome: string;
+  codigo?: string;
+  descricao?: string | null;
+  tipo?: string | null;
+  icon?: string | null;
+  subtitle?: string | null;
+  display_order?: number;
+  ativo?: boolean;
+}
+
+export function useCreateCobertura() {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (input: CoberturaInput) => {
       const { data, error } = await supabase
-        .from('main_coverages')
-        .insert(input)
+        .from('coberturas')
+        .insert({
+          ...input,
+          codigo: input.codigo || input.nome.toUpperCase().replace(/\s+/g, '-').slice(0, 20),
+          ativo: input.ativo ?? true,
+        })
         .select()
         .single();
       if (error) throw error;
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['main_coverages'] });
+      queryClient.invalidateQueries({ queryKey: ['coberturas'] });
       toast.success('Cobertura criada!');
     },
     onError: (error: Error) => {
@@ -520,13 +578,12 @@ export function useCreateMainCoverage() {
   });
 }
 
-export function useUpdateMainCoverage() {
+export function useUpdateCobertura() {
   const queryClient = useQueryClient();
-
   return useMutation({
-    mutationFn: async ({ id, ...input }: MainCoverageInput & { id: string }) => {
+    mutationFn: async ({ id, ...input }: CoberturaInput & { id: string }) => {
       const { data, error } = await supabase
-        .from('main_coverages')
+        .from('coberturas')
         .update(input)
         .eq('id', id)
         .select()
@@ -535,7 +592,7 @@ export function useUpdateMainCoverage() {
       return data;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['main_coverages'] });
+      queryClient.invalidateQueries({ queryKey: ['coberturas'] });
       toast.success('Cobertura atualizada!');
     },
     onError: (error: Error) => {
@@ -544,16 +601,17 @@ export function useUpdateMainCoverage() {
   });
 }
 
-export function useDeleteMainCoverage() {
+export function useDeleteCobertura() {
   const queryClient = useQueryClient();
-
   return useMutation({
     mutationFn: async (id: string) => {
-      const { error } = await supabase.from('main_coverages').delete().eq('id', id);
+      // Delete planos_coberturas links first
+      await supabase.from('planos_coberturas').delete().eq('cobertura_id', id);
+      const { error } = await supabase.from('coberturas').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['main_coverages'] });
+      queryClient.invalidateQueries({ queryKey: ['coberturas'] });
       toast.success('Cobertura excluída!');
     },
     onError: (error: Error) => {

@@ -5,7 +5,9 @@ import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/comp
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -16,32 +18,36 @@ import {
   AlertDialogHeader,
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { useBenefits, useMainCoverages, usePlans } from '@/hooks/usePlans';
-import { useDeleteBenefit, useDeleteMainCoverage, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
+import { useBenefits, useCoberturas, usePlans } from '@/hooks/usePlans';
+import { useDeleteBenefit, useDeleteCobertura, useUpdateCobertura, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { BeneficioFormModal } from '@/components/admin/planos/BeneficioFormModal';
-import { CoberturaFormModal } from '@/components/admin/planos/CoberturaFormModal';
-import type { Benefit, MainCoverage } from '@/types/plans';
+import { CoberturaUnificadaFormModal } from '@/components/admin/planos/CoberturaUnificadaFormModal';
+import type { Benefit, Cobertura } from '@/types/plans';
 
 export function BeneficiosCoberturas() {
+  const [activeTab, setActiveTab] = useState('coberturas');
   const [filtroPlano, setFiltroPlano] = useState<string>('all');
 
   // Benefit modal state
   const [beneficioModalOpen, setBeneficioModalOpen] = useState(false);
   const [beneficioEdit, setBeneficioEdit] = useState<Benefit | null>(null);
+
+  // Cobertura modal state
+  const [coberturaModalOpen, setCoberturaModalOpen] = useState(false);
+  const [coberturaEdit, setCoberturaEdit] = useState<Cobertura | null>(null);
+
+  // Delete state
   const [deleteConfirmId, setDeleteConfirmId] = useState<string | null>(null);
   const [deleteType, setDeleteType] = useState<'benefit' | 'coverage'>('benefit');
 
-  // Coverage modal state
-  const [coberturaModalOpen, setCoberturaModalOpen] = useState(false);
-  const [coberturaEdit, setCoberturaEdit] = useState<MainCoverage | null>(null);
-
   const { data: benefits, isLoading: benefitsLoading } = useBenefits();
-  const { data: coverages, isLoading: coveragesLoading } = useMainCoverages();
+  const { data: coberturas, isLoading: coberturasLoading } = useCoberturas();
   const { data: plans } = usePlans();
   const deleteBenefit = useDeleteBenefit();
-  const deleteCoverage = useDeleteMainCoverage();
+  const deleteCobertura = useDeleteCobertura();
+  const updateCobertura = useUpdateCobertura();
   const duplicateBenefit = useDuplicateBenefit();
   const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
   const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
@@ -64,10 +70,10 @@ export function BeneficiosCoberturas() {
     },
   });
 
-  const isLoading = benefitsLoading || coveragesLoading;
+  const isLoading = benefitsLoading || coberturasLoading;
 
   if (isLoading) {
-    return <div className="grid grid-cols-2 gap-6"><Skeleton className="h-96" /><Skeleton className="h-96" /></div>;
+    return <div className="space-y-4"><Skeleton className="h-10 w-64" /><Skeleton className="h-96" /></div>;
   }
 
   // Filter benefits by plan
@@ -80,44 +86,121 @@ export function BeneficiosCoberturas() {
     if (deleteType === 'benefit') {
       deleteBenefit.mutate(deleteConfirmId);
     } else {
-      deleteCoverage.mutate(deleteConfirmId);
+      deleteCobertura.mutate(deleteConfirmId);
     }
     setDeleteConfirmId(null);
   };
 
+  const handleToggleCobertura = async (cob: Cobertura) => {
+    await updateCobertura.mutateAsync({
+      id: cob.id,
+      nome: cob.nome,
+      ativo: !cob.ativo,
+    });
+  };
+
   return (
     <div className="space-y-4">
-      {/* Filter by plan */}
-      <div className="flex items-center gap-3">
-        <Select value={filtroPlano} onValueChange={setFiltroPlano}>
-          <SelectTrigger className="w-[220px]">
-            <SelectValue placeholder="Filtrar por plano" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos os planos</SelectItem>
-            {plans?.map(p => (
-              <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-      </div>
+      <Tabs value={activeTab} onValueChange={setActiveTab}>
+        <TabsList>
+          <TabsTrigger value="coberturas" className="gap-1.5">
+            <Shield className="h-3.5 w-3.5" />
+            Coberturas ({coberturas?.length || 0})
+          </TabsTrigger>
+          <TabsTrigger value="beneficios" className="gap-1.5">
+            <Gift className="h-3.5 w-3.5" />
+            Benefícios ({benefits?.length || 0})
+          </TabsTrigger>
+        </TabsList>
 
-      <div className="grid grid-cols-1 lg:grid-cols-2 gap-6">
-        {/* Benefits column */}
-        <div className="space-y-3">
+        {/* ========== ABA COBERTURAS ========== */}
+        <TabsContent value="coberturas" className="space-y-4">
           <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-              <Gift className="h-4 w-4 text-primary" />
-              <h3 className="font-semibold">Benefícios de Marketing</h3>
-              <Badge variant="secondary" className="text-xs">Exibição no App & Site</Badge>
-            </div>
-            <Button size="sm" onClick={() => { setBeneficioEdit(null); setBeneficioModalOpen(true); }}>
+            <p className="text-sm text-muted-foreground">
+              Catálogo global de coberturas. Vincule aos planos em Planos & Preços.
+            </p>
+            <Button size="sm" onClick={() => { setCoberturaEdit(null); setCoberturaModalOpen(true); }}>
               <Plus className="h-3.5 w-3.5 mr-1" />
-              Novo
+              Nova Cobertura
             </Button>
           </div>
-          <p className="text-xs text-muted-foreground">
-            Catálogo de itens visuais exibidos no app do associado e materiais comerciais. Vincule-os aos planos na aba "Planos, Produtos e Preços".
+
+          <div className="space-y-2 max-h-[600px] overflow-y-auto">
+            {coberturas?.map(cob => (
+              <div key={cob.id} className="rounded-lg border bg-card p-3">
+                <div className="flex items-start justify-between">
+                  <div className="flex items-center gap-3">
+                    {cob.icon && <span className="text-xl">{cob.icon}</span>}
+                    <div>
+                      <div className="flex items-center gap-2">
+                        <p className="text-sm font-medium">{cob.nome}</p>
+                        {cob.codigo && (
+                          <Badge variant="outline" className="text-[10px] font-mono">{cob.codigo}</Badge>
+                        )}
+                      </div>
+                      {(cob.subtitle || cob.descricao) && (
+                        <p className="text-xs text-muted-foreground mt-0.5">{cob.subtitle || cob.descricao}</p>
+                      )}
+                    </div>
+                  </div>
+                  <div className="flex items-center gap-2">
+                    <Switch
+                      checked={cob.ativo ?? true}
+                      onCheckedChange={() => handleToggleCobertura(cob)}
+                    />
+                    <Button variant="ghost" size="icon" className="h-7 w-7"
+                      onClick={() => { setCoberturaEdit(cob); setCoberturaModalOpen(true); }}>
+                      <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
+                              onClick={() => { setDeleteType('coverage'); setDeleteConfirmId(cob.id); }}
+                              disabled={!canDelete}>
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        {!canDelete && <TooltipContent>Apenas diretores podem excluir coberturas</TooltipContent>}
+                      </Tooltip>
+                    </TooltipProvider>
+                  </div>
+                </div>
+              </div>
+            ))}
+            {(!coberturas || coberturas.length === 0) && (
+              <div className="text-center py-8 text-muted-foreground">
+                <Shield className="h-6 w-6 mx-auto mb-2 opacity-30" />
+                <p className="text-sm">Nenhuma cobertura cadastrada</p>
+              </div>
+            )}
+          </div>
+        </TabsContent>
+
+        {/* ========== ABA BENEFÍCIOS ========== */}
+        <TabsContent value="beneficios" className="space-y-4">
+          <div className="flex items-center justify-between gap-3">
+            <Select value={filtroPlano} onValueChange={setFiltroPlano}>
+              <SelectTrigger className="w-[220px]">
+                <SelectValue placeholder="Filtrar por plano" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos os planos</SelectItem>
+                {plans?.map(p => (
+                  <SelectItem key={p.id} value={p.id}>{p.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            <Button size="sm" onClick={() => { setBeneficioEdit(null); setBeneficioModalOpen(true); }}>
+              <Plus className="h-3.5 w-3.5 mr-1" />
+              Novo Benefício
+            </Button>
+          </div>
+
+          <p className="text-sm text-muted-foreground">
+            Catálogo de benefícios exibidos no app, site e materiais comerciais. Vincule-os aos planos em Planos & Preços.
           </p>
 
           <div className="space-y-2 max-h-[600px] overflow-y-auto">
@@ -133,35 +216,22 @@ export function BeneficiosCoberturas() {
                       )}
                     </div>
                     <div className="flex gap-1">
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        onClick={() => { setBeneficioEdit(benefit); setBeneficioModalOpen(true); }}
-                      >
+                      <Button variant="ghost" size="icon" className="h-7 w-7"
+                        onClick={() => { setBeneficioEdit(benefit); setBeneficioModalOpen(true); }}>
                         <Edit className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7"
-                        title="Duplicar"
+                      <Button variant="ghost" size="icon" className="h-7 w-7" title="Duplicar"
                         onClick={() => duplicateBenefit.mutate(benefit.id)}
-                        disabled={duplicateBenefit.isPending}
-                      >
+                        disabled={duplicateBenefit.isPending}>
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
                       <TooltipProvider>
                         <Tooltip>
                           <TooltipTrigger asChild>
                             <span>
-                              <Button
-                                variant="ghost"
-                                size="icon"
-                                className="h-7 w-7 text-destructive"
+                              <Button variant="ghost" size="icon" className="h-7 w-7 text-destructive"
                                 onClick={() => { setDeleteType('benefit'); setDeleteConfirmId(benefit.id); }}
-                                disabled={!canDelete}
-                              >
+                                disabled={!canDelete}>
                                 <Trash2 className="h-3.5 w-3.5" />
                               </Button>
                             </span>
@@ -193,78 +263,8 @@ export function BeneficiosCoberturas() {
               </div>
             )}
           </div>
-        </div>
-
-        {/* Coverages column */}
-        <div className="space-y-3">
-          <div className="flex items-center justify-between">
-          <div className="flex items-center gap-2">
-              <Shield className="h-4 w-4 text-primary" />
-              <h3 className="font-semibold">Coberturas Visuais</h3>
-              <Badge variant="secondary" className="text-xs">Site & Propostas</Badge>
-            </div>
-            <Button size="sm" onClick={() => { setCoberturaEdit(null); setCoberturaModalOpen(true); }}>
-              <Plus className="h-3.5 w-3.5 mr-1" />
-              Nova
-            </Button>
-          </div>
-          <p className="text-xs text-muted-foreground">
-            Ícones e textos de coberturas exibidos no site e propostas comerciais. Diferente das coberturas técnicas de sinistro (gerenciadas na sub-aba do plano).
-          </p>
-
-          <div className="space-y-2 max-h-[600px] overflow-y-auto">
-            {coverages?.map(cov => (
-              <div key={cov.id} className="rounded-lg border bg-card p-3">
-                <div className="flex items-start justify-between">
-                  <div>
-                    <p className="text-sm font-medium">{cov.name}</p>
-                    {cov.subtitle && (
-                      <p className="text-xs text-muted-foreground mt-0.5">{cov.subtitle}</p>
-                    )}
-                  </div>
-                  <div className="flex gap-1">
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7"
-                      onClick={() => { setCoberturaEdit(cov); setCoberturaModalOpen(true); }}
-                    >
-                      <Edit className="h-3.5 w-3.5" />
-                    </Button>
-                    <TooltipProvider>
-                      <Tooltip>
-                        <TooltipTrigger asChild>
-                          <span>
-                            <Button
-                              variant="ghost"
-                              size="icon"
-                              className="h-7 w-7 text-destructive"
-                              onClick={() => { setDeleteType('coverage'); setDeleteConfirmId(cov.id); }}
-                              disabled={!canDelete}
-                            >
-                              <Trash2 className="h-3.5 w-3.5" />
-                            </Button>
-                          </span>
-                        </TooltipTrigger>
-                        {!canDelete && <TooltipContent>Apenas diretores podem excluir coberturas</TooltipContent>}
-                      </Tooltip>
-                    </TooltipProvider>
-                  </div>
-                </div>
-                {cov.icon && (
-                  <Badge variant="outline" className="text-xs mt-2">{cov.icon}</Badge>
-                )}
-              </div>
-            ))}
-            {(!coverages || coverages.length === 0) && (
-              <div className="text-center py-8 text-muted-foreground">
-                <Shield className="h-6 w-6 mx-auto mb-2 opacity-30" />
-                <p className="text-sm">Nenhuma cobertura cadastrada</p>
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
+        </TabsContent>
+      </Tabs>
 
       {/* Modals */}
       <BeneficioFormModal
@@ -273,10 +273,10 @@ export function BeneficiosCoberturas() {
         benefit={beneficioEdit}
       />
 
-      <CoberturaFormModal
+      <CoberturaUnificadaFormModal
         open={coberturaModalOpen}
         onOpenChange={setCoberturaModalOpen}
-        coverage={coberturaEdit}
+        cobertura={coberturaEdit}
       />
 
       {/* Delete confirmation */}
@@ -287,7 +287,7 @@ export function BeneficiosCoberturas() {
             <AlertDialogDescription>
               {deleteType === 'benefit'
                 ? 'Este benefício será removido permanentemente, incluindo todos os vínculos com planos.'
-                : 'Esta cobertura será removida permanentemente.'}
+                : 'Esta cobertura será removida permanentemente, incluindo todos os vínculos com planos.'}
             </AlertDialogDescription>
           </AlertDialogHeader>
           <AlertDialogFooter>
