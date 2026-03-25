@@ -1,60 +1,48 @@
 
 
-# Corrigir RLS para permitir coordenador de monitoramento gerenciar equipe
+# Corrigir upload de vídeo 360° na autovistoria pública
 
 ## Problema
-As políticas de RLS atuais usam a função `is_gerencia()` que só autoriza `diretor` e `gerente_comercial`. O coordenador de monitoramento não consegue:
-1. **Atualizar profiles** (nome, telefone, regiões, etc.) dos membros da equipe
-2. **Visualizar/gerenciar user_roles** para os perfis que gerencia
+O vídeo é gravado com sucesso e o componente `VideoCapture` mostra o checkmark verde (preview local), mas o upload para o Supabase falha silenciosamente. O `videoUrl` no componente pai continua `null`, impedindo a transição para a Etapa 2.
 
-A criação de novos usuários funciona porque usa a Edge Function `create-user` (service role key), mas a edição/toggle de status falha por RLS.
+**Causa raiz**: O hook `useUploadFotoCotacaoVistoria` usa o cliente `supabase` autenticado. Na página pública de cotação, o usuário não tem sessão, então o upload ao storage e o insert na tabela `cotacoes_vistoria_fotos` falham por RLS.
 
 ## Solução
-Criar uma função `has_permission` security definer e adicionar políticas RLS que permitam usuários com `canCreateUser` gerenciar profiles e roles dos perfis sob sua responsabilidade.
 
-## Alterações (1 migration SQL)
+### 1. `src/hooks/useCotacaoVistoria.ts` — Usar `publicSupabase` no upload
+- Substituir `supabase` por `publicSupabase` nas operações de storage upload e upsert da tabela no `useUploadFotoCotacaoVistoria`
+- Isso já é feito no `useFinalizarVistoriaCotacao` (linha 164), então é uma questão de consistência
 
-### 1. Criar função `can_manage_users`
-Função security definer que verifica se o usuário tem a permissão `canCreateUser` via `app_roles_config`:
+### 2. `src/components/instalador/VideoCapture.tsx` — Feedback visual correto
+- Não mostrar checkmark verde até o upload ser confirmado pelo pai
+- Adicionar prop `confirmed?: boolean` para que o pai sinalize quando o upload foi concluído
+- Enquanto `uploading` estiver true, mostrar spinner no lugar do check
+- Se o upload falhar (previewUrl existe mas confirmed=false e uploading=false), mostrar estado de "tentar novamente"
 
-```sql
-CREATE FUNCTION public.can_manage_users(_user_id uuid) RETURNS boolean
-SECURITY DEFINER SET search_path = public
--- Verifica se algum role do usuário possui canCreateUser nas permissions
+### 3. `src/components/cotacao-publica/AutovistoriaCotacao.tsx` — Melhor tratamento de erro no vídeo
+- Quando o upload falhar, resetar o vídeo local chamando `handleVideoReset` para que o usuário possa tentar novamente
+- Ou manter o preview local e exibir botão de retry
+
+## Detalhes técnicos
+
+```text
+Fluxo atual (quebrado):
+VideoCapture.onstop → setPreviewUrl + onCapture(file)
+                       ↓ (local ✓)     ↓ (async upload)
+                     Mostra check     Upload falha (RLS)
+                                      videoUrl = null
+                                      → Preso na Etapa 1
+
+Fluxo corrigido:
+VideoCapture.onstop → setPreviewUrl + onCapture(file)
+                       ↓ (local)       ↓ (async upload com publicSupabase)
+                     Mostra spinner   Upload sucesso
+                                      videoUrl = url
+                                      → Avança para Etapa 2
 ```
 
-### 2. Nova política em `profiles` — UPDATE
-```sql
-CREATE POLICY "Team managers can update profiles"
-ON public.profiles FOR UPDATE
-TO authenticated
-USING (can_manage_users(auth.uid()))
-WITH CHECK (can_manage_users(auth.uid()));
-```
-
-### 3. Nova política em `profiles` — SELECT
-Expandir visibilidade para que coordenadores consigam ver os profiles da equipe:
-```sql
-CREATE POLICY "Team managers can view profiles"
-ON public.profiles FOR SELECT
-TO authenticated
-USING (can_manage_users(auth.uid()));
-```
-
-### 4. Novas políticas em `user_roles`
-```sql
-CREATE POLICY "Team managers can manage roles"
-ON public.user_roles FOR ALL
-TO authenticated
-USING (can_manage_users(auth.uid()))
-WITH CHECK (can_manage_users(auth.uid()));
-```
-
-## Escopo de segurança
-- A função `can_manage_users` é baseada na permissão `canCreateUser` que apenas `diretor`, `gerente_comercial` e `coordenador_monitoramento` possuem
-- As políticas existentes de `is_gerencia` continuam funcionando (OR implícito entre policies no Postgres)
-- Nenhuma alteração de código no frontend — apenas RLS
-
-## Arquivo
-- 1 migration SQL (função + 3 políticas)
+## Arquivos editados
+1. `src/hooks/useCotacaoVistoria.ts` — trocar `supabase` por `publicSupabase` no upload
+2. `src/components/instalador/VideoCapture.tsx` — prop `confirmed` para feedback correto
+3. `src/components/cotacao-publica/AutovistoriaCotacao.tsx` — passar `confirmed` e melhor tratamento de erro
 
