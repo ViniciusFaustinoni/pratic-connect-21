@@ -1914,14 +1914,25 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               {/* Carência */}
               <Alert className="border-blue-500/50 bg-blue-500/10">
                 <AlertCircle className="h-4 w-4 text-blue-500" />
-                <AlertDescription className="text-sm">
-                  <span className="font-medium">Carência:</span>{' '}
-                  {migracaoConfig?.isentar_carencia && cenarioExterno === 'cobra_rota'
-                    ? 'Sem carência (migração aprovada)'
-                    : `${carenciaDias} dias`}
+                <AlertDescription className="text-sm space-y-1">
+                  <div>
+                    <span className="font-medium">Carência geral:</span>{' '}
+                    {migracaoState.ativo && migracaoConfig?.isentar_carencia
+                      ? 'Sem carência (migração)'
+                      : `${carenciaDias} dias`}
+                  </div>
+                  <div>
+                    <span className="font-medium">Carência vidros/faróis:</span>{' '}
+                    {migracaoState.ativo && migracaoConfig?.isentar_carencia
+                      ? 'Sem carência (migração)'
+                      : `${carenciaVidrosDias} dias`}
+                  </div>
                 </AlertDescription>
               </Alert>
             </div>
+
+            {/* Toggle de migração */}
+            <MigracaoToggle value={migracaoState} onChange={setMigracaoState} />
 
             {/* Alerta de adesão abaixo do mínimo */}
             {valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base') && (
