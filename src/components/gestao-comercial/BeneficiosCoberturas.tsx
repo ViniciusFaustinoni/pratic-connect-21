@@ -43,6 +43,8 @@ export function BeneficiosCoberturas() {
   const deleteBenefit = useDeleteBenefit();
   const deleteCoverage = useDeleteMainCoverage();
   const duplicateBenefit = useDuplicateBenefit();
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
   // Fetch benefit-plan associations
   const { data: benefitPlans } = useQuery({
