@@ -11,7 +11,8 @@ import { PlantaoDiaModal } from './PlantaoDiaModal';
 import { cn } from '@/lib/utils';
 import { getHojeBrasilia } from '@/lib/date-utils';
 
-const DIAS_SEMANA = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const DIAS_SEMANA_FULL = ['Dom', 'Seg', 'Ter', 'Qua', 'Qui', 'Sex', 'Sáb'];
+const DIAS_SEMANA_SHORT = ['D', 'S', 'T', 'Q', 'Q', 'S', 'S'];
 
 interface Alocacao {
   id: string;
@@ -38,11 +39,9 @@ export function PlantoesCalendario() {
   const inicioStr = format(inicio, 'yyyy-MM-dd');
   const fimStr = format(fim, 'yyyy-MM-dd');
 
-  // Buscar profissionais
   const { data: profissionais = [] } = useQuery({
     queryKey: ['plantoes-profissionais'],
     queryFn: async (): Promise<Profissional[]> => {
-      // Buscar instaladores/vistoriadores dinamicamente
       const { data: configs } = await supabase
         .from('app_roles_config')
         .select('role')
@@ -70,7 +69,6 @@ export function PlantoesCalendario() {
     },
   });
 
-  // Buscar alocações do mês
   const { data: alocacoes = [], isLoading } = useQuery({
     queryKey: ['plantoes-mes', inicioStr, fimStr],
     queryFn: async (): Promise<Alocacao[]> => {
@@ -91,7 +89,6 @@ export function PlantoesCalendario() {
     enabled: profissionais.length > 0,
   });
 
-  // Agrupar alocações por dia
   const alocacoesPorDia = useMemo(() => {
     const map: Record<string, Alocacao[]> = {};
     alocacoes.forEach(a => {
@@ -101,7 +98,6 @@ export function PlantoesCalendario() {
     return map;
   }, [alocacoes]);
 
-  // Resumo por profissional
   const resumoPorProfissional = useMemo(() => {
     const map: Record<string, { nome: string; rota: number; base: number }> = {};
     profissionais.forEach(p => {
@@ -116,52 +112,53 @@ export function PlantoesCalendario() {
     return Object.values(map).filter(r => r.rota > 0 || r.base > 0);
   }, [profissionais, alocacoes]);
 
-  // Calcular dias vazios antes do primeiro dia do mês
   const offsetInicio = getDay(inicio);
 
   return (
     <Card>
-      <CardHeader className="pb-3">
+      <CardHeader className="pb-3 px-3 sm:px-6">
         <div className="flex items-center justify-between">
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <CalendarDays className="h-5 w-5 text-primary" />
-            Plantões Mensal
+          <CardTitle className="flex items-center gap-2 text-base sm:text-lg">
+            <CalendarDays className="h-4 w-4 sm:h-5 sm:w-5 text-primary" />
+            <span className="hidden sm:inline">Plantões Mensal</span>
+            <span className="sm:hidden">Plantões</span>
           </CardTitle>
-          <div className="flex items-center gap-2">
-            <Button variant="outline" size="icon" onClick={() => setMesAtual(subMonths(mesAtual, 1))}>
+          <div className="flex items-center gap-1 sm:gap-2">
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setMesAtual(subMonths(mesAtual, 1))}>
               <ChevronLeft className="h-4 w-4" />
             </Button>
-            <span className="text-sm font-medium min-w-[140px] text-center capitalize">
-              {format(mesAtual, 'MMMM yyyy', { locale: ptBR })}
+            <span className="text-xs sm:text-sm font-medium min-w-[100px] sm:min-w-[140px] text-center capitalize">
+              {format(mesAtual, 'MMM yyyy', { locale: ptBR })}
             </span>
-            <Button variant="outline" size="icon" onClick={() => setMesAtual(addMonths(mesAtual, 1))}>
+            <Button variant="outline" size="icon" className="h-8 w-8" onClick={() => setMesAtual(addMonths(mesAtual, 1))}>
               <ChevronRight className="h-4 w-4" />
             </Button>
           </div>
         </div>
       </CardHeader>
-      <CardContent className="space-y-4">
+      <CardContent className="space-y-4 px-2 sm:px-6">
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
             <Loader2 className="h-6 w-6 animate-spin text-muted-foreground" />
           </div>
         ) : (
           <>
-            {/* Grade do calendário */}
-            <div className="grid grid-cols-7 gap-1">
-              {/* Header dias da semana */}
-              {DIAS_SEMANA.map(dia => (
-                <div key={dia} className="text-center text-xs font-medium text-muted-foreground py-2">
-                  {dia}
+            {/* Calendar grid */}
+            <div className="grid grid-cols-7 gap-0.5 sm:gap-1">
+              {/* Weekday headers */}
+              {DIAS_SEMANA_FULL.map((dia, i) => (
+                <div key={dia} className="text-center text-[10px] sm:text-xs font-medium text-muted-foreground py-1 sm:py-2">
+                  <span className="hidden sm:inline">{dia}</span>
+                  <span className="sm:hidden">{DIAS_SEMANA_SHORT[i]}</span>
                 </div>
               ))}
 
-              {/* Espaços vazios */}
+              {/* Empty offset */}
               {Array.from({ length: offsetInicio }).map((_, i) => (
-                <div key={`empty-${i}`} className="min-h-[80px]" />
+                <div key={`empty-${i}`} className="min-h-[48px] sm:min-h-[80px]" />
               ))}
 
-              {/* Dias do mês */}
+              {/* Days */}
               {diasDoMes.map(dia => {
                 const diaStr = format(dia, 'yyyy-MM-dd');
                 const alocsDia = alocacoesPorDia[diaStr] || [];
@@ -170,23 +167,21 @@ export function PlantoesCalendario() {
                 const isHoje = isSameDay(dia, hoje);
                 const isFimDeSemana = isWeekend(dia);
 
-                // Dia útil: visual desabilitado
                 if (!isFimDeSemana) {
                   return (
                     <div
                       key={diaStr}
                       className={cn(
-                        "min-h-[80px] rounded-md border border-dashed border-border/30 p-1 flex flex-col bg-muted/30 opacity-60",
+                        "min-h-[48px] sm:min-h-[80px] rounded-md border border-dashed border-border/30 p-0.5 sm:p-1 flex flex-col bg-muted/30 opacity-60",
                         isHoje && "border-primary/30 bg-primary/5"
                       )}
                     >
                       <span className={cn(
-                        "text-xs font-medium",
+                        "text-[10px] sm:text-xs font-medium",
                         isHoje ? "text-primary/70" : "text-muted-foreground"
                       )}>
                         {format(dia, 'd')}
                       </span>
-                      <span className="text-[9px] text-muted-foreground mt-auto">Todos disponíveis</span>
                     </div>
                   );
                 }
@@ -196,53 +191,55 @@ export function PlantoesCalendario() {
                     key={diaStr}
                     onClick={() => setDiaSelecionado(dia)}
                     className={cn(
-                      "min-h-[80px] rounded-md border p-1 text-left transition-colors hover:bg-accent/50 flex flex-col",
+                      "min-h-[48px] sm:min-h-[80px] rounded-md border p-0.5 sm:p-1 text-left transition-colors hover:bg-accent/50 flex flex-col",
                       isHoje && "border-primary bg-primary/5",
                       alocsDia.length === 0 && "border-dashed border-border/50"
                     )}
                   >
                     <span className={cn(
-                      "text-xs font-medium",
+                      "text-[10px] sm:text-xs font-medium",
                       isHoje ? "text-primary" : "text-foreground"
                     )}>
                       {format(dia, 'd')}
                     </span>
-                    <div className="flex flex-wrap gap-0.5 mt-1">
+                    <div className="flex flex-wrap gap-0.5 mt-0.5">
                       {countRota > 0 && (
-                        <Badge variant="outline" className="text-[10px] px-1 py-0 gap-0.5 text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800">
-                          <MapPin className="h-2.5 w-2.5" />
+                        <Badge variant="outline" className="text-[8px] sm:text-[10px] px-0.5 sm:px-1 py-0 gap-0.5 text-blue-600 border-blue-200 bg-blue-50 dark:bg-blue-950 dark:text-blue-400 dark:border-blue-800">
+                          <MapPin className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
                           {countRota}
                         </Badge>
                       )}
                       {countBase > 0 && (
-                        <Badge variant="outline" className="text-[10px] px-1 py-0 gap-0.5 text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800">
-                          <Building2 className="h-2.5 w-2.5" />
+                        <Badge variant="outline" className="text-[8px] sm:text-[10px] px-0.5 sm:px-1 py-0 gap-0.5 text-amber-600 border-amber-200 bg-amber-50 dark:bg-amber-950 dark:text-amber-400 dark:border-amber-800">
+                          <Building2 className="h-2 w-2 sm:h-2.5 sm:w-2.5" />
                           {countBase}
                         </Badge>
                       )}
                     </div>
-                    {alocsDia.slice(0, 2).map(a => (
-                      <span key={a.id} className="text-[9px] text-muted-foreground truncate block">
-                        {a.profissional_nome?.split(' ')[0]}
-                      </span>
-                    ))}
-                    {alocsDia.length > 2 && (
-                      <span className="text-[9px] text-muted-foreground">+{alocsDia.length - 2}</span>
-                    )}
+                    <div className="hidden sm:block">
+                      {alocsDia.slice(0, 2).map(a => (
+                        <span key={a.id} className="text-[9px] text-muted-foreground truncate block">
+                          {a.profissional_nome?.split(' ')[0]}
+                        </span>
+                      ))}
+                      {alocsDia.length > 2 && (
+                        <span className="text-[9px] text-muted-foreground">+{alocsDia.length - 2}</span>
+                      )}
+                    </div>
                   </button>
                 );
               })}
             </div>
 
-            {/* Resumo lateral */}
+            {/* Monthly summary */}
             {resumoPorProfissional.length > 0 && (
-              <div className="border rounded-lg p-3">
-                <h4 className="text-sm font-medium mb-2">Resumo do Mês</h4>
+              <div className="border rounded-lg p-2 sm:p-3">
+                <h4 className="text-xs sm:text-sm font-medium mb-2">Resumo do Mês</h4>
                 <div className="space-y-1.5">
                   {resumoPorProfissional.map(r => (
-                    <div key={r.nome} className="flex items-center justify-between text-xs">
-                      <span className="text-foreground">{r.nome}</span>
-                      <div className="flex items-center gap-2">
+                    <div key={r.nome} className="flex items-center justify-between text-[10px] sm:text-xs">
+                      <span className="text-foreground truncate mr-2">{r.nome}</span>
+                      <div className="flex items-center gap-2 flex-shrink-0">
                         {r.rota > 0 && (
                           <span className="text-blue-600 dark:text-blue-400">{r.rota}d rota</span>
                         )}
@@ -258,7 +255,6 @@ export function PlantoesCalendario() {
           </>
         )}
 
-        {/* Modal de edição do dia */}
         <PlantaoDiaModal
           open={!!diaSelecionado}
           onOpenChange={(open) => !open && setDiaSelecionado(null)}
