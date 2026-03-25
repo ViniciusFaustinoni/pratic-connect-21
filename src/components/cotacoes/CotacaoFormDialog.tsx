@@ -1,4 +1,6 @@
 import { useEffect, useState, useMemo, useCallback, useRef } from 'react';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
 import { useAssociadoSearch } from '@/hooks/useAssociadoSearch';
 
@@ -230,6 +232,20 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
 
+  // Limite mínimo de FIPE para permitir FIPE menor (abaixo desse valor, não exibe a opção)
+  const { data: fipeMenorLimiteMinimo = 30000 } = useQuery({
+    queryKey: ['config-fipe-menor-limite-minimo'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'fipe_menor_limite_minimo')
+        .maybeSingle();
+      return data?.valor ? Number(data.valor) || 30000 : 30000;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Hook para FIPE limite (alto valor)
   const { data: configLimites } = useConfigLimitesVeiculo();
   const criarSolicitacaoFipeLimite = useCriarSolicitacaoFipeLimite();
@@ -366,6 +382,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return null;
     }
 
+    // Bloquear FIPE menor para veículos com valor FIPE <= limite mínimo (padrão R$ 30.000)
+    if (valorFipe <= fipeMenorLimiteMinimo) {
+      return null;
+    }
+
     const plano = planosSelecionados[0];
     const valorReduzido = valorFipe * 0.99;
 
@@ -395,7 +416,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       faixaInferior: { min: faixaInferior.fipe_min, max: faixaInferior.fipe_max, mensal: faixaInferior.valor_mensal },
       economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
     };
-  }, [valorFipe, planosSelecionados, todasFaixas]);
+  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimiteMinimo]);
 
   // Faixa de preço atual onde o FIPE se enquadra (filtra pela linha do plano selecionado)
   const faixaAtualFipe = useMemo(() => {
