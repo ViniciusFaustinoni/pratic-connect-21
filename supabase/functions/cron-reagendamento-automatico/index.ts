@@ -188,13 +188,13 @@ Deno.serve(async (req) => {
       .eq("status", "agendada")
       .is("reagendamento_enviado_em", null)
       .in("tipo", [
-        "vistoria_adesao",
-        "vistoria_transferencia",
-        "vistoria_substituicao",
-        "revistoria",
+        "vistoria_entrada",
+        "vistoria_saida",
+        "vistoria_sinistro",
+        "vistoria_periodica",
         "instalacao",
-        "manutencao",
-        "retirada",
+        "vistoria_manutencao",
+        "vistoria_retirada",
       ]);
 
     if (error) throw error;
