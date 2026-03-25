@@ -419,6 +419,7 @@ function RastreadoresContent({
           onNewRastreador={onNewRastreador}
           getPlataformaLabel={getPlataformaLabel}
           isDiretor={isDiretor}
+          canManageEquipe={canManageEquipe}
           onViewMap={onViewMap}
         />
       )}
