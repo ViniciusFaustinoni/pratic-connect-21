@@ -154,7 +154,7 @@ export function PlanFormModal({
     name: '',
     slug: '',
     product_line_id: defaultProductLineId || '',
-    tipo_uso: 'passeio' as 'passeio' | 'aplicativo',
+    // tipo_uso derivado automaticamente das categorias selecionadas
     badge_text: '',
     badge_color: '',
     coverage_type: '',
