@@ -77,16 +77,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    // Criar cliente admin para operações privilegiadas
-    const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
-    if (!supabaseServiceKey) {
-      return new Response(
-        JSON.stringify({ error: "Configuração do servidor inválida" }),
-        { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
-    const supabaseAdmin = createClient(supabaseUrl, supabaseServiceKey);
+    // Reutilizar cliente admin já criado acima
+    const supabaseAdmin = adminClientForRpc;
 
     // Buscar email atual do usuário para log
     const { data: targetUser } = await supabaseAdmin.auth.admin.getUserById(userId);

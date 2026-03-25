@@ -43,6 +43,7 @@ export type StatusProfissional = 'disponivel' | 'indisponivel';
 
 export interface Profissional {
   id: string;
+  userId?: string;
   nome: string;
   cpf: string;
   email: string;
