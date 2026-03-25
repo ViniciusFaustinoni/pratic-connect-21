@@ -1,64 +1,34 @@
 
 
-# Consolidar Coberturas & Beneficios na Gestao Comercial
+# Limpar Dados Duplicados em Benefícios
 
-## Contexto
+## Situacao Atual
 
-Hoje existem tres tabelas separadas:
-- `benefits` — beneficios de marketing (vinculados a planos via `planos_beneficios`)
-- `main_coverages` — coberturas visuais (globais, sem vinculo a planos, usadas apenas em vitrine)
-- `coberturas` — coberturas tecnicas de sinistro (vinculadas via `planos_coberturas`, com franquias, limites, carencias)
+A tabela `benefits` contem 8 itens com `category = 'cobertura'` (Alagamento, Chuva de Granizo, Colisao, Danos a Terceiros, Incendio, Perda Total, Roubo e Furto, Vidros e Farois) que sao duplicatas dos registros ja existentes na tabela `coberturas`. Nenhum desses itens esta vinculado a nenhum plano via `planos_beneficios` — portanto podem ser removidos com seguranca.
 
-O pedido e eliminar `main_coverages` e fazer tudo que era visual passar a ler de `coberturas` (a tabela tecnica). A pagina passa a ter duas abas: Coberturas (da tabela `coberturas`) e Beneficios (da tabela `benefits`).
+Alem disso, ha 2 itens com `category = 'assistencia'` que tambem existem na tabela `coberturas` (Assistencia 24h, Rastreador). Estes devem permanecer em `benefits` porque sao beneficios de marketing (servicos oferecidos), nao coberturas contratuais de eventos.
 
 ## Plano
 
-### 1. Adicionar campos visuais a tabela `coberturas`
-Migracão SQL para adicionar colunas que hoje so existem em `main_coverages`:
+### 1. Deletar beneficios duplicados
+Remover da tabela `benefits` os 8 registros com `category = 'cobertura'`:
+
 ```sql
-ALTER TABLE coberturas ADD COLUMN IF NOT EXISTS icon text;
-ALTER TABLE coberturas ADD COLUMN IF NOT EXISTS subtitle text;
-ALTER TABLE coberturas ADD COLUMN IF NOT EXISTS display_order integer DEFAULT 0;
+DELETE FROM benefits WHERE category = 'cobertura';
 ```
-Migrar dados existentes de `main_coverages` para `coberturas` (inserir registros que nao existam, mapeando `name`→`nome`, `subtitle`→`subtitle`, `icon`→`icon`).
 
-### 2. Renomear menu
-Em `TabNavigation.tsx`, alterar o item de "Beneficios & Coberturas" / "Beneficios" para "Coberturas & Beneficios" / "Cob. & Benef.".
+IDs: f957ef92, 5a9139dd, 05c7d281, 374ce067, c032f5a1, 0c2aac0a, a8a8f296, 22c15d8a
 
-Em `GestaoComercial.tsx`, atualizar o `sectionBanners` correspondente.
+Nenhum vinculo em `planos_beneficios` sera afetado (verificado: zero links).
 
-### 3. Reescrever `BeneficiosCoberturas.tsx`
-Substituir o layout de duas colunas por duas abas (usando `Tabs`/`TabsList`/`TabsTrigger`/`TabsContent`):
+### 2. Nenhuma alteracao de codigo
+A pagina `BeneficiosCoberturas.tsx` ja separa corretamente as abas: Coberturas le de `coberturas` e Beneficios le de `benefits`. Apos a limpeza, a aba Beneficios mostrara apenas os 8 itens reais (assistencia + extras), sem os itens de cobertura misturados.
 
-**Aba Coberturas**: lista de `coberturas` (tabela tecnica) com nome, descricao, icone, status ativo/inativo. CRUD via modal (novo `CoberturaUnificadaFormModal` ou adaptar o existente para ler/escrever em `coberturas` em vez de `main_coverages`).
+## Resultado
+- Aba Coberturas: 11 itens (da tabela `coberturas`)
+- Aba Beneficios: 8 itens (4 assistencia + 4 extras, sem duplicatas)
 
-**Aba Beneficios**: lista de `benefits` com nome, descricao, icone, status. CRUD via modal existente (`BeneficioFormModal`). Manter filtro por plano, badges de planos vinculados.
-
-### 4. Criar hooks para coberturas tecnicas na gestao
-- `useCoberturas()` — query na tabela `coberturas` (todas, sem filtro de ativo, para gestao)
-- `useCreateCobertura()`, `useUpdateCobertura()`, `useDeleteCobertura()` — mutations CRUD
-
-### 5. Atualizar consumidores de `main_coverages`
-- `PlanosBeneficios.tsx` (vitrine de vendas): trocar `useMainCoverages()` por `useCoberturas()` filtrando `ativo=true`, mapeando `nome`→nome e `icon`→icone.
-- Remover `useMainCoverages` de `usePlans.ts`
-- Remover mutations de `main_coverages` de `usePlansAdmin.ts`
-- Remover `CoberturasTab.tsx` e `CoberturaFormModal.tsx` antigos (ou adapta-los)
-
-### 6. Limpar tipo `MainCoverage`
-Remover de `types/plans.ts`. Substituir pelo tipo da tabela `coberturas`.
-
-## Arquivos
-
-| Arquivo | Acao |
+| Acao | Tipo |
 |---|---|
-| Migration SQL | Criar (add cols + migrar dados) |
-| `src/components/gestao-comercial/TabNavigation.tsx` | Editar label |
-| `src/pages/diretoria/GestaoComercial.tsx` | Editar banner |
-| `src/components/gestao-comercial/BeneficiosCoberturas.tsx` | Reescrever (abas) |
-| `src/hooks/usePlans.ts` | Remover `useMainCoverages`, add `useCoberturas` |
-| `src/hooks/usePlansAdmin.ts` | Remover mutations `main_coverages`, add mutations `coberturas` |
-| `src/pages/vendas/PlanosBeneficios.tsx` | Trocar `useMainCoverages` por `useCoberturas` |
-| `src/types/plans.ts` | Remover `MainCoverage`, add `Cobertura` |
-| `src/components/admin/planos/CoberturaFormModal.tsx` | Adaptar para tabela `coberturas` |
-| `src/components/admin/planos/CoberturasTab.tsx` | Remover ou redirecionar |
+| `DELETE FROM benefits WHERE category = 'cobertura'` | Dado (insert tool) |
 
