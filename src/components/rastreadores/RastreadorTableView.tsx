@@ -44,6 +44,7 @@ interface RastreadorTableViewProps {
   onNewRastreador: () => void;
   getPlataformaLabel: (codigo: string) => string;
   isDiretor: boolean;
+  canManageEquipe: boolean;
   onViewMap?: (rastreadorId: string) => void;
 }
 
