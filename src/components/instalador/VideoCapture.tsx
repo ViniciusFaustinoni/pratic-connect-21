@@ -8,6 +8,7 @@ interface VideoCaptureProps {
   onReset?: () => void;
   videoUrl?: string;
   uploading?: boolean;
+  confirmed?: boolean; // Upload confirmado pelo pai
   maxDuration?: number; // em segundos
   label?: string;
   cameraOnly?: boolean; // Se true, remove opção de galeria
