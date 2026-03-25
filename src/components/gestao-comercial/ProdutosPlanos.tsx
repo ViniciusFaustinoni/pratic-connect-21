@@ -77,6 +77,8 @@ export function ProdutosPlanos() {
   const deletePlan = useDeletePlan();
   const duplicatePlan = useDuplicatePlan();
   const toggleStatus = useTogglePlanStatus();
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
   // Fetch associados count per plan
   const { data: associadosCounts } = useQuery({
