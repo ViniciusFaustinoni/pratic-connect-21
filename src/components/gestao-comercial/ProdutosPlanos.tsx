@@ -60,7 +60,6 @@ export function ProdutosPlanos() {
   const [planToggleConfirm, setPlanToggleConfirm] = useState<{ id: string; activate: boolean } | null>(null);
   // Beneficio modals
   const [vincularBeneficioOpen, setVincularBeneficioOpen] = useState(false);
-  const [linhasDialogOpen, setLinhasDialogOpen] = useState(false);
 
   // Faixa price modals (CRUD)
   const [faixaModalOpen, setFaixaModalOpen] = useState(false);
