@@ -2018,6 +2018,13 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
         placa={placaBusca}
         info={blacklistInfo}
       />
+      
+      {/* Modal Veículo já cadastrado no SGA */}
+      <VeiculoSGAModal
+        open={showSGAModal}
+        onOpenChange={setShowSGAModal}
+        placa={placaBusca}
+      />
     </div>
   );
 }
