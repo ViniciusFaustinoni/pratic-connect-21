@@ -508,6 +508,8 @@ export default function TemplateForm() {
                               value={field.value}
                               onChange={field.onChange}
                               placeholder="Digite o conteúdo do documento aqui..."
+                              cabecalhoHtml={template?.cabecalho_html}
+                              rodapeHtml={template?.rodape_html}
                             />
                           </FormControl>
                           <FormMessage />

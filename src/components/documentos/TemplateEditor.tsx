@@ -11,31 +11,32 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Code, Eye, FileText } from 'lucide-react';
+import { Code, Eye, FileText, Info } from 'lucide-react';
 import { EditorToolbar } from './tiptap/EditorToolbar';
 import { VariableChipExtension, convertPlainTextToHTML, convertHTMLToStorage } from './tiptap/VariableChip';
+import { substituirVariaveisPreview } from './templatePreviewData';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
 import type { Editor } from '@tiptap/react';
 
 interface TemplateEditorProps {
   value: string;
   onChange: (value: string) => void;
   placeholder?: string;
+  cabecalhoHtml?: string;
+  rodapeHtml?: string;
 }
 
 // Clean Word / GDocs paste junk
 function cleanWordPaste(html: string): string {
   let clean = html;
-  // Remove Word-specific tags
   clean = clean.replace(/<o:p[^>]*>[\s\S]*?<\/o:p>/gi, '');
   clean = clean.replace(/<\/?o:[^>]*>/gi, '');
   clean = clean.replace(/<\/?v:[^>]*>/gi, '');
   clean = clean.replace(/<\/?w:[^>]*>/gi, '');
-  // Remove MsoNormal and mso-* styles
   clean = clean.replace(/class="Mso[^"]*"/gi, '');
   clean = clean.replace(/style="[^"]*mso-[^"]*"/gi, '');
-  // Remove empty spans
   clean = clean.replace(/<span[^>]*>\s*<\/span>/gi, '');
-  // Remove xml namespace declarations
   clean = clean.replace(/<\?xml[^>]*>/gi, '');
   clean = clean.replace(/xmlns[:a-zA-Z]*="[^"]*"/gi, '');
   return clean;
@@ -59,13 +60,20 @@ function stripHtml(html: string): string {
   return tmp.textContent || tmp.innerText || '';
 }
 
-// Render preview HTML with variable chips highlighted (static, non-editable)
-function renderPreviewHTML(html: string): string {
-  // Replace variable chip spans with styled versions
-  return html.replace(
-    /<span[^>]*data-variable="([^"]*)"[^>]*>[^<]*<\/span>/g,
-    '<span class="inline-flex items-center bg-primary/10 text-primary px-1.5 py-0.5 rounded text-sm font-mono border border-primary/20 mx-0.5">$1</span>'
-  );
+// Fetch empresa config for preview branding
+function useEmpresaConfig() {
+  return useQuery({
+    queryKey: ['cotacao-pdf-config-preview'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('cotacao_pdf_config')
+        .select('logo_url, nome_empresa, cor_primaria')
+        .limit(1)
+        .maybeSingle();
+      return data as { logo_url?: string; nome_empresa?: string; cor_primaria?: string } | null;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
 }
 
 // Ref holder for external access to the editor instance
@@ -75,9 +83,10 @@ export function getTemplateEditor(): Editor | null {
   return _globalEditorRef;
 }
 
-export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorProps) {
+export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, rodapeHtml }: TemplateEditorProps) {
   const [tab, setTab] = useState<string>('editor');
   const isExternalUpdate = useRef(false);
+  const { data: empresaConfig } = useEmpresaConfig();
 
   const editor = useEditor({
     extensions: [
@@ -134,7 +143,6 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
     onUpdate: ({ editor: ed }) => {
       isExternalUpdate.current = true;
       const html = ed.getHTML();
-      // Convert chip nodes back to {{var}} for storage
       const storageHtml = convertHTMLToStorage(html);
       onChange(storageHtml);
     },
@@ -157,7 +165,7 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
     return () => el.removeEventListener('dragover', handler);
   }, [editor]);
 
-  // Sync external value changes into editor (e.g. form reset)
+  // Sync external value changes into editor
   useEffect(() => {
     if (!editor) return;
     if (isExternalUpdate.current) {
@@ -176,10 +184,14 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
   const qtdCaracteres = plainText.length;
   const qtdVariaveis = contarVariaveis(value);
 
-  // Preview HTML
-  const previewHtml = editor
-    ? renderPreviewHTML(editor.getHTML())
+  // Build preview HTML with replaced variables
+  const previewConteudo = editor
+    ? substituirVariaveisPreview(editor.getHTML())
     : '';
+
+  const corPrimaria = empresaConfig?.cor_primaria || '#1e40af';
+  const nomeEmpresa = empresaConfig?.nome_empresa || 'Empresa';
+  const logoUrl = empresaConfig?.logo_url;
 
   return (
     <div className="border rounded-lg overflow-hidden">
@@ -220,11 +232,85 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
         </TabsContent>
 
         <TabsContent value="preview" className="m-0">
-          <ScrollArea className="h-[400px]">
-            <div
-              className="p-4 prose prose-sm max-w-none dark:prose-invert leading-relaxed"
-              dangerouslySetInnerHTML={{ __html: previewHtml }}
-            />
+          <ScrollArea className="h-[500px] bg-muted/30">
+            {/* Badge de aviso */}
+            <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground bg-muted/50 border-b">
+              <Info className="h-3.5 w-3.5" />
+              Preview com dados fictícios — simula o documento final
+            </div>
+
+            {/* A4-style document container */}
+            <div className="flex justify-center py-6 px-4">
+              <div
+                className="bg-white text-black shadow-xl border rounded-sm w-full"
+                style={{ maxWidth: '210mm', minHeight: '297mm' }}
+              >
+                {/* === Cabeçalho === */}
+                <div
+                  className="px-12 pt-10 pb-4 border-b-2"
+                  style={{ borderBottomColor: corPrimaria }}
+                >
+                  {cabecalhoHtml ? (
+                    <div
+                      className="prose prose-sm max-w-none"
+                      dangerouslySetInnerHTML={{ __html: substituirVariaveisPreview(cabecalhoHtml) }}
+                    />
+                  ) : (
+                    <div className="flex items-center gap-4">
+                      {logoUrl ? (
+                        <img
+                          src={logoUrl}
+                          alt={nomeEmpresa}
+                          className="h-14 w-auto object-contain"
+                          crossOrigin="anonymous"
+                        />
+                      ) : (
+                        <div
+                          className="h-14 w-14 rounded-lg flex items-center justify-center text-white font-bold text-xl"
+                          style={{ backgroundColor: corPrimaria }}
+                        >
+                          {nomeEmpresa.charAt(0)}
+                        </div>
+                      )}
+                      <div>
+                        <h2
+                          className="text-lg font-bold"
+                          style={{ color: corPrimaria }}
+                        >
+                          {nomeEmpresa}
+                        </h2>
+                        <p className="text-xs text-gray-500">Documento gerado automaticamente</p>
+                      </div>
+                    </div>
+                  )}
+                </div>
+
+                {/* === Conteúdo === */}
+                <div
+                  className="px-12 py-8 prose prose-sm max-w-none leading-relaxed"
+                  style={{ fontSize: '12pt', lineHeight: '1.8' }}
+                  dangerouslySetInnerHTML={{ __html: previewConteudo }}
+                />
+
+                {/* === Rodapé === */}
+                <div
+                  className="px-12 pb-8 pt-4 mt-auto border-t text-xs text-gray-500"
+                  style={{ borderTopColor: corPrimaria + '40' }}
+                >
+                  {rodapeHtml ? (
+                    <div
+                      className="prose prose-xs max-w-none"
+                      dangerouslySetInnerHTML={{ __html: substituirVariaveisPreview(rodapeHtml) }}
+                    />
+                  ) : (
+                    <div className="flex items-center justify-between">
+                      <span>{nomeEmpresa}</span>
+                      <span>Página 1 de 1</span>
+                    </div>
+                  )}
+                </div>
+              </div>
+            </div>
           </ScrollArea>
         </TabsContent>
       </Tabs>
@@ -234,7 +320,6 @@ export function TemplateEditor({ value, onChange, placeholder }: TemplateEditorP
 
 // Export for external variable insertion (used by TemplateForm)
 export function useTemplateEditorInsert(_editorRef: any, _value: string, _onChange: (v: string) => void) {
-  // Legacy compatibility - now uses the global editor ref
   return (texto: string) => {
     const ed = getTemplateEditor();
     if (ed) {
