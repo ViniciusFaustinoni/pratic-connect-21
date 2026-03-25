@@ -195,6 +195,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Estado para modal de placa duplicada
   const [placaDuplicadaInfo, setPlacaDuplicadaInfo] = useState<PlacaDuplicadaInfo | null>(null);
   const [showPlacaDuplicadaModal, setShowPlacaDuplicadaModal] = useState(false);
+  
+  // Estado para modal SGA
+  const [showSGAModal, setShowSGAModal] = useState(false);
+  const verificarVeiculoSGA = useVerificarVeiculoSGA();
 
   // Estados para seleção FIPE manual
   type FipeMarcaComTipo = FipeMarca & { tipoFipe: 'carros' | 'motos' };
