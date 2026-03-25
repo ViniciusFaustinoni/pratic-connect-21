@@ -300,6 +300,7 @@ export function CotacaoAcoes({
                 {deleteReason}
               </TooltipContent>
             )}
+          </Tooltip>
         </TooltipProvider>
       </CardContent>
     </Card>
