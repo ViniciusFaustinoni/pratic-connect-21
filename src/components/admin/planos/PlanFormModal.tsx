@@ -159,6 +159,7 @@ export function PlanFormModal({
     badge_color: '',
     coverage_type: '',
     min_vehicle_year: '',
+    ano_fabricacao_maximo: '',
     additional_price: '',
     desconto_percentual: '',
     cota_passeio_percent: '',
@@ -199,6 +200,7 @@ export function PlanFormModal({
         badge_color: plan.badge_color || '',
         coverage_type: plan.coverage_type || '',
         min_vehicle_year: plan.min_vehicle_year || '',
+        ano_fabricacao_maximo: (plan as any).ano_fabricacao_maximo?.toString() || '',
         additional_price: plan.additional_price?.toString() || '',
         desconto_percentual: (plan as any).desconto_percentual?.toString() || '',
         cota_passeio_percent: plan.cota_passeio_percent?.toString() || '',
@@ -237,6 +239,7 @@ export function PlanFormModal({
         badge_color: '',
         coverage_type: '',
         min_vehicle_year: '',
+        ano_fabricacao_maximo: '',
         additional_price: '',
         desconto_percentual: '',
         cota_passeio_percent: '',
@@ -315,6 +318,9 @@ export function PlanFormModal({
       badge_color: formData.badge_color || null,
       coverage_type: formData.coverage_type || null,
       min_vehicle_year: formData.min_vehicle_year || null,
+      ano_fabricacao_maximo: formData.ano_fabricacao_maximo
+        ? parseInt(formData.ano_fabricacao_maximo)
+        : null,
       additional_price: formData.additional_price
         ? parseFloat(formData.additional_price)
         : null,
@@ -576,6 +582,21 @@ export function PlanFormModal({
                             }))
                           }
                           placeholder="Ex: 2015+"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ano_fabricacao_maximo">Ano Máximo<FieldHint text={PLAN_FIELD_HINTS.ano_fabricacao_maximo || 'Ano máximo de fabricação aceito. Veículos acima deste ano NÃO verão este plano na Cotação e Calculadora.'} /></Label>
+                        <Input
+                          id="ano_fabricacao_maximo"
+                          type="number"
+                          value={formData.ano_fabricacao_maximo}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              ano_fabricacao_maximo: e.target.value,
+                            }))
+                          }
+                          placeholder="Ex: 2004"
                         />
                       </div>
                     </div>

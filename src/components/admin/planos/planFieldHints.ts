@@ -28,6 +28,9 @@ export const PLAN_FIELD_HINTS: Record<string, string> = {
   min_vehicle_year:
     'Ano mínimo aceito pelo plano (ex: "2015+"). Na Cotação e na Calculadora, veículos com ano abaixo desse valor NÃO verão este plano — ele será automaticamente ocultado.',
 
+  ano_fabricacao_maximo:
+    'Ano máximo de fabricação aceito pelo plano (ex: 2004). Veículos com ano ACIMA desse valor NÃO verão este plano na Cotação nem na Calculadora. Deixe vazio para sem limite. Útil para planos como Especial (2002-2004).',
+
   linha_slug:
     'Vincula o plano a uma tabela de preços mensais. Sem vínculo, o plano NÃO terá preço calculado e será OCULTADO tanto na Cotação quanto na Calculadora. Campo essencial para o funcionamento.',
 

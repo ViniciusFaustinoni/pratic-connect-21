@@ -444,6 +444,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const anoMinimo = plano.ano_minimo || plano.ano_minimo_veiculo || plano.ano_fabricacao_minimo || 0;
       if (anoMinimo > 0 && anoVeiculoNum < anoMinimo) continue;
 
+      // Verificar ano máximo (ex: Especial aceita até 2004)
+      const anoMaximo = plano.ano_fabricacao_maximo || null;
+      if (anoMaximo && anoVeiculoNum > anoMaximo) continue;
+
       // Verificar FIPE
       if (plano.fipe_minima && valorFipe < Number(plano.fipe_minima)) continue;
       if (plano.fipe_maxima && valorFipe > Number(plano.fipe_maxima)) continue;
