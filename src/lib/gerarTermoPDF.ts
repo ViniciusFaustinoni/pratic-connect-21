@@ -46,17 +46,18 @@ export async function gerarTermoPDF(elementId: string): Promise<Blob> {
     let heightLeft = imgHeight;
     let position = margin;
     let page = 1;
+    const usableHeight = pageHeight - margin * 2;
     
     // Adicionar primeira página
     pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
-    heightLeft -= (pageHeight - margin * 2);
+    heightLeft -= usableHeight;
     
-    // Adicionar páginas adicionais se necessário
-    while (heightLeft > 0) {
-      position = -(pageHeight - margin * 2) * page + margin;
+    // Adicionar páginas adicionais se necessário (threshold de 10mm para evitar páginas em branco)
+    while (heightLeft > 10) {
+      position = -usableHeight * page + margin;
       pdf.addPage();
       pdf.addImage(imgData, 'JPEG', margin, position, imgWidth, imgHeight);
-      heightLeft -= (pageHeight - margin * 2);
+      heightLeft -= usableHeight;
       page++;
     }
     

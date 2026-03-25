@@ -1005,7 +1005,7 @@ export async function buscarEGerarAditivos(
   console.log(`[template-utils] ${aditivosAplicaveis.length} aditivo(s) aplicável(is):`, 
     aditivosAplicaveis.map(a => a.nome).join(', '));
 
-  // 4. Gerar HTML dos aditivos aplicáveis
+  // 4. Gerar HTML dos aditivos aplicáveis (page-break-before no 1º aditivo; sem page-break-after no último)
   let htmlFinal = '';
 
   for (const aditivo of aditivosAplicaveis) {
@@ -1017,7 +1017,7 @@ export async function buscarEGerarAditivos(
     }
 
     htmlFinal += `
-<div class="section page-break" style="margin-top: 30pt; border: 2px solid #1e40af; padding: 15pt; border-radius: 4pt;">
+<div class="section" style="page-break-before: always; margin-top: 30pt; border: 2px solid #1e40af; padding: 15pt; border-radius: 4pt;">
   <h2 class="section-title" style="color: #1e40af;">
     ${aditivo.nome}
   </h2>
