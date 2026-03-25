@@ -28270,6 +28270,7 @@ export type Database = {
       can_manage_juridico: { Args: { _user_id: string }; Returns: boolean }
       can_manage_marketing: { Args: { _user_id: string }; Returns: boolean }
       can_manage_permissions: { Args: { _user_id: string }; Returns: boolean }
+      can_manage_users: { Args: { _user_id: string }; Returns: boolean }
       confirmar_encaixe_urgente: {
         Args: { p_encaixe_id: string; p_profissional_id: string }
         Returns: boolean
