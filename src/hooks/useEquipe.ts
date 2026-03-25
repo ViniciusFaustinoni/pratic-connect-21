@@ -43,11 +43,11 @@ export function useProfissionaisEquipe() {
   return useQuery({
     queryKey: ['profissionais-equipe'],
     queryFn: async () => {
-      // 1. Buscar user_ids com role instalador_vistoriador
+      // 1. Buscar user_ids com role instalador_vistoriador ou analista_monitoramento
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id')
-        .eq('role', 'instalador_vistoriador');
+        .select('user_id, role')
+        .in('role', ['instalador_vistoriador', 'analista_monitoramento']);
 
       if (rolesError) throw rolesError;
       if (!roles?.length) return [];
