@@ -44,6 +44,7 @@ interface RastreadorTableViewProps {
   onNewRastreador: () => void;
   getPlataformaLabel: (codigo: string) => string;
   isDiretor: boolean;
+  canManageEquipe: boolean;
   onViewMap?: (rastreadorId: string) => void;
 }
 
@@ -62,6 +63,7 @@ export function RastreadorTableView({
   onNewRastreador,
   getPlataformaLabel,
   isDiretor,
+  canManageEquipe,
   onViewMap,
 }: RastreadorTableViewProps) {
   const rastreadoresEstoque = rastreadores?.filter(r => r.status === 'estoque') || [];
@@ -206,19 +208,36 @@ export function RastreadorTableView({
                       {rastreador.portador?.nome ? (
                         <>
                           <span className="text-sm">{rastreador.portador.nome}</span>
-                          <Button
-                            variant="ghost"
-                            size="icon"
-                            className="h-6 w-6"
-                            onClick={(e) => {
-                              e.stopPropagation();
-                              onAssignPortador(rastreador);
-                            }}
-                          >
-                            <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
-                          </Button>
+                          {canManageEquipe ? (
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-6 w-6"
+                              onClick={(e) => {
+                                e.stopPropagation();
+                                onAssignPortador(rastreador);
+                              }}
+                            >
+                              <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+                            </Button>
+                          ) : (
+                            <TooltipProvider>
+                              <Tooltip>
+                                <TooltipTrigger asChild>
+                                  <span>
+                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled>
+                                      <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
+                                    </Button>
+                                  </span>
+                                </TooltipTrigger>
+                                <TooltipContent>
+                                  <p>Sem permissão para atribuir portador</p>
+                                </TooltipContent>
+                              </Tooltip>
+                            </TooltipProvider>
+                          )}
                         </>
-                      ) : (
+                      ) : canManageEquipe ? (
                         <Button
                           variant="ghost"
                           size="sm"
@@ -231,6 +250,22 @@ export function RastreadorTableView({
                           <UserPlus className="h-3.5 w-3.5 mr-1" />
                           Atribuir
                         </Button>
+                      ) : (
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Button variant="ghost" size="sm" className="h-7 text-xs" disabled>
+                                  <UserPlus className="h-3.5 w-3.5 mr-1" />
+                                  Atribuir
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            <TooltipContent>
+                              <p>Sem permissão para atribuir portador</p>
+                            </TooltipContent>
+                          </Tooltip>
+                        </TooltipProvider>
                       )}
                     </div>
                   ) : (

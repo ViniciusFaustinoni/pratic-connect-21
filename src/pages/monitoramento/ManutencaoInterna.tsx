@@ -60,8 +60,8 @@ import {
 } from '@/components/monitoramento/manutencao-interna';
 
 export default function ManutencaoInterna() {
-  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
-  const temAcesso = isDiretor || isCoordenadorMonitoramento;
+  const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
+  const temAcesso = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento;
   const podeDescartar = isDiretor; // SOMENTE diretor pode descartar
 
   const [busca, setBusca] = useState('');

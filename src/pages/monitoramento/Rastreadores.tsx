@@ -80,7 +80,7 @@ export default function Rastreadores() {
   const { data: rastreadores, isLoading } = useRastreadores(filters);
   const { data: metricas, isLoading: isLoadingMetricas } = useRastreadoresMetricas();
   const { data: plataformasLabels } = usePlataformasLabels();
-  const { isDiretor, isDesenvolvedor } = usePermissions();
+  const { isDiretor, isDesenvolvedor, canManageEquipeEstoque } = usePermissions();
 
   const canManagePlataformas = isDiretor || isDesenvolvedor;
 
@@ -176,6 +176,7 @@ export default function Rastreadores() {
             viewMode={viewMode}
             onViewModeChange={setViewMode}
             isDiretor={isDiretor}
+            canManageEquipe={canManageEquipeEstoque}
             onViewMap={handleViewMap}
           />
         </TabsContent>
@@ -272,6 +273,7 @@ interface RastreadoresContentProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   isDiretor: boolean;
+  canManageEquipe: boolean;
   onViewMap: (rastreadorId: string) => void;
 }
 
@@ -289,6 +291,7 @@ function RastreadoresContent({
   viewMode,
   onViewModeChange,
   isDiretor,
+  canManageEquipe,
   onViewMap,
 }: RastreadoresContentProps) {
   const queryClient = useQueryClient();
@@ -416,6 +419,7 @@ function RastreadoresContent({
           onNewRastreador={onNewRastreador}
           getPlataformaLabel={getPlataformaLabel}
           isDiretor={isDiretor}
+          canManageEquipe={canManageEquipe}
           onViewMap={onViewMap}
         />
       )}
@@ -424,6 +428,7 @@ function RastreadoresContent({
         selectedCount={selectedIds.size}
         onAssignPortador={() => setLoteDialogOpen(true)}
         onClear={() => setSelectedIds(new Set())}
+        canAssign={canManageEquipe}
       />
 
       <AtribuirPortadorDialog
