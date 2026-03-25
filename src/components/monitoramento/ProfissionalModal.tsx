@@ -144,7 +144,7 @@ const profissionalSchema = z.object({
   status: z.enum(['disponivel', 'indisponivel']),
   criarAcesso: z.boolean().default(true),
   senhaProvisoria: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
-  tipoVistoriador: z.literal('instalador_vistoriador'),
+  tipoVistoriador: z.enum(['instalador_vistoriador', 'analista_monitoramento']),
 });
 
 type FormSchema = z.infer<typeof profissionalSchema>;
