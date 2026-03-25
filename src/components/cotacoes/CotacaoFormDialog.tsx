@@ -230,6 +230,20 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const criarSolicitacaoFipeMenor = useCriarSolicitacaoFipeMenor();
   const { fipeMenorAtivo } = useFipeMenorAtivo();
 
+  // Limite mínimo de FIPE para permitir FIPE menor (abaixo desse valor, não exibe a opção)
+  const { data: fipeMenorLimiteMinimo = 30000 } = useQuery({
+    queryKey: ['config-fipe-menor-limite-minimo'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'fipe_menor_limite_minimo')
+        .maybeSingle();
+      return data?.valor ? Number(data.valor) || 30000 : 30000;
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+
   // Hook para FIPE limite (alto valor)
   const { data: configLimites } = useConfigLimitesVeiculo();
   const criarSolicitacaoFipeLimite = useCriarSolicitacaoFipeLimite();
