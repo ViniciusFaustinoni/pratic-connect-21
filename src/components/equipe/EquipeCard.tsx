@@ -24,7 +24,6 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
-import { Progress } from '@/components/ui/progress';
 import {
   DropdownMenu,
   DropdownMenuContent,
@@ -64,36 +63,42 @@ const STATUS_CONFIG: Record<StatusProfissional, { label: string; className: stri
 
 const STATUS_OPERACIONAL_CONFIG: Record<StatusOperacional, { 
   label: string; 
+  shortLabel: string;
   className: string; 
   icon: React.ReactNode;
   dotColor: string;
 }> = {
   em_andamento: {
     label: 'Realizando Tarefa',
+    shortLabel: 'Em Tarefa',
     className: 'bg-blue-500/10 text-blue-400 border-blue-500/20',
     icon: <Wrench className="h-3 w-3" />,
     dotColor: 'bg-blue-500',
   },
   em_rota: {
     label: 'Em Rota',
+    shortLabel: 'Em Rota',
     className: 'bg-purple-500/10 text-purple-400 border-purple-500/20',
     icon: <Navigation className="h-3 w-3" />,
     dotColor: 'bg-purple-500',
   },
   em_contato: {
     label: 'Em Contato',
+    shortLabel: 'Contato',
     className: 'bg-amber-500/10 text-amber-400 border-amber-500/20',
     icon: <MessageCircle className="h-3 w-3" />,
     dotColor: 'bg-amber-500',
   },
   disponivel_operacional: {
     label: 'Aguardando Atribuição',
+    shortLabel: 'Aguardando',
     className: 'bg-emerald-500/10 text-emerald-400 border-emerald-500/20',
     icon: <Signal className="h-3 w-3" />,
     dotColor: 'bg-emerald-500 animate-pulse',
   },
   offline: {
     label: 'Offline',
+    shortLabel: 'Offline',
     className: 'bg-muted text-muted-foreground border-border',
     icon: <SignalZero className="h-3 w-3" />,
     dotColor: 'bg-muted-foreground',
@@ -118,13 +123,12 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
     return formatDistanceToNow(date, { addSuffix: true, locale: ptBR });
   };
 
-  const capacidadePercent = (profissional.tarefas_hoje / profissional.capacidade_diaria) * 100;
   const statusOp = STATUS_OPERACIONAL_CONFIG[profissional.status_operacional];
   const statusProf = STATUS_CONFIG[profissional.status];
 
   return (
     <Card className="group relative overflow-hidden border-border/50 bg-card hover:border-primary/30 transition-all duration-300 hover:shadow-lg hover:shadow-primary/5">
-      {/* Indicador de status online no topo */}
+      {/* Top status bar */}
       <div className={cn(
         "absolute top-0 left-0 right-0 h-1",
         profissional.status_operacional === 'disponivel_operacional' && 'bg-gradient-to-r from-emerald-500 to-emerald-400',
@@ -134,44 +138,43 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
         profissional.status_operacional === 'offline' && 'bg-muted',
       )} />
 
-      <CardContent className="p-5">
-        {/* Header */}
-        <div className="flex items-start justify-between mb-4">
-          <div className="flex items-center gap-3">
-            <div className="relative">
-              <Avatar className="h-14 w-14 border-2 border-border">
-                <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary font-semibold text-lg">
-                  {getInitials(profissional.nome)}
-                </AvatarFallback>
-              </Avatar>
-              {/* Status indicator dot */}
-              <div className={cn(
-                "absolute -bottom-0.5 -right-0.5 w-4 h-4 rounded-full border-2 border-card",
-                statusOp.dotColor
-              )} />
-            </div>
-            <div className="flex-1 min-w-0">
-              <h3 className="font-semibold text-foreground truncate leading-tight">
-                {profissional.nome}
-              </h3>
-              <div className="flex items-center gap-1.5 mt-1.5 flex-wrap">
-                <Badge variant="outline" className={cn("text-xs", statusProf.className)}>
-                  {statusProf.label}
-                </Badge>
-                <Badge variant="outline" className={cn("text-xs flex items-center gap-1", statusOp.className)}>
-                  {statusOp.icon}
-                  {statusOp.label}
-                </Badge>
-              </div>
-            </div>
+      <CardContent className="p-3 sm:p-4">
+        {/* Header: Avatar + Name + Menu */}
+        <div className="flex items-start gap-3 mb-3">
+          <div className="relative flex-shrink-0">
+            <Avatar className="h-10 w-10 sm:h-12 sm:w-12 border-2 border-border">
+              <AvatarFallback className="bg-gradient-to-br from-primary/20 to-primary/5 text-primary font-semibold text-sm sm:text-base">
+                {getInitials(profissional.nome)}
+              </AvatarFallback>
+            </Avatar>
+            <div className={cn(
+              "absolute -bottom-0.5 -right-0.5 w-3.5 h-3.5 rounded-full border-2 border-card",
+              statusOp.dotColor
+            )} />
           </div>
           
+          <div className="flex-1 min-w-0">
+            <h3 className="font-semibold text-foreground text-sm sm:text-base leading-tight break-words" title={profissional.nome}>
+              {profissional.nome}
+            </h3>
+            <div className="flex items-center gap-1 mt-1 flex-wrap">
+              <Badge variant="outline" className={cn("text-[10px] sm:text-xs px-1.5 py-0", statusProf.className)}>
+                {statusProf.label}
+              </Badge>
+              <Badge variant="outline" className={cn("text-[10px] sm:text-xs px-1.5 py-0 flex items-center gap-0.5", statusOp.className)}>
+                {statusOp.icon}
+                <span className="hidden sm:inline">{statusOp.label}</span>
+                <span className="sm:hidden">{statusOp.shortLabel}</span>
+              </Badge>
+            </div>
+          </div>
+
           <DropdownMenu>
             <DropdownMenuTrigger asChild>
               <Button 
                 variant="ghost" 
                 size="icon" 
-                className="h-8 w-8 opacity-0 group-hover:opacity-100 transition-opacity"
+                className="h-8 w-8 flex-shrink-0 opacity-100 sm:opacity-0 sm:group-hover:opacity-100 transition-opacity"
               >
                 <MoreVertical className="h-4 w-4" />
               </Button>
@@ -201,18 +204,18 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
           </DropdownMenu>
         </div>
 
-        {/* Contato & Info */}
-        <div className="space-y-2 mb-4">
-          <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
-            <Mail className="h-4 w-4 flex-shrink-0" />
-            <span className="truncate">{profissional.email}</span>
+        {/* Contact info - compact */}
+        <div className="space-y-1.5 mb-3 text-xs sm:text-sm">
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Mail className="h-3.5 w-3.5 flex-shrink-0" />
+            <span className="truncate" title={profissional.email}>{profissional.email}</span>
           </div>
-          <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
-            <Phone className="h-4 w-4 flex-shrink-0" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <Phone className="h-3.5 w-3.5 flex-shrink-0" />
             <span>{profissional.telefone || 'Não informado'}</span>
           </div>
-          <div className="flex items-center gap-2.5 text-sm text-muted-foreground">
-            <MapPin className="h-4 w-4 flex-shrink-0" />
+          <div className="flex items-center gap-2 text-muted-foreground">
+            <MapPin className="h-3.5 w-3.5 flex-shrink-0" />
             <span className="truncate">
               {profissional.regioes_atendimento.length > 0 
                 ? profissional.regioes_atendimento.slice(0, 2).join(', ')
@@ -223,111 +226,81 @@ export function EquipeCard({ profissional, onEditar, onDesativar, onRelatorio }:
               )}
             </span>
           </div>
+        </div>
 
-          {/* Hora de login */}
-          <div className="flex items-center gap-2.5 text-sm">
-            <LogIn className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+        {/* Inline stats row */}
+        <div className="flex items-center gap-2 mb-3">
+          {/* Login */}
+          <div className="flex items-center gap-1 text-xs">
+            <LogIn className="h-3 w-3 text-muted-foreground" />
             {profissional.inicio_turno ? (
               <span className="text-emerald-500 font-medium">
-                Logou às {format(new Date(profissional.inicio_turno), 'HH:mm')}
+                {format(new Date(profissional.inicio_turno), 'HH:mm')}
               </span>
             ) : (
-              <span className="text-muted-foreground">Não logou hoje</span>
+              <span className="text-muted-foreground">--:--</span>
             )}
           </div>
+          
+          <span className="text-border">•</span>
+
+          {/* Tarefas hoje */}
+          <div className="flex items-center gap-1 text-xs">
+            <TrendingUp className="h-3 w-3 text-primary" />
+            <span className="font-semibold text-foreground">{profissional.tarefas_hoje}</span>
+            <span className="text-muted-foreground">/{profissional.capacidade_diaria}</span>
+          </div>
+
+          <span className="text-border">•</span>
+
+          {/* Rastreadores */}
+          <div className="flex items-center gap-1 text-xs">
+            <Radio className="h-3 w-3 text-orange-500" />
+            <span className="font-semibold text-foreground">{profissional.rastreadores_atribuidos}</span>
+          </div>
+
+          <span className="text-border">•</span>
 
           {/* Localização */}
-          <div className="flex items-center gap-2.5 text-sm">
-            <Navigation className="h-4 w-4 flex-shrink-0 text-muted-foreground" />
+          <div className="flex items-center gap-1 text-xs">
+            <Navigation className="h-3 w-3 text-muted-foreground" />
             {profissional.latitude && profissional.longitude ? (
-              <div className="flex items-center gap-1.5">
-                <a
-                  href={`https://www.google.com/maps?q=${profissional.latitude},${profissional.longitude}`}
-                  target="_blank"
-                  rel="noopener noreferrer"
-                  className="text-primary hover:underline flex items-center gap-1"
-                >
-                  Ver no mapa
-                  <ExternalLink className="h-3 w-3" />
-                </a>
-                {profissional.localizacao_updated_at && (
-                  <span className="text-muted-foreground text-xs">
-                    · {(() => {
-                      const mins = differenceInMinutes(new Date(), new Date(profissional.localizacao_updated_at));
-                      if (mins < 1) return 'agora';
-                      if (mins < 60) return `há ${mins}min`;
-                      const hrs = Math.floor(mins / 60);
-                      return `há ${hrs}h`;
-                    })()}
-                  </span>
-                )}
-              </div>
+              <a
+                href={`https://www.google.com/maps?q=${profissional.latitude},${profissional.longitude}`}
+                target="_blank"
+                rel="noopener noreferrer"
+                className="text-primary hover:underline flex items-center gap-0.5"
+              >
+                Mapa
+                <ExternalLink className="h-2.5 w-2.5" />
+              </a>
             ) : (
-              <span className="text-muted-foreground">Sem localização</span>
+              <span className="text-muted-foreground">N/A</span>
             )}
           </div>
         </div>
 
-        {/* Stats Grid */}
-        <div className="grid grid-cols-2 gap-3 mb-4">
-          {/* Capacidade Diária */}
-          <div className="bg-muted/30 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <TrendingUp className="h-4 w-4 text-primary" />
-              <span className="text-xs text-muted-foreground">Hoje</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold text-foreground">
-                {profissional.tarefas_hoje}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                /{profissional.capacidade_diaria}
-              </span>
-            </div>
-            <Progress
-              value={capacidadePercent}
-              className="h-1.5 mt-2"
-            />
+        {/* Footer: última atividade + botão */}
+        <div className="flex items-center justify-between pt-2 border-t border-border/50">
+          <div className="flex items-center gap-1.5 text-[10px] sm:text-xs text-muted-foreground">
+            <Clock className="h-3 w-3" />
+            <span>
+              {profissional.ultima_atividade 
+                ? formatUltimaAtividade(profissional.ultima_atividade)
+                : 'Sem atividade'
+              }
+            </span>
           </div>
-
-          {/* Rastreadores em Posse */}
-          <div className="bg-muted/30 rounded-lg p-3">
-            <div className="flex items-center gap-2 mb-2">
-              <Radio className="h-4 w-4 text-orange-500" />
-              <span className="text-xs text-muted-foreground">Em Posse</span>
-            </div>
-            <div className="flex items-baseline gap-1">
-              <span className="text-2xl font-bold text-foreground">
-                {profissional.rastreadores_atribuidos}
-              </span>
-              <span className="text-sm text-muted-foreground">
-                rastreadores
-              </span>
-            </div>
-          </div>
+          <Button 
+            variant="ghost" 
+            size="sm" 
+            className="h-7 text-xs gap-1 text-primary hover:text-primary"
+            onClick={() => onRelatorio(profissional)}
+          >
+            <BarChart className="h-3 w-3" />
+            Relatório
+          </Button>
         </div>
-
-        {/* Última atividade */}
-        <div className="flex items-center gap-2 text-xs text-muted-foreground mb-4 py-2 border-t border-border/50">
-          <Clock className="h-3 w-3" />
-          <span>
-            Última atividade: {profissional.ultima_atividade 
-              ? formatUltimaAtividade(profissional.ultima_atividade)
-              : 'Sem atividade registrada'
-            }
-          </span>
-        </div>
-
-        {/* Ação */}
-        <Button 
-          variant="secondary" 
-          size="sm" 
-          className="w-full"
-          onClick={() => onRelatorio(profissional)}
-        >
-          <BarChart className="mr-2 h-4 w-4" />
-          Ver Relatório de Produtividade
-        </Button>
       </CardContent>
     </Card>
   );

@@ -32,9 +32,9 @@ export function EquipeFilters({
 }: EquipeFiltersProps) {
   const { regioes: REGIOES_ATENDIMENTO } = useRegioesAtendimento();
   return (
-    <div className="flex flex-col lg:flex-row gap-3">
+    <div className="flex flex-col gap-3">
       {/* Search */}
-      <div className="relative flex-1 min-w-[280px]">
+      <div className="relative w-full">
         <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
         <Input
           placeholder="Buscar por nome, email ou telefone..."
@@ -45,9 +45,9 @@ export function EquipeFilters({
       </div>
 
       {/* Filters Row */}
-      <div className="flex flex-wrap gap-2">
+      <div className="grid grid-cols-3 lg:flex lg:flex-row gap-2">
         <Select value={statusFilter} onValueChange={onStatusChange}>
-          <SelectTrigger className="w-[140px] bg-muted/30 border-border/50">
+          <SelectTrigger className="w-full lg:w-[140px] bg-muted/30 border-border/50">
             <SelectValue placeholder="Status" />
           </SelectTrigger>
           <SelectContent>
@@ -80,7 +80,7 @@ export function EquipeFilters({
         </Select>
 
         <Select value={statusOperacionalFilter} onValueChange={onStatusOperacionalChange}>
-          <SelectTrigger className="w-[170px] bg-muted/30 border-border/50">
+          <SelectTrigger className="w-full lg:w-[170px] bg-muted/30 border-border/50">
             <SelectValue placeholder="Operacional" />
           </SelectTrigger>
           <SelectContent>
@@ -119,7 +119,7 @@ export function EquipeFilters({
         </Select>
 
         <Select value={regiaoFilter} onValueChange={onRegiaoChange}>
-          <SelectTrigger className="w-[150px] bg-muted/30 border-border/50">
+          <SelectTrigger className="w-full lg:w-[150px] bg-muted/30 border-border/50">
             <SelectValue placeholder="Região" />
           </SelectTrigger>
           <SelectContent>

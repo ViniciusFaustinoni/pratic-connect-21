@@ -24,7 +24,7 @@ export function EquipeMetrics({ profissionais }: EquipeMetricsProps) {
       iconBg: 'bg-primary/20',
     },
     {
-      label: 'Realizando Tarefa',
+      label: 'Em Tarefa',
       value: emAndamento,
       icon: Wrench,
       className: 'bg-blue-500/10 text-blue-500',
@@ -38,7 +38,7 @@ export function EquipeMetrics({ profissionais }: EquipeMetricsProps) {
       iconBg: 'bg-purple-500/20',
     },
     {
-      label: 'Em Contato',
+      label: 'Contato',
       value: emContato,
       icon: MessageCircle,
       className: 'bg-amber-500/10 text-amber-500',
@@ -61,7 +61,7 @@ export function EquipeMetrics({ profissionais }: EquipeMetricsProps) {
   ];
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3">
+    <div className="grid grid-cols-3 sm:grid-cols-3 lg:grid-cols-6 gap-2 sm:gap-3">
       {metrics.map((metric) => (
         <Card 
           key={metric.label} 
@@ -70,13 +70,13 @@ export function EquipeMetrics({ profissionais }: EquipeMetricsProps) {
             metric.className
           )}
         >
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className={cn("p-2 rounded-lg", metric.iconBg)}>
-              <metric.icon className="h-5 w-5" />
+          <CardContent className="p-2.5 sm:p-4 flex items-center gap-2 sm:gap-3">
+            <div className={cn("p-1.5 sm:p-2 rounded-lg", metric.iconBg)}>
+              <metric.icon className="h-4 w-4 sm:h-5 sm:w-5" />
             </div>
-            <div>
-              <p className="text-2xl font-bold">{metric.value}</p>
-              <p className="text-xs opacity-80">{metric.label}</p>
+            <div className="min-w-0">
+              <p className="text-xl sm:text-2xl font-bold">{metric.value}</p>
+              <p className="text-[10px] sm:text-xs opacity-80 truncate">{metric.label}</p>
             </div>
           </CardContent>
         </Card>
