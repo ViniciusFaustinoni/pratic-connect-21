@@ -4,7 +4,8 @@ import { useAssociadoSearch } from '@/hooks/useAssociadoSearch';
 
 import { ChevronDown, ChevronUp } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
-import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useMigracaoConfig, useObservacoesCategoria, useMarcasAceitasMotos } from '@/hooks/useConteudosSistema';
+import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useCarenciaVidrosDias, useMigracaoConfig, useObservacoesCategoria, useMarcasAceitasMotos } from '@/hooks/useConteudosSistema';
+import { MigracaoToggle, type MigracaoState } from '@/components/cotacoes/MigracaoToggle';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
@@ -149,7 +150,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: repasseVolanteExterno = 50 } = useTaxaRepasseVolanteExterno();
   const repasseVolante = isVendedorExterno ? repasseVolanteExterno : repasseVolanteInterno;
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
+  const { data: carenciaVidrosDias = 120 } = useCarenciaVidrosDias();
   const { data: migracaoConfig } = useMigracaoConfig();
+  const [migracaoState, setMigracaoState] = useState<MigracaoState>({ ativo: false, associacaoOrigem: '', arquivos: [] });
   const { data: observacoesCategoria = {} } = useObservacoesCategoria();
   
   // Estado do cenário de adesão para vendedor externo
@@ -2021,23 +2024,24 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               {/* Carência */}
               <Alert className="border-blue-500/50 bg-blue-500/10">
                 <Info className="h-4 w-4 text-blue-500" />
-                <AlertDescription className="text-sm">
-                  <span className="font-medium">Carência:</span>{' '}
-                  {migracaoConfig?.isentar_carencia && cenarioExterno?.includes('rota')
-                    ? 'Sem carência (migração aprovada)'
-                    : `${carenciaDias} dias`}
+                <AlertDescription className="text-sm space-y-1">
+                  <div>
+                    <span className="font-medium">Carência geral:</span>{' '}
+                    {migracaoState.ativo && migracaoConfig?.isentar_carencia
+                      ? 'Sem carência (migração)'
+                      : `${carenciaDias} dias`}
+                  </div>
+                  <div>
+                    <span className="font-medium">Carência vidros/faróis:</span>{' '}
+                    {migracaoState.ativo && migracaoConfig?.isentar_carencia
+                      ? 'Sem carência (migração)'
+                      : `${carenciaVidrosDias} dias`}
+                  </div>
                 </AlertDescription>
               </Alert>
 
-              {/* Info migração */}
-              {migracaoConfig && (
-                <Alert className="border-muted-foreground/30 bg-muted/30">
-                  <HelpCircle className="h-4 w-4 text-muted-foreground" />
-                  <AlertDescription className="text-xs text-muted-foreground">
-                    <span className="font-medium">Migração:</span> {migracaoConfig.comprovantes} comprovantes exigidos · Prazo {migracaoConfig.prazo_horas}h · Via {migracaoConfig.canal}
-                  </AlertDescription>
-                </Alert>
-              )}
+              {/* Toggle de migração */}
+              <MigracaoToggle value={migracaoState} onChange={setMigracaoState} />
             </div>
 
             <Separator />
