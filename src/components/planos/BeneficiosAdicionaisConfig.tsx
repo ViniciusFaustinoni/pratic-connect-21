@@ -208,12 +208,12 @@ export function BeneficiosAdicionaisConfig() {
                 className="pl-10"
               />
             </div>
-            <Select value={filterCategoria} onValueChange={setFilterCategoria}>
+            <Select value={filterCategoria || '__all__'} onValueChange={(v) => setFilterCategoria(v === '__all__' ? '' : v)}>
               <SelectTrigger className="w-48">
                 <SelectValue placeholder="Todas categorias" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todas categorias</SelectItem>
+                <SelectItem value="__all__">Todas categorias</SelectItem>
                 {CATEGORIAS_BENEFICIO.map(cat => (
                   <SelectItem key={cat.value} value={cat.value}>
                     {cat.label}
