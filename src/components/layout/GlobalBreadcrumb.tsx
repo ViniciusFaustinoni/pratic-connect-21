@@ -114,7 +114,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/monitoramento/rastreadores': { label: 'Rastreadores' },
   '/monitoramento/retiradas': { label: 'Retiradas' },
   
-  '/monitoramento/config-plataformas': { label: 'Plataformas' },
+  
   
   '/monitoramento/calendario': { label: 'Calendário' },
   '/monitoramento/alertas': { label: 'Alertas' },
