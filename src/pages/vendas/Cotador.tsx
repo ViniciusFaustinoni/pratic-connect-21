@@ -251,7 +251,9 @@ export default function CotadorPage() {
   const { data: repasseVolanteInterno = 50 } = useTaxaRepasseVolante();
   const { data: repasseVolanteExterno = 50 } = useTaxaRepasseVolanteExterno();
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
+  const { data: carenciaVidrosDias = 120 } = useCarenciaVidrosDias();
   const { data: migracaoConfig } = useMigracaoConfig();
+  const [migracaoState, setMigracaoState] = useState<MigracaoState>({ ativo: false, associacaoOrigem: '', arquivos: [] });
 
   // Fetch associado data for inclusão pre-fill
   const { data: inclusaoAssociado } = useQuery({
