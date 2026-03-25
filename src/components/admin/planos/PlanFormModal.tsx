@@ -584,6 +584,21 @@ export function PlanFormModal({
                           placeholder="Ex: 2015+"
                         />
                       </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="ano_fabricacao_maximo">Ano Máximo<FieldHint text={PLAN_FIELD_HINTS.ano_fabricacao_maximo || 'Ano máximo de fabricação aceito. Veículos acima deste ano NÃO verão este plano na Cotação e Calculadora.'} /></Label>
+                        <Input
+                          id="ano_fabricacao_maximo"
+                          type="number"
+                          value={formData.ano_fabricacao_maximo}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              ano_fabricacao_maximo: e.target.value,
+                            }))
+                          }
+                          placeholder="Ex: 2004"
+                        />
+                      </div>
                     </div>
 
                     {/* Tabela de Preços (linha_slug) */}
