@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Gift, Shield, Plus, Edit, Trash2, Copy } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
