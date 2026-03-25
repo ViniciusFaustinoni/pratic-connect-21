@@ -1,34 +1,52 @@
 
 
-# Limpar Dados Duplicados em Benefícios
+# Unificar "Tipo de Cliente" e "Categorias de Veículo Aceitas"
 
-## Situacao Atual
+## Problema
 
-A tabela `benefits` contem 8 itens com `category = 'cobertura'` (Alagamento, Chuva de Granizo, Colisao, Danos a Terceiros, Incendio, Perda Total, Roubo e Furto, Vidros e Farois) que sao duplicatas dos registros ja existentes na tabela `coberturas`. Nenhum desses itens esta vinculado a nenhum plano via `planos_beneficios` — portanto podem ser removidos com seguranca.
+O formulário de plano tem dois campos redundantes:
+- **Tipo de Cliente** (dropdown: Passeio/Aplicativo) — campo `tipo_uso` na tabela `planos`
+- **Categorias de Veículo Aceitas** (checkboxes: Passeio, Aplicativo, Moto, Diesel, etc.) — campo `categoria` na tabela `planos`
 
-Alem disso, ha 2 itens com `category = 'assistencia'` que tambem existem na tabela `coberturas` (Assistencia 24h, Rastreador). Estes devem permanecer em `benefits` porque sao beneficios de marketing (servicos oferecidos), nao coberturas contratuais de eventos.
+Ambos definem a mesma coisa: quais tipos de veículo o plano aceita. O "Tipo de Cliente" é restritivo (um valor) enquanto "Categorias" é flexível (múltiplos valores). A fonte de verdade deve ser apenas **Categorias de Veículo Aceitas**.
 
-## Plano
+## Impacto no Motor de Cotação
 
-### 1. Deletar beneficios duplicados
-Remover da tabela `benefits` os 8 registros com `category = 'cobertura'`:
-
-```sql
-DELETE FROM benefits WHERE category = 'cobertura';
+Hoje o motor de cotação (`useCotacao.ts` linha 289-303) filtra planos por `tipo_uso`:
+```
+planos.filter(p => p.tipo_uso === 'particular' || p.tipo_uso === 'passeio')
 ```
 
-IDs: f957ef92, 5a9139dd, 05c7d281, 374ce067, c032f5a1, 0c2aac0a, a8a8f296, 22c15d8a
+Precisamos migrar essa filtragem para usar `categorias_veiculo` (campo `categoria` no banco). Exemplo: se o veículo é "aplicativo", o plano só aparece se `categoria` contiver "aplicativo".
 
-Nenhum vinculo em `planos_beneficios` sera afetado (verificado: zero links).
+## Plano de Execução
 
-### 2. Nenhuma alteracao de codigo
-A pagina `BeneficiosCoberturas.tsx` ja separa corretamente as abas: Coberturas le de `coberturas` e Beneficios le de `benefits`. Apos a limpeza, a aba Beneficios mostrara apenas os 8 itens reais (assistencia + extras), sem os itens de cobertura misturados.
+### 1. Remover campo "Tipo de Cliente" do formulário
+**Arquivo:** `PlanFormModal.tsx`
+- Remover o bloco `<Select>` de "Tipo de Cliente" (linhas 509-525)
+- Remover `tipo_uso` do state `formData` (linha 157)
+- Na submissão, derivar `tipo_uso` automaticamente das categorias selecionadas: se inclui "aplicativo" → `'aplicativo'`, senão → `'passeio'` (backward compatibility com banco)
 
-## Resultado
-- Aba Coberturas: 11 itens (da tabela `coberturas`)
-- Aba Beneficios: 8 itens (4 assistencia + 4 extras, sem duplicatas)
+### 2. Atualizar motor de cotação para usar categorias
+**Arquivo:** `useCotacao.ts`
+- Trocar filtro de `tipo_uso` por verificação se a `categoria` do plano inclui a categoria do veículo sendo cotado
+- Manter fallback: plano sem categoria definida aceita qualquer veículo (backward compat)
 
-| Acao | Tipo |
+### 3. Atualizar motor avançado
+**Arquivo:** `useCotacaoAvancada.ts`
+- Mesma lógica: verificar `categoria` do plano em vez de `tipo_uso`
+
+### 4. Remover badge APP baseado em tipo_uso
+**Arquivo:** `PlanCard.tsx` (linha 114)
+- Derivar badge APP de `categorias_veiculo` em vez de `tipo_uso`
+
+## Arquivos
+
+| Arquivo | Tipo |
 |---|---|
-| `DELETE FROM benefits WHERE category = 'cobertura'` | Dado (insert tool) |
+| `src/components/admin/planos/PlanFormModal.tsx` | Editado — remover campo Tipo de Cliente |
+| `src/hooks/useCotacao.ts` | Editado — filtrar por categoria |
+| `src/hooks/useCotacaoAvancada.ts` | Editado — filtrar por categoria |
+| `src/hooks/usePlansAdmin.ts` | Editado — derivar tipo_uso das categorias |
+| `src/components/admin/planos/PlanCard.tsx` | Editado — badge APP via categoria |
 
