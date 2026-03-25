@@ -2,6 +2,7 @@ import { TableRow, TableCell } from "@/components/ui/table";
 import { Button } from "@/components/ui/button";
 import { Badge } from "@/components/ui/badge";
 import { Avatar, AvatarFallback } from "@/components/ui/avatar";
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from "@/components/ui/tooltip";
 import { AtivacaoProgressIcons } from "./AtivacaoProgressIcons";
 import { AtivacaoContrato } from "@/hooks/useAtivacoes";
 import { 
