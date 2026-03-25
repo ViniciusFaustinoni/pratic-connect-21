@@ -332,8 +332,9 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
           <VideoCapture
             onCapture={handleVideoCapture}
             onReset={handleVideoReset}
-            videoUrl={undefined}
+            videoUrl={videoUrl ?? undefined}
             uploading={uploadingVideo}
+            confirmed={!!videoUrl}
             maxDuration={120}
             label="Vídeo 360° do Veículo"
             cameraOnly={true}

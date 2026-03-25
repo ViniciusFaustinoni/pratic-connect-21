@@ -230,15 +230,26 @@ export function VideoCapture({
               className="h-full w-full rounded-lg object-contain"
             />
             <div className="absolute top-2 right-2 flex gap-1">
-              <div className="rounded-full bg-green-500 p-1">
-                <CheckCircle className="h-4 w-4 text-white" />
-              </div>
+              {uploading ? (
+                <div className="rounded-full bg-blue-500 p-1">
+                  <Loader2 className="h-4 w-4 text-white animate-spin" />
+                </div>
+              ) : confirmed || videoUrl ? (
+                <div className="rounded-full bg-green-500 p-1">
+                  <CheckCircle className="h-4 w-4 text-white" />
+                </div>
+              ) : (
+                <div className="rounded-full bg-amber-500 p-1">
+                  <Loader2 className="h-4 w-4 text-white animate-spin" />
+                </div>
+              )}
             </div>
             <div className="absolute bottom-2 right-2 flex gap-1">
               <Button
                 size="icon"
                 variant="secondary"
                 onClick={handleReset}
+                disabled={uploading}
                 className="h-8 w-8 bg-slate-800/90 hover:bg-slate-700"
               >
                 <RotateCcw className="h-4 w-4" />
