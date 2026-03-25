@@ -476,13 +476,12 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
               </div>
             </div>
 
-            {/* Seção: Configurações de Trabalho */}
+            {/* Seção: Configurações de Trabalho — apenas para vistoriadores */}
+            {tipoVistoriador !== 'analista_monitoramento' && (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                 Configurações de Trabalho
               </h3>
-
-              {/* Tipo unificado - alocação diária é feita pelo coordenador na Escala do Dia */}
               
               {/* Regiões de atuação */}
               <FormField
