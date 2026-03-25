@@ -369,14 +369,14 @@ export default function PlanosBeneficios() {
           ))}
 
           {/* Coberturas Principais */}
-          {!loadingCoverages && mainCoverages && mainCoverages.length > 0 && (
+           {!loadingCoverages && coberturas && coberturas.length > 0 && (
             <section>
               <h2 className="text-xl font-semibold mb-4">Coberturas Principais</h2>
               <div className="grid grid-cols-2 md:grid-cols-5 gap-3">
-                {mainCoverages.map((coverage) => (
+                {coberturas.map((coverage) => (
                   <Card key={coverage.id} className="text-center p-4 hover:shadow-md transition-shadow">
                     <div className="text-3xl mb-2">{coverage.icon}</div>
-                    <p className="font-medium text-sm">{coverage.name}</p>
+                    <p className="font-medium text-sm">{coverage.nome}</p>
                     <p className="text-xs text-muted-foreground">{coverage.subtitle}</p>
                   </Card>
                 ))}
