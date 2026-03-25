@@ -380,6 +380,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       return null;
     }
 
+    // Bloquear FIPE menor para veículos com valor FIPE <= limite mínimo (padrão R$ 30.000)
+    if (valorFipe <= fipeMenorLimiteMinimo) {
+      return null;
+    }
+
     const plano = planosSelecionados[0];
     const valorReduzido = valorFipe * 0.99;
 
