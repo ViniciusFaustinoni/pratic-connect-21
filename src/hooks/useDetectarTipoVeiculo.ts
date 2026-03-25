@@ -41,7 +41,7 @@ export function useDetectarTipoVeiculo(
             marcasList = raw.split(',').map((m: string) => m.toUpperCase().trim());
           }
 
-          if (marcasList.some(m => marcaNorm.includes(m) || m.includes(marcaNorm))) {
+          if (marcasList.some(m => marcaNorm === m)) {
             return 'moto';
           }
         } catch {
