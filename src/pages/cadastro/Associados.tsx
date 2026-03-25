@@ -840,7 +840,7 @@ export default function Associados() {
                                   Cancelar
                                 </DropdownMenuItem>
                               )}
-                              {canDeleteAssociados && (
+                              {canDeleteAssociados ? (
                                 <>
                                   <DropdownMenuSeparator />
                                   <DropdownMenuItem 
@@ -855,6 +855,23 @@ export default function Associados() {
                                     <Trash2 className="mr-2 h-4 w-4" />
                                     Excluir Permanentemente
                                   </DropdownMenuItem>
+                                </>
+                              ) : (
+                                <>
+                                  <DropdownMenuSeparator />
+                                  <Tooltip>
+                                    <TooltipTrigger asChild>
+                                      <span className="w-full">
+                                        <DropdownMenuItem disabled className="text-destructive font-semibold">
+                                          <Trash2 className="mr-2 h-4 w-4" />
+                                          Excluir Permanentemente
+                                        </DropdownMenuItem>
+                                      </span>
+                                    </TooltipTrigger>
+                                    <TooltipContent side="left">
+                                      Apenas diretores podem excluir associados
+                                    </TooltipContent>
+                                  </Tooltip>
                                 </>
                               )}
                             </DropdownMenuContent>
