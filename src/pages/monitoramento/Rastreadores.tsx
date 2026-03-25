@@ -272,6 +272,7 @@ interface RastreadoresContentProps {
   viewMode: ViewMode;
   onViewModeChange: (mode: ViewMode) => void;
   isDiretor: boolean;
+  canManageEquipe: boolean;
   onViewMap: (rastreadorId: string) => void;
 }
 
