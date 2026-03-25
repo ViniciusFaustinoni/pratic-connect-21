@@ -9,6 +9,7 @@ interface RastreadorBatchActionsProps {
   onAssignPortador: () => void;
   onBatchMaintenance?: () => void;
   onClear: () => void;
+  canAssign?: boolean;
 }
 
 export function RastreadorBatchActions({
