@@ -33,6 +33,8 @@ import { VincularCoberturaModal, EditarCoberturaVinculadaModal, FaixaPrecoModal,
 import { VincularBeneficioModal } from '@/components/gestao-comercial/VincularBeneficioModal';
 import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
 import { TabelaPrecosTab } from '@/components/gestao-comercial/TabelaPrecosTab';
+import { LinhasTab } from '@/components/admin/planos/LinhasTab';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import type { PlanWithDetails } from '@/hooks/usePlans';
 
 function formatCurrency(value: number) {
