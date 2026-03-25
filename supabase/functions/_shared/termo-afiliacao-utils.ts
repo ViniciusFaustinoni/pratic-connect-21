@@ -164,6 +164,20 @@ export interface TermoAfiliacaoData {
   migracao?: MigracaoData;
   substituicao?: SubstituicaoData;
   trocaTitularidade?: TrocaTitularidadeData;
+  oficina?: OficinaData;
+}
+
+export interface OficinaData {
+  nome: string;
+  cnpj?: string;
+  telefone?: string;
+  whatsapp?: string;
+  logradouro?: string;
+  numero?: string;
+  bairro?: string;
+  cidade?: string;
+  estado?: string;
+  cep?: string;
 }
 
 // ============= FORMATADORES =============

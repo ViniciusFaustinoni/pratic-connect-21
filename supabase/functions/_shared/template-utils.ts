@@ -173,6 +173,22 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
       'troca.cenario': dados.trocaTitularidade.cenario || '—',
       'troca.cenario_label': dados.trocaTitularidade.cenario_label || '—',
     } : {}),
+
+    // Oficina (quando aplicável — vinculada via OS)
+    ...(dados.oficina ? {
+      'oficina.nome': dados.oficina.nome || '—',
+      'oficina.cnpj': dados.oficina.cnpj || '—',
+      'oficina.telefone': formatPhone(dados.oficina.telefone),
+      'oficina.whatsapp': formatPhone(dados.oficina.whatsapp || dados.oficina.telefone),
+      'oficina.endereco': [
+        dados.oficina.logradouro,
+        dados.oficina.numero ? `, ${dados.oficina.numero}` : '',
+        dados.oficina.bairro ? ` - ${dados.oficina.bairro}` : '',
+        dados.oficina.cidade ? ` - ${dados.oficina.cidade}` : '',
+        dados.oficina.estado ? `/${dados.oficina.estado}` : '',
+        dados.oficina.cep ? ` - CEP ${formatCEP(dados.oficina.cep)}` : '',
+      ].join('') || '—',
+    } : {}),
   };
 }
 

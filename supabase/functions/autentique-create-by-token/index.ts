@@ -208,6 +208,45 @@ serve(async (req) => {
       templateData.regrasVenda = regrasVenda;
     }
 
+    // ============= BUSCAR OFICINA VINCULADA VIA OS =============
+    try {
+      let oficinaId: string | null = null;
+      const { data: osData } = await supabase
+        .from('ordens_servico')
+        .select('oficina_id')
+        .or(`contrato_id.eq.${contrato.id}${contrato.veiculo_id ? `,veiculo_id.eq.${contrato.veiculo_id}` : ''}`)
+        .not('oficina_id', 'is', null)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      oficinaId = osData?.oficina_id || null;
+
+      if (oficinaId) {
+        const { data: oficina } = await supabase
+          .from('oficinas')
+          .select('nome_fantasia, razao_social, cnpj, telefone, whatsapp, logradouro, numero, bairro, cidade, estado, cep')
+          .eq('id', oficinaId)
+          .maybeSingle();
+        if (oficina) {
+          templateData.oficina = {
+            nome: oficina.nome_fantasia || oficina.razao_social || '—',
+            cnpj: oficina.cnpj || '',
+            telefone: oficina.telefone || '',
+            whatsapp: oficina.whatsapp || '',
+            logradouro: oficina.logradouro || '',
+            numero: oficina.numero || '',
+            bairro: oficina.bairro || '',
+            cidade: oficina.cidade || '',
+            estado: oficina.estado || '',
+            cep: oficina.cep || '',
+          };
+          console.log(`[autentique-create-by-token] Oficina vinculada encontrada: ${templateData.oficina.nome}`);
+        }
+      }
+    } catch (err) {
+      console.warn('[autentique-create-by-token] Erro ao buscar oficina (não-bloqueante):', err);
+    }
+
     // Fetch migration data if applicable
     if (contrato.tipo_entrada === 'migracao') {
       let solMigracao = null;
