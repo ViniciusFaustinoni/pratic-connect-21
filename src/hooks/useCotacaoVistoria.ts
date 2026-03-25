@@ -28,7 +28,7 @@ export function useFotosCotacaoVistoria(cotacaoId: string | null) {
     queryKey: ['cotacao-vistoria-fotos', cotacaoId],
     queryFn: async () => {
       if (!cotacaoId) return [];
-      const { data, error } = await supabase
+      const { data, error } = await publicSupabase
         .from('cotacoes_vistoria_fotos')
         .select('*')
         .eq('cotacao_id', cotacaoId)
@@ -62,17 +62,17 @@ export function useUploadFotoCotacaoVistoria() {
       const fileExt = file.name.split('.').pop();
       const fileName = `${cotacaoId}/${fotoId}-${Date.now()}.${fileExt}`;
       
-      const { error: uploadError } = await supabase.storage
+      const { error: uploadError } = await publicSupabase.storage
         .from('cotacoes-vistoria')
         .upload(fileName, file, { upsert: true });
       if (uploadError) throw uploadError;
       
-      const { data: urlData } = supabase.storage
+      const { data: urlData } = publicSupabase.storage
         .from('cotacoes-vistoria')
         .getPublicUrl(fileName);
       const url = urlData.publicUrl;
       
-      const { error: dbError } = await supabase
+      const { error: dbError } = await publicSupabase
         .from('cotacoes_vistoria_fotos')
         .upsert({
           cotacao_id: cotacaoId,
