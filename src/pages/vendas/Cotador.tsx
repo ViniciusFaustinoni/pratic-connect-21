@@ -1169,7 +1169,22 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               </>
             ) : (
               <>
-                {/* MODO MANUAL: Selects */}
+                {/* MODO MANUAL: Placa obrigatória + Selects */}
+                <div className="space-y-2 mb-4">
+                  <Label className="flex items-center gap-2">
+                    Placa do Veículo <span className="text-destructive">*</span>
+                  </Label>
+                  <Input
+                    value={placaBusca}
+                    onChange={(e) => setPlacaBusca(e.target.value.toUpperCase().replace(/[^A-Z0-9]/g, ''))}
+                    placeholder="ABC1D23"
+                    className="uppercase font-mono text-lg"
+                    maxLength={8}
+                  />
+                  <p className="text-xs text-muted-foreground">
+                    Placa obrigatória para verificação no sistema SGA
+                  </p>
+                </div>
                 <div className="grid grid-cols-2 gap-4">
                   {/* Marca */}
                   <div className="space-y-2">
