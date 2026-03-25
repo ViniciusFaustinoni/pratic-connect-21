@@ -70,6 +70,7 @@ export default function TemplateForm() {
       is_default_saida: false,
       is_default_rastreador: false,
       anexar_proposta: false,
+      ordem_anexo: 0,
     },
   });
 
