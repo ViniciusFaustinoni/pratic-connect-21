@@ -24,6 +24,8 @@ import {
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { useBenefits } from '@/hooks/usePlans';
 import { useDeleteBenefit, useUpdateBenefit } from '@/hooks/usePlansAdmin';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BeneficioFormModal } from './BeneficioFormModal';
 import type { Benefit } from '@/types/plans';
 
@@ -35,6 +37,8 @@ export function BeneficiosTab() {
 
   const deleteBenefit = useDeleteBenefit();
   const updateBenefit = useUpdateBenefit();
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
   const handleNewBenefit = () => {
     setEditingBenefit(null);
@@ -137,13 +141,23 @@ export function BeneficiosTab() {
                         >
                           <Edit className="h-4 w-4" />
                         </Button>
-                        <Button
-                          size="icon"
-                          variant="ghost"
-                          onClick={() => setDeleteId(benefit.id)}
-                        >
-                          <Trash2 className="h-4 w-4 text-destructive" />
-                        </Button>
+                        <TooltipProvider>
+                          <Tooltip>
+                            <TooltipTrigger asChild>
+                              <span>
+                                <Button
+                                  size="icon"
+                                  variant="ghost"
+                                  onClick={() => setDeleteId(benefit.id)}
+                                  disabled={!canDelete}
+                                >
+                                  <Trash2 className="h-4 w-4 text-destructive" />
+                                </Button>
+                              </span>
+                            </TooltipTrigger>
+                            {!canDelete && <TooltipContent>Apenas diretores podem excluir benefícios</TooltipContent>}
+                          </Tooltip>
+                        </TooltipProvider>
                       </div>
                     </TableCell>
                   </TableRow>

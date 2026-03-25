@@ -20,6 +20,8 @@ import {
 } from '@/components/ui/alert-dialog';
 import { cn } from '@/lib/utils';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { supabase } from '@/integrations/supabase/client';
 import { usePlans, useProductLines } from '@/hooks/usePlans';
 import { useDeletePlan, useDuplicatePlan, useTogglePlanStatus } from '@/hooks/usePlansAdmin';
@@ -75,6 +77,8 @@ export function ProdutosPlanos() {
   const deletePlan = useDeletePlan();
   const duplicatePlan = useDuplicatePlan();
   const toggleStatus = useTogglePlanStatus();
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
   // Fetch associados count per plan
   const { data: associadosCounts } = useQuery({
@@ -401,7 +405,22 @@ export function ProdutosPlanos() {
                     <DropdownMenuItem onClick={() => duplicatePlan.mutate(selectedPlan.id)}>
                       <Copy className="h-4 w-4 mr-2" /> Duplicar
                     </DropdownMenuItem>
-                    {selectedPlan.ativo ? (
+                    {!canDelete ? (
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <DropdownMenuItem
+                              className="text-destructive opacity-50 cursor-not-allowed"
+                              onClick={(e) => e.preventDefault()}
+                              disabled
+                            >
+                              <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                            </DropdownMenuItem>
+                          </TooltipTrigger>
+                          <TooltipContent>Apenas diretores podem excluir planos</TooltipContent>
+                        </Tooltip>
+                      </TooltipProvider>
+                    ) : selectedPlan.ativo ? (
                       <DropdownMenuItem
                         className="text-destructive opacity-50 cursor-not-allowed"
                         onClick={(e) => { e.preventDefault(); toast.error('Inative o plano antes de excluir'); }}

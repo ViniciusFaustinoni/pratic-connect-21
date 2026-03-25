@@ -1,5 +1,7 @@
 import { useState } from 'react';
 import { Gift, Shield, Plus, Edit, Trash2, Copy } from 'lucide-react';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -41,6 +43,8 @@ export function BeneficiosCoberturas() {
   const deleteBenefit = useDeleteBenefit();
   const deleteCoverage = useDeleteMainCoverage();
   const duplicateBenefit = useDuplicateBenefit();
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
   // Fetch benefit-plan associations
   const { data: benefitPlans } = useQuery({
@@ -147,14 +151,24 @@ export function BeneficiosCoberturas() {
                       >
                         <Copy className="h-3.5 w-3.5" />
                       </Button>
-                      <Button
-                        variant="ghost"
-                        size="icon"
-                        className="h-7 w-7 text-destructive"
-                        onClick={() => { setDeleteType('benefit'); setDeleteConfirmId(benefit.id); }}
-                      >
-                        <Trash2 className="h-3.5 w-3.5" />
-                      </Button>
+                      <TooltipProvider>
+                        <Tooltip>
+                          <TooltipTrigger asChild>
+                            <span>
+                              <Button
+                                variant="ghost"
+                                size="icon"
+                                className="h-7 w-7 text-destructive"
+                                onClick={() => { setDeleteType('benefit'); setDeleteConfirmId(benefit.id); }}
+                                disabled={!canDelete}
+                              >
+                                <Trash2 className="h-3.5 w-3.5" />
+                              </Button>
+                            </span>
+                          </TooltipTrigger>
+                          {!canDelete && <TooltipContent>Apenas diretores podem excluir benefícios</TooltipContent>}
+                        </Tooltip>
+                      </TooltipProvider>
                     </div>
                   </div>
                   {benefit.category && (
@@ -217,14 +231,24 @@ export function BeneficiosCoberturas() {
                     >
                       <Edit className="h-3.5 w-3.5" />
                     </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive"
-                      onClick={() => { setDeleteType('coverage'); setDeleteConfirmId(cov.id); }}
-                    >
-                      <Trash2 className="h-3.5 w-3.5" />
-                    </Button>
+                    <TooltipProvider>
+                      <Tooltip>
+                        <TooltipTrigger asChild>
+                          <span>
+                            <Button
+                              variant="ghost"
+                              size="icon"
+                              className="h-7 w-7 text-destructive"
+                              onClick={() => { setDeleteType('coverage'); setDeleteConfirmId(cov.id); }}
+                              disabled={!canDelete}
+                            >
+                              <Trash2 className="h-3.5 w-3.5" />
+                            </Button>
+                          </span>
+                        </TooltipTrigger>
+                        {!canDelete && <TooltipContent>Apenas diretores podem excluir coberturas</TooltipContent>}
+                      </Tooltip>
+                    </TooltipProvider>
                   </div>
                 </div>
                 {cov.icon && (

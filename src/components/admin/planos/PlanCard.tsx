@@ -22,6 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { useTogglePlanStatus } from '@/hooks/usePlansAdmin';
 import type { PlanWithDetails } from '@/hooks/usePlans';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PlanCardProps {
   plan: PlanWithDetails;
@@ -29,6 +30,7 @@ interface PlanCardProps {
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  canDelete?: boolean;
 }
 
 const BADGE_COLORS: Record<string, string> = {
@@ -55,7 +57,7 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: PlanCardProps) {
+export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete, canDelete = true }: PlanCardProps) {
   const [expanded, setExpanded] = useState(false);
   const toggleStatus = useTogglePlanStatus();
 
@@ -171,9 +173,18 @@ export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: Pla
               <Button size="icon" variant="ghost" onClick={onDuplicate}>
                 <Copy className="h-4 w-4" />
               </Button>
-              <Button size="icon" variant="ghost" onClick={onDelete}>
-                <Trash2 className="h-4 w-4 text-destructive" />
-              </Button>
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <span>
+                      <Button size="icon" variant="ghost" onClick={onDelete} disabled={!canDelete}>
+                        <Trash2 className="h-4 w-4 text-destructive" />
+                      </Button>
+                    </span>
+                  </TooltipTrigger>
+                  {!canDelete && <TooltipContent>Apenas diretores podem excluir planos</TooltipContent>}
+                </Tooltip>
+              </TooltipProvider>
               <CollapsibleTrigger asChild>
                 <Button size="icon" variant="ghost">
                   {expanded ? (

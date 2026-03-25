@@ -7,6 +7,7 @@ import { useProductLines, usePlans, PlanWithDetails } from '@/hooks/usePlans';
 import { PlanCard } from './PlanCard';
 import { PlanFormModal } from './PlanFormModal';
 import { useDeletePlan, useDuplicatePlan, useReorderPlans } from '@/hooks/usePlansAdmin';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -84,6 +85,8 @@ export function PlanosTab() {
   const deletePlan = useDeletePlan();
   const duplicatePlan = useDuplicatePlan();
   const reorderPlans = useReorderPlans();
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
@@ -216,6 +219,7 @@ export function PlanosTab() {
                     onEdit={() => handleEdit(plan)}
                     onDuplicate={() => handleDuplicate(plan.id)}
                     onDelete={() => setDeleteId(plan.id)}
+                    canDelete={canDelete}
                   />
                 ))}
             </div>
