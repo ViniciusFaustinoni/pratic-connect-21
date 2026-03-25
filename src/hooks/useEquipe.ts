@@ -250,7 +250,7 @@ export function useSaveProfissional() {
       regioes_atendimento?: string[];
       capacidade_diaria?: number;
       ativo?: boolean;
-      tipoVistoriador?: 'instalador_vistoriador';
+      tipoVistoriador?: 'instalador_vistoriador' | 'analista_monitoramento';
       senhaProvisoria?: string;
     }) => {
       if (data.id) {
