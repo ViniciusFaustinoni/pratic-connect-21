@@ -24,6 +24,8 @@ import {
 import { Plus, Edit, Trash2 } from 'lucide-react';
 import { useBenefits } from '@/hooks/usePlans';
 import { useDeleteBenefit, useUpdateBenefit } from '@/hooks/usePlansAdmin';
+import { usePermissions } from '@/hooks/usePermissions';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { BeneficioFormModal } from './BeneficioFormModal';
 import type { Benefit } from '@/types/plans';
 
