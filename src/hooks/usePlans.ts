@@ -169,9 +169,9 @@ export function useProductLinesWithPlans() {
  * Hook para buscar planos com seus benefícios
  * @param productLineSlug - Opcional: filtrar por slug da linha de produto
  */
-export function usePlans(productLineSlug?: string) {
+export function usePlans(productLineSlug?: string, includeInactive?: boolean) {
   return useQuery({
-    queryKey: ['plans', productLineSlug],
+    queryKey: ['plans', productLineSlug, includeInactive],
     queryFn: async () => {
       let query = supabase
         .from('planos')
@@ -184,9 +184,12 @@ export function usePlans(productLineSlug?: string) {
           ),
           planos_regioes (regiao_id)
         `)
-        .eq('ativo', true)
         .eq('visivel_gestao', true)
         .order('ordem');
+
+      if (!includeInactive) {
+        query = query.eq('ativo', true);
+      }
       
       if (productLineSlug) {
         // Primeiro buscar o product_line_id pelo slug
