@@ -154,7 +154,7 @@ export function PlanFormModal({
     name: '',
     slug: '',
     product_line_id: defaultProductLineId || '',
-    tipo_uso: 'passeio' as 'passeio' | 'aplicativo',
+    // tipo_uso derivado automaticamente das categorias selecionadas
     badge_text: '',
     badge_color: '',
     coverage_type: '',
@@ -195,7 +195,7 @@ export function PlanFormModal({
         name: plan.name || '',
         slug: plan.slug || '',
         product_line_id: plan.product_line_id || '',
-        tipo_uso: (plan as any).tipo_uso || 'passeio',
+        // tipo_uso derivado das categorias
         badge_text: plan.badge_text || '',
         badge_color: plan.badge_color || '',
         coverage_type: plan.coverage_type || '',
@@ -234,7 +234,7 @@ export function PlanFormModal({
         name: '',
         slug: '',
         product_line_id: defaultProductLineId || '',
-        tipo_uso: 'passeio',
+        // tipo_uso derivado das categorias
         badge_text: '',
         badge_color: '',
         coverage_type: '',
@@ -313,7 +313,7 @@ export function PlanFormModal({
       name: formData.name,
       slug: formData.slug,
       product_line_id: formData.product_line_id,
-      tipo_uso: formData.tipo_uso,
+      tipo_uso: formData.categorias_veiculo.includes('aplicativo') ? 'aplicativo' as const : 'passeio' as const,
       badge_text: formData.badge_text || null,
       badge_color: formData.badge_color || null,
       coverage_type: formData.coverage_type || null,
@@ -506,23 +506,7 @@ export function PlanFormModal({
                       </Select>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="tipo_uso">Tipo de Cliente *<FieldHint text={PLAN_FIELD_HINTS.tipo_uso} /></Label>
-                      <Select
-                        value={formData.tipo_uso}
-                        onValueChange={(value: 'passeio' | 'aplicativo') =>
-                          setFormData((prev) => ({ ...prev, tipo_uso: value }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="passeio">🚗 Passeio (Particular)</SelectItem>
-                          <SelectItem value="aplicativo">📱 Aplicativo (Uber, 99, etc)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {/* Tipo de Cliente removido — derivado automaticamente das Categorias de Veículo Aceitas */}
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">
