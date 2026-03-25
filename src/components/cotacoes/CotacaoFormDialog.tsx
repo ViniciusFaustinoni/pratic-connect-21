@@ -416,7 +416,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       faixaInferior: { min: faixaInferior.fipe_min, max: faixaInferior.fipe_max, mensal: faixaInferior.valor_mensal },
       economia: faixaAtual.valor_mensal - faixaInferior.valor_mensal,
     };
-  }, [valorFipe, planosSelecionados, todasFaixas]);
+  }, [valorFipe, planosSelecionados, todasFaixas, fipeMenorLimiteMinimo]);
 
   // Faixa de preço atual onde o FIPE se enquadra (filtra pela linha do plano selecionado)
   const faixaAtualFipe = useMemo(() => {
