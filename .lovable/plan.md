@@ -1,41 +1,60 @@
 
 
-# Criar perfil "Analista de Monitoramento" e permitir criação pela Equipe
+# Corrigir RLS para permitir coordenador de monitoramento gerenciar equipe
 
-## Resumo
-Inserir o role `analista_monitoramento` no banco e expandir a tela de Equipe do monitoramento para que o coordenador possa criar analistas além de vistoriadores.
+## Problema
+As políticas de RLS atuais usam a função `is_gerencia()` que só autoriza `diretor` e `gerente_comercial`. O coordenador de monitoramento não consegue:
+1. **Atualizar profiles** (nome, telefone, regiões, etc.) dos membros da equipe
+2. **Visualizar/gerenciar user_roles** para os perfis que gerencia
 
-## Alterações
+A criação de novos usuários funciona porque usa a Edge Function `create-user` (service role key), mas a edição/toggle de status falha por RLS.
 
-### 1. Dados no banco (INSERT via insert tool)
-- Inserir `analista_monitoramento` em `app_roles_config` (area: Monitoramento, sigla: ANM, cor: teal, permissões: canManageInstalacoes, canManageRastreadores, canManageOuvidoria, canViewDashboard, is_operational: false)
-- Atualizar `coordenador_monitoramento` para incluir `canCreateUser` nas permissions
+## Solução
+Criar uma função `has_permission` security definer e adicionar políticas RLS que permitam usuários com `canCreateUser` gerenciar profiles e roles dos perfis sob sua responsabilidade.
 
-### 2. `src/hooks/usePermissions.ts`
-- Adicionar `isAnalistaMonitoramento` flag via `hasRoleByName('analista_monitoramento')`
-- Adicionar ao `PermissionKey` type
+## Alterações (1 migration SQL)
 
-### 3. `src/hooks/useEquipe.ts`
-- Expandir query em `useProfissionaisEquipe` para buscar roles `instalador_vistoriador` **ou** `analista_monitoramento`
-- Expandir tipo de `tipoVistoriador` em `useSaveProfissional` para `'instalador_vistoriador' | 'analista_monitoramento'`
-- Quando tipo = `analista_monitoramento`, enviar `tipo: 'funcionario'` em vez de `prestador`
+### 1. Criar função `can_manage_users`
+Função security definer que verifica se o usuário tem a permissão `canCreateUser` via `app_roles_config`:
 
-### 4. `src/components/monitoramento/ProfissionalModal.tsx`
-- Alterar schema: `tipoVistoriador` de `z.literal(...)` para `z.enum(['instalador_vistoriador', 'analista_monitoramento'])`
-- Adicionar Select "Tipo de Profissional" no formulário (Vistoriador/Instalador vs Analista de Monitoramento)
-- Quando tipo = `analista_monitoramento`: ocultar campos de regiões e capacidade diária (não aplicáveis)
+```sql
+CREATE FUNCTION public.can_manage_users(_user_id uuid) RETURNS boolean
+SECURITY DEFINER SET search_path = public
+-- Verifica se algum role do usuário possui canCreateUser nas permissions
+```
 
-### 5. `src/pages/monitoramento/Equipe.tsx`
-- Atualizar subtítulo/placeholder para incluir referência a analistas
+### 2. Nova política em `profiles` — UPDATE
+```sql
+CREATE POLICY "Team managers can update profiles"
+ON public.profiles FOR UPDATE
+TO authenticated
+USING (can_manage_users(auth.uid()))
+WITH CHECK (can_manage_users(auth.uid()));
+```
 
-### Sem alteração necessária
-- **Perfis.tsx** (configurações): o novo role aparece automaticamente via `useAppRoles`
-- **ProtectedRoute / PermissionGate**: sem mudanças, usam sistema dinâmico
+### 3. Nova política em `profiles` — SELECT
+Expandir visibilidade para que coordenadores consigam ver os profiles da equipe:
+```sql
+CREATE POLICY "Team managers can view profiles"
+ON public.profiles FOR SELECT
+TO authenticated
+USING (can_manage_users(auth.uid()));
+```
 
-## Arquivos editados
-1. `src/hooks/usePermissions.ts` — novo flag + PermissionKey
-2. `src/hooks/useEquipe.ts` — query expandida + tipo dinâmico
-3. `src/components/monitoramento/ProfissionalModal.tsx` — seletor de tipo + campos condicionais
-4. `src/pages/monitoramento/Equipe.tsx` — textos atualizados
-5. Banco: 1 INSERT + 1 UPDATE em `app_roles_config`
+### 4. Novas políticas em `user_roles`
+```sql
+CREATE POLICY "Team managers can manage roles"
+ON public.user_roles FOR ALL
+TO authenticated
+USING (can_manage_users(auth.uid()))
+WITH CHECK (can_manage_users(auth.uid()));
+```
+
+## Escopo de segurança
+- A função `can_manage_users` é baseada na permissão `canCreateUser` que apenas `diretor`, `gerente_comercial` e `coordenador_monitoramento` possuem
+- As políticas existentes de `is_gerencia` continuam funcionando (OR implícito entre policies no Postgres)
+- Nenhuma alteração de código no frontend — apenas RLS
+
+## Arquivo
+- 1 migration SQL (função + 3 políticas)
 
