@@ -4,6 +4,7 @@ import type {
   ProductLine, 
   Benefit, 
   MainCoverage,
+  Cobertura,
 } from '@/types/plans';
 
 // IDs de benefícios conhecidos
