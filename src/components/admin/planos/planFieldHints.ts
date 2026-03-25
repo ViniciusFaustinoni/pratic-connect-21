@@ -35,7 +35,7 @@ export const PLAN_FIELD_HINTS: Record<string, string> = {
     'Categorias de veículo aceitas (passeio, moto, diesel, etc). Na Cotação, o plano só aparece se a categoria do veículo do cliente estiver selecionada aqui. Na Calculadora, filtra quais planos são simuláveis.',
 
   regioes:
-    'Regiões geográficas onde o plano está disponível. Na Cotação, se nenhuma região for selecionada, o plano pode NÃO aparecer para clientes de determinadas localidades. Afeta diretamente a disponibilidade.',
+    'Regiões onde o plano está disponível. FILTRO ATIVO: na Cotação e Calculadora, o plano só aparece se a região do cliente estiver marcada aqui. Se NENHUMA região for selecionada, o plano ficará disponível em TODAS as regiões (comportamento padrão).',
 
   is_active:
     'Quando desativado, o plano fica INVISÍVEL em toda a plataforma: Cotação, Calculadora e painel de gestão. Use para retirar temporariamente um plano sem excluí-lo.',

@@ -166,7 +166,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         .select(`
           *,
           product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class, blocked_categories, supports_app),
-          planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name, category))
+          planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name, category)),
+          planos_regioes (regiao_id)
         `)
         .eq('ativo', true)
         .eq('visivel_gestao', true)
@@ -419,6 +420,20 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
       if (!params.usoApp && tipoUsoPlano === 'aplicativo') continue;
+
+      // Filtrar por regiões disponíveis (planos_regioes)
+      const planoRegioes: { regiao_id: string }[] = (plano as any).planos_regioes || [];
+      if (planoRegioes.length > 0 && regioes && regioes.length > 0) {
+        // Encontrar o ID da região do cliente pelo código
+        const regiaoCliente = regioes.find(r => r.codigo.toLowerCase() === regiaoLower);
+        if (regiaoCliente) {
+          const planoTemRegiao = planoRegioes.some(pr => pr.regiao_id === regiaoCliente.id);
+          if (!planoTemRegiao) {
+            negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Plano não disponível nesta região' });
+            continue;
+          }
+        }
+      }
 
       // Filtrar motos/carros/elétricos usando vehicle_type e linha_slug do banco
       const plSlug = plProductLine?.slug?.toLowerCase() || '';
