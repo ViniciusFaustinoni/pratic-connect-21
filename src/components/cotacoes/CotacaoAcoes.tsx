@@ -58,8 +58,9 @@ interface CotacaoAcoesProps {
   isExcluindo?: boolean;
   isGerando?: boolean;
   isDuplicando?: boolean;
-  canDelete?: boolean; // Apenas diretores podem excluir
-  contratoAssinado?: boolean; // Bloqueia edição após assinatura
+  canDelete?: boolean;
+  deleteReason?: string;
+  contratoAssinado?: boolean;
 }
 
 export function CotacaoAcoes({
