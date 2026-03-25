@@ -22,6 +22,7 @@ import { CSS } from '@dnd-kit/utilities';
 import { cn } from '@/lib/utils';
 import { useTogglePlanStatus } from '@/hooks/usePlansAdmin';
 import type { PlanWithDetails } from '@/hooks/usePlans';
+import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 
 interface PlanCardProps {
   plan: PlanWithDetails;
