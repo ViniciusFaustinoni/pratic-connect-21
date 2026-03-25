@@ -429,7 +429,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         if (regiaoCliente) {
           const planoTemRegiao = planoRegioes.some(pr => pr.regiao_id === regiaoCliente.id);
           if (!planoTemRegiao) {
-            negados.push({ planoNome: plano.nome, motivo: 'Plano não disponível nesta região' });
+            negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Plano não disponível nesta região' });
             continue;
           }
         }
