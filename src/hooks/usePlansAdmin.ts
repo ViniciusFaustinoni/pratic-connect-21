@@ -556,11 +556,17 @@ export function useCreateCobertura() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (input: CoberturaInput) => {
+      const codigo = input.codigo || input.nome.toUpperCase().replace(/\s+/g, '-').slice(0, 20);
       const { data, error } = await supabase
         .from('coberturas')
         .insert({
-          ...input,
-          codigo: input.codigo || input.nome.toUpperCase().replace(/\s+/g, '-').slice(0, 20),
+          nome: input.nome,
+          codigo,
+          descricao: input.descricao ?? null,
+          tipo: input.tipo ?? null,
+          icon: input.icon ?? null,
+          subtitle: input.subtitle ?? null,
+          display_order: input.display_order ?? 0,
           ativo: input.ativo ?? true,
         })
         .select()
