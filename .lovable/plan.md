@@ -1,41 +1,41 @@
 
 
-# Adicionar variáveis `{{oficina.*}}` nos Termos e Aditivos
+# Criar perfil "Analista de Monitoramento" e permitir criação pela Equipe
 
-## Problema
-As variáveis `{{oficina.nome}}`, `{{oficina.cnpj}}`, `{{oficina.telefone}}`, `{{oficina.whatsapp}}` e `{{oficina.endereco}}` já aparecem no seletor de variáveis do editor de templates, mas **não são substituídas** quando um termo ou aditivo é gerado via `autentique-create` / `autentique-create-by-token`. Apenas o fluxo de OS de saída (`autentique-os-saida-create`) já mapeia essas variáveis.
-
-## Solução
-Adicionar suporte a oficina no fluxo principal de geração de documentos (termos/aditivos). Como contratos não possuem `oficina_id` diretamente, buscaremos a oficina vinculada pela **Ordem de Serviço** do contrato (se existir), permitindo que templates de termos e aditivos usem dados da oficina quando o contexto permitir.
+## Resumo
+Inserir o role `analista_monitoramento` no banco e expandir a tela de Equipe do monitoramento para que o coordenador possa criar analistas além de vistoriadores.
 
 ## Alterações
 
-### 1. `supabase/functions/_shared/termo-afiliacao-utils.ts`
-- Adicionar campo opcional `oficina?` à interface `TermoAfiliacaoData` com os campos: `nome`, `cnpj`, `telefone`, `whatsapp`, `logradouro`, `numero`, `bairro`, `cidade`, `estado`, `cep`
+### 1. Dados no banco (INSERT via insert tool)
+- Inserir `analista_monitoramento` em `app_roles_config` (area: Monitoramento, sigla: ANM, cor: teal, permissões: canManageInstalacoes, canManageRastreadores, canManageOuvidoria, canViewDashboard, is_operational: false)
+- Atualizar `coordenador_monitoramento` para incluir `canCreateUser` nas permissions
 
-### 2. `supabase/functions/_shared/template-utils.ts`
-- No `criarMapeamentoVariaveis`, adicionar bloco condicional `...(dados.oficina ? { ... } : {})` mapeando:
-  - `oficina.nome` → nome_fantasia ou razao_social
-  - `oficina.cnpj`
-  - `oficina.telefone`
-  - `oficina.whatsapp`
-  - `oficina.endereco` → endereço formatado completo (logradouro, numero - bairro - cidade/estado - CEP)
+### 2. `src/hooks/usePermissions.ts`
+- Adicionar `isAnalistaMonitoramento` flag via `hasRoleByName('analista_monitoramento')`
+- Adicionar ao `PermissionKey` type
 
-### 3. `supabase/functions/autentique-create/index.ts`
-- Após buscar o contrato, buscar OS vinculada (`ordens_servico` via `contrato_id` ou `veiculo_id + associado_id`) para obter `oficina_id`
-- Se encontrar `oficina_id`, buscar dados da oficina na tabela `oficinas`
-- Injetar em `templateData.oficina`
+### 3. `src/hooks/useEquipe.ts`
+- Expandir query em `useProfissionaisEquipe` para buscar roles `instalador_vistoriador` **ou** `analista_monitoramento`
+- Expandir tipo de `tipoVistoriador` em `useSaveProfissional` para `'instalador_vistoriador' | 'analista_monitoramento'`
+- Quando tipo = `analista_monitoramento`, enviar `tipo: 'funcionario'` em vez de `prestador`
 
-### 4. `supabase/functions/autentique-create-by-token/index.ts`
-- Mesma lógica: buscar OS → oficina e injetar nos dados do template
+### 4. `src/components/monitoramento/ProfissionalModal.tsx`
+- Alterar schema: `tipoVistoriador` de `z.literal(...)` para `z.enum(['instalador_vistoriador', 'analista_monitoramento'])`
+- Adicionar Select "Tipo de Profissional" no formulário (Vistoriador/Instalador vs Analista de Monitoramento)
+- Quando tipo = `analista_monitoramento`: ocultar campos de regiões e capacidade diária (não aplicáveis)
 
-### Comportamento
-- Se não houver oficina vinculada (ex: contrato novo sem OS), as variáveis `{{oficina.*}}` serão substituídas por "—" (comportamento padrão de limpeza já existente)
-- Nenhuma mudança no banco de dados necessária — as tabelas `oficinas` e `ordens_servico` já existem com os campos necessários
+### 5. `src/pages/monitoramento/Equipe.tsx`
+- Atualizar subtítulo/placeholder para incluir referência a analistas
 
-### Arquivos editados
-1. `supabase/functions/_shared/termo-afiliacao-utils.ts` — interface
-2. `supabase/functions/_shared/template-utils.ts` — mapeamento
-3. `supabase/functions/autentique-create/index.ts` — busca e injeção
-4. `supabase/functions/autentique-create-by-token/index.ts` — busca e injeção
+### Sem alteração necessária
+- **Perfis.tsx** (configurações): o novo role aparece automaticamente via `useAppRoles`
+- **ProtectedRoute / PermissionGate**: sem mudanças, usam sistema dinâmico
+
+## Arquivos editados
+1. `src/hooks/usePermissions.ts` — novo flag + PermissionKey
+2. `src/hooks/useEquipe.ts` — query expandida + tipo dinâmico
+3. `src/components/monitoramento/ProfissionalModal.tsx` — seletor de tipo + campos condicionais
+4. `src/pages/monitoramento/Equipe.tsx` — textos atualizados
+5. Banco: 1 INSERT + 1 UPDATE em `app_roles_config`
 
