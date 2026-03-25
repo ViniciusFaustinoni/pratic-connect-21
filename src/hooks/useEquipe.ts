@@ -278,7 +278,7 @@ export function useSaveProfissional() {
             telefone: data.telefone,
             cpf: data.cpf,
             senha: data.senhaProvisoria,
-            tipo: 'prestador',  // Prestador = profissional externo
+            tipo: data.tipoVistoriador === 'analista_monitoramento' ? 'funcionario' : 'prestador',
             perfis: [data.tipoVistoriador || 'instalador_vistoriador'],
             regioes_atendimento: data.regioes_atendimento,
             capacidade_diaria: data.capacidade_diaria,

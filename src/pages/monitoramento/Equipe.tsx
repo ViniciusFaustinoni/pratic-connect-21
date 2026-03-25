@@ -219,7 +219,7 @@ export default function Equipe() {
                 Nenhum profissional encontrado
               </h3>
               <p className="text-sm text-muted-foreground text-center max-w-md">
-                Cadastre profissionais com a role "instalador_vistoriador" no sistema 
+                Cadastre vistoriadores, instaladores ou analistas de monitoramento 
                 ou ajuste os filtros de busca.
               </p>
               <Button onClick={handleNovoProfissional} variant="outline" className="mt-4">

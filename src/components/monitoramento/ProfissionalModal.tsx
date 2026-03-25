@@ -576,7 +576,9 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
 
                 <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
                   <p className="text-sm text-muted-foreground">
-                    O profissional será criado com acesso ao App do Vistoriador usando o email e senha informados.
+                    {tipoVistoriador === 'analista_monitoramento' 
+                      ? 'O analista será criado com acesso ao painel de monitoramento usando o email e senha informados.'
+                      : 'O profissional será criado com acesso ao App do Vistoriador usando o email e senha informados.'}
                   </p>
                 </div>
                 
