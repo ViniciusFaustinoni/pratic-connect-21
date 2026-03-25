@@ -37,6 +37,8 @@ export function BeneficiosTab() {
 
   const deleteBenefit = useDeleteBenefit();
   const updateBenefit = useUpdateBenefit();
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
   const handleNewBenefit = () => {
     setEditingBenefit(null);
