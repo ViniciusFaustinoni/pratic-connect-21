@@ -125,7 +125,7 @@ export default function PlanosBeneficios() {
   // Hooks para dados do Supabase
   const { data: productLines, isLoading: loadingLines, error: errorLines } = useProductLines();
   const { data: plans, isLoading: loadingPlans, error: errorPlans } = usePlans();
-  const { data: mainCoverages, isLoading: loadingCoverages } = useMainCoverages();
+  const { data: coberturas, isLoading: loadingCoverages } = useCoberturas(true);
   const { data: beneficiosAdicionais, isLoading: loadingBeneficios } = useBeneficiosAtivos();
   const { data: resumoSaude, isLoading: loadingResumo } = useResumoSaudeBeneficios();
   const { data: custosReais } = useCustoBeneficios();
