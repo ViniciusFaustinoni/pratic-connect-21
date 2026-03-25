@@ -1,6 +1,6 @@
-import { format } from 'date-fns';
+import { format, addHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertTriangle, User, FileText, Calendar, Info } from 'lucide-react';
+import { AlertTriangle, User, FileText, Calendar, Info, Clock } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
