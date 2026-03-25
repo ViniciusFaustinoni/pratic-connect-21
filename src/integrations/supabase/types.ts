@@ -10478,6 +10478,7 @@ export type Database = {
           is_default_rastreador: boolean | null
           is_default_saida: boolean | null
           nome: string
+          ordem_anexo: number | null
           perfis_permitidos: string[] | null
           requer_assinatura: boolean | null
           rodape_html: string | null
@@ -10508,6 +10509,7 @@ export type Database = {
           is_default_rastreador?: boolean | null
           is_default_saida?: boolean | null
           nome: string
+          ordem_anexo?: number | null
           perfis_permitidos?: string[] | null
           requer_assinatura?: boolean | null
           rodape_html?: string | null
@@ -10538,6 +10540,7 @@ export type Database = {
           is_default_rastreador?: boolean | null
           is_default_saida?: boolean | null
           nome?: string
+          ordem_anexo?: number | null
           perfis_permitidos?: string[] | null
           requer_assinatura?: boolean | null
           rodape_html?: string | null
