@@ -23,6 +23,7 @@ export function RastreadorBatchActions({
   onAssignPortador,
   onBatchMaintenance,
   onClear,
+  canAssign = true,
 }: RastreadorBatchActionsProps) {
   return (
     <AnimatePresence>
