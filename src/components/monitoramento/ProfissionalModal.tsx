@@ -158,6 +158,10 @@ type FormSchema = z.infer<typeof profissionalSchema>;
 
 export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: ProfissionalModalProps) {
   const [loadingCep, setLoadingCep] = useState(false);
+  const [novoEmail, setNovoEmail] = useState('');
+  const [novaSenha, setNovaSenha] = useState('');
+  const [loadingEmail, setLoadingEmail] = useState(false);
+  const [loadingSenha, setLoadingSenha] = useState(false);
   const isEditing = !!profissional;
 
   const defaultValues: FormSchema = {
