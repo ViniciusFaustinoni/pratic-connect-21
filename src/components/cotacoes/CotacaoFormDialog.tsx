@@ -150,7 +150,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: repasseVolanteExterno = 50 } = useTaxaRepasseVolanteExterno();
   const repasseVolante = isVendedorExterno ? repasseVolanteExterno : repasseVolanteInterno;
   const { data: carenciaDias = 120 } = useCarenciaDiasPadrao();
+  const { data: carenciaVidrosDias = 120 } = useCarenciaVidrosDias();
   const { data: migracaoConfig } = useMigracaoConfig();
+  const [migracaoState, setMigracaoState] = useState<MigracaoState>({ ativo: false, associacaoOrigem: '', arquivos: [] });
   const { data: observacoesCategoria = {} } = useObservacoesCategoria();
   
   // Estado do cenário de adesão para vendedor externo
