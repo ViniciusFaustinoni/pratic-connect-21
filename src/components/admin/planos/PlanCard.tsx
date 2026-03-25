@@ -29,6 +29,7 @@ interface PlanCardProps {
   onEdit: () => void;
   onDuplicate: () => void;
   onDelete: () => void;
+  canDelete?: boolean;
 }
 
 const BADGE_COLORS: Record<string, string> = {
