@@ -2578,6 +2578,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           info={placaDuplicadaInfo}
         />
       )}
+      
+      {/* Modal Veículo já cadastrado no SGA */}
+      <VeiculoSGAModal
+        open={showSGAModal}
+        onOpenChange={setShowSGAModal}
+        placa={placa}
+      />
     </>
   );
 }
