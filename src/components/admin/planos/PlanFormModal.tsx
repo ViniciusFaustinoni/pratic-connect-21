@@ -200,6 +200,7 @@ export function PlanFormModal({
         badge_color: plan.badge_color || '',
         coverage_type: plan.coverage_type || '',
         min_vehicle_year: plan.min_vehicle_year || '',
+        ano_fabricacao_maximo: (plan as any).ano_fabricacao_maximo?.toString() || '',
         additional_price: plan.additional_price?.toString() || '',
         desconto_percentual: (plan as any).desconto_percentual?.toString() || '',
         cota_passeio_percent: plan.cota_passeio_percent?.toString() || '',
