@@ -57,7 +57,7 @@ function formatCurrency(value: number): string {
   }).format(value);
 }
 
-export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete }: PlanCardProps) {
+export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete, canDelete = true }: PlanCardProps) {
   const [expanded, setExpanded] = useState(false);
   const toggleStatus = useTogglePlanStatus();
 
