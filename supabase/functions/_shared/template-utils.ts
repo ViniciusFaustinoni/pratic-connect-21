@@ -580,7 +580,7 @@ export const generateStyles = (): string => `
   
   /* ===== PAGINAÇÃO ===== */
   .page-break {
-    page-break-after: always;
+    page-break-before: always;
   }
   
   /* ===== MARKDOWN/TIPTAP CONVERTED ===== */
