@@ -78,7 +78,8 @@ export function CotacaoAcoes({
   isExcluindo,
   isGerando,
   isDuplicando,
-  canDelete = true, // Por padrão exibe, mas CotacaoDetalhe passa false se não for diretor
+  canDelete = true,
+  deleteReason,
   contratoAssinado = false,
 }: CotacaoAcoesProps) {
   const [showDeleteDialog, setShowDeleteDialog] = useState(false);
