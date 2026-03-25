@@ -291,6 +291,7 @@ function RastreadoresContent({
   viewMode,
   onViewModeChange,
   isDiretor,
+  canManageEquipe,
   onViewMap,
 }: RastreadoresContentProps) {
   const queryClient = useQueryClient();
