@@ -284,23 +284,20 @@ export function useCalcularCotacao() {
   ): ResultadoCotacao[] => {
     if (!planos || !planoPrecoMap || !tabelasMensalidade || valorFipe <= 0) return [];
 
-    // Filtrar planos pelo tipo de uso
-    // 'passeio' no banco é tratado como 'particular' (motos e elétricos usam 'passeio')
+    // Filtrar planos pela categoria do veículo (fonte de verdade: campo 'categoria' do plano)
+    const categoriaVeiculo = tipoUso === 'particular' ? 'passeio' : tipoUso;
     let planosDisponiveis = planos.filter((p) => {
-      const tipoUsoBD = p.tipo_uso?.toLowerCase();
-      if (tipoUso === 'particular') {
-        return tipoUsoBD === 'particular' || tipoUsoBD === 'passeio';
+      const cats: string[] = (p as any).categoria || [];
+      // Plano sem categorias definidas aceita qualquer veículo (backward compat)
+      if (!cats || cats.length === 0) {
+        const tipoUsoBD = p.tipo_uso?.toLowerCase();
+        if (tipoUso === 'particular') {
+          return tipoUsoBD === 'particular' || tipoUsoBD === 'passeio';
+        }
+        return tipoUsoBD === tipoUso;
       }
-      return tipoUsoBD === tipoUso;
+      return cats.includes(categoriaVeiculo);
     });
-    
-    // Se não encontrou planos para aplicativo, incluir planos passeio/particular
-    if (planosDisponiveis.length === 0 && tipoUso === 'aplicativo') {
-      planosDisponiveis = planos.filter((p) => {
-        const t = p.tipo_uso?.toLowerCase();
-        return t === 'particular' || t === 'passeio';
-      });
-    }
 
     // Se especificou plano, filtrar (bypass tipo_uso — o plano já foi escolhido)
     if (planoId) {

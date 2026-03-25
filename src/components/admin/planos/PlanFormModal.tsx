@@ -506,23 +506,7 @@ export function PlanFormModal({
                       </Select>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="tipo_uso">Tipo de Cliente *<FieldHint text={PLAN_FIELD_HINTS.tipo_uso} /></Label>
-                      <Select
-                        value={formData.tipo_uso}
-                        onValueChange={(value: 'passeio' | 'aplicativo') =>
-                          setFormData((prev) => ({ ...prev, tipo_uso: value }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Selecione..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          <SelectItem value="passeio">🚗 Passeio (Particular)</SelectItem>
-                          <SelectItem value="aplicativo">📱 Aplicativo (Uber, 99, etc)</SelectItem>
-                        </SelectContent>
-                      </Select>
-                    </div>
+                    {/* Tipo de Cliente removido — derivado automaticamente das Categorias de Veículo Aceitas */}
 
                     <div className="grid grid-cols-2 gap-4">
                       <div className="space-y-2">

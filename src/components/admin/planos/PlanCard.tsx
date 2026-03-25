@@ -111,7 +111,7 @@ export function PlanCard({ plan, lineColor, onEdit, onDuplicate, onDelete, canDe
                     Inativo
                   </Badge>
                 )}
-                {(plan as any).tipo_uso === 'aplicativo' && (
+                {((plan as any).categoria?.includes('aplicativo') || (plan as any).tipo_uso === 'aplicativo') && (
                   <Badge className="bg-orange-500/20 text-orange-400 border-orange-500/50 text-xs font-bold">
                     APP
                   </Badge>
