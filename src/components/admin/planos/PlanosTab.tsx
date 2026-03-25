@@ -7,6 +7,7 @@ import { useProductLines, usePlans, PlanWithDetails } from '@/hooks/usePlans';
 import { PlanCard } from './PlanCard';
 import { PlanFormModal } from './PlanFormModal';
 import { useDeletePlan, useDuplicatePlan, useReorderPlans } from '@/hooks/usePlansAdmin';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   AlertDialog,
   AlertDialogAction,
