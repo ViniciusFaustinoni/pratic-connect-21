@@ -3,6 +3,12 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { UserPlus, X, Wrench } from 'lucide-react';
 import { motion, AnimatePresence } from 'framer-motion';
+import {
+  Tooltip,
+  TooltipContent,
+  TooltipProvider,
+  TooltipTrigger,
+} from '@/components/ui/tooltip';
 
 interface RastreadorBatchActionsProps {
   selectedCount: number;
