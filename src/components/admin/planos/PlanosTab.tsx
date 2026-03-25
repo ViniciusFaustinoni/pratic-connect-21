@@ -85,6 +85,8 @@ export function PlanosTab() {
   const deletePlan = useDeletePlan();
   const duplicatePlan = useDuplicatePlan();
   const reorderPlans = useReorderPlans();
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
   const sensors = useSensors(
     useSensor(PointerSensor),
