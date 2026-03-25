@@ -70,7 +70,7 @@ export function ProdutosPlanos() {
 
   const queryClient = useQueryClient();
   const { data: lines, isLoading: linesLoading } = useProductLines();
-  const { data: plans, isLoading: plansLoading } = usePlans(selectedLineSlug === 'all' ? undefined : selectedLineSlug);
+  const { data: plans, isLoading: plansLoading } = usePlans(selectedLineSlug === 'all' ? undefined : selectedLineSlug, true);
   
   const deletePlan = useDeletePlan();
   const duplicatePlan = useDuplicatePlan();
