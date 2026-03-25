@@ -25,7 +25,7 @@ const normalizarPlaca = (placa: string): string => {
  * 
  * Regras:
  * - Cotações ativas: status = rascunho, enviada, aceita
- * - Período: últimos 7 dias
+ * - Período: últimas 48 horas
  * - Retorna dados do vendedor responsável se existir
  */
 export function useVerificarPlacaDuplicada() {
@@ -37,9 +37,9 @@ export function useVerificarPlacaDuplicada() {
         return null;
       }
       
-      // Calcula data limite (7 dias atrás)
+      // Calcula data limite (48 horas atrás)
       const dataLimite = new Date();
-      dataLimite.setDate(dataLimite.getDate() - 7);
+      dataLimite.setHours(dataLimite.getHours() - 48);
       
       const { data, error } = await supabase
         .from('cotacoes')
@@ -68,14 +68,20 @@ export function useVerificarPlacaDuplicada() {
       const cotacao = data[0];
       
       // Buscar nome do vendedor separadamente
-      let vendedorNome = 'Vendedor não identificado';
+      let vendedorNome = 'Consultor não identificado';
       if (cotacao.vendedor_id) {
         const { data: profile } = await supabase
           .from('profiles')
-          .select('nome')
+          .select('nome, email')
           .eq('id', cotacao.vendedor_id)
           .maybeSingle();
-        if (profile?.nome) vendedorNome = profile.nome;
+        if (profile?.nome) {
+          vendedorNome = profile.nome;
+        } else if (profile?.email) {
+          vendedorNome = profile.email;
+        } else {
+          vendedorNome = `Consultor (${cotacao.vendedor_id.slice(0, 8)})`;
+        }
       }
       
       return {

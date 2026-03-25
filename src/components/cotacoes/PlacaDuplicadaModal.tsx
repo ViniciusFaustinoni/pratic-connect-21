@@ -1,6 +1,6 @@
-import { format } from 'date-fns';
+import { format, addHours } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertTriangle, User, FileText, Calendar, Info } from 'lucide-react';
+import { AlertTriangle, User, FileText, Calendar, Info, Clock } from 'lucide-react';
 import {
   AlertDialog,
   AlertDialogAction,
@@ -67,7 +67,7 @@ export function PlacaDuplicadaModal({
           </div>
           <AlertDialogDescription className="text-left space-y-4">
             <p className="text-base">
-              A placa <span className="font-semibold text-foreground">{formatarPlaca(placa)}</span> já está vinculada a outro consultor e não pode ser utilizada para uma nova cotação no momento.
+              A placa <span className="font-semibold text-foreground">{formatarPlaca(placa)}</span> já está reservada para outro consultor por <strong>48 horas</strong> e não pode ser utilizada para uma nova cotação neste momento.
             </p>
             
             <div className="bg-muted/50 rounded-lg p-4 space-y-3 border">
@@ -94,10 +94,18 @@ export function PlacaDuplicadaModal({
                 <span className="text-muted-foreground">Status:</span>
                 <Badge variant={statusInfo.variant}>{statusInfo.label}</Badge>
               </div>
+
+              <div className="flex items-center gap-2 text-sm">
+                <Clock className="h-4 w-4 text-muted-foreground" />
+                <span className="text-muted-foreground">Liberação em:</span>
+                <span className="font-medium text-foreground">
+                  {formatarData(addHours(new Date(info.createdAt), 48).toISOString())}
+                </span>
+              </div>
             </div>
             
             <p className="text-sm text-muted-foreground">
-              Para atender este cliente, entre em contato com o consultor responsável.
+              A placa será liberada automaticamente após 48h. Para atender este cliente antes disso, entre em contato com o consultor responsável.
             </p>
           </AlertDialogDescription>
         </AlertDialogHeader>
