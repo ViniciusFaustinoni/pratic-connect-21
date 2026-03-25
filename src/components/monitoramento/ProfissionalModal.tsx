@@ -656,8 +656,69 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                 />
               </div>
             )}
+            {/* Seção: Gerenciar Acesso - apenas para edição com userId */}
+            {isEditing && profissional?.userId && (
+              <div className="space-y-4">
+                <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide flex items-center gap-2">
+                  <KeyRound className="h-4 w-4" />
+                  Gerenciar Acesso
+                </h3>
 
-            <DialogFooter className="gap-2 sm:gap-0">
+                <div className="space-y-3 p-4 border border-border rounded-lg bg-muted/30">
+                  {/* Alterar Email */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Alterar Email</label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="email"
+                        placeholder="Novo email"
+                        value={novoEmail}
+                        onChange={(e) => setNovoEmail(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!novoEmail || loadingEmail}
+                        onClick={handleAlterarEmail}
+                        className="gap-1 whitespace-nowrap"
+                      >
+                        {loadingEmail ? <Loader2 className="h-3 w-3 animate-spin" /> : <Mail className="h-3 w-3" />}
+                        Alterar
+                      </Button>
+                    </div>
+                  </div>
+
+                  {/* Redefinir Senha */}
+                  <div className="space-y-2">
+                    <label className="text-sm font-medium text-foreground">Redefinir Senha</label>
+                    <div className="flex gap-2">
+                      <Input
+                        type="password"
+                        placeholder="Nova senha (mín. 8 caracteres)"
+                        value={novaSenha}
+                        onChange={(e) => setNovaSenha(e.target.value)}
+                        className="flex-1"
+                      />
+                      <Button
+                        type="button"
+                        variant="outline"
+                        size="sm"
+                        disabled={!novaSenha || loadingSenha}
+                        onClick={handleRedefinirSenha}
+                        className="gap-1 whitespace-nowrap"
+                      >
+                        {loadingSenha ? <Loader2 className="h-3 w-3 animate-spin" /> : <KeyRound className="h-3 w-3" />}
+                        Redefinir
+                      </Button>
+                    </div>
+                  </div>
+                </div>
+              </div>
+            )}
+
+
               <Button
                 type="button"
                 variant="outline"
