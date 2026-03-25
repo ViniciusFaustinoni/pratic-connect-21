@@ -265,6 +265,7 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
 export interface CotacaoCardPermissions {
   canEdit: boolean;
   canDelete: boolean;
+  deleteReason?: string;
   canSend: boolean;
   canDuplicate: boolean;
   canGenerateContract: boolean;
