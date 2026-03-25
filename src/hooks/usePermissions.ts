@@ -19,6 +19,7 @@ export type PermissionKey =
   | 'isInstaladorVistoriador'
   | 'isAnalistaMarketing'
   | 'isAnalistaJuridico'
+  | 'isAnalistaMonitoramento'
   | 'isVendedor'
   | 'isGerencia'
   | 'isDesenvolvedor'
@@ -117,6 +118,7 @@ export function usePermissions() {
   const isAnalistaCadastro = hasRole('analista_cadastro');
   const isCoordenadorMonitoramento = hasRole('coordenador_monitoramento');
   const isInstaladorVistoriador = hasRole('instalador_vistoriador');
+  const isAnalistaMonitoramento = hasRoleByName('analista_monitoramento');
   const isRegulador = hasRoleByName('regulador');
   const isAnalistaEventos = hasRoleByName('analista_eventos');
   const isSindicante = hasRoleByName('sindicante');
@@ -228,6 +230,7 @@ export function usePermissions() {
     isInstaladorVistoriador,
     isAnalistaMarketing: hasRole('analista_marketing'),
     isAnalistaJuridico: hasRole('analista_juridico'),
+    isAnalistaMonitoramento,
 
     // Compostos
     isVendedor: isVendedor(),

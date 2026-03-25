@@ -43,11 +43,11 @@ export function useProfissionaisEquipe() {
   return useQuery({
     queryKey: ['profissionais-equipe'],
     queryFn: async () => {
-      // 1. Buscar user_ids com role instalador_vistoriador
+      // 1. Buscar user_ids com role instalador_vistoriador ou analista_monitoramento
       const { data: roles, error: rolesError } = await supabase
         .from('user_roles')
-        .select('user_id')
-        .eq('role', 'instalador_vistoriador');
+        .select('user_id, role')
+        .in('role', ['instalador_vistoriador', 'analista_monitoramento'] as any[]);
 
       if (rolesError) throw rolesError;
       if (!roles?.length) return [];
@@ -250,7 +250,7 @@ export function useSaveProfissional() {
       regioes_atendimento?: string[];
       capacidade_diaria?: number;
       ativo?: boolean;
-      tipoVistoriador?: 'instalador_vistoriador';
+      tipoVistoriador?: 'instalador_vistoriador' | 'analista_monitoramento';
       senhaProvisoria?: string;
     }) => {
       if (data.id) {
@@ -278,7 +278,7 @@ export function useSaveProfissional() {
             telefone: data.telefone,
             cpf: data.cpf,
             senha: data.senhaProvisoria,
-            tipo: 'prestador',  // Prestador = profissional externo
+            tipo: data.tipoVistoriador === 'analista_monitoramento' ? 'funcionario' : 'prestador',
             perfis: [data.tipoVistoriador || 'instalador_vistoriador'],
             regioes_atendimento: data.regioes_atendimento,
             capacidade_diaria: data.capacidade_diaria,

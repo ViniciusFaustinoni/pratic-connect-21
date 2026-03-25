@@ -77,7 +77,7 @@ export interface ProfissionalFormData {
   status: StatusProfissional;
   criarAcesso: boolean;
   senhaProvisoria: string;
-  tipoVistoriador: 'instalador_vistoriador';
+  tipoVistoriador: 'instalador_vistoriador' | 'analista_monitoramento';
 }
 
 interface ProfissionalModalProps {
@@ -144,7 +144,7 @@ const profissionalSchema = z.object({
   status: z.enum(['disponivel', 'indisponivel']),
   criarAcesso: z.boolean().default(true),
   senhaProvisoria: z.string().min(6, 'Senha deve ter pelo menos 6 caracteres'),
-  tipoVistoriador: z.literal('instalador_vistoriador'),
+  tipoVistoriador: z.enum(['instalador_vistoriador', 'analista_monitoramento']),
 });
 
 type FormSchema = z.infer<typeof profissionalSchema>;
@@ -261,6 +261,31 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                 Dados Pessoais
               </h3>
               
+              {/* Tipo de profissional - apenas para novos */}
+              {!isEditing && (
+                <FormField
+                  control={form.control}
+                  name="tipoVistoriador"
+                  render={({ field }) => (
+                    <FormItem>
+                      <FormLabel>Tipo de Profissional *</FormLabel>
+                      <Select value={field.value} onValueChange={field.onChange}>
+                        <FormControl>
+                          <SelectTrigger>
+                            <SelectValue placeholder="Selecione o tipo" />
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="instalador_vistoriador">Vistoriador / Instalador</SelectItem>
+                          <SelectItem value="analista_monitoramento">Analista de Monitoramento</SelectItem>
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              )}
+
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                 <FormField
                   control={form.control}
@@ -451,13 +476,12 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
               </div>
             </div>
 
-            {/* Seção: Configurações de Trabalho */}
+            {/* Seção: Configurações de Trabalho — apenas para vistoriadores */}
+            {tipoVistoriador !== 'analista_monitoramento' && (
             <div className="space-y-4">
               <h3 className="text-sm font-semibold text-muted-foreground uppercase tracking-wide">
                 Configurações de Trabalho
               </h3>
-
-              {/* Tipo unificado - alocação diária é feita pelo coordenador na Escala do Dia */}
               
               {/* Regiões de atuação */}
               <FormField
@@ -541,6 +565,7 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
                 />
               </div>
             </div>
+            )}
 
             {/* Seção: Acesso ao Sistema - apenas para novos profissionais */}
             {!isEditing && (
@@ -551,7 +576,9 @@ export function ProfissionalModal({ open, onOpenChange, profissional, onSave }: 
 
                 <div className="p-3 bg-primary/5 border border-primary/20 rounded-lg">
                   <p className="text-sm text-muted-foreground">
-                    O profissional será criado com acesso ao App do Vistoriador usando o email e senha informados.
+                    {tipoVistoriador === 'analista_monitoramento' 
+                      ? 'O analista será criado com acesso ao painel de monitoramento usando o email e senha informados.'
+                      : 'O profissional será criado com acesso ao App do Vistoriador usando o email e senha informados.'}
                   </p>
                 </div>
                 
