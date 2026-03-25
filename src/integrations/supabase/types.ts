@@ -28550,6 +28550,7 @@ export type Database = {
         | "analista_eventos"
         | "advogado"
         | "sindicante"
+        | "analista_monitoramento"
       cc_status_lancamento:
         | "pendente"
         | "a_pagar"
@@ -28962,6 +28963,7 @@ export const Constants = {
         "analista_eventos",
         "advogado",
         "sindicante",
+        "analista_monitoramento",
       ],
       cc_status_lancamento: [
         "pendente",
