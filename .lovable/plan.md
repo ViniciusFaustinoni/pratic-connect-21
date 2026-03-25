@@ -1,58 +1,51 @@
 
 
-# Verificar veículo no SGA (Hinova) antes de cotação
+# Detalhar carência e adicionar toggle de migração com upload
 
-## Objetivo
-Antes de qualquer cotação (automática via placa ou manual), consultar o endpoint `GET /veiculo/buscar/{placa}` da API Hinova para verificar se o veículo já existe no SGA. Se existir, bloquear a cotação com aviso. O modo manual também passa a exigir placa obrigatória.
+## Problema
+1. O alerta de carência mostra apenas "120 dias" sem especificar que é carência **geral** — e omite a carência de **vidros e faróis** (também configurável)
+2. A migração aparece como banner informativo passivo — o vendedor precisa sair do fluxo de cotação para solicitar migração separadamente
 
 ## Alterações
 
-### 1. Nova Edge Function `sga-verificar-veiculo/index.ts`
+### 1. `src/pages/vendas/Cotador.tsx` — Detalhar carência
 
-Cria uma edge function dedicada que:
-- Recebe `{ placa }` no body
-- Busca credenciais Hinova (env vars + fallback banco, mesmo padrão do `sga-hinova-sync`)
-- Faz `GET https://api.hinova.com.br/api/sga/v2/veiculo/buscar/{placa}` com `Authorization: Bearer {token}`
-- Se retornar array com dados (HTTP 200 + veículo encontrado) → `{ existe: true, mensagem: "Veículo já cadastrado no SGA" }`
-- Se retornar vazio ou 404 → `{ existe: false }`
-- Não retorna dados do veículo (apenas o flag)
+Substituir o alerta único "Carência: 120 dias" por dois itens:
+- **Carência geral:** X dias (ou "Sem carência" se migração aprovada)
+- **Carência vidros/faróis:** Y dias (usando `useCarenciaVidrosDias()` que já existe no hook)
 
-### 2. `src/hooks/useVerificarVeiculoSGA.ts` — Novo hook
+Ambos na mesma Alert, em duas linhas.
 
-Hook simples com `useMutation` que invoca `sga-verificar-veiculo` e retorna `{ existe: boolean, mensagem?: string }`.
+### 2. `src/components/cotacoes/CotacaoFormDialog.tsx` — Mesma mudança
 
-### 3. `src/pages/vendas/Cotador.tsx` — Integrar verificação SGA
+Aplicar a mesma alteração no dialog de cotação: importar `useCarenciaVidrosDias` e exibir as duas carências detalhadas.
 
-No `handleBuscarPlaca` (linha ~567), após as verificações de blacklist e placa duplicada (antes de chamar `getByPlaca`):
-- Chamar `sga-verificar-veiculo` com a placa
-- Se `existe === true`, exibir modal de bloqueio e interromper o fluxo
+### 3. `src/pages/vendas/Cotador.tsx` — Toggle de migração
 
-### 4. `src/pages/vendas/Cotador.tsx` — Exigir placa no modo manual
+Substituir o banner informativo de migração por:
+- Um **Switch** (interruptor) com label "É migração de outra associação?"
+- Quando ativado, exibir:
+  - Campo de texto para **nome da associação de origem**
+  - Área de **upload de comprovantes** (usando o storage bucket existente)
+  - Texto informativo: "X comprovantes exigidos · Prazo Yh"
+- Os documentos ficam vinculados à cotação para análise posterior
 
-Atualmente o modo manual permite cotação sem placa. Alterar para:
-- Tornar o campo placa obrigatório no formulário manual
-- No `handleCalcular`, validar que a placa foi informada
-- Antes de calcular, executar a mesma verificação SGA com a placa informada
+### 4. `src/components/cotacoes/CotacaoFormDialog.tsx` — Mesmo toggle
 
-### 5. `src/components/cotacoes/CotacaoFormDialog.tsx` — Mesma verificação
+Replicar o toggle de migração com upload no dialog de cotação.
 
-No `handleBuscarPlaca` do dialog de cotação (linha ~600), adicionar a mesma chamada ao SGA antes do `getByPlaca`.
+### 5. Novo componente `src/components/cotacoes/MigracaoToggle.tsx`
 
-### 6. `src/components/cotacoes/VeiculoSGAModal.tsx` — Modal de bloqueio
+Componente reutilizável para ambos os locais (Cotador e CotacaoFormDialog):
+- Switch on/off
+- Campo associação de origem
+- Upload de comprovantes (drag & drop ou botão)
+- Upload para bucket `migracao-documentos` no Supabase Storage
+- Retorna `{ ativo, associacaoOrigem, arquivos[] }` via callback
 
-Modal simples (estilo similar ao `PlacaBlacklistModal`) informando:
-- "Veículo já cadastrado no sistema SGA"
-- "Não é possível realizar cotação para este veículo"
-- Botão "Entendido"
+### 6. Criar bucket `migracao-documentos` (migration SQL)
 
-## Fluxo resultante
+Bucket de storage para os comprovantes de migração enviados durante a cotação.
 
-```text
-Vendedor digita placa → Blacklist? → Placa duplicada 48h? → Existe no SGA? → Busca FIPE
-                         ↓ SIM         ↓ SIM                  ↓ SIM
-                         BLOQUEIO      BLOQUEIO                BLOQUEIO (modal SGA)
-```
-
-## Observação sobre modo manual
-Hoje é possível fazer cotação sem placa (selecionando marca/modelo manualmente). Com esta mudança, a placa passa a ser obrigatória em todos os cenários, pois é necessária para a verificação no SGA.
+4 arquivos alterados/criados, 1 migration.
 
