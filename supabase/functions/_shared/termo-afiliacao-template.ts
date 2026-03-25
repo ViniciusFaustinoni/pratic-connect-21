@@ -278,7 +278,7 @@ const generateStyles = (): string => `
   
   /* PÁGINA */
   .page-break {
-    page-break-after: always;
+    page-break-before: always;
   }
 </style>
 `;
