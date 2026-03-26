@@ -166,6 +166,15 @@ export function TabelaCotasTaxas() {
   const { data: taxasProcedimentos = [], isLoading: loadingTaxas } = useTaxasProcedimentos();
   const { data: cotaPercDefault = 6 } = useCotaParticipacaoDefault();
   const { data: cotaMinDefault = 1200 } = useCotaMinimaDefault();
+  const { data: categoriasVeiculo = [] } = useCategoriasVeiculoPlano();
+
+  const CATEGORIA_LABELS: Record<string, string> = useMemo(() => {
+    const map: Record<string, string> = {};
+    categoriasVeiculo.forEach((c: { value: string; label: string }) => {
+      map[c.value] = c.label;
+    });
+    return map;
+  }, [categoriasVeiculo]);
 
   const isLoading = loadingCotas || loadingTaxas || loadingCotasTabela;
 
