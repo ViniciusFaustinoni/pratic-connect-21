@@ -373,11 +373,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     valorFipe,
     valorAdicional,
     regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
-    combustivel: veiculoEncontrado?.vehicleData?.combustivel || undefined,
+    combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || undefined,
     categoria: categoria && categoria !== 'nenhuma' ? categoria : undefined,
     anoVeiculo: anoNumerico,
     tipoVeiculo: tipoVeiculoDetectado,
-    usoApp: usoVeiculo === 'aplicativo',
+    usoApp: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
     marca: marcaResolvida || undefined,
     modelo: modeloResolvido || undefined,
   });
