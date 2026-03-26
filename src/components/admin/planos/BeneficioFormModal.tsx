@@ -10,7 +10,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -19,12 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateBenefit, useUpdateBenefit } from '@/hooks/usePlansAdmin';
-import { 
-  useBenefitExclusionsByBenefitId, 
-  useUpdateBenefitExclusions 
-} from '@/hooks/useBenefitExclusions';
-import { CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
-import { AlertTriangle } from 'lucide-react';
+import { EligibilityRulesEditor } from '@/components/admin/planos/EligibilityRulesEditor';
 import type { Benefit } from '@/types/plans';
 
 interface BeneficioFormModalProps {
