@@ -11063,6 +11063,42 @@ export type Database = {
           },
         ]
       }
+      entity_eligibility_rules: {
+        Row: {
+          created_at: string | null
+          entity_id: string
+          entity_type: string
+          id: string
+          is_active: boolean | null
+          rule_config: Json
+          rule_mode: string
+          rule_type: string
+          updated_at: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          entity_id: string
+          entity_type: string
+          id?: string
+          is_active?: boolean | null
+          rule_config?: Json
+          rule_mode?: string
+          rule_type: string
+          updated_at?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          entity_id?: string
+          entity_type?: string
+          id?: string
+          is_active?: boolean | null
+          rule_config?: Json
+          rule_mode?: string
+          rule_type?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       entrevistas: {
         Row: {
           avaliacao: string | null

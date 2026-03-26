@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateCobertura, useUpdateCobertura } from '@/hooks/usePlansAdmin';
 import type { Cobertura } from '@/types/plans';
+import { EligibilityRulesEditor } from './EligibilityRulesEditor';
 
 interface CoberturaUnificadaFormModalProps {
   open: boolean;
@@ -172,6 +173,13 @@ export function CoberturaUnificadaFormModal({
               <Label htmlFor="ativo">Ativo</Label>
             </div>
           </div>
+
+          {/* Regras de Elegibilidade */}
+          {isEditing && cobertura && (
+            <div className="border-t pt-4">
+              <EligibilityRulesEditor entityType="cobertura" entityId={cobertura.id} />
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>

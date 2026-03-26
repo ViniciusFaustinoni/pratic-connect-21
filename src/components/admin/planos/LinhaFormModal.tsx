@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { useCreateProductLine, useUpdateProductLine } from '@/hooks/usePlansAdmin';
 import type { ProductLine } from '@/types/plans';
+import { EligibilityRulesEditor } from './EligibilityRulesEditor';
 
 interface LinhaFormModalProps {
   open: boolean;
@@ -236,6 +237,13 @@ export function LinhaFormModal({
               <Label htmlFor="is_active">Ativo</Label>
             </div>
           </div>
+
+          {/* Regras de Elegibilidade */}
+          {isEditing && productLine && (
+            <div className="border-t pt-4">
+              <EligibilityRulesEditor entityType="linha" entityId={productLine.id} />
+            </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button

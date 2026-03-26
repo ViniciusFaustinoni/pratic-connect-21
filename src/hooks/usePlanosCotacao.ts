@@ -11,6 +11,7 @@ import {
   gerarMensagemAlertaCategoria,
   type BenefitExclusionData
 } from '@/data/restricoesCategorias';
+import { useAllEligibilityRules, checkAllRules, type VehicleContext, type EligibilityRule } from '@/hooks/useEntityEligibilityRules';
 
 const CATEGORIAS_DESAGIO_FALLBACK = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
 const LINHAS_COM_DESAGIO_FALLBACK = ['select', 'lancamento'];
@@ -234,6 +235,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Buscar regras de elegibilidade unificadas
+  const { data: allEligibilityRules = [], isLoading: eligibilityRulesLoading } = useAllEligibilityRules();
+
   // Buscar exclusões de benefícios por categoria
   const { data: benefitExclusions, isLoading: benefitExclusionsLoading } = useQuery({
     queryKey: ['benefit_exclusions_cotacao'],
@@ -368,6 +372,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     elegibilidadeLoading ||
     cotasCategoriaLoading ||
     benefitExclusionsLoading ||
+    eligibilityRulesLoading ||
     decomposicaoLoading ||
     adicionalAppLoading ||
     regioesComAdicionalLoading ||
@@ -375,6 +380,19 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     linhasComDesagioLoading ||
     categoriasQueSobrepoeAppLoading ||
     regioesLoading;
+
+  // Helper: build vehicle context for unified rules
+  const buildVehicleContext = (p: typeof params): VehicleContext => ({
+    valorFipe: p.valorFipe,
+    anoVeiculo: p.anoVeiculo || new Date().getFullYear(),
+    categoriaVeiculo: p.categoria,
+    categoriaEspecial: p.categoria,
+    regiao: p.regiao,
+    marca: p.marca,
+    modelo: p.modelo,
+    tipoUso: p.usoApp ? 'aplicativo' : 'particular',
+    combustivel: p.combustivel,
+  });
 
   const { planos, planosNegados } = useMemo<{ planos: PlanoCotacao[]; planosNegados: PlanoNegadoInfo[] }>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
@@ -397,6 +415,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
     const planosCalculados: PlanoCotacao[] = [];
     const negados: PlanoNegadoInfo[] = [];
+    const vehicleCtx = buildVehicleContext(params);
 
     for (const plano of planosBanco) {
       const linha = plano.linha?.toLowerCase() || null;
@@ -485,6 +504,23 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         if (!categoriasAceitasPlano.includes(categoriaLower) && !categoriasAceitasPlano.includes('todos')) {
           continue;
         }
+      }
+
+      // ── Regras unificadas de elegibilidade (entity_eligibility_rules) ──
+      // Verificar regras da LINHA
+      const productLineId = plano.product_line_id;
+      if (productLineId) {
+        const linhaRules = allEligibilityRules.filter(r => r.entity_type === 'linha' && r.entity_id === productLineId);
+        if (linhaRules.length > 0 && !checkAllRules(linhaRules, vehicleCtx)) {
+          negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Bloqueado por regra da linha' });
+          continue;
+        }
+      }
+      // Verificar regras do PLANO
+      const planoRules = allEligibilityRules.filter(r => r.entity_type === 'plano' && r.entity_id === plano.id);
+      if (planoRules.length > 0 && !checkAllRules(planoRules, vehicleCtx)) {
+        negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Bloqueado por regra do plano' });
+        continue;
       }
 
       // Filtrar por elegibilidade de modelo (whitelist restritiva)
@@ -653,6 +689,20 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const tag: string | undefined = plano.badge_text || undefined;
 
       const coberturasRemovidas = getCoberturasRemovidasDinamico(categoria, benefitExclusions || []);
+
+      // Verificar regras unificadas de coberturas/benefícios individuais
+      // Benefícios bloqueados por entity_eligibility_rules são adicionados a coberturasRemovidas
+      const beneficiosDoPlano = plano.planos_beneficios || [];
+      for (const pb of beneficiosDoPlano) {
+        const benefitRules = allEligibilityRules.filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id);
+        if (benefitRules.length > 0 && !checkAllRules(benefitRules, vehicleCtx)) {
+          const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
+          if (!coberturasRemovidas.includes(benefitName)) {
+            coberturasRemovidas.push(benefitName);
+          }
+        }
+      }
+
       const alertaDesagio = gerarMensagemAlertaCategoria(categoria, benefitExclusions || []) || undefined;
 
       // Valores detalhados (decomposição dinâmica sobre valorMensal)
@@ -710,7 +760,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     return { planos: sorted, planosNegados: negados };
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeError, elegibilidadeLoading, configApp, cotasCategoriaData, categoriasQueSobrepoeApp, dependenciasCriticasLoading]);
+  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeError, elegibilidadeLoading, configApp, cotasCategoriaData, categoriasQueSobrepoeApp, dependenciasCriticasLoading, allEligibilityRules]);
 
   return {
     planos,
