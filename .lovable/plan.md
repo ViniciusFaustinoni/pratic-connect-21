@@ -1,43 +1,25 @@
 
 
-# Fix: Nomes parecidos em coberturas
+# Mover Combustiveis de Marcas & Modelos para Tabelas de Apoio
 
-## Diagnostico
+## O que muda
 
-O fix anterior (slug + 4 chars UUID) ja esta aplicado e deveria funcionar. Porem:
+Combustiveis e uma tabela de apoio (como Regioes, Tipos de Veiculo, etc.), nao faz sentido junto com Marcas e Modelos.
 
-1. **Coberturas antigas** foram criadas com slugs truncados/malformados (ex: `colis-o`, `alagamento-por-gua-d`) — sem sufixo UUID
-2. O sufixo de 4 caracteres (65.536 combinacoes) e seguro mas curto
-
-## Solucao
-
-### 1. Aumentar sufixo UUID de 4 para 8 caracteres
-
-No `CatalogoCoberturasBeneficios.tsx`, alterar ambos CoberturaSheet e BeneficioSheet:
-
-```ts
-// De:
-crypto.randomUUID().slice(0, 4)
-// Para:
-crypto.randomUUID().slice(0, 8)
-```
-
-### 2. Corrigir slugs antigos via migration
-
-Migration para regenerar codigos/slugs de coberturas que nao possuem sufixo UUID (coberturas criadas antes do fix):
-
-```sql
-UPDATE coberturas 
-SET codigo = codigo || '-' || substr(gen_random_uuid()::text, 1, 8)
-WHERE codigo NOT LIKE '%-%-%-%';
-```
-
-Isso garante que coberturas antigas tambem tenham slugs unicos e nao colidam com novas criacoes.
-
-## Arquivos
+## Alteracoes
 
 | Arquivo | Acao |
 |---|---|
-| `CatalogoCoberturasBeneficios.tsx` | Aumentar UUID suffix de 4 para 8 chars |
-| Migration SQL | Corrigir slugs antigos sem sufixo UUID |
+| `MarcasModelosCombustiveis.tsx` | Remover `CombustiveisTab` e a aba "Combustiveis" do Tabs. Renomear export se necessario |
+| `CadastrosBase.tsx` | Adicionar aba "Combustiveis" importando o `CombustiveisTab` extraido |
+| `cadastros/CombustiveisTab.tsx` | **Novo** — extrair `CombustiveisTab` de MarcasModelosCombustiveis como componente standalone exportado |
+| `GestaoComercial.tsx` | Atualizar banner/help da secao Marcas & Modelos (remover menção a combustiveis) |
+| `TabNavigation.tsx` | Atualizar label se mencionar combustiveis |
+
+### Detalhes
+
+1. **Extrair** a funcao `CombustiveisTab` (linhas 168-247) para `src/components/gestao-comercial/cadastros/CombustiveisTab.tsx` como export nomeado
+2. **Remover** de `MarcasModelosCombustiveis.tsx` a aba Combustiveis — o componente fica so com Marcas e Modelos (sem Tabs wrapper, ou manter se preferir consistencia)
+3. **Adicionar** em `CadastrosBase.tsx` uma quinta aba "Combustiveis" apontando para o novo componente
+4. **Atualizar** `sectionBanners[8]` em `GestaoComercial.tsx` de "Marcas, Modelos e Combustíveis" para "Marcas e Modelos"
 
