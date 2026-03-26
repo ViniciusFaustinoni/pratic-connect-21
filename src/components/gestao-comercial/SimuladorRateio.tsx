@@ -358,7 +358,7 @@ export function SimuladorRateio() {
       {/* Coberturas Table */}
       {renderTable(
         projecoesCoberturas,
-        <Shield className="h-4 w-4 text-blue-600" />,
+        <Shield className="h-4 w-4 text-primary" />,
         `Coberturas (${coberturas.length})`,
         'Eventos cobertos contratualmente — custo líquido dividido pelas cotas ativas',
         totalRateioCoberturas,
