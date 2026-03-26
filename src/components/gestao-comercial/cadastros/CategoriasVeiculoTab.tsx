@@ -4,7 +4,8 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Plus, Pencil, Loader2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Plus, Pencil, Loader2, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
 function slugify(text: string) {
@@ -17,6 +18,7 @@ export function CategoriasVeiculoTab() {
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editIndex, setEditIndex] = useState<number | null>(null);
   const [label, setLabel] = useState('');
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
   const openNew = () => { setEditIndex(null); setLabel(''); setSheetOpen(true); };
   const openEdit = (idx: number) => { setEditIndex(idx); setLabel(categorias[idx].label); setSheetOpen(true); };
@@ -33,6 +35,14 @@ export function CategoriasVeiculoTab() {
     const updated = [...categorias] as any[];
     updated[idx] = { ...updated[idx], ativo: (updated[idx] as any).ativo === false ? true : false };
     saveMutation.mutate(updated);
+  };
+
+  const handleDelete = () => {
+    if (deleteIndex === null) return;
+    const updated = [...categorias] as any[];
+    updated.splice(deleteIndex, 1);
+    saveMutation.mutate(updated);
+    setDeleteIndex(null);
   };
 
   if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -52,6 +62,7 @@ export function CategoriasVeiculoTab() {
           <div key={cat.value} className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-muted/50 transition-colors group">
             <span className="text-sm flex-1">{cat.label}</span>
             <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => openEdit(idx)}><Pencil className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => setDeleteIndex(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
             <Switch checked={(cat as any).ativo !== false} onCheckedChange={() => handleToggle(idx)} />
           </div>
         ))}
@@ -71,6 +82,19 @@ export function CategoriasVeiculoTab() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <AlertDialog open={deleteIndex !== null} onOpenChange={(open) => !open && setDeleteIndex(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir tipo de veículo</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir "{deleteIndex !== null ? categorias[deleteIndex]?.label : ''}"? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDelete}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }

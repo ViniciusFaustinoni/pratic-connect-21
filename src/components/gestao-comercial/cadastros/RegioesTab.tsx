@@ -1,10 +1,11 @@
 import { useState } from 'react';
-import { useRegioes, useCreateRegiao, useUpdateRegiao, useToggleRegiaoStatus, type Regiao } from '@/hooks/useRegioes';
+import { useRegioes, useCreateRegiao, useUpdateRegiao, useToggleRegiaoStatus, useDeleteRegiao, type Regiao } from '@/hooks/useRegioes';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Plus, Pencil, Loader2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Plus, Pencil, Loader2, Trash2 } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 
 export function RegioesTab() {
@@ -12,10 +13,12 @@ export function RegioesTab() {
   const createMutation = useCreateRegiao();
   const updateMutation = useUpdateRegiao();
   const toggleMutation = useToggleRegiaoStatus();
+  const deleteMutation = useDeleteRegiao();
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [editRegiao, setEditRegiao] = useState<Regiao | null>(null);
   const [nome, setNome] = useState('');
+  const [deleteTarget, setDeleteTarget] = useState<Regiao | null>(null);
 
   const openNew = () => { setEditRegiao(null); setNome(''); setSheetOpen(true); };
   const openEdit = (r: Regiao) => { setEditRegiao(r); setNome(r.nome); setSheetOpen(true); };
@@ -54,6 +57,7 @@ export function RegioesTab() {
           <div key={r.id} className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-muted/50 transition-colors group">
             <span className="text-sm flex-1">{r.nome}</span>
             <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => openEdit(r)}><Pencil className="h-3.5 w-3.5" /></Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => setDeleteTarget(r)}><Trash2 className="h-3.5 w-3.5" /></Button>
             <Switch checked={r.ativa} onCheckedChange={(checked) => toggleMutation.mutate({ id: r.id, ativa: checked })} />
           </div>
         ))}
@@ -73,6 +77,19 @@ export function RegioesTab() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <AlertDialog open={!!deleteTarget} onOpenChange={(open) => !open && setDeleteTarget(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir região</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir "{deleteTarget?.nome}"? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={() => { if (deleteTarget) deleteMutation.mutate(deleteTarget.id); setDeleteTarget(null); }}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
