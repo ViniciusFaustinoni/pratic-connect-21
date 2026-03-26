@@ -87,7 +87,7 @@ export function BeneficioFormModal({
         display_order: '0',
         is_active: true,
       });
-      setExcludedCategories([]);
+      
     }
   }, [benefit]);
 
