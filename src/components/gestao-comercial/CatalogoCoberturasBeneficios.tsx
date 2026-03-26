@@ -44,7 +44,7 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['coberturas'] }); toast.success('Cobertura salva'); onClose(); },
-    onError: () => toast.error('Erro ao salvar'),
+    onError: (err: any) => toast.error(err?.message?.includes('duplicate') || err?.code === '23505' ? 'Já existe uma cobertura com esse nome' : 'Erro ao salvar'),
   });
 
   return (
