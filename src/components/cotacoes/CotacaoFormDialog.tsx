@@ -149,6 +149,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: carenciaVidrosDias = 120 } = useCarenciaVidrosDias();
   const { data: migracaoConfig } = useMigracaoConfig();
   const [migracaoState, setMigracaoState] = useState<MigracaoState>({ ativo: false, associacaoOrigem: '', arquivos: [] });
+  
+  // Dados dinâmicos das Tabelas de Apoio
+  const { data: regioesAtivas = [], isLoading: regioesLoading } = useRegioesAtivas();
+  const { data: tiposUsoBanco = [] } = useConfiguracaoJson<{ value: string; label: string; ativo?: boolean }[]>('tipos_uso', []);
+  const { data: tiposPlacaBanco = [] } = useConfiguracaoJson<{ value: string; label: string; ativo?: boolean }[]>('tipos_placa', []);
+  const { data: combustiveisBanco = [] } = useCombustiveis();
+  
+  const tiposUsoAtivos = useMemo(() => tiposUsoBanco.filter(t => t.ativo !== false), [tiposUsoBanco]);
+  const tiposPlacaAtivos = useMemo(() => tiposPlacaBanco.filter(t => t.ativo !== false), [tiposPlacaBanco]);
   const { data: observacoesCategoria = {} } = useObservacoesCategoria();
   
   // Estado do cenário de adesão para vendedor externo
