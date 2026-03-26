@@ -506,6 +506,23 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
+      // ── Regras unificadas de elegibilidade (entity_eligibility_rules) ──
+      // Verificar regras da LINHA
+      const productLineId = plano.product_line_id;
+      if (productLineId) {
+        const linhaRules = allEligibilityRules.filter(r => r.entity_type === 'linha' && r.entity_id === productLineId);
+        if (linhaRules.length > 0 && !checkAllRules(linhaRules, vehicleCtx)) {
+          negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Bloqueado por regra da linha' });
+          continue;
+        }
+      }
+      // Verificar regras do PLANO
+      const planoRules = allEligibilityRules.filter(r => r.entity_type === 'plano' && r.entity_id === plano.id);
+      if (planoRules.length > 0 && !checkAllRules(planoRules, vehicleCtx)) {
+        negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Bloqueado por regra do plano' });
+        continue;
+      }
+
       // Filtrar por elegibilidade de modelo (whitelist restritiva)
       const combustivelOriginal = (combustivel || 'flex').toLowerCase();
       let elegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined = undefined;
