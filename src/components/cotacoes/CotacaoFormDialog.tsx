@@ -1281,6 +1281,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setSolicitarFipeMenor(false);
       setJustificativaFipeMenor('');
       setCenarioExterno(null);
+      setTipoPlacaSelecionado('');
+      setCombustivelSelecionado('');
 
       setShowConfirmDialog(false);
       onOpenChange(false);
