@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -6,18 +6,8 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronDown } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useProductLines } from '@/hooks/usePlans';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { formatarMoeda } from '@/utils/format';
-
-interface TabelaPrecosProps {
-  titulo?: string;
-}
-
-const REGIOES = [
-  { value: 'todas', label: 'Todas as regiões' },
-  { value: 'rj', label: 'Rio de Janeiro' },
-  { value: 'lagos', label: 'Região dos Lagos' },
-  { value: 'sp', label: 'São Paulo' },
-];
 
 const ITEMS_PER_PAGE = 20;
 
