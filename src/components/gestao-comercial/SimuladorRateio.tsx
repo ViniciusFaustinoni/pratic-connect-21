@@ -39,8 +39,8 @@ export function SimuladorRateio() {
         .from('coberturas')
         .select('id, nome, valor')
         .eq('ativo', true)
-        .order('nome');
-      return data || [];
+        .order('nome') as any;
+      return (data || []) as { id: string; nome: string; valor: number | null }[];
     },
   });
 
