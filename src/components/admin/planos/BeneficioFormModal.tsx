@@ -99,14 +99,6 @@ export function BeneficioFormModal({
     }));
   };
 
-  const toggleCategoryExclusion = (categoria: string, checked: boolean) => {
-    setExcludedCategories((prev) => {
-      if (checked) {
-        return [...prev, categoria];
-      }
-      return prev.filter((c) => c !== categoria);
-    });
-  };
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
