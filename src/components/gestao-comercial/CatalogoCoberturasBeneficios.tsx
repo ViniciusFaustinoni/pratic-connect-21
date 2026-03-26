@@ -162,11 +162,6 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
           <div><Label>Nome</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Assistência 24h" /></div>
           <div><Label>Descrição</Label><Textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Descrição do benefício" /></div>
           <div><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={valor} onChange={e => setValor(e.target.value)} /></div>
-          {item?.id && (
-            <div className="border-t pt-4">
-              <EligibilityRulesEditor entityType="beneficio" entityId={item.id} />
-            </div>
-          )}
           <div className="flex gap-2 pt-4">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
             <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!name.trim() || mutation.isPending}>

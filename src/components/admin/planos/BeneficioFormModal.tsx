@@ -229,12 +229,6 @@ export function BeneficioFormModal({
             </div>
           </div>
 
-          {/* Regras de Elegibilidade */}
-          {isEditing && benefit && (
-            <div className="border-t pt-4">
-              <EligibilityRulesEditor entityType="beneficio" entityId={benefit.id} />
-            </div>
-          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button
