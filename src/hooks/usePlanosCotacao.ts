@@ -385,7 +385,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   const buildVehicleContext = (p: typeof params): VehicleContext => ({
     valorFipe: p.valorFipe,
     anoVeiculo: p.anoVeiculo || new Date().getFullYear(),
-    categoriaVeiculo: p.categoria,
+    categoriaVeiculo: p.tipoVeiculo === 'moto' ? 'moto' : 'passeio',
     categoriaEspecial: p.categoria,
     regiao: p.regiao,
     marca: p.marca,
@@ -690,12 +690,18 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       const coberturasRemovidas = getCoberturasRemovidasDinamico(categoria, benefitExclusions || []);
 
-      // Verificar regras unificadas de coberturas/benefícios individuais
-      // Benefícios bloqueados por entity_eligibility_rules são adicionados a coberturasRemovidas
+      // Verificar regras unificadas de coberturas e benefícios individuais
       const beneficiosDoPlano = plano.planos_beneficios || [];
       for (const pb of beneficiosDoPlano) {
+        // Verificar regras de benefício
         const benefitRules = allEligibilityRules.filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id);
-        if (benefitRules.length > 0 && !checkAllRules(benefitRules, vehicleCtx)) {
+        // Verificar regras de cobertura (se o benefício tem cobertura vinculada)
+        const coberturaId = (pb as any).cobertura_id || (pb as any).benefits?.cobertura_id;
+        const coberturaRules = coberturaId
+          ? allEligibilityRules.filter(r => r.entity_type === 'cobertura' && r.entity_id === coberturaId)
+          : [];
+        const allItemRules = [...benefitRules, ...coberturaRules];
+        if (allItemRules.length > 0 && !checkAllRules(allItemRules, vehicleCtx)) {
           const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
           if (!coberturasRemovidas.includes(benefitName)) {
             coberturasRemovidas.push(benefitName);

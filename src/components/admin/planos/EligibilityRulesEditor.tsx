@@ -28,7 +28,7 @@ import {
   type RuleMode,
   type EligibilityRule,
 } from '@/hooks/useEntityEligibilityRules';
-import { useCategoriasVeiculoPlano, useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistema';
+import { useCategoriasVeiculoPlano, useCategoriasVeiculo, useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistema';
 import { useRegioes } from '@/hooks/useRegioes';
 
 const RULE_TYPE_LABELS: Record<RuleType, string> = {
@@ -198,7 +198,7 @@ function AddRuleDialog({
 
   // Data from CRUD
   const { data: categoriasVeiculo = [] } = useCategoriasVeiculoPlano();
-  const { data: categoriasEspeciais = [] } = useConfiguracaoJson<{ value: string; label: string }[]>('categorias_especiais', []);
+  const { data: categoriasEspeciais = [] } = useCategoriasVeiculo();
   const { data: tiposUso = [] } = useConfiguracaoJson<{ value: string; label: string }[]>('tipos_uso', []);
   const { data: combustiveis = [] } = useCombustiveis();
   const { data: regioes = [] } = useRegioes();
