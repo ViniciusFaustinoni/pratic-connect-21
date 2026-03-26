@@ -415,6 +415,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
     const planosCalculados: PlanoCotacao[] = [];
     const negados: PlanoNegadoInfo[] = [];
+    const vehicleCtx = buildVehicleContext(params);
 
     for (const plano of planosBanco) {
       const linha = plano.linha?.toLowerCase() || null;
