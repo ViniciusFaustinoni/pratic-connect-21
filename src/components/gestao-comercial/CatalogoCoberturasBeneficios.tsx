@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -16,9 +16,15 @@ import { toast } from 'sonner';
 
 function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () => void; item?: any }) {
   const qc = useQueryClient();
-  const [nome, setNome] = useState(item?.nome || '');
-  const [descricao, setDescricao] = useState(item?.descricao || '');
-  const [valor, setValor] = useState(item?.valor?.toString() || '0');
+  const [nome, setNome] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [valor, setValor] = useState('0');
+
+  useEffect(() => {
+    setNome(item?.nome || '');
+    setDescricao(item?.descricao || '');
+    setValor(item?.valor?.toString() || '0');
+  }, [item, open]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -27,16 +33,18 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         const { error } = await supabase.from('coberturas').update(payload).eq('id', item.id);
         if (error) throw error;
       } else {
+        const slug = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const codigo = `${slug}-${crypto.randomUUID().slice(0, 4)}`;
         const { error } = await supabase.from('coberturas').insert({
           ...payload,
-          codigo: nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 20),
+          codigo,
           tipo: 'cobertura',
         });
         if (error) throw error;
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['coberturas'] }); toast.success('Cobertura salva'); onClose(); },
-    onError: () => toast.error('Erro ao salvar'),
+    onError: (err: any) => toast.error(err?.message?.includes('duplicate') || err?.code === '23505' ? 'Já existe uma cobertura com esse nome' : 'Erro ao salvar'),
   });
 
   return (
@@ -63,9 +71,15 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
 
 function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () => void; item?: any }) {
   const qc = useQueryClient();
-  const [name, setName] = useState(item?.name || '');
-  const [description, setDescription] = useState(item?.description || '');
-  const [valor, setValor] = useState(item?.preco_sugerido?.toString() || '0');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [valor, setValor] = useState('0');
+
+  useEffect(() => {
+    setName(item?.name || '');
+    setDescription(item?.description || '');
+    setValor(item?.preco_sugerido?.toString() || '0');
+  }, [item, open]);
 
   const mutation = useMutation({
     mutationFn: async () => {
@@ -74,16 +88,18 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         const { error } = await supabase.from('benefits').update(payload).eq('id', item.id);
         if (error) throw error;
       } else {
+        const slug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const uniqueSlug = `${slug}-${crypto.randomUUID().slice(0, 4)}`;
         const { error } = await supabase.from('benefits').insert({
           ...payload,
-          slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30),
+          slug: uniqueSlug,
           category: 'geral',
         });
         if (error) throw error;
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['benefits'] }); toast.success('Benefício salvo'); onClose(); },
-    onError: () => toast.error('Erro ao salvar'),
+    onError: (err: any) => toast.error(err?.message?.includes('duplicate') || err?.code === '23505' ? 'Já existe um benefício com esse nome' : 'Erro ao salvar'),
   });
 
   return (
