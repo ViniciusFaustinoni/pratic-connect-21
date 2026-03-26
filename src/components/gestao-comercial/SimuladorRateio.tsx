@@ -50,10 +50,10 @@ export function SimuladorRateio() {
     queryFn: async () => {
       const { data } = await supabase
         .from('benefits')
-        .select('id, nome, preco_sugerido')
-        .eq('ativo', true)
-        .order('nome');
-      return data || [];
+        .select('id, name, preco_sugerido')
+        .eq('is_active', true)
+        .order('name');
+      return (data || []).map(b => ({ id: b.id, nome: b.name, preco_sugerido: b.preco_sugerido }));
     },
   });
 
