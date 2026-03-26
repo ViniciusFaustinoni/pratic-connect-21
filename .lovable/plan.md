@@ -1,32 +1,34 @@
 
 
-# Remover seção "Elegibilidade" do menu da Gestão Comercial
+# Adicionar botao de exclusao nas Tabelas de Apoio
 
-## Contexto
+## Situacao atual
 
-A seção "Elegibilidade" existe como item separado no sidebar, mas essa configuração já está integrada diretamente no formulário de criação/edição de planos (PlanoFormSheet) com regras de FIPE, ano, regiões, tipo de veículo, etc. Portanto é redundante e deve ser removida.
+- **Combustiveis** ja tem botao "Remover" (remove do array JSON)
+- **Regioes** tem `useDeleteRegiao` no hook mas o `RegioesTab` simplificado nao o utiliza
+- **Tipos de Veiculo, Modalidades de Uso, Tipos de Placa** nao tem opcao de excluir — apenas editar e ativar/desativar
 
-## Alterações
+## Alteracoes
 
-| Arquivo | Ação |
+Adicionar um botao de excluir (icone Trash2) com dialogo de confirmacao em cada tab. A exclusao sera permanente, com confirmacao obrigatoria.
+
+| Arquivo | Acao |
 |---|---|
-| `TabNavigation.tsx` | Remover item "Elegibilidade" do grupo "Operação" |
-| `GestaoComercial.tsx` | Remover import de `ElegibilidadeVeiculos`, remover entrada `4` do `sectionBanners`, remover renderização condicional `activeTab === 4`, reindexar tabs 5→4, 6→5, 7→6, 8→7 |
+| `CategoriasVeiculoTab.tsx` | Adicionar botao Trash2 na linha do item + AlertDialog de confirmacao. Excluir = remover do array e salvar |
+| `RegioesTab.tsx` | Importar `useDeleteRegiao` + adicionar botao Trash2 + AlertDialog de confirmacao |
+| `TiposUsoTab.tsx` | Adicionar botao Trash2 + AlertDialog. Excluir = splice do array e salvar |
+| `TiposPlacaTab.tsx` | Idem TiposUso |
+| `CombustiveisTab.tsx` | Substituir o botao "Remover" por icone Trash2 consistente + AlertDialog de confirmacao (atualmente remove sem confirmar) |
 
-### Reindexação
+### Padrao de UI
 
-O grupo "Operação" passa de 3 para 2 itens. Os índices globais mudam:
+Cada linha de item tera, ao lado do botao de editar (Pencil):
+- Botao `Trash2` (ghost, destructive, opacity-0 group-hover:opacity-100)
+- Ao clicar, abre AlertDialog: "Tem certeza que deseja excluir [nome]? Esta acao nao pode ser desfeita."
+- Botoes "Cancelar" e "Excluir" (destructive)
 
-```text
-0 - Cob. & Benef.     (sem mudança)
-1 - Linhas & Planos    (sem mudança)
-2 - Simulador           (sem mudança)
-3 - Config. Rateio      (sem mudança)
-4 - Regras de Venda     (era 5)
-5 - Instalação e Rotas  (era 6)
-6 - Tabelas de Apoio    (era 7)
-7 - Marcas e Modelos    (era 8)
-```
+### Logica de exclusao
 
-O componente `ElegibilidadeVeiculos` pode ser mantido no codebase (não causa impacto), mas o import e referência serão removidos de `GestaoComercial.tsx`.
+- **Categorias, TiposUso, TiposPlaca, Combustiveis**: `updated.splice(idx, 1)` + `saveMutation.mutate(updated)`
+- **Regioes**: `deleteRegiao.mutate(id)` (hook existente com delete real no banco)
 
