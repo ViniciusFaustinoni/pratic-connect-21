@@ -367,7 +367,7 @@ export function SimuladorRateio() {
       {/* Benefícios Table */}
       {renderTable(
         projecoesBeneficios,
-        <Gift className="h-4 w-4 text-emerald-600" />,
+        <Gift className="h-4 w-4 text-accent-foreground" />,
         `Benefícios (${beneficios.length})`,
         'Serviços adicionais — custo líquido dividido pelas cotas ativas',
         totalRateioBeneficios,
