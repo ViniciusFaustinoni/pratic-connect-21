@@ -1490,12 +1490,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 onValueChange={setRegiaoSelecionada}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione a região" />
+                  <SelectValue placeholder={regioesLoading ? 'Carregando...' : 'Selecione a região'} />
                 </SelectTrigger>
                 <SelectContent>
-                  {REGIOES.map((regiao) => (
-                    <SelectItem key={regiao.value} value={regiao.value}>
-                      {regiao.label}
+                  {regioesAtivas.map((regiao) => (
+                    <SelectItem key={regiao.id} value={regiao.codigo}>
+                      {regiao.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
