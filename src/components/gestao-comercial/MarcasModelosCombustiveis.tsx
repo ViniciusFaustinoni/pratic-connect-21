@@ -23,6 +23,7 @@ function MarcasModelosTab() {
   const createMut = useCreateMarcaModelo();
   const toggleMut = useToggleMarcaModelo();
   const bulkMut = useBulkInsertMarcasModelos();
+  const fipeImport = useImportFipeMarcas();
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetType, setSheetType] = useState<'marca' | 'modelo' | 'import'>('marca');
@@ -31,6 +32,8 @@ function MarcasModelosTab() {
   const [importText, setImportText] = useState('');
   const [importPreview, setImportPreview] = useState<{ marca: string; modelo?: string }[]>([]);
   const [openBrands, setOpenBrands] = useState<Set<string>>(new Set());
+  const [fipeDialogOpen, setFipeDialogOpen] = useState(false);
+  const [fipeTipos, setFipeTipos] = useState<Set<string>>(new Set(['cars']));
 
   // Group by brand
   const grouped = useMemo(() => {
