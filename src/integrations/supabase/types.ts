@@ -5494,6 +5494,7 @@ export type Database = {
           percentual_cobertura: number | null
           subtitle: string | null
           tipo: string
+          valor: number | null
           valor_limite: number | null
         }
         Insert: {
@@ -5511,6 +5512,7 @@ export type Database = {
           percentual_cobertura?: number | null
           subtitle?: string | null
           tipo: string
+          valor?: number | null
           valor_limite?: number | null
         }
         Update: {
@@ -5528,6 +5530,7 @@ export type Database = {
           percentual_cobertura?: number | null
           subtitle?: string | null
           tipo?: string
+          valor?: number | null
           valor_limite?: number | null
         }
         Relationships: []
@@ -14794,6 +14797,30 @@ export type Database = {
           is_active?: boolean | null
           name?: string
           subtitle?: string | null
+        }
+        Relationships: []
+      }
+      marcas_modelos: {
+        Row: {
+          ativo: boolean | null
+          created_at: string | null
+          id: string
+          marca: string
+          modelo: string | null
+        }
+        Insert: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          marca: string
+          modelo?: string | null
+        }
+        Update: {
+          ativo?: boolean | null
+          created_at?: string | null
+          id?: string
+          marca?: string
+          modelo?: string | null
         }
         Relationships: []
       }
