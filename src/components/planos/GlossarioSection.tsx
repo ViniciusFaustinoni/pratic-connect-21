@@ -54,16 +54,7 @@ function useCotasCategoriaTabela() {
   });
 }
 
-const CATEGORIA_LABELS: Record<string, string> = {
-  passeio: 'Passeio',
-  aplicativo: 'Aplicativo (Uber, 99, etc)',
-  desagio: 'Com Deságio',
-  moto: 'Motocicletas',
-  diesel: 'Diesel',
-  especial_plus: 'Especial Plus',
-  lancamento: 'Lançamento',
-  eletrico: 'Elétricos',
-};
+// CATEGORIA_LABELS is now built dynamically inside TabelaCotasTaxas from useCategoriasVeiculoPlano
 
 export function GlossarioTermos() {
   const { data: glossario = [], isLoading } = useGlossario();
