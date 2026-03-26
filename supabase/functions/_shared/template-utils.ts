@@ -17,6 +17,71 @@ import {
   calcularPrimeiraMensalidade,
 } from "./termo-afiliacao-utils.ts";
 
+// ============= GERADORES DE TABELAS HTML =============
+
+function gerarListaCoberturas(plano: TermoAfiliacaoData['plano']): string {
+  if (plano.coberturas_detalhadas?.length) {
+    return plano.coberturas_detalhadas.map(c => c.nome).join(', ');
+  }
+  return (plano.coberturas || []).join(', ') || 'Roubo e Furto, Assistência 24 horas';
+}
+
+function gerarListaBeneficios(plano: TermoAfiliacaoData['plano']): string {
+  if (plano.beneficios_detalhados?.length) {
+    return plano.beneficios_detalhados.map(b => b.nome).join(', ');
+  }
+  return '';
+}
+
+function gerarTabelaCoberturasHTML(coberturas: CoberturaDetalhada[]): string {
+  if (!coberturas.length) return '<p><em>Nenhuma cobertura vinculada ao plano.</em></p>';
+  const rows = coberturas.map(c => {
+    const detalhes: string[] = [];
+    if (c.valor_personalizado) detalhes.push(c.valor_personalizado);
+    if (c.carencia_dias) detalhes.push(`Carência: ${c.carencia_dias} dias`);
+    if (c.franquia_percentual) detalhes.push(`Franquia: ${c.franquia_percentual}%`);
+    return `<tr><td>${c.nome}</td><td>${c.descricao || '—'}</td><td>${detalhes.join(' · ') || '—'}</td></tr>`;
+  }).join('');
+  return `<table class="plan-details"><thead><tr><th>Cobertura</th><th>Descrição</th><th>Detalhes</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function gerarTabelaBeneficiosHTML(beneficios: BeneficioDetalhado[]): string {
+  if (!beneficios.length) return '<p><em>Nenhum benefício vinculado ao plano.</em></p>';
+  const rows = beneficios.map(b => {
+    return `<tr><td>${b.nome}</td><td>${b.descricao || '—'}</td><td>${b.valor_personalizado || '—'}</td></tr>`;
+  }).join('');
+  return `<table class="plan-details"><thead><tr><th>Benefício</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>${rows}</tbody></table>`;
+}
+
+function gerarTabelaCompletaHTML(coberturas: CoberturaDetalhada[], beneficios: BeneficioDetalhado[]): string {
+  if (!coberturas.length && !beneficios.length) return '<p><em>Nenhuma cobertura ou benefício vinculado ao plano.</em></p>';
+  
+  let html = '<table class="plan-details">';
+  
+  if (coberturas.length) {
+    html += '<thead><tr><th colspan="3" style="background:#1a1a6e;color:#fff;">Coberturas</th></tr><tr><th>Nome</th><th>Descrição</th><th>Detalhes</th></tr></thead><tbody>';
+    for (const c of coberturas) {
+      const detalhes: string[] = [];
+      if (c.valor_personalizado) detalhes.push(c.valor_personalizado);
+      if (c.carencia_dias) detalhes.push(`Carência: ${c.carencia_dias} dias`);
+      if (c.franquia_percentual) detalhes.push(`Franquia: ${c.franquia_percentual}%`);
+      html += `<tr><td>${c.nome}</td><td>${c.descricao || '—'}</td><td>${detalhes.join(' · ') || '—'}</td></tr>`;
+    }
+    html += '</tbody>';
+  }
+  
+  if (beneficios.length) {
+    html += '<thead><tr><th colspan="3" style="background:#1a1a6e;color:#fff;">Benefícios</th></tr><tr><th>Nome</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>';
+    for (const b of beneficios) {
+      html += `<tr><td>${b.nome}</td><td>${b.descricao || '—'}</td><td>${b.valor_personalizado || '—'}</td></tr>`;
+    }
+    html += '</tbody>';
+  }
+  
+  html += '</table>';
+  return html;
+}
+
 // ============= MAPEAMENTO DE VARIÁVEIS =============
 
 /**
