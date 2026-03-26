@@ -114,21 +114,11 @@ export function BeneficioFormModal({
     };
 
     try {
-      let benefitId: string;
-      
       if (isEditing && benefit) {
         await updateBenefit.mutateAsync({ id: benefit.id, ...payload });
-        benefitId = benefit.id;
       } else {
-        const createdBenefit = await createBenefit.mutateAsync(payload);
-        benefitId = createdBenefit.id;
+        await createBenefit.mutateAsync(payload);
       }
-      
-      // Salvar exclusões de categoria
-      await updateExclusions.mutateAsync({
-        benefitId,
-        categorias: excludedCategories,
-      });
       
       onOpenChange(false);
     } catch (error) {
