@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Package, Shield, Gift, Calculator, ShieldCheck, Gavel, MapPin, Settings, Globe, LucideIcon, Store, Cog, Menu, ChevronDown, ChevronRight, Layers, Database } from 'lucide-react';
+import { Package, Shield, Calculator, ShieldCheck, Gavel, MapPin, Settings, Globe, LucideIcon, Store, Cog, Menu, ChevronDown, ChevronRight, Layers, Database, Car, Fuel } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -24,10 +24,8 @@ const tabGroups: TabGroup[] = [
     title: 'Produtos',
     icon: Store,
     items: [
-      { label: 'Planos, Produtos e Preços', shortLabel: 'Planos & Preços', icon: Package, description: 'Planos, linhas e faixas FIPE' },
-      { label: 'Linhas de Produto', shortLabel: 'Linhas de Produto', icon: Layers, description: 'Categorias e tipos de plano' },
-      { label: 'Coberturas & Benefícios', shortLabel: 'Cob. & Benef.', icon: Shield, description: 'Catálogo de coberturas e benefícios' },
-      { label: 'Adicionais', shortLabel: 'Adicionais', icon: Gift, description: 'Opcionais com valor extra' },
+      { label: 'Coberturas e Benefícios', shortLabel: 'Cob. & Benef.', icon: Shield, description: 'Catálogo global com valores' },
+      { label: 'Linhas e Planos', shortLabel: 'Linhas & Planos', icon: Package, description: 'Hierarquia e montagem de planos' },
     ],
   },
   {
@@ -46,7 +44,14 @@ const tabGroups: TabGroup[] = [
       { label: 'Regras de Venda', shortLabel: 'Regras', icon: Gavel, description: 'Limites e comissões' },
       { label: 'Instalação e Rotas', shortLabel: 'Instalação', icon: MapPin, description: 'Bases e rotas' },
       { label: 'Mapa de Atendimento', shortLabel: 'Mapa', icon: Globe, description: 'Cobertura geográfica' },
-      { label: 'Cadastros Base', shortLabel: 'Cadastros', icon: Database, description: 'Categorias, regiões e especiais' },
+    ],
+  },
+  {
+    title: 'Cadastros',
+    icon: Database,
+    items: [
+      { label: 'Tabelas de Apoio', shortLabel: 'Tabelas de Apoio', icon: Database, description: 'Categorias, regiões, tipos' },
+      { label: 'Marcas, Modelos e Combustíveis', shortLabel: 'Marcas & Modelos', icon: Car, description: 'CRUDs com importação em lote' },
     ],
   },
 ];
@@ -64,8 +69,7 @@ function NavContent({ active, onChange, onSelect }: TabNavigationProps & { onSel
 
   return (
     <nav className="py-2 px-3 space-y-4">
-      {tabGroups.map((group, groupIdx) => {
-        const startIdx = globalIndex;
+      {tabGroups.map((group) => {
         const groupItems = group.items.map((item) => {
           const idx = globalIndex++;
           return { ...item, idx };
@@ -74,21 +78,15 @@ function NavContent({ active, onChange, onSelect }: TabNavigationProps & { onSel
 
         return (
           <div key={group.title}>
-            {/* Group header */}
             <div className={cn(
               'flex items-center gap-2 px-2 py-1.5 mb-1 rounded-md transition-colors',
               isGroupActive ? 'text-foreground' : 'text-muted-foreground'
             )}>
               <group.icon className="h-3.5 w-3.5" />
-              <span className="text-[11px] font-bold uppercase tracking-[0.08em]">
-                {group.title}
-              </span>
-              <Badge variant="outline" className="ml-auto text-[9px] px-1.5 py-0 h-4 font-normal">
-                {group.items.length}
-              </Badge>
+              <span className="text-[11px] font-bold uppercase tracking-[0.08em]">{group.title}</span>
+              <Badge variant="outline" className="ml-auto text-[9px] px-1.5 py-0 h-4 font-normal">{group.items.length}</Badge>
             </div>
 
-            {/* Items */}
             <div className="space-y-0.5">
               {groupItems.map((item) => {
                 const isActive = active === item.idx;
@@ -105,7 +103,6 @@ function NavContent({ active, onChange, onSelect }: TabNavigationProps & { onSel
                         : 'text-muted-foreground hover:text-foreground hover:bg-muted/60'
                     )}
                   >
-                    {/* Active indicator */}
                     <div className={cn(
                       'absolute left-0 top-1/2 -translate-y-1/2 w-[3px] rounded-full transition-all duration-200',
                       isActive ? 'h-5 bg-primary' : 'h-0 bg-transparent'
@@ -121,23 +118,11 @@ function NavContent({ active, onChange, onSelect }: TabNavigationProps & { onSel
                     </div>
 
                     <div className="min-w-0 flex-1">
-                      <p className={cn(
-                        'text-[13px] leading-tight truncate',
-                        isActive ? 'font-semibold' : 'font-medium'
-                      )}>
-                        {item.shortLabel}
-                      </p>
-                      <p className={cn(
-                        'text-[10px] leading-snug mt-0.5 truncate transition-colors',
-                        isActive ? 'text-primary/70' : 'text-muted-foreground/70'
-                      )}>
-                        {item.description}
-                      </p>
+                      <p className={cn('text-[13px] leading-tight truncate', isActive ? 'font-semibold' : 'font-medium')}>{item.shortLabel}</p>
+                      <p className={cn('text-[10px] leading-snug mt-0.5 truncate transition-colors', isActive ? 'text-primary/70' : 'text-muted-foreground/70')}>{item.description}</p>
                     </div>
 
-                    {isActive && (
-                      <ChevronRight className="h-3.5 w-3.5 text-primary shrink-0" />
-                    )}
+                    {isActive && <ChevronRight className="h-3.5 w-3.5 text-primary shrink-0" />}
                   </button>
                 );
               })}
