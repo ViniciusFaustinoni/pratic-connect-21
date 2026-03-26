@@ -689,6 +689,20 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const tag: string | undefined = plano.badge_text || undefined;
 
       const coberturasRemovidas = getCoberturasRemovidasDinamico(categoria, benefitExclusions || []);
+
+      // Verificar regras unificadas de coberturas/benefícios individuais
+      // Benefícios bloqueados por entity_eligibility_rules são adicionados a coberturasRemovidas
+      const beneficiosDoPlano = plano.planos_beneficios || [];
+      for (const pb of beneficiosDoPlano) {
+        const benefitRules = allEligibilityRules.filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id);
+        if (benefitRules.length > 0 && !checkAllRules(benefitRules, vehicleCtx)) {
+          const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
+          if (!coberturasRemovidas.includes(benefitName)) {
+            coberturasRemovidas.push(benefitName);
+          }
+        }
+      }
+
       const alertaDesagio = gerarMensagemAlertaCategoria(categoria, benefitExclusions || []) || undefined;
 
       // Valores detalhados (decomposição dinâmica sobre valorMensal)
