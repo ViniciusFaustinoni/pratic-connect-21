@@ -285,6 +285,8 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const { cotaDefault, cotaMinimaDefault } = useCotaDefaults();
   const desagioConfig = useDesagioConfig();
   const { data: limites } = useConfigLimitesVeiculo();
+  const { data: regioesDb } = useRegioesAtivas();
+  const REGIOES = useMemo(() => (regioesDb || []).map(r => ({ value: r.codigo, label: r.nome })), [regioesDb]);
 
   // Elegibilidade query (same as cotador)
   const { data: elegibilidadeData } = useQuery({
