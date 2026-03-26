@@ -1,54 +1,39 @@
 
 
-# Reconfigurar Gestao Comercial — Limpeza e Padronizacao
+# Mover Mapa de Atendimento de Gestao Comercial para Monitoramento
 
-## Estado Atual
+## Contexto
 
-As secoes principais (Catalogo, Linhas/Planos, PlanoFormSheet, Marcas/Modelos) ja existem e seguem o padrao correto. Os problemas estao nos **CRUDs de Tabelas de Apoio**, que violam as regras de interface:
+O "Mapa de Atendimento" (classificacao de municipios como Volante/Viagem/Prestador/Fora de Cobertura) esta em Gestao Comercial, mas e uma funcionalidade operacional — nao tem relacao com as "regioes" comerciais que sao criadas livremente pelo diretor para elegibilidade de planos.
 
-| Componente | Problemas |
-|---|---|
-| `CategoriasVeiculoTab` | Usa Dialog (nao Sheet), mostra Slug, usa Table, tem botao excluir |
-| `CategoriasEspeciaisTab` | Mesmos problemas, e nao consta no spec (remover da nav) |
-| `RegioesTab` | Usa Dialog, mostra Codigo/Multiplicador/Cidades/Ordem, tem botao excluir |
-| `TiposUsoTab` | Usa Dialog, mostra Slug, usa Table, tem botao excluir |
-| `TiposPlacaTab` | Precisa verificar (provavelmente mesmo padrao) |
+Ja existe uma pagina `src/pages/monitoramento/RegioesAtendimento.tsx` que lida com vinculos de vistoriadores a cidades. O Mapa de Atendimento deve ser integrado ao modulo de Monitoramento.
 
 ## Plano
 
-### 1. Reescrever os 4 CRUDs de Tabelas de Apoio
+### 1. Remover "Mapa de Atendimento" da Gestao Comercial
 
-Padronizar todos para o mesmo layout clean:
-- **Lista simples** (sem Table/TableRow) — linhas com nome + Switch de ativar/desativar + botao editar (hover)
-- **Sheet lateral** para criar/editar com apenas campo **Nome**
-- Sem slugs, codigos, IDs, multiplicadores ou campos tecnicos visiveis
-- Sem botao excluir — apenas Switch de desativacao
+- **TabNavigation.tsx**: Remover o item `Mapa de Atendimento` do grupo "Operacao"
+- **GestaoComercial.tsx**: Remover import de `MapaAtendimento`, remover `activeTab === 7`, reindexar tabs 8 e 9 para 7 e 8, atualizar `sectionBanners`
 
-Componentes afetados:
-- `CategoriasVeiculoTab.tsx` — reescrever
-- `TiposUsoTab.tsx` — reescrever
-- `TiposPlacaTab.tsx` — reescrever
-- `RegioesTab.tsx` — reescrever (simplificar para nome + switch; manter dados internos como cidades/multiplicador mas nao exibir na lista)
+### 2. Criar rota dedicada no Monitoramento
 
-### 2. Atualizar CadastrosBase
+- Adicionar rota `/monitoramento/mapa-atendimento` no router
+- Criar pagina wrapper que renderiza o componente `MapaAtendimento` com hierarquia por estado (agrupar municipios por UF com secoes colapsaveis)
+- Adicionar link de acesso rapido no `DashboardCoordenador.tsx`
 
-- Remover aba "Categorias Especiais" (nao consta no spec)
-- Manter 4 abas: Tipos de Veiculo, Regioes, Modalidades de Uso, Tipos de Placa
+### 3. Reorganizar MapaAtendimento com hierarquia por UF
 
-### 3. Navegacao e banners
+- Mover `src/components/gestao-comercial/MapaAtendimento.tsx` para `src/pages/monitoramento/MapaAtendimentoPage.tsx` (ou reutilizar)
+- Agrupar municipios por estado (UF) em secoes colapsaveis com Collapsible
+- Manter funcionalidade existente (filtro por tipo, busca, adicionar, alterar tipo)
 
-- Verificar se os 4 itens de navegacao estao corretos: Coberturas e Beneficios, Linhas e Planos, Tabelas de Apoio, Marcas/Modelos/Combustiveis
-- Remover secoes extras (Simulador de Rateio, Config Rateio, Elegibilidade, Regras de Venda, Instalacao e Rotas, Mapa de Atendimento) se existirem na navegacao — ou manter conforme ja esta (depende do escopo)
-
-## Arquivos a Editar
+## Arquivos
 
 | Arquivo | Acao |
 |---|---|
-| `cadastros/CategoriasVeiculoTab.tsx` | Reescrever — Sheet + lista clean |
-| `cadastros/TiposUsoTab.tsx` | Reescrever — Sheet + lista clean |
-| `cadastros/TiposPlacaTab.tsx` | Reescrever — Sheet + lista clean |
-| `cadastros/RegioesTab.tsx` | Reescrever — Sheet + lista clean (nome apenas) |
-| `CadastrosBase.tsx` | Remover aba Categorias Especiais |
-
-Nenhuma migration necessaria — apenas UI.
+| `src/components/gestao-comercial/TabNavigation.tsx` | Remover item Mapa de Atendimento |
+| `src/pages/diretoria/GestaoComercial.tsx` | Remover tab 7, reindexar |
+| `src/pages/monitoramento/MapaAtendimentoPage.tsx` | Novo — pagina com hierarquia por UF |
+| `src/App.tsx` (router) | Adicionar rota `/monitoramento/mapa-atendimento` |
+| `src/pages/monitoramento/DashboardCoordenador.tsx` | Adicionar link de acesso rapido |
 
