@@ -134,6 +134,14 @@ export function useGerarDocumento() {
         valor_mensal: contrato?.valor_mensal ? `R$ ${Number(contrato.valor_mensal).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}` : '',
         dia_vencimento: associado?.dia_vencimento || '',
       },
+      plano: {
+        nome: planoNome,
+        coberturas: coberturasTexto,
+        beneficios: beneficiosTexto,
+        tabela_coberturas: tabelaCoberturas,
+        tabela_beneficios: tabelaBeneficios,
+        tabela_completa: tabelaCompleta,
+      },
       sistema: {
         data_atual: hoje.toLocaleDateString('pt-BR'),
         data_extenso: dataExtenso,
