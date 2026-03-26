@@ -9,7 +9,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { Plus, ChevronRight, Loader2, Upload } from 'lucide-react';
 import { useMarcasModelos, useCreateMarcaModelo, useToggleMarcaModelo, useBulkInsertMarcasModelos } from '@/hooks/useMarcasModelos';
-import { useCombustiveis, useSaveConfigJson } from '@/hooks/useConteudosSistema';
+
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
 
