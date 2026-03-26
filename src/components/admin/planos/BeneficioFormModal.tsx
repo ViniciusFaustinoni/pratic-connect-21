@@ -18,7 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateBenefit, useUpdateBenefit } from '@/hooks/usePlansAdmin';
-import { EligibilityRulesEditor } from '@/components/admin/planos/EligibilityRulesEditor';
+
 import type { Benefit } from '@/types/plans';
 
 interface BeneficioFormModalProps {
