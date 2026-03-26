@@ -51,6 +51,11 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [selMarcas, setSelMarcas] = useState<Set<string>>(new Set());
   const [selPlaca, setSelPlaca] = useState<Set<string>>(new Set());
   const [selCombustivel, setSelCombustivel] = useState<Set<string>>(new Set());
+  const [fipeMin, setFipeMin] = useState<string>('');
+  const [fipeMax, setFipeMax] = useState<string>('');
+  const [anoMin, setAnoMin] = useState<string>('');
+  const [anoMax, setAnoMax] = useState<string>('');
+
 
   // Load existing plan
   const { data: existingPlan, isLoading: loadingPlan } = useQuery({
