@@ -1,45 +1,43 @@
 
-# Fix: Erro 409 ao criar coberturas e beneficios consecutivos
 
-## Problema
+# Fix: Nomes parecidos em coberturas
 
-Dois bugs no `CatalogoCoberturasBeneficios.tsx`:
+## Diagnostico
 
-1. **Slug truncado causa duplicata**: O `codigo`/`slug` e gerado com `.slice(0, 20)`. Nomes semelhantes como "Danos a Terceiros - R$ 40.000" e "Danos a Terceiros - R$ 100.000" geram o mesmo codigo `danos-a-terceiros-r-`, violando a unique constraint `coberturas_codigo_key`.
+O fix anterior (slug + 4 chars UUID) ja esta aplicado e deveria funcionar. Porem:
 
-2. **Estado do formulario nao reseta**: `useState` inicializa uma vez. Ao fechar e reabrir o Sheet para criar outro item, os campos mantem os valores anteriores, e o slug fica identico.
+1. **Coberturas antigas** foram criadas com slugs truncados/malformados (ex: `colis-o`, `alagamento-por-gua-d`) — sem sufixo UUID
+2. O sufixo de 4 caracteres (65.536 combinacoes) e seguro mas curto
 
 ## Solucao
 
-### Arquivo: `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx`
+### 1. Aumentar sufixo UUID de 4 para 8 caracteres
 
-**CoberturaSheet (linhas 17-59)**:
-- Gerar `codigo` unico: usar slug completo (sem truncar em 20) + sufixo de 4 chars aleatorios para evitar colisoes
-- Adicionar `useEffect` para resetar campos quando `item` ou `open` mudam
-- Melhorar mensagem de erro: detectar erro de duplicata e mostrar toast especifico
+No `CatalogoCoberturasBeneficios.tsx`, alterar ambos CoberturaSheet e BeneficioSheet:
 
-**BeneficioSheet (linhas 64+)**:
-- Mesmo fix para `slug`: slug completo + sufixo aleatorio
-- Mesmo `useEffect` para resetar campos
-
-### Detalhes tecnicos
-
-Slug generation atualizada:
 ```ts
-const slug = nome.toLowerCase()
-  .normalize('NFD').replace(/[\u0300-\u036f]/g, '')
-  .replace(/[^a-z0-9]+/g, '-')
-  .replace(/^-|-$/g, '');
-const codigo = `${slug}-${crypto.randomUUID().slice(0, 4)}`;
+// De:
+crypto.randomUUID().slice(0, 4)
+// Para:
+crypto.randomUUID().slice(0, 8)
 ```
 
-Reset de estado com useEffect:
-```ts
-useEffect(() => {
-  setNome(item?.nome || '');
-  setDescricao(item?.descricao || '');
-  setValor(item?.valor?.toString() || '0');
-}, [item, open]);
+### 2. Corrigir slugs antigos via migration
+
+Migration para regenerar codigos/slugs de coberturas que nao possuem sufixo UUID (coberturas criadas antes do fix):
+
+```sql
+UPDATE coberturas 
+SET codigo = codigo || '-' || substr(gen_random_uuid()::text, 1, 8)
+WHERE codigo NOT LIKE '%-%-%-%';
 ```
 
-Nenhuma migration necessaria.
+Isso garante que coberturas antigas tambem tenham slugs unicos e nao colidam com novas criacoes.
+
+## Arquivos
+
+| Arquivo | Acao |
+|---|---|
+| `CatalogoCoberturasBeneficios.tsx` | Aumentar UUID suffix de 4 para 8 chars |
+| Migration SQL | Corrigir slugs antigos sem sufixo UUID |
+
