@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Button } from '@/components/ui/button';
@@ -6,27 +6,27 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronDown } from 'lucide-react';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useProductLines } from '@/hooks/usePlans';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { formatarMoeda } from '@/utils/format';
 
 interface TabelaPrecosProps {
   titulo?: string;
 }
 
-const REGIOES = [
-  { value: 'todas', label: 'Todas as regiões' },
-  { value: 'rj', label: 'Rio de Janeiro' },
-  { value: 'lagos', label: 'Região dos Lagos' },
-  { value: 'sp', label: 'São Paulo' },
-];
-
 const ITEMS_PER_PAGE = 20;
 
 function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
   const { data: tabelas, isLoading } = useTabelasPreco();
   const { data: productLines } = useProductLines();
+  const { data: regioesDb } = useRegioesAtivas();
   const [regiaoFiltro, setRegiaoFiltro] = useState('todas');
   const [linhaFiltro, setLinhaFiltro] = useState('todas');
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+
+  const REGIOES = useMemo(() => [
+    { value: 'todas', label: 'Todas as regiões' },
+    ...(regioesDb || []).map(r => ({ value: r.codigo, label: r.nome })),
+  ], [regioesDb]);
 
   // Build dynamic line labels from product_lines
   const linhaLabels: Record<string, string> = {};

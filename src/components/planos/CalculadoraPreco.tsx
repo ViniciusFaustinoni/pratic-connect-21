@@ -18,6 +18,7 @@ import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { maskPlaca } from '@/lib/validations';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
 
@@ -82,12 +83,6 @@ export interface DadosParaCotacao {
 
 type TipoUso = 'particular' | 'aplicativo';
 type TipoVeiculo = 'carro' | 'moto';
-
-const REGIOES = [
-  { value: 'rj', label: 'Rio de Janeiro' },
-  { value: 'lagos', label: 'Região dos Lagos' },
-  { value: 'sp', label: 'São Paulo' },
-] as const;
 
 const TIPO_VEICULO_LABELS: Record<TipoVeiculo, string> = {
   carro: 'Carro',
@@ -290,6 +285,8 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const { cotaDefault, cotaMinimaDefault } = useCotaDefaults();
   const desagioConfig = useDesagioConfig();
   const { data: limites } = useConfigLimitesVeiculo();
+  const { data: regioesDb } = useRegioesAtivas();
+  const REGIOES = useMemo(() => (regioesDb || []).map(r => ({ value: r.codigo, label: r.nome })), [regioesDb]);
 
   // Elegibilidade query (same as cotador)
   const { data: elegibilidadeData } = useQuery({
