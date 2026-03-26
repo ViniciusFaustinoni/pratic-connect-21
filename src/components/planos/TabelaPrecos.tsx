@@ -9,14 +9,24 @@ import { useProductLines } from '@/hooks/usePlans';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { formatarMoeda } from '@/utils/format';
 
+interface TabelaPrecosProps {
+  titulo?: string;
+}
+
 const ITEMS_PER_PAGE = 20;
 
 function TabelaPrecosGeneric({ titulo }: TabelaPrecosProps) {
   const { data: tabelas, isLoading } = useTabelasPreco();
   const { data: productLines } = useProductLines();
+  const { data: regioesDb } = useRegioesAtivas();
   const [regiaoFiltro, setRegiaoFiltro] = useState('todas');
   const [linhaFiltro, setLinhaFiltro] = useState('todas');
   const [visibleCount, setVisibleCount] = useState(ITEMS_PER_PAGE);
+
+  const REGIOES = useMemo(() => [
+    { value: 'todas', label: 'Todas as regiões' },
+    ...(regioesDb || []).map(r => ({ value: r.codigo, label: r.nome })),
+  ], [regioesDb]);
 
   // Build dynamic line labels from product_lines
   const linhaLabels: Record<string, string> = {};
