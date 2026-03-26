@@ -4,7 +4,6 @@ import { TabNavigation } from '@/components/gestao-comercial/TabNavigation';
 import { CatalogoCoberturasBeneficios } from '@/components/gestao-comercial/CatalogoCoberturasBeneficios';
 import { LinhasPlanos } from '@/components/gestao-comercial/LinhasPlanos';
 import { SimuladorRateio } from '@/components/gestao-comercial/SimuladorRateio';
-import { ElegibilidadeVeiculos } from '@/components/gestao-comercial/ElegibilidadeVeiculos';
 import { RegrasVendaContent } from '@/components/gestao-comercial/RegrasVendaContent';
 import { InstalacaoRotasConfig } from '@/components/gestao-comercial/InstalacaoRotasConfig';
 import RateioConfig from '@/pages/configuracoes/RateioConfig';
@@ -19,11 +18,10 @@ const sectionBanners: Record<number, { title: string; help: string }> = {
   1: { title: 'Linhas e Planos', help: 'Gerencie linhas de produto e monte planos selecionando coberturas e benefícios.' },
   2: { title: 'Simulador de Rateio', help: 'Simule a distribuição de custos entre associados antes de aplicar.' },
   3: { title: 'Configuração do Rateio', help: 'Defina percentuais, tetos, fundo de reserva e variáveis do rateio.' },
-  4: { title: 'Elegibilidade', help: 'Controle quais veículos cada plano aceita por marca, modelo e ano.' },
-  5: { title: 'Regras de Venda', help: 'Configure limites FIPE, comissões e taxas do processo de venda.' },
-  6: { title: 'Instalação e Rotas', help: 'Cadastre bases, parceiros e organize rotas de instalação.' },
-  7: { title: 'Tabelas de Apoio', help: 'Gerencie categorias de veículo, regiões, tipos de uso e tipos de placa.' },
-  8: { title: 'Marcas e Modelos', help: 'Cadastre marcas e modelos de veículos com importação em lote.' },
+  4: { title: 'Regras de Venda', help: 'Configure limites FIPE, comissões e taxas do processo de venda.' },
+  5: { title: 'Instalação e Rotas', help: 'Cadastre bases, parceiros e organize rotas de instalação.' },
+  6: { title: 'Tabelas de Apoio', help: 'Gerencie categorias de veículo, regiões, tipos de uso e tipos de placa.' },
+  7: { title: 'Marcas e Modelos', help: 'Cadastre marcas e modelos de veículos com importação em lote.' },
 };
 
 export default function GestaoComercial() {
