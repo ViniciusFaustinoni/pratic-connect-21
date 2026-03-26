@@ -28,7 +28,7 @@ import {
   type RuleMode,
   type EligibilityRule,
 } from '@/hooks/useEntityEligibilityRules';
-import { useCategoriasVeiculoPlano, useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistema';
+import { useCategoriasVeiculoPlano, useCategoriasVeiculo, useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistema';
 import { useRegioes } from '@/hooks/useRegioes';
 
 const RULE_TYPE_LABELS: Record<RuleType, string> = {
