@@ -1,27 +1,27 @@
 
 
-# Conexão entre Marcas & Modelos e Elegibilidade do Plano
+# Popular base de Marcas & Modelos via API pública FIPE
 
-## Diagnóstico
+## API escolhida
 
-A conexão já está implementada corretamente:
-- `PlanoFormSheet.tsx` importa `useMarcasModelos()` (hook que lê a tabela `marcas_modelos`)
-- Extrai marcas únicas ativas → exibe como badges selecionáveis na seção de elegibilidade
-- **O problema**: a tabela `marcas_modelos` está vazia (0 marcas cadastradas), por isso nenhuma marca aparece na edição do plano
+A **API Parallelum FIPE** (`https://fipe.parallelum.com.br/api/v2`) é gratuita, sem autenticação, e fornece todas as marcas e modelos do mercado brasileiro (carros, motos e caminhões).
 
-## Situação atual
+Endpoints relevantes:
+- `GET /cars/brands` → lista todas as marcas de carros
+- `GET /cars/brands/{brandId}/models` → lista modelos de uma marca
+- Mesma estrutura para `motorcycles` e `trucks`
 
-```text
-marcas_modelos (tabela) ──► useMarcasModelos() ──► PlanoFormSheet.tsx
-         0 registros              ↓
-                          uniqueBrands = []
-                                 ↓
-                    {uniqueBrands.length > 0 && ...}  ← não renderiza nada
-```
+## Plano de implementação
 
-## Ação necessária
+### 1. Criar Edge Function `fipe-import-marcas`
 
-Não há correção de código. A base de Marcas & Modelos precisa ser populada. Posso importar automaticamente as marcas e modelos mais comuns do mercado brasileiro (Fiat, Chevrolet, Volkswagen, Toyota, Honda, Hyundai, Renault, Jeep, Nissan, BMW, Mercedes, Audi, etc.) com seus respectivos modelos.
+Nova edge function que:
+1. Consulta `GET /cars/brands` para obter todas as marcas
+2. Para cada marca, consulta `GET /cars/brands/{id}/models`
+3. Opcionalmente repete para `motorcycles` e `trucks`
+4. Insere os resultados na tabela `marcas_modelos` com `ON CONFLICT DO NOTHING`
+5. Retorna resumo (total de marcas/modelos importados)
 
-**Deseja que eu popule a tabela com uma lista padrão de marcas e modelos?**
+Inclui rate limiting interno (delay entre requests) para não sobrecarregar a API pública.
 
+### 2.
