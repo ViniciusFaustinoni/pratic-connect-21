@@ -64,9 +64,8 @@ export default function GestaoComercial() {
             {activeTab === 4 && <ElegibilidadeVeiculos />}
             {activeTab === 5 && <RegrasVendaContent />}
             {activeTab === 6 && <InstalacaoRotasConfig />}
-            {activeTab === 7 && <MapaAtendimento />}
-            {activeTab === 8 && <CadastrosBase />}
-            {activeTab === 9 && <MarcasModelosCombustiveis />}
+            {activeTab === 7 && <CadastrosBase />}
+            {activeTab === 8 && <MarcasModelosCombustiveis />}
           </div>
         </div>
       </div>

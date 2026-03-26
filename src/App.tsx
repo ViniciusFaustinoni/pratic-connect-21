@@ -645,6 +645,7 @@ const App = () => (
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
               <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
               <Route path="/monitoramento/configuracoes/regioes" element={<RegioesAtendimento />} />
+              <Route path="/monitoramento/mapa-atendimento" element={<MapaAtendimentoPage />} />
               <Route path="/monitoramento/vistorias-prestadores" element={<VistoriasPrestadoresDashboard />} />
               
               {/* Marketing */}
