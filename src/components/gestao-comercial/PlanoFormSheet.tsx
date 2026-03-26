@@ -371,6 +371,52 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Regras de Elegibilidade</h3>
             <p className="text-xs text-muted-foreground">Campos opcionais — se não preenchido, o plano aparece para todos.</p>
 
+            {/* Faixa FIPE */}
+            <div>
+              <Label className="text-xs">Faixa de Valor FIPE (R$)</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="number"
+                  placeholder="Mínimo"
+                  value={fipeMin}
+                  onChange={e => setFipeMin(e.target.value)}
+                  className="flex-1"
+                />
+                <span className="self-center text-muted-foreground text-xs">até</span>
+                <Input
+                  type="number"
+                  placeholder="Máximo"
+                  value={fipeMax}
+                  onChange={e => setFipeMax(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">Deixe em branco para aceitar qualquer valor</p>
+            </div>
+
+            {/* Faixa de Ano */}
+            <div>
+              <Label className="text-xs">Faixa de Ano do Veículo</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="number"
+                  placeholder="De"
+                  value={anoMin}
+                  onChange={e => setAnoMin(e.target.value)}
+                  className="flex-1"
+                />
+                <span className="self-center text-muted-foreground text-xs">até</span>
+                <Input
+                  type="number"
+                  placeholder="Até"
+                  value={anoMax}
+                  onChange={e => setAnoMax(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">Deixe em branco para aceitar qualquer ano</p>
+            </div>
+
             {/* Regiões */}
             {regioes.length > 0 && (
               <div>
