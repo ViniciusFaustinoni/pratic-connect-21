@@ -4,7 +4,8 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Plus, Loader2, Upload } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Plus, Loader2, Upload, Trash2 } from 'lucide-react';
 import { useCombustiveis, useSaveConfigJson } from '@/hooks/useConteudosSistema';
 import { toast } from 'sonner';
 
@@ -15,6 +16,7 @@ export function CombustiveisTab() {
   const [sheetType, setSheetType] = useState<'new' | 'import'>('new');
   const [nome, setNome] = useState('');
   const [importText, setImportText] = useState('');
+  const [deleteIndex, setDeleteIndex] = useState<number | null>(null);
 
   const handleAdd = () => {
     const slug = nome.toLowerCase().replace(/[^a-z0-9]+/g, '_');
@@ -29,9 +31,11 @@ export function CombustiveisTab() {
     saveMut.mutate([...combustiveis, ...toAdd], { onSuccess: () => { setSheetOpen(false); toast.success(`${toAdd.length} adicionados`); } });
   };
 
-  const handleToggle = (idx: number) => {
-    const updated = combustiveis.filter((_, i) => i !== idx);
+  const handleDelete = () => {
+    if (deleteIndex === null) return;
+    const updated = combustiveis.filter((_, i) => i !== deleteIndex);
     saveMut.mutate(updated);
+    setDeleteIndex(null);
   };
 
   if (isLoading) return <div className="flex justify-center py-8"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -51,9 +55,9 @@ export function CombustiveisTab() {
 
       <div className="space-y-1">
         {combustiveis.map((c, idx) => (
-          <div key={c.value} className="flex items-center gap-3 px-3 py-2 rounded-md hover:bg-muted/50 transition-colors">
+          <div key={c.value} className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-muted/50 transition-colors group">
             <span className="text-sm flex-1">{c.label}</span>
-            <Button variant="ghost" size="sm" className="text-xs text-destructive h-7" onClick={() => handleToggle(idx)}>Remover</Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => setDeleteIndex(idx)}><Trash2 className="h-3.5 w-3.5" /></Button>
           </div>
         ))}
       </div>
@@ -86,6 +90,19 @@ export function CombustiveisTab() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <AlertDialog open={deleteIndex !== null} onOpenChange={(open) => !open && setDeleteIndex(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir combustível</AlertDialogTitle>
+            <AlertDialogDescription>Tem certeza que deseja excluir "{deleteIndex !== null ? combustiveis[deleteIndex]?.label : ''}"? Esta ação não pode ser desfeita.</AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction className="bg-destructive text-destructive-foreground hover:bg-destructive/90" onClick={handleDelete}>Excluir</AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
