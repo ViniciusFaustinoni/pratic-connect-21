@@ -85,7 +85,7 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         if (error) throw error;
       } else {
         const slug = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
-        const codigo = `${slug}-${crypto.randomUUID().slice(0, 4)}`;
+        const codigo = `${slug}-${crypto.randomUUID().slice(0, 8)}`;
         const { error } = await supabase.from('coberturas').insert({
           ...payload,
           codigo,
