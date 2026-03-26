@@ -385,7 +385,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   const buildVehicleContext = (p: typeof params): VehicleContext => ({
     valorFipe: p.valorFipe,
     anoVeiculo: p.anoVeiculo || new Date().getFullYear(),
-    categoriaVeiculo: p.categoria,
+    categoriaVeiculo: p.tipoVeiculo === 'moto' ? 'moto' : 'passeio',
     categoriaEspecial: p.categoria,
     regiao: p.regiao,
     marca: p.marca,
