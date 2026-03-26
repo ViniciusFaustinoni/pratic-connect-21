@@ -547,21 +547,43 @@ export const generateStyles = (): string => `
     text-transform: uppercase;
   }
 
-  /* ===== COBERTURAS ===== */
-  .cobertura-list {
-    margin: 6pt 0;
-  }
-  
-  .cobertura-item {
-    font-size: 9pt;
-    margin-bottom: 2pt;
-    padding-left: 5pt;
-  }
-  
-  .cobertura-check {
-    color: #16a34a;
-    font-weight: bold;
-  }
+   /* ===== TABELA DE COBERTURAS/BENEFÍCIOS DO PLANO ===== */
+   .plan-details {
+     width: 100%;
+     border-collapse: collapse;
+     margin: 8pt 0;
+     font-size: 9pt;
+   }
+   .plan-details th {
+     background-color: #1a1a6e;
+     color: #ffffff;
+     font-weight: bold;
+     font-size: 8pt;
+     text-transform: uppercase;
+     padding: 4pt 6pt;
+     border: 1px solid #999;
+   }
+   .plan-details td {
+     padding: 3pt 5pt;
+     border: 1px solid #999;
+     vertical-align: top;
+   }
+
+   /* ===== COBERTURAS ===== */
+   .cobertura-list {
+     margin: 6pt 0;
+   }
+   
+   .cobertura-item {
+     font-size: 9pt;
+     margin-bottom: 2pt;
+     padding-left: 5pt;
+   }
+   
+   .cobertura-check {
+     color: #16a34a;
+     font-weight: bold;
+   }
   
   /* ===== DECLARAÇÕES / CORPO ===== */
   .declaracao {
