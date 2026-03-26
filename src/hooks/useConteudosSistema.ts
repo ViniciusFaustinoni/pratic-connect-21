@@ -550,3 +550,73 @@ export function useInadimplenciaPrazos() {
     staleTime: 1000 * 60 * 10,
   });
 }
+
+// ============================================
+// Categorias de Veículo Aceitas nos Planos
+// ============================================
+
+const CATEGORIAS_VEICULO_PLANO_DEFAULT = [
+  { value: 'passeio', label: 'Passeio' },
+  { value: 'aplicativo', label: 'Aplicativo' },
+  { value: 'moto', label: 'Moto' },
+  { value: 'diesel', label: 'Diesel' },
+  { value: 'eletrico', label: 'Elétrico' },
+  { value: 'especial_plus', label: 'Especial Plus' },
+  { value: 'lancamento', label: 'Lançamento' },
+];
+
+export function useCategoriasVeiculoPlano() {
+  return useConfiguracaoJson<CategoriaVeiculo[]>('categorias_veiculo_plano', CATEGORIAS_VEICULO_PLANO_DEFAULT);
+}
+
+export function useSaveCategoriasVeiculoPlano() {
+  return useSaveConfigJson('categorias_veiculo_plano');
+}
+
+// ============================================
+// Generic save config JSON mutation
+// ============================================
+
+export function useSaveConfigJson(chave: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (value: unknown) => {
+      const { error } = await supabase
+        .from('configuracoes')
+        .update({ valor: JSON.stringify(value) })
+        .eq('chave', chave);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['configuracao', chave] });
+      toast.success('Configuração salva');
+    },
+    onError: () => {
+      toast.error('Erro ao salvar configuração');
+    },
+  });
+}
+  return useQuery({
+    queryKey: ['comissoes-parametros', 'inadimplencia-prazos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('comissoes_parametros')
+        .select('chave, valor')
+        .in('chave', [
+          'inadimplencia_prazo_sem_revistoria',
+          'inadimplencia_prazo_revistoria',
+          'inadimplencia_prazo_nova_adesao',
+        ]);
+
+      if (error) throw error;
+
+      const map = Object.fromEntries((data || []).map(d => [d.chave, d.valor]));
+      return {
+        prazoSemRevistoria: parseInt(map.inadimplencia_prazo_sem_revistoria) || 30,
+        prazoRevistoria: parseInt(map.inadimplencia_prazo_revistoria) || 90,
+        prazoNovaAdesao: parseInt(map.inadimplencia_prazo_nova_adesao) || 180,
+      } as InadimplenciaPrazos;
+    },
+    staleTime: 1000 * 60 * 10,
+  });
+}
