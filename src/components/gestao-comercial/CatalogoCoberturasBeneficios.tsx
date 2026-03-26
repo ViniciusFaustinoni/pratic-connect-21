@@ -6,11 +6,62 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Plus, Pencil, Loader2 } from 'lucide-react';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
+import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+
+// ── Delete Confirmation Dialog ──
+
+function DeleteConfirmDialog({ open, onClose, onConfirm, itemName, isPending }: {
+  open: boolean;
+  onClose: () => void;
+  onConfirm: (justificativa: string) => void;
+  itemName: string;
+  isPending: boolean;
+}) {
+  const [justificativa, setJustificativa] = useState('');
+
+  useEffect(() => {
+    if (open) setJustificativa('');
+  }, [open]);
+
+  return (
+    <AlertDialog open={open} onOpenChange={(v) => !v && onClose()}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Excluir permanentemente</AlertDialogTitle>
+          <AlertDialogDescription>
+            Tem certeza que deseja excluir <strong>"{itemName}"</strong>? Esta ação é irreversível e removerá todos os vínculos com planos existentes.
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <div className="py-2">
+          <Label>Justificativa obrigatória</Label>
+          <Textarea
+            rows={2}
+            value={justificativa}
+            onChange={e => setJustificativa(e.target.value)}
+            placeholder="Motivo da exclusão..."
+            className="mt-1"
+          />
+        </div>
+        <AlertDialogFooter>
+          <AlertDialogCancel onClick={onClose}>Cancelar</AlertDialogCancel>
+          <AlertDialogAction
+            onClick={() => onConfirm(justificativa)}
+            disabled={!justificativa.trim() || isPending}
+            className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+          >
+            {isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+            Excluir
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+}
 
 // ── Cobertura Sheet ──
 
@@ -146,12 +197,42 @@ function useToggleBenefit() {
   });
 }
 
+// ── Delete mutations ──
+
+function useDeleteCobertura() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      // Remove vínculos com planos primeiro
+      await supabase.from('planos_coberturas').delete().eq('cobertura_id', id);
+      const { error } = await supabase.from('coberturas').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['coberturas'] }); toast.success('Cobertura excluída'); },
+    onError: () => toast.error('Erro ao excluir. Verifique se não há dependências.'),
+  });
+}
+
+function useDeleteBenefit() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id }: { id: string }) => {
+      await supabase.from('planos_beneficios').delete().eq('benefit_id', id);
+      const { error } = await supabase.from('benefits').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['benefits'] }); toast.success('Benefício excluído'); },
+    onError: () => toast.error('Erro ao excluir. Verifique se não há dependências.'),
+  });
+}
+
 // ── Item List ──
 
-function ItemList({ items, onEdit, onToggle, type }: {
+function ItemList({ items, onEdit, onToggle, onDelete, type }: {
   items: any[];
   onEdit: (item: any) => void;
   onToggle: (id: string, active: boolean) => void;
+  onDelete: (item: any) => void;
   type: 'cobertura' | 'beneficio';
 }) {
   const getActive = (item: any) => type === 'cobertura' ? item.ativo !== false : item.is_active !== false;
@@ -180,6 +261,9 @@ function ItemList({ items, onEdit, onToggle, type }: {
           <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onEdit(item)}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
+            <Trash2 className="h-3.5 w-3.5" />
+          </Button>
         </div>
       ))}
     </div>
@@ -193,9 +277,27 @@ export function CatalogoCoberturasBeneficios() {
   const { data: benefits = [], isLoading: loadingBen } = useBenefits();
   const toggleCob = useToggleCobertura();
   const toggleBen = useToggleBenefit();
+  const deleteCob = useDeleteCobertura();
+  const deleteBen = useDeleteBenefit();
 
   const [cobSheet, setCobSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [benSheet, setBenSheet] = useState<{ open: boolean; item?: any }>({ open: false });
+  const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item?: any; type?: 'cobertura' | 'beneficio' }>({ open: false });
+
+  const handleDelete = (justificativa: string) => {
+    if (!deleteDialog.item || !deleteDialog.type) return;
+    const id = deleteDialog.item.id;
+    if (deleteDialog.type === 'cobertura') {
+      deleteCob.mutate({ id }, { onSettled: () => setDeleteDialog({ open: false }) });
+    } else {
+      deleteBen.mutate({ id }, { onSettled: () => setDeleteDialog({ open: false }) });
+    }
+  };
+
+  const getDeleteItemName = () => {
+    if (!deleteDialog.item) return '';
+    return deleteDialog.type === 'cobertura' ? deleteDialog.item.nome : deleteDialog.item.name;
+  };
 
   const isLoading = loadingCob || loadingBen;
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -219,6 +321,7 @@ export function CatalogoCoberturasBeneficios() {
             type="cobertura"
             onEdit={(item) => setCobSheet({ open: true, item })}
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
+            onDelete={(item) => setDeleteDialog({ open: true, item, type: 'cobertura' })}
           />
         </TabsContent>
 
@@ -231,12 +334,21 @@ export function CatalogoCoberturasBeneficios() {
             type="beneficio"
             onEdit={(item) => setBenSheet({ open: true, item })}
             onToggle={(id, is_active) => toggleBen.mutate({ id, is_active })}
+            onDelete={(item) => setDeleteDialog({ open: true, item, type: 'beneficio' })}
           />
         </TabsContent>
       </Tabs>
 
       {cobSheet.open && <CoberturaSheet open item={cobSheet.item} onClose={() => setCobSheet({ open: false })} />}
       {benSheet.open && <BeneficioSheet open item={benSheet.item} onClose={() => setBenSheet({ open: false })} />}
+
+      <DeleteConfirmDialog
+        open={deleteDialog.open}
+        onClose={() => setDeleteDialog({ open: false })}
+        onConfirm={handleDelete}
+        itemName={getDeleteItemName()}
+        isPending={deleteCob.isPending || deleteBen.isPending}
+      />
     </>
   );
 }
