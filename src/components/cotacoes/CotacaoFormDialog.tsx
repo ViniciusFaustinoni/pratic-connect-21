@@ -1179,7 +1179,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         dia_vencimento: diaVencimento,
         // Região selecionada
         regiao: regiaoSelecionada || null,
-        uso_aplicativo: usoVeiculo === 'aplicativo',
+        uso_aplicativo: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
+        // Combustível e tipo de uso
+        combustivel: combustivelSelecionado || null,
+        veiculo_combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || null,
+        veiculo_tipo_uso: usoVeiculo || null,
         // Indicação
         indicador_id: indicadorId || null,
         indicador_nome: indicadorNome || null,
