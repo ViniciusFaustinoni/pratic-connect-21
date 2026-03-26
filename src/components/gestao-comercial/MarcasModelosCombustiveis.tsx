@@ -5,10 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, ChevronRight, Loader2, Upload } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Plus, ChevronRight, Loader2, Upload, Download } from 'lucide-react';
 import { useMarcasModelos, useCreateMarcaModelo, useToggleMarcaModelo, useBulkInsertMarcasModelos } from '@/hooks/useMarcasModelos';
+import { useImportFipeMarcas } from '@/hooks/useImportFipeMarcas';
 
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
@@ -20,6 +23,7 @@ function MarcasModelosTab() {
   const createMut = useCreateMarcaModelo();
   const toggleMut = useToggleMarcaModelo();
   const bulkMut = useBulkInsertMarcasModelos();
+  const fipeImport = useImportFipeMarcas();
 
   const [sheetOpen, setSheetOpen] = useState(false);
   const [sheetType, setSheetType] = useState<'marca' | 'modelo' | 'import'>('marca');
@@ -28,6 +32,8 @@ function MarcasModelosTab() {
   const [importText, setImportText] = useState('');
   const [importPreview, setImportPreview] = useState<{ marca: string; modelo?: string }[]>([]);
   const [openBrands, setOpenBrands] = useState<Set<string>>(new Set());
+  const [fipeDialogOpen, setFipeDialogOpen] = useState(false);
+  const [fipeTipos, setFipeTipos] = useState<Set<string>>(new Set(['cars']));
 
   // Group by brand
   const grouped = useMemo(() => {
@@ -85,6 +91,9 @@ function MarcasModelosTab() {
           <p className="text-xs text-muted-foreground">{grouped.length} marcas cadastradas</p>
         </div>
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setFipeDialogOpen(true)}>
+            <Download className="h-4 w-4 mr-1" />Importar da FIPE
+          </Button>
           <Button size="sm" variant="outline" onClick={openImport}><Upload className="h-4 w-4 mr-1" />Importar</Button>
           <Button size="sm" onClick={openNewMarca}><Plus className="h-4 w-4 mr-1" />Nova Marca</Button>
         </div>
@@ -159,6 +168,52 @@ function MarcasModelosTab() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={fipeDialogOpen} onOpenChange={setFipeDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Importar da Tabela FIPE</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Selecione os tipos de veículo para importar todas as marcas e modelos da tabela FIPE.
+          </p>
+          <div className="space-y-3 py-2">
+            {[
+              { value: 'cars', label: 'Carros' },
+              { value: 'motorcycles', label: 'Motos' },
+              { value: 'trucks', label: 'Caminhões' },
+            ].map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={fipeTipos.has(value)}
+                  onCheckedChange={(checked) => {
+                    setFipeTipos(prev => {
+                      const next = new Set(prev);
+                      checked ? next.add(value) : next.delete(value);
+                      return next;
+                    });
+                  }}
+                />
+                <span className="text-sm">{label}</span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFipeDialogOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                fipeImport.mutate(Array.from(fipeTipos), {
+                  onSuccess: () => setFipeDialogOpen(false),
+                });
+              }}
+              disabled={fipeTipos.size === 0 || fipeImport.isPending}
+            >
+              {fipeImport.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Importar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

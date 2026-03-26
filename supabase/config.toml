@@ -180,3 +180,6 @@ verify_jwt = false
 
 [functions.limpar-servico-inativo]
 verify_jwt = false
+
+[functions.fipe-import-marcas]
+verify_jwt = false
