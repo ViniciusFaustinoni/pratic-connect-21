@@ -107,6 +107,16 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           case 'tipo_uso': setSelUso(vals); break;
           case 'marca_modelo': setSelMarcas(vals); break;
           case 'combustivel': setSelCombustivel(vals); break;
+          case 'fipe_range': {
+            if (config.min) setFipeMin(String(config.min));
+            if (config.max) setFipeMax(String(config.max));
+            break;
+          }
+          case 'ano_range': {
+            if (config.min) setAnoMin(String(config.min));
+            if (config.max) setAnoMax(String(config.max));
+            break;
+          }
         }
       }
     }
