@@ -40,7 +40,6 @@ const tabGroups: TabGroup[] = [
     title: 'Operação',
     icon: Cog,
     items: [
-      { label: 'Elegibilidade', shortLabel: 'Elegibilidade', icon: ShieldCheck, description: 'Critérios por veículo' },
       { label: 'Regras de Venda', shortLabel: 'Regras', icon: Gavel, description: 'Limites e comissões' },
       { label: 'Instalação e Rotas', shortLabel: 'Instalação', icon: MapPin, description: 'Bases e rotas' },
     ],

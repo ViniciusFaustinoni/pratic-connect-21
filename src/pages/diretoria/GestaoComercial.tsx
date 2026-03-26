@@ -59,11 +59,10 @@ export default function GestaoComercial() {
             {activeTab === 1 && <LinhasPlanos />}
             {activeTab === 2 && <SimuladorRateio />}
             {activeTab === 3 && <RateioConfig />}
-            {activeTab === 4 && <ElegibilidadeVeiculos />}
-            {activeTab === 5 && <RegrasVendaContent />}
-            {activeTab === 6 && <InstalacaoRotasConfig />}
-            {activeTab === 7 && <CadastrosBase />}
-            {activeTab === 8 && <MarcasModelosCombustiveis />}
+            {activeTab === 4 && <RegrasVendaContent />}
+            {activeTab === 5 && <InstalacaoRotasConfig />}
+            {activeTab === 6 && <CadastrosBase />}
+            {activeTab === 7 && <MarcasModelosCombustiveis />}
           </div>
         </div>
       </div>
