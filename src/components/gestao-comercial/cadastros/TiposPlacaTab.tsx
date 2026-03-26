@@ -10,6 +10,7 @@ import { Switch } from '@/components/ui/switch';
 interface TipoPlacaItem {
   value: string;
   label: string;
+  ativo?: boolean;
 }
 
 function slugify(text: string) {
@@ -33,15 +34,16 @@ export function TiposPlacaTab() {
   const openEdit = (idx: number) => { setEditIndex(idx); setLabel(tipos[idx].label); setSheetOpen(true); };
 
   const handleSave = () => {
-    const newItem = { value: editIndex !== null ? tipos[editIndex].value : slugify(label), label };
+    const newItem: TipoPlacaItem = { value: editIndex !== null ? tipos[editIndex].value : slugify(label), label };
     const updated = [...tipos];
-    if (editIndex !== null) updated[editIndex] = newItem;
+    if (editIndex !== null) updated[editIndex] = { ...updated[editIndex], label };
     else updated.push(newItem);
     saveMutation.mutate(updated, { onSuccess: () => setSheetOpen(false) });
   };
 
-  const handleRemove = (idx: number) => {
-    const updated = tipos.filter((_, i) => i !== idx);
+  const handleToggle = (idx: number) => {
+    const updated = [...tipos];
+    updated[idx] = { ...updated[idx], ativo: updated[idx].ativo === false ? true : false };
     saveMutation.mutate(updated);
   };
 
@@ -62,7 +64,7 @@ export function TiposPlacaTab() {
           <div key={t.value} className="flex items-center gap-3 px-3 py-2.5 rounded-md hover:bg-muted/50 transition-colors group">
             <span className="text-sm flex-1">{t.label}</span>
             <Button variant="ghost" size="icon" className="h-7 w-7 opacity-0 group-hover:opacity-100" onClick={() => openEdit(idx)}><Pencil className="h-3.5 w-3.5" /></Button>
-            <Button variant="ghost" size="sm" className="text-xs text-destructive h-7 opacity-0 group-hover:opacity-100" onClick={() => handleRemove(idx)}>Remover</Button>
+            <Switch checked={t.ativo !== false} onCheckedChange={() => handleToggle(idx)} />
           </div>
         ))}
       </div>
