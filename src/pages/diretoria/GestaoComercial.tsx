@@ -8,7 +8,6 @@ import { ElegibilidadeVeiculos } from '@/components/gestao-comercial/Elegibilida
 import { RegrasVendaContent } from '@/components/gestao-comercial/RegrasVendaContent';
 import { InstalacaoRotasConfig } from '@/components/gestao-comercial/InstalacaoRotasConfig';
 import RateioConfig from '@/pages/configuracoes/RateioConfig';
-import { MapaAtendimento } from '@/components/gestao-comercial/MapaAtendimento';
 import { CadastrosBase } from '@/components/gestao-comercial/CadastrosBase';
 import { MarcasModelosCombustiveis } from '@/components/gestao-comercial/MarcasModelosCombustiveis';
 import { useIsMobile } from '@/hooks/use-mobile';
