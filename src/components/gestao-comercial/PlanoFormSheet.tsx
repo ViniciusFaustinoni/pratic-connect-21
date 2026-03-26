@@ -186,8 +186,9 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
         }
         // Insert beneficios
         if (selectedBeneficios.size > 0) {
+          const bens = benefits.filter(b => selectedBeneficios.has(b.id));
           await supabase.from('planos_beneficios').insert(
-            Array.from(selectedBeneficios).map((bid, i) => ({ plano_id: plan.id, benefit_id: bid, display_order: i }))
+            bens.map((b, i) => ({ plano_id: plan.id, benefit_id: b.id, beneficio: b.name, display_order: i }))
           );
         }
         // Insert regioes
