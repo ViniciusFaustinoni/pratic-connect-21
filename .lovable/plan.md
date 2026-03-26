@@ -1,12 +1,15 @@
 
 
-# Revisao do Sistema de Regras de Elegibilidade — Correcoes Necessarias
+# Revisao das Regras de Elegibilidade — Correcoes Pendentes
 
 ## Problemas Encontrados
 
-### 1. Chave errada para Categorias Especiais no EligibilityRulesEditor
-O `EligibilityRulesEditor` busca categorias especiais com a chave `categorias_especiais`, mas o CRUD do diretor (`CategoriasEspeciaisTab.tsx`) salva na chave `categorias_veiculo`. Resultado: o editor mostra lista vazia de categorias especiais.
+### 1. BeneficioFormModal (produto) NAO foi atualizado
+O arquivo `src/components/admin/planos/BeneficioFormModal.tsx` ainda usa o sistema antigo de exclusoes por categoria (linhas 278-312, com `benefit_category_exclusions`). O `EligibilityRulesEditor` foi adicionado apenas ao `BeneficioFormModal` de RH (`src/components/rh/`), que e uma entidade completamente diferente (beneficios de funcionarios, nao de planos).
 
-**Correcao**: Trocar `useConfiguracaoJson('categorias_especiais', [])` por `useCategoriasVeiculo()` no `EligibilityRulesEditor.tsx`.
+O modal de beneficios de produto precisa:
+- Substituir a secao "Excluir para Categorias Especiais" pelo `EligibilityRulesEditor`
+- Manter o sistema antigo funcionando em paralelo por backward compatibility
 
-### 2. Motor de cotacao com log
+### 2. Dados de categorias corretos
+Os hooks estao corretos agora:
