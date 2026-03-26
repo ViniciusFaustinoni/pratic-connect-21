@@ -270,6 +270,45 @@ serve(async (req) => {
       templateData.regrasVenda = regrasVenda;
     }
 
+    // ============= BUSCAR COBERTURAS E BENEFÍCIOS DO PLANO =============
+    const planoId = contrato.planos?.id || contrato.plano_id;
+    if (planoId) {
+      try {
+        const [{ data: coberturasData }, { data: beneficiosData }] = await Promise.all([
+          supabase
+            .from('planos_coberturas')
+            .select('valor_personalizado, carencia_dias, franquia_percentual, coberturas:cobertura_id(nome, descricao)')
+            .eq('plano_id', planoId),
+          supabase
+            .from('planos_beneficios')
+            .select('custom_value, benefits:benefit_id(name, description)')
+            .eq('plano_id', planoId),
+        ]);
+
+        if (coberturasData?.length) {
+          templateData.plano.coberturas_detalhadas = coberturasData.map((pc: any) => ({
+            nome: pc.coberturas?.nome || '',
+            descricao: pc.coberturas?.descricao || '',
+            valor_personalizado: pc.valor_personalizado || '',
+            carencia_dias: pc.carencia_dias,
+            franquia_percentual: pc.franquia_percentual,
+          }));
+          console.log(`[autentique-create] ${coberturasData.length} coberturas carregadas`);
+        }
+
+        if (beneficiosData?.length) {
+          templateData.plano.beneficios_detalhados = beneficiosData.map((pb: any) => ({
+            nome: pb.benefits?.name || '',
+            descricao: pb.benefits?.description || '',
+            valor_personalizado: pb.custom_value || '',
+          }));
+          console.log(`[autentique-create] ${beneficiosData.length} benefícios carregados`);
+        }
+      } catch (err) {
+        console.warn('[autentique-create] Erro ao buscar coberturas/benefícios (não-bloqueante):', err);
+      }
+    }
+
     // ============= BUSCAR OFICINA VINCULADA VIA OS =============
     try {
       let oficinaId: string | null = null;

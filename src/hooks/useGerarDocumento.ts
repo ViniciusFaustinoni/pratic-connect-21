@@ -49,15 +49,44 @@ export function useGerarDocumento() {
       .single();
     const contrato = contratoResult.data;
 
-    // Buscar plano se houver contrato
+    // Buscar plano, coberturas e benefícios se houver contrato
     let planoNome = '';
+    let coberturasTexto = '';
+    let beneficiosTexto = '';
+    let tabelaCoberturas = '';
+    let tabelaBeneficios = '';
+    let tabelaCompleta = '';
+
     if (contrato?.plano_id) {
-      const planoResult = await supabase
-        .from('planos')
-        .select('nome')
-        .eq('id', contrato.plano_id)
-        .single();
+      const [planoResult, coberturasResult, beneficiosResult] = await Promise.all([
+        supabase.from('planos').select('nome').eq('id', contrato.plano_id).single(),
+        supabase.from('planos_coberturas').select('valor_personalizado, carencia_dias, franquia_percentual, coberturas:cobertura_id(nome, descricao)').eq('plano_id', contrato.plano_id),
+        supabase.from('planos_beneficios').select('custom_value, benefits:benefit_id(name, description)').eq('plano_id', contrato.plano_id),
+      ]);
       planoNome = planoResult.data?.nome || '';
+
+      const coberturas = (coberturasResult.data || []) as any[];
+      const beneficios = (beneficiosResult.data || []) as any[];
+
+      coberturasTexto = coberturas.map((c: any) => c.coberturas?.nome || '').filter(Boolean).join(', ');
+      beneficiosTexto = beneficios.map((b: any) => b.benefits?.name || '').filter(Boolean).join(', ');
+
+      // Gerar tabelas HTML
+      if (coberturas.length) {
+        const rows = coberturas.map((c: any) => {
+          const det: string[] = [];
+          if (c.valor_personalizado) det.push(c.valor_personalizado);
+          if (c.carencia_dias) det.push(`Carência: ${c.carencia_dias} dias`);
+          if (c.franquia_percentual) det.push(`Franquia: ${c.franquia_percentual}%`);
+          return `<tr><td>${c.coberturas?.nome || '—'}</td><td>${c.coberturas?.descricao || '—'}</td><td>${det.join(' · ') || '—'}</td></tr>`;
+        }).join('');
+        tabelaCoberturas = `<table class="plan-details"><thead><tr><th>Cobertura</th><th>Descrição</th><th>Detalhes</th></tr></thead><tbody>${rows}</tbody></table>`;
+      }
+      if (beneficios.length) {
+        const rows = beneficios.map((b: any) => `<tr><td>${b.benefits?.name || '—'}</td><td>${b.benefits?.description || '—'}</td><td>${b.custom_value || '—'}</td></tr>`).join('');
+        tabelaBeneficios = `<table class="plan-details"><thead><tr><th>Benefício</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>${rows}</tbody></table>`;
+      }
+      tabelaCompleta = (tabelaCoberturas || '') + (tabelaBeneficios || '');
     }
 
     // Montar endereço completo
