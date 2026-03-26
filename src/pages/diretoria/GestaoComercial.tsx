@@ -23,7 +23,7 @@ const sectionBanners: Record<number, { title: string; help: string }> = {
   5: { title: 'Regras de Venda', help: 'Configure limites FIPE, comissões e taxas do processo de venda.' },
   6: { title: 'Instalação e Rotas', help: 'Cadastre bases, parceiros e organize rotas de instalação.' },
   7: { title: 'Tabelas de Apoio', help: 'Gerencie categorias de veículo, regiões, tipos de uso e tipos de placa.' },
-  8: { title: 'Marcas, Modelos e Combustíveis', help: 'Cadastre marcas, modelos e combustíveis com importação em lote.' },
+  8: { title: 'Marcas e Modelos', help: 'Cadastre marcas e modelos de veículos com importação em lote.' },
 };
 
 export default function GestaoComercial() {

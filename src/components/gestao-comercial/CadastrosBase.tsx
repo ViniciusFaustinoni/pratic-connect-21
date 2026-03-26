@@ -3,6 +3,7 @@ import { CategoriasVeiculoTab } from './cadastros/CategoriasVeiculoTab';
 import { RegioesTab } from './cadastros/RegioesTab';
 import { TiposUsoTab } from './cadastros/TiposUsoTab';
 import { TiposPlacaTab } from './cadastros/TiposPlacaTab';
+import { CombustiveisTab } from './cadastros/CombustiveisTab';
 
 export function CadastrosBase() {
   return (
