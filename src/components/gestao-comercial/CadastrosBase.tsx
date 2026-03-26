@@ -1,6 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CategoriasVeiculoTab } from './cadastros/CategoriasVeiculoTab';
-import { CategoriasEspeciaisTab } from './cadastros/CategoriasEspeciaisTab';
 import { RegioesTab } from './cadastros/RegioesTab';
 import { TiposUsoTab } from './cadastros/TiposUsoTab';
 import { TiposPlacaTab } from './cadastros/TiposPlacaTab';
@@ -10,7 +9,6 @@ export function CadastrosBase() {
     <Tabs defaultValue="categorias" className="space-y-4">
       <TabsList>
         <TabsTrigger value="categorias">Tipos de Veículo</TabsTrigger>
-        <TabsTrigger value="especiais">Categorias Especiais</TabsTrigger>
         <TabsTrigger value="regioes">Regiões</TabsTrigger>
         <TabsTrigger value="tipos_uso">Modalidades de Uso</TabsTrigger>
         <TabsTrigger value="tipos_placa">Tipos de Placa</TabsTrigger>
@@ -18,10 +16,6 @@ export function CadastrosBase() {
 
       <TabsContent value="categorias">
         <CategoriasVeiculoTab />
-      </TabsContent>
-
-      <TabsContent value="especiais">
-        <CategoriasEspeciaisTab />
       </TabsContent>
 
       <TabsContent value="regioes">
