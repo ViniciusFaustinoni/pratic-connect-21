@@ -30,9 +30,8 @@ export function CategoriasVeiculoTab() {
   };
 
   const handleToggle = (idx: number) => {
-    const item = categorias[idx];
-    const updated = [...categorias];
-    updated[idx] = { ...item, ativo: !(item as any).ativo };
+    const updated = [...categorias] as any[];
+    updated[idx] = { ...updated[idx], ativo: (updated[idx] as any).ativo === false ? true : false };
     saveMutation.mutate(updated);
   };
 
