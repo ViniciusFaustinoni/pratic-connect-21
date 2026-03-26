@@ -95,7 +95,8 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       
       // Parse rules
       for (const rule of existingPlan.rules) {
-        const vals = new Set((rule.values || []) as string[]);
+        const config = (typeof rule.rule_config === 'object' && rule.rule_config) ? rule.rule_config as any : {};
+        const vals = new Set((config.values || []) as string[]);
         switch (rule.rule_type) {
           case 'categoria_veiculo': setSelTipoVeiculo(vals); break;
           case 'tipo_uso': setSelUso(vals); break;
