@@ -3,6 +3,7 @@ import { CategoriasVeiculoTab } from './cadastros/CategoriasVeiculoTab';
 import { RegioesTab } from './cadastros/RegioesTab';
 import { TiposUsoTab } from './cadastros/TiposUsoTab';
 import { TiposPlacaTab } from './cadastros/TiposPlacaTab';
+import { CombustiveisTab } from './cadastros/CombustiveisTab';
 
 export function CadastrosBase() {
   return (
@@ -12,6 +13,7 @@ export function CadastrosBase() {
         <TabsTrigger value="regioes">Regiões</TabsTrigger>
         <TabsTrigger value="tipos_uso">Modalidades de Uso</TabsTrigger>
         <TabsTrigger value="tipos_placa">Tipos de Placa</TabsTrigger>
+        <TabsTrigger value="combustiveis">Combustíveis</TabsTrigger>
       </TabsList>
 
       <TabsContent value="categorias">
@@ -28,6 +30,10 @@ export function CadastrosBase() {
 
       <TabsContent value="tipos_placa">
         <TiposPlacaTab />
+      </TabsContent>
+
+      <TabsContent value="combustiveis">
+        <CombustiveisTab />
       </TabsContent>
     </Tabs>
   );

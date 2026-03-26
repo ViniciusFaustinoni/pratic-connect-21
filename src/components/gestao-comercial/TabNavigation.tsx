@@ -50,7 +50,7 @@ const tabGroups: TabGroup[] = [
     icon: Database,
     items: [
       { label: 'Tabelas de Apoio', shortLabel: 'Tabelas de Apoio', icon: Database, description: 'Categorias, regiões, tipos' },
-      { label: 'Marcas, Modelos e Combustíveis', shortLabel: 'Marcas & Modelos', icon: Car, description: 'CRUDs com importação em lote' },
+      { label: 'Marcas e Modelos', shortLabel: 'Marcas & Modelos', icon: Car, description: 'Cadastro com importação em lote' },
     ],
   },
 ];
