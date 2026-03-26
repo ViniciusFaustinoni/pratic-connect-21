@@ -8,7 +8,6 @@ import { ElegibilidadeVeiculos } from '@/components/gestao-comercial/Elegibilida
 import { RegrasVendaContent } from '@/components/gestao-comercial/RegrasVendaContent';
 import { InstalacaoRotasConfig } from '@/components/gestao-comercial/InstalacaoRotasConfig';
 import RateioConfig from '@/pages/configuracoes/RateioConfig';
-import { MapaAtendimento } from '@/components/gestao-comercial/MapaAtendimento';
 import { CadastrosBase } from '@/components/gestao-comercial/CadastrosBase';
 import { MarcasModelosCombustiveis } from '@/components/gestao-comercial/MarcasModelosCombustiveis';
 import { useIsMobile } from '@/hooks/use-mobile';
@@ -23,9 +22,8 @@ const sectionBanners: Record<number, { title: string; help: string }> = {
   4: { title: 'Elegibilidade', help: 'Controle quais veículos cada plano aceita por marca, modelo e ano.' },
   5: { title: 'Regras de Venda', help: 'Configure limites FIPE, comissões e taxas do processo de venda.' },
   6: { title: 'Instalação e Rotas', help: 'Cadastre bases, parceiros e organize rotas de instalação.' },
-  7: { title: 'Mapa de Atendimento', help: 'Visualize a cobertura geográfica e identifique áreas descobertas.' },
-  8: { title: 'Tabelas de Apoio', help: 'Gerencie categorias de veículo, regiões, tipos de uso e tipos de placa.' },
-  9: { title: 'Marcas, Modelos e Combustíveis', help: 'Cadastre marcas, modelos e combustíveis com importação em lote.' },
+  7: { title: 'Tabelas de Apoio', help: 'Gerencie categorias de veículo, regiões, tipos de uso e tipos de placa.' },
+  8: { title: 'Marcas, Modelos e Combustíveis', help: 'Cadastre marcas, modelos e combustíveis com importação em lote.' },
 };
 
 export default function GestaoComercial() {
@@ -66,9 +64,8 @@ export default function GestaoComercial() {
             {activeTab === 4 && <ElegibilidadeVeiculos />}
             {activeTab === 5 && <RegrasVendaContent />}
             {activeTab === 6 && <InstalacaoRotasConfig />}
-            {activeTab === 7 && <MapaAtendimento />}
-            {activeTab === 8 && <CadastrosBase />}
-            {activeTab === 9 && <MarcasModelosCombustiveis />}
+            {activeTab === 7 && <CadastrosBase />}
+            {activeTab === 8 && <MarcasModelosCombustiveis />}
           </div>
         </div>
       </div>
