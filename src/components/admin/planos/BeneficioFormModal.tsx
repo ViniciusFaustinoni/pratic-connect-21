@@ -52,12 +52,6 @@ export function BeneficioFormModal({
 }: BeneficioFormModalProps) {
   const createBenefit = useCreateBenefit();
   const updateBenefit = useUpdateBenefit();
-  const updateExclusions = useUpdateBenefitExclusions();
-  
-  // Buscar exclusões existentes se estiver editando
-  const { data: existingExclusions } = useBenefitExclusionsByBenefitId(
-    benefit?.id || null
-  );
 
   const isEditing = !!benefit;
 
