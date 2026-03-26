@@ -83,12 +83,6 @@ export interface DadosParaCotacao {
 type TipoUso = 'particular' | 'aplicativo';
 type TipoVeiculo = 'carro' | 'moto';
 
-const REGIOES = [
-  { value: 'rj', label: 'Rio de Janeiro' },
-  { value: 'lagos', label: 'Região dos Lagos' },
-  { value: 'sp', label: 'São Paulo' },
-] as const;
-
 const TIPO_VEICULO_LABELS: Record<TipoVeiculo, string> = {
   carro: 'Carro',
   moto: 'Moto',
