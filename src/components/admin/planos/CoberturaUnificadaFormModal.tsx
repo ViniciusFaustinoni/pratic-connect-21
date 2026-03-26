@@ -12,6 +12,7 @@ import { Switch } from '@/components/ui/switch';
 import { Textarea } from '@/components/ui/textarea';
 import { useCreateCobertura, useUpdateCobertura } from '@/hooks/usePlansAdmin';
 import type { Cobertura } from '@/types/plans';
+import { EligibilityRulesEditor } from './EligibilityRulesEditor';
 
 interface CoberturaUnificadaFormModalProps {
   open: boolean;
