@@ -234,6 +234,21 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
     addRule('tipo_uso', Array.from(selUso));
     addRule('marca_modelo', Array.from(selMarcas));
     addRule('combustivel', Array.from(selCombustivel));
+
+    // FIPE range
+    const fMin = fipeMin ? parseFloat(fipeMin) : null;
+    const fMax = fipeMax ? parseFloat(fipeMax) : null;
+    if (fMin !== null || fMax !== null) {
+      rules.push({ entity_type: 'plano', entity_id: entityId, rule_type: 'fipe_range', rule_mode: 'include', rule_config: { min: fMin || 0, max: fMax || 99999999 } });
+    }
+
+    // Ano range
+    const aMin = anoMin ? parseInt(anoMin) : null;
+    const aMax = anoMax ? parseInt(anoMax) : null;
+    if (aMin !== null || aMax !== null) {
+      rules.push({ entity_type: 'plano', entity_id: entityId, rule_type: 'ano_range', rule_mode: 'include', rule_config: { min: aMin || 1900, max: aMax || 9999 } });
+    }
+
     if (rules.length > 0) {
       await supabase.from('entity_eligibility_rules').insert(rules);
     }
