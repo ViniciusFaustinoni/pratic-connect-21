@@ -696,6 +696,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         setAnoSelecionado('');
         setModelos([]);
         setAnos([]);
+        
+        // Auto-detectar combustível do veículo
+        if (resultado.vehicleData.combustivel) {
+          const combFipe = resultado.vehicleData.combustivel.toLowerCase();
+          const match = combustiveisBanco.find(c => 
+            combFipe.includes(c.value) || combFipe.includes(c.label.toLowerCase())
+          );
+          if (match) setCombustivelSelecionado(match.value);
+          else if (combFipe.includes('flex') || (combFipe.includes('gasolina') && combFipe.includes('álcool'))) setCombustivelSelecionado('flex');
+          else if (combFipe.includes('gasolina')) setCombustivelSelecionado('gasolina');
+          else if (combFipe.includes('diesel')) setCombustivelSelecionado('diesel');
+          else if (combFipe.includes('elétrico') || combFipe.includes('eletrico')) setCombustivelSelecionado('eletrico');
+        }
 
         // Preencher valor FIPE diretamente dos dados retornados
         if (resultado.fipeData?.valor) {
