@@ -36,11 +36,6 @@ const CATEGORIES = [
   { value: 'outros', label: 'Outros' },
 ];
 
-// Categorias que podem ter exclusões (excluímos 'nenhuma')
-const CATEGORIAS_PARA_EXCLUSAO = CATEGORIAS_VEICULO.filter(
-  (cat) => cat.value !== 'nenhuma'
-);
-
 function generateSlug(name: string): string {
   return name
     .toLowerCase()
