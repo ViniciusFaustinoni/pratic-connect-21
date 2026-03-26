@@ -88,9 +88,11 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         const { error } = await supabase.from('benefits').update(payload).eq('id', item.id);
         if (error) throw error;
       } else {
+        const slug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
+        const uniqueSlug = `${slug}-${crypto.randomUUID().slice(0, 4)}`;
         const { error } = await supabase.from('benefits').insert({
           ...payload,
-          slug: name.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30),
+          slug: uniqueSlug,
           category: 'geral',
         });
         if (error) throw error;
