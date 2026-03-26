@@ -1,34 +1,27 @@
 
 
-# Adicionar botao de exclusao nas Tabelas de Apoio
+# Conexão entre Marcas & Modelos e Elegibilidade do Plano
 
-## Situacao atual
+## Diagnóstico
 
-- **Combustiveis** ja tem botao "Remover" (remove do array JSON)
-- **Regioes** tem `useDeleteRegiao` no hook mas o `RegioesTab` simplificado nao o utiliza
-- **Tipos de Veiculo, Modalidades de Uso, Tipos de Placa** nao tem opcao de excluir — apenas editar e ativar/desativar
+A conexão já está implementada corretamente:
+- `PlanoFormSheet.tsx` importa `useMarcasModelos()` (hook que lê a tabela `marcas_modelos`)
+- Extrai marcas únicas ativas → exibe como badges selecionáveis na seção de elegibilidade
+- **O problema**: a tabela `marcas_modelos` está vazia (0 marcas cadastradas), por isso nenhuma marca aparece na edição do plano
 
-## Alteracoes
+## Situação atual
 
-Adicionar um botao de excluir (icone Trash2) com dialogo de confirmacao em cada tab. A exclusao sera permanente, com confirmacao obrigatoria.
+```text
+marcas_modelos (tabela) ──► useMarcasModelos() ──► PlanoFormSheet.tsx
+         0 registros              ↓
+                          uniqueBrands = []
+                                 ↓
+                    {uniqueBrands.length > 0 && ...}  ← não renderiza nada
+```
 
-| Arquivo | Acao |
-|---|---|
-| `CategoriasVeiculoTab.tsx` | Adicionar botao Trash2 na linha do item + AlertDialog de confirmacao. Excluir = remover do array e salvar |
-| `RegioesTab.tsx` | Importar `useDeleteRegiao` + adicionar botao Trash2 + AlertDialog de confirmacao |
-| `TiposUsoTab.tsx` | Adicionar botao Trash2 + AlertDialog. Excluir = splice do array e salvar |
-| `TiposPlacaTab.tsx` | Idem TiposUso |
-| `CombustiveisTab.tsx` | Substituir o botao "Remover" por icone Trash2 consistente + AlertDialog de confirmacao (atualmente remove sem confirmar) |
+## Ação necessária
 
-### Padrao de UI
+Não há correção de código. A base de Marcas & Modelos precisa ser populada. Posso importar automaticamente as marcas e modelos mais comuns do mercado brasileiro (Fiat, Chevrolet, Volkswagen, Toyota, Honda, Hyundai, Renault, Jeep, Nissan, BMW, Mercedes, Audi, etc.) com seus respectivos modelos.
 
-Cada linha de item tera, ao lado do botao de editar (Pencil):
-- Botao `Trash2` (ghost, destructive, opacity-0 group-hover:opacity-100)
-- Ao clicar, abre AlertDialog: "Tem certeza que deseja excluir [nome]? Esta acao nao pode ser desfeita."
-- Botoes "Cancelar" e "Excluir" (destructive)
-
-### Logica de exclusao
-
-- **Categorias, TiposUso, TiposPlaca, Combustiveis**: `updated.splice(idx, 1)` + `saveMutation.mutate(updated)`
-- **Regioes**: `deleteRegiao.mutate(id)` (hook existente com delete real no banco)
+**Deseja que eu popule a tabela com uma lista padrão de marcas e modelos?**
 
