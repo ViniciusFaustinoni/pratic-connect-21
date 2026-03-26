@@ -213,7 +213,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   async function insertRules(entityId: string) {
     const rules: any[] = [];
     const addRule = (type: string, values: string[], mode = 'include') => {
-      if (values.length > 0) rules.push({ entity_type: 'plano', entity_id: entityId, rule_type: type, mode, values });
+      if (values.length > 0) rules.push({ entity_type: 'plano', entity_id: entityId, rule_type: type, rule_mode: mode, rule_config: { values } });
     };
     addRule('categoria_veiculo', Array.from(selTipoVeiculo));
     addRule('tipo_uso', Array.from(selUso));
