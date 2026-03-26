@@ -28,6 +28,7 @@ import { useBenefits } from '@/hooks/usePlans';
 import { useCreatePlan, useUpdatePlan, PlanBenefitInput } from '@/hooks/usePlansAdmin';
 import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
 import { useRegioes } from '@/hooks/useRegioes';
+import { useCategoriasVeiculoPlano } from '@/hooks/useConteudosSistema';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
 import { ElegibilidadeTab } from './ElegibilidadeTab';
