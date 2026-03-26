@@ -64,12 +64,28 @@ export interface VeiculoData {
   flag_avarias_vistoria?: boolean;
 }
 
+export interface CoberturaDetalhada {
+  nome: string;
+  descricao?: string;
+  valor_personalizado?: string;
+  carencia_dias?: number;
+  franquia_percentual?: number;
+}
+
+export interface BeneficioDetalhado {
+  nome: string;
+  descricao?: string;
+  valor_personalizado?: string;
+}
+
 export interface PlanoData {
   nome: string;
   codigo?: string;
   tipo?: string;
   linha?: string;
   coberturas?: string[];
+  coberturas_detalhadas?: CoberturaDetalhada[];
+  beneficios_detalhados?: BeneficioDetalhado[];
   cota_participacao?: number;
   cota_minima?: number;
   cobertura_fipe?: number;
