@@ -372,6 +372,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     elegibilidadeLoading ||
     cotasCategoriaLoading ||
     benefitExclusionsLoading ||
+    eligibilityRulesLoading ||
     decomposicaoLoading ||
     adicionalAppLoading ||
     regioesComAdicionalLoading ||
@@ -379,6 +380,19 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     linhasComDesagioLoading ||
     categoriasQueSobrepoeAppLoading ||
     regioesLoading;
+
+  // Helper: build vehicle context for unified rules
+  const buildVehicleContext = (p: typeof params): VehicleContext => ({
+    valorFipe: p.valorFipe,
+    anoVeiculo: p.anoVeiculo || new Date().getFullYear(),
+    categoriaVeiculo: p.categoria,
+    categoriaEspecial: p.categoria,
+    regiao: p.regiao,
+    marca: p.marca,
+    modelo: p.modelo,
+    tipoUso: p.usoApp ? 'aplicativo' : 'particular',
+    combustivel: p.combustivel,
+  });
 
   const { planos, planosNegados } = useMemo<{ planos: PlanoCotacao[]; planosNegados: PlanoNegadoInfo[] }>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
