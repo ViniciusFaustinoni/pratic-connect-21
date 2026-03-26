@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { Calculator, TrendingUp, Users, DollarSign, AlertTriangle, ArrowRight } from 'lucide-react';
+import { Calculator, TrendingUp, Users, DollarSign, AlertTriangle, ArrowRight, Shield, Gift } from 'lucide-react';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -16,20 +16,10 @@ function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
 }
 
-const BENEFICIO_TIPOS = [
-  { key: 'colisao', label: 'Colisão / PT / IF' },
-  { key: 'roubo_furto', label: 'Roubo / Furto' },
-  { key: 'assistencia', label: 'Assistência 24h' },
-  { key: 'terceiros', label: 'Danos a Terceiros' },
-  { key: 'vidros', label: 'Vidros' },
-  { key: 'operacional', label: 'Operacional' },
-];
-
 export function SimuladorRateio() {
   const now = new Date();
   const [mesRef, setMesRef] = useState(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
 
-  // Generate last 6 months options
   const mesesOptions = useMemo(() => {
     return Array.from({ length: 6 }, (_, i) => {
       const d = subMonths(now, i);
@@ -41,13 +31,39 @@ export function SimuladorRateio() {
 
   const [ano, mes] = mesRef.split('-').map(Number);
 
-  // Fetch active associates with vehicles
+  // Fetch real coberturas from database
+  const { data: coberturas = [], isLoading: loadingCoberturas } = useQuery({
+    queryKey: ['simulador-coberturas'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('coberturas')
+        .select('id, nome, valor')
+        .eq('ativo', true)
+        .order('nome') as any;
+      return (data || []) as { id: string; nome: string; valor: number | null }[];
+    },
+  });
+
+  // Fetch real benefits from database
+  const { data: beneficios = [], isLoading: loadingBeneficios } = useQuery({
+    queryKey: ['simulador-beneficios'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('benefits')
+        .select('id, name, preco_sugerido')
+        .eq('is_active', true)
+        .order('name');
+      return (data || []).map(b => ({ id: b.id, nome: b.name, preco_sugerido: b.preco_sugerido }));
+    },
+  });
+
+  // Fetch active associates
   const { data: baseAtiva, isLoading: loadingBase } = useQuery({
     queryKey: ['simulador-base-ativa'],
     queryFn: async () => {
-      const { data, count } = await supabase
+      const { count } = await supabase
         .from('associados')
-        .select('id', { count: 'exact' })
+        .select('id', { count: 'exact', head: true })
         .eq('status', 'ativo');
       return { total: count || 0 };
     },
@@ -82,28 +98,11 @@ export function SimuladorRateio() {
         .gte('data_ocorrencia', inicioMes)
         .lt('data_ocorrencia', fimMes);
 
-      // Group by benefit type
-      const porBeneficio: Record<string, { total: number; count: number; cotaParticipacao: number }> = {};
-      BENEFICIO_TIPOS.forEach(b => {
-        porBeneficio[b.key] = { total: 0, count: 0, cotaParticipacao: 0 };
-      });
-
-      data?.forEach((s: any) => {
-        const tipo = mapSinistroTipo(s.tipo);
-        if (porBeneficio[tipo]) {
-          const bruto = s.valor_indenizacao || 0;
-          const cota = s.valor_cota_participacao || 0;
-          porBeneficio[tipo].total += Math.max(0, bruto - cota);
-          porBeneficio[tipo].count += 1;
-          porBeneficio[tipo].cotaParticipacao += cota;
-        }
-      });
-
-      return porBeneficio;
+      return data || [];
     },
   });
 
-  // Fetch existing fechamento for this month
+  // Fetch existing fechamento
   const { data: fechamentoExistente } = useQuery({
     queryKey: ['simulador-fechamento-existente', mesRef],
     queryFn: async (): Promise<{ id: string; status: string } | null> => {
@@ -133,29 +132,66 @@ export function SimuladorRateio() {
   const taxaAdmin = Number(configs?.['taxa_administrativa_padrao']) || 49.90;
   const totalCotas = cotasData?.totalCotas || 1;
 
-  // Calculate projections
-  const projecoes = useMemo(() => {
-    if (!sinistrosData) return [];
-    return BENEFICIO_TIPOS.map(b => {
-      const dados = sinistrosData[b.key];
-      const custoLiquido = dados?.total || 0;
-      const valorPorCota = totalCotas > 0 ? custoLiquido / totalCotas : 0;
+  // Map sinistros to coberturas/beneficios
+  const projecoesCoberturas = useMemo(() => {
+    return coberturas.map(c => {
+      // Match sinistros by tipo containing cobertura name
+      const matched = (sinistrosData || []).filter(s => {
+        const tipo = (s.tipo || '').toLowerCase();
+        const nome = c.nome.toLowerCase();
+        return tipo.includes(nome) || nome.includes(tipo);
+      });
+      const custoLiquido = matched.reduce((sum, s) => {
+        const bruto = s.valor_indenizacao || 0;
+        const cota = s.valor_cota_participacao || 0;
+        return sum + Math.max(0, bruto - cota);
+      }, 0);
+      const cotaParticipacao = matched.reduce((sum, s) => sum + (s.valor_cota_participacao || 0), 0);
       return {
-        ...b,
+        id: c.id,
+        nome: c.nome,
+        valorCatalogo: c.valor || 0,
+        eventos: matched.length,
+        cotaParticipacao,
         custoLiquido,
-        eventos: dados?.count || 0,
-        cotaParticipacao: dados?.cotaParticipacao || 0,
-        valorPorCota,
+        valorPorCota: totalCotas > 0 ? custoLiquido / totalCotas : 0,
       };
     });
-  }, [sinistrosData, totalCotas]);
+  }, [coberturas, sinistrosData, totalCotas]);
 
-  const totalRateio = projecoes.reduce((s, p) => s + p.custoLiquido, 0);
+  const projecoesBeneficios = useMemo(() => {
+    return beneficios.map(b => {
+      const matched = (sinistrosData || []).filter(s => {
+        const tipo = (s.tipo || '').toLowerCase();
+        const nome = b.nome.toLowerCase();
+        return tipo.includes(nome) || nome.includes(tipo);
+      });
+      const custoLiquido = matched.reduce((sum, s) => {
+        const bruto = s.valor_indenizacao || 0;
+        const cota = s.valor_cota_participacao || 0;
+        return sum + Math.max(0, bruto - cota);
+      }, 0);
+      const cotaParticipacao = matched.reduce((sum, s) => sum + (s.valor_cota_participacao || 0), 0);
+      return {
+        id: b.id,
+        nome: b.nome,
+        valorCatalogo: b.preco_sugerido || 0,
+        eventos: matched.length,
+        cotaParticipacao,
+        custoLiquido,
+        valorPorCota: totalCotas > 0 ? custoLiquido / totalCotas : 0,
+      };
+    });
+  }, [beneficios, sinistrosData, totalCotas]);
+
+  const totalRateioCoberturas = projecoesCoberturas.reduce((s, p) => s + p.custoLiquido, 0);
+  const totalRateioBeneficios = projecoesBeneficios.reduce((s, p) => s + p.custoLiquido, 0);
+  const totalRateio = totalRateioCoberturas + totalRateioBeneficios;
   const rateioMedioPorAssociado = (baseAtiva?.total || 1) > 0
     ? (totalRateio / (baseAtiva?.total || 1)) + taxaAdmin
     : 0;
 
-  const isLoading = loadingBase || loadingCotas || loadingSinistros;
+  const isLoading = loadingBase || loadingCotas || loadingSinistros || loadingCoberturas || loadingBeneficios;
 
   if (isLoading) {
     return (
@@ -168,6 +204,79 @@ export function SimuladorRateio() {
       </div>
     );
   }
+
+  const renderTable = (
+    items: typeof projecoesCoberturas,
+    icon: React.ReactNode,
+    title: string,
+    description: string,
+    totalCusto: number,
+  ) => (
+    <Card>
+      <CardHeader>
+        <CardTitle className="text-base flex items-center gap-2">
+          {icon}
+          {title}
+        </CardTitle>
+        <CardDescription>{description}</CardDescription>
+      </CardHeader>
+      <CardContent>
+        {items.length === 0 ? (
+          <p className="text-sm text-muted-foreground py-4 text-center">Nenhum item cadastrado.</p>
+        ) : (
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead>Nome</TableHead>
+                <TableHead className="text-right">Valor Catálogo</TableHead>
+                <TableHead className="text-center">Eventos</TableHead>
+                <TableHead className="text-right">Cota Participação</TableHead>
+                <TableHead className="text-right">Custo Líquido</TableHead>
+                <TableHead className="text-right">Valor / Cota</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              {items.map(p => (
+                <TableRow key={p.id}>
+                  <TableCell className="font-medium">{p.nome}</TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {formatCurrency(p.valorCatalogo)}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    <Badge variant={p.eventos > 0 ? 'default' : 'secondary'}>{p.eventos}</Badge>
+                  </TableCell>
+                  <TableCell className="text-right text-muted-foreground">
+                    {formatCurrency(p.cotaParticipacao)}
+                  </TableCell>
+                  <TableCell className="text-right font-medium">
+                    {formatCurrency(p.custoLiquido)}
+                  </TableCell>
+                  <TableCell className="text-right">
+                    <Badge variant="outline">{formatCurrency(p.valorPorCota)}</Badge>
+                  </TableCell>
+                </TableRow>
+              ))}
+              <TableRow className="border-t-2 font-bold">
+                <TableCell colSpan={2}>Total</TableCell>
+                <TableCell className="text-center">
+                  {items.reduce((s, p) => s + p.eventos, 0)}
+                </TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(items.reduce((s, p) => s + p.cotaParticipacao, 0))}
+                </TableCell>
+                <TableCell className="text-right">
+                  {formatCurrency(totalCusto)}
+                </TableCell>
+                <TableCell className="text-right">
+                  <Badge>{formatCurrency(totalCotas > 0 ? totalCusto / totalCotas : 0)}</Badge>
+                </TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        )}
+      </CardContent>
+    </Card>
+  );
 
   return (
     <div className="space-y-6">
@@ -246,60 +355,23 @@ export function SimuladorRateio() {
         </Card>
       </div>
 
-      {/* Breakdown by benefit */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="text-base">Projeção por Benefício</CardTitle>
-          <CardDescription>Custo líquido (já descontada a cota de participação) dividido pelas cotas ativas</CardDescription>
-        </CardHeader>
-        <CardContent>
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Benefício</TableHead>
-                <TableHead className="text-center">Eventos</TableHead>
-                <TableHead className="text-right">Cota Participação</TableHead>
-                <TableHead className="text-right">Custo Líquido</TableHead>
-                <TableHead className="text-right">Valor / Cota</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {projecoes.map(p => (
-                <TableRow key={p.key}>
-                  <TableCell className="font-medium">{p.label}</TableCell>
-                  <TableCell className="text-center">
-                    <Badge variant={p.eventos > 0 ? 'default' : 'secondary'}>{p.eventos}</Badge>
-                  </TableCell>
-                  <TableCell className="text-right text-muted-foreground">
-                    {formatCurrency(p.cotaParticipacao)}
-                  </TableCell>
-                  <TableCell className="text-right font-medium">
-                    {formatCurrency(p.custoLiquido)}
-                  </TableCell>
-                  <TableCell className="text-right">
-                    <Badge variant="outline">{formatCurrency(p.valorPorCota)}</Badge>
-                  </TableCell>
-                </TableRow>
-              ))}
-              <TableRow className="border-t-2 font-bold">
-                <TableCell>Total</TableCell>
-                <TableCell className="text-center">
-                  {projecoes.reduce((s, p) => s + p.eventos, 0)}
-                </TableCell>
-                <TableCell className="text-right">
-                  {formatCurrency(projecoes.reduce((s, p) => s + p.cotaParticipacao, 0))}
-                </TableCell>
-                <TableCell className="text-right">
-                  {formatCurrency(totalRateio)}
-                </TableCell>
-                <TableCell className="text-right">
-                  <Badge>{formatCurrency(totalCotas > 0 ? totalRateio / totalCotas : 0)}</Badge>
-                </TableCell>
-              </TableRow>
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
+      {/* Coberturas Table */}
+      {renderTable(
+        projecoesCoberturas,
+        <Shield className="h-4 w-4 text-primary" />,
+        `Coberturas (${coberturas.length})`,
+        'Eventos cobertos contratualmente — custo líquido dividido pelas cotas ativas',
+        totalRateioCoberturas,
+      )}
+
+      {/* Benefícios Table */}
+      {renderTable(
+        projecoesBeneficios,
+        <Gift className="h-4 w-4 text-accent-foreground" />,
+        `Benefícios (${beneficios.length})`,
+        'Serviços adicionais — custo líquido dividido pelas cotas ativas',
+        totalRateioBeneficios,
+      )}
 
       {/* Action */}
       <div className="flex justify-end">
@@ -316,15 +388,4 @@ export function SimuladorRateio() {
       </div>
     </div>
   );
-}
-
-function mapSinistroTipo(tipo: string | null): string {
-  if (!tipo) return 'operacional';
-  const t = tipo.toLowerCase();
-  if (t.includes('colisao') || t.includes('colisão') || t.includes('perda_total') || t.includes('incendio') || t.includes('incêndio')) return 'colisao';
-  if (t.includes('roubo') || t.includes('furto')) return 'roubo_furto';
-  if (t.includes('assistencia') || t.includes('assistência') || t.includes('reboque') || t.includes('guincho')) return 'assistencia';
-  if (t.includes('terceiro')) return 'terceiros';
-  if (t.includes('vidro') || t.includes('para-brisa') || t.includes('parabrisa')) return 'vidros';
-  return 'operacional';
 }
