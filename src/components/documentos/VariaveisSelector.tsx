@@ -96,8 +96,11 @@ const VARIAVEIS_DISPONIVEIS: Record<string, { codigo: string; descricao: string 
     { codigo: 'plano.nome', descricao: 'Nome do plano contratado' },
     { codigo: 'plano.tipo', descricao: 'Tipo do plano' },
     { codigo: 'plano.linha', descricao: 'Linha do plano' },
-    
-    { codigo: 'plano.coberturas', descricao: 'Lista de coberturas' },
+    { codigo: 'plano.coberturas', descricao: 'Lista simples de coberturas (texto)' },
+    { codigo: 'plano.beneficios', descricao: 'Lista simples de benefícios (texto)' },
+    { codigo: 'plano.tabela_coberturas', descricao: 'Tabela HTML de coberturas com detalhes' },
+    { codigo: 'plano.tabela_beneficios', descricao: 'Tabela HTML de benefícios com detalhes' },
+    { codigo: 'plano.tabela_completa', descricao: 'Tabela completa (coberturas + benefícios)' },
     { codigo: 'plano.valor_base', descricao: 'Valor base mensal (R$)' },
     { codigo: 'plano.cobertura_fipe', descricao: 'Percentual cobertura FIPE' },
     { codigo: 'plano.cota_participacao', descricao: 'Percentual cota participação' },
