@@ -18,6 +18,7 @@ import {
 } from '@/components/ui/select';
 import { useCreateProductLine, useUpdateProductLine } from '@/hooks/usePlansAdmin';
 import type { ProductLine } from '@/types/plans';
+import { EligibilityRulesEditor } from './EligibilityRulesEditor';
 
 interface LinhaFormModalProps {
   open: boolean;
