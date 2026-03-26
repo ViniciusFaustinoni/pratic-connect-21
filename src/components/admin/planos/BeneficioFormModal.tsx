@@ -229,41 +229,12 @@ export function BeneficioFormModal({
             </div>
           </div>
 
-          {/* Seção de Exclusão por Categoria */}
-          <div className="space-y-3 pt-4 border-t">
-            <div className="flex items-center gap-2">
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-              <Label className="font-medium">Excluir para Categorias Especiais</Label>
+          {/* Regras de Elegibilidade */}
+          {isEditing && benefit && (
+            <div className="border-t pt-4">
+              <EligibilityRulesEditor entityType="beneficio" entityId={benefit.id} />
             </div>
-            <p className="text-xs text-muted-foreground">
-              Selecione as categorias de veículo que <strong>NÃO</strong> terão direito a este benefício.
-              Veículos destas categorias não verão este benefício em cotações, propostas ou contratos.
-            </p>
-            <div className="grid grid-cols-1 gap-2 max-h-[180px] overflow-y-auto p-2 border rounded-md bg-muted/20">
-              {CATEGORIAS_PARA_EXCLUSAO.map((cat) => (
-                <div key={cat.value} className="flex items-center gap-2">
-                  <Checkbox
-                    id={`exclude-${cat.value}`}
-                    checked={excludedCategories.includes(cat.value)}
-                    onCheckedChange={(checked) =>
-                      toggleCategoryExclusion(cat.value, !!checked)
-                    }
-                  />
-                  <Label 
-                    htmlFor={`exclude-${cat.value}`}
-                    className="text-sm font-normal cursor-pointer"
-                  >
-                    {cat.label}
-                  </Label>
-                </div>
-              ))}
-            </div>
-            {excludedCategories.length > 0 && (
-              <p className="text-xs text-amber-600">
-                ⚠️ Este benefício será excluído para {excludedCategories.length} categoria(s)
-              </p>
-            )}
-          </div>
+          )}
 
           <div className="flex justify-end gap-2 pt-4">
             <Button
