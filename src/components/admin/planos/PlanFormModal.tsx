@@ -453,6 +453,7 @@ export function PlanFormModal({
                     <TabsTrigger value="cotas">Cotas</TabsTrigger>
                     <TabsTrigger value="beneficios">Benefícios</TabsTrigger>
                     <TabsTrigger value="elegibilidade" disabled={!isEditing}>Elegibilidade</TabsTrigger>
+                    <TabsTrigger value="regras" disabled={!isEditing}>Regras</TabsTrigger>
                     <TabsTrigger value="outros">Outros</TabsTrigger>
                   </TabsList>
 
