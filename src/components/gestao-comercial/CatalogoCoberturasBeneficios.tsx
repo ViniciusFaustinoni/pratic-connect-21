@@ -12,7 +12,7 @@ import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { EligibilityRulesEditor } from '@/components/admin/planos/EligibilityRulesEditor';
+
 
 // ── Delete Confirmation Dialog ──
 
