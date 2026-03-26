@@ -76,6 +76,7 @@ export default function GestaoComercial() {
             {activeTab === 7 && <RegrasVendaContent />}
             {activeTab === 8 && <InstalacaoRotasConfig />}
             {activeTab === 9 && <MapaAtendimento />}
+            {activeTab === 10 && <CadastrosBase />}
           </div>
         </div>
       </div>

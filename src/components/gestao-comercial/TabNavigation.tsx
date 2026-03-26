@@ -46,6 +46,7 @@ const tabGroups: TabGroup[] = [
       { label: 'Regras de Venda', shortLabel: 'Regras', icon: Gavel, description: 'Limites e comissões' },
       { label: 'Instalação e Rotas', shortLabel: 'Instalação', icon: MapPin, description: 'Bases e rotas' },
       { label: 'Mapa de Atendimento', shortLabel: 'Mapa', icon: Globe, description: 'Cobertura geográfica' },
+      { label: 'Cadastros Base', shortLabel: 'Cadastros', icon: Database, description: 'Categorias, regiões e especiais' },
     ],
   },
 ];
