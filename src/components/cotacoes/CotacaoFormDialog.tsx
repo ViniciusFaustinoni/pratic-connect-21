@@ -1514,85 +1514,71 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 Uso do Veículo
               </h3>
               
-              <div className="grid grid-cols-2 gap-3">
-                {/* Passeio */}
-                <div
-                  onClick={() => setUsoVeiculo('particular')}
-                  className={cn(
-                    "relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md",
-                    usoVeiculo === 'particular'
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                      : "border-border hover:border-primary/50"
+              <Select
+                value={usoVeiculo}
+                onValueChange={setUsoVeiculo}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o uso do veículo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiposUsoAtivos.length > 0 ? (
+                    tiposUsoAtivos.map((tipo) => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="particular">Particular</SelectItem>
+                      <SelectItem value="aplicativo">Aplicativo (Uber, 99, etc)</SelectItem>
+                    </>
                   )}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-full",
-                      usoVeiculo === 'particular'
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    )}>
-                      <Car className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        "font-semibold",
-                        usoVeiculo === 'particular' && "text-primary"
-                      )}>Passeio</p>
-                      <p className="text-xs text-muted-foreground">Uso particular</p>
-                    </div>
-                  </div>
-                  {usoVeiculo === 'particular' && (
-                    <div className="absolute top-2 right-2">
-                      <CheckCircle2 className="h-5 w-5 text-primary" />
-                    </div>
-                  )}
-                </div>
-                
-                {/* Aplicativo */}
-                <div
-                  onClick={() => setUsoVeiculo('aplicativo')}
-                  className={cn(
-                    "relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md",
-                    usoVeiculo === 'aplicativo'
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                      : "border-border hover:border-primary/50"
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-full",
-                      usoVeiculo === 'aplicativo'
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    )}>
-                      <Zap className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        "font-semibold",
-                        usoVeiculo === 'aplicativo' && "text-primary"
-                      )}>Aplicativo</p>
-                      <p className="text-xs text-muted-foreground">Uber, 99, etc</p>
-                    </div>
-                  </div>
-                  {usoVeiculo === 'aplicativo' && (
-                    <div className="absolute top-2 right-2">
-                      <CheckCircle2 className="h-5 w-5 text-primary" />
-                    </div>
-                  )}
-                </div>
-              </div>
+                </SelectContent>
+              </Select>
               
               {/* Alerta quando aplicativo é selecionado */}
-              {usoVeiculo === 'aplicativo' && (
-                <Alert className="border-blue-500/50 bg-blue-500/10">
-                  <Info className="h-4 w-4 text-blue-500" />
-                  <AlertDescription className="text-blue-700 dark:text-blue-400">
+              {(usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app')) && (
+                <Alert className="border-primary/50 bg-primary/5">
+                  <Info className="h-4 w-4 text-primary" />
+                  <AlertDescription className="text-sm">
                     Categoria APP: cota de participação será 8% (mínimo R$ 3.000).
                   </AlertDescription>
                 </Alert>
               )}
+            </div>
+
+            <Separator />
+
+            {/* BLOCO 0.4: TIPO DE PLACA */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Car className="h-4 w-4 text-primary" />
+                Tipo de Placa
+              </h3>
+              
+              <Select
+                value={tipoPlacaSelecionado}
+                onValueChange={setTipoPlacaSelecionado}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo de placa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiposPlacaAtivos.length > 0 ? (
+                    tiposPlacaAtivos.map((tipo) => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="mercosul">Mercosul</SelectItem>
+                      <SelectItem value="antiga">Antiga</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
 
             <Separator />
