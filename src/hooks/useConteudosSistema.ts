@@ -1,5 +1,6 @@
-import { useQuery } from '@tanstack/react-query';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
 
 // ============================================
 // Hook genérico para buscar configurações do banco
@@ -547,5 +548,51 @@ export function useInadimplenciaPrazos() {
       } as InadimplenciaPrazos;
     },
     staleTime: 1000 * 60 * 10,
+  });
+}
+
+// ============================================
+// Categorias de Veículo Aceitas nos Planos
+// ============================================
+
+const CATEGORIAS_VEICULO_PLANO_DEFAULT = [
+  { value: 'passeio', label: 'Passeio' },
+  { value: 'aplicativo', label: 'Aplicativo' },
+  { value: 'moto', label: 'Moto' },
+  { value: 'diesel', label: 'Diesel' },
+  { value: 'eletrico', label: 'Elétrico' },
+  { value: 'especial_plus', label: 'Especial Plus' },
+  { value: 'lancamento', label: 'Lançamento' },
+];
+
+export function useCategoriasVeiculoPlano() {
+  return useConfiguracaoJson<CategoriaVeiculo[]>('categorias_veiculo_plano', CATEGORIAS_VEICULO_PLANO_DEFAULT);
+}
+
+export function useSaveCategoriasVeiculoPlano() {
+  return useSaveConfigJson('categorias_veiculo_plano');
+}
+
+// ============================================
+// Generic save config JSON mutation
+// ============================================
+
+export function useSaveConfigJson(chave: string) {
+  const queryClient = useQueryClient();
+  return useMutation({
+    mutationFn: async (value: unknown) => {
+      const { error } = await supabase
+        .from('configuracoes')
+        .update({ valor: JSON.stringify(value) })
+        .eq('chave', chave);
+      if (error) throw error;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['configuracao', chave] });
+      toast.success('Configuração salva');
+    },
+    onError: () => {
+      toast.error('Erro ao salvar configuração');
+    },
   });
 }

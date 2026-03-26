@@ -10,6 +10,7 @@ import { RegrasVendaContent } from '@/components/gestao-comercial/RegrasVendaCon
 import { InstalacaoRotasConfig } from '@/components/gestao-comercial/InstalacaoRotasConfig';
 import RateioConfig from '@/pages/configuracoes/RateioConfig';
 import { MapaAtendimento } from '@/components/gestao-comercial/MapaAtendimento';
+import { CadastrosBase } from '@/components/gestao-comercial/CadastrosBase';
 import { LinhasTab } from '@/components/admin/planos/LinhasTab';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Info } from 'lucide-react';
@@ -26,6 +27,7 @@ const sectionBanners: Record<number, { title: string; help: string }> = {
   7: { title: 'Regras de Venda', help: 'Configure limites FIPE, comissões e taxas do processo de venda.' },
   8: { title: 'Instalação e Rotas', help: 'Cadastre bases, parceiros e organize rotas de instalação.' },
   9: { title: 'Mapa de Atendimento', help: 'Visualize a cobertura geográfica e identifique áreas descobertas.' },
+  10: { title: 'Cadastros Base', help: 'Gerencie categorias de veículo, categorias especiais e regiões de atendimento.' },
 };
 
 export default function GestaoComercial() {
@@ -74,6 +76,7 @@ export default function GestaoComercial() {
             {activeTab === 7 && <RegrasVendaContent />}
             {activeTab === 8 && <InstalacaoRotasConfig />}
             {activeTab === 9 && <MapaAtendimento />}
+            {activeTab === 10 && <CadastrosBase />}
           </div>
         </div>
       </div>

@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { Package, Shield, Gift, Calculator, ShieldCheck, Gavel, MapPin, Settings, Globe, LucideIcon, Store, Cog, Menu, ChevronDown, ChevronRight, Layers } from 'lucide-react';
+import { Package, Shield, Gift, Calculator, ShieldCheck, Gavel, MapPin, Settings, Globe, LucideIcon, Store, Cog, Menu, ChevronDown, ChevronRight, Layers, Database } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -46,6 +46,7 @@ const tabGroups: TabGroup[] = [
       { label: 'Regras de Venda', shortLabel: 'Regras', icon: Gavel, description: 'Limites e comissões' },
       { label: 'Instalação e Rotas', shortLabel: 'Instalação', icon: MapPin, description: 'Bases e rotas' },
       { label: 'Mapa de Atendimento', shortLabel: 'Mapa', icon: Globe, description: 'Cobertura geográfica' },
+      { label: 'Cadastros Base', shortLabel: 'Cadastros', icon: Database, description: 'Categorias, regiões e especiais' },
     ],
   },
 ];
