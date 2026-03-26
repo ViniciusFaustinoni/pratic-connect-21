@@ -106,6 +106,7 @@ import AprovacaoInstalacaoDetalhe from "./pages/monitoramento/AprovacaoInstalaca
 import ImprevistosPainel from "./pages/monitoramento/ImprevistosPainel";
 import PrestadoresParceiros from "./pages/monitoramento/PrestadoresParceiros";
 import RegioesAtendimento from "./pages/monitoramento/RegioesAtendimento";
+import MapaAtendimentoPage from "./pages/monitoramento/MapaAtendimentoPage";
 import VistoriasPrestadoresDashboard from "./pages/monitoramento/VistoriasPrestadoresDashboard";
 import Oficinas from "./pages/oficinas/Oficinas";
 import AutoCenters from "./pages/oficinas/AutoCenters";
