@@ -10,6 +10,7 @@ import { RegrasVendaContent } from '@/components/gestao-comercial/RegrasVendaCon
 import { InstalacaoRotasConfig } from '@/components/gestao-comercial/InstalacaoRotasConfig';
 import RateioConfig from '@/pages/configuracoes/RateioConfig';
 import { MapaAtendimento } from '@/components/gestao-comercial/MapaAtendimento';
+import { CadastrosBase } from '@/components/gestao-comercial/CadastrosBase';
 import { LinhasTab } from '@/components/admin/planos/LinhasTab';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Info } from 'lucide-react';
