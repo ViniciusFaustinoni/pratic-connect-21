@@ -16,9 +16,15 @@ import { toast } from 'sonner';
 
 function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () => void; item?: any }) {
   const qc = useQueryClient();
-  const [nome, setNome] = useState(item?.nome || '');
-  const [descricao, setDescricao] = useState(item?.descricao || '');
-  const [valor, setValor] = useState(item?.valor?.toString() || '0');
+  const [nome, setNome] = useState('');
+  const [descricao, setDescricao] = useState('');
+  const [valor, setValor] = useState('0');
+
+  useEffect(() => {
+    setNome(item?.nome || '');
+    setDescricao(item?.descricao || '');
+    setValor(item?.valor?.toString() || '0');
+  }, [item, open]);
 
   const mutation = useMutation({
     mutationFn: async () => {
