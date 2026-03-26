@@ -96,9 +96,9 @@ export function SimuladorRateio() {
         .select('tipo, valor_indenizacao, valor_cota_participacao')
         .in('status', ['aprovado', 'pago', 'encerrado'])
         .gte('data_ocorrencia', inicioMes)
-        .lt('data_ocorrencia', fimMes);
+        .lt('data_ocorrencia', fimMes) as any;
 
-      return data || [];
+      return (data || []) as { tipo: string | null; valor_indenizacao: number | null; valor_cota_participacao: number | null }[];
     },
   });
 
