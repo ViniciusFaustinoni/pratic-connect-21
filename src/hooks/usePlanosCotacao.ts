@@ -235,6 +235,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 5 * 60 * 1000,
   });
 
+  // Buscar regras de elegibilidade unificadas
+  const { data: allEligibilityRules = [], isLoading: eligibilityRulesLoading } = useAllEligibilityRules();
+
   // Buscar exclusões de benefícios por categoria
   const { data: benefitExclusions, isLoading: benefitExclusionsLoading } = useQuery({
     queryKey: ['benefit_exclusions_cotacao'],
