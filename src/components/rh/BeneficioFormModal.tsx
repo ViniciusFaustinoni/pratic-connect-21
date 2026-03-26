@@ -9,7 +9,7 @@ import { Loader2 } from 'lucide-react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
-import { EligibilityRulesEditor } from '@/components/admin/planos/EligibilityRulesEditor';
+
 
 interface Beneficio {
   id: string;
@@ -175,12 +175,6 @@ export function BeneficioFormModal({ open, onClose, beneficio, mode }: Beneficio
             <Switch checked={ativo} onCheckedChange={setAtivo} disabled={isView} />
           </div>
 
-          {/* Regras de Elegibilidade */}
-          {mode === 'edit' && beneficio && (
-            <div className="border-t pt-4">
-              <EligibilityRulesEditor entityType="beneficio" entityId={beneficio.id} />
-            </div>
-          )}
         </div>
 
         <DialogFooter>
