@@ -149,8 +149,9 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
         // Rebuild beneficios links
         await supabase.from('planos_beneficios').delete().eq('plano_id', planoId);
         if (selectedBeneficios.size > 0) {
+          const bens = benefits.filter(b => selectedBeneficios.has(b.id));
           await supabase.from('planos_beneficios').insert(
-            Array.from(selectedBeneficios).map((bid, i) => ({ plano_id: planoId, benefit_id: bid, display_order: i }))
+            bens.map((b, i) => ({ plano_id: planoId, benefit_id: b.id, beneficio: b.name, display_order: i }))
           );
         }
 
