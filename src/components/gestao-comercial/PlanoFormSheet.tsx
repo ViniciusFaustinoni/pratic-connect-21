@@ -51,6 +51,11 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [selMarcas, setSelMarcas] = useState<Set<string>>(new Set());
   const [selPlaca, setSelPlaca] = useState<Set<string>>(new Set());
   const [selCombustivel, setSelCombustivel] = useState<Set<string>>(new Set());
+  const [fipeMin, setFipeMin] = useState<string>('');
+  const [fipeMax, setFipeMax] = useState<string>('');
+  const [anoMin, setAnoMin] = useState<string>('');
+  const [anoMax, setAnoMax] = useState<string>('');
+
 
   // Load existing plan
   const { data: existingPlan, isLoading: loadingPlan } = useQuery({
@@ -102,6 +107,16 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           case 'tipo_uso': setSelUso(vals); break;
           case 'marca_modelo': setSelMarcas(vals); break;
           case 'combustivel': setSelCombustivel(vals); break;
+          case 'fipe_range': {
+            if (config.min) setFipeMin(String(config.min));
+            if (config.max) setFipeMax(String(config.max));
+            break;
+          }
+          case 'ano_range': {
+            if (config.min) setAnoMin(String(config.min));
+            if (config.max) setAnoMax(String(config.max));
+            break;
+          }
         }
       }
     }
@@ -219,6 +234,21 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
     addRule('tipo_uso', Array.from(selUso));
     addRule('marca_modelo', Array.from(selMarcas));
     addRule('combustivel', Array.from(selCombustivel));
+
+    // FIPE range
+    const fMin = fipeMin ? parseFloat(fipeMin) : null;
+    const fMax = fipeMax ? parseFloat(fipeMax) : null;
+    if (fMin !== null || fMax !== null) {
+      rules.push({ entity_type: 'plano', entity_id: entityId, rule_type: 'fipe_range', rule_mode: 'include', rule_config: { min: fMin || 0, max: fMax || 99999999 } });
+    }
+
+    // Ano range
+    const aMin = anoMin ? parseInt(anoMin) : null;
+    const aMax = anoMax ? parseInt(anoMax) : null;
+    if (aMin !== null || aMax !== null) {
+      rules.push({ entity_type: 'plano', entity_id: entityId, rule_type: 'ano_range', rule_mode: 'include', rule_config: { min: aMin || 1900, max: aMax || 9999 } });
+    }
+
     if (rules.length > 0) {
       await supabase.from('entity_eligibility_rules').insert(rules);
     }
@@ -255,8 +285,16 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       const names = combustiveis.filter(c => selCombustivel.has(c.value)).map(c => c.label);
       parts.push(`Combustível: ${names.join(', ')}`);
     }
+    if (fipeMin || fipeMax) {
+      const min = fipeMin ? `R$ ${Number(fipeMin).toLocaleString('pt-BR')}` : '0';
+      const max = fipeMax ? `R$ ${Number(fipeMax).toLocaleString('pt-BR')}` : '∞';
+      parts.push(`FIPE: ${min} – ${max}`);
+    }
+    if (anoMin || anoMax) {
+      parts.push(`Ano: ${anoMin || '—'} a ${anoMax || '—'}`);
+    }
     return parts;
-  }, [selRegioes, selTipoVeiculo, selUso, selMarcas, selPlaca, selCombustivel, regioes, categoriasVeiculo, tiposUso, tiposPlaca, combustiveis]);
+  }, [selRegioes, selTipoVeiculo, selUso, selMarcas, selPlaca, selCombustivel, fipeMin, fipeMax, anoMin, anoMax, regioes, categoriasVeiculo, tiposUso, tiposPlaca, combustiveis]);
 
   if (planoId && loadingPlan) {
     return (
@@ -340,6 +378,52 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           <section className="space-y-4">
             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Regras de Elegibilidade</h3>
             <p className="text-xs text-muted-foreground">Campos opcionais — se não preenchido, o plano aparece para todos.</p>
+
+            {/* Faixa FIPE */}
+            <div>
+              <Label className="text-xs">Faixa de Valor FIPE (R$)</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="number"
+                  placeholder="Mínimo"
+                  value={fipeMin}
+                  onChange={e => setFipeMin(e.target.value)}
+                  className="flex-1"
+                />
+                <span className="self-center text-muted-foreground text-xs">até</span>
+                <Input
+                  type="number"
+                  placeholder="Máximo"
+                  value={fipeMax}
+                  onChange={e => setFipeMax(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">Deixe em branco para aceitar qualquer valor</p>
+            </div>
+
+            {/* Faixa de Ano */}
+            <div>
+              <Label className="text-xs">Faixa de Ano do Veículo</Label>
+              <div className="flex gap-2 mt-1">
+                <Input
+                  type="number"
+                  placeholder="De"
+                  value={anoMin}
+                  onChange={e => setAnoMin(e.target.value)}
+                  className="flex-1"
+                />
+                <span className="self-center text-muted-foreground text-xs">até</span>
+                <Input
+                  type="number"
+                  placeholder="Até"
+                  value={anoMax}
+                  onChange={e => setAnoMax(e.target.value)}
+                  className="flex-1"
+                />
+              </div>
+              <p className="text-[10px] text-muted-foreground mt-1">Deixe em branco para aceitar qualquer ano</p>
+            </div>
 
             {/* Regiões */}
             {regioes.length > 0 && (
