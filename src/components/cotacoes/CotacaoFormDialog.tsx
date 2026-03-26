@@ -1899,6 +1899,52 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               })()}
             </div>
 
+            {/* BLOCO: COMBUSTÍVEL (detectado via FIPE ou manual) */}
+            {(veiculoEncontrado || valorFipe > 0) && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Fuel className="h-4 w-4 text-primary" />
+                    Combustível
+                  </h3>
+                  
+                  <Select
+                    value={combustivelSelecionado}
+                    onValueChange={setCombustivelSelecionado}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o combustível" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {combustiveisBanco.length > 0 ? (
+                        combustiveisBanco.map((c) => (
+                          <SelectItem key={c.value} value={c.value}>
+                            {c.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <>
+                          <SelectItem value="flex">Flex (Gasolina/Etanol)</SelectItem>
+                          <SelectItem value="gasolina">Gasolina</SelectItem>
+                          <SelectItem value="diesel">Diesel</SelectItem>
+                          <SelectItem value="eletrico">Elétrico</SelectItem>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  
+                  {veiculoEncontrado?.vehicleData?.combustivel && (
+                    <p className="text-xs text-muted-foreground">
+                      Detectado via FIPE: {veiculoEncontrado.vehicleData.combustivel}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            <Separator />
+
             {/* BLOCO 2: CONDIÇÕES ESPECIAIS / DESÁGIOS */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
