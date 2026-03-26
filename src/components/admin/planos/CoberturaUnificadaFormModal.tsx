@@ -174,6 +174,13 @@ export function CoberturaUnificadaFormModal({
             </div>
           </div>
 
+          {/* Regras de Elegibilidade */}
+          {isEditing && cobertura && (
+            <div className="border-t pt-4">
+              <EligibilityRulesEditor entityType="cobertura" entityId={cobertura.id} />
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-4">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>
               Cancelar

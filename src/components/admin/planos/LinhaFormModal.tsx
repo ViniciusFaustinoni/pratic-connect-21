@@ -238,6 +238,13 @@ export function LinhaFormModal({
             </div>
           </div>
 
+          {/* Regras de Elegibilidade */}
+          {isEditing && productLine && (
+            <div className="border-t pt-4">
+              <EligibilityRulesEditor entityType="linha" entityId={productLine.id} />
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-4">
             <Button
               type="button"

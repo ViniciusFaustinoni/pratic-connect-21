@@ -174,6 +174,13 @@ export function BeneficioFormModal({ open, onClose, beneficio, mode }: Beneficio
             <Label>Ativo</Label>
             <Switch checked={ativo} onCheckedChange={setAtivo} disabled={isView} />
           </div>
+
+          {/* Regras de Elegibilidade */}
+          {mode === 'edit' && beneficio && (
+            <div className="border-t pt-4">
+              <EligibilityRulesEditor entityType="beneficio" entityId={beneficio.id} />
+            </div>
+          )}
         </div>
 
         <DialogFooter>
