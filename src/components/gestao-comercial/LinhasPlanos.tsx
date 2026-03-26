@@ -1,0 +1,208 @@
+import { useState } from 'react';
+import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import { toast } from 'sonner';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import { Label } from '@/components/ui/label';
+import { Switch } from '@/components/ui/switch';
+import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
+import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Plus, ChevronRight, Loader2, Pencil } from 'lucide-react';
+import { cn } from '@/lib/utils';
+import { PlanoFormSheet } from './PlanoFormSheet';
+
+// ── Data hooks ──
+
+function useLinhasComPlanos() {
+  return useQuery({
+    queryKey: ['linhas_com_planos_clean'],
+    queryFn: async () => {
+      const { data: lines, error: le } = await supabase
+        .from('product_lines')
+        .select('*')
+        .order('display_order');
+      if (le) throw le;
+
+      const { data: planos, error: pe } = await supabase
+        .from('planos')
+        .select('id, nome, ativo, product_line_id, ordem')
+        .eq('visivel_gestao', true)
+        .order('ordem');
+      if (pe) throw pe;
+
+      // Fetch linked coberturas/beneficios values for each plan
+      const planoIds = (planos || []).map(p => p.id);
+      
+      let cobValores = new Map<string, number>();
+      let benValores = new Map<string, number>();
+      
+      if (planoIds.length > 0) {
+        const { data: cobs } = await supabase
+          .from('planos_coberturas')
+          .select('plano_id, coberturas(valor)')
+          .in('plano_id', planoIds);
+        
+        for (const c of cobs || []) {
+          const prev = cobValores.get(c.plano_id) || 0;
+          cobValores.set(c.plano_id, prev + ((c.coberturas as any)?.valor || 0));
+        }
+
+        const { data: bens } = await supabase
+          .from('planos_beneficios')
+          .select('plano_id, benefits:benefit_id(preco_sugerido)')
+          .in('plano_id', planoIds);
+
+        for (const b of bens || []) {
+          const prev = benValores.get(b.plano_id) || 0;
+          benValores.set(b.plano_id, prev + ((b.benefits as any)?.preco_sugerido || 0));
+        }
+      }
+
+      return (lines || []).map(line => ({
+        ...line,
+        plans: (planos || [])
+          .filter(p => p.product_line_id === line.id)
+          .map(p => ({
+            ...p,
+            valor_mensal: (cobValores.get(p.id) || 0) + (benValores.get(p.id) || 0),
+          })),
+      }));
+    },
+  });
+}
+
+function useCreateLinha() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (nome: string) => {
+      const slug = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-');
+      const { error } = await supabase.from('product_lines').insert({ name: nome, slug, display_order: 99 });
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] }); toast.success('Linha criada'); },
+    onError: () => toast.error('Erro ao criar linha'),
+  });
+}
+
+function useUpdateLinha() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ id, name }: { id: string; name: string }) => {
+      const { error } = await supabase.from('product_lines').update({ name }).eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] }); toast.success('Linha atualizada'); },
+  });
+}
+
+// ── Linha Sheet ──
+
+function LinhaSheet({ open, onClose, linha }: { open: boolean; onClose: () => void; linha?: any }) {
+  const [nome, setNome] = useState(linha?.name || '');
+  const createMut = useCreateLinha();
+  const updateMut = useUpdateLinha();
+
+  const handleSave = () => {
+    if (linha?.id) {
+      updateMut.mutate({ id: linha.id, name: nome }, { onSuccess: onClose });
+    } else {
+      createMut.mutate(nome, { onSuccess: onClose });
+    }
+  };
+
+  const isPending = createMut.isPending || updateMut.isPending;
+
+  return (
+    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
+      <SheetContent className="sm:max-w-sm">
+        <SheetHeader><SheetTitle>{linha ? 'Editar' : 'Nova'} Linha</SheetTitle></SheetHeader>
+        <div className="space-y-4 mt-6">
+          <div><Label>Nome da Linha</Label><Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Select" autoFocus /></div>
+          <div className="flex gap-2 pt-4">
+            <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
+            <Button className="flex-1" onClick={handleSave} disabled={!nome.trim() || isPending}>
+              {isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Salvar
+            </Button>
+          </div>
+        </div>
+      </SheetContent>
+    </Sheet>
+  );
+}
+
+// ── Main Component ──
+
+export function LinhasPlanos() {
+  const { data: linhas = [], isLoading } = useLinhasComPlanos();
+  const [openLines, setOpenLines] = useState<Set<string>>(new Set());
+  const [linhaSheet, setLinhaSheet] = useState<{ open: boolean; linha?: any }>({ open: false });
+  const [planoSheet, setPlanoSheet] = useState<{ open: boolean; planoId?: string; linhaId?: string }>({ open: false });
+
+  const toggleLine = (id: string) => {
+    setOpenLines(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
+
+  if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
+
+  return (
+    <>
+      <div className="flex items-center justify-between mb-4">
+        <div>
+          <h3 className="text-sm font-semibold">Linhas e Planos</h3>
+          <p className="text-xs text-muted-foreground">{linhas.length} linhas cadastradas</p>
+        </div>
+        <Button size="sm" onClick={() => setLinhaSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Linha</Button>
+      </div>
+
+      <div className="space-y-2">
+        {linhas.map(linha => (
+          <Collapsible key={linha.id} open={openLines.has(linha.id)} onOpenChange={() => toggleLine(linha.id)}>
+            <div className="border rounded-lg overflow-hidden">
+              <CollapsibleTrigger className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left">
+                <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform', openLines.has(linha.id) && 'rotate-90')} />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-semibold">{linha.name}</p>
+                  <p className="text-xs text-muted-foreground">{linha.plans.length} plano{linha.plans.length !== 1 ? 's' : ''}</p>
+                </div>
+                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); setLinhaSheet({ open: true, linha }); }}>
+                  <Pencil className="h-3.5 w-3.5" />
+                </Button>
+              </CollapsibleTrigger>
+
+              <CollapsibleContent>
+                <div className="border-t px-4 py-2 space-y-1 bg-muted/20">
+                  {linha.plans.map((plano: any) => (
+                    <button
+                      key={plano.id}
+                      onClick={() => setPlanoSheet({ open: true, planoId: plano.id, linhaId: linha.id })}
+                      className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-background transition-colors text-left"
+                    >
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium">{plano.nome}</p>
+                      </div>
+                      <span className="text-sm font-semibold text-primary">
+                        R$ {plano.valor_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                      </span>
+                      <Switch checked={plano.ativo} className="shrink-0 pointer-events-none" />
+                    </button>
+                  ))}
+                  <Button variant="ghost" size="sm" className="w-full mt-1 text-muted-foreground" onClick={() => setPlanoSheet({ open: true, linhaId: linha.id })}>
+                    <Plus className="h-3.5 w-3.5 mr-1" />Novo Plano
+                  </Button>
+                </div>
+              </CollapsibleContent>
+            </div>
+          </Collapsible>
+        ))}
+      </div>
+
+      {linhaSheet.open && <LinhaSheet open linha={linhaSheet.linha} onClose={() => setLinhaSheet({ open: false })} />}
+      {planoSheet.open && <PlanoFormSheet open planoId={planoSheet.planoId} linhaId={planoSheet.linhaId} onClose={() => setPlanoSheet({ open: false })} />}
+    </>
+  );
+}
