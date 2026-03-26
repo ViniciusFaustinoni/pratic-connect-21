@@ -22,9 +22,8 @@ const sectionBanners: Record<number, { title: string; help: string }> = {
   4: { title: 'Elegibilidade', help: 'Controle quais veículos cada plano aceita por marca, modelo e ano.' },
   5: { title: 'Regras de Venda', help: 'Configure limites FIPE, comissões e taxas do processo de venda.' },
   6: { title: 'Instalação e Rotas', help: 'Cadastre bases, parceiros e organize rotas de instalação.' },
-  7: { title: 'Mapa de Atendimento', help: 'Visualize a cobertura geográfica e identifique áreas descobertas.' },
-  8: { title: 'Tabelas de Apoio', help: 'Gerencie categorias de veículo, regiões, tipos de uso e tipos de placa.' },
-  9: { title: 'Marcas, Modelos e Combustíveis', help: 'Cadastre marcas, modelos e combustíveis com importação em lote.' },
+  7: { title: 'Tabelas de Apoio', help: 'Gerencie categorias de veículo, regiões, tipos de uso e tipos de placa.' },
+  8: { title: 'Marcas, Modelos e Combustíveis', help: 'Cadastre marcas, modelos e combustíveis com importação em lote.' },
 };
 
 export default function GestaoComercial() {
