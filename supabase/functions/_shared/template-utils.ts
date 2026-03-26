@@ -5,6 +5,8 @@
 import {
   TermoAfiliacaoData,
   RegrasVendaData,
+  CoberturaDetalhada,
+  BeneficioDetalhado,
   formatCPF,
   formatPhone,
   formatCEP,
