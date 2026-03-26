@@ -65,17 +65,6 @@ export function BeneficioFormModal({
     is_active: true,
   });
   
-  // Estado para categorias excluídas
-  const [excludedCategories, setExcludedCategories] = useState<string[]>([]);
-
-  // Carregar exclusões existentes quando o benefício mudar
-  useEffect(() => {
-    if (existingExclusions) {
-      setExcludedCategories(existingExclusions.map((e) => e.categoria_veiculo));
-    } else {
-      setExcludedCategories([]);
-    }
-  }, [existingExclusions]);
 
   useEffect(() => {
     if (benefit) {
