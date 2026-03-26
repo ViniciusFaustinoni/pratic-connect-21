@@ -21,7 +21,8 @@ import {
   useGlossario, 
   useRegrasImportantes, 
   useCotasTaxas, 
-  useTaxasProcedimentos 
+  useTaxasProcedimentos,
+  useCategoriasVeiculoPlano,
 } from '@/hooks/useConteudosSistema';
 import { useCotaParticipacaoDefault, useCotaMinimaDefault } from '@/hooks/useConteudosSistema';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto } from '@/hooks/useConfigRastreador';
