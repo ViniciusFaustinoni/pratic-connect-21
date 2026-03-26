@@ -187,8 +187,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [buscaIndicador, setBuscaIndicador] = useState('');
   const { data: resultadosIndicador = [], isLoading: buscandoIndicador } = useAssociadoSearch(buscaIndicador);
   
-  // Estado para uso do veículo (passeio ou aplicativo)
-  const [usoVeiculo, setUsoVeiculo] = useState<'particular' | 'aplicativo'>('particular');
+  // Estado para uso do veículo (dinâmico das Tabelas de Apoio)
+  const [usoVeiculo, setUsoVeiculo] = useState<string>('particular');
+  
+  // Estado para tipo de placa
+  const [tipoPlacaSelecionado, setTipoPlacaSelecionado] = useState<string>('');
+  
+  // Estado para combustível detectado/selecionado
+  const [combustivelSelecionado, setCombustivelSelecionado] = useState<string>('');
   
   // Estados para busca por placa
   const [placa, setPlaca] = useState('');
