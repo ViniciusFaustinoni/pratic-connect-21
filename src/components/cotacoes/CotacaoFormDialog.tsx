@@ -505,6 +505,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setDiaVencimento(null);
       setSolicitarFipeMenor(false);
       setJustificativaFipeMenor('');
+      setTipoPlacaSelecionado('');
+      setCombustivelSelecionado('');
     }
   }, [open, leadId, cotacaoParaEditar, cotacaoBase, form]);
 
