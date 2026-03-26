@@ -4,9 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
 import { useAssociadoSearch } from '@/hooks/useAssociadoSearch';
 
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Fuel } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
-import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useCarenciaVidrosDias, useMigracaoConfig, useObservacoesCategoria, useMarcasAceitasMotos } from '@/hooks/useConteudosSistema';
+import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useCarenciaVidrosDias, useMigracaoConfig, useObservacoesCategoria, useMarcasAceitasMotos, useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistema';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { MigracaoToggle, type MigracaoState } from '@/components/cotacoes/MigracaoToggle';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useForm } from 'react-hook-form';
