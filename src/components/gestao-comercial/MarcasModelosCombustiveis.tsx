@@ -91,6 +91,9 @@ function MarcasModelosTab() {
           <p className="text-xs text-muted-foreground">{grouped.length} marcas cadastradas</p>
         </div>
         <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setFipeDialogOpen(true)}>
+            <Download className="h-4 w-4 mr-1" />Importar da FIPE
+          </Button>
           <Button size="sm" variant="outline" onClick={openImport}><Upload className="h-4 w-4 mr-1" />Importar</Button>
           <Button size="sm" onClick={openNewMarca}><Plus className="h-4 w-4 mr-1" />Nova Marca</Button>
         </div>
