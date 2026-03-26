@@ -18,6 +18,7 @@ import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { maskPlaca } from '@/lib/validations';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
 
