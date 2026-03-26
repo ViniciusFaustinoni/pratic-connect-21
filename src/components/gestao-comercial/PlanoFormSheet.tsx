@@ -285,8 +285,16 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       const names = combustiveis.filter(c => selCombustivel.has(c.value)).map(c => c.label);
       parts.push(`Combustível: ${names.join(', ')}`);
     }
+    if (fipeMin || fipeMax) {
+      const min = fipeMin ? `R$ ${Number(fipeMin).toLocaleString('pt-BR')}` : '0';
+      const max = fipeMax ? `R$ ${Number(fipeMax).toLocaleString('pt-BR')}` : '∞';
+      parts.push(`FIPE: ${min} – ${max}`);
+    }
+    if (anoMin || anoMax) {
+      parts.push(`Ano: ${anoMin || '—'} a ${anoMax || '—'}`);
+    }
     return parts;
-  }, [selRegioes, selTipoVeiculo, selUso, selMarcas, selPlaca, selCombustivel, regioes, categoriasVeiculo, tiposUso, tiposPlaca, combustiveis]);
+  }, [selRegioes, selTipoVeiculo, selUso, selMarcas, selPlaca, selCombustivel, fipeMin, fipeMax, anoMin, anoMax, regioes, categoriasVeiculo, tiposUso, tiposPlaca, combustiveis]);
 
   if (planoId && loadingPlan) {
     return (
