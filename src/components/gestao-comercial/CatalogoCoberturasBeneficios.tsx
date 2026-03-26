@@ -71,9 +71,15 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
 
 function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () => void; item?: any }) {
   const qc = useQueryClient();
-  const [name, setName] = useState(item?.name || '');
-  const [description, setDescription] = useState(item?.description || '');
-  const [valor, setValor] = useState(item?.preco_sugerido?.toString() || '0');
+  const [name, setName] = useState('');
+  const [description, setDescription] = useState('');
+  const [valor, setValor] = useState('0');
+
+  useEffect(() => {
+    setName(item?.name || '');
+    setDescription(item?.description || '');
+    setValor(item?.preco_sugerido?.toString() || '0');
+  }, [item, open]);
 
   const mutation = useMutation({
     mutationFn: async () => {
