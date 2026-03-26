@@ -22,9 +22,9 @@ export function CategoriasVeiculoTab() {
   const openEdit = (idx: number) => { setEditIndex(idx); setLabel(categorias[idx].label); setSheetOpen(true); };
 
   const handleSave = () => {
-    const newItem = { value: editIndex !== null ? categorias[editIndex].value : slugify(label), label };
-    const updated = [...categorias];
-    if (editIndex !== null) updated[editIndex] = newItem;
+    const newItem = { value: editIndex !== null ? categorias[editIndex].value : slugify(label), label } as any;
+    const updated = [...categorias] as any[];
+    if (editIndex !== null) updated[editIndex] = { ...updated[editIndex], label };
     else updated.push(newItem);
     saveMutation.mutate(updated, { onSuccess: () => setSheetOpen(false) });
   };
