@@ -5,10 +5,13 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, ChevronRight, Loader2, Upload } from 'lucide-react';
+import { Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter } from '@/components/ui/dialog';
+import { Plus, ChevronRight, Loader2, Upload, Download } from 'lucide-react';
 import { useMarcasModelos, useCreateMarcaModelo, useToggleMarcaModelo, useBulkInsertMarcasModelos } from '@/hooks/useMarcasModelos';
+import { useImportFipeMarcas } from '@/hooks/useImportFipeMarcas';
 
 import { cn } from '@/lib/utils';
 import { toast } from 'sonner';
