@@ -99,7 +99,7 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
       }
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['benefits'] }); toast.success('Benefício salvo'); onClose(); },
-    onError: () => toast.error('Erro ao salvar'),
+    onError: (err: any) => toast.error(err?.message?.includes('duplicate') || err?.code === '23505' ? 'Já existe um benefício com esse nome' : 'Erro ao salvar'),
   });
 
   return (
