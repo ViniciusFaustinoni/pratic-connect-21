@@ -82,14 +82,7 @@ import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
 import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
 
-// Regiões disponíveis no sistema
-const REGIOES = [
-  { value: 'rio_de_janeiro', label: 'Rio de Janeiro - Capital e Região Metropolitana' },
-  { value: 'regiao_lagos', label: 'Região dos Lagos' },
-  { value: 'sao_paulo', label: 'São Paulo - Capital e Região Metropolitana' },
-  { value: 'interior_rj', label: 'Interior do Rio de Janeiro' },
-  { value: 'interior_sp', label: 'Interior de São Paulo' },
-];
+// Regiões, tipos de uso, tipos de placa e combustíveis agora vêm do banco
 
 // Alertas de categoria agora vêm do banco (observacoes_categoria)
 
