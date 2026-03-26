@@ -3,6 +3,7 @@ import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { CategoriasVeiculoTab } from './cadastros/CategoriasVeiculoTab';
 import { CategoriasEspeciaisTab } from './cadastros/CategoriasEspeciaisTab';
 import { RegioesTab } from './cadastros/RegioesTab';
+import { TiposUsoTab } from './cadastros/TiposUsoTab';
 
 export function CadastrosBase() {
   return (
@@ -11,6 +12,7 @@ export function CadastrosBase() {
         <TabsTrigger value="categorias">Categorias de Veículo</TabsTrigger>
         <TabsTrigger value="especiais">Categorias Especiais</TabsTrigger>
         <TabsTrigger value="regioes">Regiões</TabsTrigger>
+        <TabsTrigger value="tipos_uso">Tipos de Uso</TabsTrigger>
       </TabsList>
 
       <TabsContent value="categorias">
@@ -23,6 +25,10 @@ export function CadastrosBase() {
 
       <TabsContent value="regioes">
         <RegioesTab />
+      </TabsContent>
+
+      <TabsContent value="tipos_uso">
+        <TiposUsoTab />
       </TabsContent>
     </Tabs>
   );
