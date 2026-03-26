@@ -27,6 +27,7 @@ const sectionBanners: Record<number, { title: string; help: string }> = {
   7: { title: 'Regras de Venda', help: 'Configure limites FIPE, comissões e taxas do processo de venda.' },
   8: { title: 'Instalação e Rotas', help: 'Cadastre bases, parceiros e organize rotas de instalação.' },
   9: { title: 'Mapa de Atendimento', help: 'Visualize a cobertura geográfica e identifique áreas descobertas.' },
+  10: { title: 'Cadastros Base', help: 'Gerencie categorias de veículo, categorias especiais e regiões de atendimento.' },
 };
 
 export default function GestaoComercial() {
