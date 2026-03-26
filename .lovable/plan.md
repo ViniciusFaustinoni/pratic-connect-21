@@ -1,39 +1,29 @@
 
+# Fix: Erro ao salvar cobertura — CHECK constraint no campo `tipo`
 
-# Mover Mapa de Atendimento de Gestao Comercial para Monitoramento
+## Problema
 
-## Contexto
+A tabela `coberturas` tem um CHECK constraint que restringe o campo `tipo` a valores especificos:
+`colisao`, `roubo_furto`, `incendio`, `alagamento`, `vidros`, `terceiros`, `app`, `assistencia`, `carro_reserva`, `protecao_financeira`, `rastreamento`, `morte_acidental`, `granizo`, `perda_total`.
 
-O "Mapa de Atendimento" (classificacao de municipios como Volante/Viagem/Prestador/Fora de Cobertura) esta em Gestao Comercial, mas e uma funcionalidade operacional — nao tem relacao com as "regioes" comerciais que sao criadas livremente pelo diretor para elegibilidade de planos.
+O codigo em `CatalogoCoberturasBeneficios.tsx` tenta inserir com `tipo: 'cobertura'` (para coberturas) e `tipo: 'beneficio'` (para beneficios), ambos rejeitados pelo CHECK.
 
-Ja existe uma pagina `src/pages/monitoramento/RegioesAtendimento.tsx` que lida com vinculos de vistoriadores a cidades. O Mapa de Atendimento deve ser integrado ao modulo de Monitoramento.
+## Solucao
 
-## Plano
+1. **Migration**: Alterar o CHECK constraint para incluir `'cobertura'` e `'beneficio'` como valores validos (ou remover o constraint e usar apenas a logica de aplicacao)
 
-### 1. Remover "Mapa de Atendimento" da Gestao Comercial
+2. **Sem mudanca no frontend** — o codigo ja esta correto conceitualmente
 
-- **TabNavigation.tsx**: Remover o item `Mapa de Atendimento` do grupo "Operacao"
-- **GestaoComercial.tsx**: Remover import de `MapaAtendimento`, remover `activeTab === 7`, reindexar tabs 8 e 9 para 7 e 8, atualizar `sectionBanners`
-
-### 2. Criar rota dedicada no Monitoramento
-
-- Adicionar rota `/monitoramento/mapa-atendimento` no router
-- Criar pagina wrapper que renderiza o componente `MapaAtendimento` com hierarquia por estado (agrupar municipios por UF com secoes colapsaveis)
-- Adicionar link de acesso rapido no `DashboardCoordenador.tsx`
-
-### 3. Reorganizar MapaAtendimento com hierarquia por UF
-
-- Mover `src/components/gestao-comercial/MapaAtendimento.tsx` para `src/pages/monitoramento/MapaAtendimentoPage.tsx` (ou reutilizar)
-- Agrupar municipios por estado (UF) em secoes colapsaveis com Collapsible
-- Manter funcionalidade existente (filtro por tipo, busca, adicionar, alterar tipo)
+### Migration SQL
+```sql
+ALTER TABLE coberturas DROP CONSTRAINT coberturas_tipo_check;
+ALTER TABLE coberturas ADD CONSTRAINT coberturas_tipo_check 
+  CHECK (tipo IN ('colisao','roubo_furto','incendio','alagamento','vidros','terceiros','app','assistencia','carro_reserva','protecao_financeira','rastreamento','morte_acidental','granizo','perda_total','cobertura','beneficio'));
+```
 
 ## Arquivos
-
 | Arquivo | Acao |
 |---|---|
-| `src/components/gestao-comercial/TabNavigation.tsx` | Remover item Mapa de Atendimento |
-| `src/pages/diretoria/GestaoComercial.tsx` | Remover tab 7, reindexar |
-| `src/pages/monitoramento/MapaAtendimentoPage.tsx` | Novo — pagina com hierarquia por UF |
-| `src/App.tsx` (router) | Adicionar rota `/monitoramento/mapa-atendimento` |
-| `src/pages/monitoramento/DashboardCoordenador.tsx` | Adicionar link de acesso rapido |
+| Migration SQL | Atualizar CHECK constraint |
 
+Nenhuma alteracao de codigo frontend necessaria.
