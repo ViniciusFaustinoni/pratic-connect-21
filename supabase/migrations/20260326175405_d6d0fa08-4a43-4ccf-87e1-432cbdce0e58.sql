@@ -1,0 +1,2 @@
+ALTER TABLE coberturas DROP CONSTRAINT IF EXISTS coberturas_tipo_check;
+ALTER TABLE coberturas ADD CONSTRAINT coberturas_tipo_check CHECK (tipo IN ('colisao','roubo_furto','incendio','alagamento','vidros','terceiros','app','assistencia','carro_reserva','protecao_financeira','rastreamento','morte_acidental','granizo','perda_total','cobertura','beneficio'));
