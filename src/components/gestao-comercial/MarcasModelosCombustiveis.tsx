@@ -168,6 +168,52 @@ function MarcasModelosTab() {
           </div>
         </SheetContent>
       </Sheet>
+
+      <Dialog open={fipeDialogOpen} onOpenChange={setFipeDialogOpen}>
+        <DialogContent className="sm:max-w-sm">
+          <DialogHeader>
+            <DialogTitle>Importar da Tabela FIPE</DialogTitle>
+          </DialogHeader>
+          <p className="text-sm text-muted-foreground">
+            Selecione os tipos de veículo para importar todas as marcas e modelos da tabela FIPE.
+          </p>
+          <div className="space-y-3 py-2">
+            {[
+              { value: 'cars', label: 'Carros' },
+              { value: 'motorcycles', label: 'Motos' },
+              { value: 'trucks', label: 'Caminhões' },
+            ].map(({ value, label }) => (
+              <label key={value} className="flex items-center gap-2 cursor-pointer">
+                <Checkbox
+                  checked={fipeTipos.has(value)}
+                  onCheckedChange={(checked) => {
+                    setFipeTipos(prev => {
+                      const next = new Set(prev);
+                      checked ? next.add(value) : next.delete(value);
+                      return next;
+                    });
+                  }}
+                />
+                <span className="text-sm">{label}</span>
+              </label>
+            ))}
+          </div>
+          <DialogFooter>
+            <Button variant="outline" onClick={() => setFipeDialogOpen(false)}>Cancelar</Button>
+            <Button
+              onClick={() => {
+                fipeImport.mutate(Array.from(fipeTipos), {
+                  onSuccess: () => setFipeDialogOpen(false),
+                });
+              }}
+              disabled={fipeTipos.size === 0 || fipeImport.isPending}
+            >
+              {fipeImport.isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}
+              Importar
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
