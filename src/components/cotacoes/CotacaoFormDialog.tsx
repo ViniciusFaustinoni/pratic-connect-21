@@ -1032,7 +1032,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     let texto = `*Cotação Praticcar*\n` +
       `Associado: ${nomeAssociado}\n` +
       `Veículo: ${veiculoInfo}\n` +
-      `Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}\n` +
+      `Uso: ${tiposUsoAtivos.find(t => t.value === usoVeiculo)?.label || usoVeiculo}\n` +
       `FIPE: ${formatCurrency(valorFipe)}\n\n`;
     
     if (planosSelecionados.length === 1) {
