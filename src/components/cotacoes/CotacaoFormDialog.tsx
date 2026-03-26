@@ -4,9 +4,10 @@ import { supabase } from '@/integrations/supabase/client';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
 import { useAssociadoSearch } from '@/hooks/useAssociadoSearch';
 
-import { ChevronDown, ChevronUp } from 'lucide-react';
+import { ChevronDown, ChevronUp, Fuel } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
-import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useCarenciaVidrosDias, useMigracaoConfig, useObservacoesCategoria, useMarcasAceitasMotos } from '@/hooks/useConteudosSistema';
+import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useCarenciaVidrosDias, useMigracaoConfig, useObservacoesCategoria, useMarcasAceitasMotos, useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistema';
+import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { MigracaoToggle, type MigracaoState } from '@/components/cotacoes/MigracaoToggle';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useForm } from 'react-hook-form';
@@ -81,14 +82,7 @@ import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
 import { useVerificarVeiculoSGA } from '@/hooks/useVerificarVeiculoSGA';
 
-// Regiões disponíveis no sistema
-const REGIOES = [
-  { value: 'rio_de_janeiro', label: 'Rio de Janeiro - Capital e Região Metropolitana' },
-  { value: 'regiao_lagos', label: 'Região dos Lagos' },
-  { value: 'sao_paulo', label: 'São Paulo - Capital e Região Metropolitana' },
-  { value: 'interior_rj', label: 'Interior do Rio de Janeiro' },
-  { value: 'interior_sp', label: 'Interior de São Paulo' },
-];
+// Regiões, tipos de uso, tipos de placa e combustíveis agora vêm do banco
 
 // Alertas de categoria agora vêm do banco (observacoes_categoria)
 
@@ -155,6 +149,15 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const { data: carenciaVidrosDias = 120 } = useCarenciaVidrosDias();
   const { data: migracaoConfig } = useMigracaoConfig();
   const [migracaoState, setMigracaoState] = useState<MigracaoState>({ ativo: false, associacaoOrigem: '', arquivos: [] });
+  
+  // Dados dinâmicos das Tabelas de Apoio
+  const { data: regioesAtivas = [], isLoading: regioesLoading } = useRegioesAtivas();
+  const { data: tiposUsoBanco = [] } = useConfiguracaoJson<{ value: string; label: string; ativo?: boolean }[]>('tipos_uso', []);
+  const { data: tiposPlacaBanco = [] } = useConfiguracaoJson<{ value: string; label: string; ativo?: boolean }[]>('tipos_placa', []);
+  const { data: combustiveisBanco = [] } = useCombustiveis();
+  
+  const tiposUsoAtivos = useMemo(() => tiposUsoBanco.filter(t => t.ativo !== false), [tiposUsoBanco]);
+  const tiposPlacaAtivos = useMemo(() => tiposPlacaBanco.filter(t => t.ativo !== false), [tiposPlacaBanco]);
   const { data: observacoesCategoria = {} } = useObservacoesCategoria();
   
   // Estado do cenário de adesão para vendedor externo
@@ -184,8 +187,14 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [buscaIndicador, setBuscaIndicador] = useState('');
   const { data: resultadosIndicador = [], isLoading: buscandoIndicador } = useAssociadoSearch(buscaIndicador);
   
-  // Estado para uso do veículo (passeio ou aplicativo)
-  const [usoVeiculo, setUsoVeiculo] = useState<'particular' | 'aplicativo'>('particular');
+  // Estado para uso do veículo (dinâmico das Tabelas de Apoio)
+  const [usoVeiculo, setUsoVeiculo] = useState<string>('particular');
+  
+  // Estado para tipo de placa
+  const [tipoPlacaSelecionado, setTipoPlacaSelecionado] = useState<string>('');
+  
+  // Estado para combustível detectado/selecionado
+  const [combustivelSelecionado, setCombustivelSelecionado] = useState<string>('');
   
   // Estados para busca por placa
   const [placa, setPlaca] = useState('');
@@ -364,11 +373,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     valorFipe,
     valorAdicional,
     regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
-    combustivel: veiculoEncontrado?.vehicleData?.combustivel || undefined,
+    combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || undefined,
     categoria: categoria && categoria !== 'nenhuma' ? categoria : undefined,
     anoVeiculo: anoNumerico,
     tipoVeiculo: tipoVeiculoDetectado,
-    usoApp: usoVeiculo === 'aplicativo',
+    usoApp: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
     marca: marcaResolvida || undefined,
     modelo: modeloResolvido || undefined,
   });
@@ -496,6 +505,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setDiaVencimento(null);
       setSolicitarFipeMenor(false);
       setJustificativaFipeMenor('');
+      setTipoPlacaSelecionado('');
+      setCombustivelSelecionado('');
     }
   }, [open, leadId, cotacaoParaEditar, cotacaoBase, form]);
 
@@ -685,6 +696,19 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         setAnoSelecionado('');
         setModelos([]);
         setAnos([]);
+        
+        // Auto-detectar combustível do veículo
+        if (resultado.vehicleData.combustivel) {
+          const combFipe = resultado.vehicleData.combustivel.toLowerCase();
+          const match = combustiveisBanco.find(c => 
+            combFipe.includes(c.value) || combFipe.includes(c.label.toLowerCase())
+          );
+          if (match) setCombustivelSelecionado(match.value);
+          else if (combFipe.includes('flex') || (combFipe.includes('gasolina') && combFipe.includes('álcool'))) setCombustivelSelecionado('flex');
+          else if (combFipe.includes('gasolina')) setCombustivelSelecionado('gasolina');
+          else if (combFipe.includes('diesel')) setCombustivelSelecionado('diesel');
+          else if (combFipe.includes('elétrico') || combFipe.includes('eletrico')) setCombustivelSelecionado('eletrico');
+        }
 
         // Preencher valor FIPE diretamente dos dados retornados
         if (resultado.fipeData?.valor) {
@@ -1008,7 +1032,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     let texto = `*Cotação Praticcar*\n` +
       `Associado: ${nomeAssociado}\n` +
       `Veículo: ${veiculoInfo}\n` +
-      `Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}\n` +
+      `Uso: ${tiposUsoAtivos.find(t => t.value === usoVeiculo)?.label || usoVeiculo}\n` +
       `FIPE: ${formatCurrency(valorFipe)}\n\n`;
     
     if (planosSelecionados.length === 1) {
@@ -1042,7 +1066,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     let texto = `*Cotação Praticcar*\n` +
       `Associado: ${nomeAssociado}\n` +
       `Veículo: ${veiculoInfo}\n` +
-      `Uso: ${usoVeiculo === 'particular' ? 'Passeio' : 'Aplicativo'}\n` +
+      `Uso: ${tiposUsoAtivos.find(t => t.value === usoVeiculo)?.label || usoVeiculo}\n` +
       `FIPE: ${formatCurrency(valorFipe)}\n\n`;
     
     if (planosSelecionados.length === 1) {
@@ -1155,7 +1179,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         dia_vencimento: diaVencimento,
         // Região selecionada
         regiao: regiaoSelecionada || null,
-        uso_aplicativo: usoVeiculo === 'aplicativo',
+        uso_aplicativo: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
+        // Combustível e tipo de uso
+        combustivel: combustivelSelecionado || null,
+        veiculo_combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || null,
+        veiculo_tipo_uso: usoVeiculo || null,
         // Indicação
         indicador_id: indicadorId || null,
         indicador_nome: indicadorNome || null,
@@ -1253,6 +1281,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setSolicitarFipeMenor(false);
       setJustificativaFipeMenor('');
       setCenarioExterno(null);
+      setTipoPlacaSelecionado('');
+      setCombustivelSelecionado('');
 
       setShowConfirmDialog(false);
       onOpenChange(false);
@@ -1481,12 +1511,12 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 onValueChange={setRegiaoSelecionada}
               >
                 <SelectTrigger>
-                  <SelectValue placeholder="Selecione a região" />
+                  <SelectValue placeholder={regioesLoading ? 'Carregando...' : 'Selecione a região'} />
                 </SelectTrigger>
                 <SelectContent>
-                  {REGIOES.map((regiao) => (
-                    <SelectItem key={regiao.value} value={regiao.value}>
-                      {regiao.label}
+                  {regioesAtivas.map((regiao) => (
+                    <SelectItem key={regiao.id} value={regiao.codigo}>
+                      {regiao.nome}
                     </SelectItem>
                   ))}
                 </SelectContent>
@@ -1505,85 +1535,71 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 Uso do Veículo
               </h3>
               
-              <div className="grid grid-cols-2 gap-3">
-                {/* Passeio */}
-                <div
-                  onClick={() => setUsoVeiculo('particular')}
-                  className={cn(
-                    "relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md",
-                    usoVeiculo === 'particular'
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                      : "border-border hover:border-primary/50"
+              <Select
+                value={usoVeiculo}
+                onValueChange={setUsoVeiculo}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o uso do veículo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiposUsoAtivos.length > 0 ? (
+                    tiposUsoAtivos.map((tipo) => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="particular">Particular</SelectItem>
+                      <SelectItem value="aplicativo">Aplicativo (Uber, 99, etc)</SelectItem>
+                    </>
                   )}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-full",
-                      usoVeiculo === 'particular'
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    )}>
-                      <Car className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        "font-semibold",
-                        usoVeiculo === 'particular' && "text-primary"
-                      )}>Passeio</p>
-                      <p className="text-xs text-muted-foreground">Uso particular</p>
-                    </div>
-                  </div>
-                  {usoVeiculo === 'particular' && (
-                    <div className="absolute top-2 right-2">
-                      <CheckCircle2 className="h-5 w-5 text-primary" />
-                    </div>
-                  )}
-                </div>
-                
-                {/* Aplicativo */}
-                <div
-                  onClick={() => setUsoVeiculo('aplicativo')}
-                  className={cn(
-                    "relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md",
-                    usoVeiculo === 'aplicativo'
-                      ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                      : "border-border hover:border-primary/50"
-                  )}
-                >
-                  <div className="flex items-center gap-3">
-                    <div className={cn(
-                      "flex h-10 w-10 items-center justify-center rounded-full",
-                      usoVeiculo === 'aplicativo'
-                        ? "bg-primary text-primary-foreground"
-                        : "bg-muted text-muted-foreground"
-                    )}>
-                      <Zap className="h-5 w-5" />
-                    </div>
-                    <div>
-                      <p className={cn(
-                        "font-semibold",
-                        usoVeiculo === 'aplicativo' && "text-primary"
-                      )}>Aplicativo</p>
-                      <p className="text-xs text-muted-foreground">Uber, 99, etc</p>
-                    </div>
-                  </div>
-                  {usoVeiculo === 'aplicativo' && (
-                    <div className="absolute top-2 right-2">
-                      <CheckCircle2 className="h-5 w-5 text-primary" />
-                    </div>
-                  )}
-                </div>
-              </div>
+                </SelectContent>
+              </Select>
               
               {/* Alerta quando aplicativo é selecionado */}
-              {usoVeiculo === 'aplicativo' && (
-                <Alert className="border-blue-500/50 bg-blue-500/10">
-                  <Info className="h-4 w-4 text-blue-500" />
-                  <AlertDescription className="text-blue-700 dark:text-blue-400">
+              {(usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app')) && (
+                <Alert className="border-primary/50 bg-primary/5">
+                  <Info className="h-4 w-4 text-primary" />
+                  <AlertDescription className="text-sm">
                     Categoria APP: cota de participação será 8% (mínimo R$ 3.000).
                   </AlertDescription>
                 </Alert>
               )}
+            </div>
+
+            <Separator />
+
+            {/* BLOCO 0.4: TIPO DE PLACA */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Car className="h-4 w-4 text-primary" />
+                Tipo de Placa
+              </h3>
+              
+              <Select
+                value={tipoPlacaSelecionado}
+                onValueChange={setTipoPlacaSelecionado}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo de placa" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiposPlacaAtivos.length > 0 ? (
+                    tiposPlacaAtivos.map((tipo) => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="mercosul">Mercosul</SelectItem>
+                      <SelectItem value="antiga">Antiga</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
             </div>
 
             <Separator />
@@ -1903,6 +1919,52 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 );
               })()}
             </div>
+
+            {/* BLOCO: COMBUSTÍVEL (detectado via FIPE ou manual) */}
+            {(veiculoEncontrado || valorFipe > 0) && (
+              <>
+                <Separator />
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Fuel className="h-4 w-4 text-primary" />
+                    Combustível
+                  </h3>
+                  
+                  <Select
+                    value={combustivelSelecionado}
+                    onValueChange={setCombustivelSelecionado}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o combustível" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {combustiveisBanco.length > 0 ? (
+                        combustiveisBanco.map((c) => (
+                          <SelectItem key={c.value} value={c.value}>
+                            {c.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <>
+                          <SelectItem value="flex">Flex (Gasolina/Etanol)</SelectItem>
+                          <SelectItem value="gasolina">Gasolina</SelectItem>
+                          <SelectItem value="diesel">Diesel</SelectItem>
+                          <SelectItem value="eletrico">Elétrico</SelectItem>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  
+                  {veiculoEncontrado?.vehicleData?.combustivel && (
+                    <p className="text-xs text-muted-foreground">
+                      Detectado via FIPE: {veiculoEncontrado.vehicleData.combustivel}
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            <Separator />
 
             {/* BLOCO 2: CONDIÇÕES ESPECIAIS / DESÁGIOS */}
             <div className="space-y-3">
