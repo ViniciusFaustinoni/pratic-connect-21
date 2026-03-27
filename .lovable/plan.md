@@ -1,49 +1,46 @@
 
 
-# Corrigir Nome da Empresa no Termo de Filiação
+# Adicionar Blocos de Assinatura na Proposta de Filiação (Edge Function)
 
 ## Problema
 
-O nome "ABP PRATICCAR" e "ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR" aparecem no termo de filiação. O correto é **"ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR"**.
+A seção de assinatura nos templates das edge functions (`generateSecao8` e `generateSecaoAssinatura`) gera apenas a linha de data/local, mas não inclui os campos de assinatura com nome e CPF do associado e da empresa. O template React (`TermoFiliacaoTemplate.tsx`) já tem esses campos corretamente (linhas 482-498), mas as edge functions que geram o HTML para o Autentique estão incompletos.
 
-## Alterações
+## Correção
 
-### 1. `src/components/cadastro/TermoFiliacaoTemplate.tsx` (React/PDF)
+Adicionar os blocos de assinatura (signature-block) com linhas para nome, CPF e papel (ASSOCIADO / PRATICCAR) nas duas funções:
 
-- Linha 110: `ABP PRATICCAR` → `PRATICCAR`
-- Linha 113: `ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR` → `ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR`
-- Linha 418: `ABP PraticCar é uma ASSOCIAÇÃO DE SOCORRO MÚTUO` → `PRATICCAR é uma ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO`
-- Linha 493: `ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR` → `ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR`
-- Linha 495: `ABP PRATICCAR` → `PRATICCAR`
-- Demais referências a `ABP PraticCar` no corpo do template (declarações 5.1, 5.8, 5.9, 6.x) → substituir por `PRATICCAR`
+### 1. `supabase/functions/_shared/termo-afiliacao-template.ts` — `generateSecao8`
 
-### 2. `supabase/functions/_shared/termo-afiliacao-template.ts` (Edge Function HTML)
+Após a `<p class="signature-local-data">`, adicionar:
 
-- Linha 290: `ABP PRATICCAR` → `PRATICCAR`
-- Linha 292: `ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR` → `ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR`
-- Todas as referências a `ABP PraticCar` no corpo das declarações → `PRATICCAR`
+```html
+<div style="text-align: center;">
+  <div class="signature-block">
+    <div class="signature-line">
+      <p class="signature-name">${data.cliente.nome}</p>
+      <p class="signature-doc">CPF: ${formatCPF(data.cliente.cpf)}</p>
+      <p class="signature-role">ASSOCIADO</p>
+    </div>
+  </div>
+  <div class="signature-block" style="margin-left: 40pt;">
+    <div class="signature-line">
+      <p class="signature-name">${data.empresa.razaoSocial}</p>
+      <p class="signature-doc">CNPJ: ${data.empresa.cnpj}</p>
+      <p class="signature-role">PRATICCAR</p>
+    </div>
+  </div>
+</div>
+```
 
-### 3. `supabase/functions/_shared/termo-afiliacao-utils.ts` (defaults)
+### 2. `supabase/functions/_shared/template-utils.ts` — `generateSecaoAssinatura`
 
-- Linha 455: fallback `"ABP PraticCar"` → `"PRATICCAR"`
-- Linha 456: fallback `"Associação de Benefícios PraticCar"` → `"ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR"`
-
-### 4. `supabase/functions/_shared/template-utils.ts` (defaults)
-
-- Linha 176: fallback `'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'` → `'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'`
-- Linha 726: fallback `'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'` → `'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'`
-
-### 5. `src/components/documentos/templatePreviewData.ts`
-
-- Linha 100: `'empresa.nome'` preview → `'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'`
+Mesma adição de blocos de assinatura, usando `dados.cliente.nome`, `dados.cliente.cpf`, `dados.empresa.razaoSocial`, `dados.empresa.cnpj`.
 
 ## Arquivos alterados
 
 | Arquivo | Ação |
 |---|---|
-| `src/components/cadastro/TermoFiliacaoTemplate.tsx` | Atualizar nome da empresa em todos os pontos |
-| `supabase/functions/_shared/termo-afiliacao-template.ts` | Atualizar nome nos headers e declarações |
-| `supabase/functions/_shared/termo-afiliacao-utils.ts` | Atualizar fallbacks do nome |
-| `supabase/functions/_shared/template-utils.ts` | Atualizar fallbacks do nome |
-| `src/components/documentos/templatePreviewData.ts` | Atualizar preview do nome da empresa |
+| `supabase/functions/_shared/termo-afiliacao-template.ts` | Adicionar blocos de assinatura em `generateSecao8` |
+| `supabase/functions/_shared/template-utils.ts` | Adicionar blocos de assinatura em `generateSecaoAssinatura` |
 
