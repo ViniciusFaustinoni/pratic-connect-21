@@ -36,6 +36,7 @@ import { ORIGEM_LABELS } from '@/types/database';
 import { toast } from 'sonner';
 import { useFipe } from '@/hooks/useFipe';
 import { Badge } from '@/components/ui/badge';
+import { useLeadOrigensPorCategoria } from '@/hooks/useLeadOrigens';
 
 interface LeadFormDialogProps {
   open: boolean;
