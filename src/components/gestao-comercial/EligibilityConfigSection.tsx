@@ -168,13 +168,14 @@ function toggleInSet(set: Set<string>, value: string): Set<string> {
   return next;
 }
 
-export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeChange }: EligibilityConfigSectionProps) {
+export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeChange, externalState }: EligibilityConfigSectionProps) {
   const { data: regioes = [] } = useRegioes();
   const { data: tiposUso = [] } = useConfiguracaoJson<any[]>('tipos_uso', []);
   const { data: tiposPlaca = [] } = useConfiguracaoJson<any[]>('tipos_placa', []);
   const { data: combustiveis = [] } = useCombustiveis();
 
-  const { state, setState } = useEligibilityState(entityType, entityId);
+  const internalState = useEligibilityState(entityType, entityId);
+  const { state, setState } = externalState || internalState;
 
   const update = (patch: Partial<EligibilityState>) => setState(prev => ({ ...prev, ...patch }));
 
