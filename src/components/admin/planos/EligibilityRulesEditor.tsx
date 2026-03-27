@@ -46,6 +46,7 @@ const RULE_TYPE_LABELS: Record<RuleType, string> = {
 
 const RULE_TYPE_ICONS: Record<RuleType, string> = {
   fipe_range: '💰',
+  fipe_eligibility: '🎯',
   ano_range: '📅',
   categoria_veiculo: '🚗',
   categoria_especial: '⚠️',
