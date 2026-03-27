@@ -1,56 +1,81 @@
 
 
-# Detalhar Itens do Plano na Seção "Plano Contratado" do Termo de Filiação
+# Fix RLS Error on "Acesso a Módulos" Save
 
-## Problema
+## Problem
 
-A seção "3. PLANO CONTRATADO E COBERTURAS" atualmente exibe apenas uma lista simples com nomes curtos (ex: `[X] Roubo`, `[X] Furto`). O correto é exibir todos os itens detalhados do plano — coberturas E benefícios — com suas descrições completas (ex: "Proteção a Terceiros R$: 100.000,00", "Reboque Pane Elétrica ou Mecânica 1000KM Totais").
+When saving module access configuration (`user_module_visibility`), the system throws: **"new row violates row-level security policy for table user_module_visibility"**.
 
-## Situação atual
+## Root Cause
 
-Os dados detalhados (`coberturas_detalhadas` e `beneficios_detalhados`) já existem na estrutura de dados e já são carregados pelas edge functions `autentique-create`. Porém, a renderização na seção 3 ignora esses dados e usa apenas o array simples `coberturas[]`.
+The admin user (`admin@teste.com`, id `37beadcf-...`) has **no entry in `user_roles`**. The RLS INSERT/UPDATE policies on `user_module_visibility` require either:
+- `has_role(auth.uid(), 'diretor')` or `has_role(auth.uid(), 'desenvolvedor')`, OR
+- `can_manage_users(auth.uid())` — which checks for `canCreateUser` permission in `app_roles_config`
 
-## Correção
+Since the user has no role at all, both checks fail.
 
-### 1. `supabase/functions/_shared/termo-afiliacao-template.ts` — `generateSecao3`
+## Fix
 
-Atualizar para:
-- Quando `coberturas_detalhadas` estiver disponível, renderizar uma tabela com Nome + Descrição/Valor para cada cobertura
-- Quando `beneficios_detalhados` estiver disponível, renderizar uma segunda tabela para benefícios
-- Manter fallback para o array simples `coberturas[]` quando os dados detalhados não existirem
+The RLS policies themselves are correct in logic — the issue is that `can_manage_users` already covers the dynamic permission check. We need to also use `has_permission` for a more granular capability. But the simplest and most correct fix is to **also allow users with the `canManageModuleAccess` or similar permission**.
 
-### 2. `src/components/cadastro/TermoFiliacaoTemplate.tsx` — Seção 3 (React)
+However, looking at the existing architecture, the real fix is two-fold:
 
-Atualizar para:
-- Aceitar `coberturas_detalhadas` e `beneficios_detalhados` opcionais nas props/tipos
-- Renderizar tabela detalhada com nome + descrição quando disponível
-- Separar visualmente "Coberturas" de "Benefícios"
-- Manter fallback para a lista simples
+### 1. Migration — Broaden RLS to use `has_permission` function
 
-### 3. `src/types/termo-filiacao.ts` — `PlanoData`
+Update the INSERT, UPDATE, and DELETE policies on `user_module_visibility` to also check `has_permission(auth.uid(), 'canManageModuleAccess')` as an alternative path, so any role with that capability can manage module visibility.
 
-Adicionar campos opcionais:
-- `coberturas_detalhadas?: { nome: string; descricao?: string; valor_personalizado?: string }[]`
-- `beneficios_detalhados?: { nome: string; descricao?: string; valor_personalizado?: string }[]`
+If `has_permission` doesn't exist yet or `canManageModuleAccess` isn't a defined capability, we fall back to using the existing `can_manage_users` function which checks `canCreateUser` — and ensure the admin role has that permission.
 
-## Formato visual esperado
+### 2. Data fix — Ensure admin@teste.com has a role
 
-Cada item renderizado como:
-```text
-[X] Proteção contra Roubo e Furto
-[X] Proteção contra Incêndio
-[X] Proteção a Terceiros — R$: 100.000,00
-[X] Reboque para Colisão — Ilimitado somente em caso de acionamento para reparo
-[X] Reboque Pane Elétrica ou Mecânica — 1000KM Totais
+Insert the `diretor` role for the admin user (`37beadcf-284b-4a2c-88a0-6efa8cae60d9`) into `user_roles` so the test account works. This is a data issue but should be addressed.
+
+## Proposed SQL Migration
+
+```sql
+-- Ensure admin test user has diretor role
+INSERT INTO public.user_roles (user_id, role)
+VALUES ('37beadcf-284b-4a2c-88a0-6efa8cae60d9', 'diretor')
+ON CONFLICT (user_id, role) DO NOTHING;
 ```
 
-Nome em negrito, descrição/valor ao lado quando existir.
+And update the RLS policies to be more permissive for users with management capabilities:
 
-## Arquivos alterados
+```sql
+-- Drop and recreate INSERT policy
+DROP POLICY IF EXISTS "Directors can insert user visibility" ON public.user_module_visibility;
+DROP POLICY IF EXISTS "Team managers can insert user visibility" ON public.user_module_visibility;
 
-| Arquivo | Ação |
+CREATE POLICY "Managers can insert user visibility"
+  ON public.user_module_visibility FOR INSERT TO authenticated
+  WITH CHECK (
+    has_role(auth.uid(), 'diretor'::app_role) 
+    OR has_role(auth.uid(), 'desenvolvedor'::app_role) 
+    OR can_manage_users(auth.uid())
+  );
+
+-- Same for UPDATE and DELETE (consolidate duplicate policies)
+DROP POLICY IF EXISTS "Directors can update user visibility" ON public.user_module_visibility;
+DROP POLICY IF EXISTS "Team managers can update user visibility" ON public.user_module_visibility;
+
+CREATE POLICY "Managers can update user visibility"
+  ON public.user_module_visibility FOR UPDATE TO authenticated
+  USING (has_role(auth.uid(), 'diretor'::app_role) OR has_role(auth.uid(), 'desenvolvedor'::app_role) OR can_manage_users(auth.uid()))
+  WITH CHECK (has_role(auth.uid(), 'diretor'::app_role) OR has_role(auth.uid(), 'desenvolvedor'::app_role) OR can_manage_users(auth.uid()));
+
+DROP POLICY IF EXISTS "Directors can delete user visibility" ON public.user_module_visibility;
+DROP POLICY IF EXISTS "Team managers can delete user visibility" ON public.user_module_visibility;
+
+CREATE POLICY "Managers can delete user visibility"
+  ON public.user_module_visibility FOR DELETE TO authenticated
+  USING (has_role(auth.uid(), 'diretor'::app_role) OR has_role(auth.uid(), 'desenvolvedor'::app_role) OR can_manage_users(auth.uid()));
+```
+
+## Files
+
+| File | Action |
 |---|---|
-| `src/types/termo-filiacao.ts` | Adicionar tipos detalhados em `PlanoData` |
-| `src/components/cadastro/TermoFiliacaoTemplate.tsx` | Renderizar itens detalhados na seção 3 |
-| `supabase/functions/_shared/termo-afiliacao-template.ts` | Renderizar itens detalhados em `generateSecao3` |
+| New SQL migration | Insert diretor role for admin user + consolidate RLS policies |
+
+No frontend code changes needed — the issue is purely RLS + missing role data.
 
