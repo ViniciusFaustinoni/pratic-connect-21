@@ -690,7 +690,7 @@ const generateSecao5 = (data: TermoAfiliacaoData): string => `
   <div class="declaracao">
     <p class="declaracao-titulo">5.6. COMPREENSÃO DO MUTUALISMO</p>
     <p class="declaracao-texto">
-      Compreendo plenamente que a ABP PraticCar é uma ASSOCIAÇÃO DE SOCORRO MÚTUO, 
+      Compreendo plenamente que a PRATICCAR é uma ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO, 
       constituída sob a forma de associação civil sem fins lucrativos, NÃO SE 
       CONFIGURANDO como empresa seguradora, e que os valores das contribuições 
       mensais são RATEADOS entre todos os associados de acordo com os custos e 
