@@ -1,34 +1,53 @@
 
 
-# Alterar Texto de Aviso "IMPORTANTE" na Proposta de Filiação
+# Fix Scroll Issue on "Planos de Cobertura" and Other Pages
 
-## Problema
+## Problem
 
-O texto abaixo da seção "ASSOCIADO INDICADOR" no template da Proposta de Filiação contém um aviso "IMPORTANTE" desatualizado. O conteúdo precisa ser substituído pelo novo texto fornecido.
+Mousewheel and touchpad scrolling does not work on pages rendered inside the main layout. Users can only scroll via the browser scrollbar. Reproduced on multiple machines.
 
-## Localização
+## Root Cause
 
-O texto está na tabela `documento_templates`, registro com `id = 'eb09759f-cfbc-4ee8-8f1f-f1cc520e7279'` (nome: "Proposta de Filiação"), no campo `conteudo`. É um template HTML editável pelo TipTap.
+In `src/index.css` (lines 772-776), the `.app-scroll-container` class applies `touch-action: pan-y`, which on some browsers/OS combinations restricts pointer-based scroll events (trackpad, precision touchpad). Combined with `overscroll-behavior-y: none` on `body` (line 186), the browser may not propagate wheel events properly to the inner scroll container.
 
-## Alteração
+Additionally, `SidebarInset` has both `min-h-svh` and `min-h-0` conflicting (line 314 of sidebar.tsx), and the AppLayout adds `overflow-hidden` on it (line 37), creating a rigid container that relies entirely on the inner `<main>` for scrolling.
 
-Criar uma migração SQL que faz `UPDATE` no campo `conteudo` desse template, substituindo o parágrafo atual após `<p><strong>IMPORTANTE</strong></p>` pelo novo texto:
+## Fix
 
-**Texto atual (a remover):**
-> No caso de roubo ou furto, o associado deve comunicar imediatamente a PRATICCAR através do 0800 980 0001 o evento ocorrido; Caso o veículo protegido pela PRATICCAR seja conduzido por pessoa sem habilitação, o mesmo não estará coberto pelo programa de Benefícios Mútuos da PRATICCAR; O associado fica ciente que o rastreador instalado no veículo ficará sob sua responsabilidade em caráter de comodato e a não devolução do rastreador a PRATICCAR ocasionará ao associado o pagamento de uma multa estipulada em R$400,00; Os benefícios do PSM para veículo do associado cadastrado têm início às 00:00h no primeiro dia útil subsequente a data de aceitação da vistoria e da instalação do equipamento de rastreamento, quando obrigatório, sendo o início no ato que ocorrer por último.
+### 1. `src/index.css` — Remove restrictive `touch-action`
 
-**Novo texto:**
-> No caso de roubo, furto, incêndio, colisão e alagamento, o associado deve comunicar imediatamente a PRATICCAR através do 0800 980 0001 o evento ocorrido sob pena de negativa de cobertura; Caso o veículo protegido pela PRATICCAR infrinja as normas do Código de Trânsito Brasileiro (CTB), tais como: conduzir na contramão de direção; avançar o sinal semafórico ou o de parada obrigatória; dirigir sob efeito de álcool ou recusar-se a realizar o teste do etilômetro; exceder o limite de velocidade; manusear/utilizar o telefone celular ou pegar objetos no interior do veículo durante a condução; bem como cometer qualquer outra infração classificada como grave ou gravíssima, os benefícios previstos no Programa de Socorro Mútuo da PRATICCAR serão automaticamente negados; O associado fica ciente que o rastreador instalado no veículo ficará sob sua responsabilidade em caráter de comodato e a não devolução do rastreador à PRATICCAR ocasionará ao associado o pagamento de uma multa estipulada em R$400,00; Os benefícios de roubo, furto, colisão, alagamento e incêndio do PSM têm início no primeiro dia útil subsequente à data de aceitação da vistoria e da instalação do equipamento de rastreamento, quando obrigatório, sendo o início no ato que ocorrer por último. Os demais benefícios só estarão disponíveis após 48 horas (quarenta e oito horas) úteis após o prazo supracitado; O ASSOCIADO declara estar ciente de que a PRATICCAR é uma associação de benefícios mútuos, regida por seu Estatuto e em conformidade com as normas legais aplicáveis. Declara, ainda, que recebeu cópia do Regulamento Associativo e do Regulamento de Assistência 24 Horas, tendo lido, compreendido e possuindo pleno conhecimento de todas as normas neles contidas, as quais aceita e com as quais concorda integralmente, estando plenamente ciente de todo o seu conteúdo.
+Remove `touch-action: pan-y` from `.app-scroll-container`. This property is meant for touch devices but can interfere with precision touchpads and wheel events on desktop browsers.
 
-Tambem será removido o parágrafo em negrito logo abaixo (a antiga declaração em CAPS LOCK que agora está integrada no novo texto acima).
+```css
+/* Before */
+.app-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  touch-action: pan-y;
+}
 
-## Implementacao
+/* After */
+.app-scroll-container {
+  -webkit-overflow-scrolling: touch;
+  scroll-behavior: smooth;
+}
+```
 
-Uma migração SQL usando `REPLACE()` no campo `conteudo` para trocar o texto antigo pelo novo no registro do template.
+### 2. `src/components/layout/AppLayout.tsx` — Ensure proper scroll propagation
 
-## Arquivos
+On line 40, add `overscroll-behavior: contain` to isolate scroll within the main area without blocking wheel events:
 
-| Arquivo | Acao |
+```tsx
+<main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden app-scroll-container overscroll-contain">
+```
+
+### 3. `src/index.css` — Remove `overscroll-behavior-y: none` from body
+
+Line 186: Change `overscroll-behavior-y: none` to `overscroll-behavior-x: none` on body/#root, so vertical scroll is not suppressed globally while still preventing horizontal overscroll bounce.
+
+## Files changed
+
+| File | Action |
 |---|---|
-| Nova migracao SQL | UPDATE no `documento_templates` substituindo o texto do aviso IMPORTANTE |
+| `src/index.css` | Remove `touch-action: pan-y` from `.app-scroll-container`; adjust `overscroll-behavior` on body |
+| `src/components/layout/AppLayout.tsx` | Add `overscroll-contain` class to main element |
 
