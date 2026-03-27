@@ -285,20 +285,21 @@ const drawPremiumSectionHeader = (
   y: number,
   width: number,
   title: string,
-  corSecundaria: { r: number; g: number; b: number } = brandRedDefault
+  corSecundaria: { r: number; g: number; b: number } = brandRedDefault,
+  corPrimaria: { r: number; g: number; b: number } = brandBlueDefault
 ) => {
-  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
+  doc.setFillColor(corPrimaria.r, corPrimaria.g, corPrimaria.b);
   doc.roundedRect(x, y, width, HEADER_HEIGHT, 2, 2, 'F');
 
-  doc.setFillColor(glowBlue.r, glowBlue.g, glowBlue.b);
-  doc.rect(x + 5, y + 3.5, 4, 5, 'F');
+  doc.setFillColor(255, 255, 255);
+  doc.rect(x + 5, y + 4, 4, 6, 'F');
 
   doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
-  doc.setFontSize(10);
+  doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text(title, x + 13, y + 8);
+  doc.text(title, x + 13, y + 10);
 
-  drawGradientRect(doc, x, y + HEADER_HEIGHT, width, 1, glowBlue, corSecundaria, 20);
+  drawGradientRect(doc, x, y + HEADER_HEIGHT, width, 1.5, corPrimaria, corSecundaria, 20);
 };
 
 const drawPageBackground = (
