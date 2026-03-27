@@ -631,44 +631,27 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   // ============= COBERTURAS REMOVIDAS (PDF SIMPLES) =============
   if (cotacao.coberturasRemovidas && cotacao.coberturasRemovidas.length > 0) {
     checkPageBreak(40);
-    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO APLICÁVEL PARA ESTE VEÍCULO', brandRed);
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO APLICÁVEL PARA ESTE VEÍCULO', brandRed, brandBlue);
     y += HEADER_HEIGHT + INNER_GAP;
 
-    const removCol1 = cotacao.coberturasRemovidas.slice(0, Math.ceil(cotacao.coberturasRemovidas.length / 2));
-    const removCol2 = cotacao.coberturasRemovidas.slice(Math.ceil(cotacao.coberturasRemovidas.length / 2));
-    const startRemovY = y;
-
-    removCol1.forEach((item, index) => {
-      const lineTop = startRemovY + (index * coberturaLineHeight);
+    cotacao.coberturasRemovidas.forEach((item, index) => {
+      checkPageBreak(coberturaLineHeight + 4);
+      const lineTop = y;
       const textYR = lineTop + coberturaLineHeight / 2 + 2;
       if (index % 2 === 0) {
         doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-        doc.rect(cobCol1X, lineTop, colWidth, coberturaLineHeight, 'F');
+        doc.rect(margin, lineTop, contentWidth, coberturaLineHeight, 'F');
       }
       doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-      doc.setFontSize(9);
-      doc.text('⚠', cobCol1X + 5, textYR);
+      doc.setFontSize(10);
+      doc.text('⚠', margin + 6, textYR);
       doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
       doc.setFont('helvetica', 'normal');
-      doc.text(item, cobCol1X + 12, textYR);
+      doc.text(item, margin + 14, textYR);
+      y += coberturaLineHeight;
     });
 
-    removCol2.forEach((item, index) => {
-      const lineTop = startRemovY + (index * coberturaLineHeight);
-      const textYR = lineTop + coberturaLineHeight / 2 + 2;
-      if (index % 2 === 0) {
-        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-        doc.rect(cobCol2X - 4, lineTop, colWidth + 4, coberturaLineHeight, 'F');
-      }
-      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-      doc.setFontSize(9);
-      doc.text('⚠', cobCol2X + 2, textYR);
-      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
-      doc.setFont('helvetica', 'normal');
-      doc.text(item, cobCol2X + 9, textYR);
-    });
-
-    y = startRemovY + Math.max(removCol1.length, removCol2.length) * coberturaLineHeight + SECTION_GAP;
+    y += SECTION_GAP;
   }
 
   // ============= BADGES E COTAS (PDF SIMPLES) =============
