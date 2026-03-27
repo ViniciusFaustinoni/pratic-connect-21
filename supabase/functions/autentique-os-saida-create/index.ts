@@ -186,7 +186,7 @@ serve(async (req) => {
       'veiculo.valor_fipe': formatCurrency(veiculo?.valor_fipe),
 
       // Empresa
-      'empresa.nome': empresaConfig.nome || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR',
+      'empresa.nome': empresaConfig.nome || 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR',
       'empresa.razao_social': empresaConfig.razao_social || empresaConfig.nome || '',
       'empresa.cnpj': empresaConfig.cnpj || '—',
       'empresa.endereco': `${empresaConfig.logradouro || ''}, ${empresaConfig.numero || ''} - ${empresaConfig.bairro || ''} - ${empresaConfig.cidade || ''}/${empresaConfig.uf || ''} - CEP ${empresaConfig.cep || ''}`,
