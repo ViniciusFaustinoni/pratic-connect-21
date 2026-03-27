@@ -106,8 +106,53 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       setSelectedCoberturas(new Set(existingPlan.coberturaIds));
       setSelectedBeneficios(new Set(existingPlan.beneficioIds));
       setTemplateContratoId(existingPlan.template_contrato_id || '');
+      
+      // Load taxa administrativa faixas
+      if (existingPlan.taxasFipe && existingPlan.taxasFipe.length > 0) {
+        setTaxaFaixas(existingPlan.taxasFipe);
+        const first = existingPlan.taxasFipe[0];
+        const last = existingPlan.taxasFipe[existingPlan.taxasFipe.length - 1];
+        const intervalo = existingPlan.taxasFipe.length > 1
+          ? existingPlan.taxasFipe[1].fipe_de - first.fipe_de
+          : first.fipe_ate - first.fipe_de;
+        setTaxaFipeMin(String(first.fipe_de));
+        setTaxaFipeMax(String(last.fipe_ate));
+        setTaxaIntervalo(String(intervalo));
+      }
     }
   }, [existingPlan]);
+
+  // Generate taxa faixas from min/max/interval
+  const generateTaxaFaixas = useCallback(() => {
+    const min = parseFloat(taxaFipeMin);
+    const max = parseFloat(taxaFipeMax);
+    const intervalo = parseFloat(taxaIntervalo);
+    if (isNaN(min) || isNaN(max) || isNaN(intervalo) || intervalo <= 0 || max <= min) return;
+
+    const newFaixas: TaxaFaixa[] = [];
+    let current = min;
+    while (current < max) {
+      const fimFaixa = Math.min(current + intervalo, max);
+      // Try to keep existing values
+      const existing = taxaFaixas.find(f => f.fipe_de === current && f.fipe_ate === fimFaixa);
+      newFaixas.push({
+        fipe_de: current,
+        fipe_ate: fimFaixa,
+        valor_taxa: existing?.valor_taxa ?? 0,
+      });
+      current = fimFaixa;
+    }
+    setTaxaFaixas(newFaixas);
+  }, [taxaFipeMin, taxaFipeMax, taxaIntervalo, taxaFaixas]);
+
+  useEffect(() => {
+    const min = parseFloat(taxaFipeMin);
+    const max = parseFloat(taxaFipeMax);
+    const intervalo = parseFloat(taxaIntervalo);
+    if (!isNaN(min) && !isNaN(max) && !isNaN(intervalo) && intervalo > 0 && max > min) {
+      generateTaxaFaixas();
+    }
+  }, [taxaFipeMin, taxaFipeMax, taxaIntervalo]);
 
   // Calculate total
   const valorTotal = useMemo(() => {
