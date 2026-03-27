@@ -1,57 +1,69 @@
 
 
-# Unificar "Condições Especiais" e "Tipo de Placa" em campo unico
+# Faixas de Preço por Intervalo FIPE nas Coberturas e Benefícios
 
-## Problema
+## Resumo
 
-O formulario de cotacao tem dois campos que fazem a mesma coisa:
-1. **Tipo de Placa** (dropdown dinamico de `tipos_placa`) — contem itens como "Chassi remarcado", "Veiculo proveniente de leilao", "Placa Vermelha", "Ex-taxi", "Taxi", etc.
-2. **Condicoes Especiais / Desagios** (`VehicleCategorySelect`) — contem exatamente os mesmos itens hardcoded
+Quando "Varia com FIPE?" é ativado, além de Mínimo e Máximo, aparece um campo **Intervalo FIPE (R$)**. O sistema calcula automaticamente quantas faixas existem (`(max - min) / intervalo`) e exibe campos de valor manual para cada faixa. Esses valores por faixa são persistidos no `rule_config` da regra `fipe_range`.
 
-O usuario quer manter apenas **Tipo de Placa** e eliminar o bloco de Condicoes Especiais.
+## Exemplo
 
-## Impacto tecnico
+- Mínimo: R$ 30.000 | Máximo: R$ 60.000 | Intervalo: R$ 5.000
+- Cálculo: (60000 - 30000) / 5000 = **6 faixas**
+- Faixas geradas: 30k-35k, 35k-40k, 40k-45k, 45k-50k, 50k-55k, 55k-60k
+- Cada faixa tem um campo de valor (R$) preenchido manualmente
 
-O campo `categoria` (vindo do `VehicleCategorySelect`) alimenta:
-- Desagio de preco (`isDesagio` → `valorDesagio`)
-- Cota diferenciada (`planos_cotas_categoria`)
-- Bloqueio de planos (`blocked_categories`)
-- Exclusao de beneficios (`benefit_exclusions`)
-- Regras unificadas (`categoriaEspecial` no `VehicleContext`)
-- Alertas visuais
+## Alterações
 
-Toda essa logica precisa passar a usar `tipoPlacaSelecionado` em vez de `categoria`.
+### 1. `EligibilityConfigSection.tsx` — Estado e UI
 
-## Alteracoes
+**Estado** — adicionar ao `EligibilityState`:
+- `fipeIntervalo: string` (valor do intervalo)
+- `fipeValoresFaixa: Record<number, string>` (mapa índice → valor R$)
 
-### 1. `CotacaoFormDialog.tsx`
+**Carregar** — no `useEligibilityState`, ler `cfg.intervalo` e `cfg.faixas` do `rule_config` existente.
 
-- **Remover** o bloco "Condicoes Especiais / Desagios" inteiro (linhas ~1967-2004): o `VehicleCategorySelect`, o alerta dinamico de categoria
-- **Remover** o state `categoria` e `handleCategoriaChange`
-- **Remover** import de `VehicleCategorySelect` e `CATEGORIAS_VEICULO`
-- **Remover** import de `isCoberturaRemovida`
-- **Alimentar** `usePlanosCotacao` com `categoria: tipoPlacaSelecionado` em vez de `categoria: categoria`
-- **Alimentar** `alertaCategoria` usando `tipoPlacaSelecionado`
-- Em todos os locais que referenciam `categoria`, substituir por `tipoPlacaSelecionado`
-- No payload de save, mapear `categoria: tipoPlacaSelecionado || null`
+**UI** — quando `variaComFipe` está ativo:
+- Após Min/Max, exibir campo "Intervalo FIPE (R$)"
+- Calcular `numFaixas = Math.floor((max - min) / intervalo)` em tempo real
+- Se numFaixas > 0 e ≤ 50, renderizar grid de campos:
+  ```
+  R$ 30.000 – R$ 35.000:  [_____ valor]
+  R$ 35.000 – R$ 40.000:  [_____ valor]
+  ...
+  ```
+- Cada campo atualiza `fipeValoresFaixa[index]`
 
-### 2. `usePlanosCotacao.ts`
+### 2. `EligibilityConfigSection.tsx` — Persistência (`saveEligibilityRules`)
 
-- Nenhuma alteracao estrutural — o parametro `categoria` continua existindo, so muda o valor que chega (agora vem de `tipoPlacaSelecionado`)
-- A logica de desagio, cota, blocked_categories, benefit_exclusions continua funcionando porque os values dos `tipos_placa` no banco devem corresponder aos mesmos slugs usados nas categorias (ex: `chassi_remarcado`, `leilao`, `taxi`, etc.)
+No `rule_config` da regra `fipe_range`, salvar:
+```json
+{
+  "min": 30000,
+  "max": 60000,
+  "intervalo": 5000,
+  "faixas": [
+    { "de": 30000, "ate": 35000, "valor": 89.90 },
+    { "de": 35000, "ate": 40000, "valor": 99.90 },
+    ...
+  ]
+}
+```
 
-### 3. `EtapaCriteriosCotacao.tsx`
+### 3. Nenhuma migração de banco
 
-- Mesmo tratamento: remover `VehicleCategorySelect` do bloco de Condicoes Especiais, usar o Tipo de Placa como unica fonte
-
-### 4. Cotador.tsx (pagina antiga)
-
-- Manter por enquanto (pagina legada), mas verificar se tambem tem duplicidade e alinhar
+O campo `rule_config` já é JSONB — comporta a nova estrutura sem alteração de schema.
 
 ## Arquivos alterados
 
-| Arquivo | Acao |
+| Arquivo | Ação |
 |---|---|
-| `src/components/cotacoes/CotacaoFormDialog.tsx` | Remover bloco Condicoes Especiais, redirecionar `categoria` para `tipoPlacaSelecionado` |
-| `src/components/cotacao/EtapaCriteriosCotacao.tsx` | Remover VehicleCategorySelect, usar tipo de placa |
+| `src/components/gestao-comercial/EligibilityConfigSection.tsx` | Adicionar campo intervalo, cálculo de faixas, campos de valor por faixa, persistência no rule_config |
+
+## Comportamento
+
+- Se intervalo não preenchido ou = 0, não mostra faixas
+- Se resultado > 50 faixas, exibe aviso "Intervalo muito pequeno"
+- Ao alterar min/max/intervalo, faixas são recalculadas preservando valores já preenchidos quando possível
+- Formatação dos labels das faixas usa `formatarMoeda` de `@/utils/format`
 
