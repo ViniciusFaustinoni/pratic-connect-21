@@ -685,173 +685,213 @@ export default function Cotacoes() {
         })}
       </div>
 
-      {/* Filters - Barra unificada */}
-      <div className={cn(
-        "flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl",
-        "bg-muted/30 border border-border/40"
-      )}>
-        <div className="relative flex-1 min-w-[200px] max-w-md">
-          <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
-          <Input
-            placeholder="Buscar lead, veículo ou número..."
-            className="pl-9 h-9 border-0 bg-background/80 shadow-sm focus-visible:ring-1"
-            value={search}
-            onChange={(e) => setSearch(e.target.value)}
-          />
-        </div>
-        <Select value={statusFilter} onValueChange={setStatusFilter}>
-          <SelectTrigger className="w-[140px] h-9 border-0 bg-background/80 shadow-sm">
-            <SelectValue placeholder="Status" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos status</SelectItem>
-            <SelectItem value="rascunho">Rascunho</SelectItem>
-            <SelectItem value="enviada">Enviada</SelectItem>
-            <SelectItem value="visualizada">Visualizada</SelectItem>
-            <SelectItem value="aceita">Aceita</SelectItem>
-            <SelectItem value="recusada">Recusada</SelectItem>
-            <SelectItem value="expirada">Expirada</SelectItem>
-          </SelectContent>
-        </Select>
-        <Select value={mesFilter} onValueChange={setMesFilter}>
-          <SelectTrigger className="w-[150px] h-9 border-0 bg-background/80 shadow-sm">
-            <CalendarIcon className="h-4 w-4 mr-1.5 text-muted-foreground" />
-            <SelectValue placeholder="Período" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem value="all">Todos períodos</SelectItem>
-            {mesesDisponiveis.map((mes) => (
-              <SelectItem key={mes} value={mes}>{formatMesLabel(mes)}</SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
-        
-        <Popover>
-          <PopoverTrigger asChild>
-            <Button 
-              variant="outline" 
+      {/* Tabs Em Andamento / Finalizadas */}
+      <Tabs value={activeTab} onValueChange={setActiveTab} className="space-y-4">
+        <TabsList className="grid w-full max-w-md grid-cols-2">
+          <TabsTrigger value="em_andamento" className="gap-2">
+            Em Andamento
+            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+              {cotacoesEmAndamento.length}
+            </Badge>
+          </TabsTrigger>
+          <TabsTrigger value="finalizadas" className="gap-2">
+            Finalizadas
+            <Badge variant="secondary" className="ml-1 h-5 px-1.5 text-[10px]">
+              {cotacoesFinalizadas.length}
+            </Badge>
+          </TabsTrigger>
+        </TabsList>
+
+        {/* Filtros - Barra unificada */}
+        <div className={cn(
+          "flex flex-wrap items-center gap-2 px-4 py-3 rounded-xl",
+          "bg-muted/30 border border-border/40"
+        )}>
+          <div className="relative flex-1 min-w-[200px] max-w-md">
+            <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground/70" />
+            <Input
+              placeholder="Buscar lead, veículo ou número..."
+              className="pl-9 h-9 border-0 bg-background/80 shadow-sm focus-visible:ring-1"
+              value={search}
+              onChange={(e) => setSearch(e.target.value)}
+            />
+          </div>
+          {activeTab === 'em_andamento' && (
+            <>
+              <Select value={statusFilter} onValueChange={setStatusFilter}>
+                <SelectTrigger className="w-[140px] h-9 border-0 bg-background/80 shadow-sm">
+                  <SelectValue placeholder="Status" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos status</SelectItem>
+                  <SelectItem value="rascunho">Rascunho</SelectItem>
+                  <SelectItem value="enviada">Enviada</SelectItem>
+                  <SelectItem value="visualizada">Visualizada</SelectItem>
+                </SelectContent>
+              </Select>
+              <Select value={mesFilter} onValueChange={setMesFilter}>
+                <SelectTrigger className="w-[150px] h-9 border-0 bg-background/80 shadow-sm">
+                  <CalendarIcon className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                  <SelectValue placeholder="Período" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="all">Todos períodos</SelectItem>
+                  {mesesDisponiveis.map((mes) => (
+                    <SelectItem key={mes} value={mes}>{formatMesLabel(mes)}</SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+            </>
+          )}
+          
+          <Popover>
+            <PopoverTrigger asChild>
+              <Button 
+                variant="outline" 
+                size="sm"
+                className={cn(
+                  "h-9 px-3 border-0 bg-background/80 shadow-sm",
+                  !dataFilter && "text-muted-foreground"
+                )}
+              >
+                <CalendarDays className="h-4 w-4 mr-1.5" />
+                {dataFilter ? format(dataFilter, 'dd/MM') : 'Data'}
+              </Button>
+            </PopoverTrigger>
+            <PopoverContent className="w-auto p-0" align="start">
+              <Calendar
+                mode="single"
+                selected={dataFilter}
+                onSelect={setDataFilter}
+                initialFocus
+                className="p-3 pointer-events-auto"
+              />
+              {dataFilter && (
+                <div className="p-2 border-t">
+                  <Button 
+                    variant="ghost" 
+                    size="sm" 
+                    className="w-full" 
+                    onClick={() => setDataFilter(undefined)}
+                  >
+                    Limpar
+                  </Button>
+                </div>
+              )}
+            </PopoverContent>
+          </Popover>
+
+          {permissions.cotacao.viewScope !== 'own' && (
+            <Select value={consultorFilter} onValueChange={setConsultorFilter}>
+              <SelectTrigger className="w-[160px] h-9 border-0 bg-background/80 shadow-sm">
+                <User className="h-4 w-4 mr-1.5 text-muted-foreground" />
+                <SelectValue placeholder="Consultor" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">Todos consultores</SelectItem>
+                {vendedores?.map((v) => (
+                  <SelectItem key={v.user_id} value={v.user_id}>{v.nome}</SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          )}
+
+          {activeTab === 'em_andamento' && (permissions.cotacao.canDelete || permissions.userId) && (
+            <Button
+              variant={filtroOrfas ? 'default' : 'outline'}
               size="sm"
+              onClick={() => {
+                setFiltroOrfas(!filtroOrfas);
+                setSelectedIds(new Set());
+              }}
               className={cn(
-                "h-9 px-3 border-0 bg-background/80 shadow-sm",
-                !dataFilter && "text-muted-foreground"
+                "h-9 px-3 shadow-sm",
+                !filtroOrfas && "border-0 bg-background/80"
               )}
             >
-              <CalendarDays className="h-4 w-4 mr-1.5" />
-              {dataFilter ? format(dataFilter, 'dd/MM') : 'Data'}
+              <AlertTriangle className="h-4 w-4 mr-1.5" />
+              Sem Lead
             </Button>
-          </PopoverTrigger>
-          <PopoverContent className="w-auto p-0" align="start">
-            <Calendar
-              mode="single"
-              selected={dataFilter}
-              onSelect={setDataFilter}
-              initialFocus
-              className="p-3 pointer-events-auto"
-            />
-            {dataFilter && (
-              <div className="p-2 border-t">
-                <Button 
-                  variant="ghost" 
-                  size="sm" 
-                  className="w-full" 
-                  onClick={() => setDataFilter(undefined)}
-                >
-                  Limpar
-                </Button>
-              </div>
-            )}
-          </PopoverContent>
-        </Popover>
-
-        {permissions.cotacao.viewScope !== 'own' && (
-          <Select value={consultorFilter} onValueChange={setConsultorFilter}>
-            <SelectTrigger className="w-[160px] h-9 border-0 bg-background/80 shadow-sm">
-              <User className="h-4 w-4 mr-1.5 text-muted-foreground" />
-              <SelectValue placeholder="Consultor" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">Todos consultores</SelectItem>
-              {vendedores?.map((v) => (
-                <SelectItem key={v.user_id} value={v.user_id}>{v.nome}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        )}
-
-        {(permissions.cotacao.canDelete || permissions.userId) && (
-          <Button
-            variant={filtroOrfas ? 'default' : 'outline'}
-            size="sm"
-            onClick={() => {
-              setFiltroOrfas(!filtroOrfas);
-              setSelectedIds(new Set());
-            }}
-            className={cn(
-              "h-9 px-3 shadow-sm",
-              !filtroOrfas && "border-0 bg-background/80"
-            )}
-          >
-            <AlertTriangle className="h-4 w-4 mr-1.5" />
-            Sem Lead
-          </Button>
-        )}
-        
-        {hasActiveFilters && (
-          <Button 
-            variant="ghost" 
-            size="sm" 
-            onClick={clearFilters} 
-            className="h-9 text-muted-foreground hover:text-foreground animate-in fade-in-0 slide-in-from-left-2 duration-200"
-          >
-            <RefreshCw className="h-3.5 w-3.5 mr-1" />
-            Limpar
-            <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
-              {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas].filter(Boolean).length}
-            </Badge>
-          </Button>
-        )}
-      </div>
-
-      {/* Barra de seleção em lote */}
-      {selectedIds.size > 0 && (
-        <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/20 animate-in fade-in-0 slide-in-from-top-2 duration-200">
-          <span className="text-sm font-medium text-destructive">
-            {selectedIds.size} cotação(ões) selecionada(s)
-          </span>
-          <Button
-            variant="destructive"
-            size="sm"
-            onClick={() => setShowExclusaoLoteDialog(true)}
-          >
-            <Trash2 className="h-4 w-4 mr-1.5" />
-            Excluir selecionadas
-          </Button>
-          <Button
-            variant="ghost"
-            size="sm"
-            onClick={() => setSelectedIds(new Set())}
-            className="text-muted-foreground"
-          >
-            Limpar seleção
-          </Button>
+          )}
+          
+          {hasActiveFilters && (
+            <Button 
+              variant="ghost" 
+              size="sm" 
+              onClick={clearFilters} 
+              className="h-9 text-muted-foreground hover:text-foreground animate-in fade-in-0 slide-in-from-left-2 duration-200"
+            >
+              <RefreshCw className="h-3.5 w-3.5 mr-1" />
+              Limpar
+              <Badge variant="secondary" className="ml-1.5 h-5 px-1.5 text-[10px]">
+                {[search, statusFilter !== 'all', mesFilter !== 'all', dataFilter, consultorFilter !== 'all', filtroOrfas].filter(Boolean).length}
+              </Badge>
+            </Button>
+          )}
         </div>
-      )}
 
-      {/* Tabela de Cotações */}
-      <CotacoesTable 
-        cotacoes={sortedCotacoes}
-        onRowClick={handleRowClick}
-        onCopiarWhatsApp={copiarParaWhatsApp}
-        onPdf={handleBaixarPdf}
-        onDuplicar={handleDuplicar}
-        onExcluir={handleExcluir}
-        copiandoWhatsAppId={copiandoWhatsApp}
-        getPermissions={getPermissions}
-        selectable={true}
-        selectedIds={selectedIds}
-        onToggleSelect={toggleSelect}
-        onToggleAll={toggleSelectAll}
-      />
+        {/* Barra de seleção em lote */}
+        {selectedIds.size > 0 && (
+          <div className="flex items-center gap-3 px-4 py-2.5 rounded-xl bg-destructive/10 border border-destructive/20 animate-in fade-in-0 slide-in-from-top-2 duration-200">
+            <span className="text-sm font-medium text-destructive">
+              {selectedIds.size} cotação(ões) selecionada(s)
+            </span>
+            <Button
+              variant="destructive"
+              size="sm"
+              onClick={() => setShowExclusaoLoteDialog(true)}
+            >
+              <Trash2 className="h-4 w-4 mr-1.5" />
+              Excluir selecionadas
+            </Button>
+            <Button
+              variant="ghost"
+              size="sm"
+              onClick={() => setSelectedIds(new Set())}
+              className="text-muted-foreground"
+            >
+              Limpar seleção
+            </Button>
+          </div>
+        )}
+
+        {/* Tab Em Andamento */}
+        <TabsContent value="em_andamento">
+          <CotacoesTable 
+            cotacoes={cotacoesEmAndamento}
+            onRowClick={handleRowClick}
+            onCopiarWhatsApp={copiarParaWhatsApp}
+            onPdf={handleBaixarPdf}
+            onDuplicar={handleDuplicar}
+            onExcluir={handleExcluir}
+            copiandoWhatsAppId={copiandoWhatsApp}
+            getPermissions={getPermissions}
+            selectable={true}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            onToggleAll={toggleSelectAll}
+          />
+        </TabsContent>
+
+        {/* Tab Finalizadas */}
+        <TabsContent value="finalizadas">
+          <CotacoesTable 
+            cotacoes={cotacoesFinalizadas}
+            onRowClick={handleRowClick}
+            onCopiarWhatsApp={copiarParaWhatsApp}
+            onPdf={handleBaixarPdf}
+            onDuplicar={handleDuplicar}
+            onExcluir={handleExcluir}
+            copiandoWhatsAppId={copiandoWhatsApp}
+            getPermissions={getPermissions}
+            selectable={true}
+            selectedIds={selectedIds}
+            onToggleSelect={toggleSelect}
+            onToggleAll={toggleSelectAll}
+            groupByDate={true}
+          />
+        </TabsContent>
+      </Tabs>
 
       {/* Modal de Detalhes */}
       <CotacaoDetalhesModal 
