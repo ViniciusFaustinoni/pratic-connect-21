@@ -145,6 +145,10 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       const inRange = ctx.valorFipe >= (cfg.min || 0) && ctx.valorFipe <= (cfg.max || Infinity);
       return isInclude ? inRange : !inRange;
     }
+    case 'fipe_eligibility': {
+      const inRange = ctx.valorFipe >= (cfg.min || 0) && ctx.valorFipe <= (cfg.max || Infinity);
+      return isInclude ? inRange : !inRange;
+    }
     case 'ano_range': {
       const inRange = ctx.anoVeiculo >= (cfg.min || 0) && ctx.anoVeiculo <= (cfg.max || 9999);
       return isInclude ? inRange : !inRange;
