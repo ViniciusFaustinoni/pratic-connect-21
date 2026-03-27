@@ -7,8 +7,9 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Trash2, Loader2, Filter } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Filter, Copy } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
+import { useDuplicateCobertura, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -275,11 +276,12 @@ function RulesIndicator({ entityType, entityId }: { entityType: 'cobertura' | 'b
 
 // ── Item List ──
 
-function ItemList({ items, onEdit, onToggle, onDelete, type }: {
+function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type }: {
   items: any[];
   onEdit: (item: any) => void;
   onToggle: (id: string, active: boolean) => void;
   onDelete: (item: any) => void;
+  onDuplicate: (id: string) => void;
   type: 'cobertura' | 'beneficio';
 }) {
   const getActive = (item: any) => type === 'cobertura' ? item.ativo !== false : item.is_active !== false;
@@ -311,6 +313,9 @@ function ItemList({ items, onEdit, onToggle, onDelete, type }: {
           <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onEdit(item)}>
             <Pencil className="h-3.5 w-3.5" />
           </Button>
+          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onDuplicate(item.id)} title="Duplicar">
+            <Copy className="h-3.5 w-3.5" />
+          </Button>
           <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
             <Trash2 className="h-3.5 w-3.5" />
           </Button>
@@ -329,6 +334,8 @@ export function CatalogoCoberturasBeneficios() {
   const toggleBen = useToggleBenefit();
   const deleteCob = useDeleteCobertura();
   const deleteBen = useDeleteBenefit();
+  const duplicateCob = useDuplicateCobertura();
+  const duplicateBen = useDuplicateBenefit();
 
   const [cobSheet, setCobSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [benSheet, setBenSheet] = useState<{ open: boolean; item?: any }>({ open: false });
@@ -372,6 +379,7 @@ export function CatalogoCoberturasBeneficios() {
             onEdit={(item) => setCobSheet({ open: true, item })}
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'cobertura' })}
+            onDuplicate={(id) => duplicateCob.mutate(id)}
           />
         </TabsContent>
 
@@ -385,6 +393,7 @@ export function CatalogoCoberturasBeneficios() {
             onEdit={(item) => setBenSheet({ open: true, item })}
             onToggle={(id, is_active) => toggleBen.mutate({ id, is_active })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'beneficio' })}
+            onDuplicate={(id) => duplicateBen.mutate(id)}
           />
         </TabsContent>
       </Tabs>

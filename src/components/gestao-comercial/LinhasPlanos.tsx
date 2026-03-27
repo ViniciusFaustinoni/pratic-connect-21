@@ -12,10 +12,11 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, ChevronRight, Loader2, Pencil, Trash2 } from 'lucide-react';
+import { Plus, ChevronRight, Loader2, Pencil, Trash2, Copy } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PlanoFormSheet } from './PlanoFormSheet';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useDuplicateProductLine, useDuplicatePlan } from '@/hooks/usePlansAdmin';
 
 // ── Data hooks ──
 
@@ -187,6 +188,8 @@ export function LinhasPlanos() {
 
   const deleteLinha = useDeleteLinha();
   const deletePlano = useDeletePlano();
+  const duplicateLine = useDuplicateProductLine();
+  const duplicatePlan = useDuplicatePlan();
 
   const toggleLine = (id: string) => {
     setOpenLines(prev => {
@@ -232,6 +235,9 @@ export function LinhasPlanos() {
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setLinhaSheet({ open: true, linha }); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); duplicateLine.mutate(linha.id); }} title="Duplicar">
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
                   {canDelete && (
                     <Button
                       variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
@@ -259,6 +265,12 @@ export function LinhasPlanos() {
                         </span>
                         <Switch checked={plano.ativo} className="shrink-0 pointer-events-none" />
                       </button>
+                      <Button
+                        variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                        onClick={() => duplicatePlan.mutate(plano.id)} title="Duplicar"
+                      >
+                        <Copy className="h-3.5 w-3.5" />
+                      </Button>
                       {canDelete && (
                         <Button
                           variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
