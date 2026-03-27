@@ -7,11 +7,13 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Trash2, Loader2 } from 'lucide-react';
+import { Plus, Pencil, Trash2, Loader2, Filter } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { EligibilityConfigSection, useEligibilityState, saveEligibilityRules, hasEligibilityRules } from './EligibilityConfigSection';
+import { useRulesForEntity } from '@/hooks/useEntityEligibilityRules';
 
 
 // ── Delete Confirmation Dialog ──
@@ -72,6 +74,8 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('0');
 
+  const { state: eligState, setState: setEligState } = useEligibilityState('cobertura', item?.id);
+
   useEffect(() => {
     setNome(item?.nome || '');
     setDescricao(item?.descricao || '');
@@ -81,32 +85,42 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
   const mutation = useMutation({
     mutationFn: async () => {
       const payload = { nome, descricao, valor: parseFloat(valor) || 0 };
-      if (item?.id) {
-        const { error } = await supabase.from('coberturas').update(payload).eq('id', item.id);
+      let entityId = item?.id;
+      if (entityId) {
+        const { error } = await supabase.from('coberturas').update(payload).eq('id', entityId);
         if (error) throw error;
       } else {
         const slug = nome.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
         const codigo = `${slug}-${crypto.randomUUID().slice(0, 8)}`;
-        const { error } = await supabase.from('coberturas').insert({
-          ...payload,
-          codigo,
-          tipo: 'cobertura',
-        });
+        const { data, error } = await supabase.from('coberturas').insert({
+          ...payload, codigo, tipo: 'cobertura',
+        }).select().single();
         if (error) throw error;
+        entityId = data.id;
       }
+      // Save eligibility rules
+      await saveEligibilityRules('cobertura', entityId, eligState);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['coberturas'] }); toast.success('Cobertura salva'); onClose(); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['coberturas'] });
+      qc.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
+      toast.success('Cobertura salva');
+      onClose();
+    },
     onError: (err: any) => toast.error(err?.message?.includes('duplicate') || err?.code === '23505' ? 'Já existe uma cobertura com esse nome' : 'Erro ao salvar'),
   });
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="sm:max-w-md">
+      <SheetContent className="sm:max-w-md overflow-y-auto">
         <SheetHeader><SheetTitle>{item ? 'Editar' : 'Nova'} Cobertura</SheetTitle></SheetHeader>
-        <div className="space-y-4 mt-6">
+        <div className="space-y-4 mt-6 pb-8">
           <div><Label>Nome</Label><Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Roubo e Furto" /></div>
           <div><Label>Descrição</Label><Textarea rows={3} value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição da cobertura" /></div>
           <div><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={valor} onChange={e => setValor(e.target.value)} /></div>
+
+          <EligibilityConfigSection entityType="cobertura" entityId={item?.id} />
+
           <div className="flex gap-2 pt-4">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
             <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!nome.trim() || mutation.isPending}>
@@ -127,6 +141,8 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
   const [description, setDescription] = useState('');
   const [valor, setValor] = useState('0');
 
+  const { state: eligState, setState: setEligState } = useEligibilityState('beneficio', item?.id);
+
   useEffect(() => {
     setName(item?.name || '');
     setDescription(item?.description || '');
@@ -136,32 +152,42 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
   const mutation = useMutation({
     mutationFn: async () => {
       const payload = { name, description, preco_sugerido: parseFloat(valor) || 0 };
-      if (item?.id) {
-        const { error } = await supabase.from('benefits').update(payload).eq('id', item.id);
+      let entityId = item?.id;
+      if (entityId) {
+        const { error } = await supabase.from('benefits').update(payload).eq('id', entityId);
         if (error) throw error;
       } else {
         const slug = name.toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '').replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '');
         const uniqueSlug = `${slug}-${crypto.randomUUID().slice(0, 8)}`;
-        const { error } = await supabase.from('benefits').insert({
-          ...payload,
-          slug: uniqueSlug,
-          category: 'geral',
-        });
+        const { data, error } = await supabase.from('benefits').insert({
+          ...payload, slug: uniqueSlug, category: 'geral',
+        }).select().single();
         if (error) throw error;
+        entityId = data.id;
       }
+      // Save eligibility rules
+      await saveEligibilityRules('beneficio', entityId, eligState);
     },
-    onSuccess: () => { qc.invalidateQueries({ queryKey: ['benefits'] }); toast.success('Benefício salvo'); onClose(); },
+    onSuccess: () => {
+      qc.invalidateQueries({ queryKey: ['benefits'] });
+      qc.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
+      toast.success('Benefício salvo');
+      onClose();
+    },
     onError: (err: any) => toast.error(err?.message?.includes('duplicate') || err?.code === '23505' ? 'Já existe um benefício com esse nome' : 'Erro ao salvar'),
   });
 
   return (
     <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="sm:max-w-md">
+      <SheetContent className="sm:max-w-md overflow-y-auto">
         <SheetHeader><SheetTitle>{item ? 'Editar' : 'Novo'} Benefício</SheetTitle></SheetHeader>
-        <div className="space-y-4 mt-6">
+        <div className="space-y-4 mt-6 pb-8">
           <div><Label>Nome</Label><Input value={name} onChange={e => setName(e.target.value)} placeholder="Ex: Assistência 24h" /></div>
           <div><Label>Descrição</Label><Textarea rows={3} value={description} onChange={e => setDescription(e.target.value)} placeholder="Descrição do benefício" /></div>
           <div><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={valor} onChange={e => setValor(e.target.value)} /></div>
+
+          <EligibilityConfigSection entityType="beneficio" entityId={item?.id} />
+
           <div className="flex gap-2 pt-4">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
             <Button className="flex-1" onClick={() => mutation.mutate()} disabled={!name.trim() || mutation.isPending}>
@@ -204,8 +230,8 @@ function useDeleteCobertura() {
   const qc = useQueryClient();
   return useMutation({
     mutationFn: async ({ id }: { id: string }) => {
-      // Remove vínculos com planos primeiro
       await supabase.from('planos_coberturas').delete().eq('cobertura_id', id);
+      await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'cobertura').eq('entity_id', id);
       const { error } = await supabase.from('coberturas').delete().eq('id', id);
       if (error) throw error;
     },
@@ -219,12 +245,26 @@ function useDeleteBenefit() {
   return useMutation({
     mutationFn: async ({ id }: { id: string }) => {
       await supabase.from('planos_beneficios').delete().eq('benefit_id', id);
+      await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'beneficio').eq('entity_id', id);
       const { error } = await supabase.from('benefits').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['benefits'] }); toast.success('Benefício excluído'); },
     onError: () => toast.error('Erro ao excluir. Verifique se não há dependências.'),
   });
+}
+
+// ── Rules indicator hook ──
+
+function useHasRules(entityType: 'cobertura' | 'beneficio', entityId: string) {
+  const { data: rules = [] } = useRulesForEntity(entityType as any, entityId);
+  return rules.length > 0;
+}
+
+function RulesIndicator({ entityType, entityId }: { entityType: 'cobertura' | 'beneficio'; entityId: string }) {
+  const hasRules = useHasRules(entityType, entityId);
+  if (!hasRules) return null;
+  return <Filter className="h-3.5 w-3.5 text-primary shrink-0" />;
 }
 
 // ── Item List ──
@@ -248,7 +288,10 @@ function ItemList({ items, onEdit, onToggle, onDelete, type }: {
       {items.map(item => (
         <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors group">
           <div className="flex-1 min-w-0">
-            <p className="text-sm font-medium truncate">{getNome(item)}</p>
+            <div className="flex items-center gap-1.5">
+              <p className="text-sm font-medium truncate">{getNome(item)}</p>
+              <RulesIndicator entityType={type} entityId={item.id} />
+            </div>
             {getDesc(item) && <p className="text-xs text-muted-foreground truncate">{getDesc(item)}</p>}
           </div>
           <span className="text-sm font-semibold text-primary shrink-0">

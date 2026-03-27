@@ -40,6 +40,7 @@ const RULE_TYPE_LABELS: Record<RuleType, string> = {
   marca_modelo: 'Marca / Modelo / Versão',
   tipo_uso: 'Tipo de Uso',
   combustivel: 'Combustível',
+  tipo_placa: 'Tipo de Placa',
 };
 
 const RULE_TYPE_ICONS: Record<RuleType, string> = {
@@ -51,6 +52,7 @@ const RULE_TYPE_ICONS: Record<RuleType, string> = {
   marca_modelo: '🏭',
   tipo_uso: '🔑',
   combustivel: '⛽',
+  tipo_placa: '🪪',
 };
 
 interface EligibilityRulesEditorProps {

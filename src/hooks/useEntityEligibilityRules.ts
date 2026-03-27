@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export type EntityType = 'linha' | 'plano' | 'cobertura' | 'beneficio';
-export type RuleType = 'fipe_range' | 'ano_range' | 'categoria_veiculo' | 'categoria_especial' | 'regiao' | 'marca_modelo' | 'tipo_uso' | 'combustivel';
+export type RuleType = 'fipe_range' | 'ano_range' | 'categoria_veiculo' | 'categoria_especial' | 'regiao' | 'marca_modelo' | 'tipo_uso' | 'combustivel' | 'tipo_placa';
 export type RuleMode = 'include' | 'exclude';
 
 export interface EligibilityRule {
@@ -133,6 +133,7 @@ export interface VehicleContext {
   versao?: string;
   tipoUso?: string;
   combustivel?: string;
+  tipoPlaca?: string;
 }
 
 export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleContext): boolean {
@@ -149,19 +150,19 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       return isInclude ? inRange : !inRange;
     }
     case 'categoria_veiculo': {
-      const cats: string[] = cfg.categorias || [];
+      const cats: string[] = cfg.categorias || cfg.values || [];
       if (cats.length === 0) return true;
-      const match = !!ctx.categoriaVeiculo && cats.includes(ctx.categoriaVeiculo.toLowerCase());
+      const match = !!ctx.categoriaVeiculo && cats.some(c => c.toLowerCase() === ctx.categoriaVeiculo!.toLowerCase());
       return isInclude ? match : !match;
     }
     case 'categoria_especial': {
-      const cats: string[] = cfg.categorias || [];
+      const cats: string[] = cfg.categorias || cfg.values || [];
       if (cats.length === 0) return true;
-      const match = !!ctx.categoriaEspecial && cats.includes(ctx.categoriaEspecial.toLowerCase());
+      const match = !!ctx.categoriaEspecial && cats.some(c => c.toLowerCase() === ctx.categoriaEspecial!.toLowerCase());
       return isInclude ? match : !match;
     }
     case 'regiao': {
-      const regioes: string[] = cfg.regioes || [];
+      const regioes: string[] = cfg.regioes || cfg.values || [];
       if (regioes.length === 0) return true;
       const match = !!ctx.regiao && regioes.some(r => r.toLowerCase() === ctx.regiao!.toLowerCase());
       return isInclude ? match : !match;
@@ -174,15 +175,21 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       return isInclude ? match : !match;
     }
     case 'tipo_uso': {
-      const tipos: string[] = cfg.tipos || [];
+      const tipos: string[] = cfg.tipos || cfg.values || [];
       if (tipos.length === 0) return true;
-      const match = !!ctx.tipoUso && tipos.includes(ctx.tipoUso.toLowerCase());
+      const match = !!ctx.tipoUso && tipos.some(t => t.toLowerCase() === ctx.tipoUso!.toLowerCase());
       return isInclude ? match : !match;
     }
     case 'combustivel': {
-      const combs: string[] = cfg.combustiveis || [];
+      const combs: string[] = cfg.combustiveis || cfg.values || [];
       if (combs.length === 0) return true;
-      const match = !!ctx.combustivel && combs.includes(ctx.combustivel.toLowerCase());
+      const match = !!ctx.combustivel && combs.some(c => c.toLowerCase() === ctx.combustivel!.toLowerCase());
+      return isInclude ? match : !match;
+    }
+    case 'tipo_placa': {
+      const placas: string[] = cfg.tipos || cfg.values || [];
+      if (placas.length === 0) return true;
+      const match = !!ctx.tipoPlaca && placas.some(p => p.toLowerCase() === ctx.tipoPlaca!.toLowerCase());
       return isInclude ? match : !match;
     }
     default:
