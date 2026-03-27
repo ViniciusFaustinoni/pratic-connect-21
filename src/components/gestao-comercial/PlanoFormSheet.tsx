@@ -35,6 +35,21 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [ativo, setAtivo] = useState(true);
   const [selectedCoberturas, setSelectedCoberturas] = useState<Set<string>>(new Set());
   const [selectedBeneficios, setSelectedBeneficios] = useState<Set<string>>(new Set());
+  const [templateContratoId, setTemplateContratoId] = useState<string>('');
+
+  // Load templates
+  const { data: templates = [] } = useQuery({
+    queryKey: ['documento_templates_ativos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('documento_templates')
+        .select('id, nome, codigo')
+        .eq('ativo', true)
+        .order('nome');
+      if (error) throw error;
+      return data || [];
+    },
+  });
   
 
   // Load existing plan
