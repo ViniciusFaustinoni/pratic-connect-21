@@ -384,23 +384,44 @@ serve(async (req) => {
     }
 
     // ============= BUSCAR TEMPLATE DO BANCO =============
-    const { data: templatesDB, error: templateError } = await supabase
-      .from("documento_templates")
-      .select("id, codigo, nome, conteudo, config_layout")
-      .eq("is_default_autentique", true)
-      .eq("ativo", true)
-      .order("updated_at", { ascending: false })
-      .limit(2);
+    // Priorizar template vinculado ao plano, senão fallback para is_default_autentique
+    let templateDB: any = null;
+    const planoTemplateId = contrato.planos?.template_contrato_id;
 
-    if (templateError) {
-      console.warn("[autentique-create-by-token] Erro ao buscar template:", templateError.message);
-    }
-    if (templatesDB && templatesDB.length > 1) {
-      console.warn(`[autentique-create-by-token] ⚠️ ${templatesDB.length} templates com is_default_autentique=true! Usando o mais recente: ${templatesDB[0].codigo}`);
+    if (planoTemplateId) {
+      const { data: tpl, error: tplErr } = await supabase
+        .from("documento_templates")
+        .select("id, codigo, nome, conteudo, config_layout")
+        .eq("id", planoTemplateId)
+        .eq("ativo", true)
+        .single();
+      if (!tplErr && tpl) {
+        templateDB = tpl;
+        console.log(`[autentique-create-by-token] Usando template vinculado ao plano: ${tpl.codigo} (${tpl.nome})`);
+      } else {
+        console.warn(`[autentique-create-by-token] Template do plano (${planoTemplateId}) não encontrado, usando fallback`);
+      }
     }
 
-    const templateDB = templatesDB?.[0] || null;
-    const usandoTemplateBanco = !templateError && templateDB?.conteudo;
+    if (!templateDB) {
+      const { data: templatesDB, error: templateError } = await supabase
+        .from("documento_templates")
+        .select("id, codigo, nome, conteudo, config_layout")
+        .eq("is_default_autentique", true)
+        .eq("ativo", true)
+        .order("updated_at", { ascending: false })
+        .limit(2);
+
+      if (templateError) {
+        console.warn("[autentique-create-by-token] Erro ao buscar template:", templateError.message);
+      }
+      if (templatesDB && templatesDB.length > 1) {
+        console.warn(`[autentique-create-by-token] ⚠️ ${templatesDB.length} templates com is_default_autentique=true!`);
+      }
+      templateDB = templatesDB?.[0] || null;
+    }
+
+    const usandoTemplateBanco = templateDB?.conteudo;
 
     // ============= GERAR HTML DO TERMO DE AFILIAÇÃO =============
     let contratoHTML: string;
