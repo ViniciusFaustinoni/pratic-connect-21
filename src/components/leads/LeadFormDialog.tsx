@@ -76,6 +76,9 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
     },
   });
 
+  const origemValue = form.watch('origem');
+  const { data: origensDetalhe = [] } = useLeadOrigensPorCategoria(origemValue);
+
   // Consulta automática de placa via FIPE
   const handlePlacaLookup = async (placa: string) => {
     const placaLimpa = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
