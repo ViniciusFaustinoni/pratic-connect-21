@@ -665,6 +665,7 @@ const App = () => (
               <Route path="/marketing/materiais" element={<Materiais />} />
               <Route path="/marketing/comunicacao" element={<ComunicacaoMassa />} />
               <Route path="/marketing/redes-sociais" element={<RedesSociais />} />
+              <Route path="/marketing/origens" element={<OrigensLead />} />
               
               {/* Admin */}
               <Route path="/admin/planos" element={<PlanosAdmin />} />

@@ -130,6 +130,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/marketing/indicacoes': { label: 'Indicações' },
   '/marketing/utms': { label: 'UTMs' },
   '/marketing/relatorios': { label: 'Relatórios' },
+  '/marketing/origens': { label: 'Origens de Lead' },
   
   // Diretoria
   '/diretoria': { label: 'Diretoria' },
