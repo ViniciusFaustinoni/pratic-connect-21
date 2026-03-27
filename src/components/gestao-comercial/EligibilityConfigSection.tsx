@@ -220,6 +220,23 @@ export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeC
       <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Configurações de Elegibilidade</h4>
       <p className="text-[10px] text-muted-foreground">Campos opcionais — se não preenchido, aparece para todos os veículos.</p>
 
+      {/* Elegibilidade por FIPE */}
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold">Elegibilidade por FIPE</Label>
+        <p className="text-[10px] text-muted-foreground">Define para quais valores de FIPE este item aparece na cotação. Se vazio, aparece para todos.</p>
+        <div className="flex gap-2">
+          <Input
+            type="number" placeholder="FIPE mínimo (R$)" value={state.elegFipeMin}
+            onChange={e => update({ elegFipeMin: e.target.value })} className="flex-1"
+          />
+          <span className="self-center text-muted-foreground text-xs">até</span>
+          <Input
+            type="number" placeholder="FIPE máximo (R$)" value={state.elegFipeMax}
+            onChange={e => update({ elegFipeMax: e.target.value })} className="flex-1"
+          />
+        </div>
+      </div>
+
       {/* Varia com FIPE */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -227,7 +244,7 @@ export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeC
             checked={state.variaComFipe}
             onCheckedChange={(checked) => { update({ variaComFipe: checked, fipeIntervalo: '', fipeValoresFaixa: {} }); onVariaComFipeChange?.(checked); }}
           />
-          <Label className="text-xs">Varia com FIPE?</Label>
+          <Label className="text-xs">Varia com FIPE? (precificação por faixa)</Label>
         </div>
         {state.variaComFipe && (
           <>
