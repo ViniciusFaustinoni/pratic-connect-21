@@ -129,7 +129,6 @@ function useDeletePlano() {
     mutationFn: async (id: string) => {
       await supabase.from('planos_coberturas').delete().eq('plano_id', id);
       await supabase.from('planos_beneficios').delete().eq('plano_id', id);
-      await supabase.from('planos_regioes').delete().eq('plano_id', id);
       await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'plano').eq('entity_id', id);
       const { error } = await supabase.from('planos').delete().eq('id', id);
       if (error) throw error;

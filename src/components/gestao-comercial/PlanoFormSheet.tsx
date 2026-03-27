@@ -228,27 +228,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
 
           <div className="border-t" />
 
-          {/* ── BLOCO 3: Regiões ── */}
-          <section className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Regiões Disponíveis</h3>
-            <p className="text-xs text-muted-foreground">Se nenhuma região for selecionada, o plano estará disponível em todas.</p>
-
-            {regioes.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {regioes.filter(r => r.ativa).map(r => (
-                  <Badge
-                    key={r.id}
-                    variant={selRegioes.has(r.id) ? 'default' : 'outline'}
-                    className="cursor-pointer"
-                    onClick={() => toggleSet(selRegioes, setSelRegioes, r.id)}
-                  >{r.nome}</Badge>
-                ))}
-              </div>
-            )}
-          </section>
-
-          <div className="border-t" />
-
           {/* ── Template de Contrato (placeholder) ── */}
           <section className="space-y-2">
             <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Template de Contrato</h3>
