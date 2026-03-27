@@ -1,40 +1,90 @@
 
 
-# Corrigir Duplicação de Plano: Cache + Taxa Administrativa
+# Refatorar Motor de Cotação: Preço = Soma dos Itens + Taxa Administrativa
 
-## Problemas
+## Contexto
 
-1. **Lista não atualiza** — o `onSuccess` do `useDuplicatePlan` invalida `['plans']` e `['planos']`, mas a tela de Linhas e Planos usa a query `['linhas_com_planos_clean']`, que não é invalidada.
-2. **Faixas de taxa administrativa não são copiadas** — o `mutationFn` duplica benefícios e regiões, mas ignora a tabela `planos_taxa_administrativa`.
+O motor de cotação atual busca o preço mensal na tabela `tabelas_preco_mensalidade` (tabela de preços por faixa FIPE). Essa tabela é obsoleta. O novo modelo de precificação é:
 
-## Alterações
-
-### `src/hooks/usePlansAdmin.ts` — função `useDuplicatePlan`
-
-**A) Duplicar taxa administrativa** (após duplicar regiões, ~linha 368):
-```ts
-// Duplicate taxa administrativa
-const { data: taxas } = await supabase
-  .from('planos_taxa_administrativa')
-  .select('fipe_de, fipe_ate, valor_taxa')
-  .eq('plano_id', id);
-
-if (taxas && taxas.length > 0) {
-  await supabase.from('planos_taxa_administrativa').insert(
-    taxas.map(t => ({ plano_id: createdPlan.id, fipe_de: t.fipe_de, fipe_ate: t.fipe_ate, valor_taxa: t.valor_taxa }))
-  );
-}
+```text
+valor_mensal = Σ coberturas.valor (via planos_coberturas)
+             + Σ benefits.preco_sugerido (via planos_beneficios)
+             + taxa_administrativa (via planos_taxa_administrativa, por faixa FIPE)
 ```
 
-**B) Invalidar query correta** no `onSuccess` (~linha 373):
-Adicionar:
-```ts
-queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
-```
-
-## Arquivo alterado
+## Arquivos afetados
 
 | Arquivo | Ação |
 |---|---|
-| `src/hooks/usePlansAdmin.ts` | Duplicar faixas de taxa administrativa + invalidar cache `linhas_com_planos_clean` |
+| `src/hooks/usePlanosCotacao.ts` | Refatorar pricing principal |
+| `src/hooks/useCotacao.ts` | Refatorar pricing secundário |
+
+## Detalhes técnicos
+
+### 1. `usePlanosCotacao.ts` — Hook principal da tela de cotação
+
+**Remover:**
+- Query `plano_preco_map` (linhas 182-193)
+- Query `tabelas_preco_mensalidade` (linhas 195-208)
+- Bloco de pricing antigo (linhas 561-613) que busca `valorMensal` via `tabelasMensalidade`
+- Dependências de `tabelasMensalidadeLoading` e `planoPrecoMapLoading` no flag de loading crítico
+
+**Adicionar:**
+- Query `planos_coberturas` com join `coberturas(valor)` para todos os planos ativos
+- Query `planos_taxa_administrativa` para todos os planos ativos
+- Alterar a query de `planos_beneficios` existente (linha 170) para incluir `benefits:benefit_id(id, name, category, preco_sugerido)`
+
+**Novo cálculo de preço** (substituir linhas 561-613):
+```ts
+// Soma dos valores das coberturas vinculadas ao plano
+const somaCoberturas = coberturasMap.get(plano.id) || 0;
+
+// Soma dos valores dos benefícios vinculados (usando preco_sugerido)
+const somaBeneficios = (plano.planos_beneficios || [])
+  .reduce((acc, pb) => acc + ((pb.benefits as any)?.preco_sugerido || 0), 0);
+
+// Taxa administrativa por faixa FIPE
+const taxaAdmin = taxasAdminData
+  ?.filter(t => t.plano_id === plano.id)
+  ?.find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
+const valorTaxaAdmin = taxaAdmin?.valor_taxa || 0;
+
+let valorMensal = somaCoberturas + somaBeneficios + valorTaxaAdmin;
+
+// Se o plano não tem itens configurados, ocultar
+if (valorMensal === 0) continue;
+```
+
+### 2. `useCotacao.ts` — Hook secundário (criação de cotações)
+
+**Remover:**
+- `usePlanoPrecoMap()` (linhas 100-112)
+- `useTabelasMensalidade()` (linhas 114-127)
+- `useConfigAdicionalApp()` (linhas 133-174)
+- `encontrarFaixaMensalidade()` (linhas 180-232)
+
+**Adicionar:**
+- Queries para coberturas, benefícios e taxa administrativa
+- Novo cálculo dentro de `useCalcularCotacao` usando soma dos itens + taxa
+
+**Novo `useCalcularCotacao`:** Em vez de chamar `encontrarFaixaMensalidade`, calcular diretamente:
+```ts
+// Para cada plano disponível:
+const somaCob = cobValores.get(plano.id) || 0;
+const somaBen = benValores.get(plano.id) || 0;
+const taxa = taxasAdmin
+  ?.filter(t => t.plano_id === plano.id)
+  ?.find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
+const valorMensal = somaCob + somaBen + (taxa?.valor_taxa || 0);
+
+if (valorMensal <= 0) continue;
+```
+
+## O que NÃO muda
+
+- Regras de elegibilidade (FIPE, ano, modelo, região, categoria)
+- Decomposição do valor mensal (cota, admin, rastreamento, assistência)
+- Cota de participação e deságio
+- Lógica de coberturas removidas por categoria
+- Adicional mensal e desconto percentual do plano (continuam aplicados sobre o total)
 
