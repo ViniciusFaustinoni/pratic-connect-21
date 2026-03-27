@@ -95,7 +95,7 @@ const mockAssociado: DadosTermoFiliacao = {
   },
   empresa: {
     nome: 'PRATICCAR',
-    razaoSocial: 'Associação de Benefícios PraticCar',
+    razaoSocial: 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR',
     cnpj: '12.345.678/0001-90',
     logradouro: 'Av. das Américas',
     numero: '19.005',
