@@ -36,29 +36,20 @@ export interface EligibilityState {
 export function useEligibilityState(entityType: EntityType, entityId: string | undefined) {
   const { data: existingRules = [] } = useRulesForEntity(entityType, entityId);
 
-  const [state, setState] = useState<EligibilityState>({
-    variaComFipe: false,
-    fipeMin: '',
-    fipeMax: '',
-    selRegioes: new Set(),
-    selUso: new Set(),
-    selPlaca: new Set(),
-    selCombustivel: new Set(),
-  });
+  const emptyState: EligibilityState = {
+    variaComFipe: false, fipeMin: '', fipeMax: '', fipeIntervalo: '', fipeValoresFaixa: {},
+    selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set(),
+  };
+
+  const [state, setState] = useState<EligibilityState>(emptyState);
 
   useEffect(() => {
     if (!entityId || existingRules.length === 0) {
-      setState({
-        variaComFipe: false, fipeMin: '', fipeMax: '',
-        selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set(),
-      });
+      setState(emptyState);
       return;
     }
 
-    const newState: EligibilityState = {
-      variaComFipe: false, fipeMin: '', fipeMax: '',
-      selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set(),
-    };
+    const newState: EligibilityState = { ...emptyState, selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set() };
 
     for (const rule of existingRules) {
       const cfg = rule.rule_config as any;
