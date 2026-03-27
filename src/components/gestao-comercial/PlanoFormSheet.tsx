@@ -247,10 +247,28 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
 
           <div className="border-t" />
 
-          {/* ── Template de Contrato (placeholder) ── */}
-          <section className="space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Template de Contrato</h3>
-            <p className="text-xs text-muted-foreground">Integração com Autentique — em breve</p>
+          {/* ── Template de Contrato ── */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5" />Template de Contrato
+            </h3>
+            <p className="text-xs text-muted-foreground">Selecione o template do Autentique que será usado ao gerar contratos deste plano.</p>
+            <Select value={templateContratoId} onValueChange={setTemplateContratoId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Usar template padrão do sistema" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Usar template padrão do sistema</SelectItem>
+                {templates.map(t => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.nome} {t.codigo ? `(${t.codigo})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {templateContratoId && templateContratoId !== 'default' && (
+              <p className="text-xs text-emerald-600">✓ Template específico vinculado</p>
+            )}
           </section>
 
           {/* Actions */}
