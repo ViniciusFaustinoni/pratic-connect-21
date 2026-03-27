@@ -134,6 +134,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
         veiculo_placa: data.veiculo_placa || null,
         veiculo_fipe: data.veiculo_fipe || null,
         origem: data.origem as 'site',
+        origem_detalhe_id: origemDetalheId || null,
         vendedor_id: data.vendedor_id || null,
         // vendedor_id já está sendo passado acima
         observacoes: data.observacoes || null,
