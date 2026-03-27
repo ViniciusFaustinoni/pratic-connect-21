@@ -387,7 +387,26 @@ export function CotacoesTable({
             </TableRow>
           </TableHeader>
           <TableBody>
-            {cotacoes.map((cotacao) => {
+            {(() => {
+              let lastDateKey = '';
+              return cotacoes.map((cotacao) => {
+                const dateKey = groupByDate ? format(new Date(cotacao.updated_at || cotacao.created_at), 'yyyy-MM-dd') : '';
+                const showDateHeader = groupByDate && dateKey !== lastDateKey;
+                if (showDateHeader) lastDateKey = dateKey;
+                const colSpan = (selectable ? 1 : 0) + 7;
+
+                return (
+                  <>
+                    {showDateHeader && (
+                      <TableRow key={`date-${dateKey}`} className="bg-muted/60 hover:bg-muted/60">
+                        <TableCell colSpan={colSpan} className="py-2 px-4">
+                          <span className="text-xs font-bold uppercase tracking-wider text-muted-foreground">
+                            📅 {format(new Date(dateKey), "dd/MM/yyyy (EEEE)", { locale: ptBR })}
+                          </span>
+                        </TableCell>
+                      </TableRow>
+                    )}
+                    {(() => {
               const status = statusConfig[cotacao.status as StatusCotacaoExtended] || statusConfig.rascunho;
               const etapaVenda = getEtapaVenda(cotacao);
               const etapaInfo = etapaVenda ? etapaVendaConfig[etapaVenda] : null;
