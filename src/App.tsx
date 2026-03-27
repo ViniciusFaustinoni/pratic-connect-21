@@ -243,6 +243,7 @@ import LandingPages from "./pages/marketing/LandingPages";
 import Materiais from "./pages/marketing/Materiais";
 import ComunicacaoMassa from "./pages/marketing/ComunicacaoMassa";
 import RedesSociais from "./pages/marketing/RedesSociais";
+import OrigensLead from "./pages/marketing/OrigensLead";
 import DistribuicaoConfig from "./pages/vendas/DistribuicaoConfig";
 import PlanosBeneficios from "./pages/vendas/PlanosBeneficios";
 import VendasConfig from "./pages/vendas/VendasConfig";
