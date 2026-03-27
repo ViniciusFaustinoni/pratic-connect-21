@@ -79,6 +79,12 @@ export interface CotacaoParaPdf {
   anoMinimo?: number;
   alertaDesagio?: string;
   coberturasRemovidas?: string[];
+  // Dados do vendedor/consultor
+  vendedor?: {
+    nome: string;
+    whatsapp?: string | null;
+    telefone?: string | null;
+  } | null;
 }
 
 export interface PlanoParaPdf {
