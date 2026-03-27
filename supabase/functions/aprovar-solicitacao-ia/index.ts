@@ -761,7 +761,7 @@ serve(async (req) => {
         if (associado) {
           const telefoneAssociado = associado.whatsapp || associado.telefone;
           if (telefoneAssociado) {
-            const mensagem = `Olá ${associado.nome}!\n\nSua solicitação de troca de titularidade foi recebida.\n\nSerá agendada uma vistoria do veículo *${veiculo?.marca || ""} ${veiculo?.modelo || ""}* placa *${veiculo?.placa || ""}*.\n\nO novo titular receberá um link para envio de documentos.\n\nABP PraticCar`;
+            const mensagem = `Olá ${associado.nome}!\n\nSua solicitação de troca de titularidade foi recebida.\n\nSerá agendada uma vistoria do veículo *${veiculo?.marca || ""} ${veiculo?.modelo || ""}* placa *${veiculo?.placa || ""}*.\n\nO novo titular receberá um link para envio de documentos.\n\nPRATICCAR`;
 
             await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
               method: "POST",
