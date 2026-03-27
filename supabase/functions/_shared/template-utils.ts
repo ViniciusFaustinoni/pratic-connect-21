@@ -790,6 +790,22 @@ export function generateSecaoAssinatura(dados: TermoAfiliacaoData): string {
   <p class="signature-local-data">
     ${localAssinatura}, ${dataAssinatura}
   </p>
+  <div style="display: flex; justify-content: space-around; margin-top: 40pt;">
+    <div style="text-align: center;">
+      <div style="border-top: 1px solid #000; width: 250pt; margin: 0 auto; padding-top: 8pt;">
+        <p style="margin: 0; font-weight: bold;">${dados.cliente.nome}</p>
+        <p style="margin: 4pt 0 0 0; font-size: 9pt;">CPF: ${formatCPF(dados.cliente.cpf)}</p>
+        <p style="margin: 4pt 0 0 0; font-size: 9pt; color: #666;">ASSOCIADO</p>
+      </div>
+    </div>
+    <div style="text-align: center;">
+      <div style="border-top: 1px solid #000; width: 250pt; margin: 0 auto; padding-top: 8pt;">
+        <p style="margin: 0; font-weight: bold;">${dados.empresa.razaoSocial}</p>
+        <p style="margin: 4pt 0 0 0; font-size: 9pt;">CNPJ: ${dados.empresa.cnpj}</p>
+        <p style="margin: 4pt 0 0 0; font-size: 9pt; color: #666;">PRATICCAR</p>
+      </div>
+    </div>
+  </div>
 </div>
 `;
 }
