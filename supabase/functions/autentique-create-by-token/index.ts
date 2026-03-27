@@ -511,9 +511,10 @@ serve(async (req) => {
         let anexosHTML = '';
         for (const tmpl of templatesAnexos) {
           anexosHTML += `
-            <div style="page-break-before: always;"></div>
-            <h2 style="text-align: center; margin-top: 40px; margin-bottom: 20px; font-size: 16px; text-transform: uppercase;">${tmpl.nome}</h2>
-            <div style="font-size: 12px; line-height: 1.6;">${tmpl.conteudo}</div>
+            <div style="page-break-before: always;">
+              <h2 style="text-align: center; margin-top: 40px; margin-bottom: 20px; font-size: 16px; text-transform: uppercase;">${tmpl.nome}</h2>
+              <div style="font-size: 12px; line-height: 1.6;">${tmpl.conteudo}</div>
+            </div>
           `;
         }
         if (contratoHTML.includes('</body>')) {
