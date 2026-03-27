@@ -368,7 +368,7 @@ serve(async (req) => {
             }
 
             const prazoLink = await getConfiguracaoNumero(supabaseAdmin, 'prazo_link_evento_horas', 72);
-            mensagemSin += `\n⏰ O link é válido por ${prazoLink} horas. Qualquer dúvida, estamos à disposição!\n\nABP PraticCar`;
+            mensagemSin += `\n⏰ O link é válido por ${prazoLink} horas. Qualquer dúvida, estamos à disposição!\n\nPRATICCAR`;
 
             // Preparar params do template comunicacao_sinistro
             const primeiroNomeSin = associadoSin.nome?.split(' ')[0] || 'Associado';
