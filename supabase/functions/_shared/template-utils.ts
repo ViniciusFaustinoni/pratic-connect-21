@@ -727,7 +727,7 @@ export function generateHeader(dados: TermoAfiliacaoData): string {
     CNPJ: ${dados.empresa.cnpj} | ${dados.empresa.logradouro}, ${dados.empresa.numero} - ${dados.empresa.bairro} - ${dados.empresa.cidade}/${dados.empresa.uf} - CEP ${dados.empresa.cep}
   </div>
   <div class="header-titulo">TERMO DE AFILIAÇÃO AO PROGRAMA DE SOCORRO MÚTUO</div>
-  <div class="header-numero">Contrato Nº ${dados.contrato.numero}</div>
+  <div class="header-numero">Nº ${dados.contrato.numero}</div>
 </div>
 `;
 }
