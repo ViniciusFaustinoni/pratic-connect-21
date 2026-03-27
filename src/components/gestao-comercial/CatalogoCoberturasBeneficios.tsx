@@ -333,6 +333,8 @@ export function CatalogoCoberturasBeneficios() {
   const toggleBen = useToggleBenefit();
   const deleteCob = useDeleteCobertura();
   const deleteBen = useDeleteBenefit();
+  const duplicateCob = useDuplicateCobertura();
+  const duplicateBen = useDuplicateBenefit();
 
   const [cobSheet, setCobSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [benSheet, setBenSheet] = useState<{ open: boolean; item?: any }>({ open: false });
