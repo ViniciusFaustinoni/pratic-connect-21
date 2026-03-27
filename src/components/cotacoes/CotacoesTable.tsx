@@ -287,6 +287,7 @@ interface CotacoesTableProps {
   selectedIds?: Set<string>;
   onToggleSelect?: (id: string) => void;
   onToggleAll?: () => void;
+  groupByDate?: boolean;
 }
 
 // Avatar gradient colors based on initial
