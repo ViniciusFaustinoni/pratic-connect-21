@@ -54,7 +54,7 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
       return;
     }
 
-    const newState: EligibilityState = { ...emptyState, selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set() };
+    const newState: EligibilityState = { ...emptyState, selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set(), elegFipeMin: '', elegFipeMax: '' };
 
     for (const rule of existingRules) {
       const cfg = rule.rule_config as any;
