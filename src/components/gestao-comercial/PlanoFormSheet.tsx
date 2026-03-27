@@ -12,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Loader2 } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
-import { useRegioes } from '@/hooks/useRegioes';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -28,7 +27,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   // Data sources
   const { data: coberturas = [] } = useCoberturas(true);
   const { data: benefits = [] } = useBenefits();
-  const { data: regioes = [] } = useRegioes();
 
   // Form state
   const [nome, setNome] = useState('');
@@ -37,8 +35,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [selectedCoberturas, setSelectedCoberturas] = useState<Set<string>>(new Set());
   const [selectedBeneficios, setSelectedBeneficios] = useState<Set<string>>(new Set());
   
-  // Only regions remain at plan level
-  const [selRegioes, setSelRegioes] = useState<Set<string>>(new Set());
 
   // Load existing plan
   const { data: existingPlan, isLoading: loadingPlan } = useQuery({
@@ -54,13 +50,11 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
 
       const { data: cobs } = await supabase.from('planos_coberturas').select('cobertura_id').eq('plano_id', planoId);
       const { data: bens } = await supabase.from('planos_beneficios').select('benefit_id').eq('plano_id', planoId);
-      const { data: regs } = await supabase.from('planos_regioes').select('regiao_id').eq('plano_id', planoId);
 
       return {
         ...data,
         coberturaIds: (cobs || []).map((c: any) => c.cobertura_id),
         beneficioIds: (bens || []).map((b: any) => b.benefit_id),
-        regiaoIds: (regs || []).map((r: any) => r.regiao_id),
       };
     },
     enabled: !!planoId,
@@ -73,7 +67,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       setAtivo(existingPlan.ativo);
       setSelectedCoberturas(new Set(existingPlan.coberturaIds));
       setSelectedBeneficios(new Set(existingPlan.beneficioIds));
-      setSelRegioes(new Set(existingPlan.regiaoIds));
     }
   }, [existingPlan]);
 
@@ -124,13 +117,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           );
         }
 
-        // Rebuild regioes
-        await supabase.from('planos_regioes').delete().eq('plano_id', planoId);
-        if (selRegioes.size > 0) {
-          await supabase.from('planos_regioes').insert(
-            Array.from(selRegioes).map(rid => ({ plano_id: planoId, regiao_id: rid }))
-          );
-        }
 
       } else {
         const codigo = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
@@ -151,11 +137,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           const bens = benefits.filter(b => selectedBeneficios.has(b.id));
           await supabase.from('planos_beneficios').insert(
             bens.map((b, i) => ({ plano_id: plan.id, benefit_id: b.id, beneficio: b.name, display_order: i }))
-          );
-        }
-        if (selRegioes.size > 0) {
-          await supabase.from('planos_regioes').insert(
-            Array.from(selRegioes).map(rid => ({ plano_id: plan.id, regiao_id: rid }))
           );
         }
       }
@@ -241,27 +222,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
                     </label>
                   ))}
                 </div>
-              </div>
-            )}
-          </section>
-
-          <div className="border-t" />
-
-          {/* ── BLOCO 3: Regiões ── */}
-          <section className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Regiões Disponíveis</h3>
-            <p className="text-xs text-muted-foreground">Se nenhuma região for selecionada, o plano estará disponível em todas.</p>
-
-            {regioes.length > 0 && (
-              <div className="flex flex-wrap gap-1.5">
-                {regioes.filter(r => r.ativa).map(r => (
-                  <Badge
-                    key={r.id}
-                    variant={selRegioes.has(r.id) ? 'default' : 'outline'}
-                    className="cursor-pointer"
-                    onClick={() => toggleSet(selRegioes, setSelRegioes, r.id)}
-                  >{r.nome}</Badge>
-                ))}
               </div>
             )}
           </section>
