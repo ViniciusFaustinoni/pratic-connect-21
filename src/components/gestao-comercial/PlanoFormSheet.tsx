@@ -359,6 +359,17 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
               </div>
             </div>
 
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={!canGenerateFaixas}
+              onClick={generateTaxaFaixas}
+            >
+              Gerar Faixas
+            </Button>
+
             {taxaFaixas.length > 0 && (
               <div className="space-y-2">
                 <p className="text-xs font-semibold text-muted-foreground">{taxaFaixas.length} faixa(s) gerada(s)</p>
