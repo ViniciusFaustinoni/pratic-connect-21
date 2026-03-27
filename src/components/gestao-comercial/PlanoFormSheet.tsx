@@ -200,11 +200,13 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           );
         }
         // Save taxa administrativa
-        await supabase.from('planos_taxa_administrativa').delete().eq('plano_id', planoId);
+        const { error: delTaxaErr } = await supabase.from('planos_taxa_administrativa').delete().eq('plano_id', planoId);
+        if (delTaxaErr) throw delTaxaErr;
         if (taxaFaixas.length > 0) {
-          await supabase.from('planos_taxa_administrativa').insert(
+          const { error: insTaxaErr } = await supabase.from('planos_taxa_administrativa').insert(
             taxaFaixas.map(f => ({ plano_id: planoId, fipe_de: f.fipe_de, fipe_ate: f.fipe_ate, valor_taxa: f.valor_taxa }))
           );
+          if (insTaxaErr) throw insTaxaErr;
         }
 
       } else {
