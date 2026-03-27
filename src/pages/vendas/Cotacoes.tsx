@@ -94,6 +94,7 @@ export default function Cotacoes() {
   const [mesFilter, setMesFilter] = useState<string>('all');
   const [cotacaoParaDuplicar, setCotacaoParaDuplicar] = useState<CotacaoWithRelations | null>(null);
   const [copiandoWhatsApp, setCopiandoWhatsApp] = useState<string | null>(null);
+  const [activeTab, setActiveTab] = useState<string>('em_andamento');
   
   // Filtros
   const [dataFilter, setDataFilter] = useState<Date | undefined>(undefined);
