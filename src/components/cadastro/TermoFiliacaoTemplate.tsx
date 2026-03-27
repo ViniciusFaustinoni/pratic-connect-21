@@ -417,7 +417,7 @@ export function TermoFiliacaoTemplate({
           { titulo: '5.5. PROCEDÊNCIA DO VEÍCULO', texto: `A procedência do veículo protegido é: ${veiculo.procedencia || 'Usado de particular'}` },
           { titulo: '5.6. COMPREENSÃO DO MUTUALISMO', texto: 'Compreendo plenamente que a PRATICCAR é uma ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO, NÃO SE CONFIGURANDO como empresa seguradora.' },
           { titulo: '5.7. VALOR FIPE DE REFERÊNCIA', texto: `Estou ciente de que o valor de referência para cálculo de eventual indenização será o VALOR FIPE REGISTRADO NO MOMENTO DESTA ADESÃO (${formatCurrency(veiculo.valorFipe)}).` },
-          { titulo: '5.8. AUTORIZAÇÃO DE SUB-ROGAÇÃO', texto: 'AUTORIZO expressamente a ABP PraticCar a ser sub-rogada em todos os direitos relativos a eventuais prejuízos causados ao veículo por terceiros.' },
+          { titulo: '5.8. AUTORIZAÇÃO DE SUB-ROGAÇÃO', texto: 'AUTORIZO expressamente a PRATICCAR a ser sub-rogada em todos os direitos relativos a eventuais prejuízos causados ao veículo por terceiros.' },
           { titulo: '5.9. RASTREADOR VEICULAR', texto: 'Concordo com a instalação do rastreador veicular, que será realizada por técnico credenciado após aprovação do cadastro.' },
         ].map((item, index) => (
           <div key={index} style={{ marginBottom: '12pt', textAlign: 'justify' }}>
