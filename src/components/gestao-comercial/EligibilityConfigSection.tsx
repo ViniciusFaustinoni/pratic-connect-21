@@ -367,5 +367,5 @@ export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeC
 
 // Check if entity has any rules configured
 export function hasEligibilityRules(state: EligibilityState): boolean {
-  return state.variaComFipe || state.selRegioes.size > 0 || state.selUso.size > 0 || state.selPlaca.size > 0 || state.selCombustivel.size > 0;
+  return !!state.elegFipeMin || !!state.elegFipeMax || state.variaComFipe || state.selRegioes.size > 0 || state.selUso.size > 0 || state.selPlaca.size > 0 || state.selCombustivel.size > 0;
 }
