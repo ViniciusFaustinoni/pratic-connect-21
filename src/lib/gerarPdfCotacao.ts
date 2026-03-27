@@ -735,54 +735,57 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     y += alertaH + SECTION_GAP;
   }
 
-  // ============= VALORES =============
+  // ============= INVESTIMENTO =============
   checkPageBreak(80);
   
-  const labelCol = margin + 5;
-  const valueCol = pageWidth - margin - 5;
+  const labelCol = margin + 8;
+  const valueCol = pageWidth - margin - 8;
 
   doc.setFillColor(brandBlue.r, brandBlue.g, brandBlue.b);
-  doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'F');
+  doc.roundedRect(margin, y, contentWidth, 22, 3, 3, 'F');
   doc.setDrawColor(glowBlue.r, glowBlue.g, glowBlue.b);
   doc.setLineWidth(1);
-  doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'S');
+  doc.roundedRect(margin, y, contentWidth, 22, 3, 3, 'S');
   
   doc.setTextColor(255, 255, 255);
   doc.setFont('helvetica', 'bold');
+  doc.setFontSize(12);
+  doc.text('VALOR MÉDIO MENSAL', labelCol, y + 14);
+  doc.setFontSize(18);
+  doc.text(formatCurrency(cotacao.valor_total_mensal), valueCol, y + 14, { align: 'right' });
+
+  y += 28;
+
+  // Taxa de Filiação destacada
+  doc.setFillColor(sectionHeaderBg.r, sectionHeaderBg.g, sectionHeaderBg.b);
+  doc.roundedRect(margin, y, contentWidth, 18, 3, 3, 'F');
+  doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+  doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('VALOR MÉDIO MENSAL', labelCol, y + 11);
+  doc.text('TAXA DE FILIAÇÃO (pagamento único)', labelCol, y + 12);
+  doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
   doc.setFontSize(14);
-  doc.text(formatCurrency(cotacao.valor_total_mensal), valueCol, y + 11, { align: 'right' });
+  doc.text(formatCurrency(cotacao.valor_adesao), valueCol, y + 12, { align: 'right' });
 
   y += 24;
-
-  doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFont('helvetica', 'normal');
-  doc.setFontSize(9);
-  doc.text('Taxa de Adesão (pagamento único)', labelCol, y);
-  doc.setTextColor(textLight.r, textLight.g, textLight.b);
-  doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(cotacao.valor_adesao), valueCol, y, { align: 'right' });
-
-  y += 12;
 
   const primeiroPagamento = (cotacao.valor_adesao || 0) + (cotacao.valor_total_mensal || 0);
   const diaVencimento = cotacao.dia_vencimento || 10;
   
   doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
-  doc.roundedRect(margin, y, contentWidth, 24, 3, 3, 'F');
+  doc.roundedRect(margin, y, contentWidth, 26, 3, 3, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(11);
+  doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('PRIMEIRO PAGAMENTO', labelCol, y + 10);
-  doc.setFontSize(8);
+  doc.text('PRIMEIRO PAGAMENTO', labelCol, y + 11);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Vencimento: dia ${diaVencimento}`, labelCol, y + 18);
-  doc.setFontSize(16);
+  doc.text(`Vencimento: dia ${diaVencimento}`, labelCol, y + 20);
+  doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(primeiroPagamento), valueCol, y + 14, { align: 'right' });
+  doc.text(formatCurrency(primeiroPagamento), valueCol, y + 16, { align: 'right' });
 
-  y += 30;
+  y += 32;
 
   // ============= MENSAGEM INSTITUCIONAL =============
   if (config?.mostrar_mensagem_encerramento !== false) {
