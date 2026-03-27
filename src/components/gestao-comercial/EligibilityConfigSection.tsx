@@ -24,6 +24,8 @@ export interface FipeRangeFaixa {
 }
 
 export interface EligibilityState {
+  elegFipeMin: string;
+  elegFipeMax: string;
   variaComFipe: boolean;
   fipeMin: string;
   fipeMax: string;
