@@ -109,7 +109,7 @@ function useDeleteLinha() {
       for (const p of planos || []) {
         await supabase.from('planos_coberturas').delete().eq('plano_id', p.id);
         await supabase.from('planos_beneficios').delete().eq('plano_id', p.id);
-        await supabase.from('planos_regioes').delete().eq('plano_id', p.id);
+        
         await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'plano').eq('entity_id', p.id);
       }
       if (planos && planos.length > 0) {
