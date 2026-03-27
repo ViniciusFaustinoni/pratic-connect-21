@@ -1,90 +1,25 @@
 
 
-# Refatorar Motor de Cotação: Preço = Soma dos Itens + Taxa Administrativa
+# Remover Toggle de Migração de Dentro da Cotação
 
-## Contexto
+## Problema
+O toggle "É migração de outra associação?" aparece dentro do formulário de cotação, mas essa opção já deve estar definida antes de abrir o modal da cotação.
 
-O motor de cotação atual busca o preço mensal na tabela `tabelas_preco_mensalidade` (tabela de preços por faixa FIPE). Essa tabela é obsoleta. O novo modelo de precificação é:
+## Alterações
 
-```text
-valor_mensal = Σ coberturas.valor (via planos_coberturas)
-             + Σ benefits.preco_sugerido (via planos_beneficios)
-             + taxa_administrativa (via planos_taxa_administrativa, por faixa FIPE)
-```
+### 1. `src/components/cotacoes/CotacaoFormDialog.tsx`
+- Remover a linha `<MigracaoToggle value={migracaoState} onChange={setMigracaoState} />` (~linha 2102-2103)
+- Manter o estado `migracaoState` e a lógica de carência que o usa (linhas 2087-2098), pois o estado pode ser passado via props futuramente
+- Remover import do `MigracaoToggle` se não for mais usado
 
-## Arquivos afetados
+### 2. `src/pages/vendas/Cotador.tsx`
+- Remover a linha `<MigracaoToggle value={migracaoState} onChange={setMigracaoState} />` (~linha 1935)
+- Manter o estado e a lógica de carência
+
+Ambos os arquivos mantêm o `migracaoState` e a lógica condicional de carência — apenas o toggle visual é removido do formulário.
 
 | Arquivo | Ação |
 |---|---|
-| `src/hooks/usePlanosCotacao.ts` | Refatorar pricing principal |
-| `src/hooks/useCotacao.ts` | Refatorar pricing secundário |
-
-## Detalhes técnicos
-
-### 1. `usePlanosCotacao.ts` — Hook principal da tela de cotação
-
-**Remover:**
-- Query `plano_preco_map` (linhas 182-193)
-- Query `tabelas_preco_mensalidade` (linhas 195-208)
-- Bloco de pricing antigo (linhas 561-613) que busca `valorMensal` via `tabelasMensalidade`
-- Dependências de `tabelasMensalidadeLoading` e `planoPrecoMapLoading` no flag de loading crítico
-
-**Adicionar:**
-- Query `planos_coberturas` com join `coberturas(valor)` para todos os planos ativos
-- Query `planos_taxa_administrativa` para todos os planos ativos
-- Alterar a query de `planos_beneficios` existente (linha 170) para incluir `benefits:benefit_id(id, name, category, preco_sugerido)`
-
-**Novo cálculo de preço** (substituir linhas 561-613):
-```ts
-// Soma dos valores das coberturas vinculadas ao plano
-const somaCoberturas = coberturasMap.get(plano.id) || 0;
-
-// Soma dos valores dos benefícios vinculados (usando preco_sugerido)
-const somaBeneficios = (plano.planos_beneficios || [])
-  .reduce((acc, pb) => acc + ((pb.benefits as any)?.preco_sugerido || 0), 0);
-
-// Taxa administrativa por faixa FIPE
-const taxaAdmin = taxasAdminData
-  ?.filter(t => t.plano_id === plano.id)
-  ?.find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
-const valorTaxaAdmin = taxaAdmin?.valor_taxa || 0;
-
-let valorMensal = somaCoberturas + somaBeneficios + valorTaxaAdmin;
-
-// Se o plano não tem itens configurados, ocultar
-if (valorMensal === 0) continue;
-```
-
-### 2. `useCotacao.ts` — Hook secundário (criação de cotações)
-
-**Remover:**
-- `usePlanoPrecoMap()` (linhas 100-112)
-- `useTabelasMensalidade()` (linhas 114-127)
-- `useConfigAdicionalApp()` (linhas 133-174)
-- `encontrarFaixaMensalidade()` (linhas 180-232)
-
-**Adicionar:**
-- Queries para coberturas, benefícios e taxa administrativa
-- Novo cálculo dentro de `useCalcularCotacao` usando soma dos itens + taxa
-
-**Novo `useCalcularCotacao`:** Em vez de chamar `encontrarFaixaMensalidade`, calcular diretamente:
-```ts
-// Para cada plano disponível:
-const somaCob = cobValores.get(plano.id) || 0;
-const somaBen = benValores.get(plano.id) || 0;
-const taxa = taxasAdmin
-  ?.filter(t => t.plano_id === plano.id)
-  ?.find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
-const valorMensal = somaCob + somaBen + (taxa?.valor_taxa || 0);
-
-if (valorMensal <= 0) continue;
-```
-
-## O que NÃO muda
-
-- Regras de elegibilidade (FIPE, ano, modelo, região, categoria)
-- Decomposição do valor mensal (cota, admin, rastreamento, assistência)
-- Cota de participação e deságio
-- Lógica de coberturas removidas por categoria
-- Adicional mensal e desconto percentual do plano (continuam aplicados sobre o total)
+| `src/components/cotacoes/CotacaoFormDialog.tsx` | Remover toggle de migração do formulário |
+| `src/pages/vendas/Cotador.tsx` | Remover toggle de migração do formulário |
 
