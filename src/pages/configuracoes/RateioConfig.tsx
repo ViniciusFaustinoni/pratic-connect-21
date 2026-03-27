@@ -315,33 +315,6 @@ export default function RateioConfig() {
         </CardContent>
       </Card>
 
-      {/* Taxa Administrativa */}
-      <Card>
-        <CardHeader>
-          <CardTitle className="flex items-center gap-2 text-lg">
-            <DollarSign className="h-5 w-5" />
-            Taxa Administrativa Mensal
-          </CardTitle>
-          <CardDescription>
-            Valor fixo cobrado de todos os associados, separado do rateio.
-          </CardDescription>
-        </CardHeader>
-        <CardContent>
-          <div className="flex items-end gap-3">
-            <div className="flex-1 max-w-xs">
-              <Label>Valor em R$</Label>
-              <Input
-                type="number"
-                min="0"
-                step="0.01"
-                value={getValue('rateio_taxa_administrativa')}
-                onChange={(e) => handleChange('rateio_taxa_administrativa', e.target.value)}
-              />
-            </div>
-            <SaveButton configKey="rateio_taxa_administrativa" />
-          </div>
-        </CardContent>
-      </Card>
 
       {/* Dia de Fechamento e Vencimento */}
       <Card>
