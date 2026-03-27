@@ -465,6 +465,7 @@ export function mapearDadosParaTemplate(
       telefone: empresa?.empresa_telefone || "",
       email: empresa?.empresa_email || "",
       lgpd_email: empresa?.empresa_lgpd_email || "lgpd@praticcar.com.br",
+      complemento: empresa?.empresa_complemento || '',
     },
     consultor: vendedorNome ? { nome: vendedorNome } : undefined,
   };

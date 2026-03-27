@@ -804,7 +804,7 @@ export function generateSecaoAssinatura(dados: TermoAfiliacaoData): string {
     </div>
     <div style="text-align: center;">
       <div style="border-top: 1px solid #000; width: 250pt; margin: 0 auto; padding-top: 8pt;">
-        <p style="margin: 0; font-weight: bold;">${dados.empresa.razaoSocial}</p>
+        <p style="margin: 0; font-weight: bold;">${dados.empresa.razao_social || dados.empresa.nome}</p>
         <p style="margin: 4pt 0 0 0; font-size: 9pt;">CNPJ: ${dados.empresa.cnpj}</p>
         <p style="margin: 4pt 0 0 0; font-size: 9pt; color: #666;">PRATICCAR</p>
       </div>

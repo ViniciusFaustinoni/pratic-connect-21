@@ -558,6 +558,9 @@ serve(async (req) => {
       console.warn('[autentique-create] Erro ao buscar templates para anexar:', err);
     }
 
+    // Limpeza final: garantir que nenhuma variável bruta apareça no HTML (após anexos)
+    contratoHTML = limparVariaveisNaoSubstituidas(contratoHTML);
+
     console.log(`[autentique-create] Template usado: ${templateUsado}`);
     console.log(`[autentique-create] HTML gerado: ${contratoHTML.length} bytes`);
 
