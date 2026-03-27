@@ -243,6 +243,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
     onSuccess: () => {
       qc.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       qc.invalidateQueries({ queryKey: ['plans'] });
+      qc.invalidateQueries({ queryKey: ['plano_edit'] });
       toast.success('Plano salvo');
       onClose();
     },
