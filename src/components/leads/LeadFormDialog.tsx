@@ -51,6 +51,7 @@ const MARCAS = [
 export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
   const [placaConsultada, setPlacaConsultada] = useState(false);
   const [marcaManual, setMarcaManual] = useState(false);
+  const [origemDetalheId, setOrigemDetalheId] = useState<string | null>(null);
   const createLead = useCreateLead();
   const { data: vendedores = [] } = useVendedores();
   // Consultores removido - usar apenas vendedores
