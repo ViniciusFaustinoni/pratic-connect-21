@@ -98,10 +98,27 @@ export async function saveEligibilityRules(entityType: EntityType, entityId: str
   const rules: any[] = [];
 
   if (state.variaComFipe && (state.fipeMin || state.fipeMax)) {
+    const min = parseFloat(state.fipeMin) || 0;
+    const max = parseFloat(state.fipeMax) || 99999999;
+    const intervalo = parseFloat(state.fipeIntervalo) || 0;
+    const ruleConfig: any = { min, max };
+
+    if (intervalo > 0 && max > min) {
+      ruleConfig.intervalo = intervalo;
+      const numFaixas = Math.floor((max - min) / intervalo);
+      const faixas: FipeRangeFaixa[] = [];
+      for (let i = 0; i < Math.min(numFaixas, 50); i++) {
+        const de = min + i * intervalo;
+        const ate = de + intervalo;
+        faixas.push({ de, ate, valor: parseFloat(state.fipeValoresFaixa[i] || '0') || 0 });
+      }
+      ruleConfig.faixas = faixas;
+    }
+
     rules.push({
       entity_type: entityType, entity_id: entityId,
       rule_type: 'fipe_range', rule_mode: 'include',
-      rule_config: { min: parseFloat(state.fipeMin) || 0, max: parseFloat(state.fipeMax) || 99999999 },
+      rule_config: ruleConfig,
     });
   }
 
