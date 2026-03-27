@@ -324,6 +324,73 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
             )}
           </section>
 
+          {/* ── BLOCO 3: Taxa Administrativa ── */}
+          <section className="space-y-4">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <DollarSign className="h-3.5 w-3.5" />Taxa Administrativa
+            </h3>
+            <p className="text-xs text-muted-foreground">Configure o valor da taxa administrativa por faixa de valor FIPE do veículo.</p>
+            
+            <div className="grid grid-cols-3 gap-3">
+              <div>
+                <Label className="text-xs">FIPE Mínimo (R$)</Label>
+                <Input
+                  type="number"
+                  placeholder="0"
+                  value={taxaFipeMin}
+                  onChange={e => setTaxaFipeMin(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">FIPE Máximo (R$)</Label>
+                <Input
+                  type="number"
+                  placeholder="200000"
+                  value={taxaFipeMax}
+                  onChange={e => setTaxaFipeMax(e.target.value)}
+                />
+              </div>
+              <div>
+                <Label className="text-xs">Intervalo (R$)</Label>
+                <Input
+                  type="number"
+                  placeholder="20000"
+                  value={taxaIntervalo}
+                  onChange={e => setTaxaIntervalo(e.target.value)}
+                />
+              </div>
+            </div>
+
+            {taxaFaixas.length > 0 && (
+              <div className="space-y-2">
+                <p className="text-xs font-semibold text-muted-foreground">{taxaFaixas.length} faixa(s) gerada(s)</p>
+                <div className="space-y-1.5 max-h-60 overflow-y-auto">
+                  {taxaFaixas.map((faixa, idx) => (
+                    <div key={idx} className="flex items-center gap-3 px-3 py-2 rounded-md bg-muted/30 ring-1 ring-border/50">
+                      <span className="text-xs text-muted-foreground flex-1 min-w-0">
+                        R$ {faixa.fipe_de.toLocaleString('pt-BR')} – R$ {faixa.fipe_ate.toLocaleString('pt-BR')}
+                      </span>
+                      <div className="flex items-center gap-1.5 shrink-0">
+                        <span className="text-xs text-muted-foreground">R$</span>
+                        <Input
+                          type="number"
+                          className="w-24 h-8 text-sm"
+                          value={faixa.valor_taxa || ''}
+                          onChange={e => {
+                            const updated = [...taxaFaixas];
+                            updated[idx] = { ...faixa, valor_taxa: parseFloat(e.target.value) || 0 };
+                            setTaxaFaixas(updated);
+                          }}
+                          placeholder="0,00"
+                        />
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </div>
+            )}
+          </section>
+
           <div className="border-t" />
 
           {/* ── Template de Contrato ── */}
