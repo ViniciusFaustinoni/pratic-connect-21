@@ -12,7 +12,6 @@ import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Loader2 } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
-import { useRegioes } from '@/hooks/useRegioes';
 import { cn } from '@/lib/utils';
 
 interface Props {
