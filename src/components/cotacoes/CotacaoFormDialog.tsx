@@ -984,10 +984,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     });
   };
 
-  // Handler para mudança de categoria
-  const handleCategoriaChange = (value: string) => {
-    setCategoria(value);
-  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
