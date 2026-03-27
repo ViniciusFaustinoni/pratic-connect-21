@@ -493,9 +493,6 @@ serve(async (req) => {
       templateUsado = "Termo de Afiliação (hardcoded fallback + aditivos dinâmicos)";
     }
 
-    // Limpeza final: garantir que nenhuma variável bruta apareça no HTML
-    contratoHTML = limparVariaveisNaoSubstituidas(contratoHTML);
-
     // ============= ANEXAR TEMPLATES MARCADOS COMO "ANEXAR À PROPOSTA" =============
     try {
       const { data: templatesAnexos } = await supabase
@@ -510,10 +507,12 @@ serve(async (req) => {
         console.log(`[autentique-create-by-token] Anexando ${templatesAnexos.length} template(s) ao documento`);
         let anexosHTML = '';
         for (const tmpl of templatesAnexos) {
+          // Substituir variáveis no conteúdo do anexo antes de inserir
+          const conteudoSubstituido = substituirVariaveis(tmpl.conteudo, templateData);
           anexosHTML += `
             <div style="page-break-before: always;">
               <h2 style="text-align: center; margin-top: 40px; margin-bottom: 20px; font-size: 16px; text-transform: uppercase;">${tmpl.nome}</h2>
-              <div style="font-size: 12px; line-height: 1.6;">${tmpl.conteudo}</div>
+              <div style="font-size: 12px; line-height: 1.6;">${conteudoSubstituido}</div>
             </div>
           `;
         }
@@ -526,6 +525,9 @@ serve(async (req) => {
     } catch (err) {
       console.warn('[autentique-create-by-token] Erro ao buscar templates para anexar:', err);
     }
+
+    // Limpeza final: garantir que nenhuma variável bruta apareça no HTML (após anexos)
+    contratoHTML = limparVariaveisNaoSubstituidas(contratoHTML);
 
     console.log(`[autentique-create-by-token] Template usado: ${templateUsado}`);
     console.log('[autentique-create-by-token] HTML gerado, tamanho:', contratoHTML.length, 'bytes');

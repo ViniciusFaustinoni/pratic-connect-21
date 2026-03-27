@@ -757,6 +757,10 @@ export function hasSignatureArea(html: string): boolean {
     /class\s*=\s*["']signature-local-data["']/i,
     />ASSINATURA<\//i,
     />\s*8\.\s*ASSINATURA\s*<\//i,
+    // Detectar área de assinatura do template AF1 (nome + CPF em contexto de assinatura)
+    /Associado\s*\(a\)\s*:/i,
+    /{{associado\.nome}}[\s\S]*?{{associado\.cpf}}/i,
+    /border-top.*?ASSOCIADO/is,
   ];
   return patterns.some(p => p.test(html));
 }
@@ -800,7 +804,7 @@ export function generateSecaoAssinatura(dados: TermoAfiliacaoData): string {
     </div>
     <div style="text-align: center;">
       <div style="border-top: 1px solid #000; width: 250pt; margin: 0 auto; padding-top: 8pt;">
-        <p style="margin: 0; font-weight: bold;">${dados.empresa.razaoSocial}</p>
+        <p style="margin: 0; font-weight: bold;">${dados.empresa.razao_social || dados.empresa.nome}</p>
         <p style="margin: 4pt 0 0 0; font-size: 9pt;">CNPJ: ${dados.empresa.cnpj}</p>
         <p style="margin: 4pt 0 0 0; font-size: 9pt; color: #666;">PRATICCAR</p>
       </div>
