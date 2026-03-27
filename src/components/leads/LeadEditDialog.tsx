@@ -47,6 +47,7 @@ const etapas = ETAPAS_FUNIL;
 
 export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps) {
   const updateLead = useUpdateLead();
+  const [origemDetalheId, setOrigemDetalheId] = useState<string | null>(null);
 
   const form = useForm<LeadFormData & { etapa: EtapaLead; motivo_perda?: string }>({
     resolver: zodResolver(leadSchema),
