@@ -16,6 +16,7 @@ import { Plus, ChevronRight, Loader2, Pencil, Trash2, Copy } from 'lucide-react'
 import { cn } from '@/lib/utils';
 import { PlanoFormSheet } from './PlanoFormSheet';
 import { usePermissions } from '@/hooks/usePermissions';
+import { useDuplicateProductLine, useDuplicatePlan } from '@/hooks/usePlansAdmin';
 
 // ── Data hooks ──
 
