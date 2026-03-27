@@ -378,6 +378,7 @@ export function CatalogoCoberturasBeneficios() {
             onEdit={(item) => setCobSheet({ open: true, item })}
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'cobertura' })}
+            onDuplicate={(id) => duplicateCob.mutate(id)}
           />
         </TabsContent>
 
