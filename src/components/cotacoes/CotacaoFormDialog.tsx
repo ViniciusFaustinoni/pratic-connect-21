@@ -222,8 +222,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [modeloSelecionado, setModeloSelecionado] = useState('');
   const [anoSelecionado, setAnoSelecionado] = useState('');
   
-  // Estado para categoria/deságio
-  const [categoria, setCategoria] = useState<string | null>('nenhuma');
   
   // Estado para região selecionada
   const [regiaoSelecionada, setRegiaoSelecionada] = useState<string>('');
