@@ -58,6 +58,14 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
           newState.variaComFipe = true;
           if (cfg.min) newState.fipeMin = String(cfg.min);
           if (cfg.max && cfg.max < 99999999) newState.fipeMax = String(cfg.max);
+          if (cfg.intervalo) newState.fipeIntervalo = String(cfg.intervalo);
+          if (Array.isArray(cfg.faixas)) {
+            const valMap: Record<number, string> = {};
+            cfg.faixas.forEach((f: any, i: number) => {
+              if (f.valor != null) valMap[i] = String(f.valor);
+            });
+            newState.fipeValoresFaixa = valMap;
+          }
           break;
         case 'regiao':
           newState.selRegioes = new Set(cfg.values || []);
