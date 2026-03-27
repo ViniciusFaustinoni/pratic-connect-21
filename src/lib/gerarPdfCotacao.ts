@@ -540,7 +540,9 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   // ============= CARD DO PLANO (Premium Destacado) =============
   const planoNome = cotacao.planos?.nome || 'Plano Selecionado';
-  const cardHeight = 42;
+  const cardHeight = 55;
+
+  checkPageBreak(cardHeight + 10);
 
   drawPremiumCard(doc, margin, y, contentWidth, cardHeight, { 
     isRecommended: true, 
@@ -550,25 +552,39 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
   doc.setFontSize(16);
   doc.setFont('helvetica', 'bold');
-  doc.text(truncateText(planoNome.toUpperCase(), 32), margin + 15, y + 16);
+  doc.text(truncateText(planoNome.toUpperCase(), 32), margin + 15, y + 14);
 
   const badgeWidth = 50;
   doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
-  doc.roundedRect(margin + 15, y + 22, badgeWidth, 12, 2, 2, 'F');
+  doc.roundedRect(margin + 15, y + 19, badgeWidth, 12, 2, 2, 'F');
   doc.setTextColor(255, 255, 255);
-  doc.setFontSize(7);
+  doc.setFontSize(8);
   doc.setFont('helvetica', 'bold');
-  doc.text('SELECIONADO', margin + 15 + badgeWidth / 2, y + 30, { align: 'center' });
+  doc.text('SELECIONADO', margin + 15 + badgeWidth / 2, y + 27, { align: 'center' });
 
+  // Valor mensal destacado
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
-  doc.setFontSize(24);
+  doc.setFontSize(26);
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(cotacao.valor_total_mensal), pageWidth - margin - 15, y + 18, { align: 'right' });
   
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-  doc.setFontSize(8);
+  doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text('valor médio mensal', pageWidth - margin - 15, y + 28, { align: 'right' });
+  doc.text('valor médio mensal', pageWidth - margin - 15, y + 27, { align: 'right' });
+
+  // Taxa de Filiação destacada dentro do card
+  doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
+  doc.setLineWidth(0.5);
+  doc.line(margin + 10, y + 35, pageWidth - margin - 10, y + 35);
+
+  doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
+  doc.setFontSize(11);
+  doc.setFont('helvetica', 'bold');
+  doc.text('TAXA DE FILIAÇÃO:', margin + 15, y + 46);
+  doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
+  doc.setFontSize(14);
+  doc.text(formatCurrency(cotacao.valor_adesao), pageWidth - margin - 15, y + 46, { align: 'right' });
 
   y += cardHeight + INNER_GAP;
 
