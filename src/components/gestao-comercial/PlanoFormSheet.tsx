@@ -83,6 +83,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       setAtivo(existingPlan.ativo);
       setSelectedCoberturas(new Set(existingPlan.coberturaIds));
       setSelectedBeneficios(new Set(existingPlan.beneficioIds));
+      setTemplateContratoId(existingPlan.template_contrato_id || '');
     }
   }, [existingPlan]);
 
