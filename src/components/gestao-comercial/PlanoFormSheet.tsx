@@ -201,7 +201,13 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
             bens.map((b, i) => ({ plano_id: planoId, benefit_id: b.id, beneficio: b.name, display_order: i }))
           );
         }
-
+        // Save taxa administrativa
+        await supabase.from('planos_taxa_administrativa').delete().eq('plano_id', planoId);
+        if (taxaFaixas.length > 0) {
+          await supabase.from('planos_taxa_administrativa').insert(
+            taxaFaixas.map(f => ({ plano_id: planoId, fipe_de: f.fipe_de, fipe_ate: f.fipe_ate, valor_taxa: f.valor_taxa }))
+          );
+        }
 
       } else {
         const codigo = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
@@ -223,6 +229,12 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           const bens = benefits.filter(b => selectedBeneficios.has(b.id));
           await supabase.from('planos_beneficios').insert(
             bens.map((b, i) => ({ plano_id: plan.id, benefit_id: b.id, beneficio: b.name, display_order: i }))
+          );
+        }
+        // Save taxa administrativa for new plan
+        if (taxaFaixas.length > 0) {
+          await supabase.from('planos_taxa_administrativa').insert(
+            taxaFaixas.map(f => ({ plano_id: plan.id, fipe_de: f.fipe_de, fipe_ate: f.fipe_ate, valor_taxa: f.valor_taxa }))
           );
         }
       }
