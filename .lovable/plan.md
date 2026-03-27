@@ -1,34 +1,40 @@
 
 
-# Corrigir RLS da Taxa Administrativa - Permissão Incorreta
+# Corrigir Duplicação de Plano: Cache + Taxa Administrativa
 
-## Problema
+## Problemas
 
-A tabela `planos_taxa_administrativa` usa a permissão `canManagePlans` nas policies de INSERT, UPDATE e DELETE. Porém, o papel `diretor` possui a permissão `canManagePlanos` (em português). O nome não bate, causando erro RLS `42501` ao tentar salvar.
+1. **Lista não atualiza** — o `onSuccess` do `useDuplicatePlan` invalida `['plans']` e `['planos']`, mas a tela de Linhas e Planos usa a query `['linhas_com_planos_clean']`, que não é invalidada.
+2. **Faixas de taxa administrativa não são copiadas** — o `mutationFn` duplica benefícios e regiões, mas ignora a tabela `planos_taxa_administrativa`.
 
-## Correção
+## Alterações
 
-### Migração SQL
-Recriar as 3 policies (INSERT, UPDATE, DELETE) trocando `canManagePlans` por `canManagePlanos`:
+### `src/hooks/usePlansAdmin.ts` — função `useDuplicatePlan`
 
-```sql
-DROP POLICY "Insert taxa administrativa diretor" ON public.planos_taxa_administrativa;
-DROP POLICY "Update taxa administrativa diretor" ON public.planos_taxa_administrativa;
-DROP POLICY "Delete taxa administrativa diretor" ON public.planos_taxa_administrativa;
+**A) Duplicar taxa administrativa** (após duplicar regiões, ~linha 368):
+```ts
+// Duplicate taxa administrativa
+const { data: taxas } = await supabase
+  .from('planos_taxa_administrativa')
+  .select('fipe_de, fipe_ate, valor_taxa')
+  .eq('plano_id', id);
 
-CREATE POLICY "Insert taxa administrativa diretor"
-  ON public.planos_taxa_administrativa FOR INSERT TO authenticated
-  WITH CHECK (public.has_permission(auth.uid(), 'canManagePlanos'));
-
-CREATE POLICY "Update taxa administrativa diretor"
-  ON public.planos_taxa_administrativa FOR UPDATE TO authenticated
-  USING (public.has_permission(auth.uid(), 'canManagePlanos'))
-  WITH CHECK (public.has_permission(auth.uid(), 'canManagePlanos'));
-
-CREATE POLICY "Delete taxa administrativa diretor"
-  ON public.planos_taxa_administrativa FOR DELETE TO authenticated
-  USING (public.has_permission(auth.uid(), 'canManagePlanos'));
+if (taxas && taxas.length > 0) {
+  await supabase.from('planos_taxa_administrativa').insert(
+    taxas.map(t => ({ plano_id: createdPlan.id, fipe_de: t.fipe_de, fipe_ate: t.fipe_ate, valor_taxa: t.valor_taxa }))
+  );
+}
 ```
 
-Nenhuma alteração de código necessária.
+**B) Invalidar query correta** no `onSuccess` (~linha 373):
+Adicionar:
+```ts
+queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+```
+
+## Arquivo alterado
+
+| Arquivo | Ação |
+|---|---|
+| `src/hooks/usePlansAdmin.ts` | Duplicar faixas de taxa administrativa + invalidar cache `linhas_com_planos_clean` |
 
