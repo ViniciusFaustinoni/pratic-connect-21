@@ -114,7 +114,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       if (planoId) {
         const { error } = await supabase.from('planos').update({
           nome, descricao, ativo,
-          template_contrato_id: templateContratoId || null,
+          template_contrato_id: (templateContratoId && templateContratoId !== 'default') ? templateContratoId : null,
         }).eq('id', planoId);
         if (error) throw error;
 
