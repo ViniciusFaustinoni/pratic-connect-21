@@ -737,7 +737,7 @@ export function generateHeader(dados: TermoAfiliacaoData): string {
 export function generateFooter(dados: TermoAfiliacaoData): string {
   return `
 <div class="footer">
-  ABP PraticCar | Termo de Afiliação Nº ${dados.contrato.numero}
+  PRATICCAR | Termo de Afiliação Nº ${dados.contrato.numero}
 </div>
 `;
 }

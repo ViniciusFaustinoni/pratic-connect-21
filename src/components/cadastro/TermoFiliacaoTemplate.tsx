@@ -490,9 +490,9 @@ export function TermoFiliacaoTemplate({
           
           <div style={{ display: 'inline-block', width: '45%', textAlign: 'center', verticalAlign: 'top', marginLeft: '40pt' }}>
             <div style={{ borderTop: '1px solid #333333', width: '280px', margin: '0 auto', paddingTop: '6pt', fontSize: '9pt' }}>
-              <p style={{ fontWeight: 'bold', fontSize: '10pt' }}>ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR</p>
+              <p style={{ fontWeight: 'bold', fontSize: '10pt' }}>ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR</p>
               <p style={{ fontSize: '8pt', color: '#666666' }}>CNPJ: {empresa.cnpj}</p>
-              <p style={{ fontSize: '9pt', color: '#374151' }}>ABP PRATICCAR</p>
+              <p style={{ fontSize: '9pt', color: '#374151' }}>PRATICCAR</p>
             </div>
           </div>
         </div>

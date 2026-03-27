@@ -109,7 +109,7 @@ const DADOS_FICTICIOS: Record<string, string> = {
   'oficina.endereco': 'Rua dos Mecânicos, 500 - Vila Industrial, São Paulo/SP',
 
   // Empresa
-  'empresa.nome': 'PRATIC Associação de Proteção Veicular',
+  'empresa.nome': 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR',
   'empresa.cnpj': '12.345.678/0001-99',
   'empresa.endereco': 'Rua Exemplo, 100 - Centro, São Paulo/SP - CEP 01000-000',
   'empresa.logradouro': 'Rua Exemplo',

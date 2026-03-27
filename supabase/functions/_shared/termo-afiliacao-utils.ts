@@ -452,8 +452,8 @@ export function mapearDadosParaTemplate(
       tipo_entrada: contrato.tipo_entrada || 'adesao',
     },
     empresa: {
-      nome: empresa?.empresa_nome || "ABP PraticCar",
-      razao_social: empresa?.empresa_razao_social || "Associação de Benefícios PraticCar",
+      nome: empresa?.empresa_nome || "PRATICCAR",
+      razao_social: empresa?.empresa_razao_social || "ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR",
       cnpj: empresa?.empresa_cnpj || "XX.XXX.XXX/0001-XX",
       logradouro: empresa?.empresa_logradouro || "Av. das Américas",
       numero: empresa?.empresa_numero || "19.005",

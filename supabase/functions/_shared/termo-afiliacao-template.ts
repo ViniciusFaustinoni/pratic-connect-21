@@ -847,7 +847,7 @@ const generateSecao8 = (data: TermoAfiliacaoData): string => {
 
 const generateFooter = (data: TermoAfiliacaoData): string => `
 <div class="footer">
-  ABP PraticCar | Termo de Afiliação Nº ${data.contrato.numero}
+  PRATICCAR | Termo de Afiliação Nº ${data.contrato.numero}
 </div>
 `;
 
