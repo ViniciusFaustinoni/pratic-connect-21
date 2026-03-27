@@ -724,7 +724,7 @@ const generateSecao5 = (data: TermoAfiliacaoData): string => `
     <p class="declaracao-titulo">5.9. RASTREADOR VEICULAR</p>
     <p class="declaracao-texto">
       Concordo com a instalação obrigatória do rastreador veicular, que será 
-      realizada por técnico credenciado pela ABP PraticCar após aprovação do 
+      realizada por técnico credenciado pela PRATICCAR após aprovação do 
       cadastro, sendo condição indispensável para a efetivação da proteção.
     </p>
   </div>
