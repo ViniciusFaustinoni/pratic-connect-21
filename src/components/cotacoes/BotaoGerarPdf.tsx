@@ -113,7 +113,15 @@ export function BotaoGerarPdf({
         await gerarPdfCotacaoComparativa(cotacaoComparativa);
       } else {
         // Fallback: sem dados_extras, usar PDF padrão
-        await gerarPdfCotacao(cotacao as CotacaoParaPdf);
+        const cotacaoComVendedor: CotacaoParaPdf & { vendedor?: { nome: string; whatsapp?: string | null; telefone?: string | null } | null } = {
+          ...(cotacao as CotacaoParaPdf),
+          vendedor: (cotacao.profiles?.whatsapp || cotacao.profiles?.phone) ? {
+            nome: cotacao.profiles?.full_name || 'Vendedor',
+            whatsapp: cotacao.profiles?.whatsapp || null,
+            telefone: cotacao.profiles?.phone || null,
+          } : null,
+        };
+        await gerarPdfCotacao(cotacaoComVendedor);
       }
       
       toast.success('PDF gerado com sucesso!');
