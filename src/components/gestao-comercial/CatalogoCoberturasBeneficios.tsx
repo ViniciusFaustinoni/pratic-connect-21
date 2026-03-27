@@ -392,6 +392,7 @@ export function CatalogoCoberturasBeneficios() {
             onEdit={(item) => setBenSheet({ open: true, item })}
             onToggle={(id, is_active) => toggleBen.mutate({ id, is_active })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'beneficio' })}
+            onDuplicate={(id) => duplicateBen.mutate(id)}
           />
         </TabsContent>
       </Tabs>
