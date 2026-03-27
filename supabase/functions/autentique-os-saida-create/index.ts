@@ -256,7 +256,7 @@ serve(async (req) => {
         <img src="https://pratic-connect-21.lovable.app/logos/logo-full-light.png" alt="Logo PraticCar" onerror="this.style.display='none'" />
       </div>
       <div class="header-empresa">
-        ${empresaConfig.razao_social || empresaConfig.nome || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'}<br>
+        ${empresaConfig.razao_social || empresaConfig.nome || 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'}<br>
         CNPJ: ${empresaConfig.cnpj}
       </div>
       <div class="header-titulo">TERMO DE SAÍDA DE VEÍCULO</div>
@@ -334,7 +334,7 @@ serve(async (req) => {
     </div>
 
     <div class="footer">
-      ABP PraticCar | Termo de Saída de Veículo - OS ${os.numero}
+      PRATICCAR | Termo de Saída de Veículo - OS ${os.numero}
     </div>
   </div>
 </body>

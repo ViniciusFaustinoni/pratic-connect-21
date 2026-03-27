@@ -490,7 +490,7 @@ export default function SinistroAnalise() {
     try {
       const link = `https://pratic-connect-21.lovable.app/evento/${(linkEvento as any).token}`;
       const nome = associado.nome?.split(' ')[0] || 'Associado';
-      const mensagem = `Olá ${nome}!\n\nAs informações do seu sinistro ${sinistro.protocolo} foram recebidas com sucesso!\n\nAgora, para darmos andamento ao processo de reparo, você precisa agendar a vistoria presencial do regulador.\n\nAcesse o link abaixo para escolher a data e horário:\n${link}\n\nO regulador irá até o endereço que você informar para avaliar os danos.\n\nABP PraticCar`;
+      const mensagem = `Olá ${nome}!\n\nAs informações do seu sinistro ${sinistro.protocolo} foram recebidas com sucesso!\n\nAgora, para darmos andamento ao processo de reparo, você precisa agendar a vistoria presencial do regulador.\n\nAcesse o link abaixo para escolher a data e horário:\n${link}\n\nO regulador irá até o endereço que você informar para avaliar os danos.\n\nPRATICCAR`;
       const { error } = await supabase.functions.invoke('whatsapp-send-text', {
         body: { telefone, mensagem },
       });
@@ -580,7 +580,7 @@ export default function SinistroAnalise() {
         console.error('Erro ao calcular cota:', cotaErr);
       }
 
-      const mensagem = `Olá ${nome}!\n\nSeu sinistro ${sinistro.protocolo} foi registrado com sucesso.\n\nPara dar andamento ao processo, acesse o link abaixo e envie os documentos necessários:\n\n${link}\n\n*DOCUMENTOS NECESSÁRIOS:*\n\n📸 *Etapa 1 - Auto Vistoria (fotos e vídeo do veículo)*\n- Frente, traseira, laterais e teto\n- Detalhes dos danos\n- Painel/hodômetro\n- Mínimo de 5 fotos e 1 vídeo dos danos\n\n📋 *Etapa 2 - Boletim de Ocorrência*\n- Número do B.O.\n- Foto ou PDF do documento\n\n📝 *Etapa 3 - Relato do ocorrido*\n- Descrição detalhada do que aconteceu\n- Áudio ou texto\n- Localização do evento\n${cotaTexto}\n⏰ O link é válido por ${prazoLinkEvento} horas.\n\nABP PraticCar`;
+      const mensagem = `Olá ${nome}!\n\nSeu sinistro ${sinistro.protocolo} foi registrado com sucesso.\n\nPara dar andamento ao processo, acesse o link abaixo e envie os documentos necessários:\n\n${link}\n\n*DOCUMENTOS NECESSÁRIOS:*\n\n📸 *Etapa 1 - Auto Vistoria (fotos e vídeo do veículo)*\n- Frente, traseira, laterais e teto\n- Detalhes dos danos\n- Painel/hodômetro\n- Mínimo de 5 fotos e 1 vídeo dos danos\n\n📋 *Etapa 2 - Boletim de Ocorrência*\n- Número do B.O.\n- Foto ou PDF do documento\n\n📝 *Etapa 3 - Relato do ocorrido*\n- Descrição detalhada do que aconteceu\n- Áudio ou texto\n- Localização do evento\n${cotaTexto}\n⏰ O link é válido por ${prazoLinkEvento} horas.\n\nPRATICCAR`;
 
       const { error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
         body: { telefone, mensagem },
@@ -618,7 +618,7 @@ export default function SinistroAnalise() {
     setReenviandoAssinatura(true);
     try {
       const nome = associado.nome?.split(' ')[0] || 'Associado';
-      const mensagem = `Olá ${nome}! Tudo bem?\n\nNotamos que o Termo de Entrada do seu evento ${sinistro.protocolo} ainda não foi assinado.\n\nPara darmos continuidade ao processo, precisamos da sua assinatura digital. É bem rápido e simples!\n\nAcesse o link do email enviado por "Autentique" para assinar.\n\nQualquer dúvida, estamos aqui para ajudar!\n\nABP PraticCar`;
+      const mensagem = `Olá ${nome}! Tudo bem?\n\nNotamos que o Termo de Entrada do seu evento ${sinistro.protocolo} ainda não foi assinado.\n\nPara darmos continuidade ao processo, precisamos da sua assinatura digital. É bem rápido e simples!\n\nAcesse o link do email enviado por "Autentique" para assinar.\n\nQualquer dúvida, estamos aqui para ajudar!\n\nPRATICCAR`;
       const { error } = await supabase.functions.invoke('whatsapp-send-text', { body: { telefone, mensagem } });
       if (error) throw error;
       toast.success('Lembrete de assinatura enviado via WhatsApp!');
@@ -656,7 +656,7 @@ export default function SinistroAnalise() {
       if (!linkPag) { toast.error('Link do evento não encontrado. Gere um novo link.'); setReenviandoPagamento(false); return; }
 
       const nome = associado.nome?.split(' ')[0] || 'Associado';
-      const mensagem = `Olá ${nome}! Tudo bem?\n\nO Termo de Entrada do evento ${sinistro.protocolo} já foi assinado com sucesso!\n\nPara que seu veículo seja encaminhado à oficina, falta apenas o pagamento da cota de coparticipação:\n\n💰 Valor: ${valorFmt}\n📋 Link de pagamento: ${linkPag}\n\nApós a confirmação do pagamento, seu evento será encaminhado para reparo.\n\nEstamos à disposição!\n\nABP PraticCar`;
+      const mensagem = `Olá ${nome}! Tudo bem?\n\nO Termo de Entrada do evento ${sinistro.protocolo} já foi assinado com sucesso!\n\nPara que seu veículo seja encaminhado à oficina, falta apenas o pagamento da cota de coparticipação:\n\n💰 Valor: ${valorFmt}\n📋 Link de pagamento: ${linkPag}\n\nApós a confirmação do pagamento, seu evento será encaminhado para reparo.\n\nEstamos à disposição!\n\nPRATICCAR`;
       const { error } = await supabase.functions.invoke('whatsapp-send-text', { body: { telefone, mensagem } });
       if (error) throw error;
       toast.success('Link de pagamento reenviado via WhatsApp!');
