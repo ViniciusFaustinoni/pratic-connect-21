@@ -370,7 +370,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     valorAdicional,
     regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
     combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || undefined,
-    categoria: categoria && categoria !== 'nenhuma' ? categoria : undefined,
+    categoria: tipoPlacaSelecionado && tipoPlacaSelecionado !== 'nenhuma' ? tipoPlacaSelecionado : undefined,
     anoVeiculo: anoNumerico,
     tipoVeiculo: tipoVeiculoDetectado,
     usoApp: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
