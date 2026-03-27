@@ -149,8 +149,8 @@ const headerFooterBg = { r: 245, g: 247, b: 250 };
 
 const SECTION_GAP = 8;
 const INNER_GAP = 5;
-const HEADER_HEIGHT = 12;
-const LINE_HEIGHT = 7;
+const HEADER_HEIGHT = 14;
+const LINE_HEIGHT = 8;
 
 const truncateText = (text: string | null | undefined, maxLength: number): string => {
   if (!text) return '—';
