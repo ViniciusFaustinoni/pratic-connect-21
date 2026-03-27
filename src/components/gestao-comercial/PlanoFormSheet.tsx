@@ -145,13 +145,11 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
     setTaxaFaixas(newFaixas);
   }, [taxaFipeMin, taxaFipeMax, taxaIntervalo, taxaFaixas]);
 
-  useEffect(() => {
+  const canGenerateFaixas = useMemo(() => {
     const min = parseFloat(taxaFipeMin);
     const max = parseFloat(taxaFipeMax);
     const intervalo = parseFloat(taxaIntervalo);
-    if (!isNaN(min) && !isNaN(max) && !isNaN(intervalo) && intervalo > 0 && max > min) {
-      generateTaxaFaixas();
-    }
+    return !isNaN(min) && !isNaN(max) && !isNaN(intervalo) && intervalo > 0 && max > min;
   }, [taxaFipeMin, taxaFipeMax, taxaIntervalo]);
 
   // Calculate total
@@ -360,6 +358,17 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
                 />
               </div>
             </div>
+
+            <Button
+              type="button"
+              variant="outline"
+              size="sm"
+              className="w-full"
+              disabled={!canGenerateFaixas}
+              onClick={generateTaxaFaixas}
+            >
+              Gerar Faixas
+            </Button>
 
             {taxaFaixas.length > 0 && (
               <div className="space-y-2">
