@@ -56,8 +56,6 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
   const { data: vendedores = [] } = useVendedores();
   // Consultores removido - usar apenas vendedores
   const { loading: placaLoading, error: placaError, getByPlaca, clearError } = useFipe();
-  const origemValue = form.watch?.('origem') || 'telefone';
-  const { data: origensDetalhe = [] } = useLeadOrigensPorCategoria(origemValue);
   
   const form = useForm<LeadFormData>({
     resolver: zodResolver(leadSchema),
