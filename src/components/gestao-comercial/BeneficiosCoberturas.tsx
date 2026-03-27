@@ -49,6 +49,7 @@ export function BeneficiosCoberturas() {
   const deleteCobertura = useDeleteCobertura();
   const updateCobertura = useUpdateCobertura();
   const duplicateBenefit = useDuplicateBenefit();
+  const duplicateCobertura = useDuplicateCobertura();
   const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
   const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
