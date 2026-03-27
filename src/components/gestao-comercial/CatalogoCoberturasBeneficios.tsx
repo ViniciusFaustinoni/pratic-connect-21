@@ -73,6 +73,7 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
   const [nome, setNome] = useState('');
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('0');
+  const [variaComFipe, setVariaComFipe] = useState(false);
 
   const { state: eligState, setState: setEligState } = useEligibilityState('cobertura', item?.id);
 
