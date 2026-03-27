@@ -122,7 +122,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
 
     mensagem += `\n📝 Você receberá um *Termo de Saída* para assinatura digital antes da liberação do veículo.\n\n` +
       `Em caso de dúvidas, entre em contato conosco.\n\n` +
-      `*ABP PraticCar*`;
+      `*PRATICCAR*`;
 
     try {
       const { error: whatsError } = await supabase.functions.invoke('whatsapp-send-text', {
@@ -178,7 +178,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
           `🔗 *Clique no link abaixo para assinar:*\n${data.signatureLink}\n\n` +
           `Após a assinatura, seu veículo será liberado.\n\n` +
           `Em caso de dúvidas, entre em contato conosco.\n\n` +
-          `*ABP PraticCar*`;
+          `*PRATICCAR*`;
 
         try {
           await supabase.functions.invoke('whatsapp-send-text', {
@@ -310,7 +310,7 @@ export function OSConclusaoModal({ open, onOpenChange, os }: OSConclusaoModalPro
         const phone = associado?.whatsapp || associado?.telefone;
         if (phone) {
           const veiculoDesc = veiculo ? `${veiculo.marca} ${veiculo.modelo}` : 'seu veículo';
-          const mensagem = `Olá *${associado.nome}*! 🚗✅\n\nSeu veículo *${veiculoDesc}* foi *liberado*!\n\nO Termo de Saída foi assinado com sucesso. Você já pode retirar o veículo na oficina.\n\nObrigado pela confiança! 🙏\n\n*ABP PraticCar*`;
+          const mensagem = `Olá *${associado.nome}*! 🚗✅\n\nSeu veículo *${veiculoDesc}* foi *liberado*!\n\nO Termo de Saída foi assinado com sucesso. Você já pode retirar o veículo na oficina.\n\nObrigado pela confiança! 🙏\n\n*PRATICCAR*`;
           await supabase.functions.invoke('whatsapp-send-text', {
             body: { telefone: phone.replace(/\D/g, ''), mensagem },
           });
