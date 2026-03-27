@@ -158,11 +158,11 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
     case 'categoria_especial': {
       const cats: string[] = cfg.categorias || cfg.values || [];
       if (cats.length === 0) return true;
-      const match = !!ctx.categoriaEspecial && cats.includes(ctx.categoriaEspecial.toLowerCase());
+      const match = !!ctx.categoriaEspecial && cats.some(c => c.toLowerCase() === ctx.categoriaEspecial!.toLowerCase());
       return isInclude ? match : !match;
     }
     case 'regiao': {
-      const regioes: string[] = cfg.regioes || [];
+      const regioes: string[] = cfg.regioes || cfg.values || [];
       if (regioes.length === 0) return true;
       const match = !!ctx.regiao && regioes.some(r => r.toLowerCase() === ctx.regiao!.toLowerCase());
       return isInclude ? match : !match;
