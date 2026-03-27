@@ -723,7 +723,7 @@ export function generateHeader(dados: TermoAfiliacaoData): string {
     <img src="https://pratic-connect-21.lovable.app/logos/logo-full-light.png" alt="Logo PraticCar" onerror="this.style.display='none'" />
   </div>
   <div class="header-empresa">
-    ${dados.empresa.razao_social || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'}<br>
+    ${dados.empresa.razao_social || 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'}<br>
     CNPJ: ${dados.empresa.cnpj} | ${dados.empresa.logradouro}, ${dados.empresa.numero} - ${dados.empresa.bairro} - ${dados.empresa.cidade}/${dados.empresa.uf} - CEP ${dados.empresa.cep}
   </div>
   <div class="header-titulo">TERMO DE AFILIAÇÃO AO PROGRAMA DE SOCORRO MÚTUO</div>
