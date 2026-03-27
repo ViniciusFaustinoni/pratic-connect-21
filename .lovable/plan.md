@@ -1,46 +1,98 @@
 
 
-# Adicionar Blocos de Assinatura na Proposta de Filiação (Edge Function)
+# CRUD de "Origem do Lead" no módulo Marketing
 
-## Problema
+## Contexto
 
-A seção de assinatura nos templates das edge functions (`generateSecao8` e `generateSecaoAssinatura`) gera apenas a linha de data/local, mas não inclui os campos de assinatura com nome e CPF do associado e da empresa. O template React (`TermoFiliacaoTemplate.tsx`) já tem esses campos corretamente (linhas 482-498), mas as edge functions que geram o HTML para o Autentique estão incompletos.
+Atualmente, a origem do lead é um enum fixo no banco (`origem_lead`) com valores genéricos como "instagram", "facebook", "site". O usuário precisa de granularidade maior — por exemplo, "Instagram - Reels", "Instagram - Stories", "Meta Ads", "Facebook - Reels" — para mapear exatamente por qual canal o associado chegou.
 
-## Correção
+As origens de tipo operacional (Migração, Inclusão, Troca de Titularidade) já estão no cotador e não precisam ser alteradas.
 
-Adicionar os blocos de assinatura (signature-block) com linhas para nome, CPF e papel (ASSOCIADO / PRATICCAR) nas duas funções:
+## Solução
 
-### 1. `supabase/functions/_shared/termo-afiliacao-template.ts` — `generateSecao8`
+Criar uma nova tabela `lead_origens` para cadastro dinâmico de origens, e adicionar um campo `origem_detalhe_id` na tabela `leads` que referencia essa tabela. O campo `origem` (enum) existente continua funcionando como categoria principal, e o novo campo funciona como sub-origem detalhada.
 
-Após a `<p class="signature-local-data">`, adicionar:
+## 1. Migração SQL — Nova tabela `lead_origens`
 
-```html
-<div style="text-align: center;">
-  <div class="signature-block">
-    <div class="signature-line">
-      <p class="signature-name">${data.cliente.nome}</p>
-      <p class="signature-doc">CPF: ${formatCPF(data.cliente.cpf)}</p>
-      <p class="signature-role">ASSOCIADO</p>
-    </div>
-  </div>
-  <div class="signature-block" style="margin-left: 40pt;">
-    <div class="signature-line">
-      <p class="signature-name">${data.empresa.razaoSocial}</p>
-      <p class="signature-doc">CNPJ: ${data.empresa.cnpj}</p>
-      <p class="signature-role">PRATICCAR</p>
-    </div>
-  </div>
-</div>
+```sql
+CREATE TABLE public.lead_origens (
+  id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+  nome TEXT NOT NULL,              -- "Instagram - Reels"
+  categoria TEXT NOT NULL,         -- "instagram", "facebook", "google", etc (mapeia ao enum origem_lead)
+  descricao TEXT,
+  ativo BOOLEAN NOT NULL DEFAULT true,
+  created_at TIMESTAMPTZ DEFAULT now(),
+  updated_at TIMESTAMPTZ DEFAULT now()
+);
+
+ALTER TABLE public.lead_origens ENABLE ROW LEVEL SECURITY;
+
+CREATE POLICY "Authenticated users can view lead_origens"
+  ON public.lead_origens FOR SELECT TO authenticated USING (true);
+
+CREATE POLICY "Managers can manage lead_origens"
+  ON public.lead_origens FOR ALL TO authenticated
+  USING (public.can_manage_users(auth.uid()))
+  WITH CHECK (public.can_manage_users(auth.uid()));
+
+-- Adicionar campo na tabela leads
+ALTER TABLE public.leads 
+  ADD COLUMN origem_detalhe_id UUID REFERENCES public.lead_origens(id);
+
+-- Seed com exemplos iniciais
+INSERT INTO public.lead_origens (nome, categoria) VALUES
+  ('Instagram - Reels', 'instagram'),
+  ('Instagram - Stories', 'instagram'),
+  ('Instagram - Feed', 'instagram'),
+  ('Facebook - Reels', 'facebook'),
+  ('Facebook - Feed', 'facebook'),
+  ('Meta Ads', 'facebook'),
+  ('Google Ads', 'google'),
+  ('Google Orgânico', 'google'),
+  ('WhatsApp Direto', 'whatsapp'),
+  ('Indicação de Associado', 'indicacao'),
+  ('Presencial', 'presencial'),
+  ('Telefone', 'telefone'),
+  ('Site', 'site'),
+  ('Parceiro', 'parceiro');
 ```
 
-### 2. `supabase/functions/_shared/template-utils.ts` — `generateSecaoAssinatura`
+## 2. Nova página — `src/pages/marketing/OrigensLead.tsx`
 
-Mesma adição de blocos de assinatura, usando `dados.cliente.nome`, `dados.cliente.cpf`, `dados.empresa.razaoSocial`, `dados.empresa.cnpj`.
+CRUD completo com:
+- Lista de origens com busca, filtro por categoria, toggle ativo/inativo
+- Dialog para criar/editar origem (campos: nome, categoria via select, descrição)
+- Botão excluir com confirmação
+- Badge colorido por categoria
+- Contagem de leads vinculados a cada origem
 
-## Arquivos alterados
+## 3. Novo hook — `src/hooks/useLeadOrigens.ts`
+
+- `useLeadOrigens()` — lista todas as origens
+- `useCreateLeadOrigem()` — criar
+- `useUpdateLeadOrigem()` — atualizar
+- `useDeleteLeadOrigem()` — excluir
+
+## 4. Rota e navegação
+
+- Adicionar rota `/marketing/origens` no `App.tsx`
+- Adicionar link no menu lateral do Marketing (sidebar)
+
+## 5. Integração com Leads
+
+- Nos formulários de lead (`LeadFormDialog`, `ConfirmationStep`, `LeadEditDialog`), adicionar select opcional de "Origem Detalhada" que filtra as `lead_origens` pela categoria selecionada em `origem`
+- No Kanban e listagem, exibir a origem detalhada quando disponível
+
+## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| `supabase/functions/_shared/termo-afiliacao-template.ts` | Adicionar blocos de assinatura em `generateSecao8` |
-| `supabase/functions/_shared/template-utils.ts` | Adicionar blocos de assinatura em `generateSecaoAssinatura` |
+| Nova migração SQL | Criar tabela `lead_origens` + campo `origem_detalhe_id` em leads |
+| `src/pages/marketing/OrigensLead.tsx` | Nova página CRUD |
+| `src/hooks/useLeadOrigens.ts` | Novo hook |
+| `src/components/marketing/OrigemLeadFormDialog.tsx` | Dialog de formulário |
+| `src/App.tsx` | Adicionar rota `/marketing/origens` |
+| Sidebar/menu Marketing | Adicionar link "Origens de Lead" |
+| `src/components/leads/LeadFormDialog.tsx` | Adicionar select de origem detalhada |
+| `src/components/leads/LeadEditDialog.tsx` | Adicionar select de origem detalhada |
 
