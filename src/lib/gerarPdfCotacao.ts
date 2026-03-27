@@ -588,55 +588,45 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y += cardHeight + INNER_GAP;
 
-  // ============= COBERTURAS DO PLANO =============
+  // ============= COBERTURAS DO PLANO (Detalhadas) =============
   checkPageBreak(80);
-  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COBERTURAS INCLUÍDAS', brandRed);
+  drawPremiumSectionHeader(doc, margin, y, contentWidth, 'COBERTURAS E BENEFÍCIOS INCLUÍDOS', brandRed, brandBlue);
   y += HEADER_HEIGHT + INNER_GAP;
 
   const coberturas = cotacao.planos?.coberturas || [];
+  const coberturaLineHeight = 9;
 
-  const coberturasCol1 = coberturas.slice(0, Math.ceil(coberturas.length / 2));
-  const coberturasCol2 = coberturas.slice(Math.ceil(coberturas.length / 2));
-
-  const startY = y;
-  const coberturaLineHeight = 8;
-  const cobCol1X = margin;
-  const cobCol2X = margin + (contentWidth / 2) + 8;
-  const colWidth = (contentWidth / 2) - 8;
-  
-  coberturasCol1.forEach((cobertura, index) => {
-    const lineTop = startY + (index * coberturaLineHeight);
+  // Exibir coberturas em coluna única para mostrar texto completo
+  coberturas.forEach((cobertura, index) => {
+    checkPageBreak(coberturaLineHeight + 4);
+    const lineTop = y;
     const textY = lineTop + coberturaLineHeight / 2 + 2;
     
     if (index % 2 === 0) {
       doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-      doc.rect(cobCol1X, lineTop, colWidth, coberturaLineHeight, 'F');
+      doc.rect(margin, lineTop, contentWidth, coberturaLineHeight, 'F');
     }
     
-    drawCheckIndicator(doc, cobCol1X + 5, textY);
+    drawCheckIndicator(doc, margin + 6, textY);
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
-    doc.text(cobertura, cobCol1X + 12, textY);
-  });
-
-  coberturasCol2.forEach((cobertura, index) => {
-    const lineTop = startY + (index * coberturaLineHeight);
-    const textY = lineTop + coberturaLineHeight / 2 + 2;
+    // Usa splitTextToSize para textos longos
+    const maxWidth = contentWidth - 20;
+    const lines = doc.splitTextToSize(cobertura, maxWidth);
+    doc.text(lines[0], margin + 14, textY);
     
-    if (index % 2 === 0) {
-      doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-      doc.rect(cobCol2X - 4, lineTop, colWidth + 4, coberturaLineHeight, 'F');
+    if (lines.length > 1) {
+      doc.setFontSize(9);
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.text(lines[1], margin + 14, textY + coberturaLineHeight * 0.7);
+      y += coberturaLineHeight * 1.6;
+    } else {
+      y += coberturaLineHeight;
     }
-    
-    drawCheckIndicator(doc, cobCol2X + 2, textY);
-    doc.setTextColor(textLight.r, textLight.g, textLight.b);
-    doc.setFontSize(9);
-    doc.setFont('helvetica', 'normal');
-    doc.text(cobertura, cobCol2X + 9, textY);
   });
 
-  y = startY + Math.max(coberturasCol1.length, coberturasCol2.length) * coberturaLineHeight + SECTION_GAP;
+  y += SECTION_GAP;
 
   // ============= COBERTURAS REMOVIDAS (PDF SIMPLES) =============
   if (cotacao.coberturasRemovidas && cotacao.coberturasRemovidas.length > 0) {
