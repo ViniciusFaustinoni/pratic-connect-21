@@ -2438,7 +2438,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                               {/* Lista de benefícios com Ver mais */}
                               <ul className="text-sm space-y-1.5 text-muted-foreground">
                                 {plano.coberturas.slice(0, LIMIT).map((cobertura, i) => {
-                                  const isRemovida = isCoberturaRemovida(cobertura, categoria);
+                                   const isRemovida = (plano.coberturasRemovidas || []).includes(cobertura);
                                   return (
                                     <li key={i} className="flex items-start gap-2">
                                       {isRemovida ? (
