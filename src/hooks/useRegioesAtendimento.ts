@@ -20,6 +20,14 @@ const FALLBACK_REGIOES: RegiaoAtendimento[] = [
   { value: 'campinas', label: 'Campinas e Região' },
   { value: 'santos', label: 'Santos e Baixada' },
   { value: 'sorocaba', label: 'Sorocaba e Região' },
+  { value: 'rj_centro', label: 'Rio de Janeiro - Centro' },
+  { value: 'rj_zona_sul', label: 'Rio de Janeiro - Zona Sul' },
+  { value: 'rj_zona_norte', label: 'Rio de Janeiro - Zona Norte' },
+  { value: 'rj_zona_oeste', label: 'Rio de Janeiro - Zona Oeste' },
+  { value: 'niteroi_sao_goncalo', label: 'Niterói e São Gonçalo' },
+  { value: 'baixada_fluminense', label: 'Baixada Fluminense' },
+  { value: 'regiao_dos_lagos', label: 'Região dos Lagos' },
+  { value: 'regiao_serrana_rj', label: 'Região Serrana' },
   { value: 'outros', label: 'Outras Regiões' },
 ];
 
