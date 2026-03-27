@@ -133,6 +133,7 @@ export interface VehicleContext {
   versao?: string;
   tipoUso?: string;
   combustivel?: string;
+  tipoPlaca?: string;
 }
 
 export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleContext): boolean {
