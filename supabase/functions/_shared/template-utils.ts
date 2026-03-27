@@ -757,6 +757,10 @@ export function hasSignatureArea(html: string): boolean {
     /class\s*=\s*["']signature-local-data["']/i,
     />ASSINATURA<\//i,
     />\s*8\.\s*ASSINATURA\s*<\//i,
+    // Detectar área de assinatura do template AF1 (nome + CPF em contexto de assinatura)
+    /Associado\s*\(a\)\s*:/i,
+    /{{associado\.nome}}[\s\S]*?{{associado\.cpf}}/i,
+    /border-top.*?ASSOCIADO/is,
   ];
   return patterns.some(p => p.test(html));
 }
