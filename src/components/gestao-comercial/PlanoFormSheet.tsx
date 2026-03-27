@@ -139,11 +139,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
             bens.map((b, i) => ({ plano_id: plan.id, benefit_id: b.id, beneficio: b.name, display_order: i }))
           );
         }
-        if (selRegioes.size > 0) {
-          await supabase.from('planos_regioes').insert(
-            Array.from(selRegioes).map(rid => ({ plano_id: plan.id, regiao_id: rid }))
-          );
-        }
       }
     },
     onSuccess: () => {
