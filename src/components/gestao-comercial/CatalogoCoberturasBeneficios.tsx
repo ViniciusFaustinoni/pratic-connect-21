@@ -276,11 +276,12 @@ function RulesIndicator({ entityType, entityId }: { entityType: 'cobertura' | 'b
 
 // ── Item List ──
 
-function ItemList({ items, onEdit, onToggle, onDelete, type }: {
+function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type }: {
   items: any[];
   onEdit: (item: any) => void;
   onToggle: (id: string, active: boolean) => void;
   onDelete: (item: any) => void;
+  onDuplicate: (id: string) => void;
   type: 'cobertura' | 'beneficio';
 }) {
   const getActive = (item: any) => type === 'cobertura' ? item.ativo !== false : item.is_active !== false;
