@@ -179,28 +179,52 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Buscar mapeamento plano → linha_slug (nova tabela)
-  const { data: planoPrecoMap, isLoading: planoPrecoMapLoading } = useQuery({
-    queryKey: ['plano_preco_map'],
+  // Buscar coberturas vinculadas aos planos (para cálculo de preço)
+  const { data: planoCoberturasData, isLoading: planoCoberturasLoading } = useQuery({
+    queryKey: ['planos_coberturas_pricing'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('plano_preco_map')
-        .select('*');
+        .from('planos_coberturas')
+        .select('plano_id, cobertura_id, coberturas:cobertura_id (valor, varia_com_fipe)');
       if (error) throw error;
       return data;
     },
     staleTime: 1000 * 60 * 5,
   });
 
-  // Buscar tabelas de preço mensalidade (nova tabela)
-  const { data: tabelasMensalidade, isLoading: tabelasMensalidadeLoading } = useQuery({
-    queryKey: ['tabelas_preco_mensalidade'],
+  // Buscar faixas de preço FIPE das coberturas (para coberturas com varia_com_fipe)
+  const { data: coberturaFaixasData } = useQuery({
+    queryKey: ['coberturas_faixas_fipe_pricing'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tabelas_preco_mensalidade')
-        .select('*')
-        .eq('is_active', true)
-        .limit(5000);
+        .from('coberturas_faixas_fipe')
+        .select('cobertura_id, fipe_de, fipe_ate, valor');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Buscar faixas de preço FIPE dos benefícios (para benefícios com varia_com_fipe)
+  const { data: beneficioFaixasData } = useQuery({
+    queryKey: ['beneficios_faixas_fipe_pricing'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('benefits_faixas_fipe')
+        .select('benefit_id, fipe_de, fipe_ate, valor');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Buscar taxa administrativa por plano e faixa FIPE
+  const { data: taxasAdminData, isLoading: taxasAdminLoading } = useQuery({
+    queryKey: ['planos_taxa_administrativa_pricing'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos_taxa_administrativa')
+        .select('plano_id, fipe_de, fipe_ate, valor_taxa');
       if (error) throw error;
       return data;
     },
