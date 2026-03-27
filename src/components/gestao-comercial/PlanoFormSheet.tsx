@@ -267,7 +267,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
               </SelectContent>
             </Select>
             {templateContratoId && templateContratoId !== 'default' && (
-              <p className="text-xs text-emerald-600">✓ Template específico vinculado</p>
+              <p className="text-xs text-primary">✓ Template específico vinculado</p>
             )}
           </section>
 
