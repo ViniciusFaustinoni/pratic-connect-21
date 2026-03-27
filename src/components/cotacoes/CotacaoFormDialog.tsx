@@ -1955,44 +1955,29 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               </>
             )}
 
-            <Separator />
-
-            {/* BLOCO 2: CONDIÇÕES ESPECIAIS / DESÁGIOS */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
-                Condições Especiais / Deságios
-              </h3>
-              
-              <VehicleCategorySelect
-                value={categoria}
-                onChange={handleCategoriaChange}
-              />
-
-              {/* Alerta dinâmico baseado na categoria */}
-              {alertaCategoria && (
-                <Alert 
-                  className={
-                    alertaCategoria.tipo === 'warning' 
-                      ? 'border-amber-500/50 bg-amber-500/10' 
-                      : 'border-blue-500/50 bg-blue-500/10'
-                  }
-                >
-                  {alertaCategoria.tipo === 'warning' ? (
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  ) : (
-                    <Info className="h-4 w-4 text-blue-500" />
-                  )}
-                  <AlertDescription className={
-                    alertaCategoria.tipo === 'warning'
-                      ? 'text-amber-700 dark:text-amber-400'
-                      : 'text-blue-700 dark:text-blue-400'
-                  }>
-                    {alertaCategoria.mensagem}
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
+            {/* Alerta dinâmico baseado no tipo de placa selecionado */}
+            {alertaCategoria && (
+              <Alert 
+                className={
+                  alertaCategoria.tipo === 'warning' 
+                    ? 'border-amber-500/50 bg-amber-500/10' 
+                    : 'border-blue-500/50 bg-blue-500/10'
+                }
+              >
+                {alertaCategoria.tipo === 'warning' ? (
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                ) : (
+                  <Info className="h-4 w-4 text-blue-500" />
+                )}
+                <AlertDescription className={
+                  alertaCategoria.tipo === 'warning'
+                    ? 'text-amber-700 dark:text-amber-400'
+                    : 'text-blue-700 dark:text-blue-400'
+                }>
+                  {alertaCategoria.mensagem}
+                </AlertDescription>
+              </Alert>
+            )}
 
             <Separator />
 
