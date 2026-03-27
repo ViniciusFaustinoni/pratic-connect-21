@@ -27,7 +27,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   // Data sources
   const { data: coberturas = [] } = useCoberturas(true);
   const { data: benefits = [] } = useBenefits();
-  const { data: regioes = [] } = useRegioes();
 
   // Form state
   const [nome, setNome] = useState('');
