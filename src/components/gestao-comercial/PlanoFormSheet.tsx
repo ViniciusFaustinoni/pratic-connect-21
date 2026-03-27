@@ -35,8 +35,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [selectedCoberturas, setSelectedCoberturas] = useState<Set<string>>(new Set());
   const [selectedBeneficios, setSelectedBeneficios] = useState<Set<string>>(new Set());
   
-  // Only regions remain at plan level
-  const [selRegioes, setSelRegioes] = useState<Set<string>>(new Set());
 
   // Load existing plan
   const { data: existingPlan, isLoading: loadingPlan } = useQuery({
