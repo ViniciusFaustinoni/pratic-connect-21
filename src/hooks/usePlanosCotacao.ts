@@ -551,56 +551,34 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
-      // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
-      const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);
-      const linhaSlug = mapping?.linha_slug;
-      const mappingTipoUso = mapping?.tipo_uso || 'particular';
-      const isLinhaTipoUsoProprio = mappingTipoUso !== 'particular' && mappingTipoUso !== 'aplicativo' && mappingTipoUso !== 'passeio';
-      const tipoUsoOriginal = isLinhaTipoUsoProprio ? mappingTipoUso : (params.usoApp ? 'aplicativo' : 'particular');
-      // Resolver tipo_uso para query (regras de adicional app)
-      const tipoUsoPricing = linhaSlug
-        ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal, configApp)
-        : tipoUsoOriginal;
+      // === NOVO MODELO: Preço = Σ coberturas + Σ benefícios + taxa administrativa ===
+      
+      // Soma dos valores das coberturas vinculadas ao plano
+      const coberturasDoPlano = (planoCoberturasData || []).filter(pc => pc.plano_id === plano.id);
+      const somaCoberturas = coberturasDoPlano.reduce((acc, pc) => {
+        const valor = (pc as any).coberturas?.valor || 0;
+        return acc + Number(valor);
+      }, 0);
 
-      let valorMensal = 0;
+      // Soma dos valores dos benefícios vinculados (usando preco_sugerido)
+      const somaBeneficios = (plano.planos_beneficios || []).reduce((acc: number, pb: any) => {
+        const preco = pb.benefits?.preco_sugerido || 0;
+        return acc + Number(preco);
+      }, 0);
+
+      // Taxa administrativa por faixa FIPE
+      const taxaAdmin = (taxasAdminData || [])
+        .filter(t => t.plano_id === plano.id)
+        .find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
+      const valorTaxaAdmin = taxaAdmin?.valor_taxa || 0;
+
+      let valorMensal = somaCoberturas + somaBeneficios + Number(valorTaxaAdmin);
       let valorDesagio: number | null = null;
-
-      if (linhaSlug && tabelasMensalidade) {
-        // For eletrico line: ignore region (national pricing) and combustivel
-        const isEletrico = linhaSlug === 'eletrico';
-        const faixa = tabelasMensalidade.find(t =>
-          t.linha_slug === linhaSlug &&
-          (isEletrico || t.regiao === regiaoLower) &&
-          t.tipo_uso === tipoUsoPricing &&
-          (isEletrico || t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
-          valorFipe >= t.fipe_min &&
-          valorFipe <= t.fipe_max
-        );
-
-        if (faixa) {
-          valorMensal = faixa.valor_mensal;
-          valorDesagio = faixa.valor_desagio;
-        }
-      }
 
       // Deságio: derive flag from category
       const isDesagio = !!categoria && categoriasDesagio.includes(categoria);
 
-      // SELECT ONE (coluna dedicada APP): ignorar deságio, usar preço APP direto
-      const temColunaAppDedicada = configApp.linhasComColunaApp.includes(linhaSlug || '');
-
-      // Aplicar valor_desagio apenas para linhas sem coluna APP dedicada
-      if (isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || '') && !temColunaAppDedicada) {
-        valorMensal = valorDesagio;
-      }
-
-      // Adicional APP: NÃO aplicar se a categoria está em categorias_que_sobrepoe_app
-      const categoriaAnulaApp = isDesagio && categoriasQueSobrepoeApp.includes(categoria || '');
-      if (linhaSlug && tipoUsoOriginal === 'aplicativo' && !categoriaAnulaApp) {
-        valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp, configApp);
-      }
-
-      // Se não encontrou faixa de preço válida, ocultar o plano
+      // Se o plano não tem itens configurados, ocultar
       if (valorMensal === 0) {
         continue;
       }
