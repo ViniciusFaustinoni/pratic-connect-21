@@ -13,6 +13,7 @@ import { formatarMoeda } from '@/utils/format';
 interface EligibilityConfigSectionProps {
   entityType: EntityType;
   entityId: string | undefined;
+  onVariaComFipeChange?: (varia: boolean) => void;
 }
 
 export interface FipeRangeFaixa {
