@@ -52,6 +52,7 @@ const RULE_TYPE_ICONS: Record<RuleType, string> = {
   marca_modelo: '🏭',
   tipo_uso: '🔑',
   combustivel: '⛽',
+  tipo_placa: '🪪',
 };
 
 interface EligibilityRulesEditorProps {
