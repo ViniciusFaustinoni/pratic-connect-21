@@ -2099,8 +2099,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 </AlertDescription>
               </Alert>
 
-              {/* Toggle de migração */}
-              <MigracaoToggle value={migracaoState} onChange={setMigracaoState} />
             </div>
 
             <Separator />
