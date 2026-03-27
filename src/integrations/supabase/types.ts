@@ -18161,6 +18161,48 @@ export type Database = {
           },
         ]
       }
+      planos_taxa_administrativa: {
+        Row: {
+          created_at: string | null
+          fipe_ate: number
+          fipe_de: number
+          id: string
+          plano_id: string
+          valor_taxa: number
+        }
+        Insert: {
+          created_at?: string | null
+          fipe_ate: number
+          fipe_de: number
+          id?: string
+          plano_id: string
+          valor_taxa?: number
+        }
+        Update: {
+          created_at?: string | null
+          fipe_ate?: number
+          fipe_de?: number
+          id?: string
+          plano_id?: string
+          valor_taxa?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "planos_taxa_administrativa_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "planos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_taxa_administrativa_plano_id_fkey"
+            columns: ["plano_id"]
+            isOneToOne: false
+            referencedRelation: "vw_plans_compat"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       plans: {
         Row: {
           additional_price: number | null
