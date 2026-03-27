@@ -271,7 +271,7 @@ export default function LandingPlanos() {
         <div className="mx-auto max-w-5xl px-6 text-center">
           <img src={logoFullLight} alt="Praticcar" className="mx-auto h-10 w-auto" loading="lazy" />
           <p className="mt-4 text-sm text-gray-400">
-            ABP Praticcar — Associação de Proteção Veicular
+            PRATICCAR — Associação de Proteção Patrimonial para Motoristas de Aplicativo
           </p>
           <div className="mt-4 flex items-center justify-center gap-6 text-sm text-gray-500">
             <a href="#planos-section" className="hover:text-white transition">Planos</a>

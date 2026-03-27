@@ -287,9 +287,9 @@ const generateStyles = (): string => `
 
 const generateHeader = (data: TermoAfiliacaoData): string => `
 <div class="header">
-  <div class="header-logo">ABP PRATICCAR</div>
+  <div class="header-logo">PRATICCAR</div>
   <div class="header-empresa">
-    ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR<br>
+    ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR<br>
     CNPJ: ${data.empresa.cnpj}<br>
     ${data.empresa.logradouro}, ${data.empresa.numero} - ${data.empresa.bairro}<br>
     ${data.empresa.cidade}/${data.empresa.uf} - CEP ${data.empresa.cep}
@@ -645,7 +645,7 @@ const generateSecao5 = (data: TermoAfiliacaoData): string => `
     <p class="declaracao-titulo">5.1. REGULAMENTO DO PSM</p>
     <p class="declaracao-texto">
       Recebi, li e compreendi integralmente o Regulamento do Programa de Socorro 
-      Mútuo (PSM) da ABP PraticCar, concordando com todos os seus termos, 
+      Mútuo (PSM) da PRATICCAR, concordando com todos os seus termos, 
       condições e disposições.
     </p>
   </div>
@@ -690,7 +690,7 @@ const generateSecao5 = (data: TermoAfiliacaoData): string => `
   <div class="declaracao">
     <p class="declaracao-titulo">5.6. COMPREENSÃO DO MUTUALISMO</p>
     <p class="declaracao-texto">
-      Compreendo plenamente que a ABP PraticCar é uma ASSOCIAÇÃO DE SOCORRO MÚTUO, 
+      Compreendo plenamente que a PRATICCAR é uma ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO, 
       constituída sob a forma de associação civil sem fins lucrativos, NÃO SE 
       CONFIGURANDO como empresa seguradora, e que os valores das contribuições 
       mensais são RATEADOS entre todos os associados de acordo com os custos e 
@@ -713,7 +713,7 @@ const generateSecao5 = (data: TermoAfiliacaoData): string => `
   <div class="declaracao">
     <p class="declaracao-titulo">5.8. AUTORIZAÇÃO DE SUB-ROGAÇÃO</p>
     <p class="declaracao-texto">
-      AUTORIZO expressamente a ABP PraticCar a ser sub-rogada em todos os 
+      AUTORIZO expressamente a PRATICCAR a ser sub-rogada em todos os 
       direitos, ações e pretensões relativos a eventuais prejuízos causados ao 
       veículo protegido por terceiros, podendo a associação buscar o ressarcimento 
       dos valores pagos a título de indenização junto aos responsáveis pelo sinistro.
@@ -724,7 +724,7 @@ const generateSecao5 = (data: TermoAfiliacaoData): string => `
     <p class="declaracao-titulo">5.9. RASTREADOR VEICULAR</p>
     <p class="declaracao-texto">
       Concordo com a instalação obrigatória do rastreador veicular, que será 
-      realizada por técnico credenciado pela ABP PraticCar após aprovação do 
+      realizada por técnico credenciado pela PRATICCAR após aprovação do 
       cadastro, sendo condição indispensável para a efetivação da proteção.
     </p>
   </div>
@@ -742,7 +742,7 @@ const generateSecao6 = (data: TermoAfiliacaoData): string => `
   <div class="declaracao">
     <p class="declaracao-titulo">6.1. COLETA E TRATAMENTO</p>
     <p class="declaracao-texto">
-      Autorizo a ABP PraticCar a coletar, armazenar, processar e tratar meus 
+      Autorizo a PRATICCAR a coletar, armazenar, processar e tratar meus 
       dados pessoais para fins de cadastro, gestão da associação, processamento 
       de pagamentos, análise de sinistros, comunicações oficiais e cumprimento 
       de obrigações legais.
@@ -763,7 +763,7 @@ const generateSecao6 = (data: TermoAfiliacaoData): string => `
   <div class="declaracao">
     <p class="declaracao-titulo">6.3. COMUNICAÇÕES</p>
     <p class="declaracao-texto">
-      Autorizo o recebimento de comunicações oficiais da ABP PraticCar através 
+      Autorizo o recebimento de comunicações oficiais da PRATICCAR através 
       de WhatsApp, e-mail, SMS e telefone, reconhecendo o WhatsApp como canal 
       válido para notificações de cobrança e informações sobre sinistros.
     </p>
@@ -847,7 +847,7 @@ const generateSecao8 = (data: TermoAfiliacaoData): string => {
 
 const generateFooter = (data: TermoAfiliacaoData): string => `
 <div class="footer">
-  ABP PraticCar | Termo de Afiliação Nº ${data.contrato.numero}
+  PRATICCAR | Termo de Afiliação Nº ${data.contrato.numero}
 </div>
 `;
 

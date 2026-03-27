@@ -368,7 +368,7 @@ serve(async (req) => {
             }
 
             const prazoLink = await getConfiguracaoNumero(supabaseAdmin, 'prazo_link_evento_horas', 72);
-            mensagemSin += `\n⏰ O link é válido por ${prazoLink} horas. Qualquer dúvida, estamos à disposição!\n\nABP PraticCar`;
+            mensagemSin += `\n⏰ O link é válido por ${prazoLink} horas. Qualquer dúvida, estamos à disposição!\n\nPRATICCAR`;
 
             // Preparar params do template comunicacao_sinistro
             const primeiroNomeSin = associadoSin.nome?.split(' ')[0] || 'Associado';
@@ -582,7 +582,7 @@ serve(async (req) => {
         if (associado) {
           const telefoneAssociado = associado.whatsapp || associado.telefone;
           if (telefoneAssociado) {
-            const mensagem = `Olá ${associado.nome}!\n\nSua solicitação de cancelamento foi recebida.\n\nSerá agendada a retirada do rastreador do seu veículo *${veiculo?.marca || ""} ${veiculo?.modelo || ""}* placa *${veiculo?.placa || ""}*.\n\nVocê receberá o agendamento em breve.\n\nABP PraticCar`;
+            const mensagem = `Olá ${associado.nome}!\n\nSua solicitação de cancelamento foi recebida.\n\nSerá agendada a retirada do rastreador do seu veículo *${veiculo?.marca || ""} ${veiculo?.modelo || ""}* placa *${veiculo?.placa || ""}*.\n\nVocê receberá o agendamento em breve.\n\nPRATICCAR`;
 
             await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
               method: "POST",
@@ -761,7 +761,7 @@ serve(async (req) => {
         if (associado) {
           const telefoneAssociado = associado.whatsapp || associado.telefone;
           if (telefoneAssociado) {
-            const mensagem = `Olá ${associado.nome}!\n\nSua solicitação de troca de titularidade foi recebida.\n\nSerá agendada uma vistoria do veículo *${veiculo?.marca || ""} ${veiculo?.modelo || ""}* placa *${veiculo?.placa || ""}*.\n\nO novo titular receberá um link para envio de documentos.\n\nABP PraticCar`;
+            const mensagem = `Olá ${associado.nome}!\n\nSua solicitação de troca de titularidade foi recebida.\n\nSerá agendada uma vistoria do veículo *${veiculo?.marca || ""} ${veiculo?.modelo || ""}* placa *${veiculo?.placa || ""}*.\n\nO novo titular receberá um link para envio de documentos.\n\nPRATICCAR`;
 
             await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
               method: "POST",

@@ -107,10 +107,10 @@ export function TermoFiliacaoTemplate({
         borderBottom: '2px solid #1e40af',
       }}>
         <div style={{ fontSize: '18pt', fontWeight: 'bold', color: '#1e40af', marginBottom: '6pt' }}>
-          ABP PRATICCAR
+          PRATICCAR
         </div>
         <div style={{ fontSize: '9pt', color: '#666666', marginBottom: '4pt' }}>
-          ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR<br />
+          ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR<br />
           CNPJ: {empresa.cnpj}<br />
           {empresa.logradouro}, {empresa.numero} - {empresa.bairro}<br />
           {empresa.cidade}/{empresa.uf} - CEP {empresa.cep}
@@ -410,14 +410,14 @@ export function TermoFiliacaoTemplate({
         </p>
         
         {[
-          { titulo: '5.1. REGULAMENTO DO PSM', texto: 'Recebi, li e compreendi integralmente o Regulamento do Programa de Socorro Mútuo (PSM) da ABP PraticCar, concordando com todos os seus termos, condições e disposições.' },
+          { titulo: '5.1. REGULAMENTO DO PSM', texto: 'Recebi, li e compreendi integralmente o Regulamento do Programa de Socorro Mútuo (PSM) da PRATICCAR, concordando com todos os seus termos, condições e disposições.' },
           { titulo: '5.2. VERACIDADE DAS INFORMAÇÕES', texto: 'Todas as informações prestadas neste Termo de Afiliação são verdadeiras, completas e atualizadas, estando ciente de que a prestação de informações falsas, incompletas ou a omissão de dados relevantes pode resultar em minha exclusão imediata do programa.' },
           { titulo: '5.3. CONDIÇÃO DO VEÍCULO', texto: 'O veículo descrito neste termo encontra-se em perfeitas condições de conservação, funcionamento e segurança, sem avarias, danos, sinistros anteriores não declarados.' },
           { titulo: '5.4. DOCUMENTAÇÃO REGULAR', texto: 'O veículo está com toda a documentação regularizada e em dia, incluindo licenciamento anual, IPVA, multas e demais impostos e taxas.' },
           { titulo: '5.5. PROCEDÊNCIA DO VEÍCULO', texto: `A procedência do veículo protegido é: ${veiculo.procedencia || 'Usado de particular'}` },
-          { titulo: '5.6. COMPREENSÃO DO MUTUALISMO', texto: 'Compreendo plenamente que a ABP PraticCar é uma ASSOCIAÇÃO DE SOCORRO MÚTUO, NÃO SE CONFIGURANDO como empresa seguradora.' },
+          { titulo: '5.6. COMPREENSÃO DO MUTUALISMO', texto: 'Compreendo plenamente que a PRATICCAR é uma ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO, NÃO SE CONFIGURANDO como empresa seguradora.' },
           { titulo: '5.7. VALOR FIPE DE REFERÊNCIA', texto: `Estou ciente de que o valor de referência para cálculo de eventual indenização será o VALOR FIPE REGISTRADO NO MOMENTO DESTA ADESÃO (${formatCurrency(veiculo.valorFipe)}).` },
-          { titulo: '5.8. AUTORIZAÇÃO DE SUB-ROGAÇÃO', texto: 'AUTORIZO expressamente a ABP PraticCar a ser sub-rogada em todos os direitos relativos a eventuais prejuízos causados ao veículo por terceiros.' },
+          { titulo: '5.8. AUTORIZAÇÃO DE SUB-ROGAÇÃO', texto: 'AUTORIZO expressamente a PRATICCAR a ser sub-rogada em todos os direitos relativos a eventuais prejuízos causados ao veículo por terceiros.' },
           { titulo: '5.9. RASTREADOR VEICULAR', texto: 'Concordo com a instalação do rastreador veicular, que será realizada por técnico credenciado após aprovação do cadastro.' },
         ].map((item, index) => (
           <div key={index} style={{ marginBottom: '12pt', textAlign: 'justify' }}>
@@ -436,7 +436,7 @@ export function TermoFiliacaoTemplate({
         <p style={{ marginBottom: '10pt' }}>Em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018):</p>
         
         {[
-          { titulo: '6.1. COLETA E TRATAMENTO', texto: 'Autorizo a ABP PraticCar a coletar, armazenar, processar e tratar meus dados pessoais para fins de cadastro, gestão da associação, processamento de pagamentos e comunicações oficiais.' },
+          { titulo: '6.1. COLETA E TRATAMENTO', texto: 'Autorizo a PRATICCAR a coletar, armazenar, processar e tratar meus dados pessoais para fins de cadastro, gestão da associação, processamento de pagamentos e comunicações oficiais.' },
           { titulo: '6.2. COMPARTILHAMENTO', texto: 'Autorizo o compartilhamento de meus dados pessoais com empresas de rastreamento, oficinas credenciadas, empresas de assistência 24h e instituições financeiras.' },
           { titulo: '6.3. COMUNICAÇÕES', texto: 'Autorizo o recebimento de comunicações oficiais através de WhatsApp, e-mail, SMS e telefone.' },
           { titulo: '6.4. DIREITOS DO TITULAR', texto: `Estou ciente dos meus direitos como titular de dados, podendo exercê-los através do e-mail ${empresa.lgpdEmail || 'lgpd@praticcar.com.br'}.` },
@@ -490,9 +490,9 @@ export function TermoFiliacaoTemplate({
           
           <div style={{ display: 'inline-block', width: '45%', textAlign: 'center', verticalAlign: 'top', marginLeft: '40pt' }}>
             <div style={{ borderTop: '1px solid #333333', width: '280px', margin: '0 auto', paddingTop: '6pt', fontSize: '9pt' }}>
-              <p style={{ fontWeight: 'bold', fontSize: '10pt' }}>ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR</p>
+              <p style={{ fontWeight: 'bold', fontSize: '10pt' }}>ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR</p>
               <p style={{ fontSize: '8pt', color: '#666666' }}>CNPJ: {empresa.cnpj}</p>
-              <p style={{ fontSize: '9pt', color: '#374151' }}>ABP PRATICCAR</p>
+              <p style={{ fontSize: '9pt', color: '#374151' }}>PRATICCAR</p>
             </div>
           </div>
         </div>
@@ -533,7 +533,7 @@ export function TermoFiliacaoTemplate({
 
       {/* RODAPÉ */}
       <div style={{ marginTop: '30pt', textAlign: 'center', fontSize: '8pt', color: '#666666', borderTop: '1px solid #e5e7eb', paddingTop: '10pt' }}>
-        ABP PraticCar | Termo de Afiliação Nº {contrato.numero}
+        PRATICCAR | Termo de Afiliação Nº {contrato.numero}
       </div>
     </div>
   );

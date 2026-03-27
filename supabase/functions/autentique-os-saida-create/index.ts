@@ -186,7 +186,7 @@ serve(async (req) => {
       'veiculo.valor_fipe': formatCurrency(veiculo?.valor_fipe),
 
       // Empresa
-      'empresa.nome': empresaConfig.nome || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR',
+      'empresa.nome': empresaConfig.nome || 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR',
       'empresa.razao_social': empresaConfig.razao_social || empresaConfig.nome || '',
       'empresa.cnpj': empresaConfig.cnpj || '—',
       'empresa.endereco': `${empresaConfig.logradouro || ''}, ${empresaConfig.numero || ''} - ${empresaConfig.bairro || ''} - ${empresaConfig.cidade || ''}/${empresaConfig.uf || ''} - CEP ${empresaConfig.cep || ''}`,
@@ -220,7 +220,7 @@ serve(async (req) => {
         <img src="https://pratic-connect-21.lovable.app/logos/logo-full-light.png" alt="Logo PraticCar" onerror="this.style.display='none'" />
       </div>
       <div class="header-empresa">
-        ${empresaConfig.razao_social || empresaConfig.nome || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'}<br>
+        ${empresaConfig.razao_social || empresaConfig.nome || 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'}<br>
         CNPJ: ${empresaConfig.cnpj} | ${empresaConfig.logradouro}, ${empresaConfig.numero} - ${empresaConfig.bairro} - ${empresaConfig.cidade}/${empresaConfig.uf} - CEP ${empresaConfig.cep}
       </div>
       <div class="header-titulo">TERMO DE SAÍDA DE VEÍCULO</div>
@@ -233,7 +233,7 @@ serve(async (req) => {
       <p class="signature-local-data">${associado.cidade || ''}/${associado.uf || ''}, ${formatDateExtended(dataAtual)}</p>
     </div>
     <div class="footer">
-      ABP PraticCar | Termo de Saída de Veículo - OS ${os.numero}
+      PRATICCAR | Termo de Saída de Veículo - OS ${os.numero}
     </div>
   </div>
 </body>
@@ -256,7 +256,7 @@ serve(async (req) => {
         <img src="https://pratic-connect-21.lovable.app/logos/logo-full-light.png" alt="Logo PraticCar" onerror="this.style.display='none'" />
       </div>
       <div class="header-empresa">
-        ${empresaConfig.razao_social || empresaConfig.nome || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'}<br>
+        ${empresaConfig.razao_social || empresaConfig.nome || 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'}<br>
         CNPJ: ${empresaConfig.cnpj}
       </div>
       <div class="header-titulo">TERMO DE SAÍDA DE VEÍCULO</div>
@@ -334,7 +334,7 @@ serve(async (req) => {
     </div>
 
     <div class="footer">
-      ABP PraticCar | Termo de Saída de Veículo - OS ${os.numero}
+      PRATICCAR | Termo de Saída de Veículo - OS ${os.numero}
     </div>
   </div>
 </body>

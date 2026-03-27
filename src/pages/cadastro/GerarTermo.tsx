@@ -94,8 +94,8 @@ const mockAssociado: DadosTermoFiliacao = {
     formaPagamento: 'Boleto Bancário',
   },
   empresa: {
-    nome: 'ABP PraticCar',
-    razaoSocial: 'Associação de Benefícios PraticCar',
+    nome: 'PRATICCAR',
+    razaoSocial: 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR',
     cnpj: '12.345.678/0001-90',
     logradouro: 'Av. das Américas',
     numero: '19.005',

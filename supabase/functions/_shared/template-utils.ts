@@ -173,7 +173,7 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
     'plano.cota_minima': dados.plano.cota_minima === 0 ? 'Sem mínimo' : formatCurrency(dados.plano.cota_minima ?? 1200),
     
     // Empresa
-    'empresa.nome': dados.empresa.nome || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR',
+    'empresa.nome': dados.empresa.nome || 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR',
     'empresa.cnpj': dados.empresa.cnpj || '—',
     'empresa.logradouro': dados.empresa.logradouro || '—',
     'empresa.numero': dados.empresa.numero || '—',
@@ -723,7 +723,7 @@ export function generateHeader(dados: TermoAfiliacaoData): string {
     <img src="https://pratic-connect-21.lovable.app/logos/logo-full-light.png" alt="Logo PraticCar" onerror="this.style.display='none'" />
   </div>
   <div class="header-empresa">
-    ${dados.empresa.razao_social || 'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'}<br>
+    ${dados.empresa.razao_social || 'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'}<br>
     CNPJ: ${dados.empresa.cnpj} | ${dados.empresa.logradouro}, ${dados.empresa.numero} - ${dados.empresa.bairro} - ${dados.empresa.cidade}/${dados.empresa.uf} - CEP ${dados.empresa.cep}
   </div>
   <div class="header-titulo">TERMO DE AFILIAÇÃO AO PROGRAMA DE SOCORRO MÚTUO</div>
@@ -737,7 +737,7 @@ export function generateHeader(dados: TermoAfiliacaoData): string {
 export function generateFooter(dados: TermoAfiliacaoData): string {
   return `
 <div class="footer">
-  ABP PraticCar | Termo de Afiliação Nº ${dados.contrato.numero}
+  PRATICCAR | Termo de Afiliação Nº ${dados.contrato.numero}
 </div>
 `;
 }
