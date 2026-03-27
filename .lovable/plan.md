@@ -1,60 +1,34 @@
 
 
-# Fix RLS Error on "Salvar acessos" for `user_module_visibility`
+# Alterar Texto de Aviso "IMPORTANTE" na Proposta de Filiação
 
-## Problem
+## Problema
 
-When saving module access configuration, the upsert to `user_module_visibility` fails with "new row violates row-level security policy". The existing RLS policies use `FOR ALL` which can behave unexpectedly with upserts.
+O texto abaixo da seção "ASSOCIADO INDICADOR" no template da Proposta de Filiação contém um aviso "IMPORTANTE" desatualizado. O conteúdo precisa ser substituído pelo novo texto fornecido.
 
-## Root Cause
+## Localização
 
-The `FOR ALL` policies combine USING + WITH CHECK in ways that can conflict during upsert (INSERT...ON CONFLICT UPDATE). The safer approach is explicit INSERT and UPDATE policies.
+O texto está na tabela `documento_templates`, registro com `id = 'eb09759f-cfbc-4ee8-8f1f-f1cc520e7279'` (nome: "Proposta de Filiação"), no campo `conteudo`. É um template HTML editável pelo TipTap.
 
-## Fix — Migration to recreate RLS policies
+## Alteração
 
-Drop existing management policies and replace with explicit INSERT, UPDATE, and DELETE policies:
+Criar uma migração SQL que faz `UPDATE` no campo `conteudo` desse template, substituindo o parágrafo atual após `<p><strong>IMPORTANTE</strong></p>` pelo novo texto:
 
-```sql
--- Drop the two ALL policies
-DROP POLICY "Directors can manage user visibility" ON user_module_visibility;
-DROP POLICY "Team managers can manage user visibility" ON user_module_visibility;
+**Texto atual (a remover):**
+> No caso de roubo ou furto, o associado deve comunicar imediatamente a PRATICCAR através do 0800 980 0001 o evento ocorrido; Caso o veículo protegido pela PRATICCAR seja conduzido por pessoa sem habilitação, o mesmo não estará coberto pelo programa de Benefícios Mútuos da PRATICCAR; O associado fica ciente que o rastreador instalado no veículo ficará sob sua responsabilidade em caráter de comodato e a não devolução do rastreador a PRATICCAR ocasionará ao associado o pagamento de uma multa estipulada em R$400,00; Os benefícios do PSM para veículo do associado cadastrado têm início às 00:00h no primeiro dia útil subsequente a data de aceitação da vistoria e da instalação do equipamento de rastreamento, quando obrigatório, sendo o início no ato que ocorrer por último.
 
--- Explicit INSERT
-CREATE POLICY "Directors can insert user visibility" ON user_module_visibility
-FOR INSERT TO authenticated
-WITH CHECK (has_role(auth.uid(), 'diretor'::app_role) OR has_role(auth.uid(), 'desenvolvedor'::app_role));
+**Novo texto:**
+> No caso de roubo, furto, incêndio, colisão e alagamento, o associado deve comunicar imediatamente a PRATICCAR através do 0800 980 0001 o evento ocorrido sob pena de negativa de cobertura; Caso o veículo protegido pela PRATICCAR infrinja as normas do Código de Trânsito Brasileiro (CTB), tais como: conduzir na contramão de direção; avançar o sinal semafórico ou o de parada obrigatória; dirigir sob efeito de álcool ou recusar-se a realizar o teste do etilômetro; exceder o limite de velocidade; manusear/utilizar o telefone celular ou pegar objetos no interior do veículo durante a condução; bem como cometer qualquer outra infração classificada como grave ou gravíssima, os benefícios previstos no Programa de Socorro Mútuo da PRATICCAR serão automaticamente negados; O associado fica ciente que o rastreador instalado no veículo ficará sob sua responsabilidade em caráter de comodato e a não devolução do rastreador à PRATICCAR ocasionará ao associado o pagamento de uma multa estipulada em R$400,00; Os benefícios de roubo, furto, colisão, alagamento e incêndio do PSM têm início no primeiro dia útil subsequente à data de aceitação da vistoria e da instalação do equipamento de rastreamento, quando obrigatório, sendo o início no ato que ocorrer por último. Os demais benefícios só estarão disponíveis após 48 horas (quarenta e oito horas) úteis após o prazo supracitado; O ASSOCIADO declara estar ciente de que a PRATICCAR é uma associação de benefícios mútuos, regida por seu Estatuto e em conformidade com as normas legais aplicáveis. Declara, ainda, que recebeu cópia do Regulamento Associativo e do Regulamento de Assistência 24 Horas, tendo lido, compreendido e possuindo pleno conhecimento de todas as normas neles contidas, as quais aceita e com as quais concorda integralmente, estando plenamente ciente de todo o seu conteúdo.
 
--- Explicit UPDATE
-CREATE POLICY "Directors can update user visibility" ON user_module_visibility
-FOR UPDATE TO authenticated
-USING (has_role(auth.uid(), 'diretor'::app_role) OR has_role(auth.uid(), 'desenvolvedor'::app_role))
-WITH CHECK (has_role(auth.uid(), 'diretor'::app_role) OR has_role(auth.uid(), 'desenvolvedor'::app_role));
+Tambem será removido o parágrafo em negrito logo abaixo (a antiga declaração em CAPS LOCK que agora está integrada no novo texto acima).
 
--- Explicit DELETE
-CREATE POLICY "Directors can delete user visibility" ON user_module_visibility
-FOR DELETE TO authenticated
-USING (has_role(auth.uid(), 'diretor'::app_role) OR has_role(auth.uid(), 'desenvolvedor'::app_role));
+## Implementacao
 
--- Same for team managers
-CREATE POLICY "Team managers can insert user visibility" ON user_module_visibility
-FOR INSERT TO authenticated
-WITH CHECK (can_manage_users(auth.uid()));
+Uma migração SQL usando `REPLACE()` no campo `conteudo` para trocar o texto antigo pelo novo no registro do template.
 
-CREATE POLICY "Team managers can update user visibility" ON user_module_visibility
-FOR UPDATE TO authenticated
-USING (can_manage_users(auth.uid()))
-WITH CHECK (can_manage_users(auth.uid()));
+## Arquivos
 
-CREATE POLICY "Team managers can delete user visibility" ON user_module_visibility
-FOR DELETE TO authenticated
-USING (can_manage_users(auth.uid()));
-```
-
-Apply the same pattern for `user_module_item_visibility` table.
-
-## Files changed
-
-| File | Action |
+| Arquivo | Acao |
 |---|---|
-| New migration | Replace ALL policies with explicit INSERT/UPDATE/DELETE on both visibility tables |
+| Nova migracao SQL | UPDATE no `documento_templates` substituindo o texto do aviso IMPORTANTE |
 
