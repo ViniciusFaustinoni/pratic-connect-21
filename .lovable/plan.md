@@ -1,53 +1,49 @@
 
 
-# Fix Scroll Issue on "Planos de Cobertura" and Other Pages
+# Corrigir Nome da Empresa no Termo de Filiação
 
-## Problem
+## Problema
 
-Mousewheel and touchpad scrolling does not work on pages rendered inside the main layout. Users can only scroll via the browser scrollbar. Reproduced on multiple machines.
+O nome "ABP PRATICCAR" e "ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR" aparecem no termo de filiação. O correto é **"ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR"**.
 
-## Root Cause
+## Alterações
 
-In `src/index.css` (lines 772-776), the `.app-scroll-container` class applies `touch-action: pan-y`, which on some browsers/OS combinations restricts pointer-based scroll events (trackpad, precision touchpad). Combined with `overscroll-behavior-y: none` on `body` (line 186), the browser may not propagate wheel events properly to the inner scroll container.
+### 1. `src/components/cadastro/TermoFiliacaoTemplate.tsx` (React/PDF)
 
-Additionally, `SidebarInset` has both `min-h-svh` and `min-h-0` conflicting (line 314 of sidebar.tsx), and the AppLayout adds `overflow-hidden` on it (line 37), creating a rigid container that relies entirely on the inner `<main>` for scrolling.
+- Linha 110: `ABP PRATICCAR` → `PRATICCAR`
+- Linha 113: `ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR` → `ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR`
+- Linha 418: `ABP PraticCar é uma ASSOCIAÇÃO DE SOCORRO MÚTUO` → `PRATICCAR é uma ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO`
+- Linha 493: `ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR` → `ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR`
+- Linha 495: `ABP PRATICCAR` → `PRATICCAR`
+- Demais referências a `ABP PraticCar` no corpo do template (declarações 5.1, 5.8, 5.9, 6.x) → substituir por `PRATICCAR`
 
-## Fix
+### 2. `supabase/functions/_shared/termo-afiliacao-template.ts` (Edge Function HTML)
 
-### 1. `src/index.css` — Remove restrictive `touch-action`
+- Linha 290: `ABP PRATICCAR` → `PRATICCAR`
+- Linha 292: `ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR` → `ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR`
+- Todas as referências a `ABP PraticCar` no corpo das declarações → `PRATICCAR`
 
-Remove `touch-action: pan-y` from `.app-scroll-container`. This property is meant for touch devices but can interfere with precision touchpads and wheel events on desktop browsers.
+### 3. `supabase/functions/_shared/termo-afiliacao-utils.ts` (defaults)
 
-```css
-/* Before */
-.app-scroll-container {
-  -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
-}
+- Linha 455: fallback `"ABP PraticCar"` → `"PRATICCAR"`
+- Linha 456: fallback `"Associação de Benefícios PraticCar"` → `"ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR"`
 
-/* After */
-.app-scroll-container {
-  -webkit-overflow-scrolling: touch;
-  scroll-behavior: smooth;
-}
-```
+### 4. `supabase/functions/_shared/template-utils.ts` (defaults)
 
-### 2. `src/components/layout/AppLayout.tsx` — Ensure proper scroll propagation
+- Linha 176: fallback `'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'` → `'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'`
+- Linha 726: fallback `'ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR'` → `'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'`
 
-On line 40, add `overscroll-behavior: contain` to isolate scroll within the main area without blocking wheel events:
+### 5. `src/components/documentos/templatePreviewData.ts`
 
-```tsx
-<main className="flex-1 min-h-0 overflow-y-auto overflow-x-hidden app-scroll-container overscroll-contain">
-```
+- Linha 100: `'empresa.nome'` preview → `'ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR'`
 
-### 3. `src/index.css` — Remove `overscroll-behavior-y: none` from body
+## Arquivos alterados
 
-Line 186: Change `overscroll-behavior-y: none` to `overscroll-behavior-x: none` on body/#root, so vertical scroll is not suppressed globally while still preventing horizontal overscroll bounce.
-
-## Files changed
-
-| File | Action |
+| Arquivo | Ação |
 |---|---|
-| `src/index.css` | Remove `touch-action: pan-y` from `.app-scroll-container`; adjust `overscroll-behavior` on body |
-| `src/components/layout/AppLayout.tsx` | Add `overscroll-contain` class to main element |
+| `src/components/cadastro/TermoFiliacaoTemplate.tsx` | Atualizar nome da empresa em todos os pontos |
+| `supabase/functions/_shared/termo-afiliacao-template.ts` | Atualizar nome nos headers e declarações |
+| `supabase/functions/_shared/termo-afiliacao-utils.ts` | Atualizar fallbacks do nome |
+| `supabase/functions/_shared/template-utils.ts` | Atualizar fallbacks do nome |
+| `src/components/documentos/templatePreviewData.ts` | Atualizar preview do nome da empresa |
 
