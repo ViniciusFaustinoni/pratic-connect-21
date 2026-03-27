@@ -118,9 +118,11 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
         <div className="space-y-4 mt-6 pb-8">
           <div><Label>Nome</Label><Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Roubo e Furto" /></div>
           <div><Label>Descrição</Label><Textarea rows={3} value={descricao} onChange={e => setDescricao(e.target.value)} placeholder="Descrição da cobertura" /></div>
-          <div><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={valor} onChange={e => setValor(e.target.value)} /></div>
+          {!variaComFipe && (
+            <div><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={valor} onChange={e => setValor(e.target.value)} /></div>
+          )}
 
-          <EligibilityConfigSection entityType="cobertura" entityId={item?.id} />
+          <EligibilityConfigSection entityType="cobertura" entityId={item?.id} onVariaComFipeChange={setVariaComFipe} />
 
           <div className="flex gap-2 pt-4">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
