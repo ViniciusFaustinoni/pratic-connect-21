@@ -1,40 +1,34 @@
 
 
-# Fix: Erro ao Salvar Benefício com Intervalo FIPE
+# Fix: Página em Branco no Termo de Filiação (Autentique)
 
 ## Causa Raiz
 
-A tabela `entity_eligibility_rules` possui um CHECK constraint no campo `rule_type` que aceita apenas:
-```
-'fipe_range','ano_range','categoria_veiculo','categoria_especial','regiao','marca_modelo','tipo_uso','combustivel'
+Nos arquivos `autentique-create/index.ts` e `autentique-create-by-token/index.ts`, os anexos são inseridos com um **`<div>` vazio** que tem `page-break-before: always`:
+
+```html
+<div style="page-break-before: always;"></div>   ← div vazio = página em branco
+<h2>Título do Anexo</h2>
+<div>conteúdo</div>
 ```
 
-O código frontend insere dois `rule_type` que **não existem** nessa lista:
-- `'fipe_eligibility'` — regra de elegibilidade por FIPE
-- `'tipo_placa'` — regra de tipo de placa
-
-Qualquer save que inclua esses tipos falha com violação de CHECK constraint.
+Esse div vazio gera uma página em branco antes de cada anexo.
 
 ## Correção
 
-Uma migração SQL para expandir o CHECK constraint:
+Agrupar o conteúdo do anexo em um único container com `page-break-before: always`, eliminando o div vazio:
 
-```sql
-ALTER TABLE public.entity_eligibility_rules
-  DROP CONSTRAINT entity_eligibility_rules_rule_type_check;
-
-ALTER TABLE public.entity_eligibility_rules
-  ADD CONSTRAINT entity_eligibility_rules_rule_type_check
-  CHECK (rule_type IN (
-    'fipe_range','fipe_eligibility','ano_range','categoria_veiculo',
-    'categoria_especial','regiao','marca_modelo','tipo_uso',
-    'combustivel','tipo_placa'
-  ));
+```html
+<div style="page-break-before: always;">
+  <h2>Título do Anexo</h2>
+  <div>conteúdo</div>
+</div>
 ```
 
-## Arquivos
+## Arquivos alterados
 
 | Arquivo | Ação |
 |---|---|
-| Nova migração SQL | Atualizar CHECK constraint para incluir `fipe_eligibility` e `tipo_placa` |
+| `supabase/functions/autentique-create/index.ts` | Remover div vazio, mover page-break para wrapper |
+| `supabase/functions/autentique-create-by-token/index.ts` | Mesma correção |
 
