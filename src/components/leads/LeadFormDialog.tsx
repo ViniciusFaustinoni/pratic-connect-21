@@ -468,6 +468,26 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                 />
 
                 {/* Campo consultor removido - usar apenas vendedor */}
+
+                {origensDetalhe.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium leading-none">Origem Detalhada</label>
+                    <Select
+                      onValueChange={(value) => setOrigemDetalheId(value === '_none' ? null : value)}
+                      value={origemDetalheId || '_none'}
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Não especificada</SelectItem>
+                        {origensDetalhe.map((o) => (
+                          <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               <FormField
