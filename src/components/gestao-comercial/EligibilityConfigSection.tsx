@@ -59,6 +59,10 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
     for (const rule of existingRules) {
       const cfg = rule.rule_config as any;
       switch (rule.rule_type) {
+        case 'fipe_eligibility':
+          if (cfg.min) newState.elegFipeMin = String(cfg.min);
+          if (cfg.max && cfg.max < 99999999) newState.elegFipeMax = String(cfg.max);
+          break;
         case 'fipe_range':
           newState.variaComFipe = true;
           if (cfg.min) newState.fipeMin = String(cfg.min);
