@@ -177,6 +177,11 @@ export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeC
 
   const update = (patch: Partial<EligibilityState>) => setState(prev => ({ ...prev, ...patch }));
 
+  // Notify parent of variaComFipe state on load
+  useEffect(() => {
+    onVariaComFipeChange?.(state.variaComFipe);
+  }, [state.variaComFipe, onVariaComFipeChange]);
+
   const faixas = useMemo(() => {
     if (!state.variaComFipe) return [];
     const min = parseFloat(state.fipeMin) || 0;
