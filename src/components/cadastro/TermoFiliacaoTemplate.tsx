@@ -410,7 +410,7 @@ export function TermoFiliacaoTemplate({
         </p>
         
         {[
-          { titulo: '5.1. REGULAMENTO DO PSM', texto: 'Recebi, li e compreendi integralmente o Regulamento do Programa de Socorro Mútuo (PSM) da ABP PraticCar, concordando com todos os seus termos, condições e disposições.' },
+          { titulo: '5.1. REGULAMENTO DO PSM', texto: 'Recebi, li e compreendi integralmente o Regulamento do Programa de Socorro Mútuo (PSM) da PRATICCAR, concordando com todos os seus termos, condições e disposições.' },
           { titulo: '5.2. VERACIDADE DAS INFORMAÇÕES', texto: 'Todas as informações prestadas neste Termo de Afiliação são verdadeiras, completas e atualizadas, estando ciente de que a prestação de informações falsas, incompletas ou a omissão de dados relevantes pode resultar em minha exclusão imediata do programa.' },
           { titulo: '5.3. CONDIÇÃO DO VEÍCULO', texto: 'O veículo descrito neste termo encontra-se em perfeitas condições de conservação, funcionamento e segurança, sem avarias, danos, sinistros anteriores não declarados.' },
           { titulo: '5.4. DOCUMENTAÇÃO REGULAR', texto: 'O veículo está com toda a documentação regularizada e em dia, incluindo licenciamento anual, IPVA, multas e demais impostos e taxas.' },
