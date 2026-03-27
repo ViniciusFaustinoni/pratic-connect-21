@@ -1,22 +1,40 @@
 
 
-# Remover a Palavra "Contrato" dos Termos Gerados
+# Fix: Erro ao Salvar Benefício com Intervalo FIPE
 
-## Problema
+## Causa Raiz
 
-No cabeçalho dos documentos gerados via `template-utils.ts`, aparece **"Contrato Nº CTR-..."**. O correto é exibir apenas **"Nº CTR-..."** (sem a palavra "Contrato"), como já é feito no `termo-afiliacao-template.ts` e no `TermoFiliacaoTemplate.tsx`.
+A tabela `entity_eligibility_rules` possui um CHECK constraint no campo `rule_type` que aceita apenas:
+```
+'fipe_range','ano_range','categoria_veiculo','categoria_especial','regiao','marca_modelo','tipo_uso','combustivel'
+```
 
-## Alteração
+O código frontend insere dois `rule_type` que **não existem** nessa lista:
+- `'fipe_eligibility'` — regra de elegibilidade por FIPE
+- `'tipo_placa'` — regra de tipo de placa
 
-### `supabase/functions/_shared/template-utils.ts`
+Qualquer save que inclua esses tipos falha com violação de CHECK constraint.
 
-- **Linha 730**: `Contrato Nº ${dados.contrato.numero}` → `Nº ${dados.contrato.numero}`
+## Correção
 
-Este é o único arquivo onde a palavra "Contrato" ainda precede o número no cabeçalho dos termos. Os demais templates já usam apenas `Nº`.
+Uma migração SQL para expandir o CHECK constraint:
 
-## Arquivos alterados
+```sql
+ALTER TABLE public.entity_eligibility_rules
+  DROP CONSTRAINT entity_eligibility_rules_rule_type_check;
+
+ALTER TABLE public.entity_eligibility_rules
+  ADD CONSTRAINT entity_eligibility_rules_rule_type_check
+  CHECK (rule_type IN (
+    'fipe_range','fipe_eligibility','ano_range','categoria_veiculo',
+    'categoria_especial','regiao','marca_modelo','tipo_uso',
+    'combustivel','tipo_placa'
+  ));
+```
+
+## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| `supabase/functions/_shared/template-utils.ts` | Remover "Contrato" da linha 730 |
+| Nova migração SQL | Atualizar CHECK constraint para incluir `fipe_eligibility` e `tipo_placa` |
 
