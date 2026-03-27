@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
@@ -8,6 +8,7 @@ import { useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistem
 import { useRulesForEntity, useSaveRule, useDeleteRule, type EntityType, type EligibilityRule } from '@/hooks/useEntityEligibilityRules';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { formatarMoeda } from '@/utils/format';
 
 interface EligibilityConfigSectionProps {
   entityType: EntityType;
