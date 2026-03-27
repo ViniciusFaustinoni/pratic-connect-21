@@ -90,7 +90,7 @@ export function OrigemLeadFormDialog({ open, onOpenChange, origem }: Props) {
         await updateOrigem.mutateAsync({ id: origem.id, ...data });
         toast.success('Origem atualizada com sucesso!');
       } else {
-        await createOrigem.mutateAsync(data);
+        await createOrigem.mutateAsync({ nome: data.nome, categoria: data.categoria, descricao: data.descricao });
         toast.success('Origem criada com sucesso!');
       }
       onOpenChange(false);
