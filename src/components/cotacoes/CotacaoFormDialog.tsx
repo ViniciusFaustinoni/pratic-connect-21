@@ -75,8 +75,6 @@ import { toast } from 'sonner';
 import { Separator } from '@/components/ui/separator';
 import { cn } from '@/lib/utils';
 import { Switch } from '@/components/ui/switch';
-import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
-import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { useVerificarPlacaDuplicada, type PlacaDuplicadaInfo } from '@/hooks/useVerificarPlaca';
 import { PlacaDuplicadaModal } from '@/components/cotacoes/PlacaDuplicadaModal';
 import { VeiculoSGAModal } from '@/components/cotacoes/VeiculoSGAModal';
@@ -224,8 +222,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const [modeloSelecionado, setModeloSelecionado] = useState('');
   const [anoSelecionado, setAnoSelecionado] = useState('');
   
-  // Estado para categoria/deságio
-  const [categoria, setCategoria] = useState<string | null>('nenhuma');
   
   // Estado para região selecionada
   const [regiaoSelecionada, setRegiaoSelecionada] = useState<string>('');
@@ -374,7 +370,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     valorAdicional,
     regiao: mapearRegiaoParaPricing(regiaoSelecionada || 'rj'),
     combustivel: combustivelSelecionado || veiculoEncontrado?.vehicleData?.combustivel || undefined,
-    categoria: categoria && categoria !== 'nenhuma' ? categoria : undefined,
+    categoria: tipoPlacaSelecionado && tipoPlacaSelecionado !== 'nenhuma' ? tipoPlacaSelecionado : undefined,
     anoVeiculo: anoNumerico,
     tipoVeiculo: tipoVeiculoDetectado,
     usoApp: usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app'),
@@ -459,13 +455,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return nomeValido && telefoneValido;
   }, [nomeAssociado, telefoneAssociado]);
 
-  // Alerta da categoria selecionada (do banco)
+  // Alerta da categoria selecionada (do banco) — agora usa tipoPlacaSelecionado
   const alertaCategoria = useMemo(() => {
-    if (!categoria || !observacoesCategoria) return null;
-    const texto = observacoesCategoria[categoria];
+    if (!tipoPlacaSelecionado || !observacoesCategoria) return null;
+    const texto = observacoesCategoria[tipoPlacaSelecionado];
     if (!texto) return null;
     return { tipo: 'warning' as const, mensagem: texto };
-  }, [categoria, observacoesCategoria]);
+  }, [tipoPlacaSelecionado, observacoesCategoria]);
 
   // Resetar formulário quando o modal abre sem leadId (exceto em modo edição ou duplicação)
   useEffect(() => {
@@ -499,7 +495,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setIndicadorId(null);
       setIndicadorNome('');
       setBuscaIndicador('');
-      setCategoria('nenhuma');
       setUsoVeiculo('particular');
       setRegiaoSelecionada('');
       setDiaVencimento(null);
@@ -820,9 +815,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         setPlaca(cotacaoBase.veiculo_placa);
       }
       
-      // Preencher categoria
+      // Preencher categoria → tipo de placa
       if (cotacaoBase.categoria) {
-        setCategoria(cotacaoBase.categoria);
+        setTipoPlacaSelecionado(cotacaoBase.categoria);
       }
       
       // Preencher região
@@ -896,9 +891,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         setPlaca(cotacaoParaEditar.veiculo_placa);
       }
       
-      // Preencher categoria
+      // Preencher categoria → tipo de placa
       if (cotacaoParaEditar.categoria) {
-        setCategoria(cotacaoParaEditar.categoria);
+        setTipoPlacaSelecionado(cotacaoParaEditar.categoria);
       }
       
       // Preencher região
@@ -989,10 +984,6 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     });
   };
 
-  // Handler para mudança de categoria
-  const handleCategoriaChange = (value: string) => {
-    setCategoria(value);
-  };
 
   const formatCurrency = (value: number) => {
     return new Intl.NumberFormat('pt-BR', {
@@ -1174,7 +1165,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         telefone1_solicitante: telefoneAssociado.replace(/\D/g, '') || null,
         email_solicitante: emailAssociado.trim() || null,
         // Categoria do veículo
-        categoria: categoria && categoria !== 'nenhuma' ? categoria : null,
+        categoria: tipoPlacaSelecionado && tipoPlacaSelecionado !== 'nenhuma' ? tipoPlacaSelecionado : null,
         // Dia de vencimento
         dia_vencimento: diaVencimento,
         // Região selecionada
@@ -1274,7 +1265,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setIndicadorId(null);
       setIndicadorNome('');
       setBuscaIndicador('');
-      setCategoria('nenhuma');
+      
       setUsoVeiculo('particular');
       setRegiaoSelecionada('');
       setDiaVencimento(null);
@@ -1964,44 +1955,29 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               </>
             )}
 
-            <Separator />
-
-            {/* BLOCO 2: CONDIÇÕES ESPECIAIS / DESÁGIOS */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <AlertTriangle className="h-4 w-4 text-amber-500" />
-                Condições Especiais / Deságios
-              </h3>
-              
-              <VehicleCategorySelect
-                value={categoria}
-                onChange={handleCategoriaChange}
-              />
-
-              {/* Alerta dinâmico baseado na categoria */}
-              {alertaCategoria && (
-                <Alert 
-                  className={
-                    alertaCategoria.tipo === 'warning' 
-                      ? 'border-amber-500/50 bg-amber-500/10' 
-                      : 'border-blue-500/50 bg-blue-500/10'
-                  }
-                >
-                  {alertaCategoria.tipo === 'warning' ? (
-                    <AlertTriangle className="h-4 w-4 text-amber-500" />
-                  ) : (
-                    <Info className="h-4 w-4 text-blue-500" />
-                  )}
-                  <AlertDescription className={
-                    alertaCategoria.tipo === 'warning'
-                      ? 'text-amber-700 dark:text-amber-400'
-                      : 'text-blue-700 dark:text-blue-400'
-                  }>
-                    {alertaCategoria.mensagem}
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
+            {/* Alerta dinâmico baseado no tipo de placa selecionado */}
+            {alertaCategoria && (
+              <Alert 
+                className={
+                  alertaCategoria.tipo === 'warning' 
+                    ? 'border-amber-500/50 bg-amber-500/10' 
+                    : 'border-blue-500/50 bg-blue-500/10'
+                }
+              >
+                {alertaCategoria.tipo === 'warning' ? (
+                  <AlertTriangle className="h-4 w-4 text-amber-500" />
+                ) : (
+                  <Info className="h-4 w-4 text-blue-500" />
+                )}
+                <AlertDescription className={
+                  alertaCategoria.tipo === 'warning'
+                    ? 'text-amber-700 dark:text-amber-400'
+                    : 'text-blue-700 dark:text-blue-400'
+                }>
+                  {alertaCategoria.mensagem}
+                </AlertDescription>
+              </Alert>
+            )}
 
             <Separator />
 
@@ -2212,7 +2188,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           })}
                           <div className={`overflow-hidden transition-all duration-200 ${expandedPlanos[plano.id] ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
                                 {plano.coberturas.slice(4).map((cobertura, idx) => {
-                                  const isRemovida = isCoberturaRemovida(cobertura, categoria);
+                                   const isRemovida = (plano.coberturasRemovidas || []).includes(cobertura);
                                   return (
                                     <li key={idx + 4} className="flex items-start gap-1 mt-1">
                                       {isRemovida ? (
@@ -2462,7 +2438,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                               {/* Lista de benefícios com Ver mais */}
                               <ul className="text-sm space-y-1.5 text-muted-foreground">
                                 {plano.coberturas.slice(0, LIMIT).map((cobertura, i) => {
-                                  const isRemovida = isCoberturaRemovida(cobertura, categoria);
+                                   const isRemovida = (plano.coberturasRemovidas || []).includes(cobertura);
                                   return (
                                     <li key={i} className="flex items-start gap-2">
                                       {isRemovida ? (
@@ -2481,7 +2457,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                                 })}
                                 <div className={`overflow-hidden transition-all duration-200 ${isExpanded && hasMore ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
                                       {plano.coberturas.slice(LIMIT).map((cobertura, i) => {
-                                        const isRemovida = isCoberturaRemovida(cobertura, categoria);
+                                        const isRemovida = (plano.coberturasRemovidas || []).includes(cobertura);
                                         return (
                                           <li key={i + LIMIT} className="flex items-start gap-2 mt-1.5">
                                             {isRemovida ? (
