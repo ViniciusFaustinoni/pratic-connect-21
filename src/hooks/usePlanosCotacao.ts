@@ -192,31 +192,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Buscar faixas de preço FIPE das coberturas (para coberturas com varia_com_fipe)
-  const { data: coberturaFaixasData } = useQuery({
-    queryKey: ['coberturas_faixas_fipe_pricing'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('coberturas_faixas_fipe')
-        .select('cobertura_id, fipe_de, fipe_ate, valor');
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 1000 * 60 * 5,
-  });
 
-  // Buscar faixas de preço FIPE dos benefícios (para benefícios com varia_com_fipe)
-  const { data: beneficioFaixasData } = useQuery({
-    queryKey: ['beneficios_faixas_fipe_pricing'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('benefits_faixas_fipe')
-        .select('benefit_id, fipe_de, fipe_ate, valor');
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 1000 * 60 * 5,
-  });
 
   // Buscar taxa administrativa por plano e faixa FIPE
   const { data: taxasAdminData, isLoading: taxasAdminLoading } = useQuery({
