@@ -123,7 +123,6 @@ export function BotaoGerarPdf({
         };
         await gerarPdfCotacao(cotacaoComVendedor);
       }
-      }
       
       toast.success('PDF gerado com sucesso!');
     } catch (error) {
