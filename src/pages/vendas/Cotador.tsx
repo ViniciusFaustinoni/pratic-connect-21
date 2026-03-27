@@ -1931,8 +1931,6 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
               </Alert>
             </div>
 
-            {/* Toggle de migração */}
-            <MigracaoToggle value={migracaoState} onChange={setMigracaoState} />
 
             {/* Alerta de adesão abaixo do mínimo */}
             {valorAdesaoCustom !== null && valorAdesaoCustom > 0 && valorAdesaoCustom < minimoAdesaoConfig && !(cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base') && (
