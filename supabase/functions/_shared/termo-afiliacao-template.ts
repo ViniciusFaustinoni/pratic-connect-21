@@ -645,7 +645,7 @@ const generateSecao5 = (data: TermoAfiliacaoData): string => `
     <p class="declaracao-titulo">5.1. REGULAMENTO DO PSM</p>
     <p class="declaracao-texto">
       Recebi, li e compreendi integralmente o Regulamento do Programa de Socorro 
-      Mútuo (PSM) da ABP PraticCar, concordando com todos os seus termos, 
+      Mútuo (PSM) da PRATICCAR, concordando com todos os seus termos, 
       condições e disposições.
     </p>
   </div>
