@@ -167,7 +167,7 @@ function toggleInSet(set: Set<string>, value: string): Set<string> {
   return next;
 }
 
-export function EligibilityConfigSection({ entityType, entityId }: EligibilityConfigSectionProps) {
+export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeChange }: EligibilityConfigSectionProps) {
   const { data: regioes = [] } = useRegioes();
   const { data: tiposUso = [] } = useConfiguracaoJson<any[]>('tipos_uso', []);
   const { data: tiposPlaca = [] } = useConfiguracaoJson<any[]>('tipos_placa', []);
