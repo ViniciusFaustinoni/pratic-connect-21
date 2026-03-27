@@ -167,8 +167,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         .select(`
           *,
           product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class, blocked_categories, supports_app),
-          planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name, category)),
-          planos_regioes (regiao_id)
+          planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name, category))
         `)
         .eq('ativo', true)
         .eq('visivel_gestao', true)
