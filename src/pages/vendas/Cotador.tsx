@@ -55,7 +55,7 @@ import { usePlanosCotacao, type PlanoCotacao, type PlanoNegadoInfo } from '@/hoo
 import { isCoberturaRemovida } from '@/data/restricoesCategorias';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { useTemplateWhatsappCotacao, useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useCarenciaVidrosDias, useMigracaoConfig } from '@/hooks/useConteudosSistema';
-import { MigracaoToggle, type MigracaoState } from '@/components/cotacoes/MigracaoToggle';
+import { type MigracaoState } from '@/components/cotacoes/MigracaoToggle';
 import { supabase } from '@/integrations/supabase/client';
 import type { Tables } from '@/integrations/supabase/types';
 import { BotaoGerarProposta } from '@/components/vendas/BotaoGerarProposta';

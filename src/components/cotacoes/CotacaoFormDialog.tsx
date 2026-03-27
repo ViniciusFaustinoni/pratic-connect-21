@@ -8,7 +8,7 @@ import { ChevronDown, ChevronUp, Fuel } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
 import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useCarenciaVidrosDias, useMigracaoConfig, useObservacoesCategoria, useMarcasAceitasMotos, useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistema';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
-import { MigracaoToggle, type MigracaoState } from '@/components/cotacoes/MigracaoToggle';
+import { type MigracaoState } from '@/components/cotacoes/MigracaoToggle';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useForm } from 'react-hook-form';
 import { useNavigate } from 'react-router-dom';
