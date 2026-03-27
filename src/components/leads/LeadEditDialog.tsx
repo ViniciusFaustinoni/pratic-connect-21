@@ -66,6 +66,9 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
     },
   });
 
+  const origemValue = form.watch('origem');
+  const { data: origensDetalhe = [] } = useLeadOrigensPorCategoria(origemValue);
+
   // Reset form when lead changes
   useEffect(() => {
     if (lead) {
