@@ -1,69 +1,41 @@
 
 
-# Faixas de Preço por Intervalo FIPE nas Coberturas e Benefícios
+# Remover Regiões do nível do Plano
 
-## Resumo
+## Contexto
 
-Quando "Varia com FIPE?" é ativado, além de Mínimo e Máximo, aparece um campo **Intervalo FIPE (R$)**. O sistema calcula automaticamente quantas faixas existem (`(max - min) / intervalo`) e exibe campos de valor manual para cada faixa. Esses valores por faixa são persistidos no `rule_config` da regra `fipe_range`.
-
-## Exemplo
-
-- Mínimo: R$ 30.000 | Máximo: R$ 60.000 | Intervalo: R$ 5.000
-- Cálculo: (60000 - 30000) / 5000 = **6 faixas**
-- Faixas geradas: 30k-35k, 35k-40k, 40k-45k, 45k-50k, 50k-55k, 55k-60k
-- Cada faixa tem um campo de valor (R$) preenchido manualmente
+Regiões já foram movidas para a elegibilidade individual de cada cobertura e benefício. O bloco "Regiões Disponíveis" no formulário de plano e a tabela `planos_regioes` no motor de cotação são agora redundantes.
 
 ## Alterações
 
-### 1. `EligibilityConfigSection.tsx` — Estado e UI
+### 1. `PlanoFormSheet.tsx` — Remover bloco de Regiões
 
-**Estado** — adicionar ao `EligibilityState`:
-- `fipeIntervalo: string` (valor do intervalo)
-- `fipeValoresFaixa: Record<number, string>` (mapa índice → valor R$)
+- Remover state `selRegioes` / `setSelRegioes`
+- Remover carregamento de `planos_regioes` no `queryFn`
+- Remover `setSelRegioes` no `useEffect`
+- Remover inserção/deleção de `planos_regioes` no `saveMutation` (tanto create quanto update)
+- Remover o bloco visual inteiro (BLOCO 3: Regiões, linhas ~248-267)
+- Remover import de `useRegioes` se não usado em outro lugar do arquivo
 
-**Carregar** — no `useEligibilityState`, ler `cfg.intervalo` e `cfg.faixas` do `rule_config` existente.
+### 2. `usePlanosCotacao.ts` — Remover filtro por `planos_regioes`
 
-**UI** — quando `variaComFipe` está ativo:
-- Após Min/Max, exibir campo "Intervalo FIPE (R$)"
-- Calcular `numFaixas = Math.floor((max - min) / intervalo)` em tempo real
-- Se numFaixas > 0 e ≤ 50, renderizar grid de campos:
-  ```
-  R$ 30.000 – R$ 35.000:  [_____ valor]
-  R$ 35.000 – R$ 40.000:  [_____ valor]
-  ...
-  ```
-- Cada campo atualiza `fipeValoresFaixa[index]`
+- Remover `planos_regioes (regiao_id)` do select da query (linha ~171)
+- Remover o bloco de filtro "Filtrar por regiões disponíveis" (linhas ~443-446+) que descarta planos sem match de região
+- A filtragem regional agora acontece no nível de cada cobertura/benefício via `entity_eligibility_rules`
 
-### 2. `EligibilityConfigSection.tsx` — Persistência (`saveEligibilityRules`)
+### 3. `LinhasPlanos.tsx` — Limpar referências na exclusão
 
-No `rule_config` da regra `fipe_range`, salvar:
-```json
-{
-  "min": 30000,
-  "max": 60000,
-  "intervalo": 5000,
-  "faixas": [
-    { "de": 30000, "ate": 35000, "valor": 89.90 },
-    { "de": 35000, "ate": 40000, "valor": 99.90 },
-    ...
-  ]
-}
-```
+- Remover `await supabase.from('planos_regioes').delete()` nas mutations de delete (linhas 112, 132) — dados órfãos serão ignorados
 
-### 3. Nenhuma migração de banco
+### 4. Outros arquivos (manter por ora)
 
-O campo `rule_config` já é JSONB — comporta a nova estrutura sem alteração de schema.
+- `usePlansAdmin.ts`, `PlanosConfig.tsx`, `usePlans.ts`, `usePlanosAdmin.ts` — são telas legadas (admin antigo). Podem ser limpos depois sem impacto funcional.
 
 ## Arquivos alterados
 
 | Arquivo | Ação |
 |---|---|
-| `src/components/gestao-comercial/EligibilityConfigSection.tsx` | Adicionar campo intervalo, cálculo de faixas, campos de valor por faixa, persistência no rule_config |
-
-## Comportamento
-
-- Se intervalo não preenchido ou = 0, não mostra faixas
-- Se resultado > 50 faixas, exibe aviso "Intervalo muito pequeno"
-- Ao alterar min/max/intervalo, faixas são recalculadas preservando valores já preenchidos quando possível
-- Formatação dos labels das faixas usa `formatarMoeda` de `@/utils/format`
+| `src/components/gestao-comercial/PlanoFormSheet.tsx` | Remover estado, persistência e UI de regiões |
+| `src/hooks/usePlanosCotacao.ts` | Remover filtro de planos por `planos_regioes` |
+| `src/components/gestao-comercial/LinhasPlanos.tsx` | Remover delete de `planos_regioes` nas exclusões |
 
