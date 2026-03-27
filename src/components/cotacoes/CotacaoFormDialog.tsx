@@ -815,9 +815,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         setPlaca(cotacaoBase.veiculo_placa);
       }
       
-      // Preencher categoria
+      // Preencher categoria → tipo de placa
       if (cotacaoBase.categoria) {
-        setCategoria(cotacaoBase.categoria);
+        setTipoPlacaSelecionado(cotacaoBase.categoria);
       }
       
       // Preencher região
