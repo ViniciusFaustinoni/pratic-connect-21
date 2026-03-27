@@ -188,6 +188,8 @@ export function LinhasPlanos() {
 
   const deleteLinha = useDeleteLinha();
   const deletePlano = useDeletePlano();
+  const duplicateLine = useDuplicateProductLine();
+  const duplicatePlan = useDuplicatePlan();
 
   const toggleLine = (id: string) => {
     setOpenLines(prev => {
