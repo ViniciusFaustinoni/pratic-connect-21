@@ -533,7 +533,7 @@ export function TermoFiliacaoTemplate({
 
       {/* RODAPÉ */}
       <div style={{ marginTop: '30pt', textAlign: 'center', fontSize: '8pt', color: '#666666', borderTop: '1px solid #e5e7eb', paddingTop: '10pt' }}>
-        ABP PraticCar | Termo de Afiliação Nº {contrato.numero}
+        PRATICCAR | Termo de Afiliação Nº {contrato.numero}
       </div>
     </div>
   );
