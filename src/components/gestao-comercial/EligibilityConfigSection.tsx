@@ -13,6 +13,7 @@ import { formatarMoeda } from '@/utils/format';
 interface EligibilityConfigSectionProps {
   entityType: EntityType;
   entityId: string | undefined;
+  onVariaComFipeChange?: (varia: boolean) => void;
 }
 
 export interface FipeRangeFaixa {
@@ -166,7 +167,7 @@ function toggleInSet(set: Set<string>, value: string): Set<string> {
   return next;
 }
 
-export function EligibilityConfigSection({ entityType, entityId }: EligibilityConfigSectionProps) {
+export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeChange }: EligibilityConfigSectionProps) {
   const { data: regioes = [] } = useRegioes();
   const { data: tiposUso = [] } = useConfiguracaoJson<any[]>('tipos_uso', []);
   const { data: tiposPlaca = [] } = useConfiguracaoJson<any[]>('tipos_placa', []);
@@ -175,6 +176,11 @@ export function EligibilityConfigSection({ entityType, entityId }: EligibilityCo
   const { state, setState } = useEligibilityState(entityType, entityId);
 
   const update = (patch: Partial<EligibilityState>) => setState(prev => ({ ...prev, ...patch }));
+
+  // Notify parent of variaComFipe state on load
+  useEffect(() => {
+    onVariaComFipeChange?.(state.variaComFipe);
+  }, [state.variaComFipe, onVariaComFipeChange]);
 
   const faixas = useMemo(() => {
     if (!state.variaComFipe) return [];
@@ -201,7 +207,7 @@ export function EligibilityConfigSection({ entityType, entityId }: EligibilityCo
         <div className="flex items-center gap-2">
           <Switch
             checked={state.variaComFipe}
-            onCheckedChange={(checked) => update({ variaComFipe: checked, fipeIntervalo: '', fipeValoresFaixa: {} })}
+            onCheckedChange={(checked) => { update({ variaComFipe: checked, fipeIntervalo: '', fipeValoresFaixa: {} }); onVariaComFipeChange?.(checked); }}
           />
           <Label className="text-xs">Varia com FIPE?</Label>
         </div>
