@@ -202,7 +202,7 @@ export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeC
         <div className="flex items-center gap-2">
           <Switch
             checked={state.variaComFipe}
-            onCheckedChange={(checked) => update({ variaComFipe: checked, fipeIntervalo: '', fipeValoresFaixa: {} })}
+            onCheckedChange={(checked) => { update({ variaComFipe: checked, fipeIntervalo: '', fipeValoresFaixa: {} }); onVariaComFipeChange?.(checked); }}
           />
           <Label className="text-xs">Varia com FIPE?</Label>
         </div>
