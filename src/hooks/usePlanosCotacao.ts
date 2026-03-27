@@ -368,30 +368,23 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     return { status: 'aprovado', coberturaFipe: cobFipe };
   }
 
-  // Montar ConfigAdicionalApp dinamicamente
+  // Montar ConfigAdicionalApp dinamicamente (sem dependência de tabelasMensalidade)
   const configApp = useMemo<ConfigAdicionalApp>(() => {
     const linhasSupportsApp = (planosBanco || [])
       .map((p: any) => p.product_lines?.slug?.toLowerCase())
       .filter((slug: string | undefined): slug is string => !!slug && (planosBanco || []).some((p2: any) => p2.product_lines?.slug?.toLowerCase() === slug && p2.product_lines?.supports_app === true));
-    
-    const linhasComColunaApp = [...new Set(
-      (tabelasMensalidade || [])
-        .filter(t => t.tipo_uso === 'aplicativo')
-        .map(t => (t.linha_slug || '').toLowerCase())
-        .filter(Boolean)
-    )];
 
     return {
       regioesComAdicional: (regioesComAdicionalRaw || []).map(r => r.toLowerCase()),
-      linhasComColunaApp,
+      linhasComColunaApp: [] as string[],
       linhasSupportsApp: [...new Set(linhasSupportsApp)],
     };
-  }, [planosBanco, tabelasMensalidade, regioesComAdicionalRaw]);
+  }, [planosBanco, regioesComAdicionalRaw]);
 
   const dependenciasCriticasLoading =
     planosBancoLoading ||
-    planoPrecoMapLoading ||
-    tabelasMensalidadeLoading ||
+    planoCoberturasLoading ||
+    taxasAdminLoading ||
     elegibilidadeLoading ||
     cotasCategoriaLoading ||
     benefitExclusionsLoading ||
