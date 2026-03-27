@@ -117,13 +117,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           );
         }
 
-        // Rebuild regioes
-        await supabase.from('planos_regioes').delete().eq('plano_id', planoId);
-        if (selRegioes.size > 0) {
-          await supabase.from('planos_regioes').insert(
-            Array.from(selRegioes).map(rid => ({ plano_id: planoId, regiao_id: rid }))
-          );
-        }
 
       } else {
         const codigo = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
