@@ -1,40 +1,34 @@
 
 
-# Corrigir Persistência da Taxa Administrativa
+# Adicionar Botões de Duplicar em Coberturas/Benefícios e Linhas/Planos
 
-## Problema
+## Estado atual
 
-As operações de delete/insert em `planos_taxa_administrativa` dentro do `saveMutation` **não verificam erros**. Se a operação falhar (por RLS ou qualquer outro motivo), o código continua e exibe "Plano salvo" mesmo sem ter persistido as taxas.
+| Componente | Entidade | Botão Duplicar |
+|---|---|---|
+| `BeneficiosCoberturas.tsx` (admin/planos) | Coberturas, Benefícios | ✅ Já tem |
+| `ProdutosPlanos.tsx` (gestão comercial) | Planos | ✅ Já tem |
+| `CatalogoCoberturasBeneficios.tsx` (gestão comercial) | Coberturas, Benefícios | ❌ Falta |
+| `LinhasPlanos.tsx` (gestão comercial) | Linhas, Planos | ❌ Falta |
 
-## Alteração
+Os hooks de duplicação já existem todos em `usePlansAdmin.ts`: `useDuplicateCobertura`, `useDuplicateBenefit`, `useDuplicatePlan`, `useDuplicateProductLine`.
 
-### `src/components/gestao-comercial/PlanoFormSheet.tsx`
+## Alterações
 
-No `saveMutation.mutationFn`, adicionar verificação de erro (`if (error) throw error`) após cada operação de delete e insert na tabela `planos_taxa_administrativa`. Isso se aplica tanto ao fluxo de **edição** (linhas ~203-208) quanto ao de **criação** (linhas ~233-237).
+### 1. `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx`
+- Importar `Copy` do lucide-react e `useDuplicateCobertura`, `useDuplicateBenefit` de `usePlansAdmin`
+- No componente `ItemList`, adicionar prop `onDuplicate` e um botão `Copy` ao lado de Edit/Trash
+- Passar as funções de duplicação via props na chamada de `ItemList`
 
-**Edição (delete + insert):**
-```ts
-const { error: delTaxaErr } = await supabase.from('planos_taxa_administrativa').delete().eq('plano_id', planoId);
-if (delTaxaErr) throw delTaxaErr;
-if (taxaFaixas.length > 0) {
-  const { error: insTaxaErr } = await supabase.from('planos_taxa_administrativa').insert(...);
-  if (insTaxaErr) throw insTaxaErr;
-}
-```
-
-**Criação (insert):**
-```ts
-if (taxaFaixas.length > 0) {
-  const { error: insTaxaErr } = await supabase.from('planos_taxa_administrativa').insert(...);
-  if (insTaxaErr) throw insTaxaErr;
-}
-```
-
-Isso fará com que, caso haja falha de permissão ou qualquer erro, o toast mostre "Erro ao salvar plano" em vez de "Plano salvo".
+### 2. `src/components/gestao-comercial/LinhasPlanos.tsx`
+- Importar `Copy` do lucide-react e `useDuplicateProductLine`, `useDuplicatePlan` de `usePlansAdmin`
+- Nas ações da **linha** (ao lado de Pencil/Trash2, ~linha 232): adicionar botão Copy que chama `duplicateProductLine.mutate(linha.id)`
+- Nas ações do **plano** (ao lado de Trash2, ~linha 262): adicionar botão Copy que chama `duplicatePlan.mutate(plano.id)`
 
 ## Arquivos alterados
 
 | Arquivo | Ação |
 |---|---|
-| `src/components/gestao-comercial/PlanoFormSheet.tsx` | Adicionar error handling nas operações de taxa administrativa |
+| `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx` | Adicionar botão duplicar em coberturas e benefícios |
+| `src/components/gestao-comercial/LinhasPlanos.tsx` | Adicionar botão duplicar em linhas e planos |
 
