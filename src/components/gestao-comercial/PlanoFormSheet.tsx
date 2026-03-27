@@ -143,6 +143,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           product_line_id: targetLineId,
           tipo_uso: 'passeio',
           valor_adesao: 0,
+          template_contrato_id: templateContratoId || null,
         }).select().single();
         if (error) throw error;
 
