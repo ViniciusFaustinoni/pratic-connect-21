@@ -713,7 +713,7 @@ const generateSecao5 = (data: TermoAfiliacaoData): string => `
   <div class="declaracao">
     <p class="declaracao-titulo">5.8. AUTORIZAÇÃO DE SUB-ROGAÇÃO</p>
     <p class="declaracao-texto">
-      AUTORIZO expressamente a ABP PraticCar a ser sub-rogada em todos os 
+      AUTORIZO expressamente a PRATICCAR a ser sub-rogada em todos os 
       direitos, ações e pretensões relativos a eventuais prejuízos causados ao 
       veículo protegido por terceiros, podendo a associação buscar o ressarcimento 
       dos valores pagos a título de indenização junto aos responsáveis pelo sinistro.
