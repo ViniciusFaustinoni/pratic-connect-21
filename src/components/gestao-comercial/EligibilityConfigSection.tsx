@@ -15,10 +15,18 @@ interface EligibilityConfigSectionProps {
   entityId: string | undefined;
 }
 
+export interface FipeRangeFaixa {
+  de: number;
+  ate: number;
+  valor: number;
+}
+
 export interface EligibilityState {
   variaComFipe: boolean;
   fipeMin: string;
   fipeMax: string;
+  fipeIntervalo: string;
+  fipeValoresFaixa: Record<number, string>;
   selRegioes: Set<string>;
   selUso: Set<string>;
   selPlaca: Set<string>;
