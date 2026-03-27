@@ -50,13 +50,11 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
 
       const { data: cobs } = await supabase.from('planos_coberturas').select('cobertura_id').eq('plano_id', planoId);
       const { data: bens } = await supabase.from('planos_beneficios').select('benefit_id').eq('plano_id', planoId);
-      const { data: regs } = await supabase.from('planos_regioes').select('regiao_id').eq('plano_id', planoId);
 
       return {
         ...data,
         coberturaIds: (cobs || []).map((c: any) => c.cobertura_id),
         beneficioIds: (bens || []).map((b: any) => b.benefit_id),
-        regiaoIds: (regs || []).map((r: any) => r.regiao_id),
       };
     },
     enabled: !!planoId,
