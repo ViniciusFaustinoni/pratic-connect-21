@@ -118,7 +118,7 @@ serve(async (req) => {
       "contrato.valor_mensal": formatCurrency(contrato?.valor_mensal || 0),
       "cancelamento.motivo": motivo || "Solicitação do associado",
       "cancelamento.data": formatDate(dataAtual.toISOString()),
-      "empresa.nome": empresa.nome || "ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR",
+      "empresa.nome": empresa.nome || "ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR",
       "empresa.cnpj": empresa.cnpj || "—",
       "empresa.endereco": `${empresa.logradouro || ""}, ${empresa.numero || ""} - ${empresa.bairro || ""} - ${empresa.cidade || ""}/${empresa.uf || ""}`,
       "sistema.data_atual": formatDate(dataAtual.toISOString()),
