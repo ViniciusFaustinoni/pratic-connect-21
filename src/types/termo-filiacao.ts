@@ -55,10 +55,18 @@ export interface VeiculoData {
   usoAplicativo?: boolean;
 }
 
+export interface ItemPlanoDetalhado {
+  nome: string;
+  descricao?: string;
+  valor_personalizado?: string;
+}
+
 export interface PlanoData {
   nome: string;
   codigo?: string;
   coberturas: string[];
+  coberturas_detalhadas?: ItemPlanoDetalhado[];
+  beneficios_detalhados?: ItemPlanoDetalhado[];
   valorMensal: number;
   taxaAdesao: number;
   diaVencimento: number;
