@@ -1265,7 +1265,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
       setIndicadorId(null);
       setIndicadorNome('');
       setBuscaIndicador('');
-      setCategoria('nenhuma');
+      
       setUsoVeiculo('particular');
       setRegiaoSelecionada('');
       setDiaVencimento(null);
