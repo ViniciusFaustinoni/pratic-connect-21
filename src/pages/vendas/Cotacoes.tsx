@@ -234,10 +234,7 @@ export default function Cotacoes() {
       // Ordenar por data de finalização (updated_at) desc, depois por consultor
       const dateA = new Date(a.updated_at || a.created_at).getTime();
       const dateB = new Date(b.updated_at || b.created_at).getTime();
-      if (dateB !== dateA) return dateB - dateA;
-      const nomeA = (a.profiles as any)?.nome || '';
-      const nomeB = (b.profiles as any)?.nome || '';
-      return nomeA.localeCompare(nomeB);
+      return dateB - dateA;
     });
   }, [sortedCotacoes]);
   
