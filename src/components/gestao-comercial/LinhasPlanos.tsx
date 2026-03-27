@@ -235,6 +235,9 @@ export function LinhasPlanos() {
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setLinhaSheet({ open: true, linha }); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); duplicateLine.mutate(linha.id); }} title="Duplicar">
+                    <Copy className="h-3.5 w-3.5" />
+                  </Button>
                   {canDelete && (
                     <Button
                       variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
