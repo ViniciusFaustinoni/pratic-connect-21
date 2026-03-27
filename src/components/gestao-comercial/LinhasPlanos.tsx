@@ -8,9 +8,14 @@ import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { Plus, ChevronRight, Loader2, Pencil } from 'lucide-react';
+import {
+  AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
+  AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
+import { Plus, ChevronRight, Loader2, Pencil, Trash2 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PlanoFormSheet } from './PlanoFormSheet';
+import { usePermissions } from '@/hooks/usePermissions';
 
 // ── Data hooks ──
 
@@ -31,7 +36,6 @@ function useLinhasComPlanos() {
         .order('ordem');
       if (pe) throw pe;
 
-      // Fetch linked coberturas/beneficios values for each plan
       const planoIds = (planos || []).map(p => p.id);
       
       let cobValores = new Map<string, number>();
@@ -96,6 +100,45 @@ function useUpdateLinha() {
   });
 }
 
+function useDeleteLinha() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Delete all plans in this line first
+      const { data: planos } = await supabase.from('planos').select('id').eq('product_line_id', id);
+      for (const p of planos || []) {
+        await supabase.from('planos_coberturas').delete().eq('plano_id', p.id);
+        await supabase.from('planos_beneficios').delete().eq('plano_id', p.id);
+        await supabase.from('planos_regioes').delete().eq('plano_id', p.id);
+        await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'plano').eq('entity_id', p.id);
+      }
+      if (planos && planos.length > 0) {
+        await supabase.from('planos').delete().in('id', planos.map(p => p.id));
+      }
+      const { error } = await supabase.from('product_lines').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] }); toast.success('Linha excluída'); },
+    onError: (e: Error) => toast.error(`Erro ao excluir linha: ${e.message}`),
+  });
+}
+
+function useDeletePlano() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (id: string) => {
+      await supabase.from('planos_coberturas').delete().eq('plano_id', id);
+      await supabase.from('planos_beneficios').delete().eq('plano_id', id);
+      await supabase.from('planos_regioes').delete().eq('plano_id', id);
+      await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'plano').eq('entity_id', id);
+      const { error } = await supabase.from('planos').delete().eq('id', id);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] }); toast.success('Plano excluído'); },
+    onError: (e: Error) => toast.error(`Erro ao excluir plano: ${e.message}`),
+  });
+}
+
 // ── Linha Sheet ──
 
 function LinhaSheet({ open, onClose, linha }: { open: boolean; onClose: () => void; linha?: any }) {
@@ -138,6 +181,13 @@ export function LinhasPlanos() {
   const [openLines, setOpenLines] = useState<Set<string>>(new Set());
   const [linhaSheet, setLinhaSheet] = useState<{ open: boolean; linha?: any }>({ open: false });
   const [planoSheet, setPlanoSheet] = useState<{ open: boolean; planoId?: string; linhaId?: string }>({ open: false });
+  const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
+
+  const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
+
+  const deleteLinha = useDeleteLinha();
+  const deletePlano = useDeletePlano();
 
   const toggleLine = (id: string) => {
     setOpenLines(prev => {
@@ -145,6 +195,16 @@ export function LinhasPlanos() {
       next.has(id) ? next.delete(id) : next.add(id);
       return next;
     });
+  };
+
+  const handleConfirmDelete = () => {
+    if (!deleteConfirm) return;
+    if (deleteConfirm.type === 'linha') {
+      deleteLinha.mutate(deleteConfirm.id);
+    } else {
+      deletePlano.mutate(deleteConfirm.id);
+    }
+    setDeleteConfirm(null);
   };
 
   if (isLoading) return <div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin text-muted-foreground" /></div>;
@@ -169,27 +229,46 @@ export function LinhasPlanos() {
                   <p className="text-sm font-semibold">{linha.name}</p>
                   <p className="text-xs text-muted-foreground">{linha.plans.length} plano{linha.plans.length !== 1 ? 's' : ''}</p>
                 </div>
-                <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); setLinhaSheet({ open: true, linha }); }}>
-                  <Pencil className="h-3.5 w-3.5" />
-                </Button>
+                <div className="flex items-center gap-1 shrink-0">
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setLinhaSheet({ open: true, linha }); }}>
+                    <Pencil className="h-3.5 w-3.5" />
+                  </Button>
+                  {canDelete && (
+                    <Button
+                      variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive"
+                      onClick={(e) => { e.stopPropagation(); setDeleteConfirm({ type: 'linha', id: linha.id, name: linha.name, plansCount: linha.plans.length }); }}
+                    >
+                      <Trash2 className="h-3.5 w-3.5" />
+                    </Button>
+                  )}
+                </div>
               </CollapsibleTrigger>
 
               <CollapsibleContent>
                 <div className="border-t px-4 py-2 space-y-1 bg-muted/20">
                   {linha.plans.map((plano: any) => (
-                    <button
-                      key={plano.id}
-                      onClick={() => setPlanoSheet({ open: true, planoId: plano.id, linhaId: linha.id })}
-                      className="w-full flex items-center gap-3 px-3 py-2 rounded-md hover:bg-background transition-colors text-left"
-                    >
-                      <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium">{plano.nome}</p>
-                      </div>
-                      <span className="text-sm font-semibold text-primary">
-                        R$ {plano.valor_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                      </span>
-                      <Switch checked={plano.ativo} className="shrink-0 pointer-events-none" />
-                    </button>
+                    <div key={plano.id} className="flex items-center gap-1">
+                      <button
+                        onClick={() => setPlanoSheet({ open: true, planoId: plano.id, linhaId: linha.id })}
+                        className="flex-1 flex items-center gap-3 px-3 py-2 rounded-md hover:bg-background transition-colors text-left"
+                      >
+                        <div className="flex-1 min-w-0">
+                          <p className="text-sm font-medium">{plano.nome}</p>
+                        </div>
+                        <span className="text-sm font-semibold text-primary">
+                          R$ {plano.valor_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                        </span>
+                        <Switch checked={plano.ativo} className="shrink-0 pointer-events-none" />
+                      </button>
+                      {canDelete && (
+                        <Button
+                          variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+                          onClick={() => setDeleteConfirm({ type: 'plano', id: plano.id, name: plano.nome })}
+                        >
+                          <Trash2 className="h-3.5 w-3.5" />
+                        </Button>
+                      )}
+                    </div>
                   ))}
                   <Button variant="ghost" size="sm" className="w-full mt-1 text-muted-foreground" onClick={() => setPlanoSheet({ open: true, linhaId: linha.id })}>
                     <Plus className="h-3.5 w-3.5 mr-1" />Novo Plano
@@ -203,6 +282,43 @@ export function LinhasPlanos() {
 
       {linhaSheet.open && <LinhaSheet open linha={linhaSheet.linha} onClose={() => setLinhaSheet({ open: false })} />}
       {planoSheet.open && <PlanoFormSheet open planoId={planoSheet.planoId} linhaId={planoSheet.linhaId} onClose={() => setPlanoSheet({ open: false })} />}
+
+      {/* Delete confirmation */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(v) => !v && setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>
+              Excluir {deleteConfirm?.type === 'linha' ? 'linha' : 'plano'}
+            </AlertDialogTitle>
+            <AlertDialogDescription>
+              {deleteConfirm?.type === 'linha' ? (
+                <>
+                  Tem certeza que deseja excluir a linha <strong>"{deleteConfirm?.name}"</strong>?
+                  {(deleteConfirm?.plansCount ?? 0) > 0 && (
+                    <> Isso também excluirá <strong>{deleteConfirm?.plansCount} plano(s)</strong> vinculado(s).</>
+                  )}
+                  {' '}Esta ação não pode ser desfeita.
+                </>
+              ) : (
+                <>
+                  Tem certeza que deseja excluir o plano <strong>"{deleteConfirm?.name}"</strong>?
+                  Esta ação não pode ser desfeita.
+                </>
+              )}
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              onClick={handleConfirmDelete}
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            >
+              {(deleteLinha.isPending || deletePlano.isPending) ? <Loader2 className="h-4 w-4 animate-spin mr-1" /> : null}
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </>
   );
 }
