@@ -742,7 +742,7 @@ const generateSecao6 = (data: TermoAfiliacaoData): string => `
   <div class="declaracao">
     <p class="declaracao-titulo">6.1. COLETA E TRATAMENTO</p>
     <p class="declaracao-texto">
-      Autorizo a ABP PraticCar a coletar, armazenar, processar e tratar meus 
+      Autorizo a PRATICCAR a coletar, armazenar, processar e tratar meus 
       dados pessoais para fins de cadastro, gestão da associação, processamento 
       de pagamentos, análise de sinistros, comunicações oficiais e cumprimento 
       de obrigações legais.
