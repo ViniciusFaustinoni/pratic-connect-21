@@ -376,6 +376,7 @@ const menuConfig: {
         { title: 'UTMs', url: '/marketing/utms', icon: Link },
         { title: 'Distribuição', url: '/marketing/distribuicao', icon: Users },
         { title: 'Relatórios', url: '/marketing/relatorios', icon: ClipboardList },
+        { title: 'Origens de Lead', url: '/marketing/origens', icon: Radio },
       ],
     },
     {

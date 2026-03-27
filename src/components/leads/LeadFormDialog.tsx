@@ -36,6 +36,7 @@ import { ORIGEM_LABELS } from '@/types/database';
 import { toast } from 'sonner';
 import { useFipe } from '@/hooks/useFipe';
 import { Badge } from '@/components/ui/badge';
+import { useLeadOrigensPorCategoria } from '@/hooks/useLeadOrigens';
 
 interface LeadFormDialogProps {
   open: boolean;
@@ -50,6 +51,7 @@ const MARCAS = [
 export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
   const [placaConsultada, setPlacaConsultada] = useState(false);
   const [marcaManual, setMarcaManual] = useState(false);
+  const [origemDetalheId, setOrigemDetalheId] = useState<string | null>(null);
   const createLead = useCreateLead();
   const { data: vendedores = [] } = useVendedores();
   // Consultores removido - usar apenas vendedores
@@ -73,6 +75,9 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
       observacoes: '',
     },
   });
+
+  const origemValue = form.watch('origem');
+  const { data: origensDetalhe = [] } = useLeadOrigensPorCategoria(origemValue);
 
   // Consulta automática de placa via FIPE
   const handlePlacaLookup = async (placa: string) => {
@@ -129,6 +134,7 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
         veiculo_placa: data.veiculo_placa || null,
         veiculo_fipe: data.veiculo_fipe || null,
         origem: data.origem as 'site',
+        origem_detalhe_id: origemDetalheId || null,
         vendedor_id: data.vendedor_id || null,
         // vendedor_id já está sendo passado acima
         observacoes: data.observacoes || null,
@@ -462,6 +468,26 @@ export function LeadFormDialog({ open, onOpenChange }: LeadFormDialogProps) {
                 />
 
                 {/* Campo consultor removido - usar apenas vendedor */}
+
+                {origensDetalhe.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium leading-none">Origem Detalhada</label>
+                    <Select
+                      onValueChange={(value) => setOrigemDetalheId(value === '_none' ? null : value)}
+                      value={origemDetalheId || '_none'}
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Não especificada</SelectItem>
+                        {origensDetalhe.map((o) => (
+                          <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
               </div>
 
               <FormField

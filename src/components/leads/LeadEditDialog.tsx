@@ -1,4 +1,4 @@
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { useForm } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Loader2 } from 'lucide-react';
@@ -33,6 +33,7 @@ import { leadSchema, type LeadFormData } from '@/lib/validations';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { ORIGEM_LABELS, ETAPA_LABELS, type Lead, type EtapaLead, type OrigemLead } from '@/types/database';
 import { toast } from 'sonner';
+import { useLeadOrigensPorCategoria } from '@/hooks/useLeadOrigens';
 
 interface LeadEditDialogProps {
   open: boolean;
@@ -46,6 +47,7 @@ const etapas = ETAPAS_FUNIL;
 
 export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps) {
   const updateLead = useUpdateLead();
+  const [origemDetalheId, setOrigemDetalheId] = useState<string | null>(null);
 
   const form = useForm<LeadFormData & { etapa: EtapaLead; motivo_perda?: string }>({
     resolver: zodResolver(leadSchema),
@@ -63,6 +65,9 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
       observacoes: '',
     },
   });
+
+  const origemValue = form.watch('origem');
+  const { data: origensDetalhe = [] } = useLeadOrigensPorCategoria(origemValue);
 
   // Reset form when lead changes
   useEffect(() => {
@@ -82,6 +87,7 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
         etapa: lead.etapa,
         motivo_perda: lead.motivo_perda || '',
       });
+      setOrigemDetalheId((lead as any).origem_detalhe_id || null);
     }
   }, [lead, form]);
 
@@ -101,6 +107,7 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
         veiculo_placa: data.veiculo_placa || null,
         veiculo_fipe: data.veiculo_fipe || null,
         origem: data.origem as 'site', // Cast for Supabase compatibility
+        origem_detalhe_id: origemDetalheId || null,
         observacoes: data.observacoes || null,
         etapa: data.etapa as 'novo', // Cast for Supabase compatibility
         motivo_perda: data.motivo_perda || null,
@@ -301,6 +308,26 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
                     </FormItem>
                   )}
                 />
+
+                {origensDetalhe.length > 0 && (
+                  <div>
+                    <label className="text-sm font-medium leading-none">Origem Detalhada</label>
+                    <Select
+                      onValueChange={(value) => setOrigemDetalheId(value === '_none' ? null : value)}
+                      value={origemDetalheId || '_none'}
+                    >
+                      <SelectTrigger className="mt-2">
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="_none">Não especificada</SelectItem>
+                        {origensDetalhe.map((o) => (
+                          <SelectItem key={o.id} value={o.id}>{o.nome}</SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+                )}
 
                 <FormField
                   control={form.control}

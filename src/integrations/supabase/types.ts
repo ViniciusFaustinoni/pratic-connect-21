@@ -14364,6 +14364,36 @@ export type Database = {
         }
         Relationships: []
       }
+      lead_origens: {
+        Row: {
+          ativo: boolean
+          categoria: string
+          created_at: string | null
+          descricao: string | null
+          id: string
+          nome: string
+          updated_at: string | null
+        }
+        Insert: {
+          ativo?: boolean
+          categoria: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome: string
+          updated_at?: string | null
+        }
+        Update: {
+          ativo?: boolean
+          categoria?: string
+          created_at?: string | null
+          descricao?: string | null
+          id?: string
+          nome?: string
+          updated_at?: string | null
+        }
+        Relationships: []
+      }
       leads: {
         Row: {
           associado_id: string | null
@@ -14392,6 +14422,7 @@ export type Database = {
           observacao_perda: string | null
           observacoes: string | null
           origem: Database["public"]["Enums"]["origem_lead"]
+          origem_detalhe_id: string | null
           plano_escolhido_id: string | null
           plano_escolhido_nome: string | null
           plano_escolhido_valor: number | null
@@ -14440,6 +14471,7 @@ export type Database = {
           observacao_perda?: string | null
           observacoes?: string | null
           origem?: Database["public"]["Enums"]["origem_lead"]
+          origem_detalhe_id?: string | null
           plano_escolhido_id?: string | null
           plano_escolhido_nome?: string | null
           plano_escolhido_valor?: number | null
@@ -14488,6 +14520,7 @@ export type Database = {
           observacao_perda?: string | null
           observacoes?: string | null
           origem?: Database["public"]["Enums"]["origem_lead"]
+          origem_detalhe_id?: string | null
           plano_escolhido_id?: string | null
           plano_escolhido_nome?: string | null
           plano_escolhido_valor?: number | null
@@ -14578,6 +14611,13 @@ export type Database = {
             columns: ["fonte_id"]
             isOneToOne: false
             referencedRelation: "lead_fontes"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "leads_origem_detalhe_id_fkey"
+            columns: ["origem_detalhe_id"]
+            isOneToOne: false
+            referencedRelation: "lead_origens"
             referencedColumns: ["id"]
           },
           {
