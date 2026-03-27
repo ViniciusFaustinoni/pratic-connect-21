@@ -327,6 +327,7 @@ export function CotacoesTable({
   selectedIds,
   onToggleSelect,
   onToggleAll,
+  groupByDate = false,
 }: CotacoesTableProps) {
   const formatPhone = (phone?: string | null) => {
     if (!phone) return null;
