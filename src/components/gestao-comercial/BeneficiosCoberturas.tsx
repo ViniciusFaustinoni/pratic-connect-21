@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useBenefits, useCoberturas, usePlans } from '@/hooks/usePlans';
-import { useDeleteBenefit, useDeleteCobertura, useUpdateCobertura, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
+import { useDeleteBenefit, useDeleteCobertura, useUpdateCobertura, useDuplicateBenefit, useDuplicateCobertura } from '@/hooks/usePlansAdmin';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { BeneficioFormModal } from '@/components/admin/planos/BeneficioFormModal';
@@ -49,6 +49,7 @@ export function BeneficiosCoberturas() {
   const deleteCobertura = useDeleteCobertura();
   const updateCobertura = useUpdateCobertura();
   const duplicateBenefit = useDuplicateBenefit();
+  const duplicateCobertura = useDuplicateCobertura();
   const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
   const canDelete = isDiretor || isDesenvolvedor || isAdminMaster;
 
@@ -151,6 +152,11 @@ export function BeneficiosCoberturas() {
                     <Button variant="ghost" size="icon" className="h-7 w-7"
                       onClick={() => { setCoberturaEdit(cob); setCoberturaModalOpen(true); }}>
                       <Edit className="h-3.5 w-3.5" />
+                    </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Duplicar"
+                      onClick={() => duplicateCobertura.mutate(cob.id)}
+                      disabled={duplicateCobertura.isPending}>
+                      <Copy className="h-3.5 w-3.5" />
                     </Button>
                     <TooltipProvider>
                       <Tooltip>
