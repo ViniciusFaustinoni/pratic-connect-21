@@ -3,7 +3,6 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto, useCotaParticipacaoDefault, useCotaMinimaDefault, useCotaDesagioDefault, useCotaMinimaDesagioDefault, useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
-import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
 import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 import { 
@@ -167,7 +166,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         .select(`
           *,
           product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class, blocked_categories, supports_app),
-          planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name, category))
+          planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name, category, preco_sugerido))
         `)
         .eq('ativo', true)
         .eq('visivel_gestao', true)
@@ -179,28 +178,28 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Buscar mapeamento plano → linha_slug (nova tabela)
-  const { data: planoPrecoMap, isLoading: planoPrecoMapLoading } = useQuery({
-    queryKey: ['plano_preco_map'],
+  // Buscar coberturas vinculadas aos planos (para cálculo de preço)
+  const { data: planoCoberturasData, isLoading: planoCoberturasLoading } = useQuery({
+    queryKey: ['planos_coberturas_pricing'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('plano_preco_map')
-        .select('*');
+        .from('planos_coberturas')
+        .select('plano_id, cobertura_id, coberturas:cobertura_id (valor, varia_com_fipe)');
       if (error) throw error;
       return data;
     },
     staleTime: 1000 * 60 * 5,
   });
 
-  // Buscar tabelas de preço mensalidade (nova tabela)
-  const { data: tabelasMensalidade, isLoading: tabelasMensalidadeLoading } = useQuery({
-    queryKey: ['tabelas_preco_mensalidade'],
+
+
+  // Buscar taxa administrativa por plano e faixa FIPE
+  const { data: taxasAdminData, isLoading: taxasAdminLoading } = useQuery({
+    queryKey: ['planos_taxa_administrativa_pricing'],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('tabelas_preco_mensalidade')
-        .select('*')
-        .eq('is_active', true)
-        .limit(5000);
+        .from('planos_taxa_administrativa')
+        .select('plano_id, fipe_de, fipe_ate, valor_taxa');
       if (error) throw error;
       return data;
     },
@@ -344,30 +343,23 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     return { status: 'aprovado', coberturaFipe: cobFipe };
   }
 
-  // Montar ConfigAdicionalApp dinamicamente
+  // Montar ConfigAdicionalApp dinamicamente (sem dependência de tabelasMensalidade)
   const configApp = useMemo<ConfigAdicionalApp>(() => {
     const linhasSupportsApp = (planosBanco || [])
       .map((p: any) => p.product_lines?.slug?.toLowerCase())
       .filter((slug: string | undefined): slug is string => !!slug && (planosBanco || []).some((p2: any) => p2.product_lines?.slug?.toLowerCase() === slug && p2.product_lines?.supports_app === true));
-    
-    const linhasComColunaApp = [...new Set(
-      (tabelasMensalidade || [])
-        .filter(t => t.tipo_uso === 'aplicativo')
-        .map(t => (t.linha_slug || '').toLowerCase())
-        .filter(Boolean)
-    )];
 
     return {
       regioesComAdicional: (regioesComAdicionalRaw || []).map(r => r.toLowerCase()),
-      linhasComColunaApp,
+      linhasComColunaApp: [] as string[],
       linhasSupportsApp: [...new Set(linhasSupportsApp)],
     };
-  }, [planosBanco, tabelasMensalidade, regioesComAdicionalRaw]);
+  }, [planosBanco, regioesComAdicionalRaw]);
 
   const dependenciasCriticasLoading =
     planosBancoLoading ||
-    planoPrecoMapLoading ||
-    tabelasMensalidadeLoading ||
+    planoCoberturasLoading ||
+    taxasAdminLoading ||
     elegibilidadeLoading ||
     cotasCategoriaLoading ||
     benefitExclusionsLoading ||
@@ -558,56 +550,34 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
-      // === NOVA LÓGICA: Buscar valor_mensal de tabelas_preco_mensalidade ===
-      const mapping = planoPrecoMap?.find(m => m.plano_id === plano.id);
-      const linhaSlug = mapping?.linha_slug;
-      const mappingTipoUso = mapping?.tipo_uso || 'particular';
-      const isLinhaTipoUsoProprio = mappingTipoUso !== 'particular' && mappingTipoUso !== 'aplicativo' && mappingTipoUso !== 'passeio';
-      const tipoUsoOriginal = isLinhaTipoUsoProprio ? mappingTipoUso : (params.usoApp ? 'aplicativo' : 'particular');
-      // Resolver tipo_uso para query (regras de adicional app)
-      const tipoUsoPricing = linhaSlug
-        ? resolverTipoUsoQuery(linhaSlug, regiaoLower, tipoUsoOriginal, configApp)
-        : tipoUsoOriginal;
+      // === NOVO MODELO: Preço = Σ coberturas + Σ benefícios + taxa administrativa ===
+      
+      // Soma dos valores das coberturas vinculadas ao plano
+      const coberturasDoPlano = (planoCoberturasData || []).filter(pc => pc.plano_id === plano.id);
+      const somaCoberturas = coberturasDoPlano.reduce((acc, pc) => {
+        const valor = (pc as any).coberturas?.valor || 0;
+        return acc + Number(valor);
+      }, 0);
 
-      let valorMensal = 0;
+      // Soma dos valores dos benefícios vinculados (usando preco_sugerido)
+      const somaBeneficios = (plano.planos_beneficios || []).reduce((acc: number, pb: any) => {
+        const preco = pb.benefits?.preco_sugerido || 0;
+        return acc + Number(preco);
+      }, 0);
+
+      // Taxa administrativa por faixa FIPE
+      const taxaAdmin = (taxasAdminData || [])
+        .filter(t => t.plano_id === plano.id)
+        .find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
+      const valorTaxaAdmin = taxaAdmin?.valor_taxa || 0;
+
+      let valorMensal = somaCoberturas + somaBeneficios + Number(valorTaxaAdmin);
       let valorDesagio: number | null = null;
-
-      if (linhaSlug && tabelasMensalidade) {
-        // For eletrico line: ignore region (national pricing) and combustivel
-        const isEletrico = linhaSlug === 'eletrico';
-        const faixa = tabelasMensalidade.find(t =>
-          t.linha_slug === linhaSlug &&
-          (isEletrico || t.regiao === regiaoLower) &&
-          t.tipo_uso === tipoUsoPricing &&
-          (isEletrico || t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
-          valorFipe >= t.fipe_min &&
-          valorFipe <= t.fipe_max
-        );
-
-        if (faixa) {
-          valorMensal = faixa.valor_mensal;
-          valorDesagio = faixa.valor_desagio;
-        }
-      }
 
       // Deságio: derive flag from category
       const isDesagio = !!categoria && categoriasDesagio.includes(categoria);
 
-      // SELECT ONE (coluna dedicada APP): ignorar deságio, usar preço APP direto
-      const temColunaAppDedicada = configApp.linhasComColunaApp.includes(linhaSlug || '');
-
-      // Aplicar valor_desagio apenas para linhas sem coluna APP dedicada
-      if (isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || '') && !temColunaAppDedicada) {
-        valorMensal = valorDesagio;
-      }
-
-      // Adicional APP: NÃO aplicar se a categoria está em categorias_que_sobrepoe_app
-      const categoriaAnulaApp = isDesagio && categoriasQueSobrepoeApp.includes(categoria || '');
-      if (linhaSlug && tipoUsoOriginal === 'aplicativo' && !categoriaAnulaApp) {
-        valorMensal = resolverPrecoApp(linhaSlug, regiaoLower, tipoUsoOriginal, valorMensal, adicionalApp, configApp);
-      }
-
-      // Se não encontrou faixa de preço válida, ocultar o plano
+      // Se o plano não tem itens configurados, ocultar
       if (valorMensal === 0) {
         continue;
       }
@@ -736,7 +706,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
         anoMinimo: anoMinimo || undefined,
         elegibilidadeStatus,
-        precoDesagioAplicado: isDesagio && valorDesagio != null && linhasComDesagio.includes(linhaSlug || '') && !temColunaAppDedicada,
+        precoDesagioAplicado: false,
       });
     }
 
@@ -751,7 +721,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     return { planos: sorted, planosNegados: negados };
-  }, [params, planosBanco, planoPrecoMap, tabelasMensalidade, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeError, elegibilidadeLoading, configApp, cotasCategoriaData, categoriasQueSobrepoeApp, dependenciasCriticasLoading, allEligibilityRules]);
+  }, [params, planosBanco, planoCoberturasData, taxasAdminData, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeError, elegibilidadeLoading, configApp, cotasCategoriaData, categoriasQueSobrepoeApp, dependenciasCriticasLoading, allEligibilityRules]);
 
   return {
     planos,

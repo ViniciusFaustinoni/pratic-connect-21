@@ -1,15 +1,13 @@
 // ============================================
 // HOOKS ESPECIALIZADOS PARA MÓDULO DE COTAÇÃO
 // SGA Pratic 2.0 - Proteção Veicular
-// Migrado para tabelas_preco_mensalidade + plano_preco_map
+// Modelo: Preço = Σ coberturas + Σ benefícios + taxa administrativa
 // ============================================
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import type { Database } from '@/integrations/supabase/types';
-import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
-import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import type {
   PlanoParaCotacao,
   CotacaoCompleta,
@@ -18,34 +16,10 @@ import type {
   StatusCotacaoExtended,
   CriarCotacaoPayload,
 } from '@/types/cotacao';
-import { useConfiguracaoNumero, useConfigDecomposicao } from '@/hooks/useConteudosSistema';
+import { useConfigDecomposicao } from '@/hooks/useConteudosSistema';
 
 // Tipo do status no banco (sem 'visualizada')
 type StatusCotacaoDB = Database['public']['Tables']['cotacoes']['Row']['status'];
-
-// ============================================
-// TIPOS INTERNOS
-// ============================================
-
-interface PlanoPrecoMapEntry {
-  id: string;
-  plano_id: string;
-  linha_slug: string;
-  tipo_uso: string;
-}
-
-interface FaixaMensalidade {
-  id: string;
-  linha_slug: string | null;
-  regiao: string | null;
-  combustivel_tipo: string | null;
-  tipo_uso: string | null;
-  fipe_min: number;
-  fipe_max: number;
-  valor_mensal: number;
-  valor_desagio: number | null;
-  is_active: boolean | null;
-}
 
 // ============================================
 // FUNÇÕES DE MAPEAMENTO (BD → Interface)
@@ -94,144 +68,6 @@ export function usePlanosCotacao(tipoUso?: TipoUso) {
 }
 
 // ============================================
-// HOOK: BUSCAR DADOS DE PREÇO (nova tabela)
-// ============================================
-
-function usePlanoPrecoMap() {
-  return useQuery({
-    queryKey: ['plano_preco_map'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('plano_preco_map')
-        .select('*');
-      if (error) throw error;
-      return data as PlanoPrecoMapEntry[];
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-}
-
-function useTabelasMensalidade() {
-  return useQuery({
-    queryKey: ['tabelas_preco_mensalidade'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('tabelas_preco_mensalidade')
-        .select('*')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data as FaixaMensalidade[];
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-}
-
-// ============================================
-// HOOK: CONFIG ADICIONAL APP (dinâmico do banco)
-// ============================================
-
-function useConfigAdicionalApp(tabelasMensalidade: FaixaMensalidade[] | undefined) {
-  const { data: regioesRaw } = useQuery({
-    queryKey: ['configuracoes', 'regioes_com_adicional_app'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'regioes_com_adicional_app')
-        .maybeSingle();
-      try { return JSON.parse(data?.valor || '[]') as string[]; }
-      catch { return [] as string[]; }
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-
-  const { data: productLines } = useQuery({
-    queryKey: ['product_lines_supports_app'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('product_lines')
-        .select('slug, supports_app');
-      if (error) throw error;
-      return data || [];
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-
-  const config: ConfigAdicionalApp = {
-    regioesComAdicional: (regioesRaw || []).map(r => r.toLowerCase()),
-    linhasSupportsApp: (productLines || [])
-      .filter(pl => pl.supports_app === true)
-      .map(pl => (pl.slug || '').toLowerCase()),
-    linhasComColunaApp: [...new Set(
-      (tabelasMensalidade || [])
-        .filter(t => t.tipo_uso === 'aplicativo')
-        .map(t => (t.linha_slug || '').toLowerCase())
-        .filter(Boolean)
-    )],
-  };
-
-  return config;
-}
-
-// ============================================
-// FUNÇÃO: ENCONTRAR FAIXA POR VALOR FIPE
-// ============================================
-
-function encontrarFaixaMensalidade(
-  tabelasMensalidade: FaixaMensalidade[],
-  planoPrecoMap: PlanoPrecoMapEntry[],
-  planoId: string,
-  valorFipe: number,
-  regiao: string,
-  combustivel: string,
-  adicionalApp: number = 0,
-  adicionalMensal: number = 0,
-  descontoPercentual: number = 0,
-  configApp: ConfigAdicionalApp,
-): { valorMensal: number; valorDesagio: number | null } | null {
-  const mapping = planoPrecoMap.find(m => m.plano_id === planoId);
-  if (!mapping) return null;
-
-  // Resolver tipo_uso para query (regras de adicional app)
-  const tipoUsoQuery = resolverTipoUsoQuery(mapping.linha_slug, regiao, mapping.tipo_uso, configApp);
-
-  // For eletrico: ignore region (national pricing) and combustivel
-  const isEletrico = mapping.linha_slug === 'eletrico';
-  const regiaoLower = regiao.toLowerCase();
-  const combustivelLower = combustivel.toLowerCase();
-
-  const faixa = tabelasMensalidade.find(t =>
-    t.linha_slug === mapping.linha_slug &&
-    (isEletrico || t.regiao === regiaoLower) &&
-    t.tipo_uso === tipoUsoQuery &&
-    (isEletrico || t.combustivel_tipo === combustivelLower || t.combustivel_tipo === null) &&
-    valorFipe >= t.fipe_min &&
-    valorFipe <= t.fipe_max
-  );
-
-  if (!faixa) return null;
-
-  // Aplicar adicional app se necessário
-  const isLinhaTipoUsoProprio = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
-  let valorMensalFinal = isLinhaTipoUsoProprio
-    ? faixa.valor_mensal
-    : resolverPrecoApp(mapping.linha_slug, regiao, mapping.tipo_uso, faixa.valor_mensal, adicionalApp, configApp);
-
-  // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
-  valorMensalFinal += adicionalMensal;
-
-  // Aplicar desconto percentual dinâmico (ex: 5% OFF)
-  if (descontoPercentual > 0) {
-    valorMensalFinal *= (1 - descontoPercentual / 100);
-  }
-
-  return {
-    valorMensal: Math.round(valorMensalFinal * 100) / 100,
-    valorDesagio: faixa.valor_desagio,
-  };
-}
-
-// ============================================
 // FUNÇÃO: CALCULAR VALORES DA COTAÇÃO
 // ============================================
 
@@ -241,7 +77,6 @@ export function calcularValoresCotacao(
   valorFipe: number,
   decomposicao?: { cota: number; admin: number; rastreamento: number; assistencia: number },
 ): ResultadoCotacao['valores'] {
-  // Decomposição percentual sobre valor_mensal (valores do banco com fallback)
   const decCota = decomposicao?.cota || 0.60;
   const decAdmin = decomposicao?.admin || 0.25;
   const decRastreamento = decomposicao?.rastreamento || 0.10;
@@ -259,21 +94,59 @@ export function calcularValoresCotacao(
     valor_rastreamento,
     valor_assistencia,
     valor_mensal: valorMensalDireto,
-    valor_adesao: Math.max(valorFipe * 0.01, 100), // Valor sugestão — será substituído pelo consultor
+    valor_adesao: Math.max(valorFipe * 0.01, 100),
   };
 }
 
 // ============================================
-// HOOK: CALCULAR COTAÇÃO
+// HOOK: CALCULAR COTAÇÃO (novo modelo)
 // ============================================
 
 export function useCalcularCotacao() {
   const { data: planos, isLoading: loadingPlanos } = usePlanosCotacao();
-  const { data: planoPrecoMap, isLoading: loadingMap } = usePlanoPrecoMap();
-  const { data: tabelasMensalidade, isLoading: loadingMensalidade } = useTabelasMensalidade();
-  const { data: adicionalApp = 35.90 } = useConfiguracaoNumero('adicional_app', 35.90);
   const { data: decomposicao } = useConfigDecomposicao();
-  const configApp = useConfigAdicionalApp(tabelasMensalidade);
+
+  // Buscar coberturas vinculadas aos planos
+  const { data: planoCoberturasData, isLoading: loadingCoberturas } = useQuery({
+    queryKey: ['planos_coberturas_cotacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos_coberturas')
+        .select('plano_id, cobertura_id, coberturas:cobertura_id (valor)');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Buscar benefícios vinculados aos planos
+  const { data: planoBeneficiosData, isLoading: loadingBeneficios } = useQuery({
+    queryKey: ['planos_beneficios_cotacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos_beneficios')
+        .select('plano_id, benefit_id, benefits:benefit_id (preco_sugerido)');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  // Buscar taxa administrativa por faixa FIPE
+  const { data: taxasAdminData, isLoading: loadingTaxas } = useQuery({
+    queryKey: ['planos_taxa_administrativa_cotacao'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos_taxa_administrativa')
+        .select('plano_id, fipe_de, fipe_ate, valor_taxa');
+      if (error) throw error;
+      return data;
+    },
+    staleTime: 1000 * 60 * 5,
+  });
+
+  const isLoading = loadingPlanos || loadingCoberturas || loadingBeneficios || loadingTaxas;
+  const isReady = !!planos && !!planoCoberturasData && !!planoBeneficiosData && !!taxasAdminData;
 
   const calcular = (
     valorFipe: number,
@@ -282,13 +155,11 @@ export function useCalcularCotacao() {
     regiao: string = 'rj',
     combustivel: string = 'gasolina',
   ): ResultadoCotacao[] => {
-    if (!planos || !planoPrecoMap || !tabelasMensalidade || valorFipe <= 0) return [];
+    if (!planos || !isReady || valorFipe <= 0) return [];
 
-    // Filtrar planos pela categoria do veículo (fonte de verdade: campo 'categoria' do plano)
     const categoriaVeiculo = tipoUso === 'particular' ? 'passeio' : tipoUso;
     let planosDisponiveis = planos.filter((p) => {
       const cats: string[] = (p as any).categoria || [];
-      // Plano sem categorias definidas aceita qualquer veículo (backward compat)
       if (!cats || cats.length === 0) {
         const tipoUsoBD = p.tipo_uso?.toLowerCase();
         if (tipoUso === 'particular') {
@@ -299,7 +170,6 @@ export function useCalcularCotacao() {
       return cats.includes(categoriaVeiculo);
     });
 
-    // Se especificou plano, filtrar (bypass tipo_uso — o plano já foi escolhido)
     if (planoId) {
       const planoEspecifico = planos.filter((p) => p.id === planoId);
       if (planoEspecifico.length > 0) {
@@ -310,25 +180,40 @@ export function useCalcularCotacao() {
     const resultados: ResultadoCotacao[] = [];
 
     for (const plano of planosDisponiveis) {
-      const faixaResult = encontrarFaixaMensalidade(
-        tabelasMensalidade,
-        planoPrecoMap,
-        plano.id,
-        valorFipe,
-        regiao,
-        combustivel,
-        adicionalApp,
-        plano.adicional_mensal || 0,
-        plano.desconto_percentual || 0,
-        configApp,
-      );
+      // Soma coberturas
+      const coberturasDoPlano = (planoCoberturasData || []).filter(pc => pc.plano_id === plano.id);
+      const somaCoberturas = coberturasDoPlano.reduce((acc, pc) => {
+        const valor = (pc as any).coberturas?.valor || 0;
+        return acc + Number(valor);
+      }, 0);
 
-      if (!faixaResult) continue;
+      // Soma benefícios
+      const beneficiosDoPlano = (planoBeneficiosData || []).filter(pb => pb.plano_id === plano.id);
+      const somaBeneficios = beneficiosDoPlano.reduce((acc, pb) => {
+        const preco = (pb as any).benefits?.preco_sugerido || 0;
+        return acc + Number(preco);
+      }, 0);
+
+      // Taxa administrativa por faixa FIPE
+      const taxaAdmin = (taxasAdminData || [])
+        .filter(t => t.plano_id === plano.id)
+        .find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
+      const valorTaxaAdmin = taxaAdmin?.valor_taxa || 0;
+
+      let valorMensal = somaCoberturas + somaBeneficios + Number(valorTaxaAdmin);
+
+      // Aplicar adicional_mensal e desconto_percentual
+      valorMensal += plano.adicional_mensal || 0;
+      if (plano.desconto_percentual > 0) {
+        valorMensal *= (1 - plano.desconto_percentual / 100);
+      }
+
+      if (valorMensal <= 0) continue;
 
       resultados.push({
         plano,
-        faixa: null as any, // Campo legado — decomposição é feita internamente
-        valores: calcularValoresCotacao(plano, faixaResult.valorMensal, valorFipe, decomposicao),
+        faixa: null as any,
+        valores: calcularValoresCotacao(plano, Math.round(valorMensal * 100) / 100, valorFipe, decomposicao),
       });
     }
 
@@ -336,7 +221,7 @@ export function useCalcularCotacao() {
       if (valorFipe > 500000) {
         toast.error('Valor FIPE acima de R$ 500.000. Entre em contato para cotação especial.');
       } else {
-        toast.error('Valor FIPE fora das faixas configuradas para esta região/uso.');
+        toast.error('Nenhum plano configurado com preços para este valor FIPE.');
       }
     }
 
@@ -345,10 +230,10 @@ export function useCalcularCotacao() {
 
   return {
     calcular,
-    isReady: !!planos && !!planoPrecoMap && !!tabelasMensalidade,
-    isLoading: loadingPlanos || loadingMap || loadingMensalidade,
+    isReady,
+    isLoading,
     planos,
-    faixas: tabelasMensalidade,
+    faixas: null,
   };
 }
 
