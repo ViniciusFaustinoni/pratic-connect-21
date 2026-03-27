@@ -33,6 +33,7 @@ import { leadSchema, type LeadFormData } from '@/lib/validations';
 import { useUpdateLead } from '@/hooks/useLeads';
 import { ORIGEM_LABELS, ETAPA_LABELS, type Lead, type EtapaLead, type OrigemLead } from '@/types/database';
 import { toast } from 'sonner';
+import { useLeadOrigensPorCategoria } from '@/hooks/useLeadOrigens';
 
 interface LeadEditDialogProps {
   open: boolean;
