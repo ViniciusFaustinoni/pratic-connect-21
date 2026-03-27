@@ -216,6 +216,30 @@ export default function Cotacoes() {
       return new Date(b.created_at).getTime() - new Date(a.created_at).getTime();
     });
   }, [filteredCotacoes]);
+
+  // Separação Em Andamento vs Finalizadas
+  const STATUS_EM_ANDAMENTO = ['rascunho', 'enviada', 'visualizada'];
+  const STATUS_FINALIZADAS = ['aceita', 'recusada', 'expirada'];
+
+  const cotacoesEmAndamento = useMemo(() => {
+    return sortedCotacoes.filter(c => 
+      STATUS_EM_ANDAMENTO.includes(c.status) && c.status_contratacao !== 'concluido'
+    );
+  }, [sortedCotacoes]);
+
+  const cotacoesFinalizadas = useMemo(() => {
+    return [...sortedCotacoes.filter(c => 
+      STATUS_FINALIZADAS.includes(c.status) || c.status_contratacao === 'concluido'
+    )].sort((a, b) => {
+      // Ordenar por data de finalização (updated_at) desc, depois por consultor
+      const dateA = new Date(a.updated_at || a.created_at).getTime();
+      const dateB = new Date(b.updated_at || b.created_at).getTime();
+      if (dateB !== dateA) return dateB - dateA;
+      const nomeA = (a.profiles as any)?.nome || '';
+      const nomeB = (b.profiles as any)?.nome || '';
+      return nomeA.localeCompare(nomeB);
+    });
+  }, [sortedCotacoes]);
   
   const mesesDisponiveis = [...new Set((cotacoes || []).map(c => {
     const date = new Date(c.created_at);
