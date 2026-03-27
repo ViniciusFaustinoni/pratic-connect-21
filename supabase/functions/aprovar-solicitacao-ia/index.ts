@@ -582,7 +582,7 @@ serve(async (req) => {
         if (associado) {
           const telefoneAssociado = associado.whatsapp || associado.telefone;
           if (telefoneAssociado) {
-            const mensagem = `Olá ${associado.nome}!\n\nSua solicitação de cancelamento foi recebida.\n\nSerá agendada a retirada do rastreador do seu veículo *${veiculo?.marca || ""} ${veiculo?.modelo || ""}* placa *${veiculo?.placa || ""}*.\n\nVocê receberá o agendamento em breve.\n\nABP PraticCar`;
+            const mensagem = `Olá ${associado.nome}!\n\nSua solicitação de cancelamento foi recebida.\n\nSerá agendada a retirada do rastreador do seu veículo *${veiculo?.marca || ""} ${veiculo?.modelo || ""}* placa *${veiculo?.placa || ""}*.\n\nVocê receberá o agendamento em breve.\n\nPRATICCAR`;
 
             await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
               method: "POST",
