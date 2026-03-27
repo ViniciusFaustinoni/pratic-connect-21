@@ -287,9 +287,9 @@ const generateStyles = (): string => `
 
 const generateHeader = (data: TermoAfiliacaoData): string => `
 <div class="header">
-  <div class="header-logo">ABP PRATICCAR</div>
+  <div class="header-logo">PRATICCAR</div>
   <div class="header-empresa">
-    ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR<br>
+    ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR<br>
     CNPJ: ${data.empresa.cnpj}<br>
     ${data.empresa.logradouro}, ${data.empresa.numero} - ${data.empresa.bairro}<br>
     ${data.empresa.cidade}/${data.empresa.uf} - CEP ${data.empresa.cep}
