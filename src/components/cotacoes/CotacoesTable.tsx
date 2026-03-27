@@ -638,8 +638,12 @@ export function CotacoesTable({
                     </div>
                   </TableCell>
                 </TableRow>
-              );
-            })}
+                    );
+                    })()}
+                  </>
+                );
+              });
+            })()}
           </TableBody>
         </Table>
       </div>
