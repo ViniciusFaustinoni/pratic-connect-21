@@ -107,10 +107,10 @@ export function TermoFiliacaoTemplate({
         borderBottom: '2px solid #1e40af',
       }}>
         <div style={{ fontSize: '18pt', fontWeight: 'bold', color: '#1e40af', marginBottom: '6pt' }}>
-          ABP PRATICCAR
+          PRATICCAR
         </div>
         <div style={{ fontSize: '9pt', color: '#666666', marginBottom: '4pt' }}>
-          ASSOCIAÇÃO DE BENEFÍCIOS PRATICCAR<br />
+          ASSOCIAÇÃO DE PROTEÇÃO PATRIMONIAL PARA MOTORISTAS DE APLICATIVO PRATICCAR<br />
           CNPJ: {empresa.cnpj}<br />
           {empresa.logradouro}, {empresa.numero} - {empresa.bairro}<br />
           {empresa.cidade}/{empresa.uf} - CEP {empresa.cep}
