@@ -143,6 +143,7 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
   const [name, setName] = useState('');
   const [description, setDescription] = useState('');
   const [valor, setValor] = useState('0');
+  const [variaComFipe, setVariaComFipe] = useState(false);
 
   const { state: eligState, setState: setEligState } = useEligibilityState('beneficio', item?.id);
 
