@@ -197,7 +197,7 @@ ${conteudoHTML}
   <br><br>
   <p class="signature-local-data">${associado.cidade || ""}/${associado.uf || ""}, ${variaveis["sistema.data_extenso"]}</p>
 </div>
-<div class="footer">ABP PraticCar | Termo de Cancelamento</div>
+<div class="footer">PRATICCAR | Termo de Cancelamento</div>
 </div></body></html>`;
     }
 

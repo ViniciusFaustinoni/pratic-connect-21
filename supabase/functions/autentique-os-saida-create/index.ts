@@ -233,7 +233,7 @@ serve(async (req) => {
       <p class="signature-local-data">${associado.cidade || ''}/${associado.uf || ''}, ${formatDateExtended(dataAtual)}</p>
     </div>
     <div class="footer">
-      ABP PraticCar | Termo de Saída de Veículo - OS ${os.numero}
+      PRATICCAR | Termo de Saída de Veículo - OS ${os.numero}
     </div>
   </div>
 </body>
