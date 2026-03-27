@@ -150,13 +150,13 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       return isInclude ? inRange : !inRange;
     }
     case 'categoria_veiculo': {
-      const cats: string[] = cfg.categorias || [];
+      const cats: string[] = cfg.categorias || cfg.values || [];
       if (cats.length === 0) return true;
-      const match = !!ctx.categoriaVeiculo && cats.includes(ctx.categoriaVeiculo.toLowerCase());
+      const match = !!ctx.categoriaVeiculo && cats.some(c => c.toLowerCase() === ctx.categoriaVeiculo!.toLowerCase());
       return isInclude ? match : !match;
     }
     case 'categoria_especial': {
-      const cats: string[] = cfg.categorias || [];
+      const cats: string[] = cfg.categorias || cfg.values || [];
       if (cats.length === 0) return true;
       const match = !!ctx.categoriaEspecial && cats.includes(ctx.categoriaEspecial.toLowerCase());
       return isInclude ? match : !match;
