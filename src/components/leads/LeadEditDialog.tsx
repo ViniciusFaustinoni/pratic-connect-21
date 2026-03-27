@@ -107,6 +107,7 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
         veiculo_placa: data.veiculo_placa || null,
         veiculo_fipe: data.veiculo_fipe || null,
         origem: data.origem as 'site', // Cast for Supabase compatibility
+        origem_detalhe_id: origemDetalheId || null,
         observacoes: data.observacoes || null,
         etapa: data.etapa as 'novo', // Cast for Supabase compatibility
         motivo_perda: data.motivo_perda || null,
