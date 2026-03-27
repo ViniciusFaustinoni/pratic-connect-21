@@ -106,6 +106,15 @@ export async function saveEligibilityRules(entityType: EntityType, entityId: str
 
   const rules: any[] = [];
 
+  // Save fipe_eligibility rule
+  if (state.elegFipeMin || state.elegFipeMax) {
+    rules.push({
+      entity_type: entityType, entity_id: entityId,
+      rule_type: 'fipe_eligibility', rule_mode: 'include',
+      rule_config: { min: parseFloat(state.elegFipeMin) || 0, max: parseFloat(state.elegFipeMax) || 99999999 },
+    });
+  }
+
   if (state.variaComFipe && (state.fipeMin || state.fipeMax)) {
     const min = parseFloat(state.fipeMin) || 0;
     const max = parseFloat(state.fipeMax) || 99999999;
