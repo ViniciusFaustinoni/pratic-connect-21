@@ -118,6 +118,7 @@ export interface EmpresaData {
   telefone?: string;
   email?: string;
   lgpd_email?: string;
+  complemento?: string;
 }
 
 export interface RegrasVendaData {
