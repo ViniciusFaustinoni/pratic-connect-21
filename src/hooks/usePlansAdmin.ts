@@ -641,7 +641,7 @@ export function useDuplicateCobertura() {
 
       if (fetchError) throw fetchError;
 
-      const { id: _, created_at, updated_at, ...cobData } = original;
+      const { id: _, created_at, ...cobData } = original;
       const newCob = {
         ...cobData,
         nome: `${cobData.nome} (cópia)`,
