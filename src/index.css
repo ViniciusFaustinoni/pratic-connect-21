@@ -772,5 +772,5 @@
 /* Scroll suave no mobile */
 .app-scroll-container {
   -webkit-overflow-scrolling: touch;
-  touch-action: pan-y;
+  scroll-behavior: smooth;
 }
