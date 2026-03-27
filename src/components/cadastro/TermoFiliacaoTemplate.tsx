@@ -436,7 +436,7 @@ export function TermoFiliacaoTemplate({
         <p style={{ marginBottom: '10pt' }}>Em conformidade com a Lei Geral de Proteção de Dados (Lei nº 13.709/2018):</p>
         
         {[
-          { titulo: '6.1. COLETA E TRATAMENTO', texto: 'Autorizo a ABP PraticCar a coletar, armazenar, processar e tratar meus dados pessoais para fins de cadastro, gestão da associação, processamento de pagamentos e comunicações oficiais.' },
+          { titulo: '6.1. COLETA E TRATAMENTO', texto: 'Autorizo a PRATICCAR a coletar, armazenar, processar e tratar meus dados pessoais para fins de cadastro, gestão da associação, processamento de pagamentos e comunicações oficiais.' },
           { titulo: '6.2. COMPARTILHAMENTO', texto: 'Autorizo o compartilhamento de meus dados pessoais com empresas de rastreamento, oficinas credenciadas, empresas de assistência 24h e instituições financeiras.' },
           { titulo: '6.3. COMUNICAÇÕES', texto: 'Autorizo o recebimento de comunicações oficiais através de WhatsApp, e-mail, SMS e telefone.' },
           { titulo: '6.4. DIREITOS DO TITULAR', texto: `Estou ciente dos meus direitos como titular de dados, podendo exercê-los através do e-mail ${empresa.lgpdEmail || 'lgpd@praticcar.com.br'}.` },
