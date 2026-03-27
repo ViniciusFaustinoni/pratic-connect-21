@@ -122,7 +122,7 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
             <div><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={valor} onChange={e => setValor(e.target.value)} /></div>
           )}
 
-          <EligibilityConfigSection entityType="cobertura" entityId={item?.id} onVariaComFipeChange={setVariaComFipe} />
+          <EligibilityConfigSection entityType="cobertura" entityId={item?.id} onVariaComFipeChange={setVariaComFipe} externalState={{ state: eligState, setState: setEligState }} />
 
           <div className="flex gap-2 pt-4">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
@@ -192,7 +192,7 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
             <div><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={valor} onChange={e => setValor(e.target.value)} /></div>
           )}
 
-          <EligibilityConfigSection entityType="beneficio" entityId={item?.id} onVariaComFipeChange={setVariaComFipe} />
+          <EligibilityConfigSection entityType="beneficio" entityId={item?.id} onVariaComFipeChange={setVariaComFipe} externalState={{ state: eligState, setState: setEligState }} />
 
           <div className="flex gap-2 pt-4">
             <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
