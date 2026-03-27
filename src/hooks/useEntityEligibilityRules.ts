@@ -175,9 +175,9 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       return isInclude ? match : !match;
     }
     case 'tipo_uso': {
-      const tipos: string[] = cfg.tipos || [];
+      const tipos: string[] = cfg.tipos || cfg.values || [];
       if (tipos.length === 0) return true;
-      const match = !!ctx.tipoUso && tipos.includes(ctx.tipoUso.toLowerCase());
+      const match = !!ctx.tipoUso && tipos.some(t => t.toLowerCase() === ctx.tipoUso!.toLowerCase());
       return isInclude ? match : !match;
     }
     case 'combustivel': {
