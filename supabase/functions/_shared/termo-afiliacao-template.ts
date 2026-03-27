@@ -530,10 +530,36 @@ const generateSecao3 = (data: TermoAfiliacaoData): string => {
   const coberturas = data.plano.coberturas || [];
   const rastreador = exigeRastreador(data.veiculo, data.configRastreador);
   const textoRastreador = rastreador.exige ? 'Obrigatório' : 'Opcional';
-  const coberturasHTML = coberturas.map(c => 
-    `<div class="cobertura-item"><span class="cobertura-check">[X]</span> ${c}</div>`
-  ).join('\n');
   const depreciacaoHTML = generateBlocoDepreciacao(data);
+
+  // Coberturas detalhadas (preferência) ou lista simples (fallback)
+  const coberturasDetalhadas = (data.plano as any).coberturas_detalhadas as Array<{nome: string; descricao?: string; valor_personalizado?: string}> | undefined;
+  const beneficiosDetalhados = (data.plano as any).beneficios_detalhados as Array<{nome: string; descricao?: string; valor_personalizado?: string}> | undefined;
+
+  let coberturasHTML: string;
+  if (coberturasDetalhadas && coberturasDetalhadas.length > 0) {
+    coberturasHTML = coberturasDetalhadas.map(item => {
+      const detalhe = item.valor_personalizado || item.descricao || '';
+      return `<div class="cobertura-item"><span class="cobertura-check">[X]</span> <strong>${item.nome}</strong>${detalhe ? ` — ${detalhe}` : ''}</div>`;
+    }).join('\n');
+  } else {
+    coberturasHTML = coberturas.map(c => 
+      `<div class="cobertura-item"><span class="cobertura-check">[X]</span> ${c}</div>`
+    ).join('\n');
+  }
+
+  let beneficiosHTML = '';
+  if (beneficiosDetalhados && beneficiosDetalhados.length > 0) {
+    const items = beneficiosDetalhados.map(item => {
+      const detalhe = item.valor_personalizado || item.descricao || '';
+      return `<div class="cobertura-item"><span class="cobertura-check">[X]</span> <strong>${item.nome}</strong>${detalhe ? ` — ${detalhe}` : ''}</div>`;
+    }).join('\n');
+    beneficiosHTML = `
+  <h3 class="section-subtitle">BENEFÍCIOS INCLUÍDOS:</h3>
+  <div class="cobertura-list">
+    ${items}
+  </div>`;
+  }
   
   return `
 <div class="section">
@@ -554,6 +580,8 @@ const generateSecao3 = (data: TermoAfiliacaoData): string => {
   <div class="cobertura-list">
     ${coberturasHTML || '<div class="cobertura-item"><span class="cobertura-check">[X]</span> Roubo e Furto</div><div class="cobertura-item"><span class="cobertura-check">[X]</span> Assistência 24 horas</div>'}
   </div>
+  
+  ${beneficiosHTML}
   
   ${depreciacaoHTML}
   

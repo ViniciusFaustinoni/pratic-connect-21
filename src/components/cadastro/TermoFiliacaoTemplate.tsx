@@ -271,12 +271,43 @@ export function TermoFiliacaoTemplate({
         </h3>
         
         <div style={{ margin: '10pt 0' }}>
-          {plano.coberturas.map((cobertura, index) => (
-            <div key={index} style={{ fontFamily: "'Courier New', monospace", fontSize: '10pt', marginBottom: '4pt', paddingLeft: '5pt' }}>
-              <span style={{ color: '#16a34a', fontWeight: 'bold' }}>[X]</span> {cobertura}
-            </div>
-          ))}
+          {plano.coberturas_detalhadas && plano.coberturas_detalhadas.length > 0 ? (
+            plano.coberturas_detalhadas.map((item, index) => (
+              <div key={index} style={{ fontFamily: "'Courier New', monospace", fontSize: '10pt', marginBottom: '4pt', paddingLeft: '5pt' }}>
+                <span style={{ color: '#16a34a', fontWeight: 'bold' }}>[X]</span>{' '}
+                <strong>{item.nome}</strong>
+                {(item.descricao || item.valor_personalizado) && (
+                  <span> — {item.valor_personalizado || item.descricao}</span>
+                )}
+              </div>
+            ))
+          ) : (
+            plano.coberturas.map((cobertura, index) => (
+              <div key={index} style={{ fontFamily: "'Courier New', monospace", fontSize: '10pt', marginBottom: '4pt', paddingLeft: '5pt' }}>
+                <span style={{ color: '#16a34a', fontWeight: 'bold' }}>[X]</span> {cobertura}
+              </div>
+            ))
+          )}
         </div>
+
+        {plano.beneficios_detalhados && plano.beneficios_detalhados.length > 0 && (
+          <>
+            <h3 style={{ fontSize: '10pt', fontWeight: 'bold', color: '#374151', marginTop: '10pt', marginBottom: '6pt' }}>
+              BENEFÍCIOS INCLUÍDOS:
+            </h3>
+            <div style={{ margin: '10pt 0' }}>
+              {plano.beneficios_detalhados.map((item, index) => (
+                <div key={index} style={{ fontFamily: "'Courier New', monospace", fontSize: '10pt', marginBottom: '4pt', paddingLeft: '5pt' }}>
+                  <span style={{ color: '#16a34a', fontWeight: 'bold' }}>[X]</span>{' '}
+                  <strong>{item.nome}</strong>
+                  {(item.descricao || item.valor_personalizado) && (
+                    <span> — {item.valor_personalizado || item.descricao}</span>
+                  )}
+                </div>
+              ))}
+            </div>
+          </>
+        )}
 
         {/* BLOCO DE DEPRECIAÇÃO (condicional) */}
         {regraMaior && (
