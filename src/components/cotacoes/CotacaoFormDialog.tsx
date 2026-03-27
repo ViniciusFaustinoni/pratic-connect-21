@@ -2188,7 +2188,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           })}
                           <div className={`overflow-hidden transition-all duration-200 ${expandedPlanos[plano.id] ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
                                 {plano.coberturas.slice(4).map((cobertura, idx) => {
-                                  const isRemovida = isCoberturaRemovida(cobertura, categoria);
+                                   const isRemovida = (plano.coberturasRemovidas || []).includes(cobertura);
                                   return (
                                     <li key={idx + 4} className="flex items-start gap-1 mt-1">
                                       {isRemovida ? (
