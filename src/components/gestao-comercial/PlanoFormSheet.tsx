@@ -10,7 +10,8 @@ import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
-import { Loader2 } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Loader2, FileText } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { cn } from '@/lib/utils';
 
@@ -34,6 +35,21 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [ativo, setAtivo] = useState(true);
   const [selectedCoberturas, setSelectedCoberturas] = useState<Set<string>>(new Set());
   const [selectedBeneficios, setSelectedBeneficios] = useState<Set<string>>(new Set());
+  const [templateContratoId, setTemplateContratoId] = useState<string>('');
+
+  // Load templates
+  const { data: templates = [] } = useQuery({
+    queryKey: ['documento_templates_ativos'],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('documento_templates')
+        .select('id, nome, codigo')
+        .eq('ativo', true)
+        .order('nome');
+      if (error) throw error;
+      return data || [];
+    },
+  });
   
 
   // Load existing plan
@@ -67,6 +83,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       setAtivo(existingPlan.ativo);
       setSelectedCoberturas(new Set(existingPlan.coberturaIds));
       setSelectedBeneficios(new Set(existingPlan.beneficioIds));
+      setTemplateContratoId(existingPlan.template_contrato_id || '');
     }
   }, [existingPlan]);
 
@@ -97,6 +114,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       if (planoId) {
         const { error } = await supabase.from('planos').update({
           nome, descricao, ativo,
+          template_contrato_id: (templateContratoId && templateContratoId !== 'default') ? templateContratoId : null,
         }).eq('id', planoId);
         if (error) throw error;
 
@@ -125,6 +143,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           product_line_id: targetLineId,
           tipo_uso: 'passeio',
           valor_adesao: 0,
+          template_contrato_id: (templateContratoId && templateContratoId !== 'default') ? templateContratoId : null,
         }).select().single();
         if (error) throw error;
 
@@ -228,10 +247,28 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
 
           <div className="border-t" />
 
-          {/* ── Template de Contrato (placeholder) ── */}
-          <section className="space-y-2">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Template de Contrato</h3>
-            <p className="text-xs text-muted-foreground">Integração com Autentique — em breve</p>
+          {/* ── Template de Contrato ── */}
+          <section className="space-y-3">
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
+              <FileText className="h-3.5 w-3.5" />Template de Contrato
+            </h3>
+            <p className="text-xs text-muted-foreground">Selecione o template do Autentique que será usado ao gerar contratos deste plano.</p>
+            <Select value={templateContratoId} onValueChange={setTemplateContratoId}>
+              <SelectTrigger>
+                <SelectValue placeholder="Usar template padrão do sistema" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Usar template padrão do sistema</SelectItem>
+                {templates.map(t => (
+                  <SelectItem key={t.id} value={t.id}>
+                    {t.nome} {t.codigo ? `(${t.codigo})` : ''}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+            {templateContratoId && templateContratoId !== 'default' && (
+              <p className="text-xs text-primary">✓ Template específico vinculado</p>
+            )}
           </section>
 
           {/* Actions */}

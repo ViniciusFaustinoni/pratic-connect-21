@@ -17714,6 +17714,7 @@ export type Database = {
           product_line_id: string | null
           restriction_alert: string | null
           slug: string | null
+          template_contrato_id: string | null
           tipo_uso: string
           tipo_veiculo: string | null
           updated_at: string
@@ -17765,6 +17766,7 @@ export type Database = {
           product_line_id?: string | null
           restriction_alert?: string | null
           slug?: string | null
+          template_contrato_id?: string | null
           tipo_uso?: string
           tipo_veiculo?: string | null
           updated_at?: string
@@ -17816,6 +17818,7 @@ export type Database = {
           product_line_id?: string | null
           restriction_alert?: string | null
           slug?: string | null
+          template_contrato_id?: string | null
           tipo_uso?: string
           tipo_veiculo?: string | null
           updated_at?: string
@@ -17830,6 +17833,13 @@ export type Database = {
             columns: ["product_line_id"]
             isOneToOne: false
             referencedRelation: "product_lines"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "planos_template_contrato_id_fkey"
+            columns: ["template_contrato_id"]
+            isOneToOne: false
+            referencedRelation: "documento_templates"
             referencedColumns: ["id"]
           },
         ]

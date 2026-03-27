@@ -1,0 +1,1 @@
+ALTER TABLE public.planos ADD COLUMN template_contrato_id UUID REFERENCES public.documento_templates(id) ON DELETE SET NULL;

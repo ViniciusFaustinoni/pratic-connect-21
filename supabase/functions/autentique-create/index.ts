@@ -201,23 +201,44 @@ serve(async (req) => {
     }
 
     // ============= BUSCAR TEMPLATE DO BANCO DE DADOS =============
-    const { data: templatesDB, error: templateError } = await supabase
-      .from("documento_templates")
-      .select("id, codigo, nome, conteudo, config_layout")
-      .eq("is_default_autentique", true)
-      .eq("ativo", true)
-      .order("updated_at", { ascending: false })
-      .limit(2);
-
-    if (templateError) {
-      console.warn("[autentique-create] Erro ao buscar template:", templateError.message);
+    // Priorizar template vinculado ao plano, senão fallback para is_default_autentique
+    let templateDB: any = null;
+    const planoTemplateId = contrato.planos?.template_contrato_id;
+    
+    if (planoTemplateId) {
+      const { data: tpl, error: tplErr } = await supabase
+        .from("documento_templates")
+        .select("id, codigo, nome, conteudo, config_layout")
+        .eq("id", planoTemplateId)
+        .eq("ativo", true)
+        .single();
+      if (!tplErr && tpl) {
+        templateDB = tpl;
+        console.log(`[autentique-create] Usando template vinculado ao plano: ${tpl.codigo} (${tpl.nome})`);
+      } else {
+        console.warn(`[autentique-create] Template do plano (${planoTemplateId}) não encontrado ou inativo, usando fallback`);
+      }
     }
-    if (templatesDB && templatesDB.length > 1) {
-      console.warn(`[autentique-create] ⚠️ ${templatesDB.length} templates com is_default_autentique=true! Usando o mais recente: ${templatesDB[0].codigo}`);
+
+    if (!templateDB) {
+      const { data: templatesDB, error: templateError } = await supabase
+        .from("documento_templates")
+        .select("id, codigo, nome, conteudo, config_layout")
+        .eq("is_default_autentique", true)
+        .eq("ativo", true)
+        .order("updated_at", { ascending: false })
+        .limit(2);
+
+      if (templateError) {
+        console.warn("[autentique-create] Erro ao buscar template:", templateError.message);
+      }
+      if (templatesDB && templatesDB.length > 1) {
+        console.warn(`[autentique-create] ⚠️ ${templatesDB.length} templates com is_default_autentique=true! Usando o mais recente: ${templatesDB[0].codigo}`);
+      }
+      templateDB = templatesDB?.[0] || null;
     }
 
-    const templateDB = templatesDB?.[0] || null;
-    const usandoTemplateBanco = !templateError && templateDB?.conteudo;
+    const usandoTemplateBanco = templateDB?.conteudo;
     
     if (usandoTemplateBanco) {
       console.log(`[autentique-create] Usando template do banco: ${templateDB.codigo} (${templateDB.nome})`);
