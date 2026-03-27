@@ -763,7 +763,7 @@ const generateSecao6 = (data: TermoAfiliacaoData): string => `
   <div class="declaracao">
     <p class="declaracao-titulo">6.3. COMUNICAÇÕES</p>
     <p class="declaracao-texto">
-      Autorizo o recebimento de comunicações oficiais da ABP PraticCar através 
+      Autorizo o recebimento de comunicações oficiais da PRATICCAR através 
       de WhatsApp, e-mail, SMS e telefone, reconhecendo o WhatsApp como canal 
       válido para notificações de cobrança e informações sobre sinistros.
     </p>
