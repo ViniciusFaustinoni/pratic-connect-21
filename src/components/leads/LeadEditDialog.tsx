@@ -87,6 +87,7 @@ export function LeadEditDialog({ open, onOpenChange, lead }: LeadEditDialogProps
         etapa: lead.etapa,
         motivo_perda: lead.motivo_perda || '',
       });
+      setOrigemDetalheId((lead as any).origem_detalhe_id || null);
     }
   }, [lead, form]);
 
