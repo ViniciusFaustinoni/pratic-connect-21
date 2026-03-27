@@ -1165,7 +1165,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         telefone1_solicitante: telefoneAssociado.replace(/\D/g, '') || null,
         email_solicitante: emailAssociado.trim() || null,
         // Categoria do veículo
-        categoria: categoria && categoria !== 'nenhuma' ? categoria : null,
+        categoria: tipoPlacaSelecionado && tipoPlacaSelecionado !== 'nenhuma' ? tipoPlacaSelecionado : null,
         // Dia de vencimento
         dia_vencimento: diaVencimento,
         // Região selecionada
