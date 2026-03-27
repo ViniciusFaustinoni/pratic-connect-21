@@ -413,31 +413,32 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   // ============= DADOS DO SOLICITANTE =============
   if (config?.mostrar_dados_solicitante !== false) {
-    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'DADOS DO SOLICITANTE', brandRed);
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'DADOS DO SOLICITANTE', brandRed, brandBlue);
     y += HEADER_HEIGHT + INNER_GAP;
 
     const clienteNome = cotacao.nome_solicitante || cotacao.leads?.nome || 'Não informado';
     const clienteTelefone = cotacao.telefone1_solicitante || cotacao.leads?.telefone || '';
     const clienteEmail = cotacao.email_solicitante || cotacao.leads?.email || '';
 
-    const labelWidth = 22;
+    const labelWidth = 24;
     const col1X = margin;
     const col1ValueX = margin + labelWidth;
     const col2X = margin + (contentWidth / 2) + 5;
     const col2ValueX = col2X + labelWidth;
 
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text('Nome:', col1X, y);
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFont('helvetica', 'bold');
-    doc.text(truncateText(clienteNome, 55), col1ValueX, y);
+    doc.text(truncateText(clienteNome, 50), col1ValueX, y);
 
     y += LINE_HEIGHT;
 
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
     doc.setFont('helvetica', 'normal');
+    doc.setFontSize(10);
     doc.text('Telefone:', col1X, y);
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.text(formatPhone(clienteTelefone), col1ValueX, y);
@@ -454,17 +455,17 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   // ============= DADOS DO VEÍCULO =============
   if (config?.mostrar_dados_veiculo !== false) {
-    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'DADOS DO VEÍCULO', brandRed);
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'DADOS DO VEÍCULO', brandRed, brandBlue);
     y += HEADER_HEIGHT + INNER_GAP;
 
-    const labelWidth = 22;
+    const labelWidth = 24;
     const col1X = margin;
     const col1ValueX = margin + labelWidth;
     const col2X = margin + (contentWidth / 2) + 5;
     const col2ValueX = col2X + labelWidth;
 
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
-    doc.setFontSize(9);
+    doc.setFontSize(10);
     doc.setFont('helvetica', 'normal');
     doc.text('Marca:', col1X, y);
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
@@ -491,7 +492,48 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
     doc.text('Valor FIPE:', col2X, y);
     doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
     doc.setFont('helvetica', 'bold');
+    doc.setFontSize(11);
     doc.text(formatCurrency(cotacao.valor_fipe), col2ValueX, y);
+
+    // Renderizar imagem do veículo se disponível
+    if (vehicleBase64) {
+      y += LINE_HEIGHT + 2;
+      const imgHeight = 35;
+      const imgWidth = imgHeight * 2;
+      const imgX = margin + (contentWidth - imgWidth) / 2;
+      try {
+        doc.addImage(vehicleBase64, 'PNG', imgX, y, imgWidth, imgHeight);
+        y += imgHeight + 4;
+      } catch {
+        y += SECTION_GAP;
+      }
+    } else {
+      y += SECTION_GAP;
+    }
+  }
+
+  // ============= CONSULTOR RESPONSÁVEL =============
+  if (cotacao.vendedor) {
+    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'CONSULTOR RESPONSÁVEL', brandRed, brandBlue);
+    y += HEADER_HEIGHT + INNER_GAP;
+
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.setFontSize(10);
+    doc.setFont('helvetica', 'normal');
+    doc.text('Nome:', margin, y);
+    doc.setTextColor(glowBlue.r, glowBlue.g, glowBlue.b);
+    doc.setFont('helvetica', 'bold');
+    doc.text(cotacao.vendedor.nome, margin + 24, y);
+
+    if (cotacao.vendedor.whatsapp || cotacao.vendedor.telefone) {
+      const telefoneConsultor = cotacao.vendedor.whatsapp || cotacao.vendedor.telefone || '';
+      doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+      doc.setFontSize(10);
+      doc.setFont('helvetica', 'normal');
+      doc.text('WhatsApp:', margin + (contentWidth / 2) + 5, y);
+      doc.setTextColor(textLight.r, textLight.g, textLight.b);
+      doc.text(formatPhone(telefoneConsultor), margin + (contentWidth / 2) + 32, y);
+    }
 
     y += SECTION_GAP;
   }
