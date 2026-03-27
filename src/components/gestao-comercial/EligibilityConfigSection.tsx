@@ -41,6 +41,7 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
   const { data: existingRules = [] } = useRulesForEntity(entityType, entityId);
 
   const emptyState: EligibilityState = {
+    elegFipeMin: '', elegFipeMax: '',
     variaComFipe: false, fipeMin: '', fipeMax: '', fipeIntervalo: '', fipeValoresFaixa: {},
     selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set(),
   };
