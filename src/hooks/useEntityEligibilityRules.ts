@@ -181,9 +181,15 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       return isInclude ? match : !match;
     }
     case 'combustivel': {
-      const combs: string[] = cfg.combustiveis || [];
+      const combs: string[] = cfg.combustiveis || cfg.values || [];
       if (combs.length === 0) return true;
-      const match = !!ctx.combustivel && combs.includes(ctx.combustivel.toLowerCase());
+      const match = !!ctx.combustivel && combs.some(c => c.toLowerCase() === ctx.combustivel!.toLowerCase());
+      return isInclude ? match : !match;
+    }
+    case 'tipo_placa': {
+      const placas: string[] = cfg.tipos || cfg.values || [];
+      if (placas.length === 0) return true;
+      const match = !!ctx.tipoPlaca && placas.some(p => p.toLowerCase() === ctx.tipoPlaca!.toLowerCase());
       return isInclude ? match : !match;
     }
     default:
