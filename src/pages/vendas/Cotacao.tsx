@@ -405,8 +405,6 @@ export default function CotacaoPage() {
             setModalidade={setModalidade}
             combustivel={combustivel}
             setCombustivel={setCombustivel}
-            categoria={categoria}
-            setCategoria={setCategoria}
             onBack={handleEtapa3Back}
             onCalcular={handleCalcular}
             isCalculando={isCalculando}
