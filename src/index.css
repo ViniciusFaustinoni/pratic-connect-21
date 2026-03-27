@@ -183,7 +183,7 @@
   #root {
     overflow-x: clip;
     max-width: 100vw;
-    overscroll-behavior-y: none;
+    overscroll-behavior-x: none;
   }
 
   body {
