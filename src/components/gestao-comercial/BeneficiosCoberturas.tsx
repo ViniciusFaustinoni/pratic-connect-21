@@ -153,6 +153,11 @@ export function BeneficiosCoberturas() {
                       onClick={() => { setCoberturaEdit(cob); setCoberturaModalOpen(true); }}>
                       <Edit className="h-3.5 w-3.5" />
                     </Button>
+                    <Button variant="ghost" size="icon" className="h-7 w-7" title="Duplicar"
+                      onClick={() => duplicateCobertura.mutate(cob.id)}
+                      disabled={duplicateCobertura.isPending}>
+                      <Copy className="h-3.5 w-3.5" />
+                    </Button>
                     <TooltipProvider>
                       <Tooltip>
                         <TooltipTrigger asChild>
