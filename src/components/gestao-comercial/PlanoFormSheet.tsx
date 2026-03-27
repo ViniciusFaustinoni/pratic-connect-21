@@ -13,8 +13,6 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Loader2 } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { useRegioes } from '@/hooks/useRegioes';
-import { useCategoriasVeiculoPlano, useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistema';
-import { useMarcasModelos } from '@/hooks/useMarcasModelos';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -31,11 +29,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const { data: coberturas = [] } = useCoberturas(true);
   const { data: benefits = [] } = useBenefits();
   const { data: regioes = [] } = useRegioes();
-  const { data: categoriasVeiculo = [] } = useCategoriasVeiculoPlano();
-  const { data: tiposUso = [] } = useConfiguracaoJson<any[]>('tipos_uso', []);
-  const { data: tiposPlaca = [] } = useConfiguracaoJson<any[]>('tipos_placa', []);
-  const { data: combustiveis = [] } = useCombustiveis();
-  const { data: marcasModelos = [] } = useMarcasModelos();
 
   // Form state
   const [nome, setNome] = useState('');
@@ -44,18 +37,8 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [selectedCoberturas, setSelectedCoberturas] = useState<Set<string>>(new Set());
   const [selectedBeneficios, setSelectedBeneficios] = useState<Set<string>>(new Set());
   
-  // Eligibility
+  // Only regions remain at plan level
   const [selRegioes, setSelRegioes] = useState<Set<string>>(new Set());
-  const [selTipoVeiculo, setSelTipoVeiculo] = useState<Set<string>>(new Set());
-  const [selUso, setSelUso] = useState<Set<string>>(new Set());
-  const [selMarcas, setSelMarcas] = useState<Set<string>>(new Set());
-  const [selPlaca, setSelPlaca] = useState<Set<string>>(new Set());
-  const [selCombustivel, setSelCombustivel] = useState<Set<string>>(new Set());
-  const [fipeMin, setFipeMin] = useState<string>('');
-  const [fipeMax, setFipeMax] = useState<string>('');
-  const [anoMin, setAnoMin] = useState<string>('');
-  const [anoMax, setAnoMax] = useState<string>('');
-
 
   // Load existing plan
   const { data: existingPlan, isLoading: loadingPlan } = useQuery({
@@ -69,21 +52,15 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
         .single();
       if (error) throw error;
 
-      // Load linked coberturas
       const { data: cobs } = await supabase.from('planos_coberturas').select('cobertura_id').eq('plano_id', planoId);
-      // Load linked beneficios
       const { data: bens } = await supabase.from('planos_beneficios').select('benefit_id').eq('plano_id', planoId);
-      // Load linked regioes
       const { data: regs } = await supabase.from('planos_regioes').select('regiao_id').eq('plano_id', planoId);
-      // Load eligibility rules
-      const { data: rules } = await supabase.from('entity_eligibility_rules').select('*').eq('entity_type', 'plano').eq('entity_id', planoId);
 
       return {
         ...data,
         coberturaIds: (cobs || []).map((c: any) => c.cobertura_id),
         beneficioIds: (bens || []).map((b: any) => b.benefit_id),
         regiaoIds: (regs || []).map((r: any) => r.regiao_id),
-        rules: rules || [],
       };
     },
     enabled: !!planoId,
@@ -97,28 +74,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       setSelectedCoberturas(new Set(existingPlan.coberturaIds));
       setSelectedBeneficios(new Set(existingPlan.beneficioIds));
       setSelRegioes(new Set(existingPlan.regiaoIds));
-      
-      // Parse rules
-      for (const rule of existingPlan.rules) {
-        const config = (typeof rule.rule_config === 'object' && rule.rule_config) ? rule.rule_config as any : {};
-        const vals = new Set((config.values || []) as string[]);
-        switch (rule.rule_type) {
-          case 'categoria_veiculo': setSelTipoVeiculo(vals); break;
-          case 'tipo_uso': setSelUso(vals); break;
-          case 'marca_modelo': setSelMarcas(vals); break;
-          case 'combustivel': setSelCombustivel(vals); break;
-          case 'fipe_range': {
-            if (config.min) setFipeMin(String(config.min));
-            if (config.max) setFipeMax(String(config.max));
-            break;
-          }
-          case 'ano_range': {
-            if (config.min) setAnoMin(String(config.min));
-            if (config.max) setAnoMax(String(config.max));
-            break;
-          }
-        }
-      }
     }
   }, [existingPlan]);
 
@@ -147,7 +102,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       const targetLineId = linhaId || existingPlan?.product_line_id;
       
       if (planoId) {
-        // Update
         const { error } = await supabase.from('planos').update({
           nome, descricao, ativo,
         }).eq('id', planoId);
@@ -178,12 +132,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           );
         }
 
-        // Rebuild eligibility rules
-        await supabase.from('entity_eligibility_rules').delete().eq('entity_type', 'plano').eq('entity_id', planoId);
-        await insertRules(planoId);
-
       } else {
-        // Create
         const codigo = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
         const { data: plan, error } = await supabase.from('planos').insert({
           nome, descricao, ativo, codigo, slug: codigo,
@@ -193,27 +142,22 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
         }).select().single();
         if (error) throw error;
 
-        // Insert coberturas
         if (selectedCoberturas.size > 0) {
           await supabase.from('planos_coberturas').insert(
             Array.from(selectedCoberturas).map(cid => ({ plano_id: plan.id, cobertura_id: cid }))
           );
         }
-        // Insert beneficios
         if (selectedBeneficios.size > 0) {
           const bens = benefits.filter(b => selectedBeneficios.has(b.id));
           await supabase.from('planos_beneficios').insert(
             bens.map((b, i) => ({ plano_id: plan.id, benefit_id: b.id, beneficio: b.name, display_order: i }))
           );
         }
-        // Insert regioes
         if (selRegioes.size > 0) {
           await supabase.from('planos_regioes').insert(
             Array.from(selRegioes).map(rid => ({ plano_id: plan.id, regiao_id: rid }))
           );
         }
-        // Insert rules
-        await insertRules(plan.id);
       }
     },
     onSuccess: () => {
@@ -224,77 +168,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
     },
     onError: (e) => { console.error(e); toast.error('Erro ao salvar plano'); },
   });
-
-  async function insertRules(entityId: string) {
-    const rules: any[] = [];
-    const addRule = (type: string, values: string[], mode = 'include') => {
-      if (values.length > 0) rules.push({ entity_type: 'plano', entity_id: entityId, rule_type: type, rule_mode: mode, rule_config: { values } });
-    };
-    addRule('categoria_veiculo', Array.from(selTipoVeiculo));
-    addRule('tipo_uso', Array.from(selUso));
-    addRule('marca_modelo', Array.from(selMarcas));
-    addRule('combustivel', Array.from(selCombustivel));
-
-    // FIPE range
-    const fMin = fipeMin ? parseFloat(fipeMin) : null;
-    const fMax = fipeMax ? parseFloat(fipeMax) : null;
-    if (fMin !== null || fMax !== null) {
-      rules.push({ entity_type: 'plano', entity_id: entityId, rule_type: 'fipe_range', rule_mode: 'include', rule_config: { min: fMin || 0, max: fMax || 99999999 } });
-    }
-
-    // Ano range
-    const aMin = anoMin ? parseInt(anoMin) : null;
-    const aMax = anoMax ? parseInt(anoMax) : null;
-    if (aMin !== null || aMax !== null) {
-      rules.push({ entity_type: 'plano', entity_id: entityId, rule_type: 'ano_range', rule_mode: 'include', rule_config: { min: aMin || 1900, max: aMax || 9999 } });
-    }
-
-    if (rules.length > 0) {
-      await supabase.from('entity_eligibility_rules').insert(rules);
-    }
-  }
-
-  // Unique brands from marcasModelos
-  const uniqueBrands = useMemo(() => {
-    const brands = new Set<string>();
-    for (const mm of marcasModelos) if (mm.ativo) brands.add(mm.marca);
-    return Array.from(brands).sort();
-  }, [marcasModelos]);
-
-  // Eligibility summary
-  const summaryParts = useMemo(() => {
-    const parts: string[] = [];
-    if (selRegioes.size > 0) {
-      const names = regioes.filter(r => selRegioes.has(r.id)).map(r => r.nome);
-      parts.push(`Região: ${names.join(', ')}`);
-    }
-    if (selTipoVeiculo.size > 0) {
-      const names = categoriasVeiculo.filter(c => selTipoVeiculo.has(c.value)).map(c => c.label);
-      parts.push(`Veículo: ${names.join(', ')}`);
-    }
-    if (selUso.size > 0) {
-      const names = tiposUso.filter((t: any) => selUso.has(t.value)).map((t: any) => t.label);
-      parts.push(`Uso: ${names.join(', ')}`);
-    }
-    if (selMarcas.size > 0) parts.push(`Marcas: ${Array.from(selMarcas).join(', ')}`);
-    if (selPlaca.size > 0) {
-      const names = tiposPlaca.filter((t: any) => selPlaca.has(t.value)).map((t: any) => t.label);
-      parts.push(`Placa: ${names.join(', ')}`);
-    }
-    if (selCombustivel.size > 0) {
-      const names = combustiveis.filter(c => selCombustivel.has(c.value)).map(c => c.label);
-      parts.push(`Combustível: ${names.join(', ')}`);
-    }
-    if (fipeMin || fipeMax) {
-      const min = fipeMin ? `R$ ${Number(fipeMin).toLocaleString('pt-BR')}` : '0';
-      const max = fipeMax ? `R$ ${Number(fipeMax).toLocaleString('pt-BR')}` : '∞';
-      parts.push(`FIPE: ${min} – ${max}`);
-    }
-    if (anoMin || anoMax) {
-      parts.push(`Ano: ${anoMin || '—'} a ${anoMax || '—'}`);
-    }
-    return parts;
-  }, [selRegioes, selTipoVeiculo, selUso, selMarcas, selPlaca, selCombustivel, fipeMin, fipeMax, anoMin, anoMax, regioes, categoriasVeiculo, tiposUso, tiposPlaca, combustiveis]);
 
   if (planoId && loadingPlan) {
     return (
@@ -374,164 +247,21 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
 
           <div className="border-t" />
 
-          {/* ── BLOCO 3: Elegibilidade ── */}
+          {/* ── BLOCO 3: Regiões ── */}
           <section className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Regras de Elegibilidade</h3>
-            <p className="text-xs text-muted-foreground">Campos opcionais — se não preenchido, o plano aparece para todos.</p>
+            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Regiões Disponíveis</h3>
+            <p className="text-xs text-muted-foreground">Se nenhuma região for selecionada, o plano estará disponível em todas.</p>
 
-            {/* Faixa FIPE */}
-            <div>
-              <Label className="text-xs">Faixa de Valor FIPE (R$)</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  type="number"
-                  placeholder="Mínimo"
-                  value={fipeMin}
-                  onChange={e => setFipeMin(e.target.value)}
-                  className="flex-1"
-                />
-                <span className="self-center text-muted-foreground text-xs">até</span>
-                <Input
-                  type="number"
-                  placeholder="Máximo"
-                  value={fipeMax}
-                  onChange={e => setFipeMax(e.target.value)}
-                  className="flex-1"
-                />
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-1">Deixe em branco para aceitar qualquer valor</p>
-            </div>
-
-            {/* Faixa de Ano */}
-            <div>
-              <Label className="text-xs">Faixa de Ano do Veículo</Label>
-              <div className="flex gap-2 mt-1">
-                <Input
-                  type="number"
-                  placeholder="De"
-                  value={anoMin}
-                  onChange={e => setAnoMin(e.target.value)}
-                  className="flex-1"
-                />
-                <span className="self-center text-muted-foreground text-xs">até</span>
-                <Input
-                  type="number"
-                  placeholder="Até"
-                  value={anoMax}
-                  onChange={e => setAnoMax(e.target.value)}
-                  className="flex-1"
-                />
-              </div>
-              <p className="text-[10px] text-muted-foreground mt-1">Deixe em branco para aceitar qualquer ano</p>
-            </div>
-
-            {/* Regiões */}
             {regioes.length > 0 && (
-              <div>
-                <Label className="text-xs">Regiões</Label>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {regioes.filter(r => r.ativa).map(r => (
-                    <Badge
-                      key={r.id}
-                      variant={selRegioes.has(r.id) ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => toggleSet(selRegioes, setSelRegioes, r.id)}
-                    >{r.nome}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tipo Veículo */}
-            {categoriasVeiculo.length > 0 && (
-              <div>
-                <Label className="text-xs">Tipo de Veículo</Label>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {categoriasVeiculo.map(c => (
-                    <Badge
-                      key={c.value}
-                      variant={selTipoVeiculo.has(c.value) ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => toggleSet(selTipoVeiculo, setSelTipoVeiculo, c.value)}
-                    >{c.label}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Modalidade de Uso */}
-            {tiposUso.length > 0 && (
-              <div>
-                <Label className="text-xs">Modalidade de Uso</Label>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {tiposUso.map((t: any) => (
-                    <Badge
-                      key={t.value}
-                      variant={selUso.has(t.value) ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => toggleSet(selUso, setSelUso, t.value)}
-                    >{t.label}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Marcas */}
-            {uniqueBrands.length > 0 && (
-              <div>
-                <Label className="text-xs">Marcas</Label>
-                <div className="flex flex-wrap gap-1.5 mt-1 max-h-32 overflow-y-auto">
-                  {uniqueBrands.map(brand => (
-                    <Badge
-                      key={brand}
-                      variant={selMarcas.has(brand) ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => toggleSet(selMarcas, setSelMarcas, brand)}
-                    >{brand}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Tipo Placa */}
-            {tiposPlaca.length > 0 && (
-              <div>
-                <Label className="text-xs">Tipo de Placa</Label>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {tiposPlaca.map((t: any) => (
-                    <Badge
-                      key={t.value}
-                      variant={selPlaca.has(t.value) ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => toggleSet(selPlaca, setSelPlaca, t.value)}
-                    >{t.label}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Combustível */}
-            {combustiveis.length > 0 && (
-              <div>
-                <Label className="text-xs">Combustível</Label>
-                <div className="flex flex-wrap gap-1.5 mt-1">
-                  {combustiveis.map(c => (
-                    <Badge
-                      key={c.value}
-                      variant={selCombustivel.has(c.value) ? 'default' : 'outline'}
-                      className="cursor-pointer"
-                      onClick={() => toggleSet(selCombustivel, setSelCombustivel, c.value)}
-                    >{c.label}</Badge>
-                  ))}
-                </div>
-              </div>
-            )}
-
-            {/* Summary */}
-            {summaryParts.length > 0 && (
-              <div className="bg-muted/50 rounded-lg p-3 mt-3">
-                <p className="text-xs text-muted-foreground mb-1">Este plano será exibido para:</p>
-                <p className="text-xs font-medium">{summaryParts.join(' · ')}</p>
+              <div className="flex flex-wrap gap-1.5">
+                {regioes.filter(r => r.ativa).map(r => (
+                  <Badge
+                    key={r.id}
+                    variant={selRegioes.has(r.id) ? 'default' : 'outline'}
+                    className="cursor-pointer"
+                    onClick={() => toggleSet(selRegioes, setSelRegioes, r.id)}
+                  >{r.nome}</Badge>
+                ))}
               </div>
             )}
           </section>
