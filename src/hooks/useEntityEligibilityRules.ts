@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export type EntityType = 'linha' | 'plano' | 'cobertura' | 'beneficio';
-export type RuleType = 'fipe_range' | 'ano_range' | 'categoria_veiculo' | 'categoria_especial' | 'regiao' | 'marca_modelo' | 'tipo_uso' | 'combustivel' | 'tipo_placa';
+export type RuleType = 'fipe_range' | 'fipe_eligibility' | 'ano_range' | 'categoria_veiculo' | 'categoria_especial' | 'regiao' | 'marca_modelo' | 'tipo_uso' | 'combustivel' | 'tipo_placa';
 export type RuleMode = 'include' | 'exclude';
 
 export interface EligibilityRule {
@@ -142,6 +142,10 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
 
   switch (rule.rule_type) {
     case 'fipe_range': {
+      const inRange = ctx.valorFipe >= (cfg.min || 0) && ctx.valorFipe <= (cfg.max || Infinity);
+      return isInclude ? inRange : !inRange;
+    }
+    case 'fipe_eligibility': {
       const inRange = ctx.valorFipe >= (cfg.min || 0) && ctx.valorFipe <= (cfg.max || Infinity);
       return isInclude ? inRange : !inRange;
     }

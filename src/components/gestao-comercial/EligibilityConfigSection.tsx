@@ -24,6 +24,8 @@ export interface FipeRangeFaixa {
 }
 
 export interface EligibilityState {
+  elegFipeMin: string;
+  elegFipeMax: string;
   variaComFipe: boolean;
   fipeMin: string;
   fipeMax: string;
@@ -39,6 +41,7 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
   const { data: existingRules = [] } = useRulesForEntity(entityType, entityId);
 
   const emptyState: EligibilityState = {
+    elegFipeMin: '', elegFipeMax: '',
     variaComFipe: false, fipeMin: '', fipeMax: '', fipeIntervalo: '', fipeValoresFaixa: {},
     selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set(),
   };
@@ -51,11 +54,15 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
       return;
     }
 
-    const newState: EligibilityState = { ...emptyState, selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set() };
+    const newState: EligibilityState = { ...emptyState, selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set(), elegFipeMin: '', elegFipeMax: '' };
 
     for (const rule of existingRules) {
       const cfg = rule.rule_config as any;
       switch (rule.rule_type) {
+        case 'fipe_eligibility':
+          if (cfg.min) newState.elegFipeMin = String(cfg.min);
+          if (cfg.max && cfg.max < 99999999) newState.elegFipeMax = String(cfg.max);
+          break;
         case 'fipe_range':
           newState.variaComFipe = true;
           if (cfg.min) newState.fipeMin = String(cfg.min);
@@ -98,6 +105,15 @@ export async function saveEligibilityRules(entityType: EntityType, entityId: str
   await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', entityType).eq('entity_id', entityId);
 
   const rules: any[] = [];
+
+  // Save fipe_eligibility rule
+  if (state.elegFipeMin || state.elegFipeMax) {
+    rules.push({
+      entity_type: entityType, entity_id: entityId,
+      rule_type: 'fipe_eligibility', rule_mode: 'include',
+      rule_config: { min: parseFloat(state.elegFipeMin) || 0, max: parseFloat(state.elegFipeMax) || 99999999 },
+    });
+  }
 
   if (state.variaComFipe && (state.fipeMin || state.fipeMax)) {
     const min = parseFloat(state.fipeMin) || 0;
@@ -204,6 +220,23 @@ export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeC
       <h4 className="text-xs font-bold uppercase tracking-wider text-muted-foreground">Configurações de Elegibilidade</h4>
       <p className="text-[10px] text-muted-foreground">Campos opcionais — se não preenchido, aparece para todos os veículos.</p>
 
+      {/* Elegibilidade por FIPE */}
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold">Elegibilidade por FIPE</Label>
+        <p className="text-[10px] text-muted-foreground">Define para quais valores de FIPE este item aparece na cotação. Se vazio, aparece para todos.</p>
+        <div className="flex gap-2">
+          <Input
+            type="number" placeholder="FIPE mínimo (R$)" value={state.elegFipeMin}
+            onChange={e => update({ elegFipeMin: e.target.value })} className="flex-1"
+          />
+          <span className="self-center text-muted-foreground text-xs">até</span>
+          <Input
+            type="number" placeholder="FIPE máximo (R$)" value={state.elegFipeMax}
+            onChange={e => update({ elegFipeMax: e.target.value })} className="flex-1"
+          />
+        </div>
+      </div>
+
       {/* Varia com FIPE */}
       <div className="space-y-3">
         <div className="flex items-center gap-2">
@@ -211,7 +244,7 @@ export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeC
             checked={state.variaComFipe}
             onCheckedChange={(checked) => { update({ variaComFipe: checked, fipeIntervalo: '', fipeValoresFaixa: {} }); onVariaComFipeChange?.(checked); }}
           />
-          <Label className="text-xs">Varia com FIPE?</Label>
+          <Label className="text-xs">Varia com FIPE? (precificação por faixa)</Label>
         </div>
         {state.variaComFipe && (
           <>
@@ -334,5 +367,5 @@ export function EligibilityConfigSection({ entityType, entityId, onVariaComFipeC
 
 // Check if entity has any rules configured
 export function hasEligibilityRules(state: EligibilityState): boolean {
-  return state.variaComFipe || state.selRegioes.size > 0 || state.selUso.size > 0 || state.selPlaca.size > 0 || state.selCombustivel.size > 0;
+  return !!state.elegFipeMin || !!state.elegFipeMax || state.variaComFipe || state.selRegioes.size > 0 || state.selUso.size > 0 || state.selPlaca.size > 0 || state.selCombustivel.size > 0;
 }
