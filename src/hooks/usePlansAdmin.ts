@@ -626,6 +626,48 @@ export function useDeleteCobertura() {
   });
 }
 
+// ==================== DUPLICATE COBERTURA ====================
+
+export function useDuplicateCobertura() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async (id: string) => {
+      const { data: original, error: fetchError } = await supabase
+        .from('coberturas')
+        .select('*')
+        .eq('id', id)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const { id: _, created_at, updated_at, ...cobData } = original;
+      const newCob = {
+        ...cobData,
+        nome: `${cobData.nome} (cópia)`,
+        codigo: `${cobData.codigo || 'COB'}-COPIA-${Date.now()}`,
+        ativo: false,
+      };
+
+      const { data, error } = await supabase
+        .from('coberturas')
+        .insert(newCob)
+        .select()
+        .single();
+
+      if (error) throw error;
+      return data;
+    },
+    onSuccess: () => {
+      queryClient.invalidateQueries({ queryKey: ['coberturas'] });
+      toast.success('Cobertura duplicada! (criada como inativa)');
+    },
+    onError: (error: Error) => {
+      toast.error(`Erro ao duplicar cobertura: ${error.message}`);
+    },
+  });
+}
+
 // ==================== PRODUCT LINE MUTATIONS ====================
 
 export interface ProductLineInput {

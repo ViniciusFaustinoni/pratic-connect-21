@@ -19,7 +19,7 @@ import {
   AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import { useBenefits, useCoberturas, usePlans } from '@/hooks/usePlans';
-import { useDeleteBenefit, useDeleteCobertura, useUpdateCobertura, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
+import { useDeleteBenefit, useDeleteCobertura, useUpdateCobertura, useDuplicateBenefit, useDuplicateCobertura } from '@/hooks/usePlansAdmin';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { BeneficioFormModal } from '@/components/admin/planos/BeneficioFormModal';
