@@ -14,6 +14,7 @@ interface EligibilityConfigSectionProps {
   entityType: EntityType;
   entityId: string | undefined;
   onVariaComFipeChange?: (varia: boolean) => void;
+  externalState?: { state: EligibilityState; setState: React.Dispatch<React.SetStateAction<EligibilityState>> };
 }
 
 export interface FipeRangeFaixa {
