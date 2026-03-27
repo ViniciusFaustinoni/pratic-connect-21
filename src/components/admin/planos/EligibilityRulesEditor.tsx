@@ -33,6 +33,7 @@ import { useRegioes } from '@/hooks/useRegioes';
 
 const RULE_TYPE_LABELS: Record<RuleType, string> = {
   fipe_range: 'Faixa FIPE',
+  fipe_eligibility: 'Elegibilidade FIPE',
   ano_range: 'Faixa de Ano',
   categoria_veiculo: 'Categoria de Veículo',
   categoria_especial: 'Categoria Especial',
