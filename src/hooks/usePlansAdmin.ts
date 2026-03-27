@@ -367,11 +367,24 @@ export function useDuplicatePlan() {
         await supabase.from('planos_regioes').insert(newRegioes);
       }
 
+      // Duplicate taxa administrativa
+      const { data: taxas } = await supabase
+        .from('planos_taxa_administrativa')
+        .select('fipe_de, fipe_ate, valor_taxa')
+        .eq('plano_id', id);
+
+      if (taxas && taxas.length > 0) {
+        await supabase.from('planos_taxa_administrativa').insert(
+          taxas.map(t => ({ plano_id: createdPlan.id, fipe_de: t.fipe_de, fipe_ate: t.fipe_ate, valor_taxa: t.valor_taxa }))
+        );
+      }
+
       return createdPlan;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planos'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Plano duplicado!');
     },
     onError: (error: Error) => {
