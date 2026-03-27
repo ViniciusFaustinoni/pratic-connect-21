@@ -1,0 +1,22 @@
+
+INSERT INTO public.tabelas_preco_mensalidade (tipo_uso, fipe_min, fipe_max, valor_mensal, regiao, is_active, linha_slug) VALUES
+('particular', 0, 20000, 89.90, NULL, true, 'prote-o-veicular'),
+('particular', 20000.01, 40000, 109.90, NULL, true, 'prote-o-veicular'),
+('particular', 40000.01, 60000, 129.90, NULL, true, 'prote-o-veicular'),
+('particular', 60000.01, 80000, 159.90, NULL, true, 'prote-o-veicular'),
+('particular', 80000.01, 100000, 189.90, NULL, true, 'prote-o-veicular'),
+('particular', 100000.01, 150000, 229.90, NULL, true, 'prote-o-veicular'),
+('particular', 150000.01, 200000, 279.90, NULL, true, 'prote-o-veicular'),
+('particular', 200000.01, 300000, 349.90, NULL, true, 'prote-o-veicular'),
+('particular', 300000.01, 500000, 449.90, NULL, true, 'prote-o-veicular'),
+('particular', 500000.01, 999999999, 599.90, NULL, true, 'prote-o-veicular'),
+('aplicativo', 0, 20000, 119.90, NULL, true, 'prote-o-veicular'),
+('aplicativo', 20000.01, 40000, 139.90, NULL, true, 'prote-o-veicular'),
+('aplicativo', 40000.01, 60000, 169.90, NULL, true, 'prote-o-veicular'),
+('aplicativo', 60000.01, 80000, 199.90, NULL, true, 'prote-o-veicular'),
+('aplicativo', 80000.01, 100000, 239.90, NULL, true, 'prote-o-veicular'),
+('aplicativo', 100000.01, 150000, 289.90, NULL, true, 'prote-o-veicular'),
+('aplicativo', 150000.01, 200000, 349.90, NULL, true, 'prote-o-veicular'),
+('aplicativo', 200000.01, 300000, 429.90, NULL, true, 'prote-o-veicular'),
+('aplicativo', 300000.01, 500000, 549.90, NULL, true, 'prote-o-veicular'),
+('aplicativo', 500000.01, 999999999, 699.90, NULL, true, 'prote-o-veicular');
