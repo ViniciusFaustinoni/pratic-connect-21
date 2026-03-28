@@ -1,36 +1,39 @@
 
 
-# Corrigir Preview e Confirmação do Vídeo Antes do Upload
+# Corrigir Exibição de Vídeo na Galeria de Fotos da Vistoria
 
 ## Problema
-Quando o vídeo termina de gravar, o componente `VideoCapture` chama `onCapture(file)` imediatamente no `mediaRecorder.onstop` (linha 88), iniciando o upload sem dar chance ao usuário de assistir o vídeo gravado e decidir se está bom.
+No modal "Fotos da Vistoria" do `PropostaMidiaGrid`, todos os itens (incluindo vídeos 360°) são renderizados com `<img>`. Vídeos `.webm`/`.mp4` não carregam em tags `<img>`, resultando em imagem quebrada.
 
-O usuário não consegue:
-1. Ver o vídeo durante a gravação (o preview ao vivo funciona, mas fica coberto por overlay escuro)
-2. Revisar o vídeo gravado antes de confirmar o envio
+## Correção
 
-## Correções
+### `src/components/cadastro/proposta/PropostaMidiaGrid.tsx`
 
-### `src/components/instalador/VideoCapture.tsx`
+**A) Área principal do modal galeria (linhas 223-231)**
+- Verificar se `fotos[galeriaIndex].tipo` começa com `video_360`
+- Se sim, renderizar `<video>` com controles em vez de `<img>`
 
-**A) Separar gravação de upload** — Adicionar estado intermediário `pendingFile`:
-- No `mediaRecorder.onstop`: setar `previewUrl` e guardar o arquivo em `pendingFile`, mas **não** chamar `onCapture`
-- Mostrar o vídeo gravado com controles de playback
-- Adicionar dois botões: **"Confirmar e Enviar"** (chama `onCapture(pendingFile)`) e **"Gravar Novamente"** (limpa e volta ao estado inicial)
+**B) Thumbnails (linhas 257-270)**
+- Mesma verificação: se o tipo é vídeo, renderizar `<video>` no thumbnail (muted, sem controles) ou um ícone de play sobre fundo escuro
 
-**B) Melhorar preview ao vivo durante gravação**:
-- Reduzir opacidade do overlay de `bg-black/40` para `bg-black/20` para o vídeo ao vivo ser mais visível
+**C) Thumbnails na grid de preview (linhas 122-143)**
+- Verificar se a foto é um vídeo e renderizar adequadamente com ícone de play
 
-**Fluxo revisado**:
-```text
-[Gravar Vídeo] → [Gravando... (preview ao vivo)] → [Parar] 
-→ [Preview do vídeo com play] → [Confirmar e Enviar | Gravar Novamente]
-→ [Upload em andamento] → [✓ Enviado]
+Lógica auxiliar:
+```ts
+const isVideo = (tipo?: string) => tipo?.startsWith('video_360');
 ```
 
-## Arquivo alterado
+No render principal:
+```tsx
+{isVideo(fotos[galeriaIndex].tipo) ? (
+  <video src={url} controls autoPlay className="max-h-[70vh] max-w-full object-contain" playsInline />
+) : (
+  <img src={url} alt={...} className="max-h-[70vh] max-w-full object-contain" />
+)}
+```
 
 | Arquivo | Ação |
 |---|---|
-| `src/components/instalador/VideoCapture.tsx` | Adicionar estado `pendingFile`, separar preview de upload, botões de confirmar/regravar |
+| `src/components/cadastro/proposta/PropostaMidiaGrid.tsx` | Detectar vídeos e renderizar `<video>` em vez de `<img>` na galeria, thumbnails e preview |
 
