@@ -27,15 +27,16 @@ export function VistoriaFotoSequencial({
   const fileInputRef = useRef<HTMLInputElement>(null);
   const thumbnailsRef = useRef<HTMLDivElement>(null);
   const prevUploadingRef = useRef<string | null>(null);
+  const [uploadedLocally, setUploadedLocally] = useState<Set<string>>(new Set());
 
   const fotoAtual = fotos[fotoAtualIndex];
   const totalFotos = fotos.length;
-  const fotosCompletasCount = fotos.filter(f => fotosEnviadas.some(e => e.tipo === f.id)).length;
+  const fotosCompletasCount = fotos.filter(f => fotosEnviadas.some(e => e.tipo === f.id) || uploadedLocally.has(f.id)).length;
   const todasCompletas = fotosCompletasCount === totalFotos;
 
   const isFotoEnviada = useCallback((fotoId: string) => {
-    return fotosEnviadas.some(f => f.tipo === fotoId);
-  }, [fotosEnviadas]);
+    return fotosEnviadas.some(f => f.tipo === fotoId) || uploadedLocally.has(fotoId);
+  }, [fotosEnviadas, uploadedLocally]);
 
   const getFotoUrl = useCallback((fotoId: string) => {
     return fotosEnviadas.find(f => f.tipo === fotoId)?.arquivo_url;
@@ -45,20 +46,27 @@ export function VistoriaFotoSequencial({
   useEffect(() => {
     if (prevUploadingRef.current && !uploadingFoto) {
       const uploadedId = prevUploadingRef.current;
+      // Track locally immediately — don't wait for react-query refetch
+      const newUploaded = new Set(uploadedLocally).add(uploadedId);
+      setUploadedLocally(newUploaded);
+
       const timer = setTimeout(() => {
-        const nextIndex = fotos.findIndex((f, i) => i > fotoAtualIndex && f.id !== uploadedId && !isFotoEnviada(f.id));
-        if (nextIndex >= 0) {
-          setFotoAtualIndex(nextIndex);
+        const isPending = (f: VistoriaFotoConfig) =>
+          f.id !== uploadedId && !fotosEnviadas.some(e => e.tipo === f.id) && !newUploaded.has(f.id);
+
+        const nextAfter = fotos.findIndex((f, i) => i > fotoAtualIndex && isPending(f));
+        if (nextAfter >= 0) {
+          setFotoAtualIndex(nextAfter);
         } else {
-          const fromStart = fotos.findIndex(f => f.id !== uploadedId && !isFotoEnviada(f.id));
+          const fromStart = fotos.findIndex(f => isPending(f));
           if (fromStart >= 0) setFotoAtualIndex(fromStart);
         }
-      }, 600);
-      prevUploadingRef.current = uploadingFoto;
+      }, 300);
+      prevUploadingRef.current = null;
       return () => clearTimeout(timer);
     }
     prevUploadingRef.current = uploadingFoto;
-  }, [uploadingFoto, fotos, fotoAtualIndex, isFotoEnviada]);
+  }, [uploadingFoto]);
 
   // Scroll thumbnail ativa para o centro
   useEffect(() => {
