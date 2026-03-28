@@ -211,7 +211,7 @@ export function VideoCapture({
               playsInline
               className="h-full w-full rounded-lg object-cover"
             />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
               <div className="flex flex-col items-center gap-3">
                 <div className="flex items-center gap-2">
                   <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
