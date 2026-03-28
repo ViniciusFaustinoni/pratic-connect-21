@@ -1,72 +1,45 @@
 
 
-# Corrigir Contrato Autentique: Variáveis Não Substituídas + Assinatura
+# Corrigir Upload de Vídeo na Autovistoria + Botão "Seguir para Fotos"
 
-## Problemas Encontrados
+## Problemas
 
-### Problema 1: Variáveis não substituídas nos anexos
-Os templates marcados como `anexar_proposta` (REGULAMENTO e Manual de Assistência 24h) são adicionados ao HTML **após** a substituição de variáveis. Resultado: variáveis como `{{empresa.nome}}`, `{{associado.cpf}}`, `{{plano.cota_participacao_valor}}` aparecem como texto bruto no documento final.
+1. **Upload de vídeo falha** — O bucket `cotacoes-vistoria` só permite `image/jpeg, image/png, image/webp` com limite de 5MB. Vídeos `video/webm` (ou `video/mp4`) são rejeitados pelo Storage.
 
-**Causa raiz** (linhas 530-557 de `autentique-create/index.ts`):
-```ts
-// Anexos inseridos SEM substituição de variáveis
-anexosHTML += `...${tmpl.conteudo}...`;
-```
-
-### Problema 2: Assinatura duplicada + variável faltante
-- O template AF1 tem sua própria área de assinatura no final (com `{{associado.nome}}` e `{{associado.cpf}}`), mas sem classes CSS que `hasSignatureArea` detecte. Resultado: o sistema injeta uma **segunda** assinatura via `generateSecaoAssinatura`.
-- A variável `{{empresa.complemento}}` usada no template REGULAMENTO não existe no mapeamento.
-- Bug no `generateSecaoAssinatura` (linha 803): usa `dados.empresa.razaoSocial` (camelCase) mas a interface define `razao_social` (snake_case) → mostra `undefined`.
+2. **Sem botão para avançar após vídeo** — Quando o vídeo é enviado com sucesso, o `videoUrl` é setado e a tela automaticamente muda para a etapa de fotos (linha 262: `if (!videoUrl)`). Porém, como o upload falha, o usuário fica preso na etapa 1 sem conseguir avançar. Mesmo que funcionasse, não há feedback visual claro de "avançar" — a transição é automática.
 
 ## Correções
 
-### 1. `supabase/functions/autentique-create/index.ts`
-**Substituir variáveis nos templates anexados** (linhas 540-556):
-- Chamar `substituirVariaveis(tmpl.conteudo, templateData)` em cada template anexo antes de inseri-lo no HTML
-- Aplicar `limparVariaveisNaoSubstituidas()` no HTML final **depois** de anexar tudo (mover a linha 528 para depois do bloco de anexos)
+### 1. Migração SQL — Atualizar bucket para aceitar vídeos
+Alterar o bucket `cotacoes-vistoria` para:
+- Adicionar mime types: `video/mp4`, `video/webm`, `video/quicktime`
+- Aumentar `file_size_limit` de 5MB para 50MB (vídeos de até 2 min)
 
-### 2. `supabase/functions/_shared/template-utils.ts`
-
-**A) Adicionar `empresa.complemento` ao mapeamento** (~linha 184):
-```ts
-'empresa.complemento': dados.empresa.complemento || '',
+```sql
+UPDATE storage.buckets 
+SET 
+  allowed_mime_types = ARRAY['image/jpeg', 'image/png', 'image/webp', 'video/mp4', 'video/webm', 'video/quicktime'],
+  file_size_limit = 52428800
+WHERE id = 'cotacoes-vistoria';
 ```
 
-**B) Melhorar detecção de assinatura existente** em `hasSignatureArea` (~linha 753):
-Adicionar padrão que detecte o formato do template AF1 — associado.nome + CPF em contexto de assinatura:
-```ts
-/Associado\(a\)\s*:\s*/i,
-/{{associado\.nome}}.*{{associado\.cpf}}/s,
-```
-E também detectar texto já substituído com padrão nome + CPF centralizado.
+### 2. `src/components/cotacao-publica/AutovistoriaCotacao.tsx`
+Na etapa 1 (vídeo, linhas 262-344), após o componente `<VideoCapture>`, adicionar um botão "Seguir para Fotos" que aparece quando `videoUrl` está preenchido (após upload bem-sucedido). Isso dá feedback visual claro antes da transição automática.
 
-**C) Corrigir `generateSecaoAssinatura`** (linha 803):
-```ts
-// De:
-dados.empresa.razaoSocial
-// Para:
-dados.empresa.razao_social
-```
+Na verdade, revisando o código: quando `videoUrl` é setado, o componente re-renderiza e `if (!videoUrl)` na linha 262 já faz a troca automática para a etapa 2. Isso funciona corretamente — o problema real é **apenas** o upload falhando. Uma vez que o bucket aceite vídeos, o fluxo já funciona.
 
-### 3. `supabase/functions/_shared/termo-afiliacao-utils.ts`
-**Adicionar campo `complemento` à interface `EmpresaData`** (~linha 119):
-```ts
-complemento?: string;
-```
-**Mapear `complemento` na função `mapearDadosParaTemplate`** (~linha 460):
-```ts
-complemento: empresa?.empresa_complemento || '',
-```
+Porém, para melhor UX, podemos adicionar um estado intermediário: após o vídeo ser enviado, mostrar um botão "Continuar para as Fotos" em vez de transicionar automaticamente.
 
-### 4. `supabase/functions/autentique-create-by-token/index.ts`
-Aplicar a mesma correção dos anexos (substituição de variáveis nos templates anexados), se existir bloco equivalente.
+**Alteração**: Adicionar estado `videoConfirmado` separado de `videoUrl`. Quando o vídeo é enviado, `videoUrl` é setado mas a tela de vídeo ainda aparece com o botão "Continuar para Fotos". Ao clicar, seta `videoConfirmado = true` e aí sim vai para etapa 2.
+
+- Trocar a condição da linha 262 de `if (!videoUrl)` para `if (!videoConfirmado)`
+- Dentro da etapa de vídeo, quando `videoUrl` existe, mostrar o botão "Continuar para as Fotos →"
+- Ao reidratar vídeo existente, setar `videoConfirmado = false` para que o usuário confirme
 
 ## Arquivos alterados
 
 | Arquivo | Ação |
 |---|---|
-| `supabase/functions/autentique-create/index.ts` | Substituir variáveis nos templates anexados; mover limpeza final |
-| `supabase/functions/autentique-create-by-token/index.ts` | Mesma correção de anexos |
-| `supabase/functions/_shared/template-utils.ts` | Adicionar `empresa.complemento`, melhorar `hasSignatureArea`, corrigir `razaoSocial` |
-| `supabase/functions/_shared/termo-afiliacao-utils.ts` | Adicionar `complemento` à interface e ao mapeamento |
+| Nova migração SQL | Atualizar bucket para aceitar vídeos (50MB, mp4/webm/quicktime) |
+| `src/components/cotacao-publica/AutovistoriaCotacao.tsx` | Adicionar botão "Continuar para Fotos" após vídeo enviado |
 
