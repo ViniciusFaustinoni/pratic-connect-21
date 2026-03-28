@@ -555,13 +555,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         return acc + Number(preco);
       }, 0);
 
-      // Taxa administrativa por faixa FIPE
-      const taxaAdmin = (taxasAdminData || [])
-        .filter(t => t.plano_id === plano.id)
-        .find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
-      const valorTaxaAdmin = taxaAdmin?.valor_taxa || 0;
 
-      let valorMensal = somaCoberturas + somaBeneficios + Number(valorTaxaAdmin);
+      let valorMensal = somaCoberturas + somaBeneficios;
       let valorDesagio: number | null = null;
 
       // Deságio: derive flag from category

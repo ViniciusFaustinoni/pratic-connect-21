@@ -181,13 +181,7 @@ export function useCalcularCotacao() {
         return acc + Number(preco);
       }, 0);
 
-      // Taxa administrativa por faixa FIPE
-      const taxaAdmin = (taxasAdminData || [])
-        .filter(t => t.plano_id === plano.id)
-        .find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
-      const valorTaxaAdmin = taxaAdmin?.valor_taxa || 0;
-
-      let valorMensal = somaCoberturas + somaBeneficios + Number(valorTaxaAdmin);
+      let valorMensal = somaCoberturas + somaBeneficios;
 
       // Aplicar adicional_mensal e desconto_percentual
       valorMensal += plano.adicional_mensal || 0;
