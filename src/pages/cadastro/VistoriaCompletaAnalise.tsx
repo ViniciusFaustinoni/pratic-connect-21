@@ -357,7 +357,7 @@ export default function VistoriaCompletaAnalise() {
       {/* ============================================ */}
       {/* RESUMO + STATUS + AÇÕES */}
       {/* ============================================ */}
-      <div className="grid gap-4 lg:grid-cols-5">
+      <div className="grid gap-4 lg:grid-cols-5 items-start">
         {/* Resumo compacto */}
         <Card className="lg:col-span-3 border-border bg-card">
           <CardContent className="p-4">
