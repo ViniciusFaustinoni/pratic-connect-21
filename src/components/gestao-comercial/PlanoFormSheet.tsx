@@ -15,12 +15,6 @@ import { Loader2, FileText } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { cn } from '@/lib/utils';
 
-interface TaxaFaixa {
-  fipe_de: number;
-  fipe_ate: number;
-  valor_taxa: number;
-}
-
 interface Props {
   open: boolean;
   onClose: () => void;
