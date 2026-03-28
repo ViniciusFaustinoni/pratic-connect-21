@@ -127,7 +127,13 @@ export function PropostaMidiaGrid({
                     "aspect-square bg-muted rounded-lg overflow-hidden relative"
                   )}
                 >
-                  <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                  {isVideoTipo(foto.tipo) ? (
+                    <div className="w-full h-full flex items-center justify-center bg-black/80">
+                      <Play className="h-6 w-6 text-white" />
+                    </div>
+                  ) : (
+                    <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                  )}
                   {idx === 5 && totalFotos > 6 && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                       <span className="text-white font-bold text-sm">+{totalFotos - 6}</span>
