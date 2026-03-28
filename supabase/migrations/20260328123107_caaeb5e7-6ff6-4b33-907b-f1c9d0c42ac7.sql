@@ -1,0 +1,1 @@
+ALTER TABLE public.contratos ALTER COLUMN tipo_entrada SET DEFAULT 'adesao';

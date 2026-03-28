@@ -1,0 +1,1 @@
+UPDATE contratos SET tipo_entrada = 'adesao' WHERE tipo_entrada = 'nova';

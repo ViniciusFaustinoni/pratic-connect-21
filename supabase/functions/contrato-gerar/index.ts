@@ -641,7 +641,7 @@ serve(async (req) => {
     // 8. Calcular carência dinamicamente
     const carenciaDias = await getConfiguracaoNumero(supabase, 'carencia_dias_padrao', 120);
     const carenciaVidrosDias = await getConfiguracaoNumero(supabase, 'carencia_beneficio_vidros_dias', 120);
-    const tipoEntrada = cotacao.tipo_entrada || 'nova';
+    const tipoEntrada = cotacao.tipo_entrada || 'adesao';
     const hoje = new Date().toISOString().split('T')[0];
     let dataCarenciaInicio: string | null = null;
     let dataCarenciaFim: string | null = null;
@@ -656,7 +656,7 @@ serve(async (req) => {
     fimVidros.setDate(fimVidros.getDate() + carenciaVidrosDias);
     dataCarenciaVidrosFim = fimVidros.toISOString().split('T')[0];
 
-    if (['nova', 'inclusao'].includes(tipoEntrada)) {
+    if (['adesao', 'nova', 'inclusao'].includes(tipoEntrada)) {
       dataCarenciaInicio = hoje;
       const fim = new Date();
       fim.setDate(fim.getDate() + carenciaDias);
