@@ -193,18 +193,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
 
 
-  // Buscar taxa administrativa por plano e faixa FIPE
-  const { data: taxasAdminData, isLoading: taxasAdminLoading } = useQuery({
-    queryKey: ['planos_taxa_administrativa_pricing'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('planos_taxa_administrativa')
-        .select('plano_id, fipe_de, fipe_ate, valor_taxa');
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 1000 * 60 * 5,
-  });
+
+
 
   // Buscar overrides de cota por categoria (planos_cotas_categoria)
   const { data: cotasCategoriaData, isLoading: cotasCategoriaLoading } = useQuery({
