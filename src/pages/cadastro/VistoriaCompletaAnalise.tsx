@@ -524,11 +524,11 @@ export default function VistoriaCompletaAnalise() {
             <FotosGrid fotos={fotosVistoria} onFotoClick={setFotoAmpliada} />
           </div>
 
-          {/* Dados adicionais da instalação em grid compacto */}
-          <div className="grid gap-4 sm:grid-cols-2">
+          {/* Dados adicionais da instalação */}
+          <div className="flex flex-wrap gap-4">
             {/* Quilometragem */}
             {(servico?.quilometragem || servico?.km_atual || vistoria?.km_atual) && (
-              <Card className="border-border bg-card">
+              <Card className="border-border bg-card flex-1 min-w-[200px]">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-1">
                     <Gauge className="h-4 w-4 text-primary" />
@@ -543,7 +543,7 @@ export default function VistoriaCompletaAnalise() {
 
             {/* Assinatura do cliente */}
             {servico?.assinatura_cliente_url && (
-              <Card className="border-border bg-card">
+              <Card className="border-border bg-card flex-1 min-w-[200px]">
                 <CardContent className="p-4">
                   <div className="flex items-center gap-2 mb-2">
                     <PenTool className="h-4 w-4 text-primary" />

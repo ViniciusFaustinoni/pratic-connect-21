@@ -252,10 +252,43 @@ export function useAtivarRastreadorPlataforma() {
  * Hook para buscar dados da vistoria/instalação do instalador
  */
 function useInstaladorData(instalacaoId: string | undefined) {
-  const vistoria = useQuery({
-    queryKey: ['vistoria-instalacao', instalacaoId],
+  // 1. Buscar serviço vinculado à instalação (tem vistoria_origem_id)
+  const servico = useQuery({
+    queryKey: ['servico-instalacao-dados', instalacaoId],
     queryFn: async () => {
       if (!instalacaoId) return null;
+      const { data, error } = await supabase
+        .from('servicos')
+        .select('id, checklist_data, quilometragem, assinatura_cliente_url, decisao_instalador, ressalvas_instalador, observacoes, km_atual, vistoria_origem_id')
+        .eq('instalacao_origem_id', instalacaoId)
+        .eq('tipo', 'instalacao')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!instalacaoId,
+  });
+
+  // 2. Buscar vistoria: primeiro via servico.vistoria_origem_id, fallback para vistorias.instalacao_id
+  const vistoriaOrigemId = servico.data?.vistoria_origem_id;
+  const vistoria = useQuery({
+    queryKey: ['vistoria-instalacao', instalacaoId, vistoriaOrigemId],
+    queryFn: async () => {
+      if (!instalacaoId) return null;
+
+      // Caminho principal: via servico.vistoria_origem_id
+      if (vistoriaOrigemId) {
+        const { data, error } = await supabase
+          .from('vistorias')
+          .select('id, video_360_url, km_atual, observacoes, status, modalidade, vistoriador_id')
+          .eq('id', vistoriaOrigemId)
+          .maybeSingle();
+        if (!error && data) return data;
+      }
+
+      // Fallback: busca antiga por instalacao_id
       const { data, error } = await supabase
         .from('vistorias')
         .select('id, video_360_url, km_atual, observacoes, status, modalidade, vistoriador_id')
@@ -266,9 +299,10 @@ function useInstaladorData(instalacaoId: string | undefined) {
       if (error) throw error;
       return data;
     },
-    enabled: !!instalacaoId,
+    enabled: !!instalacaoId && !servico.isLoading,
   });
 
+  // 3. Buscar fotos da vistoria encontrada
   const fotos = useQuery({
     queryKey: ['vistoria-fotos-instalacao', vistoria.data?.id],
     queryFn: async () => {
@@ -282,24 +316,6 @@ function useInstaladorData(instalacaoId: string | undefined) {
       return data || [];
     },
     enabled: !!vistoria.data?.id,
-  });
-
-  const servico = useQuery({
-    queryKey: ['servico-instalacao-dados', instalacaoId],
-    queryFn: async () => {
-      if (!instalacaoId) return null;
-      const { data, error } = await supabase
-        .from('servicos')
-        .select('id, checklist_data, quilometragem, assinatura_cliente_url, decisao_instalador, ressalvas_instalador, observacoes, km_atual')
-        .eq('instalacao_origem_id', instalacaoId)
-        .eq('tipo', 'instalacao')
-        .order('created_at', { ascending: false })
-        .limit(1)
-        .maybeSingle();
-      if (error) throw error;
-      return data;
-    },
-    enabled: !!instalacaoId,
   });
 
   const rastreadorExpanded = useQuery({
