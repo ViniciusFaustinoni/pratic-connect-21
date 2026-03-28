@@ -42,6 +42,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   const [previewLocal, setPreviewLocal] = useState<string | null>(null);
   const [hidratado, setHidratado] = useState(false);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
+  const [videoConfirmado, setVideoConfirmado] = useState(false);
   const [uploadingVideo, setUploadingVideo] = useState(false);
   
   const inputRef = useRef<HTMLInputElement>(null);
@@ -259,7 +260,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   }
 
   // ETAPA 1: Vídeo 360° (obrigatório antes das fotos)
-  if (!videoUrl) {
+  if (!videoConfirmado) {
     return (
       <Card className="border-border/50 bg-card/80 backdrop-blur-xl overflow-hidden">
         <CardHeader className="pb-3 space-y-3">
@@ -339,6 +340,16 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
             label="Vídeo 360° do Veículo"
             cameraOnly={true}
           />
+
+          {videoUrl && (
+            <Button 
+              onClick={() => setVideoConfirmado(true)} 
+              className="w-full mt-4"
+              size="lg"
+            >
+              Continuar para as Fotos →
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
