@@ -282,7 +282,13 @@ export function PropostaMidiaGrid({
                       : "border-transparent hover:border-primary/50 opacity-70 hover:opacity-100"
                   )}
                 >
-                  <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                  {isVideoTipo(foto.tipo) ? (
+                    <div className="w-full h-full flex items-center justify-center bg-black/80">
+                      <Play className="h-4 w-4 text-white" />
+                    </div>
+                  ) : (
+                    <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                  )}
                 </button>
               ))}
             </div>
