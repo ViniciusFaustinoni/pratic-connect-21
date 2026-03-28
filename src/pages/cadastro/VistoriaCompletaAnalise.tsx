@@ -178,6 +178,25 @@ function VideoPlayer({ url, label }: { url: string; label: string }) {
 }
 
 // ============================================
+// COMPONENTE: Status Item (checklist ativação)
+// ============================================
+function StatusItem({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <div className={cn(
+      'flex items-center gap-2 p-2.5 rounded-lg border text-sm',
+      ok ? 'bg-success/5 border-success/20' : 'bg-destructive/5 border-destructive/20'
+    )}>
+      {ok ? (
+        <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+      ) : (
+        <XCircle className="h-4 w-4 text-destructive shrink-0" />
+      )}
+      <span className="text-foreground">{label}</span>
+    </div>
+  );
+}
+
+// ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 export default function VistoriaCompletaAnalise() {
