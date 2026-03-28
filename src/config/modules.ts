@@ -46,7 +46,6 @@ export const MODULE_ITEMS: Record<string, ModuleItem[]> = {
   vendas: [
     { id: 'leads', label: 'Leads' },
     { id: 'cotacoes', label: 'Cotação' },
-    { id: 'propostas', label: 'Propostas' },
     { id: 'ativacoes', label: 'Ativações' },
     { id: 'consultores', label: 'Consultores' },
     { id: 'planos', label: 'Planos e Benefícios' },
