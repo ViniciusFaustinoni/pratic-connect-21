@@ -37,11 +37,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [selectedBeneficios, setSelectedBeneficios] = useState<Set<string>>(new Set());
   const [templateContratoId, setTemplateContratoId] = useState<string>('');
 
-  // Taxa administrativa state
-  const [taxaFipeMin, setTaxaFipeMin] = useState('');
-  const [taxaFipeMax, setTaxaFipeMax] = useState('');
-  const [taxaIntervalo, setTaxaIntervalo] = useState('');
-  const [taxaFaixas, setTaxaFaixas] = useState<TaxaFaixa[]>([]);
 
   // Load templates
   const { data: templates = [] } = useQuery({
