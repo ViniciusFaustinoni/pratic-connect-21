@@ -87,7 +87,7 @@ export function VideoCapture({
         const file = new File([blob], `video_360_${Date.now()}.webm`, { type: 'video/webm' });
         const url = URL.createObjectURL(blob);
         setPreviewUrl(url);
-        onCapture(file);
+        setPendingFile(file);
         
         // Limpar stream
         if (streamRef.current) {
