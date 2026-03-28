@@ -340,6 +340,16 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
             label="Vídeo 360° do Veículo"
             cameraOnly={true}
           />
+
+          {videoUrl && (
+            <Button 
+              onClick={() => setVideoConfirmado(true)} 
+              className="w-full mt-4"
+              size="lg"
+            >
+              Continuar para as Fotos →
+            </Button>
+          )}
         </CardContent>
       </Card>
     );
