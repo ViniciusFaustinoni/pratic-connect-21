@@ -132,21 +132,8 @@ export function useCalcularCotacao() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Buscar taxa administrativa por faixa FIPE
-  const { data: taxasAdminData, isLoading: loadingTaxas } = useQuery({
-    queryKey: ['planos_taxa_administrativa_cotacao'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('planos_taxa_administrativa')
-        .select('plano_id, fipe_de, fipe_ate, valor_taxa');
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-
-  const isLoading = loadingPlanos || loadingCoberturas || loadingBeneficios || loadingTaxas;
-  const isReady = !!planos && !!planoCoberturasData && !!planoBeneficiosData && !!taxasAdminData;
+  const isLoading = loadingPlanos || loadingCoberturas || loadingBeneficios;
+  const isReady = !!planos && !!planoCoberturasData && !!planoBeneficiosData;
 
   const calcular = (
     valorFipe: number,
