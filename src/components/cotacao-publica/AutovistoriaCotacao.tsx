@@ -260,7 +260,7 @@ export function AutovistoriaCotacao({ cotacaoId, tipoVeiculo, onComplete }: Auto
   }
 
   // ETAPA 1: Vídeo 360° (obrigatório antes das fotos)
-  if (!videoUrl) {
+  if (!videoConfirmado) {
     return (
       <Card className="border-border/50 bg-card/80 backdrop-blur-xl overflow-hidden">
         <CardHeader className="pb-3 space-y-3">
