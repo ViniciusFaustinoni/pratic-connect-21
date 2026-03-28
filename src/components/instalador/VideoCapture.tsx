@@ -27,6 +27,7 @@ export function VideoCapture({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -38,6 +39,7 @@ export function VideoCapture({
 
   const displayUrl = videoUrl || previewUrl;
   const hasVideo = !!displayUrl;
+  const isPendingReview = !!pendingFile && !uploading && !confirmed && !videoUrl;
 
   // Limpar recursos ao desmontar
   useEffect(() => {
@@ -85,7 +87,7 @@ export function VideoCapture({
         const file = new File([blob], `video_360_${Date.now()}.webm`, { type: 'video/webm' });
         const url = URL.createObjectURL(blob);
         setPreviewUrl(url);
-        onCapture(file);
+        setPendingFile(file);
         
         // Limpar stream
         if (streamRef.current) {
@@ -147,7 +149,7 @@ export function VideoCapture({
       
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
-      onCapture(file);
+      setPendingFile(file);
     }
     e.target.value = '';
   };
@@ -157,9 +159,17 @@ export function VideoCapture({
       URL.revokeObjectURL(previewUrl);
     }
     setPreviewUrl(null);
+    setPendingFile(null);
     setRecordingTime(0);
     setError(null);
     onReset?.();
+  };
+
+  const handleConfirmUpload = () => {
+    if (pendingFile) {
+      onCapture(pendingFile);
+      setPendingFile(null);
+    }
   };
 
   const formatTime = (seconds: number) => {
@@ -201,7 +211,7 @@ export function VideoCapture({
               playsInline
               className="h-full w-full rounded-lg object-cover"
             />
-            <div className="absolute inset-0 flex items-center justify-center bg-black/40">
+            <div className="absolute inset-0 flex items-center justify-center bg-black/20">
               <div className="flex flex-col items-center gap-3">
                 <div className="flex items-center gap-2">
                   <span className="h-3 w-3 animate-pulse rounded-full bg-red-500" />
@@ -244,16 +254,38 @@ export function VideoCapture({
                 </div>
               )}
             </div>
-            <div className="absolute bottom-2 right-2 flex gap-1">
-              <Button
-                size="icon"
-                variant="secondary"
-                onClick={handleReset}
-                disabled={uploading}
-                className="h-8 w-8 bg-slate-800/90 hover:bg-slate-700"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
+            <div className="absolute bottom-2 left-2 right-2 flex gap-2 justify-center">
+              {isPendingReview ? (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={handleConfirmUpload}
+                    className="gap-1 bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    Confirmar e Enviar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleReset}
+                    className="gap-1 bg-slate-800/90 hover:bg-slate-700"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Gravar Novamente
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  onClick={handleReset}
+                  disabled={uploading}
+                  className="h-8 w-8 bg-slate-800/90 hover:bg-slate-700"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </>
         ) : (
