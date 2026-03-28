@@ -25,6 +25,8 @@ import { ptBR } from 'date-fns/locale';
 import type { VistoriaFotoInfo } from '@/hooks/usePropostasPendentes';
 import { DocumentosSolicitadosCard, type DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
 
+const isVideoTipo = (tipo?: string | null) => tipo?.startsWith('video');
+
 interface PropostaMidiaGridProps {
   video360Url?: string | null;
   fotos: VistoriaFotoInfo[];
@@ -127,7 +129,13 @@ export function PropostaMidiaGrid({
                     "aspect-square bg-muted rounded-lg overflow-hidden relative"
                   )}
                 >
-                  <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                  {isVideoTipo(foto.tipo) ? (
+                    <div className="w-full h-full flex items-center justify-center bg-black/80">
+                      <Play className="h-6 w-6 text-white" />
+                    </div>
+                  ) : (
+                    <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" loading="lazy" />
+                  )}
                   {idx === 5 && totalFotos > 6 && (
                     <div className="absolute inset-0 bg-black/50 flex items-center justify-center">
                       <span className="text-white font-bold text-sm">+{totalFotos - 6}</span>
@@ -222,11 +230,22 @@ export function PropostaMidiaGrid({
           
           <div className="relative bg-black min-h-[60vh] flex items-center justify-center">
             {fotos[galeriaIndex] && (
-              <img
-                src={fotos[galeriaIndex].arquivo_url}
-                alt={fotos[galeriaIndex].tipo || `Foto ${galeriaIndex + 1}`}
-                className="max-h-[70vh] max-w-full object-contain"
-              />
+              isVideoTipo(fotos[galeriaIndex].tipo) ? (
+                <video
+                  key={fotos[galeriaIndex].id}
+                  src={fotos[galeriaIndex].arquivo_url}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="max-h-[70vh] max-w-full object-contain"
+                />
+              ) : (
+                <img
+                  src={fotos[galeriaIndex].arquivo_url}
+                  alt={fotos[galeriaIndex].tipo || `Foto ${galeriaIndex + 1}`}
+                  className="max-h-[70vh] max-w-full object-contain"
+                />
+              )
             )}
             
             {totalFotos > 1 && (
@@ -265,7 +284,13 @@ export function PropostaMidiaGrid({
                       : "border-transparent hover:border-primary/50 opacity-70 hover:opacity-100"
                   )}
                 >
-                  <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                  {isVideoTipo(foto.tipo) ? (
+                    <div className="w-full h-full flex items-center justify-center bg-black/80">
+                      <Play className="h-4 w-4 text-white" />
+                    </div>
+                  ) : (
+                    <img src={foto.arquivo_url} alt={foto.tipo || `Foto ${idx + 1}`} className="w-full h-full object-cover" />
+                  )}
                 </button>
               ))}
             </div>
