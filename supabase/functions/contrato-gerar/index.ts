@@ -656,7 +656,7 @@ serve(async (req) => {
     fimVidros.setDate(fimVidros.getDate() + carenciaVidrosDias);
     dataCarenciaVidrosFim = fimVidros.toISOString().split('T')[0];
 
-    if (['nova', 'inclusao'].includes(tipoEntrada)) {
+    if (['adesao', 'nova', 'inclusao'].includes(tipoEntrada)) {
       dataCarenciaInicio = hoje;
       const fim = new Date();
       fim.setDate(fim.getDate() + carenciaDias);
