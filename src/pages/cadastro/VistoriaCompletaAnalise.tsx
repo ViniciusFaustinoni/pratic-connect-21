@@ -31,6 +31,14 @@ import {
   Loader2,
   Zap,
   MapPin,
+  Camera,
+  Video,
+  ClipboardCheck,
+  Gauge,
+  PenTool,
+  XCircle,
+  MessageSquare,
+  Play,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
