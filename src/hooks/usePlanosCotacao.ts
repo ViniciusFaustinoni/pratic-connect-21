@@ -349,7 +349,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   const dependenciasCriticasLoading =
     planosBancoLoading ||
     planoCoberturasLoading ||
-    taxasAdminLoading ||
+    taxasAdminLoading: false,
     elegibilidadeLoading ||
     cotasCategoriaLoading ||
     benefitExclusionsLoading ||
