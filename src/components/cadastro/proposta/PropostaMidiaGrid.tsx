@@ -228,11 +228,22 @@ export function PropostaMidiaGrid({
           
           <div className="relative bg-black min-h-[60vh] flex items-center justify-center">
             {fotos[galeriaIndex] && (
-              <img
-                src={fotos[galeriaIndex].arquivo_url}
-                alt={fotos[galeriaIndex].tipo || `Foto ${galeriaIndex + 1}`}
-                className="max-h-[70vh] max-w-full object-contain"
-              />
+              isVideoTipo(fotos[galeriaIndex].tipo) ? (
+                <video
+                  key={fotos[galeriaIndex].id}
+                  src={fotos[galeriaIndex].arquivo_url}
+                  controls
+                  autoPlay
+                  playsInline
+                  className="max-h-[70vh] max-w-full object-contain"
+                />
+              ) : (
+                <img
+                  src={fotos[galeriaIndex].arquivo_url}
+                  alt={fotos[galeriaIndex].tipo || `Foto ${galeriaIndex + 1}`}
+                  className="max-h-[70vh] max-w-full object-contain"
+                />
+              )
             )}
             
             {totalFotos > 1 && (
