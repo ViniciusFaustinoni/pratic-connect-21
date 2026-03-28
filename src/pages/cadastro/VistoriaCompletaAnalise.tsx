@@ -78,11 +78,11 @@ function ResumoCompacto({
         <Icon className="h-4 w-4 text-primary" />
         <span className="text-sm font-semibold text-foreground">{label}</span>
       </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+      <div className="space-y-1">
         {items.map((item, idx) => (
           <div key={idx} className="flex items-baseline gap-1.5">
             <span className="text-xs text-muted-foreground whitespace-nowrap">{item.label}:</span>
-            <span className="text-sm text-foreground font-medium truncate">{item.value || '---'}</span>
+            <span className="text-sm text-foreground font-medium break-all">{item.value || '---'}</span>
           </div>
         ))}
       </div>
@@ -357,9 +357,9 @@ export default function VistoriaCompletaAnalise() {
       {/* ============================================ */}
       {/* RESUMO + STATUS + AÇÕES */}
       {/* ============================================ */}
-      <div className="grid gap-4 lg:grid-cols-3">
+      <div className="grid gap-4 lg:grid-cols-5">
         {/* Resumo compacto */}
-        <Card className="lg:col-span-2 border-border bg-card">
+        <Card className="lg:col-span-3 border-border bg-card">
           <CardContent className="p-4">
             <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
               <ResumoCompacto
@@ -397,7 +397,7 @@ export default function VistoriaCompletaAnalise() {
         </Card>
 
         {/* Status + Ações */}
-        <div className="space-y-4">
+        <div className="lg:col-span-2 space-y-4">
           <StatusCoberturaCard
             coberturaRouboFurto={veiculos?.cobertura_roubo_furto || false}
             coberturaTotal={veiculos?.cobertura_total || false}
