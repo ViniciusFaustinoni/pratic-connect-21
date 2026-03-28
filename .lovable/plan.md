@@ -1,41 +1,57 @@
 
 
-# Corrigir Marcação Automática do Tipo de Entrada no Termo de Filiação
+# Revisão Completa dos Tipos de Entrada no Sistema
 
-## Causa raiz
+## Análise de todos os fluxos
 
-O contrato no banco de dados tem `tipo_entrada = 'nova'`, mas o mapeamento de variáveis em `template-utils.ts` só reconhece os valores: `adesao`, `migracao`, `inclusao`, `troca_titularidade`, `reativacao`, `substituicao_placa`.
+Verifiquei como cada tipo de entrada é salvo no banco:
 
-Como `'nova'` não corresponde a nenhum desses, todas as opções ficam com `( )` — nenhuma marcada.
+| Tipo | Onde é definido | Valor salvo | Status |
+|---|---|---|---|
+| Nova adesão | `contrato-gerar/index.ts` L644 | `'nova'` (fallback) | **Problema** — deveria ser `'adesao'` |
+| Migração | Cotação com `tipo_entrada = 'migracao'` | `'migracao'` | OK |
+| Inclusão veículo | `Cotador.tsx` define `'inclusao'` | `'inclusao'` | OK |
+| Troca titularidade | `efetivar-troca-titularidade` | `'troca_titularidade'` | OK |
+| Reativação | `ReativacaoWizard.tsx` | `'reativacao'` | OK |
+| Substituição placa | `efetivar-substituicao` | `'substituicao_placa'` | OK |
 
-O valor `'nova'` é equivalente a `'adesao'` (nova adesão). Precisa ser tratado como sinônimo.
+## Problemas restantes
 
-## Correção
+### 1. `contrato-gerar/index.ts` — Fallback ainda é `'nova'`
+Linha 644: `cotacao.tipo_entrada || 'nova'` — novos contratos sem tipo definido continuam salvando `'nova'`.
 
-### `supabase/functions/_shared/template-utils.ts`
+### 2. `contrato-gerar/index.ts` — Carência ignora `'adesao'`
+Linha 659: `['nova', 'inclusao'].includes(tipoEntrada)` — se a cotação vier com `tipo_entrada = 'adesao'` (valor correto), a carência **não será aplicada**.
 
-Na linha 192, ajustar a condição de `operacao.adesao` para aceitar tanto `'adesao'` quanto `'nova'`:
+### 3. Migration — DEFAULT da coluna `contratos.tipo_entrada`
+O default no banco é `'nova'`. Deve ser `'adesao'`. E registros existentes com `'nova'` devem ser atualizados.
 
-```typescript
-'operacao.adesao': (dados.contrato.tipo_entrada === 'adesao' || dados.contrato.tipo_entrada === 'nova') ? '(X)' : '( )',
+## Correções
+
+### `supabase/functions/contrato-gerar/index.ts`
+- **Linha 644**: Mudar fallback para `'adesao'`
+- **Linha 659**: Incluir `'adesao'` na lista de carência: `['adesao', 'nova', 'inclusao']`
+
+### Migration SQL
+```sql
+ALTER TABLE public.contratos ALTER COLUMN tipo_entrada SET DEFAULT 'adesao';
 ```
 
-Opcionalmente, normalizar o `tipo_entrada` no `mapearDadosParaTemplate` em `termo-afiliacao-utils.ts` para converter `'nova'` em `'adesao'` antes de passar aos templates.
-
-### `supabase/functions/_shared/termo-afiliacao-utils.ts`
-
-Na linha 453, normalizar o valor:
-
-```typescript
-tipo_entrada: (contrato.tipo_entrada === 'nova' ? 'adesao' : contrato.tipo_entrada) || 'adesao',
+### Data update (via insert tool)
+```sql
+UPDATE contratos SET tipo_entrada = 'adesao' WHERE tipo_entrada = 'nova';
 ```
 
-Isso garante que qualquer template (principal ou anexo) receba o valor correto.
+## Template e normalização (já OK)
+- `template-utils.ts` — já aceita `'nova'` e `'adesao'` para `operacao.adesao`
+- `termo-afiliacao-utils.ts` — já normaliza `'nova'` → `'adesao'`
+- Todos os outros 5 tipos (`migracao`, `inclusao`, `troca_titularidade`, `reativacao`, `substituicao_placa`) já mapeiam corretamente no template
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| `supabase/functions/_shared/termo-afiliacao-utils.ts` | Normalizar `'nova'` → `'adesao'` no mapeamento de dados |
-| `supabase/functions/_shared/template-utils.ts` | Adicionar fallback `'nova'` na condição de `operacao.adesao` (segurança extra) |
+| `supabase/functions/contrato-gerar/index.ts` | Fallback `'nova'` → `'adesao'`; incluir `'adesao'` na condição de carência |
+| Migration SQL | Alterar DEFAULT da coluna `tipo_entrada` |
+| Data update | Atualizar registros existentes `'nova'` → `'adesao'` |
 
