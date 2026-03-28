@@ -44,24 +44,18 @@ export function VistoriaFotoSequencial({
   // Auto-avanço: quando upload completa, avança para próxima pendente
   useEffect(() => {
     if (prevUploadingRef.current && !uploadingFoto) {
-      // Upload acabou de completar
-      const uploadedFotoId = prevUploadingRef.current;
-      if (isFotoEnviada(uploadedFotoId)) {
-        // Encontrar próxima foto não enviada
-        const timer = setTimeout(() => {
-          const nextPendingIndex = fotos.findIndex((f, i) => i > fotoAtualIndex && !isFotoEnviada(f.id));
-          if (nextPendingIndex >= 0) {
-            setFotoAtualIndex(nextPendingIndex);
-          } else {
-            // Procurar do início
-            const fromStart = fotos.findIndex(f => !isFotoEnviada(f.id));
-            if (fromStart >= 0) {
-              setFotoAtualIndex(fromStart);
-            }
-          }
-        }, 600);
-        return () => clearTimeout(timer);
-      }
+      const uploadedId = prevUploadingRef.current;
+      const timer = setTimeout(() => {
+        const nextIndex = fotos.findIndex((f, i) => i > fotoAtualIndex && f.id !== uploadedId && !isFotoEnviada(f.id));
+        if (nextIndex >= 0) {
+          setFotoAtualIndex(nextIndex);
+        } else {
+          const fromStart = fotos.findIndex(f => f.id !== uploadedId && !isFotoEnviada(f.id));
+          if (fromStart >= 0) setFotoAtualIndex(fromStart);
+        }
+      }, 600);
+      prevUploadingRef.current = uploadingFoto;
+      return () => clearTimeout(timer);
     }
     prevUploadingRef.current = uploadingFoto;
   }, [uploadingFoto, fotos, fotoAtualIndex, isFotoEnviada]);
