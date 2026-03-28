@@ -254,16 +254,38 @@ export function VideoCapture({
                 </div>
               )}
             </div>
-            <div className="absolute bottom-2 right-2 flex gap-1">
-              <Button
-                size="icon"
-                variant="secondary"
-                onClick={handleReset}
-                disabled={uploading}
-                className="h-8 w-8 bg-slate-800/90 hover:bg-slate-700"
-              >
-                <RotateCcw className="h-4 w-4" />
-              </Button>
+            <div className="absolute bottom-2 left-2 right-2 flex gap-2 justify-center">
+              {isPendingReview ? (
+                <>
+                  <Button
+                    size="sm"
+                    onClick={handleConfirmUpload}
+                    className="gap-1 bg-green-600 hover:bg-green-700 text-white"
+                  >
+                    <CheckCircle className="h-4 w-4" />
+                    Confirmar e Enviar
+                  </Button>
+                  <Button
+                    size="sm"
+                    variant="secondary"
+                    onClick={handleReset}
+                    className="gap-1 bg-slate-800/90 hover:bg-slate-700"
+                  >
+                    <RotateCcw className="h-4 w-4" />
+                    Gravar Novamente
+                  </Button>
+                </>
+              ) : (
+                <Button
+                  size="icon"
+                  variant="secondary"
+                  onClick={handleReset}
+                  disabled={uploading}
+                  className="h-8 w-8 bg-slate-800/90 hover:bg-slate-700"
+                >
+                  <RotateCcw className="h-4 w-4" />
+                </Button>
+              )}
             </div>
           </>
         ) : (
