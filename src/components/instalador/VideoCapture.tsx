@@ -149,7 +149,7 @@ export function VideoCapture({
       
       const url = URL.createObjectURL(file);
       setPreviewUrl(url);
-      onCapture(file);
+      setPendingFile(file);
     }
     e.target.value = '';
   };
