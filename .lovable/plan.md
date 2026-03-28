@@ -1,43 +1,59 @@
 
 
-# Auto-Avanço Imediato Após Envio de Foto
+# Corrigir Auto-Avanço de Fotos do Vistoriador
 
-## Problema
-O auto-avanço existe no código (linhas 45-67), mas depende de `isFotoEnviada(uploadedFotoId)` retornar `true` após o upload. Há uma condição de corrida: quando `uploadingFoto` volta a `null`, o react-query pode não ter atualizado `fotosEnviadas` ainda, então a condição falha e o avanço não acontece.
+## Causa raiz
+
+O `useEffect` de auto-avanço usa `isFotoEnviada()` para encontrar a próxima foto pendente. Essa função depende de `fotosEnviadas`, que vem de um react-query. Quando o upload termina (`uploadingFoto` vai de `"id"` para `null`), o react-query ainda não refez o fetch — então `isFotoEnviada` retorna dados **desatualizados**. A foto recém-enviada não aparece como enviada, e a busca pela "próxima pendente" pode falhar ou selecionar a mesma foto.
+
+O delay de 600ms nem sempre é suficiente para o refetch completar, especialmente em conexões lentas.
 
 ## Correção
 
 ### `src/components/vistorias/VistoriaFotoSequencial.tsx`
 
-Simplificar o `useEffect` de auto-avanço (linhas 45-67):
-- Remover a verificação `if (isFotoEnviada(uploadedFotoId))` — se o upload acabou (era X e agora é null), basta avançar
-- Usar o `uploadedFotoId` (foto que acabou de fazer upload) para pular ela na busca da próxima
-- Manter a busca: primeiro procurar depois do index atual, depois do início
+Simplificar drasticamente o auto-avanço: em vez de procurar a "próxima pendente" (que depende de dados atualizados do servidor), **manter um Set local de fotos já enviadas nesta sessão** e usar isso para o avanço.
 
-Lógica simplificada:
+1. Adicionar estado local `uploadedLocally` (`Set<string>`) que é preenchido quando o upload termina
+2. No `useEffect` de auto-avanço, quando `prevUploadingRef.current` tinha valor e `uploadingFoto` virou `null`:
+   - Adicionar `uploadedId` ao `uploadedLocally`
+   - Buscar a próxima foto onde `!isFotoEnviada(f.id) && !uploadedLocally.has(f.id)` — usando tanto os dados do servidor quanto o tracking local
+   - Avançar imediatamente (sem delay de 600ms, ou com delay menor de 300ms)
+3. Remover dependência exclusiva de `isFotoEnviada` para o avanço
+
+Lógica:
 ```ts
+const [uploadedLocally, setUploadedLocally] = useState<Set<string>>(new Set());
+
 useEffect(() => {
   if (prevUploadingRef.current && !uploadingFoto) {
     const uploadedId = prevUploadingRef.current;
+    setUploadedLocally(prev => new Set(prev).add(uploadedId));
+    
     const timer = setTimeout(() => {
-      // Próxima foto que não é a que acabou de enviar e não está enviada
-      const nextIndex = fotos.findIndex((f, i) => i > fotoAtualIndex && f.id !== uploadedId && !isFotoEnviada(f.id));
-      if (nextIndex >= 0) {
-        setFotoAtualIndex(nextIndex);
+      const isPending = (f: VistoriaFotoConfig) =>
+        f.id !== uploadedId && !isFotoEnviada(f.id) && !uploadedLocally.has(f.id);
+      
+      const nextAfter = fotos.findIndex((f, i) => i > fotoAtualIndex && isPending(f));
+      if (nextAfter >= 0) {
+        setFotoAtualIndex(nextAfter);
       } else {
-        const fromStart = fotos.findIndex(f => f.id !== uploadedId && !isFotoEnviada(f.id));
+        const fromStart = fotos.findIndex(f => isPending(f));
         if (fromStart >= 0) setFotoAtualIndex(fromStart);
       }
-    }, 600);
+    }, 300);
+    prevUploadingRef.current = null;
     return () => clearTimeout(timer);
   }
   prevUploadingRef.current = uploadingFoto;
-}, [uploadingFoto, fotos, fotoAtualIndex, isFotoEnviada]);
+}, [uploadingFoto]);
 ```
 
-Isso garante que ao terminar o upload, o sistema avança automaticamente sem o instalador precisar clicar em "Próxima".
+Isso garante que, mesmo que o react-query ainda não tenha atualizado, o componente sabe localmente que aquela foto já foi enviada e avança para a próxima.
 
-| Arquivo | Ação |
+## Arquivo
+
+| Arquivo | Acao |
 |---|---|
-| `src/components/vistorias/VistoriaFotoSequencial.tsx` | Corrigir race condition no auto-avanço |
+| `src/components/vistorias/VistoriaFotoSequencial.tsx` | Adicionar tracking local de uploads + corrigir auto-avanço |
 
