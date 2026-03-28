@@ -132,14 +132,26 @@ async function enviarViaMeta(
     template = tmpl;
     if (!template) throw new Error(`Template '${templateName}' não encontrado`);
     if (template.status !== "APPROVED") {
-      // Fallback inteligente: tentar notificacao_geral_v1 → sinistro_atualizado
+      // Fallback inteligente: só usar fallback da MESMA CATEGORIA
       console.warn(`[whatsapp-send-text] Template '${templateName}' não aprovado (${template.status}). Tentando fallback...`);
       
-      const fallbackOrder = ['notificacao_geral_v1', 'sinistro_atualizado'];
+      // Categorizar o template original para evitar fallback de contexto errado
+      const categoriasConfirmacao = ['confirmacao_agendamento', 'confirmacao_vespera', 'confirmacao_manha', 'confirmacao_encaixe'];
+      const isConfirmacao = categoriasConfirmacao.some(c => templateName.includes(c));
+      
+      // Se é template de confirmação/agendamento, NÃO usar fallback genérico (sinistro, etc.)
+      // É melhor bloquear o envio do que enviar uma mensagem com contexto completamente errado
+      if (isConfirmacao) {
+        console.error(`[whatsapp-send-text] ❌ BLOQUEADO: Template de confirmação '${templateName}' não está aprovado (${template.status}). Não é seguro usar fallback de outro contexto.`);
+        throw new Error(`Template '${templateName}' não aprovado pela Meta (${template.status}). Aprove o template no painel da Meta antes de usar este fluxo.`);
+      }
+      
+      // Para templates genéricos, tentar fallback apenas com notificacao_geral_v1
+      const fallbackOrder = ['notificacao_geral_v1'];
       let fallbackFound = false;
       
       for (const fbName of fallbackOrder) {
-        if (fbName === templateName) continue; // não tentar o mesmo
+        if (fbName === templateName) continue;
         const { data: fbTmpl } = await supabase
           .from("whatsapp_meta_templates")
           .select("nome, idioma, status, corpo, botoes")
@@ -150,7 +162,6 @@ async function enviarViaMeta(
         if (fbTmpl) {
           console.log(`[whatsapp-send-text] Usando fallback '${fbName}' no lugar de '${templateName}'`);
           template = fbTmpl;
-          // Ajustar params para o formato do fallback (3 params: nome, assunto, detalhe)
           if (bodyParams.length >= 3) {
             bodyParams = bodyParams.slice(0, 3);
           } else if (bodyParams.length === 2) {

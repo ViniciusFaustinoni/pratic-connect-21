@@ -721,6 +721,20 @@ serve(async (req) => {
       if (servico.permite_encaixe && !servico.confirmacao_whatsapp) {
         console.log(`[atribuir-proxima-tarefa] ⏳ Encaixe ${servico.id} precisa de confirmação do associado`);
         
+        // ✅ LOCK ATÔMICO: Marcar ANTES de enviar para evitar disparos duplicados
+        // Se outra execução já marcou, o UPDATE retorna 0 rows e pulamos
+        const { data: lockResult } = await supabase
+          .from('servicos')
+          .update({ confirmacao_whatsapp: 'aguardando_confirmacao_encaixe' })
+          .eq('id', servico.id)
+          .is('confirmacao_whatsapp', null)
+          .select('id');
+
+        if (!lockResult || lockResult.length === 0) {
+          console.log(`[atribuir-proxima-tarefa] 🔒 Encaixe ${servico.id} já processado por outra execução - pulando`);
+          continue;
+        }
+
         try {
           const telefoneEncaixe = servico.associado_whatsapp || servico.associado_telefone || '';
           const nomeEncaixe = servico.associado_nome || 'Cliente';
@@ -755,12 +769,6 @@ Aguardamos sua confirmação! ⚡`;
               }
             });
 
-            // Marcar como aguardando confirmação
-            await supabase
-              .from('servicos')
-              .update({ confirmacao_whatsapp: 'aguardando_confirmacao_encaixe' })
-              .eq('id', servico.id);
-
             // Criar registro para o webhook tratar a resposta
             await supabase.from('confirmacoes_agendamento').insert({
               servico_id: servico.id,
@@ -779,6 +787,12 @@ Aguardamos sua confirmação! ⚡`;
           }
         } catch (encaixeErr) {
           console.error(`[atribuir-proxima-tarefa] Erro confirmação encaixe:`, encaixeErr);
+          // Se falhou o envio, reverter o lock para permitir nova tentativa
+          await supabase
+            .from('servicos')
+            .update({ confirmacao_whatsapp: null })
+            .eq('id', servico.id)
+            .eq('confirmacao_whatsapp', 'aguardando_confirmacao_encaixe');
         }
         
         continue; // NÃO atribuir - aguardar confirmação

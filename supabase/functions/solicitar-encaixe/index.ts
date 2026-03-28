@@ -139,12 +139,25 @@ Aguardamos sua confirmação! ⚡`;
 
     console.log(`[solicitar-encaixe] WhatsApp enviado para ${telefoneFormatado}`);
 
-    // 5. Marcar serviço como aguardando confirmação
+    // 5. LOCK ATÔMICO: Marcar serviço ANTES de enviar para evitar duplicatas
     if (servicoDbId) {
-      await supabase
+      const { data: lockResult } = await supabase
         .from('servicos')
         .update({ confirmacao_whatsapp: 'aguardando_confirmacao_encaixe' })
-        .eq('id', servicoDbId);
+        .eq('id', servicoDbId)
+        .is('confirmacao_whatsapp', null)
+        .select('id');
+
+      if (!lockResult || lockResult.length === 0) {
+        console.log(`[solicitar-encaixe] 🔒 Serviço ${servicoDbId} já processado por outra execução`);
+        return new Response(JSON.stringify({ 
+          success: false, 
+          error: 'Este serviço já está em processo de confirmação.' 
+        }), {
+          status: 409,
+          headers: { ...corsHeaders, 'Content-Type': 'application/json' },
+        });
+      }
     }
 
     // 6. Criar registro em confirmacoes_agendamento
