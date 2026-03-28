@@ -101,7 +101,13 @@ export default function VistoriaCompletaAnalise() {
     podeAtivar,
     ativarRastreador,
     isAtivando,
+    vistoria,
+    fotosVistoria,
+    servico,
+    rastreadorLocal,
   } = useVistoriaCompletaAnalise(id);
+
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
   // Query para buscar dados de recusa do serviço vinculado à instalação
   const { data: servicoRecusa } = useQuery({
