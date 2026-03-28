@@ -67,21 +67,11 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
 
       const { data: cobs } = await supabase.from('planos_coberturas').select('cobertura_id').eq('plano_id', planoId);
       const { data: bens } = await supabase.from('planos_beneficios').select('benefit_id').eq('plano_id', planoId);
-      const { data: taxas } = await supabase
-        .from('planos_taxa_administrativa')
-        .select('fipe_de, fipe_ate, valor_taxa')
-        .eq('plano_id', planoId)
-        .order('fipe_de', { ascending: true });
 
       return {
         ...data,
         coberturaIds: (cobs || []).map((c: any) => c.cobertura_id),
         beneficioIds: (bens || []).map((b: any) => b.benefit_id),
-        taxasFipe: (taxas || []).map((t: any) => ({
-          fipe_de: Number(t.fipe_de),
-          fipe_ate: Number(t.fipe_ate),
-          valor_taxa: Number(t.valor_taxa),
-        })) as TaxaFaixa[],
       };
     },
     enabled: !!planoId,
