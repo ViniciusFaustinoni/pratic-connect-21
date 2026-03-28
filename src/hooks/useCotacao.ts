@@ -1,7 +1,7 @@
 // ============================================
 // HOOKS ESPECIALIZADOS PARA MÓDULO DE COTAÇÃO
 // SGA Pratic 2.0 - Proteção Veicular
-// Modelo: Preço = Σ coberturas + Σ benefícios + taxa administrativa
+// Modelo: Preço = Σ coberturas + Σ benefícios
 // ============================================
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
