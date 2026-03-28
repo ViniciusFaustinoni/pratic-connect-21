@@ -1,7 +1,7 @@
 // ============================================
 // HOOKS ESPECIALIZADOS PARA MÓDULO DE COTAÇÃO
 // SGA Pratic 2.0 - Proteção Veicular
-// Modelo: Preço = Σ coberturas + Σ benefícios + taxa administrativa
+// Modelo: Preço = Σ coberturas + Σ benefícios
 // ============================================
 
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
@@ -132,21 +132,8 @@ export function useCalcularCotacao() {
     staleTime: 1000 * 60 * 5,
   });
 
-  // Buscar taxa administrativa por faixa FIPE
-  const { data: taxasAdminData, isLoading: loadingTaxas } = useQuery({
-    queryKey: ['planos_taxa_administrativa_cotacao'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('planos_taxa_administrativa')
-        .select('plano_id, fipe_de, fipe_ate, valor_taxa');
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-
-  const isLoading = loadingPlanos || loadingCoberturas || loadingBeneficios || loadingTaxas;
-  const isReady = !!planos && !!planoCoberturasData && !!planoBeneficiosData && !!taxasAdminData;
+  const isLoading = loadingPlanos || loadingCoberturas || loadingBeneficios;
+  const isReady = !!planos && !!planoCoberturasData && !!planoBeneficiosData;
 
   const calcular = (
     valorFipe: number,
@@ -194,13 +181,7 @@ export function useCalcularCotacao() {
         return acc + Number(preco);
       }, 0);
 
-      // Taxa administrativa por faixa FIPE
-      const taxaAdmin = (taxasAdminData || [])
-        .filter(t => t.plano_id === plano.id)
-        .find(t => valorFipe >= t.fipe_de && valorFipe <= t.fipe_ate);
-      const valorTaxaAdmin = taxaAdmin?.valor_taxa || 0;
-
-      let valorMensal = somaCoberturas + somaBeneficios + Number(valorTaxaAdmin);
+      let valorMensal = somaCoberturas + somaBeneficios;
 
       // Aplicar adicional_mensal e desconto_percentual
       valorMensal += plano.adicional_mensal || 0;

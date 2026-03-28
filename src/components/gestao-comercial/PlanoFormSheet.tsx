@@ -11,15 +11,9 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, FileText, DollarSign } from 'lucide-react';
+import { Loader2, FileText } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { cn } from '@/lib/utils';
-
-interface TaxaFaixa {
-  fipe_de: number;
-  fipe_ate: number;
-  valor_taxa: number;
-}
 
 interface Props {
   open: boolean;
@@ -43,11 +37,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [selectedBeneficios, setSelectedBeneficios] = useState<Set<string>>(new Set());
   const [templateContratoId, setTemplateContratoId] = useState<string>('');
 
-  // Taxa administrativa state
-  const [taxaFipeMin, setTaxaFipeMin] = useState('');
-  const [taxaFipeMax, setTaxaFipeMax] = useState('');
-  const [taxaIntervalo, setTaxaIntervalo] = useState('');
-  const [taxaFaixas, setTaxaFaixas] = useState<TaxaFaixa[]>([]);
 
   // Load templates
   const { data: templates = [] } = useQuery({
@@ -78,21 +67,11 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
 
       const { data: cobs } = await supabase.from('planos_coberturas').select('cobertura_id').eq('plano_id', planoId);
       const { data: bens } = await supabase.from('planos_beneficios').select('benefit_id').eq('plano_id', planoId);
-      const { data: taxas } = await supabase
-        .from('planos_taxa_administrativa')
-        .select('fipe_de, fipe_ate, valor_taxa')
-        .eq('plano_id', planoId)
-        .order('fipe_de', { ascending: true });
 
       return {
         ...data,
         coberturaIds: (cobs || []).map((c: any) => c.cobertura_id),
         beneficioIds: (bens || []).map((b: any) => b.benefit_id),
-        taxasFipe: (taxas || []).map((t: any) => ({
-          fipe_de: Number(t.fipe_de),
-          fipe_ate: Number(t.fipe_ate),
-          valor_taxa: Number(t.valor_taxa),
-        })) as TaxaFaixa[],
       };
     },
     enabled: !!planoId,
@@ -106,51 +85,10 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       setSelectedCoberturas(new Set(existingPlan.coberturaIds));
       setSelectedBeneficios(new Set(existingPlan.beneficioIds));
       setTemplateContratoId(existingPlan.template_contrato_id || '');
-      
-      // Load taxa administrativa faixas
-      if (existingPlan.taxasFipe && existingPlan.taxasFipe.length > 0) {
-        setTaxaFaixas(existingPlan.taxasFipe);
-        const first = existingPlan.taxasFipe[0];
-        const last = existingPlan.taxasFipe[existingPlan.taxasFipe.length - 1];
-        const intervalo = existingPlan.taxasFipe.length > 1
-          ? existingPlan.taxasFipe[1].fipe_de - first.fipe_de
-          : first.fipe_ate - first.fipe_de;
-        setTaxaFipeMin(String(first.fipe_de));
-        setTaxaFipeMax(String(last.fipe_ate));
-        setTaxaIntervalo(String(intervalo));
-      }
     }
   }, [existingPlan]);
 
-  // Generate taxa faixas from min/max/interval
-  const generateTaxaFaixas = useCallback(() => {
-    const min = parseFloat(taxaFipeMin);
-    const max = parseFloat(taxaFipeMax);
-    const intervalo = parseFloat(taxaIntervalo);
-    if (isNaN(min) || isNaN(max) || isNaN(intervalo) || intervalo <= 0 || max <= min) return;
 
-    const newFaixas: TaxaFaixa[] = [];
-    let current = min;
-    while (current < max) {
-      const fimFaixa = Math.min(current + intervalo, max);
-      // Try to keep existing values
-      const existing = taxaFaixas.find(f => f.fipe_de === current && f.fipe_ate === fimFaixa);
-      newFaixas.push({
-        fipe_de: current,
-        fipe_ate: fimFaixa,
-        valor_taxa: existing?.valor_taxa ?? 0,
-      });
-      current = fimFaixa;
-    }
-    setTaxaFaixas(newFaixas);
-  }, [taxaFipeMin, taxaFipeMax, taxaIntervalo, taxaFaixas]);
-
-  const canGenerateFaixas = useMemo(() => {
-    const min = parseFloat(taxaFipeMin);
-    const max = parseFloat(taxaFipeMax);
-    const intervalo = parseFloat(taxaIntervalo);
-    return !isNaN(min) && !isNaN(max) && !isNaN(intervalo) && intervalo > 0 && max > min;
-  }, [taxaFipeMin, taxaFipeMax, taxaIntervalo]);
 
   // Calculate total
   const valorTotal = useMemo(() => {
@@ -199,16 +137,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
             bens.map((b, i) => ({ plano_id: planoId, benefit_id: b.id, beneficio: b.name, display_order: i }))
           );
         }
-        // Save taxa administrativa
-        const { error: delTaxaErr } = await supabase.from('planos_taxa_administrativa').delete().eq('plano_id', planoId);
-        if (delTaxaErr) throw delTaxaErr;
-        if (taxaFaixas.length > 0) {
-          const { error: insTaxaErr } = await supabase.from('planos_taxa_administrativa').insert(
-            taxaFaixas.map(f => ({ plano_id: planoId, fipe_de: f.fipe_de, fipe_ate: f.fipe_ate, valor_taxa: f.valor_taxa }))
-          );
-          if (insTaxaErr) throw insTaxaErr;
-        }
-
       } else {
         const codigo = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
         const { data: plan, error } = await supabase.from('planos').insert({
@@ -230,13 +158,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           await supabase.from('planos_beneficios').insert(
             bens.map((b, i) => ({ plano_id: plan.id, benefit_id: b.id, beneficio: b.name, display_order: i }))
           );
-        }
-        // Save taxa administrativa for new plan
-        if (taxaFaixas.length > 0) {
-          const { error: insTaxaErr } = await supabase.from('planos_taxa_administrativa').insert(
-            taxaFaixas.map(f => ({ plano_id: plan.id, fipe_de: f.fipe_de, fipe_ate: f.fipe_ate, valor_taxa: f.valor_taxa }))
-          );
-          if (insTaxaErr) throw insTaxaErr;
         }
       }
     },
@@ -320,84 +241,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
                       <span className="text-sm flex-1">{b.name}</span>
                       <span className="text-xs font-medium text-muted-foreground">R$ {(b.preco_sugerido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
                     </label>
-                  ))}
-                </div>
-              </div>
-            )}
-          </section>
-
-          {/* ── BLOCO 3: Taxa Administrativa ── */}
-          <section className="space-y-4">
-            <h3 className="text-xs font-bold uppercase tracking-wider text-muted-foreground flex items-center gap-1.5">
-              <DollarSign className="h-3.5 w-3.5" />Taxa Administrativa
-            </h3>
-            <p className="text-xs text-muted-foreground">Configure o valor da taxa administrativa por faixa de valor FIPE do veículo.</p>
-            
-            <div className="grid grid-cols-3 gap-3">
-              <div>
-                <Label className="text-xs">FIPE Mínimo (R$)</Label>
-                <Input
-                  type="number"
-                  placeholder="0"
-                  value={taxaFipeMin}
-                  onChange={e => setTaxaFipeMin(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">FIPE Máximo (R$)</Label>
-                <Input
-                  type="number"
-                  placeholder="200000"
-                  value={taxaFipeMax}
-                  onChange={e => setTaxaFipeMax(e.target.value)}
-                />
-              </div>
-              <div>
-                <Label className="text-xs">Intervalo (R$)</Label>
-                <Input
-                  type="number"
-                  placeholder="20000"
-                  value={taxaIntervalo}
-                  onChange={e => setTaxaIntervalo(e.target.value)}
-                />
-              </div>
-            </div>
-
-            <Button
-              type="button"
-              variant="outline"
-              size="sm"
-              className="w-full"
-              disabled={!canGenerateFaixas}
-              onClick={generateTaxaFaixas}
-            >
-              Gerar Faixas
-            </Button>
-
-            {taxaFaixas.length > 0 && (
-              <div className="space-y-2">
-                <p className="text-xs font-semibold text-muted-foreground">{taxaFaixas.length} faixa(s) gerada(s)</p>
-                <div className="space-y-1.5 max-h-60 overflow-y-auto">
-                  {taxaFaixas.map((faixa, idx) => (
-                    <div key={idx} className="flex items-center gap-3 px-3 py-2 rounded-md bg-muted/30 ring-1 ring-border/50">
-                      <span className="text-xs text-muted-foreground flex-1 min-w-0">
-                        R$ {faixa.fipe_de.toLocaleString('pt-BR')} – R$ {faixa.fipe_ate.toLocaleString('pt-BR')}
-                      </span>
-                      <div className="flex items-center gap-1.5 shrink-0">
-                        <span className="text-xs text-muted-foreground">R$</span>
-                        <Input
-                          type="number"
-                          className="w-24 h-8 text-sm"
-                          value={faixa.valor_taxa || ''}
-                          onChange={e => {
-                            const updated = [...taxaFaixas];
-                            updated[idx] = { ...faixa, valor_taxa: parseFloat(e.target.value) || 0 };
-                            setTaxaFaixas(updated);
-                          }}
-                          placeholder="0,00"
-                        />
-                      </div>
-                    </div>
                   ))}
                 </div>
               </div>
