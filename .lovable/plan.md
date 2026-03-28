@@ -1,76 +1,50 @@
 
 
-# Diagnóstico e Plano de Correção: Templates Errados e Mensagens Duplicadas
+# Remover Taxa Administrativa do Plano (será cobertura comum)
 
-## Problema 1: Template errado sendo enviado
+## Contexto
 
-### Causa raiz
-O template `confirmacao_agendamento_v1` tem status **PENDING** (não aprovado pela Meta). Quando `whatsapp-send-text` tenta enviá-lo, o fallback automático (linhas 134-168) busca templates aprovados na ordem: `notificacao_geral_v1` → `sinistro_atualizado`.
+O usuário vai criar a taxa administrativa como uma **cobertura** no catálogo global (`coberturas`), com seu valor próprio. Assim, ela será vinculada aos planos como qualquer outra cobertura, e seu valor já entra automaticamente na soma `somaCoberturas` do motor de cotação.
 
-Como `notificacao_geral_v1` também não está aprovado, o sistema cai no **`sinistro_atualizado`** (que está APPROVED), cujo corpo é:
+## O que precisa mudar
 
-```
-"Olá {{1}}, há uma atualização no seu sinistro {{2}}: {{3}}. Acompanhe pelo app."
-```
+### 1. `src/components/gestao-comercial/PlanoFormSheet.tsx`
+- Remover todo o **Bloco 3: Taxa Administrativa** da UI (linhas 329-405)
+- Remover states: `taxaFipeMin`, `taxaFipeMax`, `taxaIntervalo`, `taxaFaixas`
+- Remover funções: `generateTaxaFaixas`, `canGenerateFaixas`
+- Remover lógica de save/load de `planos_taxa_administrativa` na mutation e na query de edição
+- Remover interface `TaxaFaixa` e import `DollarSign`
 
-Os params enviados (`nome`, `instalação do rastreador`, `Encaixe HOJE - profissional disponível na região`) são injetados nesse template de **sinistro**, gerando a mensagem absurda que o MARCUS recebeu.
+### 2. `src/hooks/usePlanosCotacao.ts`
+- Remover a query `planos_taxa_administrativa_pricing` (linhas 196-207)
+- Remover o cálculo de `taxaAdmin`/`valorTaxaAdmin` (linhas 568-572)
+- Remover `valorTaxaAdmin` da soma do `valorMensal` (linha 574): fica apenas `somaCoberturas + somaBeneficios`
+- Remover `taxasAdminLoading` das dependências de loading
 
-### Correção
-1. **Aprovar o template `confirmacao_agendamento_v1` na Meta** ou criar um template específico para encaixe
-2. **Corrigir a cadeia de fallback** em `whatsapp-send-text`: quando o template original é de confirmação de encaixe, o fallback não pode ser `sinistro_atualizado` — é melhor **bloquear o envio** do que enviar um template com contexto completamente errado
+### 3. `src/hooks/useCotacao.ts`
+- Mesmo tratamento: remover busca e cálculo de `planos_taxa_administrativa`
+- `valorMensal = somaCoberturas + somaBeneficios` (sem `valorTaxaAdmin`)
 
----
+### 4. `src/hooks/usePlansAdmin.ts`
+- Remover a duplicação de `planos_taxa_administrativa` ao duplicar plano (linhas 370-379)
 
-## Problema 2: Mensagens enviadas dezenas de vezes (10x em 48 segundos)
+### 5. Componentes de exibição (manter compatíveis)
+- `QuoteCalculatorModal.tsx` — o campo `taxa_administrativa` na cotação continuará funcionando porque vem da decomposição percentual (já calculada sobre `valorMensal`), não da tabela de faixas
+- `ExtratoAssociado.tsx` — usa `valor_taxa_administrativa` do rateio, que é independente
 
-### Causa raiz
-A função `atribuir-proxima-tarefa` (chamada pelo frontend a cada 30 segundos por cada profissional ativo) **NÃO tem lock atômico** para encaixes. O fluxo atual é:
+### 6. Tabela `planos_taxa_administrativa`
+- **Não deletar** a tabela agora (dados históricos de rateios já processados podem referenciar)
+- Apenas parar de usar no código
 
-```text
-1. Lê servico.confirmacao_whatsapp → null ✓
-2. Envia WhatsApp (leva ~1-3s)
-3. Atualiza confirmacao_whatsapp = 'aguardando_confirmacao_encaixe'
-```
+## Impacto no preço
+Quando o usuário criar a cobertura "Taxa Administrativa" no catálogo com o valor desejado e vinculá-la aos planos, esse valor entrará automaticamente na soma de coberturas. Não é necessário nenhum ajuste adicional no motor de cotação.
 
-Entre os passos 1 e 3, outras chamadas (do mesmo profissional via polling ou do cron) leem `confirmacao_whatsapp = null` e enviam novamente. Resultado: 10 mensagens idênticas.
+## Arquivos
 
-Em contraste, o `cron-atribuir-tarefas` **já tem** o lock atômico correto (linhas 566-577): faz o UPDATE antes do envio, com `WHERE confirmacao_whatsapp IS NULL`.
-
-### Correção
-Replicar o padrão de lock atômico do `cron-atribuir-tarefas` no `atribuir-proxima-tarefa`:
-
-```typescript
-// ANTES de enviar WhatsApp:
-const { data: lockResult } = await supabase
-  .from('servicos')
-  .update({ confirmacao_whatsapp: 'aguardando_confirmacao_encaixe' })
-  .eq('id', servico.id)
-  .is('confirmacao_whatsapp', null)
-  .select('id');
-
-if (!lockResult || lockResult.length === 0) {
-  console.log('Já processado por outra execução - pulando');
-  continue;
-}
-
-// SÓ ENTÃO enviar WhatsApp
-```
-
-Adicionar também constraint UNIQUE na tabela `confirmacoes_agendamento` para `(servico_id, status)` ativo, como proteção extra.
-
----
-
-## Resumo das correções
-
-| Arquivo | Acao |
+| Arquivo | Ação |
 |---|---|
-| `supabase/functions/atribuir-proxima-tarefa/index.ts` | Adicionar lock atômico (UPDATE antes do envio) no fluxo de encaixe, igual ao `cron-atribuir-tarefas` |
-| `supabase/functions/whatsapp-send-text/index.ts` | Corrigir cadeia de fallback: não usar `sinistro_atualizado` como fallback para templates de confirmação/agendamento — bloquear envio com erro claro |
-| Migration SQL | Adicionar constraint UNIQUE em `confirmacoes_agendamento(servico_id)` com filtro de status ativo, para impedir duplicatas no banco |
-| Limpeza de dados | Remover as 9 confirmações duplicadas do servico `882ad539...` |
-
-### Impacto esperado
-- Zero mensagens duplicadas: lock atômico garante que apenas uma execução processa cada encaixe
-- Zero mensagens com template errado: fallback não usará mais templates de contexto diferente
-- Se o template correto não estiver aprovado, o sistema loga erro em vez de enviar mensagem confusa ao associado
+| `src/components/gestao-comercial/PlanoFormSheet.tsx` | Remover toda UI e lógica de taxa administrativa |
+| `src/hooks/usePlanosCotacao.ts` | Remover query e cálculo de `planos_taxa_administrativa` |
+| `src/hooks/useCotacao.ts` | Remover query e cálculo de `planos_taxa_administrativa` |
+| `src/hooks/usePlansAdmin.ts` | Remover duplicação de taxas ao clonar plano |
 
