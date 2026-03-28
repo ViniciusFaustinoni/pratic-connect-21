@@ -38,6 +38,10 @@ export function VistoriaFotoSequencial({
     return fotosEnviadas.some(f => f.tipo === fotoId) || uploadedLocally.has(fotoId);
   }, [fotosEnviadas, uploadedLocally]);
 
+  const getFotoUrl = useCallback((fotoId: string) => {
+    return fotosEnviadas.find(f => f.tipo === fotoId)?.arquivo_url;
+  }, [fotosEnviadas]);
+
   // Auto-avanço: quando upload completa, avança para próxima pendente
   useEffect(() => {
     if (prevUploadingRef.current && !uploadingFoto) {
