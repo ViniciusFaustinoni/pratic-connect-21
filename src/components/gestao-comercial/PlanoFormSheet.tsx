@@ -11,7 +11,7 @@ import { Checkbox } from '@/components/ui/checkbox';
 import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Loader2, FileText, DollarSign } from 'lucide-react';
+import { Loader2, FileText } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { cn } from '@/lib/utils';
 
