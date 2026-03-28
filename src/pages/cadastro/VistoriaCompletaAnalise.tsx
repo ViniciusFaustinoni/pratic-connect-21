@@ -178,6 +178,25 @@ function VideoPlayer({ url, label }: { url: string; label: string }) {
 }
 
 // ============================================
+// COMPONENTE: Status Item (checklist ativação)
+// ============================================
+function StatusItem({ label, ok }: { label: string; ok: boolean }) {
+  return (
+    <div className={cn(
+      'flex items-center gap-2 p-2.5 rounded-lg border text-sm',
+      ok ? 'bg-success/5 border-success/20' : 'bg-destructive/5 border-destructive/20'
+    )}>
+      {ok ? (
+        <CheckCircle2 className="h-4 w-4 text-success shrink-0" />
+      ) : (
+        <XCircle className="h-4 w-4 text-destructive shrink-0" />
+      )}
+      <span className="text-foreground">{label}</span>
+    </div>
+  );
+}
+
+// ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
 export default function VistoriaCompletaAnalise() {
@@ -277,8 +296,16 @@ export default function VistoriaCompletaAnalise() {
 
   const { associados, veiculos, rastreadores, instalador } = instalacao;
 
+  // Dados complementares condensados
+  const hasKm = !!(servico?.quilometragem || servico?.km_atual || vistoria?.km_atual);
+  const kmValue = servico?.quilometragem || servico?.km_atual || vistoria?.km_atual;
+  const hasAssinatura = !!servico?.assinatura_cliente_url;
+  const hasLocal = !!(rastreadorLocal && (rastreadorLocal.local_instalacao || rastreadorLocal.descricao_instalacao));
+  const hasObservacoes = !!(servico?.ressalvas_instalador || servico?.observacoes || vistoria?.observacoes);
+  const hasChecklist = !!(servico?.checklist_data && typeof servico.checklist_data === 'object');
+
   return (
-    <div className="space-y-5">
+    <div className="space-y-4">
       {/* ============================================ */}
       {/* HEADER */}
       {/* ============================================ */}
@@ -297,7 +324,7 @@ export default function VistoriaCompletaAnalise() {
               Ativação de Rastreador
             </h1>
             <p className="text-sm text-muted-foreground">
-              Instalação #{id?.slice(0, 8)} • {veiculos?.placa}
+              {veiculos?.placa} • {associados?.nome}
             </p>
           </div>
         </div>
@@ -355,328 +382,176 @@ export default function VistoriaCompletaAnalise() {
       )}
 
       {/* ============================================ */}
-      {/* RESUMO + STATUS + AÇÕES */}
+      {/* 1. RESUMO DA INSTALAÇÃO */}
       {/* ============================================ */}
-      <div className="grid gap-4 lg:grid-cols-5 items-start">
-        {/* Resumo compacto */}
-        <Card className="lg:col-span-3 border-border bg-card">
-          <CardContent className="p-4">
-            <div className="grid gap-5 sm:grid-cols-2 lg:grid-cols-3">
-              <ResumoCompacto
-                label="Cliente"
-                icon={User}
-                items={[
-                  { label: 'Nome', value: associados?.nome },
-                  { label: 'CPF', value: maskCPF(associados?.cpf || null) },
-                  { label: 'Telefone', value: associados?.telefone },
-                  { label: 'Email', value: associados?.email },
-                ]}
-              />
-              <ResumoCompacto
-                label="Veículo"
-                icon={Car}
-                items={[
-                  { label: 'Modelo', value: `${veiculos?.marca || ''} ${veiculos?.modelo || ''}`.trim() || null },
-                  { label: 'Placa', value: veiculos?.placa },
-                  { label: 'Ano', value: veiculos?.ano_modelo?.toString() },
-                  { label: 'Cor', value: veiculos?.cor },
-                ]}
-              />
-              <ResumoCompacto
-                label="Rastreador"
-                icon={Wifi}
-                items={[
-                  { label: 'IMEI', value: rastreadores?.imei },
-                  { label: 'Código', value: rastreadores?.codigo },
-                  { label: 'Plataforma', value: rastreadores?.plataforma?.toUpperCase() },
-                  { label: 'Instalador', value: instalador?.nome },
-                ]}
-              />
-            </div>
-          </CardContent>
-        </Card>
-
-        {/* Status + Ações */}
-        <div className="lg:col-span-2 space-y-4">
-          <StatusCoberturaCard
-            coberturaRouboFurto={veiculos?.cobertura_roubo_furto || false}
-            coberturaTotal={veiculos?.cobertura_total || false}
-            rastreadorVinculado={!!rastreadores}
-            rastreadorImei={rastreadores?.imei}
-            rastreadorCodigo={rastreadores?.codigo}
-            instalacaoStatus={instalacao.status}
-            carenciaIsenta={contratoCarencia?.carencia_isenta || false}
-            carenciaMotivoIsencao={contratoCarencia?.carencia_motivo_isencao}
-          />
-
-          {temRecusaPendente ? (
-            <Card className="border-destructive/50 bg-card">
-              <CardContent className="p-4 text-center">
-                <AlertTriangle className="h-6 w-6 text-destructive mx-auto mb-1" />
-                <p className="font-medium text-destructive text-sm">Ativação Bloqueada</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  Resolva a pendência antes de ativar.
-                </p>
-                <Button variant="destructive" size="sm" className="mt-2" onClick={() => setShowRecusaDialog(true)}>
-                  Tomar Decisão
-                </Button>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-border bg-card">
-              <CardContent className="p-4 space-y-2">
-                {podeAtivar ? (
-                  <Button
-                    className="w-full bg-success hover:bg-success/90 text-white"
-                    onClick={handleAtivarRastreador}
-                    disabled={isAtivando}
-                  >
-                    {isAtivando ? (
-                      <>
-                        <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                        Ativando...
-                      </>
-                    ) : (
-                      <>
-                        <Zap className="mr-2 h-4 w-4" />
-                        Ativar Rastreador
-                      </>
-                    )}
-                  </Button>
-                ) : veiculos?.cobertura_total ? (
-                  <div className="p-3 rounded-lg bg-success/10 border border-success/30 text-center">
-                    <CheckCircle2 className="h-6 w-6 text-success mx-auto mb-1" />
-                    <p className="font-medium text-success text-sm">Rastreador Ativado</p>
-                    <p className="text-xs text-muted-foreground">Proteção 360º liberada</p>
-                  </div>
-                ) : (
-                  <div className="p-3 rounded-lg bg-muted text-center">
-                    <AlertTriangle className="h-6 w-6 text-muted-foreground mx-auto mb-1" />
-                    <p className="font-medium text-muted-foreground text-sm">Indisponível</p>
-                    <p className="text-xs text-muted-foreground">
-                      {!rastreadores ? 'Sem rastreador vinculado' :
-                       !veiculos?.cobertura_roubo_furto ? 'Cobertura roubo/furto não aprovada' :
-                       'Instalação não concluída'}
-                    </p>
-                  </div>
-                )}
-                <Button variant="outline" size="sm" className="w-full" onClick={() => navigate(-1)}>
-                  <ArrowLeft className="mr-2 h-4 w-4" />
-                  Voltar
-                </Button>
-              </CardContent>
-            </Card>
-          )}
-        </div>
-      </div>
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base text-foreground flex items-center gap-2">
+            <FileText className="h-4 w-4 text-primary" />
+            Resumo da Instalação
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-4 sm:grid-cols-2 lg:grid-cols-4">
+            <ResumoCompacto
+              label="Cliente"
+              icon={User}
+              items={[
+                { label: 'Nome', value: associados?.nome },
+                { label: 'CPF', value: maskCPF(associados?.cpf || null) },
+                { label: 'Telefone', value: associados?.telefone },
+              ]}
+            />
+            <ResumoCompacto
+              label="Veículo"
+              icon={Car}
+              items={[
+                { label: 'Modelo', value: `${veiculos?.marca || ''} ${veiculos?.modelo || ''}`.trim() || null },
+                { label: 'Placa', value: veiculos?.placa },
+                { label: 'Ano', value: veiculos?.ano_modelo?.toString() },
+              ]}
+            />
+            <ResumoCompacto
+              label="Rastreador"
+              icon={Wifi}
+              items={[
+                { label: 'IMEI', value: rastreadores?.imei },
+                { label: 'Código', value: rastreadores?.codigo },
+                { label: 'Plataforma', value: rastreadores?.plataforma?.toUpperCase() },
+              ]}
+            />
+            <ResumoCompacto
+              label="Instalação"
+              icon={Calendar}
+              items={[
+                { label: 'Instalador', value: instalador?.nome },
+                { label: 'Conclusão', value: instalacao.concluida_em ? format(new Date(instalacao.concluida_em), "dd/MM/yyyy HH:mm", { locale: ptBR }) : '---' },
+                ...(hasKm ? [{ label: 'KM', value: `${kmValue?.toLocaleString('pt-BR')} km` }] : []),
+              ]}
+            />
+          </div>
+        </CardContent>
+      </Card>
 
       {/* ============================================ */}
-      {/* TABS: Instalação | Autovistoria | Checklist */}
+      {/* 2. CHECKLIST PARA ATIVAÇÃO */}
       {/* ============================================ */}
-      <Tabs defaultValue="instalacao" className="w-full">
-        <TabsList className="w-full justify-start bg-muted/50 border border-border h-11">
-          <TabsTrigger value="instalacao" className="gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-            <Wrench className="h-4 w-4" />
-            <span className="hidden sm:inline">Fotos do</span> Instalador
-            <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-              {fotosVistoria.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="autovistoria" className="gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-            <Camera className="h-4 w-4" />
-            Autovistoria
-            <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
-              {autovistoria.fotos.length}
-            </Badge>
-          </TabsTrigger>
-          <TabsTrigger value="checklist" className="gap-1.5 data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
-            <ClipboardCheck className="h-4 w-4" />
-            <span className="hidden sm:inline">Checklist &</span> Detalhes
-          </TabsTrigger>
-        </TabsList>
-
-        {/* ======== TAB: INSTALAÇÃO ======== */}
-        <TabsContent value="instalacao" className="space-y-4 mt-4">
-          {/* Badge de identificação */}
-          <div className="flex items-center gap-2 flex-wrap">
-            <Badge className="bg-primary/10 text-primary border-primary/30">
-              <Wrench className="h-3 w-3 mr-1" />
-              Instalador: {vistoriadorNome || instalador?.nome || 'Não identificado'}
-            </Badge>
-            {instalacao.concluida_em && (
-              <span className="text-xs text-muted-foreground">
-                Concluída em {format(new Date(instalacao.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
-              </span>
+      <Card className="border-border bg-card">
+        <CardHeader className="pb-3">
+          <CardTitle className="text-base text-foreground flex items-center gap-2">
+            <ClipboardCheck className="h-4 w-4 text-primary" />
+            Checklist para Ativação
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div className="grid gap-2 md:grid-cols-2">
+            <StatusItem label="Rastreador vinculado" ok={!!rastreadores} />
+            <StatusItem label="Instalação concluída" ok={instalacao.status === 'concluida'} />
+            <StatusItem label="Cobertura roubo/furto" ok={veiculos?.cobertura_roubo_furto || false} />
+            <StatusItem label="Cobertura total (360°)" ok={veiculos?.cobertura_total || false} />
+            {contratoCarencia?.carencia_isenta && (
+              <StatusItem label={`Carência isenta: ${contratoCarencia.carencia_motivo_isencao || ''}`} ok={true} />
             )}
           </div>
+        </CardContent>
+      </Card>
 
-          {/* Vídeo 360° do instalador */}
-          {vistoria?.video_360_url && (
-            <VideoPlayer url={vistoria.video_360_url} label="Vídeo 360° — Instalador" />
-          )}
+      {/* ============================================ */}
+      {/* 3. FOTOS & VÍDEOS — TABS POR ORIGEM */}
+      {/* ============================================ */}
+      <Card className="border-border bg-card">
+        <Tabs defaultValue="instalacao" className="w-full">
+          <CardHeader className="pb-0">
+            <TabsList className="w-full justify-start bg-muted/50 border border-border h-10">
+              <TabsTrigger value="instalacao" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+                <Wrench className="h-3.5 w-3.5" />
+                Instalador
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+                  {fotosVistoria.length}
+                </Badge>
+              </TabsTrigger>
+              <TabsTrigger value="autovistoria" className="gap-1.5 text-xs sm:text-sm data-[state=active]:bg-primary/10 data-[state=active]:text-primary">
+                <Camera className="h-3.5 w-3.5" />
+                Autovistoria
+                <Badge variant="secondary" className="ml-1 text-[10px] px-1.5 py-0">
+                  {autovistoria.fotos.length}
+                </Badge>
+              </TabsTrigger>
+            </TabsList>
+          </CardHeader>
 
-          {/* Grid de fotos */}
-          <div>
-            <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-              <Camera className="h-4 w-4 text-primary" />
-              Fotos da Vistoria ({fotosVistoria.length} fotos)
-            </h3>
-            <FotosGrid fotos={fotosVistoria} onFotoClick={setFotoAmpliada} />
-          </div>
-
-          {/* Dados adicionais da instalação */}
-          <div className="flex flex-wrap gap-4">
-            {/* Quilometragem */}
-            {(servico?.quilometragem || servico?.km_atual || vistoria?.km_atual) && (
-              <Card className="border-border bg-card flex-1 min-w-[200px]">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-1">
-                    <Gauge className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold text-foreground">Quilometragem</span>
-                  </div>
-                  <p className="text-xl font-bold text-foreground">
-                    {(servico?.quilometragem || servico?.km_atual || vistoria?.km_atual)?.toLocaleString('pt-BR')} km
-                  </p>
-                </CardContent>
-              </Card>
-            )}
-
-            {/* Assinatura do cliente */}
-            {servico?.assinatura_cliente_url && (
-              <Card className="border-border bg-card flex-1 min-w-[200px]">
-                <CardContent className="p-4">
-                  <div className="flex items-center gap-2 mb-2">
-                    <PenTool className="h-4 w-4 text-primary" />
-                    <span className="text-sm font-semibold text-foreground">Assinatura do Cliente</span>
-                  </div>
-                  <div className="border border-border rounded-lg p-2 bg-white">
-                    <img
-                      src={servico.assinatura_cliente_url}
-                      alt="Assinatura do cliente"
-                      className="w-full max-h-24 object-contain"
-                    />
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-          </div>
-
-          {/* Local de instalação */}
-          {rastreadorLocal && (rastreadorLocal.local_instalacao || rastreadorLocal.descricao_instalacao) && (
-            <Card className="border-border bg-card">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <MapPin className="h-4 w-4 text-primary" />
-                  <span className="text-sm font-semibold text-foreground">Local de Instalação do Rastreador</span>
-                </div>
-                <div className="grid gap-3 sm:grid-cols-2">
-                  <div>
-                    {rastreadorLocal.local_instalacao && (
-                      <div className="mb-2">
-                        <p className="text-xs text-muted-foreground">Local selecionado</p>
-                        <p className="text-sm font-medium text-foreground">{rastreadorLocal.local_instalacao}</p>
-                      </div>
-                    )}
-                    {rastreadorLocal.descricao_instalacao && (
-                      <div>
-                        <p className="text-xs text-muted-foreground">Descrição do ponto</p>
-                        <p className="text-sm text-foreground">{rastreadorLocal.descricao_instalacao}</p>
-                      </div>
-                    )}
-                  </div>
-                  {rastreadorLocal.foto_local_instalacao_url && (
-                    <img
-                      src={rastreadorLocal.foto_local_instalacao_url}
-                      alt="Local de instalação"
-                      className="w-full max-w-xs rounded-lg border border-border cursor-pointer hover:opacity-80"
-                      onClick={() => setFotoAmpliada(rastreadorLocal.foto_local_instalacao_url!)}
-                    />
-                  )}
-                </div>
-              </CardContent>
-            </Card>
-          )}
-
-          {/* Observações do instalador */}
-          {(servico?.ressalvas_instalador || servico?.observacoes || vistoria?.observacoes) && (
-            <Card className="border-amber-500/30 bg-amber-500/5">
-              <CardContent className="p-4 space-y-2">
-                <div className="flex items-center gap-2 mb-1">
-                  <MessageSquare className="h-4 w-4 text-amber-500" />
-                  <span className="text-sm font-semibold text-foreground">Observações do Instalador</span>
-                </div>
-                {servico?.ressalvas_instalador && (
-                  <div className="p-2 rounded-lg bg-muted/50 border border-border">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-0.5">Ressalvas</p>
-                    <p className="text-sm text-foreground whitespace-pre-wrap">{servico.ressalvas_instalador}</p>
-                  </div>
+          {/* Tab Instalador */}
+          <TabsContent value="instalacao">
+            <CardContent className="pt-4 space-y-4">
+              <div className="flex items-center gap-2 flex-wrap">
+                <Badge className="bg-primary/10 text-primary border-primary/30 text-xs">
+                  <Wrench className="h-3 w-3 mr-1" />
+                  {vistoriadorNome || instalador?.nome || 'Não identificado'}
+                </Badge>
+                {instalacao.concluida_em && (
+                  <span className="text-xs text-muted-foreground">
+                    {format(new Date(instalacao.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })}
+                  </span>
                 )}
-                {(servico?.observacoes || vistoria?.observacoes) && (
-                  <div className="p-2 rounded-lg bg-muted/50 border border-border">
-                    <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-0.5">Observações</p>
-                    <p className="text-sm text-foreground whitespace-pre-wrap">{servico?.observacoes || vistoria?.observacoes}</p>
-                  </div>
-                )}
-              </CardContent>
-            </Card>
-          )}
-        </TabsContent>
+              </div>
 
-        {/* ======== TAB: AUTOVISTORIA ======== */}
-        <TabsContent value="autovistoria" className="space-y-4 mt-4">
-          {/* Badge de identificação */}
-          <div className="flex items-center gap-2">
-            <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30">
-              <User className="h-3 w-3 mr-1" />
-              Associado: {autovistoria.associadoNome || associados?.nome || 'Não identificado'}
-            </Badge>
-          </div>
-
-          {autovistoria.fotos.length === 0 && !autovistoria.video360Url ? (
-            <Card className="border-border bg-card">
-              <CardContent className="p-8 text-center">
-                <Image className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-40" />
-                <p className="text-muted-foreground font-medium">Nenhuma autovistoria encontrada</p>
-                <p className="text-xs text-muted-foreground mt-1">
-                  O associado ainda não realizou a autovistoria, ou as fotos estão vinculadas de outra forma.
-                </p>
-              </CardContent>
-            </Card>
-          ) : (
-            <>
-              {/* Vídeo 360° do associado */}
-              {autovistoria.video360Url && (
-                <VideoPlayer url={autovistoria.video360Url} label="Vídeo 360° — Associado" />
+              {vistoria?.video_360_url && (
+                <VideoPlayer url={vistoria.video_360_url} label="Vídeo 360° — Instalador" />
               )}
 
-              {/* Grid de fotos */}
-              <div>
-                <h3 className="text-sm font-semibold text-foreground mb-2 flex items-center gap-2">
-                  <Camera className="h-4 w-4 text-emerald-500" />
-                  Fotos da Autovistoria ({autovistoria.fotos.length} fotos)
-                </h3>
-                <FotosGrid fotos={autovistoria.fotos} onFotoClick={setFotoAmpliada} />
-              </div>
-            </>
-          )}
-        </TabsContent>
+              <FotosGrid fotos={fotosVistoria} onFotoClick={setFotoAmpliada} />
+            </CardContent>
+          </TabsContent>
 
-        {/* ======== TAB: CHECKLIST & DETALHES ======== */}
-        <TabsContent value="checklist" className="space-y-4 mt-4">
-          {/* Checklist do Instalador */}
-          {servico?.checklist_data && typeof servico.checklist_data === 'object' ? (
-            <Card className="border-border bg-card">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-foreground text-base">
-                  <ClipboardCheck className="h-5 w-5 text-primary" />
+          {/* Tab Autovistoria */}
+          <TabsContent value="autovistoria">
+            <CardContent className="pt-4 space-y-4">
+              <Badge className="bg-emerald-500/10 text-emerald-600 border-emerald-500/30 text-xs">
+                <User className="h-3 w-3 mr-1" />
+                {autovistoria.associadoNome || associados?.nome || 'Não identificado'}
+              </Badge>
+
+              {autovistoria.fotos.length === 0 && !autovistoria.video360Url ? (
+                <div className="text-center py-6 text-muted-foreground">
+                  <Image className="h-10 w-10 mx-auto mb-2 opacity-40" />
+                  <p className="text-sm">Nenhuma autovistoria encontrada</p>
+                </div>
+              ) : (
+                <>
+                  {autovistoria.video360Url && (
+                    <VideoPlayer url={autovistoria.video360Url} label="Vídeo 360° — Associado" />
+                  )}
+                  <FotosGrid fotos={autovistoria.fotos} onFotoClick={setFotoAmpliada} />
+                </>
+              )}
+            </CardContent>
+          </TabsContent>
+        </Tabs>
+      </Card>
+
+      {/* ============================================ */}
+      {/* 4. DADOS COMPLEMENTARES (só se houver algo) */}
+      {/* ============================================ */}
+      {(hasAssinatura || hasLocal || hasObservacoes || hasChecklist) && (
+        <Card className="border-border bg-card">
+          <CardHeader className="pb-3">
+            <CardTitle className="text-base text-foreground flex items-center gap-2">
+              <FileText className="h-4 w-4 text-primary" />
+              Dados Complementares
+            </CardTitle>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            {/* Checklist inline */}
+            {hasChecklist && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <ClipboardCheck className="h-4 w-4 text-primary" />
                   Checklist do Instalador
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="space-y-1.5">
-                  {Object.entries(servico.checklist_data as Record<string, any>).map(([key, val]: [string, any]) => (
+                </p>
+                <div className="grid gap-1.5 sm:grid-cols-2">
+                  {Object.entries(servico!.checklist_data as Record<string, any>).map(([key, val]: [string, any]) => (
                     <div key={key} className={cn(
-                      'flex items-start gap-2 p-2.5 rounded-lg border',
+                      'flex items-start gap-2 p-2 rounded-lg border text-sm',
                       val?.status === 'ok' ? 'bg-success/5 border-success/20' :
                       val?.status === 'nok' ? 'bg-destructive/5 border-destructive/20' :
                       'bg-muted/50 border-border'
@@ -689,113 +564,156 @@ export default function VistoriaCompletaAnalise() {
                         <div className="h-4 w-4 rounded-full border-2 border-muted-foreground mt-0.5 shrink-0" />
                       )}
                       <div className="flex-1 min-w-0">
-                        <p className="text-sm font-medium text-foreground">
+                        <p className="font-medium text-foreground">
                           {key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
                         </p>
                         {val?.observacao && (
-                          <p className="text-xs text-muted-foreground mt-0.5">{val.observacao}</p>
-                        )}
-                        {val?.fotos && (val.fotos as string[]).length > 0 && (
-                          <div className="flex gap-1 mt-1">
-                            {(val.fotos as string[]).map((url: string, i: number) => (
-                              <img
-                                key={i}
-                                src={url}
-                                alt={`Evidência ${i + 1}`}
-                                className="h-10 w-10 rounded object-cover cursor-pointer border border-border hover:opacity-80"
-                                onClick={() => setFotoAmpliada(url)}
-                              />
-                            ))}
-                          </div>
+                          <p className="text-xs text-muted-foreground">{val.observacao}</p>
                         )}
                       </div>
                     </div>
                   ))}
                 </div>
-              </CardContent>
-            </Card>
-          ) : (
-            <Card className="border-border bg-card">
-              <CardContent className="p-8 text-center">
-                <ClipboardCheck className="h-12 w-12 mx-auto mb-3 text-muted-foreground opacity-40" />
-                <p className="text-muted-foreground font-medium">Nenhum checklist registrado</p>
-              </CardContent>
-            </Card>
-          )}
+              </div>
+            )}
 
-          {/* Dados da Instalação */}
-          <Card className="border-border bg-card">
-            <CardHeader className="pb-3">
-              <CardTitle className="flex items-center gap-2 text-foreground text-base">
-                <Calendar className="h-5 w-5 text-primary" />
-                Dados da Instalação
-              </CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div className="grid gap-3 sm:grid-cols-2">
-                <div>
-                  <p className="text-xs text-muted-foreground">Data de Conclusão</p>
-                  <p className="text-sm font-medium text-foreground">
-                    {instalacao.concluida_em
-                      ? format(new Date(instalacao.concluida_em), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR })
-                      : '---'}
-                  </p>
-                </div>
-                <div>
-                  <p className="text-xs text-muted-foreground">Instalador Responsável</p>
-                  <p className="text-sm font-medium text-foreground">{instalador?.nome || '---'}</p>
-                </div>
-                {instalacao.observacoes && (
-                  <div className="sm:col-span-2">
-                    <p className="text-xs text-muted-foreground">Observações da Instalação</p>
-                    <p className="text-sm text-foreground">{instalacao.observacoes}</p>
+            {/* Assinatura + Local lado a lado */}
+            {(hasAssinatura || hasLocal) && (
+              <div className="grid gap-4 sm:grid-cols-2">
+                {hasAssinatura && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <PenTool className="h-4 w-4 text-primary" />
+                      Assinatura do Cliente
+                    </p>
+                    <div className="border border-border rounded-lg p-2 bg-white">
+                      <img
+                        src={servico!.assinatura_cliente_url!}
+                        alt="Assinatura do cliente"
+                        className="w-full max-h-24 object-contain"
+                      />
+                    </div>
+                  </div>
+                )}
+                {hasLocal && (
+                  <div className="space-y-2">
+                    <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                      <MapPin className="h-4 w-4 text-primary" />
+                      Local de Instalação
+                    </p>
+                    <div className="space-y-1">
+                      {rastreadorLocal!.local_instalacao && (
+                        <p className="text-sm text-foreground">{rastreadorLocal!.local_instalacao}</p>
+                      )}
+                      {rastreadorLocal!.descricao_instalacao && (
+                        <p className="text-xs text-muted-foreground">{rastreadorLocal!.descricao_instalacao}</p>
+                      )}
+                      {rastreadorLocal!.foto_local_instalacao_url && (
+                        <img
+                          src={rastreadorLocal!.foto_local_instalacao_url}
+                          alt="Local de instalação"
+                          className="w-full max-w-[200px] rounded-lg border border-border cursor-pointer hover:opacity-80 mt-1"
+                          onClick={() => setFotoAmpliada(rastreadorLocal!.foto_local_instalacao_url!)}
+                        />
+                      )}
+                    </div>
                   </div>
                 )}
               </div>
-            </CardContent>
-          </Card>
+            )}
 
-          {/* Dados do Rastreador */}
-          {rastreadores && (
-            <Card className="border-border bg-card">
-              <CardHeader className="pb-3">
-                <CardTitle className="flex items-center gap-2 text-foreground text-base">
-                  <Wifi className="h-5 w-5 text-primary" />
-                  Dados do Rastreador
-                </CardTitle>
-              </CardHeader>
-              <CardContent>
-                <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-                  <div>
-                    <p className="text-xs text-muted-foreground">IMEI</p>
-                    <p className="text-sm font-medium text-foreground">{rastreadores.imei}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Código</p>
-                    <p className="text-sm font-medium text-foreground">{rastreadores.codigo || '---'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Número de Série</p>
-                    <p className="text-sm font-medium text-foreground">{rastreadores.numero_serie || '---'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Plataforma</p>
-                    <p className="text-sm font-medium text-foreground">{rastreadores.plataforma?.toUpperCase() || '---'}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Status</p>
-                    <p className="text-sm font-medium text-foreground">{rastreadores.status}</p>
-                  </div>
-                  <div>
-                    <p className="text-xs text-muted-foreground">Device ID</p>
-                    <p className="text-sm font-medium text-foreground">{rastreadores.plataforma_device_id || 'Não sincronizado'}</p>
-                  </div>
+            {/* Observações */}
+            {hasObservacoes && (
+              <div className="space-y-2">
+                <p className="text-sm font-semibold text-foreground flex items-center gap-2">
+                  <MessageSquare className="h-4 w-4 text-warning" />
+                  Observações do Instalador
+                </p>
+                <div className="space-y-2">
+                  {servico?.ressalvas_instalador && (
+                    <div className="p-2.5 rounded-lg bg-warning/5 border border-warning/20">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-0.5">Ressalvas</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{servico.ressalvas_instalador}</p>
+                    </div>
+                  )}
+                  {(servico?.observacoes || vistoria?.observacoes) && (
+                    <div className="p-2.5 rounded-lg bg-muted/50 border border-border">
+                      <p className="text-[10px] font-semibold text-muted-foreground uppercase mb-0.5">Observações</p>
+                      <p className="text-sm text-foreground whitespace-pre-wrap">{servico?.observacoes || vistoria?.observacoes}</p>
+                    </div>
+                  )}
                 </div>
-              </CardContent>
-            </Card>
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
+      {/* ============================================ */}
+      {/* 5. AÇÃO FINAL */}
+      {/* ============================================ */}
+      <Card className={cn(
+        'border-2',
+        temRecusaPendente ? 'border-destructive/50' :
+        podeAtivar ? 'border-success/50' :
+        veiculos?.cobertura_total ? 'border-success/30' : 'border-border'
+      )}>
+        <CardContent className="p-5">
+          {temRecusaPendente ? (
+            <div className="text-center space-y-2">
+              <AlertTriangle className="h-8 w-8 text-destructive mx-auto" />
+              <p className="font-semibold text-destructive">Ativação Bloqueada</p>
+              <p className="text-sm text-muted-foreground">Resolva a pendência de recusa antes de ativar.</p>
+              <Button variant="destructive" size="sm" onClick={() => setShowRecusaDialog(true)}>
+                Tomar Decisão
+              </Button>
+            </div>
+          ) : podeAtivar ? (
+            <div className="flex flex-col sm:flex-row items-center gap-4">
+              <div className="flex-1 text-center sm:text-left">
+                <p className="font-semibold text-foreground">Tudo pronto para ativação</p>
+                <p className="text-sm text-muted-foreground">
+                  Rastreador {rastreadores?.imei} será ativado na plataforma {rastreadores?.plataforma?.toUpperCase()} para o veículo {veiculos?.placa}.
+                </p>
+              </div>
+              <Button
+                className="bg-success hover:bg-success/90 text-white px-8"
+                size="lg"
+                onClick={handleAtivarRastreador}
+                disabled={isAtivando}
+              >
+                {isAtivando ? (
+                  <>
+                    <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                    Ativando...
+                  </>
+                ) : (
+                  <>
+                    <Zap className="mr-2 h-4 w-4" />
+                    Ativar Rastreador
+                  </>
+                )}
+              </Button>
+            </div>
+          ) : veiculos?.cobertura_total ? (
+            <div className="text-center space-y-1">
+              <CheckCircle2 className="h-8 w-8 text-success mx-auto" />
+              <p className="font-semibold text-success">Rastreador Ativado</p>
+              <p className="text-sm text-muted-foreground">Proteção 360° liberada para {veiculos?.placa}</p>
+            </div>
+          ) : (
+            <div className="text-center space-y-1">
+              <AlertTriangle className="h-8 w-8 text-muted-foreground mx-auto" />
+              <p className="font-semibold text-muted-foreground">Ativação Indisponível</p>
+              <p className="text-sm text-muted-foreground">
+                {!rastreadores ? 'Sem rastreador vinculado' :
+                 !veiculos?.cobertura_roubo_furto ? 'Cobertura roubo/furto não aprovada' :
+                 'Instalação não concluída'}
+              </p>
+            </div>
           )}
-        </TabsContent>
-      </Tabs>
+        </CardContent>
+      </Card>
 
       {/* ============================================ */}
       {/* MODAL FOTO AMPLIADA */}
