@@ -159,9 +159,17 @@ export function VideoCapture({
       URL.revokeObjectURL(previewUrl);
     }
     setPreviewUrl(null);
+    setPendingFile(null);
     setRecordingTime(0);
     setError(null);
     onReset?.();
+  };
+
+  const handleConfirmUpload = () => {
+    if (pendingFile) {
+      onCapture(pendingFile);
+      setPendingFile(null);
+    }
   };
 
   const formatTime = (seconds: number) => {
