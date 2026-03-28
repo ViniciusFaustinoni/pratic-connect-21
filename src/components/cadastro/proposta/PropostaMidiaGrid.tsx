@@ -25,7 +25,7 @@ import { ptBR } from 'date-fns/locale';
 import type { VistoriaFotoInfo } from '@/hooks/usePropostasPendentes';
 import { DocumentosSolicitadosCard, type DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
 
-interface PropostaMidiaGridProps {
+const isVideoTipo = (tipo?: string | null) => tipo?.startsWith('video');
   video360Url?: string | null;
   fotos: VistoriaFotoInfo[];
   assinaturaUrl?: string | null;
