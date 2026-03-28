@@ -78,11 +78,11 @@ function ResumoCompacto({
         <Icon className="h-4 w-4 text-primary" />
         <span className="text-sm font-semibold text-foreground">{label}</span>
       </div>
-      <div className="grid grid-cols-2 gap-x-4 gap-y-1">
+      <div className="space-y-1">
         {items.map((item, idx) => (
           <div key={idx} className="flex items-baseline gap-1.5">
             <span className="text-xs text-muted-foreground whitespace-nowrap">{item.label}:</span>
-            <span className="text-sm text-foreground font-medium truncate">{item.value || '---'}</span>
+            <span className="text-sm text-foreground font-medium break-all">{item.value || '---'}</span>
           </div>
         ))}
       </div>
