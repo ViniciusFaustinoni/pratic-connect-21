@@ -88,35 +88,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
     }
   }, [existingPlan]);
 
-  // Generate taxa faixas from min/max/interval
-  const generateTaxaFaixas = useCallback(() => {
-    const min = parseFloat(taxaFipeMin);
-    const max = parseFloat(taxaFipeMax);
-    const intervalo = parseFloat(taxaIntervalo);
-    if (isNaN(min) || isNaN(max) || isNaN(intervalo) || intervalo <= 0 || max <= min) return;
 
-    const newFaixas: TaxaFaixa[] = [];
-    let current = min;
-    while (current < max) {
-      const fimFaixa = Math.min(current + intervalo, max);
-      // Try to keep existing values
-      const existing = taxaFaixas.find(f => f.fipe_de === current && f.fipe_ate === fimFaixa);
-      newFaixas.push({
-        fipe_de: current,
-        fipe_ate: fimFaixa,
-        valor_taxa: existing?.valor_taxa ?? 0,
-      });
-      current = fimFaixa;
-    }
-    setTaxaFaixas(newFaixas);
-  }, [taxaFipeMin, taxaFipeMax, taxaIntervalo, taxaFaixas]);
-
-  const canGenerateFaixas = useMemo(() => {
-    const min = parseFloat(taxaFipeMin);
-    const max = parseFloat(taxaFipeMax);
-    const intervalo = parseFloat(taxaIntervalo);
-    return !isNaN(min) && !isNaN(max) && !isNaN(intervalo) && intervalo > 0 && max > min;
-  }, [taxaFipeMin, taxaFipeMax, taxaIntervalo]);
 
   // Calculate total
   const valorTotal = useMemo(() => {
