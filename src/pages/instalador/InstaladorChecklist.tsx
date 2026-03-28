@@ -1261,73 +1261,15 @@ export default function InstaladorChecklist() {
               </div>
             )}
 
-            {/* Categorias de Fotos */}
+            {/* Fotos Sequenciais */}
             {!isLoadingVistoria && vistoriaId && (
               <div className="space-y-3">
-                {categoriasComFotos.map((categoria) => {
-                  const { enviadas, total } = getProgressoCategoria(categoria.fotos);
-                  const isComplete = enviadas === total;
-                  const isOpen = openCategorias.includes(categoria.id);
-
-                  return (
-                    <Collapsible
-                      key={categoria.id}
-                      open={isOpen}
-                      onOpenChange={() => toggleCategoria(categoria.id)}
-                    >
-                      <CollapsibleTrigger className="w-full">
-                        <div
-                          className={cn(
-                            "flex items-center justify-between p-3 rounded-lg border transition-all",
-                            isComplete
-                              ? "bg-emerald-950/30 border-emerald-800"
-                              : "bg-slate-800 border-slate-700 hover:border-slate-600"
-                          )}
-                        >
-                          <div className="flex items-center gap-2">
-                            {isOpen ? (
-                              <ChevronDown className="h-4 w-4 text-slate-400" />
-                            ) : (
-                              <ChevronRight className="h-4 w-4 text-slate-400" />
-                            )}
-                            <span className="font-medium text-white text-sm">{categoria.nome}</span>
-                          </div>
-
-                          <div className="flex items-center gap-2">
-                            {isComplete && (
-                              <CheckCircle2 className="h-4 w-4 text-emerald-500" />
-                            )}
-                            <span
-                              className={cn(
-                                "text-xs font-medium px-2 py-0.5 rounded-full",
-                                isComplete
-                                  ? "bg-emerald-900/50 text-emerald-300"
-                                  : "bg-slate-700 text-slate-400"
-                              )}
-                            >
-                              {enviadas}/{total}
-                            </span>
-                          </div>
-                        </div>
-                      </CollapsibleTrigger>
-
-                      <CollapsibleContent>
-                        <div className="grid grid-cols-2 gap-3 mt-3 px-1">
-                          {categoria.fotos.map((foto) => (
-                            <VistoriaFotoCard
-                              key={foto.id}
-                              foto={foto}
-                              fotoUrl={getFotoUrl(foto.id)}
-                              isUploading={uploadingFoto === foto.id}
-                              onUpload={(file) => handleFotoCapture(foto.id, file)}
-                            />
-                          ))}
-                        </div>
-                      </CollapsibleContent>
-                    </Collapsible>
-                  );
-                })}
-
+                <VistoriaFotoSequencial
+                  fotos={fotosConfig.filter(f => f.categoria !== 'instalacao' && f.categoria !== 'rastreador')}
+                  fotosEnviadas={fotosEnviadas}
+                  uploadingFoto={uploadingFoto}
+                  onUpload={(fotoId, file) => handleFotoCapture(fotoId, file)}
+                />
 
                 {/* Vídeo 360 Obrigatório */}
                 <Card className={cn(
