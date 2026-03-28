@@ -397,7 +397,7 @@ export default function VistoriaCompletaAnalise() {
         </Card>
 
         {/* Status + Ações */}
-        <div className="space-y-4">
+        <div className="lg:col-span-2 space-y-4">
           <StatusCoberturaCard
             coberturaRouboFurto={veiculos?.cobertura_roubo_furto || false}
             coberturaTotal={veiculos?.cobertura_total || false}
