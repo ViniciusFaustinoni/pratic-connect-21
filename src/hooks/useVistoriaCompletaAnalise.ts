@@ -10,6 +10,8 @@ interface InstalacaoCompleta {
   periodo: string | null;
   concluida_em: string | null;
   observacoes: string | null;
+  contrato_id: string | null;
+  cotacao_id: string | null;
   associados: {
     id: string;
     nome: string;
@@ -54,6 +56,13 @@ interface AtivarRastreadorParams {
   imei: string;
 }
 
+export interface FotoVistoriaItem {
+  id: string;
+  tipo: string;
+  arquivo_url: string;
+  created_at: string;
+}
+
 /**
  * Hook para buscar dados de uma instalação completa para análise
  */
@@ -72,6 +81,8 @@ export function useInstalacaoParaAnalise(instalacaoId: string | undefined) {
           periodo,
           concluida_em,
           observacoes,
+          contrato_id,
+          cotacao_id,
           associados (
             id, nome, email, telefone, cpf, status
           ),
@@ -102,8 +113,6 @@ export function useInstalacoesAguardandoAtivacao() {
   return useQuery({
     queryKey: ['instalacoes-aguardando-ativacao'],
     queryFn: async () => {
-      // Buscar instalações concluídas onde o veículo tem cobertura_roubo_furto
-      // mas NÃO tem cobertura_total (rastreador não ativado na plataforma)
       const { data, error } = await supabase
         .from('instalacoes')
         .select(`
@@ -139,7 +148,6 @@ export function useAtivarRastreadorPlataforma() {
     mutationFn: async (params: AtivarRastreadorParams) => {
       const { instalacaoId, veiculoId, associadoId, rastreadorId, imei } = params;
 
-      // 1. Buscar plataforma do rastreador
       const { data: rastreador, error: rastError } = await supabase
         .from('rastreadores')
         .select('plataforma')
@@ -148,14 +156,12 @@ export function useAtivarRastreadorPlataforma() {
 
       if (rastError) throw new Error('Erro ao buscar dados do rastreador');
 
-      // 2. Buscar email do associado
       const { data: associado } = await supabase
         .from('associados')
         .select('email')
         .eq('id', associadoId)
         .single();
 
-      // 3. Chamar Edge Function de ativação baseado na plataforma
       if (rastreador.plataforma === 'softruck') {
         const { data: result, error } = await supabase.functions.invoke('softruck-ativar-dispositivo', {
           body: {
@@ -170,7 +176,6 @@ export function useAtivarRastreadorPlataforma() {
         if (!result.success) throw new Error(result.error || 'Erro ao ativar na Softruck');
       }
 
-      // 4. Atualizar veículo com cobertura_total = true
       const { error: veicError } = await supabase
         .from('veiculos')
         .update({
@@ -182,7 +187,6 @@ export function useAtivarRastreadorPlataforma() {
 
       if (veicError) throw veicError;
 
-      // 5. Ativar associado
       const { error: assocError } = await supabase
         .from('associados')
         .update({
@@ -194,7 +198,6 @@ export function useAtivarRastreadorPlataforma() {
 
       if (assocError) throw assocError;
 
-      // 6. Notificar associado via WhatsApp sobre cobertura total ativada
       try {
         const { data: veiculoInfo } = await supabase
           .from('veiculos')
@@ -213,7 +216,6 @@ export function useAtivarRastreadorPlataforma() {
         console.warn('[ativar-rastreador] Erro ao preparar notificação (não crítico):', notifError);
       }
 
-      // 7. Registrar no histórico
       await supabase.from('associados_historico').insert({
         associado_id: associadoId,
         tipo: 'ativacao',
@@ -250,14 +252,13 @@ export function useAtivarRastreadorPlataforma() {
  * Hook para buscar dados da vistoria/instalação do instalador
  */
 function useInstaladorData(instalacaoId: string | undefined) {
-  // Buscar vistoria vinculada à instalação
   const vistoria = useQuery({
     queryKey: ['vistoria-instalacao', instalacaoId],
     queryFn: async () => {
       if (!instalacaoId) return null;
       const { data, error } = await supabase
         .from('vistorias')
-        .select('id, video_360_url, km_atual, observacoes, status')
+        .select('id, video_360_url, km_atual, observacoes, status, modalidade, vistoriador_id')
         .eq('instalacao_id', instalacaoId)
         .order('created_at', { ascending: false })
         .limit(1)
@@ -268,7 +269,6 @@ function useInstaladorData(instalacaoId: string | undefined) {
     enabled: !!instalacaoId,
   });
 
-  // Buscar fotos da vistoria
   const fotos = useQuery({
     queryKey: ['vistoria-fotos-instalacao', vistoria.data?.id],
     queryFn: async () => {
@@ -284,7 +284,6 @@ function useInstaladorData(instalacaoId: string | undefined) {
     enabled: !!vistoria.data?.id,
   });
 
-  // Buscar serviço vinculado à instalação
   const servico = useQuery({
     queryKey: ['servico-instalacao-dados', instalacaoId],
     queryFn: async () => {
@@ -303,7 +302,6 @@ function useInstaladorData(instalacaoId: string | undefined) {
     enabled: !!instalacaoId,
   });
 
-  // Buscar dados expandidos do rastreador (local instalação)
   const rastreadorExpanded = useQuery({
     queryKey: ['rastreador-instalacao-local', instalacaoId],
     queryFn: async () => {
@@ -325,13 +323,142 @@ function useInstaladorData(instalacaoId: string | undefined) {
     enabled: !!instalacaoId,
   });
 
+  // Buscar nome do vistoriador/instalador
+  const vistoriadorNome = useQuery({
+    queryKey: ['vistoriador-nome', vistoria.data?.vistoriador_id],
+    queryFn: async () => {
+      if (!vistoria.data?.vistoriador_id) return null;
+      const { data } = await supabase
+        .from('profiles')
+        .select('nome')
+        .eq('id', vistoria.data.vistoriador_id)
+        .single();
+      return data?.nome || null;
+    },
+    enabled: !!vistoria.data?.vistoriador_id,
+  });
+
   return {
     vistoria: vistoria.data,
-    fotos: fotos.data || [],
+    fotos: (fotos.data || []) as FotoVistoriaItem[],
     servico: servico.data,
     rastreadorLocal: rastreadorExpanded.data,
+    vistoriadorNome: vistoriadorNome.data,
     isLoadingInstaladorData: vistoria.isLoading || fotos.isLoading || servico.isLoading || rastreadorExpanded.isLoading,
   };
+}
+
+/**
+ * Hook para buscar fotos/vídeo da autovistoria do associado
+ */
+function useAutovistoriaData(contratoId: string | null | undefined, cotacaoId: string | null | undefined) {
+  return useQuery({
+    queryKey: ['autovistoria-dados', contratoId, cotacaoId],
+    queryFn: async (): Promise<{
+      fotos: FotoVistoriaItem[];
+      video360Url: string | null;
+      associadoNome: string | null;
+      origem: string;
+    }> => {
+      // 1. Buscar vistoria de autovistoria via contrato_id
+      if (contratoId) {
+        const { data: vistoriaContrato } = await supabase
+          .from('vistorias')
+          .select('id, video_360_url, modalidade, associado_id')
+          .eq('contrato_id', contratoId)
+          .neq('modalidade', 'presencial')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (vistoriaContrato?.id) {
+          const { data: fotos } = await supabase
+            .from('vistoria_fotos')
+            .select('id, arquivo_url, tipo, created_at')
+            .eq('vistoria_id', vistoriaContrato.id)
+            .order('created_at', { ascending: true });
+
+          // Buscar nome do associado
+          let associadoNome: string | null = null;
+          if (vistoriaContrato.associado_id) {
+            const { data: assoc } = await supabase
+              .from('associados')
+              .select('nome')
+              .eq('id', vistoriaContrato.associado_id)
+              .single();
+            associadoNome = assoc?.nome || null;
+          }
+
+          if (fotos && fotos.length > 0) {
+            return {
+              fotos: fotos as FotoVistoriaItem[],
+              video360Url: vistoriaContrato.video_360_url,
+              associadoNome,
+              origem: 'vistoria_fotos',
+            };
+          }
+        }
+      }
+
+      // 2. Buscar vistoria de autovistoria via cotacao_id
+      if (cotacaoId) {
+        const { data: vistoriaCotacao } = await supabase
+          .from('vistorias')
+          .select('id, video_360_url, modalidade, associado_id')
+          .eq('cotacao_id', cotacaoId)
+          .neq('modalidade', 'presencial')
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+
+        if (vistoriaCotacao?.id) {
+          const { data: fotos } = await supabase
+            .from('vistoria_fotos')
+            .select('id, arquivo_url, tipo, created_at')
+            .eq('vistoria_id', vistoriaCotacao.id)
+            .order('created_at', { ascending: true });
+
+          let associadoNome: string | null = null;
+          if (vistoriaCotacao.associado_id) {
+            const { data: assoc } = await supabase
+              .from('associados')
+              .select('nome')
+              .eq('id', vistoriaCotacao.associado_id)
+              .single();
+            associadoNome = assoc?.nome || null;
+          }
+
+          if (fotos && fotos.length > 0) {
+            return {
+              fotos: fotos as FotoVistoriaItem[],
+              video360Url: vistoriaCotacao.video_360_url,
+              associadoNome,
+              origem: 'vistoria_fotos',
+            };
+          }
+        }
+
+        // 3. Fallback: cotacoes_vistoria_fotos (legado)
+        const { data: fotosLegado } = await supabase
+          .from('cotacoes_vistoria_fotos')
+          .select('id, tipo, arquivo_url, created_at')
+          .eq('cotacao_id', cotacaoId)
+          .order('created_at', { ascending: true });
+
+        if (fotosLegado && fotosLegado.length > 0) {
+          return {
+            fotos: fotosLegado as FotoVistoriaItem[],
+            video360Url: null,
+            associadoNome: null,
+            origem: 'cotacoes_vistoria_fotos',
+          };
+        }
+      }
+
+      return { fotos: [], video360Url: null, associadoNome: null, origem: 'nenhum' };
+    },
+    enabled: !!(contratoId || cotacaoId),
+  });
 }
 
 /**
@@ -341,6 +468,10 @@ export function useVistoriaCompletaAnalise(instalacaoId: string | undefined) {
   const instalacao = useInstalacaoParaAnalise(instalacaoId);
   const ativarMutation = useAtivarRastreadorPlataforma();
   const instaladorData = useInstaladorData(instalacaoId);
+  const autovistoriaData = useAutovistoriaData(
+    instalacao.data?.contrato_id,
+    instalacao.data?.cotacao_id,
+  );
 
   const podeAtivar =
     instalacao.data?.status === 'concluida' &&
@@ -375,6 +506,14 @@ export function useVistoriaCompletaAnalise(instalacaoId: string | undefined) {
     fotosVistoria: instaladorData.fotos,
     servico: instaladorData.servico,
     rastreadorLocal: instaladorData.rastreadorLocal,
+    vistoriadorNome: instaladorData.vistoriadorNome,
     isLoadingInstaladorData: instaladorData.isLoadingInstaladorData,
+    // Dados da autovistoria do associado
+    autovistoria: {
+      fotos: (autovistoriaData.data?.fotos || []) as FotoVistoriaItem[],
+      video360Url: autovistoriaData.data?.video360Url || null,
+      associadoNome: autovistoriaData.data?.associadoNome || null,
+    },
+    isLoadingAutovistoria: autovistoriaData.isLoading,
   };
 }
