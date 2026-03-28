@@ -1,59 +1,40 @@
 
 
-# Corrigir Auto-Avanço de Fotos do Vistoriador
+# Exibir Dados do Instalador na Página de Ativação
 
-## Causa raiz
+## Problema
+A página de ativação (`VistoriaCompletaAnalise.tsx`) mostra apenas dados cadastrais (cliente, veículo, rastreador, datas), mas não exibe nenhuma informação coletada pelo instalador durante a vistoria: fotos, vídeo 360, checklist, quilometragem, observações, assinatura do cliente e local de instalação.
 
-O `useEffect` de auto-avanço usa `isFotoEnviada()` para encontrar a próxima foto pendente. Essa função depende de `fotosEnviadas`, que vem de um react-query. Quando o upload termina (`uploadingFoto` vai de `"id"` para `null`), o react-query ainda não refez o fetch — então `isFotoEnviada` retorna dados **desatualizados**. A foto recém-enviada não aparece como enviada, e a busca pela "próxima pendente" pode falhar ou selecionar a mesma foto.
+## Solução
 
-O delay de 600ms nem sempre é suficiente para o refetch completar, especialmente em conexões lentas.
+### 1. Expandir a query em `useVistoriaCompletaAnalise.ts`
 
-## Correção
+Adicionar busca de:
+- **Vistoria** vinculada à instalação (tabela `vistorias` via `instalacao_id`) — para pegar `video_360_url`, `km_atual`, `observacoes`
+- **Fotos da vistoria** (tabela `vistoria_fotos` via `vistoria_id`) — todas as fotos tiradas pelo instalador
+- **Serviço** vinculado (tabela `servicos` via `instalacao_origem_id`) — para pegar `checklist_data`, `quilometragem`, `assinatura_cliente_url`, `decisao_instalador`, `ressalvas_instalador`
+- **Rastreador** com `local_instalacao`, `descricao_instalacao`, `foto_local_instalacao_url`
 
-### `src/components/vistorias/VistoriaFotoSequencial.tsx`
+Retornar esses dados extras no hook para o componente consumir.
 
-Simplificar drasticamente o auto-avanço: em vez de procurar a "próxima pendente" (que depende de dados atualizados do servidor), **manter um Set local de fotos já enviadas nesta sessão** e usar isso para o avanço.
+### 2. Atualizar `VistoriaCompletaAnalise.tsx`
 
-1. Adicionar estado local `uploadedLocally` (`Set<string>`) que é preenchido quando o upload termina
-2. No `useEffect` de auto-avanço, quando `prevUploadingRef.current` tinha valor e `uploadingFoto` virou `null`:
-   - Adicionar `uploadedId` ao `uploadedLocally`
-   - Buscar a próxima foto onde `!isFotoEnviada(f.id) && !uploadedLocally.has(f.id)` — usando tanto os dados do servidor quanto o tracking local
-   - Avançar imediatamente (sem delay de 600ms, ou com delay menor de 300ms)
-3. Remover dependência exclusiva de `isFotoEnviada` para o avanço
+Adicionar na coluna esquerda, abaixo dos cards existentes:
 
-Lógica:
-```ts
-const [uploadedLocally, setUploadedLocally] = useState<Set<string>>(new Set());
+- **Card "Checklist do Instalador"** — exibir cada item do `checklist_data` com ícone de check/X e observações
+- **Card "Quilometragem"** — mostrar KM registrado (do serviço ou da vistoria)
+- **Card "Local de Instalação"** — mostrar local selecionado, descrição do ponto exato e foto do local
+- **Card "Observações do Instalador"** — observações e ressalvas
+- **Card "Fotos da Vistoria"** — grid de thumbnails clicáveis com labels (reutilizando padrão de `AprovacaoInstalacaoDetalhe`)
+- **Card "Vídeo 360°"** — player de vídeo quando houver
+- **Card "Assinatura do Cliente"** — imagem da assinatura
 
-useEffect(() => {
-  if (prevUploadingRef.current && !uploadingFoto) {
-    const uploadedId = prevUploadingRef.current;
-    setUploadedLocally(prev => new Set(prev).add(uploadedId));
-    
-    const timer = setTimeout(() => {
-      const isPending = (f: VistoriaFotoConfig) =>
-        f.id !== uploadedId && !isFotoEnviada(f.id) && !uploadedLocally.has(f.id);
-      
-      const nextAfter = fotos.findIndex((f, i) => i > fotoAtualIndex && isPending(f));
-      if (nextAfter >= 0) {
-        setFotoAtualIndex(nextAfter);
-      } else {
-        const fromStart = fotos.findIndex(f => isPending(f));
-        if (fromStart >= 0) setFotoAtualIndex(fromStart);
-      }
-    }, 300);
-    prevUploadingRef.current = null;
-    return () => clearTimeout(timer);
-  }
-  prevUploadingRef.current = uploadingFoto;
-}, [uploadingFoto]);
-```
+Tudo read-only, sem ações de edição. Layout similar ao que já existe em `AprovacaoInstalacaoDetalhe.tsx`.
 
-Isso garante que, mesmo que o react-query ainda não tenha atualizado, o componente sabe localmente que aquela foto já foi enviada e avança para a próxima.
-
-## Arquivo
+## Arquivos
 
 | Arquivo | Acao |
 |---|---|
-| `src/components/vistorias/VistoriaFotoSequencial.tsx` | Adicionar tracking local de uploads + corrigir auto-avanço |
+| `src/hooks/useVistoriaCompletaAnalise.ts` | Buscar vistoria, fotos, serviço e dados do rastreador expandidos |
+| `src/pages/cadastro/VistoriaCompletaAnalise.tsx` | Renderizar fotos, vídeo, checklist, KM, local, assinatura e observações |
 
