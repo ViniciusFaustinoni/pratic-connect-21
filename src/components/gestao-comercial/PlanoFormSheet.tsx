@@ -159,13 +159,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
             bens.map((b, i) => ({ plano_id: plan.id, benefit_id: b.id, beneficio: b.name, display_order: i }))
           );
         }
-        // Save taxa administrativa for new plan
-        if (taxaFaixas.length > 0) {
-          const { error: insTaxaErr } = await supabase.from('planos_taxa_administrativa').insert(
-            taxaFaixas.map(f => ({ plano_id: plan.id, fipe_de: f.fipe_de, fipe_ate: f.fipe_ate, valor_taxa: f.valor_taxa }))
-          );
-          if (insTaxaErr) throw insTaxaErr;
-        }
       }
     },
     onSuccess: () => {
