@@ -26,6 +26,8 @@ import type { VistoriaFotoInfo } from '@/hooks/usePropostasPendentes';
 import { DocumentosSolicitadosCard, type DocumentoSolicitadoEnviado } from '@/components/cadastro/DocumentosSolicitadosCard';
 
 const isVideoTipo = (tipo?: string | null) => tipo?.startsWith('video');
+
+interface PropostaMidiaGridProps {
   video360Url?: string | null;
   fotos: VistoriaFotoInfo[];
   assinaturaUrl?: string | null;
