@@ -169,7 +169,6 @@ const menuConfig: {
       color: MENU_COLORS.vendas,
       items: [
         { title: 'Cotação', url: '/vendas/cotacoes', icon: Calculator },
-        { title: 'Ativações', url: '/vendas/ativacoes', icon: Rocket },
         { title: 'Aprovações', url: '/vendas/aprovacoes-fipe', icon: TrendingDown, permission: 'canManageConsultores' },
         { title: 'Equipe Comercial', url: '/vendas/equipe-comercial', icon: FileText, permission: 'canManageConsultores' },
         { title: 'Planos e Benefícios', url: '/vendas/planos-beneficios', icon: BookOpen },
