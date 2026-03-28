@@ -31,6 +31,14 @@ import {
   Loader2,
   Zap,
   MapPin,
+  Camera,
+  Video,
+  ClipboardCheck,
+  Gauge,
+  PenTool,
+  XCircle,
+  MessageSquare,
+  Play,
 } from 'lucide-react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -93,7 +101,13 @@ export default function VistoriaCompletaAnalise() {
     podeAtivar,
     ativarRastreador,
     isAtivando,
+    vistoria,
+    fotosVistoria,
+    servico,
+    rastreadorLocal,
   } = useVistoriaCompletaAnalise(id);
+
+  const [fotoAmpliada, setFotoAmpliada] = useState<string | null>(null);
 
   // Query para buscar dados de recusa do serviço vinculado à instalação
   const { data: servicoRecusa } = useQuery({
@@ -394,9 +408,251 @@ export default function VistoriaCompletaAnalise() {
               )}
             </CardContent>
           </Card>
+
+          {/* ============================================ */}
+          {/* DADOS DO INSTALADOR */}
+          {/* ============================================ */}
+
+          {/* Checklist do Instalador */}
+          {servico?.checklist_data && typeof servico.checklist_data === 'object' && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <ClipboardCheck className="h-5 w-5 text-primary" />
+                  Checklist do Instalador
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="space-y-2">
+                  {Object.entries(servico.checklist_data as Record<string, any>).map(([key, val]: [string, any]) => (
+                    <div key={key} className={cn(
+                      'flex items-start gap-2 p-2 rounded-lg border',
+                      val?.status === 'ok' ? 'bg-success/5 border-success/20' :
+                      val?.status === 'nok' ? 'bg-destructive/5 border-destructive/20' :
+                      'bg-muted/50 border-border'
+                    )}>
+                      {val?.status === 'ok' ? (
+                        <CheckCircle2 className="h-4 w-4 text-success mt-0.5 shrink-0" />
+                      ) : val?.status === 'nok' ? (
+                        <XCircle className="h-4 w-4 text-destructive mt-0.5 shrink-0" />
+                      ) : (
+                        <div className="h-4 w-4 rounded-full border-2 border-muted-foreground mt-0.5 shrink-0" />
+                      )}
+                      <div className="flex-1 min-w-0">
+                        <p className="text-sm font-medium text-foreground">
+                          {key.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                        </p>
+                        {val?.observacao && (
+                          <p className="text-xs text-muted-foreground mt-0.5">{val.observacao}</p>
+                        )}
+                        {val?.fotos && (val.fotos as string[]).length > 0 && (
+                          <div className="flex gap-1 mt-1">
+                            {(val.fotos as string[]).map((url: string, i: number) => (
+                              <img
+                                key={i}
+                                src={url}
+                                alt={`Evidência ${i + 1}`}
+                                className="h-10 w-10 rounded object-cover cursor-pointer border border-border hover:opacity-80"
+                                onClick={() => setFotoAmpliada(url)}
+                              />
+                            ))}
+                          </div>
+                        )}
+                      </div>
+                    </div>
+                  ))}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Quilometragem */}
+          {(servico?.quilometragem || servico?.km_atual || vistoria?.km_atual) && (
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-foreground text-base">
+                  <Gauge className="h-5 w-5 text-primary" />
+                  Quilometragem
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <p className="text-2xl font-bold text-foreground">
+                  {(servico?.quilometragem || servico?.km_atual || vistoria?.km_atual)?.toLocaleString('pt-BR')} km
+                </p>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Local de Instalação */}
+          {rastreadorLocal && (rastreadorLocal.local_instalacao || rastreadorLocal.descricao_instalacao) && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <MapPin className="h-5 w-5 text-primary" />
+                  Local de Instalação do Rastreador
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-3">
+                {rastreadorLocal.local_instalacao && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Local selecionado</p>
+                    <p className="font-medium text-foreground">{rastreadorLocal.local_instalacao}</p>
+                  </div>
+                )}
+                {rastreadorLocal.descricao_instalacao && (
+                  <div>
+                    <p className="text-sm text-muted-foreground">Descrição do ponto exato</p>
+                    <p className="text-foreground">{rastreadorLocal.descricao_instalacao}</p>
+                  </div>
+                )}
+                {rastreadorLocal.foto_local_instalacao_url && (
+                  <div>
+                    <p className="text-sm text-muted-foreground mb-1">Foto do local</p>
+                    <img
+                      src={rastreadorLocal.foto_local_instalacao_url}
+                      alt="Local de instalação"
+                      className="w-full max-w-sm rounded-lg border border-border cursor-pointer hover:opacity-80"
+                      onClick={() => setFotoAmpliada(rastreadorLocal.foto_local_instalacao_url!)}
+                    />
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Observações do Instalador */}
+          {(servico?.ressalvas_instalador || servico?.observacoes || vistoria?.observacoes) && (
+            <Card className="border-amber-500/30 bg-amber-500/5">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-foreground text-base">
+                  <MessageSquare className="h-5 w-5 text-amber-500" />
+                  Observações do Instalador
+                </CardTitle>
+              </CardHeader>
+              <CardContent className="space-y-2">
+                {servico?.ressalvas_instalador && (
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Ressalvas</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{servico.ressalvas_instalador}</p>
+                  </div>
+                )}
+                {(servico?.observacoes || vistoria?.observacoes) && (
+                  <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                    <p className="text-xs font-semibold text-muted-foreground uppercase mb-1">Observações</p>
+                    <p className="text-sm text-foreground whitespace-pre-wrap">{servico?.observacoes || vistoria?.observacoes}</p>
+                  </div>
+                )}
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Fotos da Vistoria */}
+          {fotosVistoria.length > 0 && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <CardTitle className="flex items-center gap-2 text-foreground">
+                  <Camera className="h-5 w-5 text-primary" />
+                  Fotos da Vistoria ({fotosVistoria.length})
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
+                  {fotosVistoria.map((foto) => {
+                    const isVideo = foto.tipo?.startsWith('video_360');
+                    return (
+                      <div
+                        key={foto.id}
+                        className="relative aspect-square rounded-lg overflow-hidden border border-border cursor-pointer hover:opacity-80 group"
+                        onClick={() => !isVideo && setFotoAmpliada(foto.arquivo_url)}
+                      >
+                        {isVideo ? (
+                          <div className="h-full w-full flex items-center justify-center bg-muted">
+                            <Play className="h-8 w-8 text-muted-foreground" />
+                          </div>
+                        ) : (
+                          <img
+                            src={foto.arquivo_url}
+                            alt={foto.tipo}
+                            className="h-full w-full object-cover"
+                          />
+                        )}
+                        <div className="absolute bottom-0 left-0 right-0 bg-black/60 px-1 py-0.5">
+                          <p className="text-[9px] text-white truncate">
+                            {foto.tipo?.replace(/_/g, ' ').replace(/\b\w/g, c => c.toUpperCase())}
+                          </p>
+                        </div>
+                      </div>
+                    );
+                  })}
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Vídeo 360° */}
+          {vistoria?.video_360_url && (
+            <Card className="border-border bg-card">
+              <CardHeader>
+                <div className="flex items-center justify-between">
+                  <CardTitle className="flex items-center gap-2 text-foreground">
+                    <Video className="h-5 w-5 text-primary" />
+                    Vídeo 360° do Veículo
+                  </CardTitle>
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30">
+                    <Play className="h-3 w-3 mr-1" />
+                    360°
+                  </Badge>
+                </div>
+              </CardHeader>
+              <CardContent className="pt-0">
+                <div className="rounded-lg overflow-hidden bg-muted/50 border border-border">
+                  <video
+                    src={vistoria.video_360_url}
+                    controls
+                    className="w-full aspect-video object-contain bg-black"
+                    preload="metadata"
+                    playsInline
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
+
+          {/* Assinatura do Cliente */}
+          {servico?.assinatura_cliente_url && (
+            <Card className="border-border bg-card">
+              <CardHeader className="pb-2">
+                <CardTitle className="flex items-center gap-2 text-foreground text-base">
+                  <PenTool className="h-5 w-5 text-primary" />
+                  Assinatura do Cliente
+                </CardTitle>
+              </CardHeader>
+              <CardContent>
+                <div className="border border-border rounded-lg p-2 bg-white">
+                  <img
+                    src={servico.assinatura_cliente_url}
+                    alt="Assinatura do cliente"
+                    className="w-full max-h-32 object-contain"
+                  />
+                </div>
+              </CardContent>
+            </Card>
+          )}
         </div>
 
-        {/* COLUNA DIREITA - 40% */}
+        {/* Foto ampliada modal */}
+        {fotoAmpliada && (
+          <div
+            className="fixed inset-0 z-50 bg-black/80 flex items-center justify-center p-4 cursor-pointer"
+            onClick={() => setFotoAmpliada(null)}
+          >
+            <img
+              src={fotoAmpliada}
+              alt="Foto ampliada"
+              className="max-h-[90vh] max-w-[90vw] object-contain rounded-lg"
+            />
+          </div>
+        )}
         <div className="lg:col-span-2 space-y-6">
           {/* Status de Cobertura */}
           <StatusCoberturaCard

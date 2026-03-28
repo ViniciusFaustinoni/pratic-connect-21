@@ -247,11 +247,100 @@ export function useAtivarRastreadorPlataforma() {
 }
 
 /**
+ * Hook para buscar dados da vistoria/instalação do instalador
+ */
+function useInstaladorData(instalacaoId: string | undefined) {
+  // Buscar vistoria vinculada à instalação
+  const vistoria = useQuery({
+    queryKey: ['vistoria-instalacao', instalacaoId],
+    queryFn: async () => {
+      if (!instalacaoId) return null;
+      const { data, error } = await supabase
+        .from('vistorias')
+        .select('id, video_360_url, km_atual, observacoes, status')
+        .eq('instalacao_id', instalacaoId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!instalacaoId,
+  });
+
+  // Buscar fotos da vistoria
+  const fotos = useQuery({
+    queryKey: ['vistoria-fotos-instalacao', vistoria.data?.id],
+    queryFn: async () => {
+      if (!vistoria.data?.id) return [];
+      const { data, error } = await supabase
+        .from('vistoria_fotos')
+        .select('id, arquivo_url, tipo, created_at')
+        .eq('vistoria_id', vistoria.data.id)
+        .order('created_at', { ascending: true });
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: !!vistoria.data?.id,
+  });
+
+  // Buscar serviço vinculado à instalação
+  const servico = useQuery({
+    queryKey: ['servico-instalacao-dados', instalacaoId],
+    queryFn: async () => {
+      if (!instalacaoId) return null;
+      const { data, error } = await supabase
+        .from('servicos')
+        .select('id, checklist_data, quilometragem, assinatura_cliente_url, decisao_instalador, ressalvas_instalador, observacoes, km_atual')
+        .eq('instalacao_origem_id', instalacaoId)
+        .eq('tipo', 'instalacao')
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!instalacaoId,
+  });
+
+  // Buscar dados expandidos do rastreador (local instalação)
+  const rastreadorExpanded = useQuery({
+    queryKey: ['rastreador-instalacao-local', instalacaoId],
+    queryFn: async () => {
+      if (!instalacaoId) return null;
+      const { data: inst } = await supabase
+        .from('instalacoes')
+        .select('rastreador_id')
+        .eq('id', instalacaoId)
+        .single();
+      if (!inst?.rastreador_id) return null;
+      const { data, error } = await supabase
+        .from('rastreadores')
+        .select('local_instalacao, descricao_instalacao, foto_local_instalacao_url')
+        .eq('id', inst.rastreador_id)
+        .single();
+      if (error) throw error;
+      return data;
+    },
+    enabled: !!instalacaoId,
+  });
+
+  return {
+    vistoria: vistoria.data,
+    fotos: fotos.data || [],
+    servico: servico.data,
+    rastreadorLocal: rastreadorExpanded.data,
+    isLoadingInstaladorData: vistoria.isLoading || fotos.isLoading || servico.isLoading || rastreadorExpanded.isLoading,
+  };
+}
+
+/**
  * Hook unificado para análise de vistoria completa
  */
 export function useVistoriaCompletaAnalise(instalacaoId: string | undefined) {
   const instalacao = useInstalacaoParaAnalise(instalacaoId);
   const ativarMutation = useAtivarRastreadorPlataforma();
+  const instaladorData = useInstaladorData(instalacaoId);
 
   const podeAtivar =
     instalacao.data?.status === 'concluida' &&
@@ -281,5 +370,11 @@ export function useVistoriaCompletaAnalise(instalacaoId: string | undefined) {
     podeAtivar,
     ativarRastreador,
     isAtivando: ativarMutation.isPending,
+    // Dados do instalador
+    vistoria: instaladorData.vistoria,
+    fotosVistoria: instaladorData.fotos,
+    servico: instaladorData.servico,
+    rastreadorLocal: instaladorData.rastreadorLocal,
+    isLoadingInstaladorData: instaladorData.isLoadingInstaladorData,
   };
 }
