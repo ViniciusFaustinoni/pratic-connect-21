@@ -85,19 +85,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       setSelectedCoberturas(new Set(existingPlan.coberturaIds));
       setSelectedBeneficios(new Set(existingPlan.beneficioIds));
       setTemplateContratoId(existingPlan.template_contrato_id || '');
-      
-      // Load taxa administrativa faixas
-      if (existingPlan.taxasFipe && existingPlan.taxasFipe.length > 0) {
-        setTaxaFaixas(existingPlan.taxasFipe);
-        const first = existingPlan.taxasFipe[0];
-        const last = existingPlan.taxasFipe[existingPlan.taxasFipe.length - 1];
-        const intervalo = existingPlan.taxasFipe.length > 1
-          ? existingPlan.taxasFipe[1].fipe_de - first.fipe_de
-          : first.fipe_ate - first.fipe_de;
-        setTaxaFipeMin(String(first.fipe_de));
-        setTaxaFipeMax(String(last.fipe_ate));
-        setTaxaIntervalo(String(intervalo));
-      }
     }
   }, [existingPlan]);
 
