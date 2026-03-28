@@ -27,6 +27,7 @@ export function VideoCapture({
   const [isRecording, setIsRecording] = useState(false);
   const [recordingTime, setRecordingTime] = useState(0);
   const [previewUrl, setPreviewUrl] = useState<string | null>(null);
+  const [pendingFile, setPendingFile] = useState<File | null>(null);
   const [error, setError] = useState<string | null>(null);
   
   const mediaRecorderRef = useRef<MediaRecorder | null>(null);
@@ -38,6 +39,7 @@ export function VideoCapture({
 
   const displayUrl = videoUrl || previewUrl;
   const hasVideo = !!displayUrl;
+  const isPendingReview = !!pendingFile && !uploading && !confirmed && !videoUrl;
 
   // Limpar recursos ao desmontar
   useEffect(() => {
