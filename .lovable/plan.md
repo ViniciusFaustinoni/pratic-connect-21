@@ -1,40 +1,96 @@
 
 
-# Exibir Dados do Instalador na Página de Ativação
+# Redesign da Página de Ativação com Fotos do Instalador e Autovistoria
 
-## Problema
-A página de ativação (`VistoriaCompletaAnalise.tsx`) mostra apenas dados cadastrais (cliente, veículo, rastreador, datas), mas não exibe nenhuma informação coletada pelo instalador durante a vistoria: fotos, vídeo 360, checklist, quilometragem, observações, assinatura do cliente e local de instalação.
+## Problemas Identificados
+
+1. **Fotos do instalador (31 fotos)** — O hook `useInstaladorData` busca fotos de `vistoria_fotos` via `vistorias.instalacao_id`, mas na resposta da API atual, `vistorias` retorna vazio (`[]`). As fotos existem vinculadas ao `servico`, mas a vistoria do instalador pode estar ligada de outra forma. Atualmente mostra "0 fotos".
+
+2. **Fotos da autovistoria do associado** — Nunca são buscadas. Estão em `cotacoes_vistoria_fotos` (keyed by `cotacao_id`) ou em `vistoria_fotos` via `vistorias.contrato_id`. O hook não busca essas fotos.
+
+3. **Vídeo 360° do associado** — Também não é buscado. Está em `vistorias.video_360_url` onde `contrato_id` ou `cotacao_id` match e `modalidade = 'autovistoria'`.
+
+4. **Layout atual** — Cards empilhados na coluna esquerda sem organização clara, difícil de navegar.
 
 ## Solução
 
-### 1. Expandir a query em `useVistoriaCompletaAnalise.ts`
+### 1. Hook — Buscar fotos de ambas as origens (`useVistoriaCompletaAnalise.ts`)
 
-Adicionar busca de:
-- **Vistoria** vinculada à instalação (tabela `vistorias` via `instalacao_id`) — para pegar `video_360_url`, `km_atual`, `observacoes`
-- **Fotos da vistoria** (tabela `vistoria_fotos` via `vistoria_id`) — todas as fotos tiradas pelo instalador
-- **Serviço** vinculado (tabela `servicos` via `instalacao_origem_id`) — para pegar `checklist_data`, `quilometragem`, `assinatura_cliente_url`, `decisao_instalador`, `ressalvas_instalador`
-- **Rastreador** com `local_instalacao`, `descricao_instalacao`, `foto_local_instalacao_url`
+Expandir `useInstaladorData` para também buscar:
 
-Retornar esses dados extras no hook para o componente consumir.
+**A) Fotos do instalador (já existe, mas precisa fallback):**
+- Buscar `vistorias` onde `instalacao_id = X` (já faz)
+- Fallback: buscar fotos diretamente de `servicos` se a vistoria não existir (o servico pode ter fotos no checklist)
 
-### 2. Atualizar `VistoriaCompletaAnalise.tsx`
+**B) Fotos/vídeo da autovistoria do associado (NOVO):**
+- A partir do `instalacao.contrato_id` ou `instalacao.cotacao_id`:
+  - Buscar `vistorias` onde `contrato_id = X` ou `cotacao_id = X` e `modalidade != 'presencial'` (autovistoria)
+  - Se encontrar, buscar `vistoria_fotos` dessa vistoria e o `video_360_url`
+  - Fallback: buscar `cotacoes_vistoria_fotos` pelo `cotacao_id`
 
-Adicionar na coluna esquerda, abaixo dos cards existentes:
+Retornar dados separados:
+```ts
+// Dados do instalador
+vistoriaInstalador: { fotos, video360Url, observacoes, kmAtual }
+// Dados da autovistoria do associado  
+autovistoria: { fotos, video360Url }
+```
 
-- **Card "Checklist do Instalador"** — exibir cada item do `checklist_data` com ícone de check/X e observações
-- **Card "Quilometragem"** — mostrar KM registrado (do serviço ou da vistoria)
-- **Card "Local de Instalação"** — mostrar local selecionado, descrição do ponto exato e foto do local
-- **Card "Observações do Instalador"** — observações e ressalvas
-- **Card "Fotos da Vistoria"** — grid de thumbnails clicáveis com labels (reutilizando padrão de `AprovacaoInstalacaoDetalhe`)
-- **Card "Vídeo 360°"** — player de vídeo quando houver
-- **Card "Assinatura do Cliente"** — imagem da assinatura
+Para isso, o hook precisa buscar `contrato_id` e `cotacao_id` da instalação (adicionar na query principal de `useInstalacaoParaAnalise`).
 
-Tudo read-only, sem ações de edição. Layout similar ao que já existe em `AprovacaoInstalacaoDetalhe.tsx`.
+### 2. Redesign da página (`VistoriaCompletaAnalise.tsx`)
+
+Reorganizar em layout com **abas/seções** claras usando um design limpo:
+
+**Layout proposto:**
+
+```text
+┌─────────────────────────────────────────────────────┐
+│ Header: Ativação de Rastreador  [Badge Status]      │
+│ Instalação #xxx • Placa ABC-1234                    │
+├─────────────────────────────────────────────────────┤
+│ [Banner de Recusa - se houver]                      │
+├──────────────────────────┬──────────────────────────┤
+│                          │ Status de Cobertura      │
+│  RESUMO RÁPIDO           │ + Ações (Ativar/Voltar)  │
+│  (Cliente + Veículo +    │                          │
+│   Rastreador em formato  │                          │
+│   compacto)              │                          │
+├──────────────────────────┴──────────────────────────┤
+│                                                     │
+│ ┌─ Abas ──────────────────────────────────────────┐ │
+│ │ [Instalação] [Autovistoria] [Checklist]         │ │
+│ └─────────────────────────────────────────────────┘ │
+│                                                     │
+│ Aba "Instalação" (fotos do instalador):             │
+│   Vídeo 360° + Grid de 31 fotos com labels         │
+│   KM + Local de instalação + Assinatura             │
+│   Observações/Ressalvas                             │
+│                                                     │
+│ Aba "Autovistoria" (fotos do associado):            │
+│   Vídeo 360° do associado + Grid de fotos           │
+│                                                     │
+│ Aba "Checklist":                                    │
+│   Checklist do instalador com status de cada item   │
+│                                                     │
+└─────────────────────────────────────────────────────┘
+```
+
+**Detalhes visuais:**
+- Resumo compacto no topo: dados do cliente, veículo e rastreador em formato horizontal/grid mais denso (sem cards separados enormes)
+- Tabs usando o componente `Tabs` do shadcn para separar: "Fotos do Instalador", "Autovistoria do Associado", "Checklist e Detalhes"
+- Grid de fotos maior (4-5 colunas) com labels claros e modal de zoom
+- Identificação clara de quem fez: badge "Instalador: Nome" e "Associado: Nome" em cada seção
+- Vídeo 360° com player nativo
+
+### 3. Buscar `contrato_id` e `cotacao_id` da instalação
+
+Adicionar esses campos na query principal de `useInstalacaoParaAnalise` para que o hook de autovistoria possa usá-los.
 
 ## Arquivos
 
 | Arquivo | Acao |
 |---|---|
-| `src/hooks/useVistoriaCompletaAnalise.ts` | Buscar vistoria, fotos, serviço e dados do rastreador expandidos |
-| `src/pages/cadastro/VistoriaCompletaAnalise.tsx` | Renderizar fotos, vídeo, checklist, KM, local, assinatura e observações |
+| `src/hooks/useVistoriaCompletaAnalise.ts` | Adicionar busca de fotos/vídeo da autovistoria do associado; retornar `contrato_id`/`cotacao_id`; separar dados instalador vs associado |
+| `src/pages/cadastro/VistoriaCompletaAnalise.tsx` | Redesign completo com layout compacto + tabs (Instalação / Autovistoria / Checklist) + badges de identificação |
 
