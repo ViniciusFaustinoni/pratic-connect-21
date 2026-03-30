@@ -254,6 +254,7 @@ export function ImportarLinhasModal({ open, onClose }: ImportarLinhasModalProps)
               await supabase.from('planos_beneficios').insert({
                 plano_id: newPlano.id,
                 benefit_id: benId,
+                beneficio: item.nomeItem,
               });
             }
           }
