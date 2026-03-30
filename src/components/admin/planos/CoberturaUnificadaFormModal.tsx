@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useCreateCobertura, useUpdateCobertura } from '@/hooks/usePlansAdmin';
 import type { Cobertura } from '@/types/plans';
 import { EligibilityRulesEditor } from './EligibilityRulesEditor';
+import { CarenciaConfigSection } from './CarenciaConfigSection';
 
 interface CoberturaUnificadaFormModalProps {
   open: boolean;
@@ -38,11 +39,15 @@ export function CoberturaUnificadaFormModal({
     subtitle: '',
     display_order: '0',
     carencia_dias: '',
+    carencia_ativa: false,
+    carencia_tipo: '',
+    carencia_multiplicador: '',
     ativo: true,
   });
 
   useEffect(() => {
     if (cobertura) {
+      const c = cobertura as any;
       setFormData({
         nome: cobertura.nome || '',
         codigo: cobertura.codigo || '',
@@ -50,7 +55,10 @@ export function CoberturaUnificadaFormModal({
         icon: cobertura.icon || '',
         subtitle: cobertura.subtitle || '',
         display_order: cobertura.display_order?.toString() || '0',
-        carencia_dias: (cobertura as any).carencia_dias?.toString() || '',
+        carencia_dias: c.carencia_dias?.toString() || '',
+        carencia_ativa: c.carencia_ativa ?? false,
+        carencia_tipo: c.carencia_tipo || '',
+        carencia_multiplicador: c.carencia_multiplicador?.toString() || '',
         ativo: cobertura.ativo ?? true,
       });
     } else {
@@ -62,6 +70,9 @@ export function CoberturaUnificadaFormModal({
         subtitle: '',
         display_order: '0',
         carencia_dias: '',
+        carencia_ativa: false,
+        carencia_tipo: '',
+        carencia_multiplicador: '',
         ativo: true,
       });
     }
@@ -78,6 +89,10 @@ export function CoberturaUnificadaFormModal({
       subtitle: formData.subtitle || null,
       display_order: parseInt(formData.display_order) || 0,
       carencia_dias: formData.carencia_dias ? parseInt(formData.carencia_dias) : null,
+      carencia_ativa: formData.carencia_ativa,
+      carencia_tipo: formData.carencia_ativa ? formData.carencia_tipo || null : null,
+      carencia_multiplicador: formData.carencia_tipo === 'multiplicadora_cota' && formData.carencia_multiplicador
+        ? parseFloat(formData.carencia_multiplicador) : null,
       ativo: formData.ativo,
     };
 
@@ -158,7 +173,7 @@ export function CoberturaUnificadaFormModal({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="display_order">Ordem</Label>
               <Input
@@ -166,17 +181,6 @@ export function CoberturaUnificadaFormModal({
                 type="number"
                 value={formData.display_order}
                 onChange={(e) => setFormData(prev => ({ ...prev, display_order: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="carencia_dias">Carência (dias)</Label>
-              <Input
-                id="carencia_dias"
-                type="number"
-                min="0"
-                value={formData.carencia_dias}
-                onChange={(e) => setFormData(prev => ({ ...prev, carencia_dias: e.target.value }))}
-                placeholder="Ex: 30"
               />
             </div>
             <div className="flex items-center gap-2 pt-7">
@@ -188,6 +192,16 @@ export function CoberturaUnificadaFormModal({
               <Label htmlFor="ativo">Ativo</Label>
             </div>
           </div>
+
+          <CarenciaConfigSection
+            config={{
+              carencia_ativa: formData.carencia_ativa,
+              carencia_tipo: formData.carencia_tipo,
+              carencia_dias: formData.carencia_dias,
+              carencia_multiplicador: formData.carencia_multiplicador,
+            }}
+            onChange={(c) => setFormData(prev => ({ ...prev, ...c }))}
+          />
 
           {/* Regras de Elegibilidade */}
           {isEditing && cobertura && (
