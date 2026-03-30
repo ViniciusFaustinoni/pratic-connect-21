@@ -35,7 +35,7 @@ export function PlanoCardCotacao({
   return (
     <Card 
       className={cn(
-        "relative border-2 transition-all duration-200 cursor-pointer",
+        "relative border-2 transition-all duration-200 cursor-pointer overflow-hidden",
         plano.destaque && !isSelected && "border-primary shadow-[0_0_20px_hsl(var(--primary)/0.2)]",
         isSelected && "ring-2 ring-primary ring-offset-2 ring-offset-background border-primary",
         !plano.destaque && !isSelected && "border-border hover:border-primary/50"
