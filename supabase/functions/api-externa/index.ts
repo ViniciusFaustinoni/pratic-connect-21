@@ -368,8 +368,10 @@ Deno.serve(async (req) => {
         // Check/Create Asaas customer
         let { data: asaasCliente } = await supabase.from('asaas_clientes').select('asaas_id').eq('associado_id', associado_id).eq('ativo', true).maybeSingle();
 
-        const asaasApiKey = Deno.env.get('ASAAS_API_KEY');
-        const asaasBaseUrl = Deno.env.get('ASAAS_BASE_URL') || 'https://api.asaas.com/v3';
+        const { getAsaasConfig: getAsaasConfigFromDb } = await import("../_shared/asaas-config.ts");
+        const asaasConfigResult = await getAsaasConfigFromDb(supabase);
+        const asaasApiKey = asaasConfigResult?.apiKey;
+        const asaasBaseUrl = asaasConfigResult?.baseUrl || 'https://api.asaas.com/v3';
 
         if (!asaasCliente && asaasApiKey) {
           // Create customer in Asaas

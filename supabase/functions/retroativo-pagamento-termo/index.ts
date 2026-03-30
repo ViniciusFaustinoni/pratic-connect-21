@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
+import { getAsaasConfig as getAsaasConfigFromDb } from "../_shared/asaas-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -17,15 +18,9 @@ serve(async (req) => {
     const supabaseServiceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
-    const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
-    if (!ASAAS_API_KEY) {
-      throw new Error("ASAAS_API_KEY não configurada");
-    }
-
-    const isSandbox = ASAAS_API_KEY.includes('_hmlg_');
-    const ASAAS_BASE_URL = isSandbox
-      ? 'https://sandbox.asaas.com/api/v3'
-      : 'https://api.asaas.com/v3';
+    const asaasConfig = await getAsaasConfigFromDb(supabase);
+    if (!asaasConfig) throw new Error("ASAAS não configurado");
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_BASE_URL } = asaasConfig;
 
     const asaasReq = async (endpoint: string, method: string, body?: object) => {
       const resp = await fetch(`${ASAAS_BASE_URL}${endpoint}`, {
