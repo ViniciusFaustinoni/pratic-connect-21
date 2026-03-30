@@ -207,7 +207,30 @@ Deno.serve(async (req) => {
 
         const { data, error } = await supabase.from('veiculos').insert(insertData).select().single();
         if (error) return err(error.message, 'INSERT_ERROR');
-        return json(data, 201);
+
+        // Vincular rastreador se rastreador_imei informado
+        let rastreadorWarning: string | null = null;
+        if (body.rastreador_imei) {
+          const { data: rastreador } = await supabase
+            .from('rastreadores')
+            .select('id')
+            .eq('imei', body.rastreador_imei)
+            .in('status', ['estoque', 'reservado'])
+            .maybeSingle();
+
+          if (rastreador) {
+            await supabase.from('rastreadores').update({
+              veiculo_id: data.id,
+              status: 'instalado',
+            }).eq('id', rastreador.id);
+          } else {
+            rastreadorWarning = `Rastreador com IMEI ${body.rastreador_imei} não encontrado em estoque`;
+          }
+        }
+
+        const response: any = { ...data };
+        if (rastreadorWarning) response._warning = rastreadorWarning;
+        return json(response, 201);
       }
 
       if (req.method === 'GET' && resourceId) {
@@ -454,6 +477,70 @@ Deno.serve(async (req) => {
         const { data, error } = await supabase.from('chamados_assistencia').insert(insertData).select().single();
         if (error) return err(error.message, 'INSERT_ERROR');
         return json(data, 201);
+      }
+    }
+
+    // ========== RASTREADORES ==========
+    if (resource === 'rastreadores') {
+      if (req.method === 'POST') {
+        const body = await req.json();
+        let { imei, codigo, plataforma, veiculo_id, veiculo_placa, associado_id, associado_cpf, status: rStatus } = body;
+
+        if (!imei || !codigo) {
+          return err('Campos obrigatórios: imei, codigo', 'MISSING_FIELDS');
+        }
+
+        // Check duplicate IMEI
+        const { data: existingImei } = await supabase.from('rastreadores').select('id').eq('imei', imei).maybeSingle();
+        if (existingImei) return err('IMEI já cadastrado no sistema', 'DUPLICATE_IMEI', 409);
+
+        // Resolve veiculo by placa
+        if (!veiculo_id && veiculo_placa) {
+          const { data: veic } = await supabase.from('veiculos').select('id, associado_id').eq('placa', veiculo_placa.toUpperCase()).maybeSingle();
+          if (!veic) return err('Veículo não encontrado para a placa informada', 'VEICULO_NOT_FOUND', 404);
+          veiculo_id = veic.id;
+          if (!associado_id && veic.associado_id) associado_id = veic.associado_id;
+        }
+
+        // Resolve associado by CPF
+        if (!associado_id && associado_cpf) {
+          const { data: assoc } = await supabase.from('associados').select('id, email').eq('cpf', associado_cpf.replace(/\D/g, '')).maybeSingle();
+          if (!assoc) return err('Associado não encontrado para o CPF informado', 'ASSOCIADO_NOT_FOUND', 404);
+          associado_id = assoc.id;
+        }
+
+        const insertData: any = {
+          imei,
+          codigo,
+          plataforma: plataforma || 'rede_veiculos',
+          status: rStatus || 'estoque',
+        };
+
+        if (veiculo_id) insertData.veiculo_id = veiculo_id;
+        if (associado_id) insertData.associado_id = associado_id;
+
+        const optionalFields = ['numero_serie', 'chip_iccid', 'id_plataforma', 'plataforma_device_id', 'associado_email'];
+        for (const f of optionalFields) {
+          if (body[f] !== undefined) insertData[f] = body[f];
+        }
+
+        // If status is instalado and has veiculo, ensure it's linked
+        if (insertData.status === 'instalado' && !insertData.veiculo_id) {
+          return err('Para status "instalado", é necessário informar veiculo_id ou veiculo_placa', 'MISSING_FIELDS');
+        }
+
+        const { data, error } = await supabase.from('rastreadores').insert(insertData).select().single();
+        if (error) return err(error.message, 'INSERT_ERROR');
+        return json(data, 201);
+      }
+
+      if (req.method === 'GET' && resourceId) {
+        const { data, error } = await supabase.from('rastreadores')
+          .select(`*, veiculo:veiculos(id, placa, marca, modelo, ano_fabricacao, ano_modelo, associado_id)`)
+          .eq('id', resourceId).maybeSingle();
+        if (error) return err(error.message, 'QUERY_ERROR');
+        if (!data) return err('Rastreador não encontrado', 'NOT_FOUND', 404);
+        return json(data);
       }
     }
 
