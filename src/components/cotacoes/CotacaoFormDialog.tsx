@@ -1577,6 +1577,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   <SelectValue placeholder="Selecione o tipo de placa" />
                 </SelectTrigger>
                 <SelectContent>
+                  <SelectItem value="nenhuma">Nenhuma</SelectItem>
                   {tiposPlacaAtivos.length > 0 ? (
                     tiposPlacaAtivos.map((tipo) => (
                       <SelectItem key={tipo.value} value={tipo.value}>
