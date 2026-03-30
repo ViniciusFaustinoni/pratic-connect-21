@@ -99,8 +99,7 @@ const ETAPAS = [
   { id: 1, label: 'Dados', icon: User },
   { id: 2, label: 'Checklist', icon: ClipboardCheck },
   { id: 3, label: 'Fotos', icon: Camera },
-  { id: 4, label: 'Assinatura', icon: PenTool },
-  { id: 5, label: 'Decisão', icon: ShieldCheck },
+  { id: 4, label: 'Decisão', icon: ShieldCheck },
 ];
 
 type ChecklistState = Record<string, { status: ChecklistStatus; observacao?: string; fotos?: string[] }>;
