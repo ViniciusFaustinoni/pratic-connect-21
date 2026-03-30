@@ -208,6 +208,12 @@ export default function Rastreadores() {
             <PlataformasConfigPanel />
           </TabsContent>
         )}
+
+        {canManagePlataformas && (
+          <TabsContent value="locais" className="mt-6">
+            <GerenciarLocaisInstalacao />
+          </TabsContent>
+        )}
       </Tabs>
 
       {/* Modais globais */}
