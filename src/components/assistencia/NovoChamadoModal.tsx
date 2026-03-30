@@ -124,7 +124,11 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
     marca_modelo: '',
   });
 
-  // Dados do chamado
+  // Opções dinâmicas de tipo de serviço baseadas no plano
+  const tipoServicoOptions = !modoManual && planData?.beneficios && planData.beneficios.length > 0
+    ? beneficiosToServicoOptions(planData.beneficios)
+    : TIPOS_SERVICO.map(t => ({ value: t.value, label: t.label, beneficioId: '' }));
+
   const [formData, setFormData] = useState({
     tipo_servico: '',
     descricao: '',
