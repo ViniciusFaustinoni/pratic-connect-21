@@ -1,19 +1,26 @@
 
 
-# Permitir desmarcar "Tipo de Placa" no formulário de cotação
+# Corrigir overflow de texto nos cards de plano na cotação
 
 ## Problema
-O campo "Tipo de Placa" usa um `Select` que não permite limpar a seleção após escolher um valor.
+O texto das coberturas (ex: "Rastreador/Monitoramento (não cobre)") ultrapassa os limites do card, quebrando o layout visual.
+
+## Causa
+Os spans de texto dentro das coberturas não têm controle de overflow — textos longos, especialmente com o label "(não disponível)", estouram o card.
 
 ## Solução
-Adicionar uma opção "Nenhuma" no topo da lista de opções do select, com value `"nenhuma"`. O sistema já trata `tipoPlacaSelecionado !== 'nenhuma'` nas linhas 373 e 1168, então a lógica de negócio já está preparada.
 
-## Alteração
+### `src/components/cotacao/PlanoCardCotacao.tsx`
 
-### `src/components/cotacoes/CotacaoFormDialog.tsx` (~linha 1579)
-- Adicionar `<SelectItem value="nenhuma">Nenhuma</SelectItem>` como primeira opção dentro do `<SelectContent>`, antes da lista dinâmica de tipos de placa.
+1. **Coberturas removidas (linhas 123-133)**: O layout usa `flex` com `ml-auto` no "(não disponível)", forçando o texto a não quebrar. Corrigir:
+   - Adicionar `min-w-0` no container flex e `truncate` ou `break-words` nos spans de texto
+   - Remover o span separado "(não disponível)" e integrar o texto inline ou usar `whitespace-normal` com `overflow-hidden`
+
+2. **Coberturas normais (linhas 134-138)**: Adicionar `min-w-0` no flex container e `truncate` ou `break-words` no span de texto
+
+3. **Card raiz**: Adicionar `overflow-hidden` no Card para garantir que nada vaze
 
 | Arquivo | Ação |
 |---|---|
-| `src/components/cotacoes/CotacaoFormDialog.tsx` | Adicionar opção "Nenhuma" no select de tipo de placa |
+| `src/components/cotacao/PlanoCardCotacao.tsx` | Adicionar overflow-hidden no Card + min-w-0/truncate nos textos de coberturas |
 
