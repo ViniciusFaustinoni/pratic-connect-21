@@ -113,6 +113,7 @@ export function BeneficioFormModal({
       description: formData.description || null,
       category: formData.category || null,
       display_order: parseInt(formData.display_order) || 0,
+      carencia_dias: formData.carencia_dias ? parseInt(formData.carencia_dias) : null,
       is_active: formData.is_active,
     };
 
