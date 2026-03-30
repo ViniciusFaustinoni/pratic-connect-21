@@ -125,6 +125,7 @@ export default function Rastreadores() {
     { value: 'estoque', label: 'Estoque', icon: Package },
     { value: 'historico', label: 'Histórico', icon: Clock },
     ...(canManagePlataformas ? [{ value: 'plataformas', label: 'Plataformas', icon: Server }] : []),
+    ...(canManagePlataformas ? [{ value: 'locais', label: 'Locais Instalação', icon: Settings }] : []),
   ];
 
   return (
