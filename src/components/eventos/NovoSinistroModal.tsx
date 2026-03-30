@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Loader2, Check, ChevronsUpDown, Car, Truck, AlertTriangle, Flame, CloudRain, Home, Wrench } from 'lucide-react';
 import { useOficinas } from '@/hooks/useOficinas';
 import { useCarenciaDiasPadrao } from '@/hooks/useConteudosSistema';
+import { useCoberturasBeneficiosPlano, coberturasToSinistroOptions, TIPO_SINISTRO_TO_COBERTURA } from '@/hooks/useCoberturasBeneficiosPlano';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
