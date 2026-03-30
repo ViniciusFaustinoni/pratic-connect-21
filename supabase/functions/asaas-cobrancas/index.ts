@@ -30,29 +30,6 @@ interface CobrancaRequest {
   };
 }
 
-async function asaasRequest(endpoint: string, method: string, body?: object, asaasApiKey?: string, asaasBaseUrl?: string) {
-  const url = `${asaasBaseUrl}${endpoint}`;
-  console.log(`[asaas-cobrancas] ${method} ${url}`);
-  
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'access_token': asaasApiKey!,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok) {
-    console.error(`[asaas-cobrancas] Erro ASAAS:`, data);
-    throw new Error(data.errors?.[0]?.description || `Erro ASAAS: ${response.status}`);
-  }
-
-  return data;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -65,7 +42,28 @@ serve(async (req) => {
     if (!asaasConfig) throw new Error('ASAAS não configurado. Configure as credenciais na área de Integrações.');
     const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_BASE_URL } = asaasConfig;
 
-    const { action, cobranca_id, asaas_id, associado_id, dados }: CobrancaRequest = await req.json();
+    async function asaasRequest(endpoint: string, method: string, body?: object) {
+      const url = `${ASAAS_BASE_URL}${endpoint}`;
+      console.log(`[asaas-cobrancas] ${method} ${url}`);
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'access_token': ASAAS_API_KEY,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error(`[asaas-cobrancas] Erro ASAAS:`, data);
+        throw new Error(data.errors?.[0]?.description || `Erro ASAAS: ${response.status}`);
+      }
+
+      return data;
+    }
 
     console.log(`[asaas-cobrancas] Action: ${action}`);
 

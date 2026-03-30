@@ -30,29 +30,6 @@ interface AsaasClienteRequest {
   };
 }
 
-async function asaasRequest(endpoint: string, method: string, body?: object, asaasApiKey?: string, asaasBaseUrl?: string) {
-  const url = `${asaasBaseUrl}${endpoint}`;
-  console.log(`[asaas-clientes] ${method} ${url}`);
-  
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'access_token': asaasApiKey!,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok) {
-    console.error(`[asaas-clientes] Erro ASAAS:`, data);
-    throw new Error(data.errors?.[0]?.description || `Erro ASAAS: ${response.status}`);
-  }
-
-  return data;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
@@ -64,6 +41,29 @@ serve(async (req) => {
     const asaasConfig = await getAsaasConfig(supabase);
     if (!asaasConfig) throw new Error('ASAAS não configurado. Configure as credenciais na área de Integrações.');
     const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_BASE_URL } = asaasConfig;
+
+    async function asaasRequest(endpoint: string, method: string, body?: object) {
+      const url = `${ASAAS_BASE_URL}${endpoint}`;
+      console.log(`[asaas-clientes] ${method} ${url}`);
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'access_token': ASAAS_API_KEY,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error(`[asaas-clientes] Erro ASAAS:`, data);
+        throw new Error(data.errors?.[0]?.description || `Erro ASAAS: ${response.status}`);
+      }
+
+      return data;
+    }
 
     const { action, associado_id, asaas_id, dados }: AsaasClienteRequest = await req.json();
 
