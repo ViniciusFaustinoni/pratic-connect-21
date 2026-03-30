@@ -1,40 +1,36 @@
 
 
-# Consolidar Retiradas, Instalações e Vistorias em um Único Submenu
+# Adicionar Campo de Carência (dias) nos Formulários de Cobertura e Benefício
 
 ## Contexto
 
-Hoje no sidebar de Monitoramento existem dois itens separados:
-- **Instalações e Vistorias** → página com tabs (Instalações, Vistorias, Encaixes, Viagens)
-- **Retiradas** → página separada
-
-Todos são tipos de serviços de campo. A ideia é consolidar tudo em uma única entrada no submenu, adicionando "Retiradas" como mais uma tab na página existente.
+A tabela `coberturas` já possui a coluna `carencia_dias`, mas o formulário de criação/edição (`CoberturaUnificadaFormModal`) não exibe esse campo. A tabela `benefits` **não possui** a coluna `carencia_dias` — precisa de migration.
 
 ## Alterações
 
-### 1. Sidebar — Remover item "Retiradas"
-Remover a entrada separada de Retiradas do submenu de Monitoramento em `AppSidebar.tsx`. Renomear o item existente para "Serviços de Campo" ou manter "Instalações e Vistorias" (incluindo retiradas).
+### 1. Migration — Adicionar `carencia_dias` na tabela `benefits`
+```sql
+ALTER TABLE benefits ADD COLUMN carencia_dias integer DEFAULT NULL;
+```
 
-### 2. Página `VistoriasInstalacoesMon.tsx` — Adicionar tab "Retiradas"
-- Importar o conteúdo de `RetiradasPage` (extrair como componente embeddable ou importar diretamente)
-- Adicionar nova tab "Retiradas" com ícone `PackageX`
-- Atualizar título/descrição para refletir a consolidação
+### 2. `CoberturaUnificadaFormModal.tsx` — Adicionar campo carência
+- Adicionar `carencia_dias` ao state do formulário
+- Carregar valor existente no `useEffect`
+- Incluir no payload do submit
+- Renderizar input numérico com label "Carência (dias)" e placeholder "Ex: 30"
 
-### 3. Breadcrumb e módulos
-- Atualizar `GlobalBreadcrumb.tsx` para remover a rota `/monitoramento/retiradas` separada
-- Atualizar `modules.ts` para remover "retiradas" como item separado do módulo monitoramento
+### 3. `BeneficioFormModal.tsx` — Adicionar campo carência
+- Mesmo padrão: state, useEffect, payload, input numérico
+- Incluir `carencia_dias` no payload enviado ao `createBenefit` / `updateBenefit`
 
-### 4. Rota no App.tsx
-- Manter a rota `/monitoramento/retiradas` como redirect para a página consolidada (compatibilidade com links existentes em substituições)
+### 4. Hooks `usePlansAdmin` — Verificar se mutations suportam o campo
+Confirmar que `useCreateCobertura`, `useUpdateCobertura`, `useCreateBenefit`, `useUpdateBenefit` passam campos extras para o Supabase (provavelmente já fazem spread do payload).
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| `src/components/layout/AppSidebar.tsx` | Remover item "Retiradas" do submenu monitoramento |
-| `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` | Adicionar tab "Retiradas" importando conteúdo do RetiradasPage |
-| `src/pages/monitoramento/RetiradasPage.tsx` | Extrair conteúdo principal como componente exportável (para ser usado como tab) |
-| `src/components/layout/GlobalBreadcrumb.tsx` | Remover breadcrumb separado de retiradas |
-| `src/config/modules.ts` | Consolidar "retiradas" dentro de "instalacoes" ou renomear |
-| `src/App.tsx` | Adicionar redirect de `/monitoramento/retiradas` → `/monitoramento/vistorias-instalacoes-mon` |
+| Migration SQL | `ALTER TABLE benefits ADD COLUMN carencia_dias integer` |
+| `src/components/admin/planos/CoberturaUnificadaFormModal.tsx` | Adicionar input de carência em dias |
+| `src/components/admin/planos/BeneficioFormModal.tsx` | Adicionar input de carência em dias |
 
