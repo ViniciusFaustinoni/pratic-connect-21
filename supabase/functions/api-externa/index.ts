@@ -207,7 +207,30 @@ Deno.serve(async (req) => {
 
         const { data, error } = await supabase.from('veiculos').insert(insertData).select().single();
         if (error) return err(error.message, 'INSERT_ERROR');
-        return json(data, 201);
+
+        // Vincular rastreador se rastreador_imei informado
+        let rastreadorWarning: string | null = null;
+        if (body.rastreador_imei) {
+          const { data: rastreador } = await supabase
+            .from('rastreadores')
+            .select('id')
+            .eq('imei', body.rastreador_imei)
+            .in('status', ['estoque', 'reservado'])
+            .maybeSingle();
+
+          if (rastreador) {
+            await supabase.from('rastreadores').update({
+              veiculo_id: data.id,
+              status: 'instalado',
+            }).eq('id', rastreador.id);
+          } else {
+            rastreadorWarning = `Rastreador com IMEI ${body.rastreador_imei} não encontrado em estoque`;
+          }
+        }
+
+        const response: any = { ...data };
+        if (rastreadorWarning) response._warning = rastreadorWarning;
+        return json(response, 201);
       }
 
       if (req.method === 'GET' && resourceId) {
