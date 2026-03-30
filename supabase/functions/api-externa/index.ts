@@ -204,7 +204,10 @@ Deno.serve(async (req) => {
 
         const insertData: any = { associado_id, veiculo_id, tipo, data_ocorrencia, canal, protocolo, status: 'aberto' };
         const optionalFields = ['descricao', 'local_descricao', 'cidade_ocorrencia', 'estado_ocorrencia',
-          'bo_numero', 'condutor_nome', 'condutor_cnh', 'condutor_relacao', 'houve_vitima', 'necessita_reboque'];
+          'bo_numero', 'condutor_nome', 'condutor_cnh', 'condutor_relacao', 'houve_vitima', 'necessita_reboque',
+          'valor_fipe', 'valor_participacao', 'valor_orcamento', 'valor_indenizacao', 'valor_pago',
+          'percentual_fipe', 'tipo_dano', 'veiculo_recuperado', 'envolvimento', 'data_comunicado',
+          'solicitou_carro_reserva', 'valor_depreciacao'];
         for (const f of optionalFields) {
           if (body[f] !== undefined) insertData[f] = body[f];
         }
@@ -215,10 +218,38 @@ Deno.serve(async (req) => {
       }
 
       if (req.method === 'GET' && resourceId) {
-        const { data, error } = await supabase.from('sinistros').select('*').eq('id', resourceId).maybeSingle();
+        const { data, error } = await supabase.from('sinistros')
+          .select(`*, associado:associados(id, nome, cpf, telefone, email), veiculo:veiculos(id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, valor_fipe)`)
+          .eq('id', resourceId).maybeSingle();
         if (error) return err(error.message, 'QUERY_ERROR');
         if (!data) return err('Sinistro não encontrado', 'NOT_FOUND', 404);
         return json(data);
+      }
+
+      if (req.method === 'GET' && !resourceId) {
+        const associadoCpf = url.searchParams.get('associado_cpf');
+        const statusFilter = url.searchParams.get('status');
+        const limit = Math.min(parseInt(url.searchParams.get('limit') || '50'), 100);
+        const offset = parseInt(url.searchParams.get('offset') || '0');
+
+        let query = supabase.from('sinistros')
+          .select(`*, associado:associados(id, nome, cpf, telefone, email), veiculo:veiculos(id, placa, chassi, marca, modelo, ano_fabricacao, ano_modelo, valor_fipe)`, { count: 'exact' })
+          .order('created_at', { ascending: false })
+          .range(offset, offset + limit - 1);
+
+        if (associadoCpf) {
+          const { data: assoc } = await supabase.from('associados').select('id').eq('cpf', associadoCpf.replace(/\D/g, '')).maybeSingle();
+          if (!assoc) return err('Associado não encontrado para o CPF informado', 'ASSOCIADO_NOT_FOUND', 404);
+          query = query.eq('associado_id', assoc.id);
+        }
+
+        if (statusFilter) {
+          query = query.eq('status', statusFilter);
+        }
+
+        const { data, error, count: total } = await query;
+        if (error) return err(error.message, 'QUERY_ERROR');
+        return json({ data, total, limit, offset });
       }
     }
 
