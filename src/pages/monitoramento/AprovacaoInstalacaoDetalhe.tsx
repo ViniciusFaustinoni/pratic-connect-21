@@ -138,12 +138,19 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
       // Buscar vídeo 360° do associado (autovistoria não presencial do mesmo contrato)
       let videoAssociado: string | null = null;
       if (servico.contrato_id) {
-        const { data: autoVistoria } = await supabase
+        let autoVistoriaQuery = supabase
           .from('vistorias')
           .select('video_360_url')
           .eq('contrato_id', servico.contrato_id)
-          .neq('modalidade', 'presencial')
-          .not('video_360_url', 'is', null)
+          .neq('modalidade', 'presencial');
+        
+        if (servico.vistoria_origem_id) {
+          autoVistoriaQuery = autoVistoriaQuery.neq('id', servico.vistoria_origem_id);
+        }
+
+        const { data: autoVistoria } = await autoVistoriaQuery
+          .order('created_at', { ascending: false })
+          .limit(1)
           .maybeSingle();
         videoAssociado = autoVistoria?.video_360_url || null;
       }
