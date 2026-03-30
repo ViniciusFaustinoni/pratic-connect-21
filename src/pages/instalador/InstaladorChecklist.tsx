@@ -151,7 +151,7 @@ export default function InstaladorChecklist() {
   const { data: fipeMinRastreadorMoto = 9000 } = useConfigFipeRastreadorMoto();
   const uploadFotoMutation = useUploadFotoVistoriaCompleta();
   const uploadVideoMutation = useUploadVideo360();
-  const saveAssinaturaMutation = useSaveAssinatura();
+  // saveAssinaturaMutation removido - assinatura agora é coletada pelo link público
   const salvarChecklistMutation = useSalvarChecklistServico();
   const aprovarVeiculoMutation = useAprovarVeiculoServico();
   const recusarVeiculoMutation = useRecusarVeiculoServico();
