@@ -144,7 +144,7 @@ serve(async (req) => {
     
     const { data: rastreador, error: rastreadorError } = await supabase
       .from('rastreadores')
-      .select('id, codigo, numero_serie, plataforma, status, plataforma_device_id, chip_iccid, chip_number, plataforma_veiculo_id, softruck_chip_id')
+      .select('id, codigo, numero_serie, plataforma, status, plataforma_device_id, chip_iccid, chip_number, plataforma_veiculo_id, softruck_chip_id, local_instalacao, descricao_instalacao')
       .eq('imei', imei)
       .maybeSingle();
 
@@ -258,6 +258,7 @@ serve(async (req) => {
             ano: veiculo.ano_modelo?.toString(),
             cor: veiculo.cor,
             tipo: mapVehicleType(veiculo.combustivel),
+            descricao: rastreador.local_instalacao || rastreador.descricao_instalacao || undefined,
           }
         );
 
