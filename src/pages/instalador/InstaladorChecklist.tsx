@@ -1915,6 +1915,14 @@ export default function InstaladorChecklist() {
             </Card>
             )}
 
+            {/* Aviso sobre assinatura digital */}
+            <Alert className="border-blue-500/50 bg-blue-500/10">
+              <PenTool className="h-4 w-4 text-blue-400" />
+              <AlertDescription className="text-blue-200">
+                Ao concluir, o associado receberá um <strong className="text-blue-300">link por WhatsApp</strong> para assinar digitalmente confirmando a instalação.
+              </AlertDescription>
+            </Alert>
+
             {/* Botões de ação */}
             <div className="space-y-3 mt-6">
               {decisaoInstalador === 'negado' ? (
