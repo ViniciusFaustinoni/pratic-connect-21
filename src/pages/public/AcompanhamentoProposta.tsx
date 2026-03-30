@@ -152,6 +152,22 @@ function useAcompanhamentoProposta(token: string | undefined) {
         confirmacaoWhatsapp = servico?.confirmacao_whatsapp || null;
       }
 
+      // Buscar serviço de instalação vinculado ao contrato (para assinatura)
+      let servicoInstalacao: ServicoInstalacao | null = null;
+      const { data: servicoData } = await supabase
+        .from('servicos')
+        .select('id, status, assinatura_cliente_url')
+        .eq('contrato_id', contrato.id)
+        .eq('tipo', 'instalacao')
+        .in('status', ['concluida', 'em_analise'])
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (servicoData) {
+        servicoInstalacao = servicoData as ServicoInstalacao;
+      }
+
       return {
         ...associado,
         primeiro_acesso: primeiroAcesso,
@@ -162,6 +178,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
           status: contrato.status || 'pendente',
         },
         instalacoes: (instalacoes || []).map(i => ({ ...i, confirmacao_whatsapp: confirmacaoWhatsapp })),
+        servicoInstalacao,
       };
     },
     enabled: !!token,
