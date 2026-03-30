@@ -1,27 +1,34 @@
 
 
-# Corrigir Template `assinatura_instalacao_v1` — Tabela Errada
+# Fix: Template `assinatura_instalacao_v1` — `variaveis_exemplo` com formato errado
 
 ## Problema
-O template foi inserido na tabela `whatsapp_templates` (templates internos do sistema), mas a tela de "Templates Meta" na configuração do WhatsApp lista da tabela `whatsapp_meta_templates` (templates da API Oficial Meta). Por isso não aparece na lista.
 
-## Solução
+A migration inseriu `variaveis_exemplo` como **array JSON**:
+```json
+["João", "HB20 - ABC1234", "https://example.com/acompanhar/token123"]
+```
 
-1. **Inserir o template na tabela correta** (`whatsapp_meta_templates`) com os campos adequados:
-   - `nome`: `assinatura_instalacao_v1`
-   - `categoria`: `UTILITY`
-   - `idioma`: `pt_BR`
-   - `status`: `DRAFT`
-   - `corpo`: mensagem com variáveis `{{1}}`, `{{2}}`, `{{3}}` (padrão Meta)
-   - `botoes`: botão CTA com URL para o link de acompanhamento
-   - `variaveis_exemplo`: exemplos para cada variável
+Mas todo o sistema (drawer, preview, edge function de envio à Meta) espera um **objeto com chaves numéricas**:
+```json
+{"1": "João", "2": "HB20 - ABC1234", "3": "https://example.com/acompanhar/token123"}
+```
 
-2. **Manter o registro em `whatsapp_templates`** — ele é usado internamente pelo hook `useWhatsAppTemplates` e pelo `SeletorTemplate`, então não há conflito.
+Quando é array, `Object.keys()` retorna `["0", "1", "2"]` — os índices ficam deslocados em 1 posição. Por isso a preview mostra "Olá HB20 - ABC1234!" (`{{1}}` pega o valor do índice 1 do array = segundo item) em vez de "Olá João!".
 
-3. **Atualizar `useServicos.ts`** — na parte que envia o WhatsApp após a instalação, referenciar o template Meta (via edge function `whatsapp-send-template` ou similar) em vez de `whatsapp-send-text` com mensagem livre, para conformidade com a API Oficial Meta.
+## Correção
+
+### Migration SQL
+
+```sql
+UPDATE whatsapp_meta_templates
+SET variaveis_exemplo = '{"1": "João", "2": "HB20 - ABC1234", "3": "https://app.praticprotecao.com.br/acompanhar/token123"}'::jsonb
+WHERE nome = 'assinatura_instalacao_v1';
+```
+
+Isso corrige o formato e também atualiza o link de exemplo para o domínio real.
 
 | Arquivo | Ação |
 |---|---|
-| Migration SQL | INSERT em `whatsapp_meta_templates` com dados corretos (UTILITY, pt_BR, DRAFT) |
-| `src/hooks/useServicos.ts` | Ajustar envio pós-instalação para usar template Meta se disponível |
+| Nova migration SQL | UPDATE `variaveis_exemplo` de array para objeto com chaves `"1"`, `"2"`, `"3"` |
 
