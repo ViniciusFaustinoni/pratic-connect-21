@@ -1,38 +1,19 @@
 
 
-# Exibir Documentação do Associado na Aprovação de Associados
+# Permitir desmarcar "Tipo de Placa" no formulário de cotação
 
 ## Problema
-
-A página de detalhe da aprovação (`/monitoramento/aprovacao-associados/:id`) mostra apenas fotos da instalação, dados do associado/veículo e rastreador. Não exibe os **documentos anexados** do associado (CNH, CRLV, contrato assinado, comprovante de endereço, etc.) que estão na tabela `documentos`.
-
-O monitoramento precisa ver toda a documentação para tomar a decisão de aprovação.
+O campo "Tipo de Placa" usa um `Select` que não permite limpar a seleção após escolher um valor.
 
 ## Solução
+Adicionar uma opção "Nenhuma" no topo da lista de opções do select, com value `"nenhuma"`. O sistema já trata `tipoPlacaSelecionado !== 'nenhuma'` nas linhas 373 e 1168, então a lógica de negócio já está preparada.
 
-Adicionar uma seção de **Documentos do Associado** na página `AprovacaoInstalacaoDetalhe.tsx`, buscando da tabela `documentos` pelo `associado_id` e exibindo com status, tipo e link para visualização.
+## Alteração
 
-## Alterações
-
-### 1. `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx`
-
-**No hook `useServicoDetalheAprovacao`:**
-- Adicionar busca na tabela `documentos` filtrando por `associado_id` do serviço
-- Retornar os documentos junto com os dados existentes
-
-**Na UI (entre a seção de Rastreador e Fotos):**
-- Adicionar card "Documentação do Associado" com grid mostrando cada documento:
-  - Tipo (CNH, CRLV, Contrato, etc.)
-  - Status (aprovado/pendente/reprovado) com badge colorido
-  - Miniatura clicável (abre no lightbox existente ou nova aba para PDFs)
-  - Data de envio
-- Exibir alerta se houver documentos pendentes ou reprovados (ajuda o monitoramento a decidir)
-
-Nenhuma tabela nova, nenhuma migration. Apenas leitura de dados já existentes.
-
-## Arquivos
+### `src/components/cotacoes/CotacaoFormDialog.tsx` (~linha 1579)
+- Adicionar `<SelectItem value="nenhuma">Nenhuma</SelectItem>` como primeira opção dentro do `<SelectContent>`, antes da lista dinâmica de tipos de placa.
 
 | Arquivo | Ação |
 |---|---|
-| `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` | Buscar documentos do associado + renderizar seção |
+| `src/components/cotacoes/CotacaoFormDialog.tsx` | Adicionar opção "Nenhuma" no select de tipo de placa |
 
