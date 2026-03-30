@@ -513,27 +513,54 @@ export default function AprovacaoInstalacaoDetalhe() {
         </CardContent>
       </Card>
 
-      {/* Vídeo 360 */}
-      {videoFotos.length > 0 && (
+      {/* Vídeos 360° */}
+      {(videoInstalador || videoAssociado) && (
         <Card className="border-border">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Video className="h-4 w-4 text-purple-500" />
-              Vídeo 360°
+              Vídeos 360°
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            {videoFotos.map((v: any) => (
-              <div key={v.id} className="rounded-lg overflow-hidden bg-muted/50 border border-border">
-                <video
-                  src={v.arquivo_url}
-                  controls
-                  className="w-full aspect-video object-contain bg-black"
-                  preload="metadata"
-                  playsInline
-                />
+          <CardContent className="space-y-4">
+            {videoInstalador && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
+                    Instalador
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">Gravado pelo vistoriador durante a instalação</span>
+                </div>
+                <div className="rounded-lg overflow-hidden bg-muted/50 border border-border">
+                  <video
+                    src={videoInstalador}
+                    controls
+                    className="w-full aspect-video object-contain bg-black"
+                    preload="metadata"
+                    playsInline
+                  />
+                </div>
               </div>
-            ))}
+            )}
+            {videoAssociado && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/30 text-xs">
+                    Associado
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">Autovistoria gravada pelo associado</span>
+                </div>
+                <div className="rounded-lg overflow-hidden bg-muted/50 border border-border">
+                  <video
+                    src={videoAssociado}
+                    controls
+                    className="w-full aspect-video object-contain bg-black"
+                    preload="metadata"
+                    playsInline
+                  />
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
