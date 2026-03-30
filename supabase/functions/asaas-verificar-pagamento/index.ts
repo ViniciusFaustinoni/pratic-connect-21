@@ -29,6 +29,16 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
 
+    // Obter config ASAAS do banco
+    const asaasConfig = await getAsaasConfig(supabase);
+    if (!asaasConfig) {
+      return new Response(
+        JSON.stringify({ success: false, pago: false, erro: 'ASAAS não configurado' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_BASE_URL } = asaasConfig;
+
     // 1. Buscar cobrança pendente no banco
     const { data: cobranca, error: cobrancaError } = await supabase
       .from('asaas_cobrancas')

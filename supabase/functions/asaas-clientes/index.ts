@@ -30,15 +30,15 @@ interface AsaasClienteRequest {
   };
 }
 
-async function asaasRequest(endpoint: string, method: string, body?: object) {
-  const url = `${ASAAS_BASE_URL}${endpoint}`;
+async function asaasRequest(endpoint: string, method: string, body?: object, asaasApiKey?: string, asaasBaseUrl?: string) {
+  const url = `${asaasBaseUrl}${endpoint}`;
   console.log(`[asaas-clientes] ${method} ${url}`);
   
   const response = await fetch(url, {
     method,
     headers: {
       'Content-Type': 'application/json',
-      'access_token': ASAAS_API_KEY!,
+      'access_token': asaasApiKey!,
     },
     body: body ? JSON.stringify(body) : undefined,
   });
@@ -59,11 +59,12 @@ serve(async (req) => {
   }
 
   try {
-    if (!ASAAS_API_KEY) {
-      throw new Error('ASAAS_API_KEY não configurada');
-    }
-
     const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    
+    const asaasConfig = await getAsaasConfig(supabase);
+    if (!asaasConfig) throw new Error('ASAAS não configurado. Configure as credenciais na área de Integrações.');
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_BASE_URL } = asaasConfig;
+
     const { action, associado_id, asaas_id, dados }: AsaasClienteRequest = await req.json();
 
     console.log(`[asaas-clientes] Action: ${action}, Associado: ${associado_id}`);
