@@ -17,6 +17,7 @@ import { cn } from '@/lib/utils';
 import { PlanoFormSheet } from './PlanoFormSheet';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDuplicateProductLine, useDuplicatePlan } from '@/hooks/usePlansAdmin';
+import { ImportarLinhasModal } from './ImportarLinhasModal';
 
 // ── Data hooks ──
 
