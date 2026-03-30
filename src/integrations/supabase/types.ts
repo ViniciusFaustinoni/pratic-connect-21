@@ -2025,6 +2025,8 @@ export type Database = {
           cancelado_por: string | null
           cep: string | null
           cidade: string | null
+          cnh_categoria: string | null
+          cnh_numero: string | null
           cnh_validade: string | null
           codigo_hinova: number | null
           complemento: string | null
@@ -2034,6 +2036,7 @@ export type Database = {
           data_adesao: string | null
           data_ativacao: string | null
           data_bloqueio: string | null
+          data_cadastro_sga: string | null
           data_cancelamento: string | null
           data_efetiva_saida: string | null
           data_nascimento: string | null
@@ -2083,6 +2086,8 @@ export type Database = {
           cancelado_por?: string | null
           cep?: string | null
           cidade?: string | null
+          cnh_categoria?: string | null
+          cnh_numero?: string | null
           cnh_validade?: string | null
           codigo_hinova?: number | null
           complemento?: string | null
@@ -2092,6 +2097,7 @@ export type Database = {
           data_adesao?: string | null
           data_ativacao?: string | null
           data_bloqueio?: string | null
+          data_cadastro_sga?: string | null
           data_cancelamento?: string | null
           data_efetiva_saida?: string | null
           data_nascimento?: string | null
@@ -2141,6 +2147,8 @@ export type Database = {
           cancelado_por?: string | null
           cep?: string | null
           cidade?: string | null
+          cnh_categoria?: string | null
+          cnh_numero?: string | null
           cnh_validade?: string | null
           codigo_hinova?: number | null
           complemento?: string | null
@@ -2150,6 +2158,7 @@ export type Database = {
           data_adesao?: string | null
           data_ativacao?: string | null
           data_bloqueio?: string | null
+          data_cadastro_sga?: string | null
           data_cancelamento?: string | null
           data_efetiva_saida?: string | null
           data_nascimento?: string | null
