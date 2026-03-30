@@ -1,0 +1,1 @@
+ALTER TABLE benefits ADD COLUMN IF NOT EXISTS carencia_dias integer DEFAULT NULL;

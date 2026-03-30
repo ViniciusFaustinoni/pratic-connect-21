@@ -37,6 +37,7 @@ export function CoberturaUnificadaFormModal({
     icon: '',
     subtitle: '',
     display_order: '0',
+    carencia_dias: '',
     ativo: true,
   });
 
@@ -49,6 +50,7 @@ export function CoberturaUnificadaFormModal({
         icon: cobertura.icon || '',
         subtitle: cobertura.subtitle || '',
         display_order: cobertura.display_order?.toString() || '0',
+        carencia_dias: (cobertura as any).carencia_dias?.toString() || '',
         ativo: cobertura.ativo ?? true,
       });
     } else {
@@ -59,6 +61,7 @@ export function CoberturaUnificadaFormModal({
         icon: '',
         subtitle: '',
         display_order: '0',
+        carencia_dias: '',
         ativo: true,
       });
     }
@@ -74,6 +77,7 @@ export function CoberturaUnificadaFormModal({
       icon: formData.icon || null,
       subtitle: formData.subtitle || null,
       display_order: parseInt(formData.display_order) || 0,
+      carencia_dias: formData.carencia_dias ? parseInt(formData.carencia_dias) : null,
       ativo: formData.ativo,
     };
 
@@ -154,7 +158,7 @@ export function CoberturaUnificadaFormModal({
             />
           </div>
 
-          <div className="grid grid-cols-2 gap-4">
+          <div className="grid grid-cols-3 gap-4">
             <div className="space-y-2">
               <Label htmlFor="display_order">Ordem</Label>
               <Input
@@ -162,6 +166,17 @@ export function CoberturaUnificadaFormModal({
                 type="number"
                 value={formData.display_order}
                 onChange={(e) => setFormData(prev => ({ ...prev, display_order: e.target.value }))}
+              />
+            </div>
+            <div className="space-y-2">
+              <Label htmlFor="carencia_dias">Carência (dias)</Label>
+              <Input
+                id="carencia_dias"
+                type="number"
+                min="0"
+                value={formData.carencia_dias}
+                onChange={(e) => setFormData(prev => ({ ...prev, carencia_dias: e.target.value }))}
+                placeholder="Ex: 30"
               />
             </div>
             <div className="flex items-center gap-2 pt-7">

@@ -3692,6 +3692,7 @@ export type Database = {
       }
       benefits: {
         Row: {
+          carencia_dias: number | null
           category: string | null
           created_at: string | null
           description: string | null
@@ -3704,6 +3705,7 @@ export type Database = {
           slug: string
         }
         Insert: {
+          carencia_dias?: number | null
           category?: string | null
           created_at?: string | null
           description?: string | null
@@ -3716,6 +3718,7 @@ export type Database = {
           slug: string
         }
         Update: {
+          carencia_dias?: number | null
           category?: string | null
           created_at?: string | null
           description?: string | null
