@@ -494,6 +494,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
             sinistro_id: sinistro.id,
             tipo: 'cobertura',
             cobertura_id: selectedOption.coberturaId,
+            nome: selectedOption.label,
             valor: 0,
             observacao: `Cobertura registrada automaticamente na criação do sinistro`,
           });
