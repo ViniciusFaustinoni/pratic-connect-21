@@ -1030,6 +1030,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
               )}
             </div>
           </div>
+          )}
 
           {/* === SEÇÃO INCÊNDIO - Bombeiros acionados? === */}
           {isIncendio && (
