@@ -175,9 +175,9 @@ export default function AprovacaoAssociadosMonitoramento() {
                 <Badge className="bg-warning/15 text-warning border-warning/30 text-[10px] px-1.5">
                   Aguardando
                 </Badge>
-                <span className={cn("text-[10px] font-semibold tabular-nums", getWaitTextColor(servico.concluido_em))}>
-                  {servico.concluido_em
-                    ? formatDistanceToNow(new Date(servico.concluido_em), { locale: ptBR, addSuffix: false })
+                <span className={cn("text-[10px] font-semibold tabular-nums", getWaitTextColor(servico.concluida_em))}>
+                  {servico.concluida_em
+                    ? formatDistanceToNow(new Date(servico.concluida_em), { locale: ptBR, addSuffix: false })
                     : '---'}
                 </span>
               </div>
