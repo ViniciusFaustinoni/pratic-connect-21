@@ -23935,6 +23935,7 @@ export type Database = {
           cota_paga_em: string | null
           created_at: string
           custo_real_total: number | null
+          data_comunicado: string | null
           data_garantia_fim: string | null
           data_garantia_inicio: string | null
           data_ocorrencia: string
@@ -23946,6 +23947,7 @@ export type Database = {
           destino_reboque_endereco: string | null
           destino_reboque_oficina_id: string | null
           destino_reboque_tipo: string | null
+          envolvimento: string | null
           estado_ocorrencia: string | null
           fluxo_simplificado: boolean | null
           garantia_observacoes: string | null
@@ -23999,6 +24001,7 @@ export type Database = {
           snapshot_salvo_em: string | null
           snapshot_salvo_por: string | null
           snapshot_trajeto_json: Json | null
+          solicitou_carro_reserva: boolean | null
           status: Database["public"]["Enums"]["status_sinistro"]
           tem_terceiro: boolean
           termo_anuencia_assinado: boolean | null
@@ -24013,6 +24016,7 @@ export type Database = {
           upload_token: string | null
           upload_token_expires_at: string | null
           valor_cota_participacao: number | null
+          valor_depreciacao: number | null
           valor_fipe: number | null
           valor_indenizacao: number | null
           valor_orcamento: number | null
@@ -24061,6 +24065,7 @@ export type Database = {
           cota_paga_em?: string | null
           created_at?: string
           custo_real_total?: number | null
+          data_comunicado?: string | null
           data_garantia_fim?: string | null
           data_garantia_inicio?: string | null
           data_ocorrencia: string
@@ -24072,6 +24077,7 @@ export type Database = {
           destino_reboque_endereco?: string | null
           destino_reboque_oficina_id?: string | null
           destino_reboque_tipo?: string | null
+          envolvimento?: string | null
           estado_ocorrencia?: string | null
           fluxo_simplificado?: boolean | null
           garantia_observacoes?: string | null
@@ -24125,6 +24131,7 @@ export type Database = {
           snapshot_salvo_em?: string | null
           snapshot_salvo_por?: string | null
           snapshot_trajeto_json?: Json | null
+          solicitou_carro_reserva?: boolean | null
           status?: Database["public"]["Enums"]["status_sinistro"]
           tem_terceiro?: boolean
           termo_anuencia_assinado?: boolean | null
@@ -24139,6 +24146,7 @@ export type Database = {
           upload_token?: string | null
           upload_token_expires_at?: string | null
           valor_cota_participacao?: number | null
+          valor_depreciacao?: number | null
           valor_fipe?: number | null
           valor_indenizacao?: number | null
           valor_orcamento?: number | null
@@ -24187,6 +24195,7 @@ export type Database = {
           cota_paga_em?: string | null
           created_at?: string
           custo_real_total?: number | null
+          data_comunicado?: string | null
           data_garantia_fim?: string | null
           data_garantia_inicio?: string | null
           data_ocorrencia?: string
@@ -24198,6 +24207,7 @@ export type Database = {
           destino_reboque_endereco?: string | null
           destino_reboque_oficina_id?: string | null
           destino_reboque_tipo?: string | null
+          envolvimento?: string | null
           estado_ocorrencia?: string | null
           fluxo_simplificado?: boolean | null
           garantia_observacoes?: string | null
@@ -24251,6 +24261,7 @@ export type Database = {
           snapshot_salvo_em?: string | null
           snapshot_salvo_por?: string | null
           snapshot_trajeto_json?: Json | null
+          solicitou_carro_reserva?: boolean | null
           status?: Database["public"]["Enums"]["status_sinistro"]
           tem_terceiro?: boolean
           termo_anuencia_assinado?: boolean | null
@@ -24265,6 +24276,7 @@ export type Database = {
           upload_token?: string | null
           upload_token_expires_at?: string | null
           valor_cota_participacao?: number | null
+          valor_depreciacao?: number | null
           valor_fipe?: number | null
           valor_indenizacao?: number | null
           valor_orcamento?: number | null
