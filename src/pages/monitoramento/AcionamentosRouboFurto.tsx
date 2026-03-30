@@ -132,7 +132,7 @@ export default function AprovacaoAssociadosMonitoramento() {
               className={cn(
                 "group flex items-center gap-3 p-3.5 rounded-xl bg-card border border-border transition-all cursor-pointer border-l-4",
                 "hover:bg-accent/30 hover:shadow-sm hover:translate-x-1",
-                getWaitColor(servico.concluido_em)
+                getWaitColor(servico.concluida_em)
               )}
               onClick={() => navigate(`/monitoramento/aprovacao-associados/${servico.id}`)}
             >
