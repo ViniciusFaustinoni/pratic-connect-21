@@ -106,6 +106,17 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         rastreador = rData;
       }
 
+      // Buscar documentos do associado
+      let documentos: any[] = [];
+      if (servico.associado_id) {
+        const { data: docsData } = await supabase
+          .from('documentos')
+          .select('*')
+          .eq('associado_id', servico.associado_id)
+          .order('created_at', { ascending: false });
+        documentos = docsData || [];
+      }
+
       // Checklist - buscar do servico.checklist_json se existir
       const checklist: any[] = [];
 
@@ -115,6 +126,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         fotos: [...fotos, ...vistoriaFotos],
         rastreador,
         checklist,
+        documentos,
       };
     },
     enabled: !!servicoId,
