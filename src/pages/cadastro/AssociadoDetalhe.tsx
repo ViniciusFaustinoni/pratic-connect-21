@@ -455,6 +455,16 @@ export default function AssociadoDetalhe() {
                   <DataField label="Nascimento" value={`${formatDate(associado.data_nascimento)}${idade ? ` (${idade} anos)` : ''}`} />
                   <DataField label="Sexo" value={associado.sexo === 'M' ? 'Masculino' : associado.sexo === 'F' ? 'Feminino' : '—'} />
                 </div>
+                <Separator className="my-2" />
+                <div className="grid grid-cols-3 gap-3">
+                  <DataField label="CNH Número" value={associado.cnh_numero || '—'} />
+                  <DataField label="Categoria" value={associado.cnh_categoria || '—'} />
+                  <DataField label="Validade CNH" value={formatDate(associado.cnh_validade)} />
+                </div>
+                <div className="grid grid-cols-2 gap-3">
+                  <DataField label="Cadastro SGA" value={formatDate(associado.data_cadastro_sga)} />
+                  <DataField label="Código Hinova" value={associado.codigo_hinova || '—'} />
+                </div>
               </CardContent>
             </Card>
 
