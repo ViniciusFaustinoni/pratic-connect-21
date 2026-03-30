@@ -1166,12 +1166,19 @@ export function useAprovarVeiculoServico() {
               .single();
 
             if (metaTemplate && metaTemplate.status === 'APPROVED') {
+              // Extrair apenas o token do link para a variável do botão
+              // O botão tem URL fixa: https://app.praticprotecao.com.br/acompanhar/{{1}}
+              const tokenAssinatura = contratoDados.link_token;
+
               // Enviar via template Meta aprovado
+              // Corpo: {{1}} = nome, {{2}} = veículo
+              // Botão URL: {{1}} = token (variáveis do botão são numeradas separadamente)
               await supabase.functions.invoke('whatsapp-send-text', {
                 body: {
                   telefone: telefoneEnvio,
                   template_nome: metaTemplate.nome,
-                  template_variaveis: [nomeAssociado, veiculoDesc, linkPublico],
+                  template_variaveis: [nomeAssociado, veiculoDesc],
+                  template_botao_variaveis: [tokenAssinatura],
                   referencia_tipo: 'assinatura_instalacao',
                   referencia_id: data.servicoId,
                 },
