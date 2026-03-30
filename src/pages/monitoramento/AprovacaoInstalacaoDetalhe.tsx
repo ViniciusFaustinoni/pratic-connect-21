@@ -117,9 +117,39 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         documentos = docsData || [];
       }
 
-      // Checklist - buscar do servico.checklist_json se existir
-      const checklist: any[] = [];
+      // Buscar vídeo 360° do instalador (da vistoria vinculada ao serviço)
+      let videoInstalador: string | null = null;
+      if (servico.vistoria_origem_id) {
+        const { data: vistoriaInst } = await supabase
+          .from('vistorias')
+          .select('video_360_url')
+          .eq('id', servico.vistoria_origem_id)
+          .maybeSingle();
+        videoInstalador = vistoriaInst?.video_360_url || null;
+      } else if (servico.instalacao_origem_id) {
+        const { data: vistoriaInst } = await supabase
+          .from('vistorias')
+          .select('video_360_url')
+          .eq('instalacao_id', servico.instalacao_origem_id)
+          .maybeSingle();
+        videoInstalador = vistoriaInst?.video_360_url || null;
+      }
 
+      // Buscar vídeo 360° do associado (autovistoria não presencial do mesmo contrato)
+      let videoAssociado: string | null = null;
+      if (servico.contrato_id) {
+        const { data: autoVistoria } = await supabase
+          .from('vistorias')
+          .select('video_360_url')
+          .eq('contrato_id', servico.contrato_id)
+          .neq('modalidade', 'presencial')
+          .not('video_360_url', 'is', null)
+          .maybeSingle();
+        videoAssociado = autoVistoria?.video_360_url || null;
+      }
+
+      // Checklist
+      const checklist: any[] = [];
 
       return {
         servico,
@@ -127,6 +157,8 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         rastreador,
         checklist,
         documentos,
+        videoInstalador,
+        videoAssociado,
       };
     },
     enabled: !!servicoId,
