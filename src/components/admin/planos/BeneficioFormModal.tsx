@@ -18,6 +18,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useCreateBenefit, useUpdateBenefit } from '@/hooks/usePlansAdmin';
+import { CarenciaConfigSection } from './CarenciaConfigSection';
 
 import type { Benefit } from '@/types/plans';
 
@@ -63,12 +64,15 @@ export function BeneficioFormModal({
     category: '',
     display_order: '0',
     carencia_dias: '',
+    carencia_ativa: false,
+    carencia_tipo: '',
+    carencia_multiplicador: '',
     is_active: true,
   });
-  
 
   useEffect(() => {
     if (benefit) {
+      const b = benefit as any;
       setFormData({
         name: benefit.name || '',
         slug: benefit.slug || '',
@@ -76,7 +80,10 @@ export function BeneficioFormModal({
         description: benefit.description || '',
         category: benefit.category || '',
         display_order: benefit.display_order?.toString() || '0',
-        carencia_dias: (benefit as any).carencia_dias?.toString() || '',
+        carencia_dias: b.carencia_dias?.toString() || '',
+        carencia_ativa: b.carencia_ativa ?? false,
+        carencia_tipo: b.carencia_tipo || '',
+        carencia_multiplicador: b.carencia_multiplicador?.toString() || '',
         is_active: benefit.is_active ?? true,
       });
     } else {
@@ -88,9 +95,11 @@ export function BeneficioFormModal({
         category: '',
         display_order: '0',
         carencia_dias: '',
+        carencia_ativa: false,
+        carencia_tipo: '',
+        carencia_multiplicador: '',
         is_active: true,
       });
-      
     }
   }, [benefit]);
 
@@ -101,7 +110,6 @@ export function BeneficioFormModal({
       slug: isEditing ? prev.slug : generateSlug(name),
     }));
   };
-
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
@@ -114,6 +122,10 @@ export function BeneficioFormModal({
       category: formData.category || null,
       display_order: parseInt(formData.display_order) || 0,
       carencia_dias: formData.carencia_dias ? parseInt(formData.carencia_dias) : null,
+      carencia_ativa: formData.carencia_ativa,
+      carencia_tipo: formData.carencia_ativa ? formData.carencia_tipo || null : null,
+      carencia_multiplicador: formData.carencia_tipo === 'multiplicadora_cota' && formData.carencia_multiplicador
+        ? parseFloat(formData.carencia_multiplicador) : null,
       is_active: formData.is_active,
     };
 
@@ -123,7 +135,6 @@ export function BeneficioFormModal({
       } else {
         await createBenefit.mutateAsync(payload);
       }
-      
       onOpenChange(false);
     } catch (error) {
       // Error handled by mutation
@@ -209,7 +220,7 @@ export function BeneficioFormModal({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="display_order">Ordem</Label>
               <Input
@@ -219,19 +230,6 @@ export function BeneficioFormModal({
                 onChange={(e) =>
                   setFormData((prev) => ({ ...prev, display_order: e.target.value }))
                 }
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="carencia_dias">Carência (dias)</Label>
-              <Input
-                id="carencia_dias"
-                type="number"
-                min="0"
-                value={formData.carencia_dias}
-                onChange={(e) =>
-                  setFormData((prev) => ({ ...prev, carencia_dias: e.target.value }))
-                }
-                placeholder="Ex: 30"
               />
             </div>
             <div className="flex items-center gap-2 pt-7">
@@ -246,6 +244,15 @@ export function BeneficioFormModal({
             </div>
           </div>
 
+          <CarenciaConfigSection
+            config={{
+              carencia_ativa: formData.carencia_ativa,
+              carencia_tipo: formData.carencia_tipo,
+              carencia_dias: formData.carencia_dias,
+              carencia_multiplicador: formData.carencia_multiplicador,
+            }}
+            onChange={(c) => setFormData((prev) => ({ ...prev, ...c }))}
+          />
 
           <div className="flex justify-end gap-2 pt-4">
             <Button
