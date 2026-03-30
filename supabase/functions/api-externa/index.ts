@@ -87,7 +87,7 @@ Deno.serve(async (req) => {
           nome, cpf: cpf.replace(/\D/g, ''), email, telefone, status: 'em_analise',
         };
         const optionalFields = ['rg', 'data_nascimento', 'sexo', 'estado_civil', 'profissao', 'whatsapp',
-          'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'plano_id', 'dia_vencimento'];
+          'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'plano_id', 'dia_vencimento', 'cnh_validade'];
         for (const f of optionalFields) {
           if (body[f] !== undefined) insertData[f] = body[f];
         }

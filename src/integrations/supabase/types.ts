@@ -2025,6 +2025,7 @@ export type Database = {
           cancelado_por: string | null
           cep: string | null
           cidade: string | null
+          cnh_validade: string | null
           codigo_hinova: number | null
           complemento: string | null
           contrato_id: string | null
@@ -2082,6 +2083,7 @@ export type Database = {
           cancelado_por?: string | null
           cep?: string | null
           cidade?: string | null
+          cnh_validade?: string | null
           codigo_hinova?: number | null
           complemento?: string | null
           contrato_id?: string | null
@@ -2139,6 +2141,7 @@ export type Database = {
           cancelado_por?: string | null
           cep?: string | null
           cidade?: string | null
+          cnh_validade?: string | null
           codigo_hinova?: number | null
           complemento?: string | null
           contrato_id?: string | null

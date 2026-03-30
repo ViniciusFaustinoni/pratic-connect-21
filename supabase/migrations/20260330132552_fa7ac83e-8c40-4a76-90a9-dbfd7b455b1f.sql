@@ -1,0 +1,1 @@
+ALTER TABLE public.associados ADD COLUMN IF NOT EXISTS cnh_validade date;

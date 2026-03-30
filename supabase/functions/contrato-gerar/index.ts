@@ -890,9 +890,14 @@ serve(async (req) => {
 
     // 10. Vincular associado ao contrato
     if (associadoId) {
+      const associadoUpdate: any = { contrato_id: contrato.id };
+      // Copiar CNH validade da cotação para o associado
+      if (cotacao.cliente_cnh_validade) {
+        associadoUpdate.cnh_validade = cotacao.cliente_cnh_validade;
+      }
       await supabase
         .from('associados')
-        .update({ contrato_id: contrato.id })
+        .update(associadoUpdate)
         .eq('id', associadoId);
       console.log('Associado vinculado ao contrato:', associadoId);
     }

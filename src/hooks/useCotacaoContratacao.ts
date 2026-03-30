@@ -464,6 +464,14 @@ export function useCotacaoContratacao(token: string | undefined) {
 
       if (error) throw error;
 
+      // Atualizar cnh_validade no associado se disponível
+      if (associadoId && dados.cnh_validade) {
+        await publicSupabase
+          .from('associados')
+          .update({ cnh_validade: dados.cnh_validade })
+          .eq('id', associadoId);
+      }
+
       // NOTA: Geração de contrato removida daqui. O contrato será gerado
       // exclusivamente na EtapaAssinaturaContrato para evitar loops de erro.
     },
