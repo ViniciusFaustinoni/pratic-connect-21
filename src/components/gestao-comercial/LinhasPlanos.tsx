@@ -12,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, ChevronRight, Loader2, Pencil, Trash2, Copy } from 'lucide-react';
+import { Plus, ChevronRight, Loader2, Pencil, Trash2, Copy, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PlanoFormSheet } from './PlanoFormSheet';
 import { usePermissions } from '@/hooks/usePermissions';
