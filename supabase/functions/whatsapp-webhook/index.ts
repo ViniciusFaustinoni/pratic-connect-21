@@ -1017,6 +1017,38 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         observacao: `Sinistro comunicado via WhatsApp - ${tipoLabels[tipoSistema] || tipoSistema}`,
       });
 
+      // 6b. Registrar cobertura utilizada automaticamente
+      try {
+        const coberturaMap: Record<string, string> = {
+          colisao: "COB-COL", roubo: "COB-RF", furto: "COB-RF",
+          incendio: "COB-INC", fenomeno_natural: "COB-FN",
+          vidros: "COB-VID", vandalismo: "COB-VAN", terceiros: "COB-TER",
+        };
+        const codigoCob = coberturaMap[tipoSistema];
+        if (codigoCob) {
+          // Buscar plano_id do associado
+          const { data: assocPlano } = await supabase
+            .from("associados").select("plano_id").eq("id", associadoId).single();
+          if (assocPlano?.plano_id) {
+            const { data: cobGlobal } = await supabase
+              .from("coberturas").select("id, nome").eq("codigo", codigoCob).single();
+            if (cobGlobal) {
+              await supabase.from("sinistro_coberturas_utilizadas").insert({
+                sinistro_id: sinistroNovo.id,
+                tipo: "cobertura",
+                cobertura_id: cobGlobal.id,
+                nome: cobGlobal.nome,
+                valor: 0,
+                observacao: "Registrado automaticamente via WhatsApp",
+              });
+              console.log(`[whatsapp-webhook] Cobertura utilizada registrada: ${cobGlobal.nome}`);
+            }
+          }
+        }
+      } catch (cobErr) {
+        console.error("[whatsapp-webhook] Erro ao registrar cobertura utilizada (não bloqueante):", cobErr);
+      }
+
       // 7. Documentos obrigatórios
       const docsList = docsObrigatorios[tipoSistema] || docsObrigatorios.outro;
       const docsToInsert = docsList.map((d) => ({
