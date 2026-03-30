@@ -420,7 +420,7 @@ serve(async (req) => {
       }
 
       case 'atualizar-veiculo': {
-        const { veiculoId, placa, chassi, marca, modelo, ano, cor, tipo } = data as {
+        const { veiculoId, placa, chassi, marca, modelo, ano, cor, tipo, descricao } = data as {
           veiculoId: string;
           placa?: string;
           chassi?: string;
@@ -429,6 +429,7 @@ serve(async (req) => {
           ano?: string;
           cor?: string;
           tipo?: string;
+          descricao?: string;
         };
 
         if (!veiculoId) throw new Error('veiculoId é obrigatório');
