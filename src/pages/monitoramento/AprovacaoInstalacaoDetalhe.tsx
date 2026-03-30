@@ -241,7 +241,6 @@ export default function AprovacaoInstalacaoDetalhe() {
     });
   };
 
-  const videoFotos = fotos.filter((f: any) => f.tipo === 'video_360');
   const imageFotos = fotos.filter((f: any) => f.tipo !== 'video_360');
 
   return (
