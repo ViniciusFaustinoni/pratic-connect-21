@@ -1180,8 +1180,8 @@ export default function SinistroAnalise() {
                         fotos={todasFotos.map(f => ({
                           url: f.arquivo_url,
                           label: f.label,
-                        }))}
                           tipo: f.tipo,
+                        }))}
                         indexInicial={fotoViewerVistoriaAdesao.index}
                         open={fotoViewerVistoriaAdesao.open}
                         onClose={() => setFotoViewerVistoriaAdesao({ open: false, index: 0 })}
