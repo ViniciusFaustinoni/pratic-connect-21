@@ -1,26 +1,40 @@
 
 
-# Corrigir overflow de texto nos cards de plano na cotação
+# Ordem de Anexação Independente do Checkbox "Anexar à Proposta"
 
 ## Problema
-O texto das coberturas (ex: "Rastreador/Monitoramento (não cobre)") ultrapassa os limites do card, quebrando o layout visual.
 
-## Causa
-Os spans de texto dentro das coberturas não têm controle de overflow — textos longos, especialmente com o label "(não disponível)", estouram o card.
+1. O campo **"Ordem de anexação"** (`ordem_anexo`) só aparece quando "Anexar à Proposta de Filiação" está marcado
+2. Templates como o termo de rastreador são injetados **dinamicamente** quando `is_default_rastreador` está marcado, mas se o usuário também marca `anexar_proposta` para definir a posição, o termo vai **duplicado** no documento final
+3. O usuário quer poder definir a posição/ordem do template na proposta **sem precisar marcar** `anexar_proposta`
 
 ## Solução
 
-### `src/components/cotacao/PlanoCardCotacao.tsx`
+Tornar o campo `ordem_anexo` sempre visível (não condicionado ao `anexar_proposta`), e na geração da proposta, excluir templates que já serão injetados dinamicamente (como o de rastreador).
 
-1. **Coberturas removidas (linhas 123-133)**: O layout usa `flex` com `ml-auto` no "(não disponível)", forçando o texto a não quebrar. Corrigir:
-   - Adicionar `min-w-0` no container flex e `truncate` ou `break-words` nos spans de texto
-   - Remover o span separado "(não disponível)" e integrar o texto inline ou usar `whitespace-normal` com `overflow-hidden`
+## Alterações
 
-2. **Coberturas normais (linhas 134-138)**: Adicionar `min-w-0` no flex container e `truncate` ou `break-words` no span de texto
+### 1. `src/pages/documentos/TemplateForm.tsx`
 
-3. **Card raiz**: Adicionar `overflow-hidden` no Card para garantir que nada vaze
+- Remover a condição `{form.watch('anexar_proposta') && ...}` que esconde o campo `ordem_anexo`
+- Mostrar `ordem_anexo` sempre, com descrição atualizada: "Define a posição deste termo na proposta de filiação (menor número = aparece primeiro). Funciona tanto para anexos manuais quanto para termos injetados automaticamente (ex: rastreador)."
+
+### 2. `src/hooks/useGerarProposta.ts` (~linha 388)
+
+- Ao buscar templates com `anexar_proposta = true`, excluir os que têm `is_default_rastreador = true` (pois esses já são injetados condicionalmente pela lógica de negócios)
+- Usar o `ordem_anexo` para ordenar **todos** os templates anexados (manuais + dinâmicos) de forma unificada
+
+### 3. `supabase/functions/autentique-create/index.ts` e `supabase/functions/autentique-create-by-token/index.ts` (~linhas 529-534 e 499-503)
+
+- Mesma lógica: ao buscar templates `anexar_proposta = true`, filtrar para excluir os que são `is_default_rastreador = true`, evitando duplicação
+- Quando o rastreador for injetado dinamicamente, respeitar o `ordem_anexo` do template para posicioná-lo corretamente entre os demais anexos
+
+## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| `src/components/cotacao/PlanoCardCotacao.tsx` | Adicionar overflow-hidden no Card + min-w-0/truncate nos textos de coberturas |
+| `src/pages/documentos/TemplateForm.tsx` | Mostrar `ordem_anexo` sempre, sem depender de `anexar_proposta` |
+| `src/hooks/useGerarProposta.ts` | Excluir templates `is_default_rastreador` da query de anexos; unificar ordenação |
+| `supabase/functions/autentique-create/index.ts` | Idem — evitar duplicação do rastreador nos anexos |
+| `supabase/functions/autentique-create-by-token/index.ts` | Idem |
 
