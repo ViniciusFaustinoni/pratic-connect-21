@@ -114,9 +114,6 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
 
   // Hook para buscar coberturas/benefícios do plano do associado
   const { data: planData } = useCoberturasBeneficiosPlano(associadoSelecionado?.id);
-  const tipoServicoOptions = !modoManual && planData?.beneficios && planData.beneficios.length > 0
-    ? beneficiosToServicoOptions(planData.beneficios)
-    : TIPOS_SERVICO.map(t => ({ value: t.value, label: t.label, beneficioId: '' }));
 
   // Modo manual (quando não encontra associado)
   const [modoManual, setModoManual] = useState(false);
