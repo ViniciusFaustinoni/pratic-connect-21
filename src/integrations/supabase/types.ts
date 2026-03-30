@@ -25890,6 +25890,7 @@ export type Database = {
           valor_fipe: number | null
           valor_fipe_atualizado_em: string | null
           valor_fipe_cache: number | null
+          valor_fipe_protegido: number | null
         }
         Insert: {
           ano_fabricacao: number
@@ -25943,6 +25944,7 @@ export type Database = {
           valor_fipe?: number | null
           valor_fipe_atualizado_em?: string | null
           valor_fipe_cache?: number | null
+          valor_fipe_protegido?: number | null
         }
         Update: {
           ano_fabricacao?: number
@@ -25996,6 +25998,7 @@ export type Database = {
           valor_fipe?: number | null
           valor_fipe_atualizado_em?: string | null
           valor_fipe_cache?: number | null
+          valor_fipe_protegido?: number | null
         }
         Relationships: [
           {
