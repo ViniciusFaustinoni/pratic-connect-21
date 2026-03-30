@@ -815,6 +815,7 @@ export function useDuplicateBenefit() {
 
   return useMutation({
     mutationFn: async (id: string) => {
+      // 1. Fetch original benefit
       const { data: original, error: fetchError } = await supabase
         .from('benefits')
         .select('*')
@@ -838,6 +839,22 @@ export function useDuplicateBenefit() {
         .single();
 
       if (error) throw error;
+
+      // 2. Copy eligibility rules
+      const { data: rules } = await supabase
+        .from('entity_eligibility_rules')
+        .select('*')
+        .eq('entity_type', 'beneficio')
+        .eq('entity_id', id);
+
+      if (rules && rules.length > 0) {
+        const newRules = rules.map(({ id: _rid, created_at: _ca, updated_at: _ua, ...rule }) => ({
+          ...rule,
+          entity_id: data.id,
+        }));
+        await supabase.from('entity_eligibility_rules').insert(newRules);
+      }
+
       return data;
     },
     onSuccess: () => {
