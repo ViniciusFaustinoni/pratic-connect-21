@@ -30,58 +30,6 @@ const STATUS_MAP: Record<string, string> = {
   'CANCELED': 'cancelado',
 };
 
-// Fazer requisição para API ASAAS
-async function asaasRequest(endpoint: string, method = 'GET'): Promise<any> {
-  const url = `${ASAAS_BASE_URL}${endpoint}`;
-  console.log(`[ASAAS] ${method} ${url}`);
-
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'access_token': ASAAS_API_KEY!,
-      'Content-Type': 'application/json',
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[ASAAS] Error ${response.status}: ${errorText}`);
-    throw new Error(`ASAAS API error: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-// Buscar QR Code do PIX para um pagamento
-async function buscarPixQrCode(paymentId: string): Promise<{ qrCode: string; payload: string; expirationDate: string } | null> {
-  try {
-    const data = await asaasRequest(`/payments/${paymentId}/pixQrCode`);
-    return {
-      qrCode: data.encodedImage || null,
-      payload: data.payload || null,
-      expirationDate: data.expirationDate || null,
-    };
-  } catch (error) {
-    console.error(`[ASAAS] Erro ao buscar PIX para ${paymentId}:`, error);
-    return null;
-  }
-}
-
-// Buscar linha digitável do boleto
-async function buscarIdentificacaoBoleto(paymentId: string): Promise<{ identificationField: string; nossoNumero: string; barCode: string } | null> {
-  try {
-    const data = await asaasRequest(`/payments/${paymentId}/identificationField`);
-    return {
-      identificationField: data.identificationField || null,
-      nossoNumero: data.nossoNumero || null,
-      barCode: data.barCode || null,
-    };
-  } catch (error) {
-    console.error(`[ASAAS] Erro ao buscar boleto para ${paymentId}:`, error);
-    return null;
-  }
-}
-
 // Extrair referência (mês/ano) do campo description ou externalReference
 function extrairReferencia(payment: any): { mes: number; ano: number; label: string } {
   const now = new Date();
@@ -91,10 +39,8 @@ function extrairReferencia(payment: any): { mes: number; ano: number; label: str
     label: `${String(now.getMonth() + 1).padStart(2, '0')}/${now.getFullYear()}`,
   };
 
-  // Tentar extrair de externalReference ou description
   const ref = payment.externalReference || payment.description || '';
   
-  // Padrões comuns: "01/2026", "2026-01", "Janeiro/2026"
   const matchMesAno = ref.match(/(\d{1,2})[\/\-](\d{4})/);
   if (matchMesAno) {
     const mes = parseInt(matchMesAno[1]);
@@ -104,7 +50,6 @@ function extrairReferencia(payment: any): { mes: number; ano: number; label: str
     }
   }
 
-  // Padrão: "2026-01" (ano-mês)
   const matchAnoMes = ref.match(/(\d{4})[\/\-](\d{1,2})/);
   if (matchAnoMes) {
     const ano = parseInt(matchAnoMes[1]);
@@ -114,7 +59,6 @@ function extrairReferencia(payment: any): { mes: number; ano: number; label: str
     }
   }
 
-  // Usar data de vencimento como fallback
   if (payment.dueDate) {
     const dueDate = new Date(payment.dueDate);
     return {
@@ -128,15 +72,54 @@ function extrairReferencia(payment: any): { mes: number; ano: number; label: str
 }
 
 serve(async (req) => {
-  // Handle CORS
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    // Verificar API Key
-    if (!ASAAS_API_KEY) {
-      throw new Error('ASAAS_API_KEY não configurada');
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const asaasConfig = await getAsaasConfig(supabase);
+    if (!asaasConfig) throw new Error('ASAAS não configurado. Configure as credenciais na área de Integrações.');
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_BASE_URL } = asaasConfig;
+
+    // Helper com closure sobre config
+    async function asaasRequest(endpoint: string, method = 'GET'): Promise<any> {
+      const url = `${ASAAS_BASE_URL}${endpoint}`;
+      console.log(`[ASAAS] ${method} ${url}`);
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'access_token': ASAAS_API_KEY,
+          'Content-Type': 'application/json',
+        },
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[ASAAS] Error ${response.status}: ${errorText}`);
+        throw new Error(`ASAAS API error: ${response.status}`);
+      }
+      return response.json();
+    }
+
+    async function buscarPixQrCode(paymentId: string) {
+      try {
+        const data = await asaasRequest(`/payments/${paymentId}/pixQrCode`);
+        return { qrCode: data.encodedImage || null, payload: data.payload || null, expirationDate: data.expirationDate || null };
+      } catch (error) {
+        console.error(`[ASAAS] Erro ao buscar PIX para ${paymentId}:`, error);
+        return null;
+      }
+    }
+
+    async function buscarIdentificacaoBoleto(paymentId: string) {
+      try {
+        const data = await asaasRequest(`/payments/${paymentId}/identificationField`);
+        return { identificationField: data.identificationField || null, nossoNumero: data.nossoNumero || null, barCode: data.barCode || null };
+      } catch (error) {
+        console.error(`[ASAAS] Erro ao buscar boleto para ${paymentId}:`, error);
+        return null;
+      }
     }
 
     // Autenticar usuário
