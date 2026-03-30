@@ -210,7 +210,7 @@ export default function AprovacaoInstalacaoDetalhe() {
     );
   }
 
-  const { servico, fotos, rastreador, checklist, documentos } = data;
+  const { servico, fotos, rastreador, checklist, documentos, videoInstalador, videoAssociado } = data;
   const associado = servico.associado as any;
   const veiculo = servico.veiculo as any;
   const profissional = servico.profissional as any;
