@@ -18,6 +18,10 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
+    const asaasConfig = await getAsaasConfig(supabase);
+    if (!asaasConfig) throw new Error('ASAAS não configurado. Configure as credenciais na área de Integrações.');
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_API_URL } = asaasConfig;
+
     const { cobranca_id } = await req.json();
     if (!cobranca_id) throw new Error('cobranca_id é obrigatório');
 
