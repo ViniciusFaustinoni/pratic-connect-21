@@ -2117,8 +2117,6 @@ export default function InstaladorChecklist() {
                     toast.error(`Marque todos os itens do checklist (${faltam} pendente${faltam > 1 ? 's' : ''})`);
                   } else if (etapaAtual === 3) {
                     toast.error('Envie todas as fotos obrigatórias e o vídeo 360°');
-                  } else if (etapaAtual === 4) {
-                    toast.error('Colete a assinatura do cliente para avançar');
                   } else {
                     toast.error('Complete todos os campos obrigatórios para avançar');
                   }
