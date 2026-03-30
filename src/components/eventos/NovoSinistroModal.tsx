@@ -486,7 +486,23 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
       
       if (error) throw error;
 
-      // ===== 5. REGISTRAR HISTÓRICO =====
+      // ===== 4b. REGISTRAR COBERTURA UTILIZADA =====
+      try {
+        const selectedOption = tipoSinistroOptions.find(o => o.value === formData.tipo);
+        if (selectedOption?.coberturaId) {
+          await supabase.from('sinistro_coberturas_utilizadas').insert({
+            sinistro_id: sinistro.id,
+            tipo: 'cobertura',
+            cobertura_id: selectedOption.coberturaId,
+            valor: 0,
+            observacao: `Cobertura registrada automaticamente na criação do sinistro`,
+          });
+          console.log('[NovoSinistroModal] Cobertura utilizada registrada:', selectedOption.coberturaId);
+        }
+      } catch (cobErr) {
+        console.error('[NovoSinistroModal] Erro ao registrar cobertura utilizada (não bloqueante):', cobErr);
+      }
+
       const observacaoHistorico = isVidros
         ? `Sinistro registrado via sistema - Vidros e Faróis - Peça: ${pecaDanificada} - Opção: ${opcaoReparo === 'via_pratic' ? 'Via Pratic' : 'Reembolso'}`
         : alertaRecemAtivado
