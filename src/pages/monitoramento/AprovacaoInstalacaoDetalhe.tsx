@@ -27,6 +27,9 @@ import {
   XCircle,
   Loader2,
   MapPin,
+  FileText,
+  AlertTriangle,
+  ExternalLink,
 } from 'lucide-react';
 import {
   useAprovarInstalacaoMonitoramento,
