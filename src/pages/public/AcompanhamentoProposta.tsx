@@ -30,6 +30,12 @@ import { CriarContaAssociadoForm } from '@/components/public/CriarContaAssociado
 import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
 import { getOrientacoesRecusa } from '@/utils/orientacoesRecusa';
 
+interface ServicoInstalacao {
+  id: string;
+  status: string;
+  assinatura_cliente_url: string | null;
+}
+
 interface AssociadoData {
   id: string;
   nome: string;
@@ -63,6 +69,7 @@ interface AssociadoData {
       nome: string;
     } | null;
   }[];
+  servicoInstalacao?: ServicoInstalacao | null;
 }
 
 function useAcompanhamentoProposta(token: string | undefined) {
