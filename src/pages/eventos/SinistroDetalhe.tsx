@@ -365,6 +365,11 @@ export default function SinistroDetalhe() {
               </Card>
             </TabsContent>
           </Tabs>
+
+          {/* Coberturas/Benefícios utilizados */}
+          <div className="mt-4">
+            <SinistroCoberturaUtilizada sinistroId={id!} />
+          </div>
         </div>
 
         {/* Sidebar - Right */}
