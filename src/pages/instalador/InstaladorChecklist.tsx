@@ -115,7 +115,7 @@ export default function InstaladorChecklist() {
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [uploadingChecklistFoto, setUploadingChecklistFoto] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
+  // assinaturaUrl removido - assinatura agora é coletada pelo link público
   const [showModalRecusa, setShowModalRecusa] = useState(false);
   const [showDialogCondicao, setShowDialogCondicao] = useState(false);
   const [motivoPrePreenchido, setMotivoPrePreenchido] = useState('');
