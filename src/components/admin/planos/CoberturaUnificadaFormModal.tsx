@@ -89,6 +89,10 @@ export function CoberturaUnificadaFormModal({
       subtitle: formData.subtitle || null,
       display_order: parseInt(formData.display_order) || 0,
       carencia_dias: formData.carencia_dias ? parseInt(formData.carencia_dias) : null,
+      carencia_ativa: formData.carencia_ativa,
+      carencia_tipo: formData.carencia_ativa ? formData.carencia_tipo || null : null,
+      carencia_multiplicador: formData.carencia_tipo === 'multiplicadora_cota' && formData.carencia_multiplicador
+        ? parseFloat(formData.carencia_multiplicador) : null,
       ativo: formData.ativo,
     };
 
