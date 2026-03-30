@@ -1,50 +1,55 @@
 
 
-# Remover Taxa Administrativa do Plano (será cobertura comum)
+# Salvar CNH Validade no Associado + Expor na API Externa
 
-## Contexto
+## Situação atual
 
-O usuário vai criar a taxa administrativa como uma **cobertura** no catálogo global (`coberturas`), com seu valor próprio. Assim, ela será vinculada aos planos como qualquer outra cobertura, e seu valor já entra automaticamente na soma `somaCoberturas` do motor de cotação.
+- O OCR da CNH já extrai o campo `validade` corretamente
+- Esse dado é salvo apenas na tabela `contratos` (como `cliente_cnh_validade`) e na `cotacoes`
+- A tabela `associados` **não tem** coluna `cnh_validade`
+- A API externa (`api-externa/index.ts`) retorna `select('*')` do associado, então basta a coluna existir para aparecer automaticamente no GET
+- No POST da API, `cnh_validade` não está na lista de `optionalFields`
 
-## O que precisa mudar
+## Correções
 
-### 1. `src/components/gestao-comercial/PlanoFormSheet.tsx`
-- Remover todo o **Bloco 3: Taxa Administrativa** da UI (linhas 329-405)
-- Remover states: `taxaFipeMin`, `taxaFipeMax`, `taxaIntervalo`, `taxaFaixas`
-- Remover funções: `generateTaxaFaixas`, `canGenerateFaixas`
-- Remover lógica de save/load de `planos_taxa_administrativa` na mutation e na query de edição
-- Remover interface `TaxaFaixa` e import `DollarSign`
+### 1. Migration — Adicionar coluna `cnh_validade` na tabela `associados`
 
-### 2. `src/hooks/usePlanosCotacao.ts`
-- Remover a query `planos_taxa_administrativa_pricing` (linhas 196-207)
-- Remover o cálculo de `taxaAdmin`/`valorTaxaAdmin` (linhas 568-572)
-- Remover `valorTaxaAdmin` da soma do `valorMensal` (linha 574): fica apenas `somaCoberturas + somaBeneficios`
-- Remover `taxasAdminLoading` das dependências de loading
+```sql
+ALTER TABLE public.associados ADD COLUMN cnh_validade date;
+```
 
-### 3. `src/hooks/useCotacao.ts`
-- Mesmo tratamento: remover busca e cálculo de `planos_taxa_administrativa`
-- `valorMensal = somaCoberturas + somaBeneficios` (sem `valorTaxaAdmin`)
+### 2. `supabase/functions/contrato-gerar/index.ts`
 
-### 4. `src/hooks/usePlansAdmin.ts`
-- Remover a duplicação de `planos_taxa_administrativa` ao duplicar plano (linhas 370-379)
+Quando o contrato é gerado, já temos `cliente_cnh_validade`. Após criar o contrato, atualizar o associado:
 
-### 5. Componentes de exibição (manter compatíveis)
-- `QuoteCalculatorModal.tsx` — o campo `taxa_administrativa` na cotação continuará funcionando porque vem da decomposição percentual (já calculada sobre `valorMensal`), não da tabela de faixas
-- `ExtratoAssociado.tsx` — usa `valor_taxa_administrativa` do rateio, que é independente
+```sql
+UPDATE associados SET cnh_validade = contrato.cliente_cnh_validade WHERE id = associado_id
+```
 
-### 6. Tabela `planos_taxa_administrativa`
-- **Não deletar** a tabela agora (dados históricos de rateios já processados podem referenciar)
-- Apenas parar de usar no código
+### 3. `supabase/functions/ativar-associado/index.ts`
 
-## Impacto no preço
-Quando o usuário criar a cobertura "Taxa Administrativa" no catálogo com o valor desejado e vinculá-la aos planos, esse valor entrará automaticamente na soma de coberturas. Não é necessário nenhum ajuste adicional no motor de cotação.
+Na ativação, copiar `cnh_validade` do contrato para o associado (caso ainda não esteja preenchido).
+
+### 4. `src/components/contratos/ContratoWizard.tsx`
+
+Quando salva a cotação com dados de OCR da CNH, também atualizar `associados.cnh_validade`.
+
+### 5. `supabase/functions/api-externa/index.ts`
+
+- Adicionar `cnh_validade` à lista de `optionalFields` no POST de associados (linha 90), para que a API aceite esse campo ao criar associados externamente.
+- O GET já retorna `select('*')`, então o campo aparecerá automaticamente.
+
+### 6. `src/hooks/useCotacaoContratacao.ts`
+
+Quando salva dados do cliente na cotação (linha 451), também atualizar `associados.cnh_validade` com o valor extraído do OCR.
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| `src/components/gestao-comercial/PlanoFormSheet.tsx` | Remover toda UI e lógica de taxa administrativa |
-| `src/hooks/usePlanosCotacao.ts` | Remover query e cálculo de `planos_taxa_administrativa` |
-| `src/hooks/useCotacao.ts` | Remover query e cálculo de `planos_taxa_administrativa` |
-| `src/hooks/usePlansAdmin.ts` | Remover duplicação de taxas ao clonar plano |
+| Migration SQL | Adicionar coluna `cnh_validade` (date) na tabela `associados` |
+| `supabase/functions/contrato-gerar/index.ts` | Copiar `cliente_cnh_validade` para `associados.cnh_validade` ao gerar contrato |
+| `supabase/functions/api-externa/index.ts` | Incluir `cnh_validade` nos `optionalFields` do POST de associados |
+| `src/hooks/useCotacaoContratacao.ts` | Atualizar `associados.cnh_validade` ao salvar dados de CNH via OCR |
+| `src/components/contratos/ContratoWizard.tsx` | Atualizar `associados.cnh_validade` ao salvar dados de OCR |
 
