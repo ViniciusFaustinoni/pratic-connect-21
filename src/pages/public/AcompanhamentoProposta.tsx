@@ -1,5 +1,5 @@
 import { useParams } from 'react-router-dom';
-import { useEffect } from 'react';
+import { useEffect, useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
@@ -19,7 +19,9 @@ import {
   MapPin,
   UserCheck,
   Bell,
-  FileWarning
+  FileWarning,
+  PenTool,
+  Loader2
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -29,6 +31,8 @@ import { motion } from 'framer-motion';
 import { CriarContaAssociadoForm } from '@/components/public/CriarContaAssociadoForm';
 import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
 import { getOrientacoesRecusa } from '@/utils/orientacoesRecusa';
+import { SignaturePad } from '@/components/instalador/SignaturePad';
+import { toast } from 'sonner';
 
 interface ServicoInstalacao {
   id: string;
