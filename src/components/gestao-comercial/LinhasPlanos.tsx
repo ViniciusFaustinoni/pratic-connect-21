@@ -220,7 +220,10 @@ export function LinhasPlanos() {
           <h3 className="text-sm font-semibold">Linhas e Planos</h3>
           <p className="text-xs text-muted-foreground">{linhas.length} linhas cadastradas</p>
         </div>
-        <Button size="sm" onClick={() => setLinhaSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Linha</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setImportModal(true)}><Upload className="h-4 w-4 mr-1" />Importar</Button>
+          <Button size="sm" onClick={() => setLinhaSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Linha</Button>
+        </div>
       </div>
 
       <div className="space-y-2">
