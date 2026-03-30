@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAsaasConfig as getAsaasConfigFromDb } from "../_shared/asaas-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,25 +9,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')!;
-
-function getAsaasBaseUrl() {
-  const envExplicito = Deno.env.get('ASAAS_ENV');
-  let ambiente: 'production' | 'sandbox';
-  
-  if (envExplicito) {
-    ambiente = envExplicito === 'production' ? 'production' : 'sandbox';
-  } else {
-    const isSandbox = ASAAS_API_KEY?.includes('_hmlg_');
-    ambiente = isSandbox ? 'sandbox' : 'production';
-  }
-  
-  return ambiente === 'production'
-    ? 'https://api.asaas.com/v3'
-    : 'https://sandbox.asaas.com/api/v3';
-}
-
-const ASAAS_API_URL = getAsaasBaseUrl();
 
 interface FaturasRequest {
   fechamento_id?: string;
@@ -82,6 +64,10 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
+    const asaasConfig = await getAsaasConfigFromDb(supabase);
+    const ASAAS_API_KEY = asaasConfig?.apiKey;
+    const ASAAS_API_URL = asaasConfig?.baseUrl;
+
     const body: FaturasRequest = await req.json().catch(() => ({}));
     
     let fechamentoId = body.fechamento_id;
