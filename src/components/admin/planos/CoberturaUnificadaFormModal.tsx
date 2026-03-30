@@ -13,6 +13,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { useCreateCobertura, useUpdateCobertura } from '@/hooks/usePlansAdmin';
 import type { Cobertura } from '@/types/plans';
 import { EligibilityRulesEditor } from './EligibilityRulesEditor';
+import { CarenciaConfigSection } from './CarenciaConfigSection';
 
 interface CoberturaUnificadaFormModalProps {
   open: boolean;
