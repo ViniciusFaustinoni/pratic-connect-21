@@ -1,91 +1,37 @@
 
 
-# Corrigir: Edge Functions ASAAS devem ler credenciais da tabela `integracoes_credenciais`
+# Suporte a Vídeo no VisualizadorFoto
 
-## Problema Raiz
+## Problema
 
-O sistema tem **dois locais diferentes** para armazenar a API key do ASAAS:
+O componente `VisualizadorFoto` renderiza apenas `<img>`. Quando um vídeo 360° é incluído na lista de mídias, ele aparece como imagem quebrada mostrando o alt text "video_360".
 
-1. **Supabase Secrets** (`Deno.env.get('ASAAS_API_KEY')`) — usado por todas as 14 edge functions
-2. **Tabela `integracoes_credenciais`** — onde a UI salva quando você configura na área de Integrações
-
-Quando você muda a chave na UI, ela vai para a tabela. Mas as edge functions continuam lendo do secret antigo.
+Isso afeta:
+- `SinistroAnalise.tsx` — mistura fotos e vídeos no array `todasFotos` sem filtrar
+- Qualquer outro local que passe vídeos para o `VisualizadorFoto`
 
 ## Solução
 
-Criar uma **função utilitária compartilhada** que todas as edge functions ASAAS usam para obter a API key e a base URL. A lógica:
+Tornar o `VisualizadorFoto` capaz de exibir tanto fotos quanto vídeos, detectando automaticamente pelo URL ou por um campo opcional `tipo`.
 
-1. Tentar ler da tabela `integracoes_credenciais` (fonte primária — é onde a UI salva)
-2. Se não encontrar, fallback para `Deno.env.get('ASAAS_API_KEY')` (retrocompatibilidade)
-3. Determinar o ambiente (sandbox/production) com base no campo `ambiente` salvo na tabela OU pelo prefixo da chave
+## Alterações
 
-```text
-UI salva credenciais → integracoes_credenciais (encrypted)
-                          ↓
-         getAsaasCredenciais() ← todas edge functions usam
-                          ↓
-              { apiKey, baseUrl, ambiente }
-```
+### 1. `src/components/analise/VisualizadorFoto.tsx`
 
-## Implementação
+- Expandir a interface para aceitar `tipo?: string` opcional em cada item
+- Criar helper `isVideo(item)` que verifica se `tipo` começa com `video` ou se a URL contém extensões de vídeo (`.mp4`, `.webm`, `.mov`)
+- No conteúdo principal: se for vídeo, renderizar `<video controls autoPlay playsInline>` em vez de `<img>` (sem zoom/rotação para vídeos)
+- Nos thumbnails: se for vídeo, renderizar ícone de Play em vez de thumbnail de imagem
+- Esconder controles de zoom/rotação quando o item atual for vídeo
 
-### 1. Criar helper `supabase/functions/_shared/asaas-config.ts`
+### 2. `src/pages/eventos/SinistroAnalise.tsx` (linha ~1180)
 
-Função `getAsaasCredenciais(supabase, serviceKey)` que:
-- Busca da tabela `integracoes_credenciais` onde `integracao = 'asaas'`
-- Descriptografa usando a mesma lógica do `integracoes-credenciais/index.ts`
-- Retorna `{ apiKey, baseUrl, ambiente }`
-- Fallback para env vars se a tabela não tiver dados
-
-### 2. Atualizar as 14 edge functions que usam `ASAAS_API_KEY`
-
-Substituir `Deno.env.get('ASAAS_API_KEY')` pelo helper em cada uma:
-
-| Edge Function | Alteração |
-|---|---|
-| `asaas-clientes/index.ts` | Usar helper |
-| `asaas-cobrancas/index.ts` | Usar helper |
-| `asaas-cobranca-adesao/index.ts` | Usar helper |
-| `asaas-verificar-pagamento/index.ts` | Usar helper |
-| `asaas-verificar-cota-sinistro/index.ts` | Usar helper |
-| `buscar-boletos-associado/index.ts` | Usar helper |
-| `detalhe-boleto/index.ts` | Usar helper |
-| `emitir-boleto-individual/index.ts` | Usar helper |
-| `gerar-cobrancas-mensais/index.ts` | Usar helper |
-| `gerar-faturas-mensais/index.ts` | Usar helper |
-| `processar-reprovacao/index.ts` | Usar helper |
-| `api-externa/index.ts` | Usar helper |
-| `autentique-webhook/index.ts` | Usar helper |
-| `cron-integracoes-health-check/index.ts` | Usar helper |
-
-### 3. Atualizar `integracoes-verificar-secrets/index.ts`
-
-Verificar status do ASAAS também pela tabela `integracoes_credenciais`, não apenas pelo env var.
-
-## Padrão de cada função atualizada
-
-Antes:
-```typescript
-const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')!;
-const isSandbox = ASAAS_API_KEY?.includes('_hmlg_');
-const ASAAS_BASE_URL = isSandbox ? 'https://sandbox.asaas.com/api/v3' : 'https://api.asaas.com/v3';
-```
-
-Depois:
-```typescript
-// Dentro do handler (precisa do supabase client)
-const asaasConfig = await getAsaasCredenciais(supabase, SUPABASE_SERVICE_ROLE_KEY);
-if (!asaasConfig) throw new Error('ASAAS não configurado');
-const { apiKey, baseUrl } = asaasConfig;
-```
-
-A chave muda de ser lida no escopo global para dentro do handler, pois precisa do Supabase client para acessar a tabela.
+- Ao montar o array `todasFotos` para o `VisualizadorFoto`, passar o campo `tipo` de cada foto para que o visualizador saiba distinguir vídeos
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| `supabase/functions/_shared/asaas-config.ts` | **Novo** — helper com crypto + busca na tabela |
-| 14 edge functions ASAAS | Substituir leitura do env var pelo helper |
-| `supabase/functions/integracoes-verificar-secrets/index.ts` | Checar tabela para status ASAAS |
+| `src/components/analise/VisualizadorFoto.tsx` | Adicionar suporte a vídeo (detecção + renderização) |
+| `src/pages/eventos/SinistroAnalise.tsx` | Passar `tipo` no array de fotos do visualizador |
 
