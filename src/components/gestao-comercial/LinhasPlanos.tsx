@@ -182,6 +182,7 @@ export function LinhasPlanos() {
   const [openLines, setOpenLines] = useState<Set<string>>(new Set());
   const [linhaSheet, setLinhaSheet] = useState<{ open: boolean; linha?: any }>({ open: false });
   const [planoSheet, setPlanoSheet] = useState<{ open: boolean; planoId?: string; linhaId?: string }>({ open: false });
+  const [importModal, setImportModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
 
   const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
