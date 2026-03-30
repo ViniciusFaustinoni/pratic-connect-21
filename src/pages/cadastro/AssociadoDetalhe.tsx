@@ -463,7 +463,7 @@ export default function AssociadoDetalhe() {
                 </div>
                 <div className="grid grid-cols-2 gap-3">
                   <DataField label="Cadastro SGA" value={formatDate(associado.data_cadastro_sga)} />
-                  <DataField label="Código Hinova" value={associado.codigo_hinova || '—'} />
+                  <DataField label="Código Hinova" value={associado.codigo_hinova ? String(associado.codigo_hinova) : '—'} />
                 </div>
               </CardContent>
             </Card>
