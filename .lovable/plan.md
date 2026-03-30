@@ -1,36 +1,69 @@
 
 
-# Adicionar Campo de Carência (dias) nos Formulários de Cobertura e Benefício
+# Carência Configurável com Tipos: Liberação e Multiplicadora de Cota
 
 ## Contexto
 
-A tabela `coberturas` já possui a coluna `carencia_dias`, mas o formulário de criação/edição (`CoberturaUnificadaFormModal`) não exibe esse campo. A tabela `benefits` **não possui** a coluna `carencia_dias` — precisa de migration.
+Hoje o campo `carencia_dias` é apenas um número. O pedido é transformar a carência em um sistema mais completo:
 
-## Alterações
+1. **Switch para ativar/desativar** carência
+2. Se ativada, **selecionar o tipo**:
+   - **Carência de Liberação** — cobertura/benefício só é liberado após X dias
+   - **Carência Multiplicadora de Cota** — durante a carência, o valor da cota de participação é multiplicado por um fator configurável
+3. Se tipo = Multiplicadora, exibir campo adicional para o **multiplicador**
 
-### 1. Migration — Adicionar `carencia_dias` na tabela `benefits`
+## Alterações no Banco
+
+### Migration — Novas colunas em `coberturas` e `benefits`
+
 ```sql
-ALTER TABLE benefits ADD COLUMN carencia_dias integer DEFAULT NULL;
+-- Coberturas
+ALTER TABLE coberturas ADD COLUMN IF NOT EXISTS carencia_ativa boolean DEFAULT false;
+ALTER TABLE coberturas ADD COLUMN IF NOT EXISTS carencia_tipo text DEFAULT NULL;
+ALTER TABLE coberturas ADD COLUMN IF NOT EXISTS carencia_multiplicador numeric DEFAULT NULL;
+
+-- Benefits
+ALTER TABLE benefits ADD COLUMN IF NOT EXISTS carencia_ativa boolean DEFAULT false;
+ALTER TABLE benefits ADD COLUMN IF NOT EXISTS carencia_tipo text DEFAULT NULL;
+ALTER TABLE benefits ADD COLUMN IF NOT EXISTS carencia_multiplicador numeric DEFAULT NULL;
 ```
 
-### 2. `CoberturaUnificadaFormModal.tsx` — Adicionar campo carência
-- Adicionar `carencia_dias` ao state do formulário
-- Carregar valor existente no `useEffect`
-- Incluir no payload do submit
-- Renderizar input numérico com label "Carência (dias)" e placeholder "Ex: 30"
+Valores possíveis de `carencia_tipo`: `'liberacao'` | `'multiplicadora_cota'`
 
-### 3. `BeneficioFormModal.tsx` — Adicionar campo carência
-- Mesmo padrão: state, useEffect, payload, input numérico
-- Incluir `carencia_dias` no payload enviado ao `createBenefit` / `updateBenefit`
+## Alterações nos Formulários
 
-### 4. Hooks `usePlansAdmin` — Verificar se mutations suportam o campo
-Confirmar que `useCreateCobertura`, `useUpdateCobertura`, `useCreateBenefit`, `useUpdateBenefit` passam campos extras para o Supabase (provavelmente já fazem spread do payload).
+### Ambos os modais (`CoberturaUnificadaFormModal` e `BeneficioFormModal`)
+
+Substituir o campo simples de "Carência (dias)" por uma seção condicional:
+
+```
+┌─────────────────────────────────────────┐
+│ [Switch] Carência                       │
+│                                         │
+│ (se ativada:)                           │
+│ ┌─────────────┐  ┌───────────────────┐  │
+│ │ Tipo ▼      │  │ Prazo (dias)      │  │
+│ │ - Liberação │  │ [____30____]      │  │
+│ │ - Mult.Cota │  │                   │  │
+│ └─────────────┘  └───────────────────┘  │
+│                                         │
+│ (se tipo = Multiplicadora de Cota:)     │
+│ ┌───────────────────────────────────┐   │
+│ │ Multiplicador da Cota  [__2.0__] │   │
+│ └───────────────────────────────────┘   │
+└─────────────────────────────────────────┘
+```
+
+- Switch "Carência" → controla `carencia_ativa`
+- Select "Tipo" → `liberacao` ou `multiplicadora_cota`
+- Input "Prazo (dias)" → `carencia_dias` (existente)
+- Input "Multiplicador" → `carencia_multiplicador` (só se tipo = multiplicadora)
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| Migration SQL | `ALTER TABLE benefits ADD COLUMN carencia_dias integer` |
-| `src/components/admin/planos/CoberturaUnificadaFormModal.tsx` | Adicionar input de carência em dias |
-| `src/components/admin/planos/BeneficioFormModal.tsx` | Adicionar input de carência em dias |
+| Migration SQL | Adicionar `carencia_ativa`, `carencia_tipo`, `carencia_multiplicador` em ambas tabelas |
+| `src/components/admin/planos/CoberturaUnificadaFormModal.tsx` | Substituir campo simples por seção condicional de carência |
+| `src/components/admin/planos/BeneficioFormModal.tsx` | Mesma alteração |
 
