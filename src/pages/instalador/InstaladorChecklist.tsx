@@ -1324,24 +1324,6 @@ export default function InstaladorChecklist() {
           </div>
         )}
 
-        {/* Etapa 4: Assinatura */}
-        {etapaAtual === 4 && (
-          <div className="space-y-4">
-            {/* Alerta se fotos ou vídeo estão incompletos */}
-            {(!fotosObrigatoriasCompletas || !video360Enviado) && (
-              <Card className="border-amber-500/50 bg-amber-500/10">
-                <CardContent className="flex items-center gap-3 p-4">
-                  <AlertCircle className="h-6 w-6 text-amber-400 shrink-0" />
-                  <div>
-                    <p className="font-medium text-amber-300">Etapas anteriores incompletas</p>
-                    <p className="text-sm text-slate-400">
-                      Complete o envio de todas as fotos obrigatórias{!video360Enviado && ' e o vídeo 360°'} antes de coletar a assinatura.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
         {/* Etapa 4 (Assinatura) removida — agora coletada via link público */}
 
         {/* Etapa 4: Decisão do Instalador */}
