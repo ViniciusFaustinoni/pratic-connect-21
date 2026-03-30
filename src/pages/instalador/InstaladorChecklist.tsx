@@ -304,9 +304,10 @@ export default function InstaladorChecklist() {
     tipoVeiculo === 'moto' ? CHECKLIST_ITEMS_MOTO : CHECKLIST_ITEMS
   , [tipoVeiculo]);
 
+  const { data: locaisInstalacaoDB } = useLocaisInstalacao(tipoVeiculo === 'moto' ? 'moto' : 'carro');
   const locaisInstalacao = useMemo(() =>
-    tipoVeiculo === 'moto' ? LOCAIS_INSTALACAO_MOTO : LOCAIS_INSTALACAO_CARRO
-  , [tipoVeiculo]);
+    locaisInstalacaoDB?.map(l => ({ value: l.value, label: l.label })) || []
+  , [locaisInstalacaoDB]);
 
   // Reinicializar checklist quando tipoVeiculo muda (e não há checklist salvo)
   useEffect(() => {
