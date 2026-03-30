@@ -208,6 +208,11 @@ const menuConfig: {
           permission: 'canManageRastreadores',
         },
         {
+          title: 'Mapa',
+          url: '/monitoramento/mapa',
+          icon: Map,
+        },
+        {
           title: 'Alertas',
           url: '/monitoramento/alertas',
           icon: Bell,
