@@ -68,6 +68,7 @@ import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecu
 import { ImprevistoBotao } from '@/components/vistoriador/ImprevistoBotao';
 import { useRastreadoresDoPortador, type RastreadorEmPorte } from '@/hooks/useRastreadoresPortador';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
+import { useLocaisInstalacao } from '@/hooks/useLocaisInstalacao';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAguardarDecisaoMonitoramento } from '@/hooks/useAguardarDecisaoMonitoramento';
