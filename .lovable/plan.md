@@ -1,69 +1,57 @@
 
 
-# Carência Configurável com Tipos: Liberação e Multiplicadora de Cota
+# Importação em Massa de Linhas Completas (com Planos, Coberturas e Benefícios)
 
-## Contexto
+## Resumo
 
-Hoje o campo `carencia_dias` é apenas um número. O pedido é transformar a carência em um sistema mais completo:
+Adicionar na seção **Linhas e Planos** da Gestão Comercial:
+1. Botão **"Importar"** ao lado de "Nova Linha"
+2. Ao clicar, abre modal com opção de **baixar template XLSX** e fazer **upload da planilha preenchida**
+3. O sistema processa a planilha e cria: linhas, planos, coberturas (no catálogo se não existirem), benefícios (idem), vínculos plano↔cobertura e plano↔benefício
 
-1. **Switch para ativar/desativar** carência
-2. Se ativada, **selecionar o tipo**:
-   - **Carência de Liberação** — cobertura/benefício só é liberado após X dias
-   - **Carência Multiplicadora de Cota** — durante a carência, o valor da cota de participação é multiplicado por um fator configurável
-3. Se tipo = Multiplicadora, exibir campo adicional para o **multiplicador**
+## Template XLSX (gerado client-side)
 
-## Alterações no Banco
+A planilha terá **uma aba única** com as seguintes colunas:
 
-### Migration — Novas colunas em `coberturas` e `benefits`
+| Coluna | Descrição | Obrigatória |
+|--------|-----------|-------------|
+| Linha | Nome da linha de produto | Sim |
+| Plano | Nome do plano | Sim |
+| Tipo Item | `cobertura` ou `beneficio` | Sim |
+| Nome Item | Nome da cobertura/benefício | Sim |
+| Código Item | Código único | Sim |
+| Descrição Item | Descrição | Não |
+| Valor (R$) | Valor mensal do item | Sim |
+| Categoria | Para benefícios: `assistencia`, `extra`, `geral` | Não |
+| Carência Ativa | `sim` ou `não` | Não |
+| Carência Tipo | `liberacao` ou `multiplicadora_cota` | Não |
+| Carência Dias | Número inteiro | Não |
+| Carência Multiplicador | Ex: 2.0 | Não |
+| Franquia % | Para coberturas | Não |
+| Franquia Valor | Para coberturas | Não |
+| % Cobertura | Para coberturas | Não |
+| Valor Limite | Para coberturas | Não |
 
-```sql
--- Coberturas
-ALTER TABLE coberturas ADD COLUMN IF NOT EXISTS carencia_ativa boolean DEFAULT false;
-ALTER TABLE coberturas ADD COLUMN IF NOT EXISTS carencia_tipo text DEFAULT NULL;
-ALTER TABLE coberturas ADD COLUMN IF NOT EXISTS carencia_multiplicador numeric DEFAULT NULL;
+Cada linha da planilha é um item (cobertura ou benefício) vinculado a um plano que pertence a uma linha. Múltiplas linhas da planilha com mesmo "Linha + Plano" agrupam itens no mesmo plano.
 
--- Benefits
-ALTER TABLE benefits ADD COLUMN IF NOT EXISTS carencia_ativa boolean DEFAULT false;
-ALTER TABLE benefits ADD COLUMN IF NOT EXISTS carencia_tipo text DEFAULT NULL;
-ALTER TABLE benefits ADD COLUMN IF NOT EXISTS carencia_multiplicador numeric DEFAULT NULL;
-```
+## Lógica de Processamento
 
-Valores possíveis de `carencia_tipo`: `'liberacao'` | `'multiplicadora_cota'`
-
-## Alterações nos Formulários
-
-### Ambos os modais (`CoberturaUnificadaFormModal` e `BeneficioFormModal`)
-
-Substituir o campo simples de "Carência (dias)" por uma seção condicional:
-
-```
-┌─────────────────────────────────────────┐
-│ [Switch] Carência                       │
-│                                         │
-│ (se ativada:)                           │
-│ ┌─────────────┐  ┌───────────────────┐  │
-│ │ Tipo ▼      │  │ Prazo (dias)      │  │
-│ │ - Liberação │  │ [____30____]      │  │
-│ │ - Mult.Cota │  │                   │  │
-│ └─────────────┘  └───────────────────┘  │
-│                                         │
-│ (se tipo = Multiplicadora de Cota:)     │
-│ ┌───────────────────────────────────┐   │
-│ │ Multiplicador da Cota  [__2.0__] │   │
-│ └───────────────────────────────────┘   │
-└─────────────────────────────────────────┘
-```
-
-- Switch "Carência" → controla `carencia_ativa`
-- Select "Tipo" → `liberacao` ou `multiplicadora_cota`
-- Input "Prazo (dias)" → `carencia_dias` (existente)
-- Input "Multiplicador" → `carencia_multiplicador` (só se tipo = multiplicadora)
+1. Parse do XLSX via `xlsx` (SheetJS) — já usado no projeto
+2. Agrupar por Linha → Plano → Itens
+3. Para cada Linha: `upsert` em `product_lines` (por nome)
+4. Para cada Plano: `insert` em `planos` vinculado à linha
+5. Para cada Item tipo `cobertura`: `upsert` em `coberturas` (por código), depois `insert` em `planos_coberturas`
+6. Para cada Item tipo `beneficio`: `upsert` em `benefits` (por slug gerado do código), depois `insert` em `planos_beneficios`
+7. Exibir resumo: X linhas, Y planos, Z coberturas, W benefícios criados
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| Migration SQL | Adicionar `carencia_ativa`, `carencia_tipo`, `carencia_multiplicador` em ambas tabelas |
-| `src/components/admin/planos/CoberturaUnificadaFormModal.tsx` | Substituir campo simples por seção condicional de carência |
-| `src/components/admin/planos/BeneficioFormModal.tsx` | Mesma alteração |
+| `src/components/gestao-comercial/ImportarLinhasModal.tsx` | Novo — Modal com download template + upload + processamento |
+| `src/components/gestao-comercial/LinhasPlanos.tsx` | Adicionar botão "Importar" e renderizar modal |
+
+## Dependências
+
+- `xlsx` (SheetJS) — verificar se já está instalado; se não, instalar
 
