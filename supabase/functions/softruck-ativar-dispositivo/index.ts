@@ -258,6 +258,7 @@ serve(async (req) => {
             ano: veiculo.ano_modelo?.toString(),
             cor: veiculo.cor,
             tipo: mapVehicleType(veiculo.combustivel),
+            descricao: rastreador.local_instalacao || rastreador.descricao_instalacao || undefined,
           }
         );
 

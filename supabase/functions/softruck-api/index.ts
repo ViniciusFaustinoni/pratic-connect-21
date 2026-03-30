@@ -444,6 +444,7 @@ serve(async (req) => {
         if (ano) attrs.year = ano.substring(0, 10);
         if (cor) attrs.color = cor.substring(0, 7);
         if (tipo) attrs.type = tipo;
+        if (descricao) attrs.description = descricao.substring(0, 20);
 
         result = await softruckRequest('PATCH', `/v2/vehicles/${veiculoId}`, token, updateData);
         break;
