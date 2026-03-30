@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAsaasConfig as getAsaasConfigFromDb } from "../_shared/asaas-config.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -8,8 +9,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
-const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY")!;
-const ASAAS_API_URL = Deno.env.get("ASAAS_API_URL") || "https://api.asaas.com/v3";
 
 serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -19,6 +18,10 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
+    const asaasConfig = await getAsaasConfigFromDb(supabase);
+    const ASAAS_API_KEY = asaasConfig?.apiKey || '';
+    const ASAAS_API_URL = asaasConfig?.baseUrl || 'https://api.asaas.com/v3';
+
     const { acao, token, assinatura_base64, ip_cliente, cobranca_id, cartao, parcelas } = await req.json();
 
     if (!token || !acao) {
