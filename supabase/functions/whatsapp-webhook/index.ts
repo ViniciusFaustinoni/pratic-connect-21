@@ -1692,6 +1692,31 @@ async function getAssociadoContext(supabase: any, associadoId: string) {
     .not("status", "in", "(concluido,cancelado)")
     .limit(3);
 
+  // Buscar coberturas do plano
+  let coberturasPlano: any[] = [];
+  let beneficiosPlano: any[] = [];
+  if (associado?.plano_id) {
+    const { data: pc } = await supabase
+      .from("planos_coberturas")
+      .select("cobertura_id, coberturas(id, nome, codigo)")
+      .eq("plano_id", associado.plano_id);
+    coberturasPlano = (pc || []).filter((p: any) => p.coberturas).map((p: any) => p.coberturas);
+
+    const { data: pb } = await supabase
+      .from("planos_beneficios")
+      .select("beneficio_id, benefits(id, name, category)")
+      .eq("plano_id", associado.plano_id);
+    beneficiosPlano = (pb || []).filter((p: any) => p.benefits).map((p: any) => p.benefits);
+  }
+
+  const coberturasFormatadas = coberturasPlano.length > 0
+    ? coberturasPlano.map((c: any) => `- ${c.nome} (${c.codigo})`).join('\n')
+    : 'Nenhuma cobertura vinculada ao plano';
+
+  const beneficiosFormatados = beneficiosPlano.length > 0
+    ? beneficiosPlano.map((b: any) => `- ${b.name} (${b.category})`).join('\n')
+    : 'Nenhum benefício vinculado ao plano';
+
   // Formatar veículos com informação clara de status e cobertura
   const veiculosFormatados = veiculos?.length > 0
     ? veiculos.map((v: any) => {
