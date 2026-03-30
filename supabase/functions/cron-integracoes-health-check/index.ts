@@ -147,7 +147,7 @@ serve(async (req) => {
 
     const integracoes: Record<string, () => Promise<any>> = {
       hinova: () => testHinova(supabase),
-      asaas: () => testAsaas(),
+      asaas: () => testAsaas(supabase),
       whatsapp: () => testWhatsapp(supabase),
       autentique: () => testAutentique(),
       email: () => testEmail(),
