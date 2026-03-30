@@ -159,9 +159,14 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
   const { user } = useAuth();
   const queryClient = useQueryClient();
   const { data: carenciaDiasVal = 120 } = useCarenciaDiasPadrao();
-  const { data: planData } = useCoberturasBeneficiosPlano(selectedAssociado);
+  
   const [selectedAssociado, setSelectedAssociado] = useState<string | null>(null);
   const [selectedVeiculo, setSelectedVeiculo] = useState<string | null>(null);
+  
+  const { data: planData } = useCoberturasBeneficiosPlano(selectedAssociado);
+  const tipoSinistroOptions = planData?.coberturas && planData.coberturas.length > 0
+    ? coberturasToSinistroOptions(planData.coberturas)
+    : TIPO_SINISTRO_OPTIONS.map(o => ({ ...o, coberturaId: '' }));
   const [searchAssociado, setSearchAssociado] = useState('');
   const [openAssociadoPopover, setOpenAssociadoPopover] = useState(false);
   
