@@ -39,11 +39,15 @@ export function CoberturaUnificadaFormModal({
     subtitle: '',
     display_order: '0',
     carencia_dias: '',
+    carencia_ativa: false,
+    carencia_tipo: '',
+    carencia_multiplicador: '',
     ativo: true,
   });
 
   useEffect(() => {
     if (cobertura) {
+      const c = cobertura as any;
       setFormData({
         nome: cobertura.nome || '',
         codigo: cobertura.codigo || '',
@@ -51,7 +55,10 @@ export function CoberturaUnificadaFormModal({
         icon: cobertura.icon || '',
         subtitle: cobertura.subtitle || '',
         display_order: cobertura.display_order?.toString() || '0',
-        carencia_dias: (cobertura as any).carencia_dias?.toString() || '',
+        carencia_dias: c.carencia_dias?.toString() || '',
+        carencia_ativa: c.carencia_ativa ?? false,
+        carencia_tipo: c.carencia_tipo || '',
+        carencia_multiplicador: c.carencia_multiplicador?.toString() || '',
         ativo: cobertura.ativo ?? true,
       });
     } else {
@@ -63,6 +70,9 @@ export function CoberturaUnificadaFormModal({
         subtitle: '',
         display_order: '0',
         carencia_dias: '',
+        carencia_ativa: false,
+        carencia_tipo: '',
+        carencia_multiplicador: '',
         ativo: true,
       });
     }
