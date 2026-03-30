@@ -941,7 +941,8 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
             </div>
           </div>
 
-          {/* Seção 2 - Dados do Sinistro */}
+          {/* Seção 2 - Dados do Sinistro (só aparece após selecionar veículo) */}
+          {selectedVeiculo && (
           <div className="space-y-4">
             <h3 className="text-sm font-medium text-muted-foreground">Dados do Sinistro</h3>
             
@@ -962,7 +963,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                     <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {TIPO_SINISTRO_OPTIONS.map((tipo) => (
+                    {tipoSinistroOptions.map((tipo) => (
                       <SelectItem key={tipo.value} value={tipo.value}>
                         {tipo.label}
                       </SelectItem>
