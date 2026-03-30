@@ -123,7 +123,7 @@ Deno.serve(async (req) => {
         if (!associado_id) return err('associado_id ou associado_cpf é obrigatório', 'MISSING_FIELDS');
 
         const insertData: any = { associado_id, placa: placa.toUpperCase(), marca, modelo, ano_fabricacao, ano_modelo, status: 'em_analise' };
-        const optionalFields = ['chassi', 'renavam', 'cor', 'combustivel', 'valor_fipe', 'codigo_fipe',
+        const optionalFields = ['chassi', 'renavam', 'cor', 'combustivel', 'valor_fipe', 'valor_fipe_protegido', 'codigo_fipe',
           'uso_aplicativo', 'blindado', 'flag_leilao', 'flag_ex_taxi', 'flag_taxi_ativo', 'flag_placa_vermelha',
           'flag_chassi_remarcado', 'flag_avarias_vistoria', 'flag_ex_ressarcido'];
         for (const f of optionalFields) {
