@@ -488,21 +488,7 @@ export default function InstaladorChecklist() {
     }
   };
 
-  const handleAssinaturaSave = async (signatureBlob: Blob) => {
-    if (!id) return;
-    try {
-      // Usar tipo 'servico' para salvar na tabela correta e também em vistoria_fotos
-      const url = await saveAssinaturaMutation.mutateAsync({ 
-        id, 
-        signatureBlob,
-        tipo: 'servico' 
-      });
-      setAssinaturaUrl(url);
-      toast.success('Assinatura salva com sucesso!');
-    } catch (err) {
-      toast.error('Erro ao salvar assinatura');
-    }
-  };
+  // handleAssinaturaSave removido - assinatura agora é coletada pelo link público
 
   // Validação de IMEI (15-17 dígitos)
   const isImeiValido = /^\d{15,17}$/.test(imeiRastreador);
