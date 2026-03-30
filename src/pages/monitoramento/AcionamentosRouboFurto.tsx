@@ -132,7 +132,7 @@ export default function AprovacaoAssociadosMonitoramento() {
               className={cn(
                 "group flex items-center gap-3 p-3.5 rounded-xl bg-card border border-border transition-all cursor-pointer border-l-4",
                 "hover:bg-accent/30 hover:shadow-sm hover:translate-x-1",
-                getWaitColor(servico.concluido_em)
+                getWaitColor(servico.concluida_em)
               )}
               onClick={() => navigate(`/monitoramento/aprovacao-associados/${servico.id}`)}
             >
@@ -175,9 +175,9 @@ export default function AprovacaoAssociadosMonitoramento() {
                 <Badge className="bg-warning/15 text-warning border-warning/30 text-[10px] px-1.5">
                   Aguardando
                 </Badge>
-                <span className={cn("text-[10px] font-semibold tabular-nums", getWaitTextColor(servico.concluido_em))}>
-                  {servico.concluido_em
-                    ? formatDistanceToNow(new Date(servico.concluido_em), { locale: ptBR, addSuffix: false })
+                <span className={cn("text-[10px] font-semibold tabular-nums", getWaitTextColor(servico.concluida_em))}>
+                  {servico.concluida_em
+                    ? formatDistanceToNow(new Date(servico.concluida_em), { locale: ptBR, addSuffix: false })
                     : '---'}
                 </span>
               </div>

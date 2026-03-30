@@ -31,7 +31,7 @@ export function useInstalacoesAguardandoAprovacao() {
         `)
         .eq('tipo', 'instalacao')
         .eq('status', 'concluida')
-        .order('concluido_em', { ascending: true });
+        .order('concluida_em', { ascending: true });
 
       if (error) throw error;
 
