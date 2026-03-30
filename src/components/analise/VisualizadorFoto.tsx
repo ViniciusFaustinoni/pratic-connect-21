@@ -1,13 +1,27 @@
 import { useState, useEffect } from 'react';
 import { Dialog, DialogContent } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCw } from 'lucide-react';
+import { ZoomIn, ZoomOut, X, ChevronLeft, ChevronRight, RotateCw, Play } from 'lucide-react';
+
+interface FotoItem {
+  url: string;
+  label: string;
+  tipo?: string;
+}
 
 interface VisualizadorFotoProps {
-  fotos: { url: string; label: string }[];
+  fotos: FotoItem[];
   indexInicial?: number;
   open: boolean;
   onClose: () => void;
+}
+
+const VIDEO_EXTENSIONS = ['.mp4', '.webm', '.mov', '.avi', '.mkv'];
+
+function isVideoItem(item: FotoItem): boolean {
+  if (item.tipo && (item.tipo.startsWith('video') || item.tipo === 'video_360')) return true;
+  const urlLower = item.url?.toLowerCase() || '';
+  return VIDEO_EXTENSIONS.some(ext => urlLower.includes(ext));
 }
 
 export function VisualizadorFoto({ fotos, indexInicial = 0, open, onClose }: VisualizadorFotoProps) {
@@ -15,7 +29,6 @@ export function VisualizadorFoto({ fotos, indexInicial = 0, open, onClose }: Vis
   const [zoom, setZoom] = useState(1);
   const [rotation, setRotation] = useState(0);
 
-  // Reset quando muda o index inicial
   useEffect(() => {
     setIndex(indexInicial);
     setZoom(1);
@@ -23,6 +36,7 @@ export function VisualizadorFoto({ fotos, indexInicial = 0, open, onClose }: Vis
   }, [indexInicial, open]);
 
   const fotoAtual = fotos[index];
+  const isVideo = fotoAtual ? isVideoItem(fotoAtual) : false;
 
   const anterior = () => {
     setIndex((prev) => (prev > 0 ? prev - 1 : fotos.length - 1));
@@ -40,7 +54,6 @@ export function VisualizadorFoto({ fotos, indexInicial = 0, open, onClose }: Vis
   const diminuirZoom = () => setZoom((prev) => Math.max(prev - 0.5, 0.5));
   const rotacionar = () => setRotation((prev) => (prev + 90) % 360);
 
-  // Keyboard navigation
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       if (!open) return;
@@ -78,17 +91,28 @@ export function VisualizadorFoto({ fotos, indexInicial = 0, open, onClose }: Vis
           </Button>
         </div>
 
-        {/* Imagem */}
+        {/* Conteúdo principal */}
         <div className="flex items-center justify-center w-full h-full overflow-hidden p-12">
-          <img
-            src={fotoAtual.url}
-            alt={fotoAtual.label}
-            className="max-w-full max-h-full object-contain transition-transform duration-200"
-            style={{
-              transform: `scale(${zoom}) rotate(${rotation}deg)`,
-            }}
-            draggable={false}
-          />
+          {isVideo ? (
+            <video
+              key={fotoAtual.url}
+              src={fotoAtual.url}
+              controls
+              autoPlay
+              playsInline
+              className="max-w-full max-h-full object-contain"
+            />
+          ) : (
+            <img
+              src={fotoAtual.url}
+              alt={fotoAtual.label}
+              className="max-w-full max-h-full object-contain transition-transform duration-200"
+              style={{
+                transform: `scale(${zoom}) rotate(${rotation}deg)`,
+              }}
+              draggable={false}
+            />
+          )}
         </div>
 
         {/* Navegação */}
@@ -113,62 +137,73 @@ export function VisualizadorFoto({ fotos, indexInicial = 0, open, onClose }: Vis
           </>
         )}
 
-        {/* Controles de zoom */}
-        <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 rounded-full px-4 py-2">
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={diminuirZoom}
-            className="text-white hover:bg-white/20 h-8 w-8"
-            disabled={zoom <= 0.5}
-          >
-            <ZoomOut className="w-4 h-4" />
-          </Button>
-          <span className="text-white text-sm min-w-[60px] text-center">
-            {Math.round(zoom * 100)}%
-          </span>
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={aumentarZoom}
-            className="text-white hover:bg-white/20 h-8 w-8"
-            disabled={zoom >= 4}
-          >
-            <ZoomIn className="w-4 h-4" />
-          </Button>
-          <div className="w-px h-6 bg-white/30 mx-1" />
-          <Button
-            variant="ghost"
-            size="icon"
-            onClick={rotacionar}
-            className="text-white hover:bg-white/20 h-8 w-8"
-          >
-            <RotateCw className="w-4 h-4" />
-          </Button>
-        </div>
+        {/* Controles de zoom (apenas para imagens) */}
+        {!isVideo && (
+          <div className="absolute bottom-4 left-1/2 -translate-x-1/2 flex items-center gap-2 bg-black/50 rounded-full px-4 py-2">
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={diminuirZoom}
+              className="text-white hover:bg-white/20 h-8 w-8"
+              disabled={zoom <= 0.5}
+            >
+              <ZoomOut className="w-4 h-4" />
+            </Button>
+            <span className="text-white text-sm min-w-[60px] text-center">
+              {Math.round(zoom * 100)}%
+            </span>
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={aumentarZoom}
+              className="text-white hover:bg-white/20 h-8 w-8"
+              disabled={zoom >= 4}
+            >
+              <ZoomIn className="w-4 h-4" />
+            </Button>
+            <div className="w-px h-6 bg-white/30 mx-1" />
+            <Button
+              variant="ghost"
+              size="icon"
+              onClick={rotacionar}
+              className="text-white hover:bg-white/20 h-8 w-8"
+            >
+              <RotateCw className="w-4 h-4" />
+            </Button>
+          </div>
+        )}
 
         {/* Thumbnails */}
         {fotos.length > 1 && (
-          <div className="absolute bottom-16 left-1/2 -translate-x-1/2 flex gap-2 p-2 bg-black/50 rounded-lg max-w-[80vw] overflow-x-auto">
-            {fotos.map((foto, i) => (
-              <button
-                key={i}
-                onClick={() => {
-                  setIndex(i);
-                  setZoom(1);
-                  setRotation(0);
-                }}
-                className={`flex-shrink-0 w-12 h-12 rounded overflow-hidden border-2 transition-all ${
-                  i === index ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'
-                }`}
-              >
-                <img
-                  src={foto.url}
-                  alt={foto.label}
-                  className="w-full h-full object-cover"
-                />
-              </button>
-            ))}
+          <div className={`absolute ${isVideo ? 'bottom-4' : 'bottom-16'} left-1/2 -translate-x-1/2 flex gap-2 p-2 bg-black/50 rounded-lg max-w-[80vw] overflow-x-auto`}>
+            {fotos.map((foto, i) => {
+              const isThumbVideo = isVideoItem(foto);
+              return (
+                <button
+                  key={i}
+                  onClick={() => {
+                    setIndex(i);
+                    setZoom(1);
+                    setRotation(0);
+                  }}
+                  className={`flex-shrink-0 w-12 h-12 rounded overflow-hidden border-2 transition-all ${
+                    i === index ? 'border-primary' : 'border-transparent opacity-60 hover:opacity-100'
+                  }`}
+                >
+                  {isThumbVideo ? (
+                    <div className="w-full h-full bg-muted/30 flex items-center justify-center">
+                      <Play className="w-5 h-5 text-white" />
+                    </div>
+                  ) : (
+                    <img
+                      src={foto.url}
+                      alt={foto.label}
+                      className="w-full h-full object-cover"
+                    />
+                  )}
+                </button>
+              );
+            })}
           </div>
         )}
       </DialogContent>
