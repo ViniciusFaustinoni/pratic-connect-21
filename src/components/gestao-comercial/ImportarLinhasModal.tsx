@@ -167,9 +167,12 @@ export function ImportarLinhasModal({ open, onClose }: ImportarLinhasModalProps)
 
         for (const [planoName, items] of planMap) {
           // Create plan
+          const codigo = planoName.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
           const { data: newPlano, error: pe } = await supabase
             .from('planos').insert({
               nome: planoName,
+              codigo,
+              slug: codigo,
               product_line_id: lineId,
               ativo: true,
               visivel_cotacao: true,
