@@ -112,7 +112,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/monitoramento/instalacoes': { label: 'Instalações' },
   '/diretoria/vistorias-instalacoes': { label: 'Vistorias e Instalações' },
   '/monitoramento/rastreadores': { label: 'Rastreadores' },
-  '/monitoramento/retiradas': { label: 'Retiradas' },
+  '/monitoramento/retiradas': { label: 'Serviços de Campo' },
   
   
   

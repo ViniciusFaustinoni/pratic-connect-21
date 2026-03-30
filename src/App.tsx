@@ -638,7 +638,7 @@ const App = () => (
               <Route path="/monitoramento/vistorias-manutencao" element={<VistoriasManutencao />} />
               <Route path="/monitoramento/vistorias-instalacoes" element={<VistoriasInstalacoes />} />
               <Route path="/monitoramento/vistorias-instalacoes-mon" element={<VistoriasInstalacoesMon />} />
-              <Route path="/monitoramento/retiradas" element={<RetiradasPage />} />
+              <Route path="/monitoramento/retiradas" element={<Navigate to="/monitoramento/vistorias-instalacoes-mon" replace />} />
               <Route path="/monitoramento/realizar-vistoria" element={<Vistorias />} />
               <Route path="/monitoramento/ressalvas-pendentes" element={<RessalvasPendentes />} />
               <Route path="/monitoramento/aprovacao-associados" element={<AprovacaoAssociadosMonitoramento />} />

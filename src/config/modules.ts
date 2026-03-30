@@ -57,9 +57,7 @@ export const MODULE_ITEMS: Record<string, ModuleItem[]> = {
   ],
   monitoramento: [
     { id: 'equipe', label: 'Equipe' },
-    { id: 'instalacoes', label: 'Instalações' },
-    { id: 'vistorias', label: 'Vistorias' },
-    { id: 'retiradas', label: 'Retiradas' },
+    { id: 'instalacoes', label: 'Serviços de Campo' },
     { id: 'calendario', label: 'Calendário' },
     { id: 'estoque', label: 'Estoque' },
     { id: 'rastreadores', label: 'Rastreadores' },
