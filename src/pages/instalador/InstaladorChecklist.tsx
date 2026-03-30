@@ -68,6 +68,7 @@ import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecu
 import { ImprevistoBotao } from '@/components/vistoriador/ImprevistoBotao';
 import { useRastreadoresDoPortador, type RastreadorEmPorte } from '@/hooks/useRastreadoresPortador';
 import { useConfigFipeRastreador, useConfigFipeRastreadorMoto, precisaRastreador } from '@/hooks/useConfigRastreador';
+import { useLocaisInstalacao } from '@/hooks/useLocaisInstalacao';
 import { toast } from 'sonner';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useAguardarDecisaoMonitoramento } from '@/hooks/useAguardarDecisaoMonitoramento';
@@ -92,28 +93,7 @@ const CHECKLIST_ITEMS_MOTO = [
   { id: 'cliente_ciente', label: 'Associado ciente do procedimento', critico: false },
 ];
 
-const LOCAIS_INSTALACAO_CARRO = [
-  { value: 'painel', label: 'Painel' },
-  { value: 'sob_banco', label: 'Sob o banco' },
-  { value: 'parachoque_dianteiro', label: 'Para-choque dianteiro' },
-  { value: 'parachoque_traseiro', label: 'Para-choque traseiro' },
-  { value: 'caixa_roda', label: 'Caixa de roda' },
-  { value: 'vao_motor', label: 'Vão do motor' },
-  { value: 'console_central', label: 'Console central' },
-  { value: 'porta_malas', label: 'Porta-malas' },
-  { value: 'outro', label: 'Outro' },
-];
-
-const LOCAIS_INSTALACAO_MOTO = [
-  { value: 'sob_banco', label: 'Sob o banco' },
-  { value: 'carenagem_lateral', label: 'Carenagem lateral' },
-  { value: 'caixa_filtro_ar', label: 'Caixa do filtro de ar' },
-  { value: 'compartimento_ferramentas', label: 'Compartimento de ferramentas' },
-  { value: 'sob_tanque', label: 'Sob o tanque' },
-  { value: 'rabeta', label: 'Rabeta/Cola' },
-  { value: 'paralama', label: 'Paralama' },
-  { value: 'outro', label: 'Outro' },
-];
+// Locais de instalação agora vêm do banco via useLocaisInstalacao
 
 const ETAPAS = [
   { id: 1, label: 'Dados', icon: User },
@@ -324,9 +304,10 @@ export default function InstaladorChecklist() {
     tipoVeiculo === 'moto' ? CHECKLIST_ITEMS_MOTO : CHECKLIST_ITEMS
   , [tipoVeiculo]);
 
+  const { data: locaisInstalacaoDB } = useLocaisInstalacao(tipoVeiculo === 'moto' ? 'moto' : 'carro');
   const locaisInstalacao = useMemo(() =>
-    tipoVeiculo === 'moto' ? LOCAIS_INSTALACAO_MOTO : LOCAIS_INSTALACAO_CARRO
-  , [tipoVeiculo]);
+    locaisInstalacaoDB?.map(l => ({ value: l.value, label: l.label })) || []
+  , [locaisInstalacaoDB]);
 
   // Reinicializar checklist quando tipoVeiculo muda (e não há checklist salvo)
   useEffect(() => {

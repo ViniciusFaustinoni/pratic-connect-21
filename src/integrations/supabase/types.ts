@@ -14773,6 +14773,39 @@ export type Database = {
           },
         ]
       }
+      locais_instalacao: {
+        Row: {
+          ativo: boolean
+          created_at: string | null
+          id: string
+          label: string
+          ordem: number
+          tipo_veiculo: string
+          updated_at: string | null
+          value: string
+        }
+        Insert: {
+          ativo?: boolean
+          created_at?: string | null
+          id?: string
+          label: string
+          ordem?: number
+          tipo_veiculo?: string
+          updated_at?: string | null
+          value: string
+        }
+        Update: {
+          ativo?: boolean
+          created_at?: string | null
+          id?: string
+          label?: string
+          ordem?: number
+          tipo_veiculo?: string
+          updated_at?: string | null
+          value?: string
+        }
+        Relationships: []
+      }
       logs_auditoria: {
         Row: {
           acao: string
