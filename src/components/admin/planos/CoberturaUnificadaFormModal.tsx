@@ -77,6 +77,7 @@ export function CoberturaUnificadaFormModal({
       icon: formData.icon || null,
       subtitle: formData.subtitle || null,
       display_order: parseInt(formData.display_order) || 0,
+      carencia_dias: formData.carencia_dias ? parseInt(formData.carencia_dias) : null,
       ativo: formData.ativo,
     };
 
