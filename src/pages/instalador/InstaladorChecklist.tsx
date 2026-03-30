@@ -1384,8 +1384,8 @@ export default function InstaladorChecklist() {
           </div>
         )}
 
-        {/* Etapa 5: Decisão do Instalador */}
-        {etapaAtual === 5 && (
+        {/* Etapa 4: Decisão do Instalador */}
+        {etapaAtual === 4 && (
           <div className="space-y-4">
             {/* Resumo dos dados */}
             <div className="space-y-2 text-sm">
