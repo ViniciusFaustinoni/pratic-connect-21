@@ -23174,6 +23174,71 @@ export type Database = {
           },
         ]
       }
+      sinistro_coberturas_utilizadas: {
+        Row: {
+          benefit_id: string | null
+          cobertura_id: string | null
+          created_at: string | null
+          id: string
+          nome: string
+          observacao: string | null
+          sinistro_id: string
+          tipo: string
+          valor: number
+        }
+        Insert: {
+          benefit_id?: string | null
+          cobertura_id?: string | null
+          created_at?: string | null
+          id?: string
+          nome: string
+          observacao?: string | null
+          sinistro_id: string
+          tipo: string
+          valor?: number
+        }
+        Update: {
+          benefit_id?: string | null
+          cobertura_id?: string | null
+          created_at?: string | null
+          id?: string
+          nome?: string
+          observacao?: string | null
+          sinistro_id?: string
+          tipo?: string
+          valor?: number
+        }
+        Relationships: [
+          {
+            foreignKeyName: "sinistro_coberturas_utilizadas_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "benefits"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_coberturas_utilizadas_benefit_id_fkey"
+            columns: ["benefit_id"]
+            isOneToOne: false
+            referencedRelation: "vw_custo_real_benefits"
+            referencedColumns: ["beneficio_id"]
+          },
+          {
+            foreignKeyName: "sinistro_coberturas_utilizadas_cobertura_id_fkey"
+            columns: ["cobertura_id"]
+            isOneToOne: false
+            referencedRelation: "coberturas"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "sinistro_coberturas_utilizadas_sinistro_id_fkey"
+            columns: ["sinistro_id"]
+            isOneToOne: false
+            referencedRelation: "sinistros"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sinistro_contatos_agendados: {
         Row: {
           agendado_para: string
