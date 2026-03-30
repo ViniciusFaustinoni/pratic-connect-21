@@ -138,6 +138,8 @@ export const apiEndpoints: ApiEndpoint[] = [
       modelo: 'Gol',
       ano_fabricacao: 2022,
       ano_modelo: 2023,
+      valor_fipe: 50000,
+      valor_fipe_protegido: 45000.00,
       associado_id: '...',
       status: 'ativo',
     },
