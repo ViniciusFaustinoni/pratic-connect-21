@@ -27,6 +27,9 @@ import {
   XCircle,
   Loader2,
   MapPin,
+  FileText,
+  AlertTriangle,
+  ExternalLink,
 } from 'lucide-react';
 import {
   useAprovarInstalacaoMonitoramento,
@@ -103,6 +106,17 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         rastreador = rData;
       }
 
+      // Buscar documentos do associado
+      let documentos: any[] = [];
+      if (servico.associado_id) {
+        const { data: docsData } = await supabase
+          .from('documentos')
+          .select('*')
+          .eq('associado_id', servico.associado_id)
+          .order('created_at', { ascending: false });
+        documentos = docsData || [];
+      }
+
       // Checklist - buscar do servico.checklist_json se existir
       const checklist: any[] = [];
 
@@ -112,6 +126,7 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         fotos: [...fotos, ...vistoriaFotos],
         rastreador,
         checklist,
+        documentos,
       };
     },
     enabled: !!servicoId,
@@ -163,7 +178,7 @@ export default function AprovacaoInstalacaoDetalhe() {
     );
   }
 
-  const { servico, fotos, rastreador, checklist } = data;
+  const { servico, fotos, rastreador, checklist, documentos } = data;
   const associado = servico.associado as any;
   const veiculo = servico.veiculo as any;
   const profissional = servico.profissional as any;
@@ -303,6 +318,103 @@ export default function AprovacaoInstalacaoDetalhe() {
           </CardContent>
         </Card>
       )}
+
+      {/* Documentação do Associado */}
+      <Card className="border-border">
+        <CardHeader className="pb-3">
+          <CardTitle className="flex items-center gap-2 text-base">
+            <FileText className="h-4 w-4 text-primary" />
+            Documentação do Associado ({documentos.length})
+          </CardTitle>
+        </CardHeader>
+        <CardContent>
+          {documentos.length === 0 ? (
+            <div className="flex items-center gap-2 text-sm text-muted-foreground py-4 justify-center">
+              <AlertTriangle className="h-4 w-4" />
+              <span>Nenhum documento enviado pelo associado</span>
+            </div>
+          ) : (
+            <>
+              {documentos.some((d: any) => d.status === 'pendente' || d.status === 'reprovado') && (
+                <div className="flex items-center gap-2 mb-4 p-3 rounded-lg bg-destructive/10 border border-destructive/20 text-sm text-destructive">
+                  <AlertTriangle className="h-4 w-4 flex-shrink-0" />
+                  <span>
+                    Existem documentos{' '}
+                    {documentos.filter((d: any) => d.status === 'pendente').length > 0 && 'pendentes'}
+                    {documentos.filter((d: any) => d.status === 'pendente').length > 0 && documentos.filter((d: any) => d.status === 'reprovado').length > 0 && ' e '}
+                    {documentos.filter((d: any) => d.status === 'reprovado').length > 0 && 'reprovados'}
+                    {' '}que precisam de atenção.
+                  </span>
+                </div>
+              )}
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-3">
+                {documentos.map((doc: any) => {
+                  const isImage = doc.arquivo_url?.match(/\.(jpg|jpeg|png|webp|gif)(\?|$)/i);
+                  const tipoLabel: Record<string, string> = {
+                    cnh: 'CNH',
+                    crlv: 'CRLV',
+                    comprovante_residencia: 'Comprovante Residência',
+                    selfie_documento: 'Selfie c/ Documento',
+                    contrato_assinado: 'Contrato Assinado',
+                    laudo_vistoria: 'Laudo Vistoria',
+                    foto_veiculo_frente: 'Frente Veículo',
+                    foto_veiculo_traseira: 'Traseira Veículo',
+                    foto_veiculo_lateral_esquerda: 'Lateral Esquerda',
+                    foto_veiculo_lateral_direita: 'Lateral Direita',
+                    foto_hodometro: 'Hodômetro',
+                    foto_chassi: 'Chassi',
+                  };
+                  const statusConfig: Record<string, { class: string; label: string }> = {
+                    aprovado: { class: 'bg-success/15 text-success border-success/30', label: 'Aprovado' },
+                    pendente: { class: 'bg-warning/15 text-warning border-warning/30', label: 'Pendente' },
+                    em_analise: { class: 'bg-primary/15 text-primary border-primary/30', label: 'Em análise' },
+                    reprovado: { class: 'bg-destructive/15 text-destructive border-destructive/30', label: 'Reprovado' },
+                  };
+                  const st = statusConfig[doc.status] || statusConfig.pendente;
+
+                  return (
+                    <div
+                      key={doc.id}
+                      className="group relative rounded-xl overflow-hidden border border-border hover:ring-2 hover:ring-primary/50 transition-all cursor-pointer"
+                      onClick={() => {
+                        if (isImage) {
+                          setSelectedImage(doc.arquivo_url);
+                        } else {
+                          window.open(doc.arquivo_url, '_blank');
+                        }
+                      }}
+                    >
+                      <div className="aspect-square bg-muted/30 flex items-center justify-center">
+                        {isImage ? (
+                          <img
+                            src={doc.arquivo_url}
+                            alt={tipoLabel[doc.tipo] || doc.tipo}
+                            className="w-full h-full object-cover"
+                            loading="lazy"
+                          />
+                        ) : (
+                          <div className="flex flex-col items-center gap-2 text-muted-foreground">
+                            <FileText className="h-8 w-8" />
+                            <ExternalLink className="h-3 w-3" />
+                          </div>
+                        )}
+                      </div>
+                      <div className="p-2 space-y-1">
+                        <p className="text-[11px] font-medium text-foreground truncate">
+                          {tipoLabel[doc.tipo] || doc.tipo || 'Documento'}
+                        </p>
+                        <Badge variant="outline" className={`text-[10px] px-1.5 py-0 ${st.class}`}>
+                          {st.label}
+                        </Badge>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </>
+          )}
+        </CardContent>
+      </Card>
 
       {/* Checklist */}
       {checklist.length > 0 && (
