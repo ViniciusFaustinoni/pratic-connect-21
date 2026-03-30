@@ -3692,7 +3692,10 @@ export type Database = {
       }
       benefits: {
         Row: {
+          carencia_ativa: boolean | null
           carencia_dias: number | null
+          carencia_multiplicador: number | null
+          carencia_tipo: string | null
           category: string | null
           created_at: string | null
           description: string | null
@@ -3705,7 +3708,10 @@ export type Database = {
           slug: string
         }
         Insert: {
+          carencia_ativa?: boolean | null
           carencia_dias?: number | null
+          carencia_multiplicador?: number | null
+          carencia_tipo?: string | null
           category?: string | null
           created_at?: string | null
           description?: string | null
@@ -3718,7 +3724,10 @@ export type Database = {
           slug: string
         }
         Update: {
+          carencia_ativa?: boolean | null
           carencia_dias?: number | null
+          carencia_multiplicador?: number | null
+          carencia_tipo?: string | null
           category?: string | null
           created_at?: string | null
           description?: string | null
@@ -5496,7 +5505,10 @@ export type Database = {
       coberturas: {
         Row: {
           ativo: boolean | null
+          carencia_ativa: boolean | null
           carencia_dias: number | null
+          carencia_multiplicador: number | null
+          carencia_tipo: string | null
           codigo: string
           created_at: string | null
           descricao: string | null
@@ -5514,7 +5526,10 @@ export type Database = {
         }
         Insert: {
           ativo?: boolean | null
+          carencia_ativa?: boolean | null
           carencia_dias?: number | null
+          carencia_multiplicador?: number | null
+          carencia_tipo?: string | null
           codigo: string
           created_at?: string | null
           descricao?: string | null
@@ -5532,7 +5547,10 @@ export type Database = {
         }
         Update: {
           ativo?: boolean | null
+          carencia_ativa?: boolean | null
           carencia_dias?: number | null
+          carencia_multiplicador?: number | null
+          carencia_tipo?: string | null
           codigo?: string
           created_at?: string | null
           descricao?: string | null
