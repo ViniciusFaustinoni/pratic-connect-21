@@ -33,6 +33,7 @@ export const apiEndpoints: ApiEndpoint[] = [
       { name: 'cpf', type: 'string', required: true, description: 'CPF (apenas números ou com formatação)' },
       { name: 'email', type: 'string', required: true, description: 'E-mail do associado' },
       { name: 'telefone', type: 'string', required: true, description: 'Telefone principal' },
+      { name: 'senha', type: 'string', required: true, description: 'Senha para acesso ao app (mínimo 6 caracteres)' },
       { name: 'rg', type: 'string', required: false, description: 'Documento de identidade' },
       { name: 'data_nascimento', type: 'string (YYYY-MM-DD)', required: false, description: 'Data de nascimento' },
       { name: 'sexo', type: 'string', required: false, description: '"masculino" ou "feminino"' },
