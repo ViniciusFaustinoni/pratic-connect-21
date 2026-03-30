@@ -1342,47 +1342,7 @@ export default function InstaladorChecklist() {
               </Card>
             )}
 
-            <Card className="border-slate-700 bg-slate-800">
-              <CardHeader>
-                <CardTitle className="text-base text-white">
-                  Assinatura do Associado
-                </CardTitle>
-                <p className="text-sm text-slate-400">
-                  {(servico as any).associados?.nome}
-                </p>
-              </CardHeader>
-              <CardContent>
-                {assinaturaUrl || (servico as any).assinatura_cliente_url ? (
-                  <div className="space-y-3">
-                    <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-4">
-                      <div className="flex items-center gap-2 text-green-400">
-                        <CheckCircle2 className="h-5 w-5" />
-                        <span className="font-medium">Assinatura coletada</span>
-                      </div>
-                      <img
-                        src={assinaturaUrl || (servico as any).assinatura_cliente_url || ''}
-                        alt="Assinatura"
-                        className="mt-3 rounded-lg bg-white"
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => setAssinaturaUrl(null)}
-                      className="w-full border-slate-600 text-slate-300"
-                    >
-                      Coletar nova assinatura
-                    </Button>
-                  </div>
-                ) : (
-                  <SignaturePad
-                    onSave={handleAssinaturaSave}
-                    disabled={saveAssinaturaMutation.isPending || !fotosObrigatoriasCompletas || !video360Enviado}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
+        {/* Etapa 4 (Assinatura) removida — agora coletada via link público */}
 
         {/* Etapa 4: Decisão do Instalador */}
         {etapaAtual === 4 && (
