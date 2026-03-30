@@ -94,7 +94,8 @@ Deno.serve(async (req) => {
         };
         const optionalFields = ['rg', 'data_nascimento', 'sexo', 'estado_civil', 'profissao', 'whatsapp',
           'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'plano_id', 'dia_vencimento',
-          'cnh_validade', 'cnh_numero', 'cnh_categoria', 'data_cadastro_sga'];
+          'cnh_validade', 'cnh_numero', 'cnh_categoria', 'data_cadastro_sga',
+          'telefone_secundario', 'data_adesao', 'codigo_hinova', 'sincronizado_hinova', 'sincronizado_hinova_em'];
         for (const f of optionalFields) {
           if (body[f] !== undefined) insertData[f] = body[f];
         }
