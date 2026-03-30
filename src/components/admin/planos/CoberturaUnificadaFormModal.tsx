@@ -37,6 +37,7 @@ export function CoberturaUnificadaFormModal({
     icon: '',
     subtitle: '',
     display_order: '0',
+    carencia_dias: '',
     ativo: true,
   });
 
@@ -49,6 +50,7 @@ export function CoberturaUnificadaFormModal({
         icon: cobertura.icon || '',
         subtitle: cobertura.subtitle || '',
         display_order: cobertura.display_order?.toString() || '0',
+        carencia_dias: (cobertura as any).carencia_dias?.toString() || '',
         ativo: cobertura.ativo ?? true,
       });
     } else {
@@ -59,6 +61,7 @@ export function CoberturaUnificadaFormModal({
         icon: '',
         subtitle: '',
         display_order: '0',
+        carencia_dias: '',
         ativo: true,
       });
     }
