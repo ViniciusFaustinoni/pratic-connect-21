@@ -1646,7 +1646,7 @@ async function getAssociadoContext(supabase: any, associadoId: string) {
   // Buscar dados completos do associado
   const { data: associado } = await supabase
     .from("associados")
-    .select("nome, email, telefone, whatsapp, cpf, status, logradouro, numero, bairro, cidade, uf, cep, plano:planos(nome)")
+    .select("nome, email, telefone, whatsapp, cpf, status, logradouro, numero, bairro, cidade, uf, cep, plano_id, plano:planos(nome)")
     .eq("id", associadoId)
     .single();
 
