@@ -729,7 +729,8 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
               </div>
             )}
 
-            {/* Tipo de Serviço */}
+            {/* Tipo de Serviço - só aparece após selecionar veículo ou em modo manual */}
+            {(modoManual || veiculoSelecionado) && (
             <div className="space-y-2">
               <Label htmlFor="tipo_servico">Tipo de Serviço *</Label>
               <Select
@@ -740,8 +741,10 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
                   <SelectValue placeholder="Selecione o tipo de serviço" />
                 </SelectTrigger>
                 <SelectContent>
-                  {TIPOS_SERVICO.map((tipo) => {
-                    const Icon = tipo.icon;
+                  {tipoServicoOptions.map((tipo) => {
+                    // Find matching icon from TIPOS_SERVICO
+                    const originalTipo = TIPOS_SERVICO.find(t => t.value === tipo.value);
+                    const Icon = originalTipo?.icon || HelpCircle;
                     return (
                       <SelectItem key={tipo.value} value={tipo.value}>
                         <div className="flex items-center gap-2">
@@ -754,6 +757,7 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
                 </SelectContent>
               </Select>
             </div>
+            )}
 
             {/* Descrição */}
             <div className="space-y-2">
