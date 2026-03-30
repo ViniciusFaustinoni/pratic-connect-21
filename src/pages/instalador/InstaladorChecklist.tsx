@@ -691,7 +691,6 @@ export default function InstaladorChecklist() {
       case 1: return true;
       case 2: return checklistCompleto;
       case 3: return fotosObrigatoriasCompletas && video360Enviado;
-      case 4: return !!assinaturaUrl || !!servico?.assinatura_cliente_url;
       default: return true;
     }
   };
