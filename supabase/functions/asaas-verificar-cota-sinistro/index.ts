@@ -6,11 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') || '';
-const IS_SANDBOX = Deno.env.get('ASAAS_SANDBOX') === 'true' || ASAAS_API_KEY.includes('_hmlg_');
-const ASAAS_BASE_URL = IS_SANDBOX
-  ? 'https://sandbox.asaas.com/api/v3'
-  : 'https://api.asaas.com/v3';
+import { getAsaasConfig } from "../_shared/asaas-config.ts";
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
