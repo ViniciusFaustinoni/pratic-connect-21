@@ -381,6 +381,58 @@ export const apiEndpoints: ApiEndpoint[] = [
       status: 'aberto',
     },
   },
+  // RASTREADORES
+  {
+    id: 'post-rastreadores',
+    method: 'POST',
+    path: `${BASE_PATH}/rastreadores`,
+    title: 'Criar Rastreador',
+    description: 'Cadastra um novo rastreador no sistema. Permite vincular automaticamente a um veículo e associado por placa ou CPF.',
+    group: 'Rastreadores',
+    fields: [
+      { name: 'imei', type: 'string', required: true, description: 'IMEI do rastreador' },
+      { name: 'codigo', type: 'string', required: true, description: 'Código interno do rastreador' },
+      { name: 'plataforma', type: 'string', required: false, description: '"rede_veiculos" ou "softruck" (default: "rede_veiculos")' },
+      { name: 'numero_serie', type: 'string', required: false, description: 'Número de série do equipamento' },
+      { name: 'chip_iccid', type: 'string', required: false, description: 'ICCID do chip de dados' },
+      { name: 'id_plataforma', type: 'string', required: false, description: 'ID do dispositivo na plataforma' },
+      { name: 'plataforma_device_id', type: 'string', required: false, description: 'Device ID na plataforma' },
+      { name: 'veiculo_id', type: 'uuid', required: false, description: 'ID do veículo (obrigatório se não enviar veiculo_placa para status "instalado")' },
+      { name: 'veiculo_placa', type: 'string', required: false, description: 'Placa do veículo (alternativa ao veiculo_id)' },
+      { name: 'associado_id', type: 'uuid', required: false, description: 'ID do associado' },
+      { name: 'associado_cpf', type: 'string', required: false, description: 'CPF do associado (alternativa ao associado_id)' },
+      { name: 'associado_email', type: 'string', required: false, description: 'Email do associado' },
+      { name: 'status', type: 'string', required: false, description: '"estoque", "instalado", "manutencao", "baixado" (default: "estoque")' },
+    ],
+    responseExample: {
+      id: 'bb0e8400-e29b-41d4-a716-446655440000',
+      imei: '860012345678901',
+      codigo: 'RST-001',
+      plataforma: 'rede_veiculos',
+      status: 'instalado',
+      veiculo_id: '660e8400-e29b-41d4-a716-446655440000',
+    },
+    errorExample: { error: 'IMEI já cadastrado no sistema', code: 'DUPLICATE_IMEI' },
+  },
+  {
+    id: 'get-rastreadores',
+    method: 'GET',
+    path: `${BASE_PATH}/rastreadores/:id`,
+    title: 'Consultar Rastreador',
+    description: 'Retorna os dados de um rastreador pelo ID, com dados do veículo embutidos.',
+    group: 'Rastreadores',
+    fields: [
+      { name: 'id', type: 'uuid', required: true, description: 'ID do rastreador (parâmetro de URL)' },
+    ],
+    responseExample: {
+      id: 'bb0e8400-e29b-41d4-a716-446655440000',
+      imei: '860012345678901',
+      codigo: 'RST-001',
+      plataforma: 'rede_veiculos',
+      status: 'instalado',
+      veiculo: { id: '...', placa: 'ABC1D23', marca: 'Volkswagen', modelo: 'Gol', ano_fabricacao: 2022, ano_modelo: 2023 },
+    },
+  },
 ];
 
 export const apiGroups = [...new Set(apiEndpoints.map(e => e.group))];
