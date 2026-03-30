@@ -1,17 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAsaasConfig } from "../_shared/asaas-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY');
-// Chaves sandbox contêm '_hmlg_' (homologação)
-const isSandbox = ASAAS_API_KEY?.includes('_hmlg_');
-const ASAAS_BASE_URL = isSandbox
-  ? 'https://sandbox.asaas.com/api/v3'
-  : 'https://api.asaas.com/v3';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -36,40 +30,41 @@ interface AsaasClienteRequest {
   };
 }
 
-async function asaasRequest(endpoint: string, method: string, body?: object) {
-  const url = `${ASAAS_BASE_URL}${endpoint}`;
-  console.log(`[asaas-clientes] ${method} ${url}`);
-  
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'access_token': ASAAS_API_KEY!,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok) {
-    console.error(`[asaas-clientes] Erro ASAAS:`, data);
-    throw new Error(data.errors?.[0]?.description || `Erro ASAAS: ${response.status}`);
-  }
-
-  return data;
-}
-
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
 
   try {
-    if (!ASAAS_API_KEY) {
-      throw new Error('ASAAS_API_KEY não configurada');
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+    
+    const asaasConfig = await getAsaasConfig(supabase);
+    if (!asaasConfig) throw new Error('ASAAS não configurado. Configure as credenciais na área de Integrações.');
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_BASE_URL } = asaasConfig;
+
+    async function asaasRequest(endpoint: string, method: string, body?: object) {
+      const url = `${ASAAS_BASE_URL}${endpoint}`;
+      console.log(`[asaas-clientes] ${method} ${url}`);
+      
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'access_token': ASAAS_API_KEY,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+
+      const data = await response.json();
+      
+      if (!response.ok) {
+        console.error(`[asaas-clientes] Erro ASAAS:`, data);
+        throw new Error(data.errors?.[0]?.description || `Erro ASAAS: ${response.status}`);
+      }
+
+      return data;
     }
 
-    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
     const { action, associado_id, asaas_id, dados }: AsaasClienteRequest = await req.json();
 
     console.log(`[asaas-clientes] Action: ${action}, Associado: ${associado_id}`);

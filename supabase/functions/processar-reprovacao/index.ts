@@ -137,19 +137,16 @@ serve(async (req) => {
         console.log('Estornando pagamento no ASAAS...', cobranca.asaas_id);
 
         try {
-          // Buscar credenciais do ASAAS
-          const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY');
-          const ASAAS_ENV = Deno.env.get('ASAAS_ENV') || 'sandbox';
-          const baseUrl = ASAAS_ENV === 'production' 
-            ? 'https://api.asaas.com/v3'
-            : 'https://sandbox.asaas.com/api/v3';
-
-          if (ASAAS_API_KEY) {
-            const refundResponse = await fetch(`${baseUrl}/payments/${cobranca.asaas_id}/refund`, {
+          // Buscar credenciais do ASAAS dinamicamente
+          const { getAsaasConfig: getAsaasConfigFromDb } = await import("../_shared/asaas-config.ts");
+          const asaasConfig = await getAsaasConfigFromDb(supabase);
+          
+          if (asaasConfig) {
+            const refundResponse = await fetch(`${asaasConfig.baseUrl}/payments/${cobranca.asaas_id}/refund`, {
               method: 'POST',
               headers: {
                 'Content-Type': 'application/json',
-                'access_token': ASAAS_API_KEY,
+                'access_token': asaasConfig.apiKey,
               },
               body: JSON.stringify({
                 description: `Estorno por reprovação: ${motivo}`,

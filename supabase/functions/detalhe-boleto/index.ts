@@ -1,16 +1,11 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAsaasConfig } from "../_shared/asaas-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
-
-const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY');
-const isSandbox = ASAAS_API_KEY?.includes('_hmlg_') || ASAAS_API_KEY?.startsWith('$aact_hmlg');
-const ASAAS_BASE_URL = isSandbox
-  ? 'https://sandbox.asaas.com/api/v3'
-  : 'https://api.asaas.com/v3';
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_ANON_KEY = Deno.env.get('SUPABASE_ANON_KEY')!;
@@ -35,65 +30,9 @@ const STATUS_MAP: Record<string, string> = {
   'CANCELED': 'cancelado',
 };
 
-// Helper para fazer requisições à API ASAAS
-async function asaasRequest(endpoint: string, method = 'GET'): Promise<any> {
-  const url = `${ASAAS_BASE_URL}${endpoint}`;
-  console.log(`[ASAAS] ${method} ${url}`);
-
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'accept': 'application/json',
-      'access_token': ASAAS_API_KEY!,
-    },
-  });
-
-  if (!response.ok) {
-    const errorText = await response.text();
-    console.error(`[ASAAS] Erro ${response.status}: ${errorText}`);
-    throw new Error(`ASAAS API error: ${response.status}`);
-  }
-
-  return response.json();
-}
-
-// Buscar QR Code PIX
-async function buscarPixQrCode(paymentId: string): Promise<{ qrCode: string; payload: string; expirationDate: string } | null> {
-  try {
-    const data = await asaasRequest(`/payments/${paymentId}/pixQrCode`);
-    return {
-      qrCode: data.encodedImage || null,
-      payload: data.payload || null,
-      expirationDate: data.expirationDate || null,
-    };
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Erro desconhecido';
-    console.log(`[PIX] QR Code não disponível para ${paymentId}:`, message);
-    return null;
-  }
-}
-
-// Buscar linha digitável do boleto
-async function buscarIdentificacaoBoleto(paymentId: string): Promise<{ identificationField: string; nossoNumero: string; barCode: string } | null> {
-  try {
-    const data = await asaasRequest(`/payments/${paymentId}/identificationField`);
-    return {
-      identificationField: data.identificationField || null,
-      nossoNumero: data.nossoNumero || null,
-      barCode: data.barCode || null,
-    };
-  } catch (error: unknown) {
-    const message = error instanceof Error ? error.message : 'Erro desconhecido';
-    console.log(`[BOLETO] Identificação não disponível para ${paymentId}:`, message);
-    return null;
-  }
-}
-
 // Extrair referência (mês/ano) da descrição
 function extrairReferencia(payment: any): { mes: number; ano: number; label: string } {
   const descricao = payment.description || payment.externalReference || '';
-  
-  // Tentar extrair mês/ano da descrição (ex: "Mensalidade 01/2026")
   const matchDescricao = descricao.match(/(\d{1,2})\/(\d{4})/);
   if (matchDescricao) {
     return {
@@ -102,8 +41,6 @@ function extrairReferencia(payment: any): { mes: number; ano: number; label: str
       label: `${matchDescricao[1].padStart(2, '0')}/${matchDescricao[2]}`
     };
   }
-  
-  // Fallback: usar data de vencimento
   const vencimento = new Date(payment.dueDate);
   return {
     mes: vencimento.getMonth() + 1,
@@ -113,7 +50,6 @@ function extrairReferencia(payment: any): { mes: number; ano: number; label: str
 }
 
 serve(async (req) => {
-  // Handle CORS preflight
   if (req.method === 'OPTIONS') {
     return new Response(null, { headers: corsHeaders });
   }
@@ -121,9 +57,51 @@ serve(async (req) => {
   try {
     console.log('[DETALHE-BOLETO] Iniciando busca de detalhes');
 
-    // Verificar API key ASAAS
-    if (!ASAAS_API_KEY) {
-      throw new Error('ASAAS_API_KEY não configurada');
+    const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
+
+    const asaasConfig = await getAsaasConfig(supabase);
+    if (!asaasConfig) throw new Error('ASAAS não configurado. Configure as credenciais na área de Integrações.');
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_BASE_URL } = asaasConfig;
+
+    // Helper com closure sobre config
+    async function asaasRequest(endpoint: string, method = 'GET'): Promise<any> {
+      const url = `${ASAAS_BASE_URL}${endpoint}`;
+      console.log(`[ASAAS] ${method} ${url}`);
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'accept': 'application/json',
+          'access_token': ASAAS_API_KEY,
+        },
+      });
+      if (!response.ok) {
+        const errorText = await response.text();
+        console.error(`[ASAAS] Erro ${response.status}: ${errorText}`);
+        throw new Error(`ASAAS API error: ${response.status}`);
+      }
+      return response.json();
+    }
+
+    async function buscarPixQrCode(paymentId: string) {
+      try {
+        const data = await asaasRequest(`/payments/${paymentId}/pixQrCode`);
+        return { qrCode: data.encodedImage || null, payload: data.payload || null, expirationDate: data.expirationDate || null };
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Erro desconhecido';
+        console.log(`[PIX] QR Code não disponível para ${paymentId}:`, message);
+        return null;
+      }
+    }
+
+    async function buscarIdentificacaoBoleto(paymentId: string) {
+      try {
+        const data = await asaasRequest(`/payments/${paymentId}/identificationField`);
+        return { identificationField: data.identificationField || null, nossoNumero: data.nossoNumero || null, barCode: data.barCode || null };
+      } catch (error: unknown) {
+        const message = error instanceof Error ? error.message : 'Erro desconhecido';
+        console.log(`[BOLETO] Identificação não disponível para ${paymentId}:`, message);
+        return null;
+      }
     }
 
     // Extrair e validar body

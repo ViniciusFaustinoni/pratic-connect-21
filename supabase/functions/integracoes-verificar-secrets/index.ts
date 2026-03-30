@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -14,12 +15,30 @@ serve(async (req) => {
   try {
     console.log('[integracoes-verificar-secrets] Verificando secrets configurados...');
 
-    // Verificar existência dos secrets (apenas true/false, nunca expor valores)
+    const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
+    const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
+    const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Verificar ASAAS via banco de dados (fonte primária) + fallback ENV
+    let asaasStatus = { configurado: false, ambiente: 'desconhecido', fonte: 'nenhum' };
+    try {
+      const { getAsaasConfig } = await import("../_shared/asaas-config.ts");
+      const asaasConfig = await getAsaasConfig(supabase);
+      if (asaasConfig) {
+        asaasStatus = { configurado: true, ambiente: asaasConfig.ambiente, fonte: 'banco_ou_env' };
+      }
+    } catch (e) {
+      console.warn('[integracoes-verificar-secrets] Erro ao verificar ASAAS:', e);
+      // Fallback para ENV direto
+      const envKey = Deno.env.get('ASAAS_API_KEY');
+      if (envKey) {
+        asaasStatus = { configurado: true, ambiente: envKey.includes('_hmlg_') ? 'sandbox' : 'production', fonte: 'env' };
+      }
+    }
+
+    // Verificar existência dos demais secrets (apenas true/false, nunca expor valores)
     const status = {
-      asaas: {
-        configurado: !!(Deno.env.get('ASAAS_API_KEY')?.length),
-        ambiente: Deno.env.get('ASAAS_API_KEY')?.startsWith('$aact_') ? 'production' : 'sandbox'
-      },
+      asaas: asaasStatus,
       autentique: {
         configurado: !!(Deno.env.get('AUTENTIQUE_API_KEY')?.length)
       },

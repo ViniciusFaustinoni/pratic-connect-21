@@ -36,35 +36,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')!;
-
-// Detectar ambiente: prioriza ASAAS_ENV, senão infere pelo prefixo da chave
-// $aact_ = produção, caso contrário sandbox
-function getAsaasConfig() {
-  const envExplicito = Deno.env.get('ASAAS_ENV');
-  
-  let ambiente: 'production' | 'sandbox';
-  
-  if (envExplicito) {
-    ambiente = envExplicito === 'production' ? 'production' : 'sandbox';
-    console.log(`[asaas-cobranca-adesao] Ambiente definido por ASAAS_ENV: ${ambiente}`);
-  } else {
-    // Inferir pelo prefixo da chave API - chaves sandbox contêm '_hmlg_' (homologação)
-    const isSandbox = ASAAS_API_KEY?.includes('_hmlg_');
-    ambiente = isSandbox ? 'sandbox' : 'production';
-    console.log(`[asaas-cobranca-adesao] Ambiente inferido pela chave API: ${ambiente}`);
-  }
-  
-  const baseUrl = ambiente === 'production'
-    ? 'https://api.asaas.com/v3'
-    : 'https://sandbox.asaas.com/api/v3';
-  
-  console.log(`[asaas-cobranca-adesao] Base URL: ${baseUrl}`);
-  
-  return { ambiente, baseUrl };
-}
-
-const { ambiente: ASAAS_ENV, baseUrl: ASAAS_API_URL } = getAsaasConfig();
+import { getAsaasConfig as getAsaasConfigFromDb } from "../_shared/asaas-config.ts";
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -72,34 +44,12 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 interface CobrancaAdesaoRequest {
   contratoId: string;
   valor: number;
-  formaPagamento?: 'PIX' | 'BOLETO' | 'CREDIT_CARD' | 'UNDEFINED'; // Suporta múltiplas formas
+  formaPagamento?: 'PIX' | 'BOLETO' | 'CREDIT_CARD' | 'UNDEFINED';
   cliente: {
     nome: string;
     email: string;
     cpfCnpj: string;
   };
-}
-
-async function asaasRequest(endpoint: string, method: string, body?: object) {
-  const url = `${ASAAS_API_URL}${endpoint}`;
-  
-  const response = await fetch(url, {
-    method,
-    headers: {
-      'Content-Type': 'application/json',
-      'access_token': ASAAS_API_KEY,
-    },
-    body: body ? JSON.stringify(body) : undefined,
-  });
-
-  const data = await response.json();
-  
-  if (!response.ok) {
-    console.error('[asaas-cobranca-adesao] Erro Asaas:', data);
-    throw new Error(data.errors?.[0]?.description || 'Erro na API do Asaas');
-  }
-
-  return data;
 }
 
 serve(async (req) => {
@@ -110,6 +60,28 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
+    const asaasConfig = await getAsaasConfigFromDb(supabase);
+    if (!asaasConfig) throw new Error('ASAAS não configurado. Configure as credenciais na área de Integrações.');
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_API_URL } = asaasConfig;
+
+    async function asaasRequest(endpoint: string, method: string, body?: object) {
+      const url = `${ASAAS_API_URL}${endpoint}`;
+      const response = await fetch(url, {
+        method,
+        headers: {
+          'Content-Type': 'application/json',
+          'access_token': ASAAS_API_KEY,
+        },
+        body: body ? JSON.stringify(body) : undefined,
+      });
+      const data = await response.json();
+      if (!response.ok) {
+        console.error('[asaas-cobranca-adesao] Erro Asaas:', data);
+        throw new Error(data.errors?.[0]?.description || 'Erro na API do Asaas');
+      }
+      return data;
+    }
+
     let { contratoId, valor, formaPagamento, cliente }: CobrancaAdesaoRequest = await req.json();
 
     // GUARD: Adesão zerada — retorna sucesso sem criar cobrança

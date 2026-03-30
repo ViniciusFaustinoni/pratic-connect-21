@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAsaasConfig } from "../_shared/asaas-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,21 +9,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')!;
-
-function getAsaasBaseUrl() {
-  const envExplicito = Deno.env.get('ASAAS_ENV');
-  if (envExplicito) {
-    return envExplicito === 'production'
-      ? 'https://api.asaas.com/v3'
-      : 'https://sandbox.asaas.com/api/v3';
-  }
-  return ASAAS_API_KEY?.includes('_hmlg_')
-    ? 'https://sandbox.asaas.com/api/v3'
-    : 'https://api.asaas.com/v3';
-}
-
-const ASAAS_API_URL = getAsaasBaseUrl();
 
 serve(async (req) => {
   if (req.method === 'OPTIONS') {
@@ -32,6 +18,10 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
+    const asaasConfig = await getAsaasConfig(supabase);
+    if (!asaasConfig) throw new Error('ASAAS não configurado. Configure as credenciais na área de Integrações.');
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_API_URL } = asaasConfig;
+
     const { cobranca_id } = await req.json();
     if (!cobranca_id) throw new Error('cobranca_id é obrigatório');
 

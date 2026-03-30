@@ -554,14 +554,14 @@ serve(async (req) => {
             }
 
             if (valorCota && valorCota > 0 && !cotaPaga && associado) {
-              const ASAAS_API_KEY = Deno.env.get("ASAAS_API_KEY");
-              if (!ASAAS_API_KEY) {
-                console.error("[autentique-webhook] ASAAS_API_KEY não configurada, pulando cobrança");
+              // Buscar credenciais ASAAS do banco
+              const { getAsaasConfig: getAsaasConfigFromDb } = await import("../_shared/asaas-config.ts");
+              const asaasConfig = await getAsaasConfigFromDb(supabase);
+              if (!asaasConfig) {
+                console.error("[autentique-webhook] ASAAS não configurado, pulando cobrança");
               } else {
-                const isSandbox = ASAAS_API_KEY.includes('_hmlg_');
-                const ASAAS_BASE_URL = isSandbox
-                  ? 'https://sandbox.asaas.com/api/v3'
-                  : 'https://api.asaas.com/v3';
+                const ASAAS_API_KEY = asaasConfig.apiKey;
+                const ASAAS_BASE_URL = asaasConfig.baseUrl;
 
                 const asaasReq = async (endpoint: string, method: string, body?: object) => {
                   const resp = await fetch(`${ASAAS_BASE_URL}${endpoint}`, {

@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { getAsaasConfig as getAsaasConfigFromDb } from "../_shared/asaas-config.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -8,35 +9,6 @@ const corsHeaders = {
 
 const SUPABASE_URL = Deno.env.get('SUPABASE_URL')!;
 const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
-const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY')!;
-
-// Detectar ambiente: prioriza ASAAS_ENV, senão infere pelo prefixo da chave
-// $aact_ = produção, caso contrário sandbox
-function getAsaasBaseUrl() {
-  const envExplicito = Deno.env.get('ASAAS_ENV');
-  
-  let ambiente: 'production' | 'sandbox';
-  
-  if (envExplicito) {
-    ambiente = envExplicito === 'production' ? 'production' : 'sandbox';
-    console.log(`[gerar-cobrancas] Ambiente definido por ASAAS_ENV: ${ambiente}`);
-  } else {
-    // Chaves sandbox contêm '_hmlg_' (homologação)
-    const isSandbox = ASAAS_API_KEY?.includes('_hmlg_');
-    ambiente = isSandbox ? 'sandbox' : 'production';
-    console.log(`[gerar-cobrancas] Ambiente inferido pela chave API: ${ambiente}`);
-  }
-  
-  const baseUrl = ambiente === 'production'
-    ? 'https://api.asaas.com/v3'
-    : 'https://sandbox.asaas.com/api/v3';
-  
-  console.log(`[gerar-cobrancas] Base URL: ${baseUrl}`);
-  
-  return baseUrl;
-}
-
-const ASAAS_API_URL = getAsaasBaseUrl();
 
 interface Associado {
   id: string;
@@ -68,6 +40,10 @@ serve(async (req) => {
   const supabase = createClient(SUPABASE_URL, SUPABASE_SERVICE_ROLE_KEY);
 
   try {
+    const asaasConfig = await getAsaasConfigFromDb(supabase);
+    if (!asaasConfig) throw new Error('ASAAS não configurado');
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_API_URL } = asaasConfig;
+
     const { mes, ano, forceRegenerate } = await req.json().catch(() => ({}));
     
     const targetMes = mes || new Date().getMonth() + 1;

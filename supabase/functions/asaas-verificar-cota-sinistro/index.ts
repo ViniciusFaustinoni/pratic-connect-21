@@ -6,11 +6,7 @@ const corsHeaders = {
   'Access-Control-Allow-Headers': 'authorization, x-client-info, apikey, content-type',
 };
 
-const ASAAS_API_KEY = Deno.env.get('ASAAS_API_KEY') || '';
-const IS_SANDBOX = Deno.env.get('ASAAS_SANDBOX') === 'true' || ASAAS_API_KEY.includes('_hmlg_');
-const ASAAS_BASE_URL = IS_SANDBOX
-  ? 'https://sandbox.asaas.com/api/v3'
-  : 'https://api.asaas.com/v3';
+import { getAsaasConfig } from "../_shared/asaas-config.ts";
 
 const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
 const supabaseServiceKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
@@ -32,6 +28,16 @@ serve(async (req) => {
     }
 
     const supabase = createClient(supabaseUrl, supabaseServiceKey);
+
+    // Obter config ASAAS
+    const asaasConfig = await getAsaasConfig(supabase);
+    if (!asaasConfig) {
+      return new Response(
+        JSON.stringify({ success: false, pago: false, erro: 'ASAAS não configurado' }),
+        { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+    const { apiKey: ASAAS_API_KEY, baseUrl: ASAAS_BASE_URL } = asaasConfig;
 
     // 1. Buscar sinistro
     const { data: sinistro, error: sinistroError } = await supabase

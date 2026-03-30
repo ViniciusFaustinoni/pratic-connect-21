@@ -41,18 +41,18 @@ async function testHinova(supabase: any) {
   }
 }
 
-async function testAsaas() {
-  const key = Deno.env.get('ASAAS_API_KEY');
-  if (!key) return { conexao_ok: false, tempo_resposta_ms: 0, erro_mensagem: 'ASAAS_API_KEY não configurada', detalhes: {} };
-  const isSandbox = key.startsWith('$aact_') ? false : true;
-  const baseUrl = isSandbox ? 'https://sandbox.asaas.com/api/v3' : 'https://api.asaas.com/v3';
-  const start = Date.now();
+async function testAsaas(supabase: any) {
   try {
-    const resp = await fetch(`${baseUrl}/finance/getCurrentBalance`, { headers: { access_token: key } });
+    const { getAsaasConfig: getAsaasConfigFromDb } = await import("../_shared/asaas-config.ts");
+    const asaasConfig = await getAsaasConfigFromDb(supabase);
+    if (!asaasConfig) return { conexao_ok: false, tempo_resposta_ms: 0, erro_mensagem: 'ASAAS não configurado', detalhes: {} };
+
+    const start = Date.now();
+    const resp = await fetch(`${asaasConfig.baseUrl}/finance/getCurrentBalance`, { headers: { access_token: asaasConfig.apiKey } });
     const ms = Date.now() - start;
-    return { conexao_ok: resp.ok, tempo_resposta_ms: ms, erro_mensagem: resp.ok ? null : `Status ${resp.status}`, detalhes: { ambiente: isSandbox ? 'sandbox' : 'producao' } };
-  } catch (e) {
-    return { conexao_ok: false, tempo_resposta_ms: Date.now() - start, erro_mensagem: `Rede: ${e.message}`, detalhes: {} };
+    return { conexao_ok: resp.ok, tempo_resposta_ms: ms, erro_mensagem: resp.ok ? null : `Status ${resp.status}`, detalhes: { ambiente: asaasConfig.ambiente } };
+  } catch (e: any) {
+    return { conexao_ok: false, tempo_resposta_ms: 0, erro_mensagem: `Erro: ${e.message}`, detalhes: {} };
   }
 }
 
@@ -147,7 +147,7 @@ serve(async (req) => {
 
     const integracoes: Record<string, () => Promise<any>> = {
       hinova: () => testHinova(supabase),
-      asaas: () => testAsaas(),
+      asaas: () => testAsaas(supabase),
       whatsapp: () => testWhatsapp(supabase),
       autentique: () => testAutentique(),
       email: () => testEmail(),
