@@ -6,6 +6,7 @@ import { toast } from 'sonner';
 import { Loader2, Check, ChevronsUpDown, Car, Truck, AlertTriangle, Flame, CloudRain, Home, Wrench } from 'lucide-react';
 import { useOficinas } from '@/hooks/useOficinas';
 import { useCarenciaDiasPadrao } from '@/hooks/useConteudosSistema';
+import { useCoberturasBeneficiosPlano, coberturasToSinistroOptions, TIPO_SINISTRO_TO_COBERTURA } from '@/hooks/useCoberturasBeneficiosPlano';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
@@ -161,6 +162,11 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
   
   const [selectedAssociado, setSelectedAssociado] = useState<string | null>(null);
   const [selectedVeiculo, setSelectedVeiculo] = useState<string | null>(null);
+  
+  const { data: planData } = useCoberturasBeneficiosPlano(selectedAssociado);
+  const tipoSinistroOptions = planData?.coberturas && planData.coberturas.length > 0
+    ? coberturasToSinistroOptions(planData.coberturas)
+    : TIPO_SINISTRO_OPTIONS.map(o => ({ ...o, coberturaId: '' }));
   const [searchAssociado, setSearchAssociado] = useState('');
   const [openAssociadoPopover, setOpenAssociadoPopover] = useState(false);
   
@@ -480,7 +486,24 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
       
       if (error) throw error;
 
-      // ===== 5. REGISTRAR HISTÓRICO =====
+      // ===== 4b. REGISTRAR COBERTURA UTILIZADA =====
+      try {
+        const selectedOption = tipoSinistroOptions.find(o => o.value === formData.tipo);
+        if (selectedOption?.coberturaId) {
+          await supabase.from('sinistro_coberturas_utilizadas').insert({
+            sinistro_id: sinistro.id,
+            tipo: 'cobertura',
+            cobertura_id: selectedOption.coberturaId,
+            nome: selectedOption.label,
+            valor: 0,
+            observacao: `Cobertura registrada automaticamente na criação do sinistro`,
+          });
+          console.log('[NovoSinistroModal] Cobertura utilizada registrada:', selectedOption.coberturaId);
+        }
+      } catch (cobErr) {
+        console.error('[NovoSinistroModal] Erro ao registrar cobertura utilizada (não bloqueante):', cobErr);
+      }
+
       const observacaoHistorico = isVidros
         ? `Sinistro registrado via sistema - Vidros e Faróis - Peça: ${pecaDanificada} - Opção: ${opcaoReparo === 'via_pratic' ? 'Via Pratic' : 'Reembolso'}`
         : alertaRecemAtivado
@@ -935,7 +958,8 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
             </div>
           </div>
 
-          {/* Seção 2 - Dados do Sinistro */}
+          {/* Seção 2 - Dados do Sinistro (só aparece após selecionar veículo) */}
+          {selectedVeiculo && (
           <div className="space-y-4">
             <h3 className="text-sm font-medium text-muted-foreground">Dados do Sinistro</h3>
             
@@ -956,7 +980,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
                     <SelectValue placeholder="Selecione o tipo" />
                   </SelectTrigger>
                   <SelectContent>
-                    {TIPO_SINISTRO_OPTIONS.map((tipo) => (
+                    {tipoSinistroOptions.map((tipo) => (
                       <SelectItem key={tipo.value} value={tipo.value}>
                         {tipo.label}
                       </SelectItem>
@@ -1023,6 +1047,7 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
               )}
             </div>
           </div>
+          )}
 
           {/* === SEÇÃO INCÊNDIO - Bombeiros acionados? === */}
           {isIncendio && (

@@ -2,6 +2,7 @@ import { useState, useEffect, useRef, lazy, Suspense } from 'react';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useCoberturasBeneficiosPlano, beneficiosToServicoOptions } from '@/hooks/useCoberturasBeneficiosPlano';
 import {
   Search,
   User,
@@ -111,6 +112,9 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
   const [associadoSelecionado, setAssociadoSelecionado] = useState<AssociadoComVeiculos | null>(null);
   const [veiculoSelecionado, setVeiculoSelecionado] = useState<string>('');
 
+  // Hook para buscar coberturas/benefícios do plano do associado
+  const { data: planData } = useCoberturasBeneficiosPlano(associadoSelecionado?.id);
+
   // Modo manual (quando não encontra associado)
   const [modoManual, setModoManual] = useState(false);
   const [dadosManuais, setDadosManuais] = useState({
@@ -120,7 +124,11 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
     marca_modelo: '',
   });
 
-  // Dados do chamado
+  // Opções dinâmicas de tipo de serviço baseadas no plano
+  const tipoServicoOptions = !modoManual && planData?.beneficios && planData.beneficios.length > 0
+    ? beneficiosToServicoOptions(planData.beneficios)
+    : TIPOS_SERVICO.map(t => ({ value: t.value, label: t.label, beneficioId: '' }));
+
   const [formData, setFormData] = useState({
     tipo_servico: '',
     descricao: '',
@@ -721,7 +729,8 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
               </div>
             )}
 
-            {/* Tipo de Serviço */}
+            {/* Tipo de Serviço - só aparece após selecionar veículo ou em modo manual */}
+            {(modoManual || veiculoSelecionado) && (
             <div className="space-y-2">
               <Label htmlFor="tipo_servico">Tipo de Serviço *</Label>
               <Select
@@ -732,8 +741,10 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
                   <SelectValue placeholder="Selecione o tipo de serviço" />
                 </SelectTrigger>
                 <SelectContent>
-                  {TIPOS_SERVICO.map((tipo) => {
-                    const Icon = tipo.icon;
+                  {tipoServicoOptions.map((tipo) => {
+                    // Find matching icon from TIPOS_SERVICO
+                    const originalTipo = TIPOS_SERVICO.find(t => t.value === tipo.value);
+                    const Icon = originalTipo?.icon || HelpCircle;
                     return (
                       <SelectItem key={tipo.value} value={tipo.value}>
                         <div className="flex items-center gap-2">
@@ -746,6 +757,7 @@ export function NovoChamadoModal({ open, onClose, onSuccess }: NovoChamadoModalP
                 </SelectContent>
               </Select>
             </div>
+            )}
 
             {/* Descrição */}
             <div className="space-y-2">

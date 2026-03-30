@@ -1017,6 +1017,38 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         observacao: `Sinistro comunicado via WhatsApp - ${tipoLabels[tipoSistema] || tipoSistema}`,
       });
 
+      // 6b. Registrar cobertura utilizada automaticamente
+      try {
+        const coberturaMap: Record<string, string> = {
+          colisao: "COB-COL", roubo: "COB-RF", furto: "COB-RF",
+          incendio: "COB-INC", fenomeno_natural: "COB-FN",
+          vidros: "COB-VID", vandalismo: "COB-VAN", terceiros: "COB-TER",
+        };
+        const codigoCob = coberturaMap[tipoSistema];
+        if (codigoCob) {
+          // Buscar plano_id do associado
+          const { data: assocPlano } = await supabase
+            .from("associados").select("plano_id").eq("id", associadoId).single();
+          if (assocPlano?.plano_id) {
+            const { data: cobGlobal } = await supabase
+              .from("coberturas").select("id, nome").eq("codigo", codigoCob).single();
+            if (cobGlobal) {
+              await supabase.from("sinistro_coberturas_utilizadas").insert({
+                sinistro_id: sinistroNovo.id,
+                tipo: "cobertura",
+                cobertura_id: cobGlobal.id,
+                nome: cobGlobal.nome,
+                valor: 0,
+                observacao: "Registrado automaticamente via WhatsApp",
+              });
+              console.log(`[whatsapp-webhook] Cobertura utilizada registrada: ${cobGlobal.nome}`);
+            }
+          }
+        }
+      } catch (cobErr) {
+        console.error("[whatsapp-webhook] Erro ao registrar cobertura utilizada (não bloqueante):", cobErr);
+      }
+
       // 7. Documentos obrigatórios
       const docsList = docsObrigatorios[tipoSistema] || docsObrigatorios.outro;
       const docsToInsert = docsList.map((d) => ({
@@ -1646,7 +1678,7 @@ async function getAssociadoContext(supabase: any, associadoId: string) {
   // Buscar dados completos do associado
   const { data: associado } = await supabase
     .from("associados")
-    .select("nome, email, telefone, whatsapp, cpf, status, logradouro, numero, bairro, cidade, uf, cep, plano:planos(nome)")
+    .select("nome, email, telefone, whatsapp, cpf, status, logradouro, numero, bairro, cidade, uf, cep, plano_id, plano:planos(nome)")
     .eq("id", associadoId)
     .single();
 
@@ -1691,6 +1723,31 @@ async function getAssociadoContext(supabase: any, associadoId: string) {
     .eq("associado_id", associadoId)
     .not("status", "in", "(concluido,cancelado)")
     .limit(3);
+
+  // Buscar coberturas do plano
+  let coberturasPlano: any[] = [];
+  let beneficiosPlano: any[] = [];
+  if (associado?.plano_id) {
+    const { data: pc } = await supabase
+      .from("planos_coberturas")
+      .select("cobertura_id, coberturas(id, nome, codigo)")
+      .eq("plano_id", associado.plano_id);
+    coberturasPlano = (pc || []).filter((p: any) => p.coberturas).map((p: any) => p.coberturas);
+
+    const { data: pb } = await supabase
+      .from("planos_beneficios")
+      .select("beneficio_id, benefits(id, name, category)")
+      .eq("plano_id", associado.plano_id);
+    beneficiosPlano = (pb || []).filter((p: any) => p.benefits).map((p: any) => p.benefits);
+  }
+
+  const coberturasFormatadas = coberturasPlano.length > 0
+    ? coberturasPlano.map((c: any) => `- ${c.nome} (${c.codigo})`).join('\n')
+    : 'Nenhuma cobertura vinculada ao plano';
+
+  const beneficiosFormatados = beneficiosPlano.length > 0
+    ? beneficiosPlano.map((b: any) => `- ${b.name} (${b.category})`).join('\n')
+    : 'Nenhum benefício vinculado ao plano';
 
   // Formatar veículos com informação clara de status e cobertura
   const veiculosFormatados = veiculos?.length > 0
@@ -1773,10 +1830,18 @@ ${sinistrosFinalizadosFormatados}
 ## ASSISTÊNCIAS EM ANDAMENTO
 ${assistenciasFormatadas}
 
+## COBERTURAS DO PLANO (tipos de sinistro permitidos)
+${coberturasFormatadas}
+
+## BENEFÍCIOS DO PLANO (serviços disponíveis)
+${beneficiosFormatados}
+
 ## INSTRUÇÕES IMPORTANTES
 - SEMPRE cumprimente usando o primeiro nome: "${primeiroNome}"
 - Se o veículo está "Aguardando Instalação", só pode criar sinistro de roubo/furto
 - Se cobertura é "APENAS ROUBO/FURTO", NÃO criar assistência 24h
+- Antes de criar sinistro, verifique se o TIPO está nas COBERTURAS DO PLANO acima
+- Antes de criar assistência, verifique se o SERVIÇO está nos BENEFÍCIOS DO PLANO acima
 - Use SEMPRE os dados acima. NÃO invente informações!
 `;
 }
