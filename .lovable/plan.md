@@ -1,32 +1,27 @@
 
 
-# Corrigir Vídeo 360° do Associado na Aprovação de Instalação
+# Corrigir Template `assinatura_instalacao_v1` — Tabela Errada
 
 ## Problema
-Na página de aprovação do associado (`AprovacaoInstalacaoDetalhe.tsx`), apenas o vídeo do instalador aparece. O vídeo 360° da autovistoria do associado não é exibido.
+O template foi inserido na tabela `whatsapp_templates` (templates internos do sistema), mas a tela de "Templates Meta" na configuração do WhatsApp lista da tabela `whatsapp_meta_templates` (templates da API Oficial Meta). Por isso não aparece na lista.
 
-## Causa raiz
-A query na linha 141-147 tem dois problemas:
+## Solução
 
-1. **Filtra apenas vistorias que já têm `video_360_url` preenchido** (`.not('video_360_url', 'is', null)`), eliminando autivistorias onde o vídeo pode estar armazenado de outra forma ou ainda não vinculado
-2. **Não exclui a vistoria do instalador** — se o instalador também tem `modalidade != 'presencial'` e `video_360_url`, `maybeSingle()` pode retornar a vistoria errada ou falhar com múltiplos resultados
+1. **Inserir o template na tabela correta** (`whatsapp_meta_templates`) com os campos adequados:
+   - `nome`: `assinatura_instalacao_v1`
+   - `categoria`: `UTILITY`
+   - `idioma`: `pt_BR`
+   - `status`: `DRAFT`
+   - `corpo`: mensagem com variáveis `{{1}}`, `{{2}}`, `{{3}}` (padrão Meta)
+   - `botoes`: botão CTA com URL para o link de acompanhamento
+   - `variaveis_exemplo`: exemplos para cada variável
 
-A página de ativação (`useVistoriaCompletaAnalise.ts`) funciona corretamente porque:
-- Não filtra por `video_360_url IS NOT NULL`
-- Usa `.limit(1)` com `.order('created_at', { ascending: false })`
-- Busca fotos separadamente da vistoria encontrada
+2. **Manter o registro em `whatsapp_templates`** — ele é usado internamente pelo hook `useWhatsAppTemplates` e pelo `SeletorTemplate`, então não há conflito.
 
-## Correção
-
-### `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` (linhas 138-149)
-
-Alinhar a query de autovistoria com o padrão que funciona na ativação:
-- Remover `.not('video_360_url', 'is', null)` — buscar a vistoria independente de ter vídeo
-- Adicionar `.limit(1)` antes de `.maybeSingle()`
-- Adicionar `.order('created_at', { ascending: false })` para pegar a mais recente
-- Se `servico.vistoria_origem_id` existir, adicionar `.neq('id', servico.vistoria_origem_id)` para excluir a vistoria do instalador
+3. **Atualizar `useServicos.ts`** — na parte que envia o WhatsApp após a instalação, referenciar o template Meta (via edge function `whatsapp-send-template` ou similar) em vez de `whatsapp-send-text` com mensagem livre, para conformidade com a API Oficial Meta.
 
 | Arquivo | Ação |
 |---|---|
-| `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` | Corrigir query de autovistoria do associado |
+| Migration SQL | INSERT em `whatsapp_meta_templates` com dados corretos (UTILITY, pt_BR, DRAFT) |
+| `src/hooks/useServicos.ts` | Ajustar envio pós-instalação para usar template Meta se disponível |
 
