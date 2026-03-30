@@ -1181,6 +1181,7 @@ export default function SinistroAnalise() {
                           url: f.arquivo_url,
                           label: f.label,
                         }))}
+                          tipo: f.tipo,
                         indexInicial={fotoViewerVistoriaAdesao.index}
                         open={fotoViewerVistoriaAdesao.open}
                         onClose={() => setFotoViewerVistoriaAdesao({ open: false, index: 0 })}
