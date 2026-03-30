@@ -298,6 +298,7 @@ export function LinhasPlanos() {
 
       {linhaSheet.open && <LinhaSheet open linha={linhaSheet.linha} onClose={() => setLinhaSheet({ open: false })} />}
       {planoSheet.open && <PlanoFormSheet open planoId={planoSheet.planoId} linhaId={planoSheet.linhaId} onClose={() => setPlanoSheet({ open: false })} />}
+      <ImportarLinhasModal open={importModal} onClose={() => setImportModal(false)} />
 
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={(v) => !v && setDeleteConfirm(null)}>
