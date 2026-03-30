@@ -4,6 +4,15 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Shield, Gift, Loader2 } from 'lucide-react';
 
+interface CoberturaUtilizada {
+  id: string;
+  sinistro_id: string;
+  tipo: string;
+  nome: string;
+  valor: number;
+  observacao: string | null;
+}
+
 interface Props {
   sinistroId: string;
 }
@@ -13,12 +22,12 @@ export function SinistroCoberturaUtilizada({ sinistroId }: Props) {
     queryKey: ['sinistro-coberturas-utilizadas', sinistroId],
     queryFn: async () => {
       const { data, error } = await supabase
-        .from('sinistro_coberturas_utilizadas')
+        .from('sinistro_coberturas_utilizadas' as any)
         .select('*')
         .eq('sinistro_id', sinistroId)
         .order('created_at');
       if (error) throw error;
-      return data;
+      return (data || []) as unknown as CoberturaUtilizada[];
     },
   });
 
@@ -41,9 +50,9 @@ export function SinistroCoberturaUtilizada({ sinistroId }: Props) {
             <div key={item.id} className="flex items-center justify-between py-2 border-b last:border-0">
               <div className="flex items-center gap-2">
                 {item.tipo === 'cobertura' ? (
-                  <Shield className="h-4 w-4 text-blue-500" />
+                  <Shield className="h-4 w-4 text-primary" />
                 ) : (
-                  <Gift className="h-4 w-4 text-green-500" />
+                  <Gift className="h-4 w-4 text-accent-foreground" />
                 )}
                 <span className="text-sm font-medium">{item.nome}</span>
                 <Badge variant="outline" className="text-xs">
