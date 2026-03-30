@@ -1,41 +1,83 @@
 
 
-# Adicionar Vídeos 360° na Análise de Instalação (Aprovação Monitoramento)
+# Mover Assinatura da Instalação do App do Instalador para o Link Público
 
-## Problema
+## Contexto
+Atualmente, a assinatura do associado é coletada no app do instalador (Etapa 4 do `InstaladorChecklist`). O pedido é:
+1. **Remover** a etapa de assinatura do app do instalador
+2. **Adicionar** uma etapa de "Assinatura da Instalação" no **link público de acompanhamento** (`/acompanhar/:token`)
+3. Quando o instalador **finaliza a instalação**, enviar **WhatsApp ao associado** com link para assinar
+4. Criar **template Meta** para essa notificação
+5. **Manter** o envio de fotos/vídeos/documentos ao monitoramento para aprovação
 
-A página de análise de instalação (`AprovacaoInstalacaoDetalhe.tsx`) não exibe os vídeos 360° gravados pelo instalador e pelo associado. Esses vídeos existem no banco, mas o hook de busca não os carrega.
+## Alterações
 
-**Causa**: O `video_360_url` é armazenado na tabela `vistorias` (não em `instalacao_fotos` ou `vistoria_fotos`). A página atual só busca fotos dessas tabelas e filtra por `tipo === 'video_360'`, que raramente tem registros.
+### 1. `src/pages/instalador/InstaladorChecklist.tsx` — Remover etapa de assinatura
 
-## Como funciona na página de ativação (referência)
+- Remover etapa 4 ("Assinatura") do array `ETAPAS` — ficam: Dados, Checklist, Fotos, Decisão (4 etapas)
+- Remover todo o bloco `{etapaAtual === 4 && ...}` (a seção de SignaturePad)
+- Remover `assinaturaUrl` dos estados e do `podeAvancar()`
+- Remover imports de `SignaturePad` e `useSaveAssinatura`
+- Ajustar numeração das etapas (Decisão passa de 5 para 4)
+- Na Etapa de Decisão: mostrar aviso informativo: "Ao concluir, o associado receberá um link por WhatsApp para assinar digitalmente a instalação"
 
-A página `VistoriaCompletaAnalise.tsx` já faz isso corretamente:
-- **Vídeo do instalador**: busca `vistorias.video_360_url` via `vistoria_origem_id` do serviço
-- **Vídeo do associado**: busca uma segunda vistoria vinculada ao `contrato_id` com `modalidade != 'presencial'`, que contém o `video_360_url` da autovistoria
+### 2. `src/hooks/useServicos.ts` (`useAprovarVeiculoServico`) — Enviar WhatsApp após conclusão
 
-## Solução
+- Após a conclusão bem-sucedida da instalação (após registrar histórico, ~linha 1126):
+  - Buscar `telefone` do associado e `link_token` do contrato
+  - Invocar edge function `whatsapp-send-text` com template `assinatura_instalacao_v1` contendo link `/acompanhar/:token` (o link público já existente)
+  - Atualizar campo `servicos.status` ou flag para indicar "pendente_assinatura_cliente" (usar o status existente `concluida` — a assinatura fica como pendência adicional, não bloqueia o fluxo de monitoramento)
 
-### `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx`
+### 3. `src/pages/public/AcompanhamentoProposta.tsx` — Nova seção de assinatura
 
-No hook `useServicoDetalheAprovacao`:
+- Quando a instalação está `concluida` e o serviço **não tem** `assinatura_cliente_url`:
+  - Mostrar card "Assinatura da Instalação" com:
+    - Explicação: "O técnico finalizou a instalação. Por favor, assine abaixo para confirmar"
+    - Componente `SignaturePad` adaptado (já existe)
+    - Ao salvar: upload para storage + update em `servicos.assinatura_cliente_url` + salvar em `vistoria_fotos`
+  - Manter a lógica existente de status (em_analise vai pra monitoramento normalmente)
+- Quando já tem `assinatura_cliente_url`: mostrar badge "✓ Assinatura concluída"
+- Buscar dados de serviço (com `assinatura_cliente_url`) junto com os dados existentes da query
 
-1. **Buscar vistoria do instalador** — Após ter o serviço, buscar na tabela `vistorias` via `servico.vistoria_origem_id` (ou fallback por `instalacao_origem_id` → `vistorias.instalacao_id`), obtendo o campo `video_360_url`
+### 4. `supabase/functions/notificar-assinatura-instalacao/` — Nova edge function (ou usar inline no hook)
 
-2. **Buscar autovistoria do associado** — Buscar em `vistorias` onde `contrato_id = servico.contrato_id` e `modalidade != 'presencial'`, obtendo o `video_360_url` da autovistoria
+Na verdade, usar diretamente `whatsapp-send-text` a partir do hook no client é mais simples e segue o padrão existente. Não precisa de edge function dedicada.
 
-3. **Retornar ambos os URLs** no objeto de retorno: `videoInstalador` e `videoAssociado`
+### 5. Template Meta WhatsApp — `assinatura_instalacao_v1`
 
-Na renderização:
+Criar template para aprovação na Meta:
+- **Nome:** `assinatura_instalacao_v1`
+- **Categoria:** UTILITY
+- **Idioma:** pt_BR
+- **Corpo:** `Olá {{1}}! A instalação do rastreador no seu veículo {{2}} foi concluída com sucesso. ✅ Para finalizar o processo, acesse o link abaixo e assine digitalmente confirmando a instalação.`
+- **Botão:** CTA tipo URL com `{{1}}` → link de acompanhamento
+- **Parâmetros:** [nome_associado, veiculo_modelo_placa]
 
-4. **Substituir a seção "Vídeo 360°"** atual (que depende de `videoFotos` filtradas por tipo) por uma seção com dois players separados e identificados:
-   - "Vídeo 360° — Instalador" (se existir)
-   - "Vídeo 360° — Associado" (se existir)
-   - Cada um com badge indicando a autoria
+### 6. Ajuste na query de `AcompanhamentoProposta`
+
+- Na query `useAcompanhamentoProposta`, além dos dados já buscados, buscar também:
+  - `servicos` vinculados ao contrato com `tipo = 'instalacao'` e `status = 'concluida'`
+  - Campo `assinatura_cliente_url` do serviço
+- Adicionar ao interface `AssociadoData` os campos de serviço necessários
+
+## Fluxo resultante
+
+```text
+Instalador conclui (sem assinatura)
+  → WhatsApp enviado ao associado com link
+  → Monitoramento recebe fotos/vídeos/docs para aprovação (mantido)
+  → Associado acessa /acompanhar/:token
+  → Vê card de "Assinatura da Instalação"
+  → Assina no celular
+  → Assinatura salva no serviço + vistoria_fotos
+```
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx` | Buscar `video_360_url` de ambas as vistorias + renderizar players separados |
+| `src/pages/instalador/InstaladorChecklist.tsx` | Remover etapa 4 (assinatura), ajustar numeração, adicionar aviso |
+| `src/hooks/useServicos.ts` | Enviar WhatsApp após conclusão da instalação |
+| `src/pages/public/AcompanhamentoProposta.tsx` | Adicionar card de assinatura quando instalação concluída |
+| `src/hooks/useAssinatura.ts` | Nenhuma mudança — reutilizado pelo link público |
 
