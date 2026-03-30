@@ -173,7 +173,7 @@ export function CoberturaUnificadaFormModal({
             />
           </div>
 
-          <div className="grid grid-cols-3 gap-4">
+          <div className="grid grid-cols-2 gap-4">
             <div className="space-y-2">
               <Label htmlFor="display_order">Ordem</Label>
               <Input
@@ -181,17 +181,6 @@ export function CoberturaUnificadaFormModal({
                 type="number"
                 value={formData.display_order}
                 onChange={(e) => setFormData(prev => ({ ...prev, display_order: e.target.value }))}
-              />
-            </div>
-            <div className="space-y-2">
-              <Label htmlFor="carencia_dias">Carência (dias)</Label>
-              <Input
-                id="carencia_dias"
-                type="number"
-                min="0"
-                value={formData.carencia_dias}
-                onChange={(e) => setFormData(prev => ({ ...prev, carencia_dias: e.target.value }))}
-                placeholder="Ex: 30"
               />
             </div>
             <div className="flex items-center gap-2 pt-7">
@@ -203,6 +192,16 @@ export function CoberturaUnificadaFormModal({
               <Label htmlFor="ativo">Ativo</Label>
             </div>
           </div>
+
+          <CarenciaConfigSection
+            config={{
+              carencia_ativa: formData.carencia_ativa,
+              carencia_tipo: formData.carencia_tipo,
+              carencia_dias: formData.carencia_dias,
+              carencia_multiplicador: formData.carencia_multiplicador,
+            }}
+            onChange={(c) => setFormData(prev => ({ ...prev, ...c }))}
+          />
 
           {/* Regras de Elegibilidade */}
           {isEditing && cobertura && (
