@@ -57,6 +57,7 @@ import { ConsultaRastreador } from '@/components/monitoramento/estoque/ConsultaR
 import { HistoricoMovimentacoes } from '@/components/monitoramento/estoque/HistoricoMovimentacoes';
 import { ListaRastreadores } from '@/components/monitoramento/estoque/ListaRastreadores';
 import { EstoqueMetricas } from '@/components/monitoramento/estoque/EstoqueMetricas';
+import { GerenciarLocaisInstalacao } from '@/components/monitoramento/GerenciarLocaisInstalacao';
 
 export default function Rastreadores() {
   const [showForm, setShowForm] = useState(false);
