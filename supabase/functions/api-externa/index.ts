@@ -74,26 +74,93 @@ Deno.serve(async (req) => {
     if (resource === 'associados') {
       if (req.method === 'POST') {
         const body = await req.json();
-        const { nome, cpf, email, telefone } = body;
-        if (!nome || !cpf || !email || !telefone) {
-          return err('Campos obrigatórios: nome, cpf, email, telefone', 'MISSING_FIELDS');
+        const { nome, cpf, email, telefone, senha } = body;
+        if (!nome || !cpf || !email || !telefone || !senha) {
+          return err('Campos obrigatórios: nome, cpf, email, telefone, senha', 'MISSING_FIELDS');
         }
 
+        if (!senha || String(senha).length < 6) {
+          return err('Senha deve ter pelo menos 6 caracteres', 'INVALID_PASSWORD');
+        }
+
+        const cpfLimpo = cpf.replace(/\D/g, '');
+
         // Check duplicate CPF
-        const { data: existing } = await supabase.from('associados').select('id').eq('cpf', cpf.replace(/\D/g, '')).maybeSingle();
+        const { data: existing } = await supabase.from('associados').select('id').eq('cpf', cpfLimpo).maybeSingle();
         if (existing) return err('CPF já cadastrado no sistema', 'DUPLICATE_CPF', 409);
 
         const insertData: any = {
-          nome, cpf: cpf.replace(/\D/g, ''), email, telefone, status: 'em_analise',
+          nome, cpf: cpfLimpo, email, telefone, status: 'em_analise',
         };
         const optionalFields = ['rg', 'data_nascimento', 'sexo', 'estado_civil', 'profissao', 'whatsapp',
-          'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'plano_id', 'dia_vencimento', 'cnh_validade'];
+          'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'plano_id', 'dia_vencimento',
+          'cnh_validade', 'cnh_numero', 'cnh_categoria', 'data_cadastro_sga'];
         for (const f of optionalFields) {
           if (body[f] !== undefined) insertData[f] = body[f];
         }
 
         const { data, error } = await supabase.from('associados').insert(insertData).select().single();
         if (error) return err(error.message, 'INSERT_ERROR');
+
+        // Criar acesso ao app do associado
+        try {
+          const emailInterno = `${cpfLimpo}@associado.pratic.com.br`;
+
+          const { data: authData, error: authError } = await supabase.auth.admin.createUser({
+            email: emailInterno,
+            password: String(senha),
+            email_confirm: true,
+            user_metadata: {
+              nome,
+              tipo: 'associado',
+              cpf: cpfLimpo,
+            },
+          });
+
+          if (authError) {
+            console.error('Erro ao criar usuário auth via API:', authError);
+          } else {
+            const userId = authData.user.id;
+
+            // Vincular user_id ao associado
+            await supabase.from('associados').update({ user_id: userId }).eq('id', data.id);
+
+            // Criar profile
+            const { data: existingProfile } = await supabase
+              .from('profiles')
+              .select('id')
+              .eq('user_id', userId)
+              .maybeSingle();
+
+            if (!existingProfile) {
+              await supabase.from('profiles').insert({
+                user_id: userId,
+                nome,
+                email: email,
+                telefone,
+                cpf: cpfLimpo,
+                tipo: 'associado',
+                ativo: true,
+                bloqueado: false,
+                primeiro_acesso: false,
+              });
+            } else {
+              await supabase.from('profiles').update({ primeiro_acesso: false }).eq('user_id', userId);
+            }
+
+            // Adicionar role de associado
+            await supabase.from('user_roles').upsert(
+              { user_id: userId, role: 'associado' },
+              { onConflict: 'user_id,role' }
+            );
+
+            // Atualizar data no response
+            data.user_id = userId;
+          }
+        } catch (authErr) {
+          console.error('Erro ao criar acesso app via API:', authErr);
+        }
+
         return json(data, 201);
       }
 
