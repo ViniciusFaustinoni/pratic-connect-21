@@ -441,30 +441,28 @@ export default function TemplateForm() {
                     )}
                   />
 
-                  {form.watch('anexar_proposta') && (
-                    <FormField
-                      control={form.control}
-                      name="ordem_anexo"
-                      render={({ field }) => (
-                        <FormItem className="ml-8 max-w-xs">
-                          <FormLabel>Ordem de anexação</FormLabel>
-                          <FormControl>
-                            <Input 
-                              type="number" 
-                              min={0}
-                              placeholder="0"
-                              {...field}
-                              onChange={(e) => field.onChange(Number(e.target.value))}
-                            />
-                          </FormControl>
-                          <FormDescription>
-                            Menor número = aparece primeiro no documento
-                          </FormDescription>
-                          <FormMessage />
-                        </FormItem>
-                      )}
-                    />
-                  )}
+                  <FormField
+                    control={form.control}
+                    name="ordem_anexo"
+                    render={({ field }) => (
+                      <FormItem className="ml-8 max-w-xs">
+                        <FormLabel>Ordem de anexação</FormLabel>
+                        <FormControl>
+                          <Input 
+                            type="number" 
+                            min={0}
+                            placeholder="0"
+                            {...field}
+                            onChange={(e) => field.onChange(Number(e.target.value))}
+                          />
+                        </FormControl>
+                        <FormDescription>
+                          Define a posição deste termo na proposta de filiação (menor número = aparece primeiro). Funciona tanto para anexos manuais quanto para termos injetados automaticamente (ex: rastreador).
+                        </FormDescription>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
 
                   <FormField
                     control={form.control}

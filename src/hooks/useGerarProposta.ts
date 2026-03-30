@@ -388,16 +388,21 @@ export function useGerarProposta() {
     try {
       const { data: templatesAnexos } = await supabase
         .from('documento_templates')
-        .select('nome, conteudo')
+        .select('nome, conteudo, is_default_rastreador')
         .eq('anexar_proposta', true)
         .eq('ativo', true)
         .order('ordem_anexo')
         .order('nome');
 
-      if (templatesAnexos && templatesAnexos.length > 0) {
-        console.log(`[useGerarProposta] Anexando ${templatesAnexos.length} template(s) à proposta`);
+      // Filtrar templates que já são injetados dinamicamente (rastreador)
+      const templatesFiltrados = (templatesAnexos || []).filter(
+        (t: any) => !t.is_default_rastreador
+      );
+
+      if (templatesFiltrados.length > 0) {
+        console.log(`[useGerarProposta] Anexando ${templatesFiltrados.length} template(s) à proposta (excluídos ${(templatesAnexos?.length || 0) - templatesFiltrados.length} template(s) de rastreador já injetados dinamicamente)`);
         
-        for (const tmpl of templatesAnexos) {
+        for (const tmpl of templatesFiltrados) {
           const annexPage = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
           const annexFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
           const annexFontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
