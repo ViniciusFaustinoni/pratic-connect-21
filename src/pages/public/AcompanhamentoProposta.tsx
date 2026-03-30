@@ -1057,7 +1057,9 @@ export default function AcompanhamentoProposta() {
                 </CardContent>
               </Card>
             </motion.div>
-          )
+          )}
+
+          {/* Plano */}
           {associado.plano && (
             <Card className="bg-card/80 backdrop-blur-xl border-border/50">
               <CardContent className="py-4">
