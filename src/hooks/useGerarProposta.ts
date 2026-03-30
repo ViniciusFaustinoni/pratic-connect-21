@@ -399,10 +399,10 @@ export function useGerarProposta() {
         (t: any) => !t.is_default_rastreador
       );
 
-      if (templatesAnexos && templatesAnexos.length > 0) {
-        console.log(`[useGerarProposta] Anexando ${templatesAnexos.length} template(s) à proposta`);
+      if (templatesFiltrados.length > 0) {
+        console.log(`[useGerarProposta] Anexando ${templatesFiltrados.length} template(s) à proposta (excluídos ${(templatesAnexos?.length || 0) - templatesFiltrados.length} template(s) de rastreador já injetados dinamicamente)`);
         
-        for (const tmpl of templatesAnexos) {
+        for (const tmpl of templatesFiltrados) {
           const annexPage = pdfDoc.addPage([A4_WIDTH, A4_HEIGHT]);
           const annexFont = await pdfDoc.embedFont(StandardFonts.Helvetica);
           const annexFontBold = await pdfDoc.embedFont(StandardFonts.HelveticaBold);
