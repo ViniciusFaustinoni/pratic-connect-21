@@ -62,6 +62,7 @@ export function BeneficioFormModal({
     description: '',
     category: '',
     display_order: '0',
+    carencia_dias: '',
     is_active: true,
   });
   
@@ -75,6 +76,7 @@ export function BeneficioFormModal({
         description: benefit.description || '',
         category: benefit.category || '',
         display_order: benefit.display_order?.toString() || '0',
+        carencia_dias: (benefit as any).carencia_dias?.toString() || '',
         is_active: benefit.is_active ?? true,
       });
     } else {
@@ -85,6 +87,7 @@ export function BeneficioFormModal({
         description: '',
         category: '',
         display_order: '0',
+        carencia_dias: '',
         is_active: true,
       });
       
