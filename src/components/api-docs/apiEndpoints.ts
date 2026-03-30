@@ -125,6 +125,7 @@ export const apiEndpoints: ApiEndpoint[] = [
       { name: 'codigo_fipe', type: 'string', required: false, description: 'Código FIPE' },
       { name: 'uso_aplicativo', type: 'boolean', required: false, description: 'Veículo usado em app de transporte' },
       { name: 'blindado', type: 'boolean', required: false, description: 'Veículo blindado' },
+      { name: 'rastreador_imei', type: 'string', required: false, description: 'IMEI do rastreador em estoque para vincular automaticamente ao veículo' },
     ],
     responseExample: {
       id: '660e8400-e29b-41d4-a716-446655440000',
