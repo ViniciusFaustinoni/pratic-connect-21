@@ -1,49 +1,33 @@
 
-# Endpoint de Rastreadores na API Externa + Vinculação Automática
 
-## Contexto
+# Enviar Local de Instalação no campo `description` ao criar veículo na Softruck
 
-Hoje a API externa (`api-externa/index.ts`) não possui endpoint para rastreadores. Quando associados e veículos são criados via API, não há como incluir o rastreador correspondente. A tabela `rastreadores` já possui `veiculo_id`, `associado_id`, `associado_email`, `imei`, `codigo`, `plataforma`, `status`.
+## Problema
 
-## Alterações
+O campo `local_instalacao` do rastreador (ex: "painel", "sob banco") existe na tabela `rastreadores`, mas **não é enviado** para a Softruck ao criar/atualizar o veículo. O campo `description` do veículo na Softruck (que seria o local ideal) vai vazio ou com outro valor.
 
-### 1. `supabase/functions/api-externa/index.ts` — Novo endpoint `rastreadores`
+## Alteração
 
-**POST /rastreadores**:
-- Campos obrigatórios: `imei`, `codigo`, `plataforma` (default: `rede_veiculos`)
-- Campos opcionais: `numero_serie`, `chip_iccid`, `id_plataforma`, `veiculo_id`, `veiculo_placa`, `associado_id`, `associado_cpf`, `associado_email`, `status` (default: `estoque`)
-- Se `veiculo_placa` for informado (sem `veiculo_id`), busca o veículo pelo placa
-- Se `associado_cpf` for informado (sem `associado_id`), busca o associado pelo CPF
-- Se o `status` for `instalado` e houver `veiculo_id`, vincula automaticamente
-- Retorna o rastreador criado
+### 1. `supabase/functions/softruck-ativar-dispositivo/index.ts`
 
-**GET /rastreadores/:id**:
-- Retorna rastreador com dados do veículo e associado
+Na etapa de criação do veículo na Softruck (~linha 249), o rastreador já está carregado com seus dados. Adicionar o campo `descricao` com o valor de `rastreador.local_instalacao` (ou `rastreador.descricao_instalacao`):
 
-### 2. `supabase/functions/api-externa/index.ts` — Vincular rastreador ao criar veículo (opcional)
-
-No POST de veículos, aceitar campo opcional `rastreador_imei`. Se informado:
-- Busca rastreador no estoque pelo IMEI
-- Se encontrado, atualiza `veiculo_id`, `associado_id` e `status = 'instalado'`
-- Se não encontrado, ignora silenciosamente (ou retorna warning no response)
-
-### 3. `src/components/api-docs/apiEndpoints.ts` — Documentação
-
-Adicionar endpoint de rastreadores na documentação da API com campos, exemplos de request/response.
-
-## Fluxo esperado via API
-
-```text
-1. POST /associados → cria associado (retorna id)
-2. POST /veiculos   → cria veículo vinculado ao associado (retorna id)
-3. POST /rastreadores → cria rastreador vinculado ao veículo/associado
-   OU
-2. POST /veiculos { rastreador_imei: "123..." } → cria veículo E vincula rastreador existente
 ```
+descricao: rastreador.local_instalacao || rastreador.descricao_instalacao || undefined
+```
+
+Isso faz com que o campo chegue ao `criar-veiculo` do `softruck-api`, que já mapeia `descricao → description` no payload da Softruck.
+
+Verificar também se o SELECT que carrega o rastreador inclui `local_instalacao` e `descricao_instalacao`.
+
+### 2. Verificar se ao **atualizar** o veículo na Softruck o `description` também é atualizado
+
+No caso `atualizar-veiculo` do `softruck-api/index.ts` (~linha 422), o campo `description` não é incluído nos updates. Adicionar suporte ao campo `descricao` no update também.
 
 ## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| `supabase/functions/api-externa/index.ts` | Novo endpoint POST/GET rastreadores + campo `rastreador_imei` no POST veículos |
-| `src/components/api-docs/apiEndpoints.ts` | Documentar novo endpoint de rastreadores |
+| `supabase/functions/softruck-ativar-dispositivo/index.ts` | Enviar `local_instalacao` como `descricao` ao criar veículo |
+| `supabase/functions/softruck-api/index.ts` | Adicionar `description` no caso `atualizar-veiculo` |
+
