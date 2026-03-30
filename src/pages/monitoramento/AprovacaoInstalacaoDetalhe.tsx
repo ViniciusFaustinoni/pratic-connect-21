@@ -117,9 +117,39 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         documentos = docsData || [];
       }
 
-      // Checklist - buscar do servico.checklist_json se existir
-      const checklist: any[] = [];
+      // Buscar vídeo 360° do instalador (da vistoria vinculada ao serviço)
+      let videoInstalador: string | null = null;
+      if (servico.vistoria_origem_id) {
+        const { data: vistoriaInst } = await supabase
+          .from('vistorias')
+          .select('video_360_url')
+          .eq('id', servico.vistoria_origem_id)
+          .maybeSingle();
+        videoInstalador = vistoriaInst?.video_360_url || null;
+      } else if (servico.instalacao_origem_id) {
+        const { data: vistoriaInst } = await supabase
+          .from('vistorias')
+          .select('video_360_url')
+          .eq('instalacao_id', servico.instalacao_origem_id)
+          .maybeSingle();
+        videoInstalador = vistoriaInst?.video_360_url || null;
+      }
 
+      // Buscar vídeo 360° do associado (autovistoria não presencial do mesmo contrato)
+      let videoAssociado: string | null = null;
+      if (servico.contrato_id) {
+        const { data: autoVistoria } = await supabase
+          .from('vistorias')
+          .select('video_360_url')
+          .eq('contrato_id', servico.contrato_id)
+          .neq('modalidade', 'presencial')
+          .not('video_360_url', 'is', null)
+          .maybeSingle();
+        videoAssociado = autoVistoria?.video_360_url || null;
+      }
+
+      // Checklist
+      const checklist: any[] = [];
 
       return {
         servico,
@@ -127,6 +157,8 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         rastreador,
         checklist,
         documentos,
+        videoInstalador,
+        videoAssociado,
       };
     },
     enabled: !!servicoId,
@@ -178,7 +210,7 @@ export default function AprovacaoInstalacaoDetalhe() {
     );
   }
 
-  const { servico, fotos, rastreador, checklist, documentos } = data;
+  const { servico, fotos, rastreador, checklist, documentos, videoInstalador, videoAssociado } = data;
   const associado = servico.associado as any;
   const veiculo = servico.veiculo as any;
   const profissional = servico.profissional as any;
@@ -209,7 +241,6 @@ export default function AprovacaoInstalacaoDetalhe() {
     });
   };
 
-  const videoFotos = fotos.filter((f: any) => f.tipo === 'video_360');
   const imageFotos = fotos.filter((f: any) => f.tipo !== 'video_360');
 
   return (
@@ -482,27 +513,54 @@ export default function AprovacaoInstalacaoDetalhe() {
         </CardContent>
       </Card>
 
-      {/* Vídeo 360 */}
-      {videoFotos.length > 0 && (
+      {/* Vídeos 360° */}
+      {(videoInstalador || videoAssociado) && (
         <Card className="border-border">
           <CardHeader className="pb-3">
             <CardTitle className="flex items-center gap-2 text-base">
               <Video className="h-4 w-4 text-purple-500" />
-              Vídeo 360°
+              Vídeos 360°
             </CardTitle>
           </CardHeader>
-          <CardContent>
-            {videoFotos.map((v: any) => (
-              <div key={v.id} className="rounded-lg overflow-hidden bg-muted/50 border border-border">
-                <video
-                  src={v.arquivo_url}
-                  controls
-                  className="w-full aspect-video object-contain bg-black"
-                  preload="metadata"
-                  playsInline
-                />
+          <CardContent className="space-y-4">
+            {videoInstalador && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
+                    Instalador
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">Gravado pelo vistoriador durante a instalação</span>
+                </div>
+                <div className="rounded-lg overflow-hidden bg-muted/50 border border-border">
+                  <video
+                    src={videoInstalador}
+                    controls
+                    className="w-full aspect-video object-contain bg-black"
+                    preload="metadata"
+                    playsInline
+                  />
+                </div>
               </div>
-            ))}
+            )}
+            {videoAssociado && (
+              <div className="space-y-2">
+                <div className="flex items-center gap-2">
+                  <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/30 text-xs">
+                    Associado
+                  </Badge>
+                  <span className="text-xs text-muted-foreground">Autovistoria gravada pelo associado</span>
+                </div>
+                <div className="rounded-lg overflow-hidden bg-muted/50 border border-border">
+                  <video
+                    src={videoAssociado}
+                    controls
+                    className="w-full aspect-video object-contain bg-black"
+                    preload="metadata"
+                    playsInline
+                  />
+                </div>
+              </div>
+            )}
           </CardContent>
         </Card>
       )}
