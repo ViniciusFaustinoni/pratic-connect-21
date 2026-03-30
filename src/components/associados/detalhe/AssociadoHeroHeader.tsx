@@ -185,11 +185,6 @@ export function AssociadoHeroHeader({
 
           {/* Actions */}
           <div className="flex items-center gap-2 flex-wrap shrink-0">
-            {!permissions.isAnalistaCadastroOnly && (
-              <Button size="sm" variant="outline" onClick={() => navigate(`/cadastro/associados/${id}/editar`)}>
-                <Edit className="h-3.5 w-3.5 mr-1.5" /> Editar
-              </Button>
-            )}
             <Button size="sm" variant="outline" onClick={onAbrirMapa}
               disabled={!veiculosComRastreador || veiculosComRastreador.length === 0}>
               <Map className="h-3.5 w-3.5 mr-1.5" /> Mapa
