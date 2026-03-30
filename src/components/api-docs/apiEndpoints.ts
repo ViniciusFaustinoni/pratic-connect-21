@@ -53,6 +53,11 @@ export const apiEndpoints: ApiEndpoint[] = [
       { name: 'uf', type: 'string', required: false, description: 'Estado (sigla)' },
       { name: 'plano_id', type: 'uuid', required: false, description: 'ID do plano de proteção' },
       { name: 'dia_vencimento', type: 'number', required: false, description: 'Dia de vencimento do boleto (1-28)' },
+      { name: 'telefone_secundario', type: 'string', required: false, description: 'Telefone secundário' },
+      { name: 'data_adesao', type: 'string (YYYY-MM-DD)', required: false, description: 'Data de adesão do associado' },
+      { name: 'codigo_hinova', type: 'number', required: false, description: 'Código do associado no Hinova' },
+      { name: 'sincronizado_hinova', type: 'boolean', required: false, description: 'Se foi sincronizado com Hinova' },
+      { name: 'sincronizado_hinova_em', type: 'string (ISO 8601)', required: false, description: 'Data/hora da sincronização com Hinova' },
     ],
     responseExample: {
       id: '550e8400-e29b-41d4-a716-446655440000',
