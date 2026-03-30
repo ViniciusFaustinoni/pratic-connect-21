@@ -1128,6 +1128,53 @@ export function useAprovarVeiculoServico() {
       // Nota: O laudo de vistoria é gerado no momento da assinatura do cliente (useAssinatura.ts)
       // Isso garante que o laudo só é gerado após fotos + assinatura estarem completos
 
+      // 7. Enviar WhatsApp ao associado com link para assinatura digital
+      try {
+        // Buscar telefone do associado e link_token do contrato
+        const { data: assocDados } = await supabase
+          .from('associados')
+          .select('telefone, whatsapp, nome, contrato_id')
+          .eq('id', data.associadoId)
+          .single();
+
+        const telefoneEnvio = assocDados?.whatsapp || assocDados?.telefone;
+        
+        if (telefoneEnvio && assocDados?.contrato_id) {
+          const { data: contratoDados } = await supabase
+            .from('contratos')
+            .select('link_token')
+            .eq('id', assocDados.contrato_id)
+            .single();
+
+          if (contratoDados?.link_token) {
+            // Buscar modelo/placa do veículo para a mensagem
+            const { data: veiculoDados } = await supabase
+              .from('veiculos')
+              .select('modelo, placa')
+              .eq('id', data.veiculoId)
+              .single();
+
+            const nomeAssociado = assocDados.nome?.split(' ')[0] || 'Associado';
+            const veiculoDesc = veiculoDados ? `${veiculoDados.modelo} - ${veiculoDados.placa}` : 'seu veículo';
+            const linkPublico = `${window.location.origin}/acompanhar/${contratoDados.link_token}`;
+
+            const mensagem = `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso. ✅\n\nPara finalizar o processo, acesse o link abaixo e assine digitalmente confirmando a instalação:\n\n${linkPublico}`;
+
+            await supabase.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone: telefoneEnvio,
+                mensagem,
+                referencia_tipo: 'assinatura_instalacao',
+                referencia_id: data.servicoId,
+              },
+            });
+            console.log('[useAprovarVeiculoServico] ✓ WhatsApp de assinatura enviado ao associado');
+          }
+        }
+      } catch (whatsErr) {
+        console.warn('[useAprovarVeiculoServico] Erro ao enviar WhatsApp de assinatura (não bloqueia):', whatsErr);
+      }
+
       // 8. Notificação de boas-vindas removida daqui — enviada apenas pelo fluxo de aprovação do analista (ativar-associado)
 
       return { sucesso: true };

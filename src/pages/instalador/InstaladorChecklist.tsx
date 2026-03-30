@@ -58,11 +58,9 @@ import {
   agruparFotosFiltradas,
   type TipoVeiculo
 } from '@/data/vistoriaConfigCompleta';
-import { useSaveAssinatura } from '@/hooks/useAssinatura';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 import { FotoCapture } from '@/components/instalador/FotoCapture';
-import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
 import { ImprevistoBotao } from '@/components/vistoriador/ImprevistoBotao';
@@ -99,8 +97,7 @@ const ETAPAS = [
   { id: 1, label: 'Dados', icon: User },
   { id: 2, label: 'Checklist', icon: ClipboardCheck },
   { id: 3, label: 'Fotos', icon: Camera },
-  { id: 4, label: 'Assinatura', icon: PenTool },
-  { id: 5, label: 'Decisão', icon: ShieldCheck },
+  { id: 4, label: 'Decisão', icon: ShieldCheck },
 ];
 
 type ChecklistState = Record<string, { status: ChecklistStatus; observacao?: string; fotos?: string[] }>;
@@ -118,7 +115,7 @@ export default function InstaladorChecklist() {
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [uploadingChecklistFoto, setUploadingChecklistFoto] = useState<string | null>(null);
   const [uploadingVideo, setUploadingVideo] = useState(false);
-  const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
+  // assinaturaUrl removido - assinatura agora é coletada pelo link público
   const [showModalRecusa, setShowModalRecusa] = useState(false);
   const [showDialogCondicao, setShowDialogCondicao] = useState(false);
   const [motivoPrePreenchido, setMotivoPrePreenchido] = useState('');
@@ -154,7 +151,7 @@ export default function InstaladorChecklist() {
   const { data: fipeMinRastreadorMoto = 9000 } = useConfigFipeRastreadorMoto();
   const uploadFotoMutation = useUploadFotoVistoriaCompleta();
   const uploadVideoMutation = useUploadVideo360();
-  const saveAssinaturaMutation = useSaveAssinatura();
+  // saveAssinaturaMutation removido - assinatura agora é coletada pelo link público
   const salvarChecklistMutation = useSalvarChecklistServico();
   const aprovarVeiculoMutation = useAprovarVeiculoServico();
   const recusarVeiculoMutation = useRecusarVeiculoServico();
@@ -491,21 +488,7 @@ export default function InstaladorChecklist() {
     }
   };
 
-  const handleAssinaturaSave = async (signatureBlob: Blob) => {
-    if (!id) return;
-    try {
-      // Usar tipo 'servico' para salvar na tabela correta e também em vistoria_fotos
-      const url = await saveAssinaturaMutation.mutateAsync({ 
-        id, 
-        signatureBlob,
-        tipo: 'servico' 
-      });
-      setAssinaturaUrl(url);
-      toast.success('Assinatura salva com sucesso!');
-    } catch (err) {
-      toast.error('Erro ao salvar assinatura');
-    }
-  };
+  // handleAssinaturaSave removido - assinatura agora é coletada pelo link público
 
   // Validação de IMEI (15-17 dígitos)
   const isImeiValido = /^\d{15,17}$/.test(imeiRastreador);
@@ -708,7 +691,6 @@ export default function InstaladorChecklist() {
       case 1: return true;
       case 2: return checklistCompleto;
       case 3: return fotosObrigatoriasCompletas && video360Enviado;
-      case 4: return !!assinaturaUrl || !!servico?.assinatura_cliente_url;
       default: return true;
     }
   };
@@ -1342,68 +1324,10 @@ export default function InstaladorChecklist() {
           </div>
         )}
 
-        {/* Etapa 4: Assinatura */}
+        {/* Etapa 4 (Assinatura) removida — agora coletada via link público */}
+
+        {/* Etapa 4: Decisão do Instalador */}
         {etapaAtual === 4 && (
-          <div className="space-y-4">
-            {/* Alerta se fotos ou vídeo estão incompletos */}
-            {(!fotosObrigatoriasCompletas || !video360Enviado) && (
-              <Card className="border-amber-500/50 bg-amber-500/10">
-                <CardContent className="flex items-center gap-3 p-4">
-                  <AlertCircle className="h-6 w-6 text-amber-400 shrink-0" />
-                  <div>
-                    <p className="font-medium text-amber-300">Etapas anteriores incompletas</p>
-                    <p className="text-sm text-slate-400">
-                      Complete o envio de todas as fotos obrigatórias{!video360Enviado && ' e o vídeo 360°'} antes de coletar a assinatura.
-                    </p>
-                  </div>
-                </CardContent>
-              </Card>
-            )}
-
-            <Card className="border-slate-700 bg-slate-800">
-              <CardHeader>
-                <CardTitle className="text-base text-white">
-                  Assinatura do Associado
-                </CardTitle>
-                <p className="text-sm text-slate-400">
-                  {(servico as any).associados?.nome}
-                </p>
-              </CardHeader>
-              <CardContent>
-                {assinaturaUrl || (servico as any).assinatura_cliente_url ? (
-                  <div className="space-y-3">
-                    <div className="rounded-lg border border-green-500/50 bg-green-500/10 p-4">
-                      <div className="flex items-center gap-2 text-green-400">
-                        <CheckCircle2 className="h-5 w-5" />
-                        <span className="font-medium">Assinatura coletada</span>
-                      </div>
-                      <img
-                        src={assinaturaUrl || (servico as any).assinatura_cliente_url || ''}
-                        alt="Assinatura"
-                        className="mt-3 rounded-lg bg-white"
-                      />
-                    </div>
-                    <Button
-                      variant="outline"
-                      onClick={() => setAssinaturaUrl(null)}
-                      className="w-full border-slate-600 text-slate-300"
-                    >
-                      Coletar nova assinatura
-                    </Button>
-                  </div>
-                ) : (
-                  <SignaturePad
-                    onSave={handleAssinaturaSave}
-                    disabled={saveAssinaturaMutation.isPending || !fotosObrigatoriasCompletas || !video360Enviado}
-                  />
-                )}
-              </CardContent>
-            </Card>
-          </div>
-        )}
-
-        {/* Etapa 5: Decisão do Instalador */}
-        {etapaAtual === 5 && (
           <div className="space-y-4">
             {/* Resumo dos dados */}
             <div className="space-y-2 text-sm">
@@ -1933,6 +1857,14 @@ export default function InstaladorChecklist() {
             </Card>
             )}
 
+            {/* Aviso sobre assinatura digital */}
+            <Alert className="border-blue-500/50 bg-blue-500/10">
+              <PenTool className="h-4 w-4 text-blue-400" />
+              <AlertDescription className="text-blue-200">
+                Ao concluir, o associado receberá um <strong className="text-blue-300">link por WhatsApp</strong> para assinar digitalmente confirmando a instalação.
+              </AlertDescription>
+            </Alert>
+
             {/* Botões de ação */}
             <div className="space-y-3 mt-6">
               {decisaoInstalador === 'negado' ? (
@@ -2127,8 +2059,6 @@ export default function InstaladorChecklist() {
                     toast.error(`Marque todos os itens do checklist (${faltam} pendente${faltam > 1 ? 's' : ''})`);
                   } else if (etapaAtual === 3) {
                     toast.error('Envie todas as fotos obrigatórias e o vídeo 360°');
-                  } else if (etapaAtual === 4) {
-                    toast.error('Colete a assinatura do cliente para avançar');
                   } else {
                     toast.error('Complete todos os campos obrigatórios para avançar');
                   }
