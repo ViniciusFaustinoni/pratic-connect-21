@@ -120,21 +120,18 @@ export function PlanoCardCotacao({
             );
 
             return (
-              <div key={index} className="flex items-center gap-2 text-sm">
+              <div key={index} className="flex items-start gap-2 text-sm min-w-0">
                 {isRemovida ? (
                   <>
-                    <X className="w-4 h-4 text-destructive shrink-0" />
-                    <span className="text-muted-foreground line-through">
-                      {cobertura}
-                    </span>
-                    <span className="text-xs text-destructive ml-auto">
-                      (não disponível)
+                    <X className="w-4 h-4 text-destructive shrink-0 mt-0.5" />
+                    <span className="text-muted-foreground line-through break-words min-w-0">
+                      {cobertura} <span className="text-xs text-destructive">(não disponível)</span>
                     </span>
                   </>
                 ) : (
                   <>
-                    <Check className="w-4 h-4 text-green-500 shrink-0" />
-                    <span className="text-foreground/90">{cobertura}</span>
+                    <Check className="w-4 h-4 text-green-500 shrink-0 mt-0.5" />
+                    <span className="text-foreground/90 break-words min-w-0">{cobertura}</span>
                   </>
                 )}
               </div>
