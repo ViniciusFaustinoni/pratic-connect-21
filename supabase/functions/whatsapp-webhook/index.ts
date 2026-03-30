@@ -1798,10 +1798,18 @@ ${sinistrosFinalizadosFormatados}
 ## ASSISTÊNCIAS EM ANDAMENTO
 ${assistenciasFormatadas}
 
+## COBERTURAS DO PLANO (tipos de sinistro permitidos)
+${coberturasFormatadas}
+
+## BENEFÍCIOS DO PLANO (serviços disponíveis)
+${beneficiosFormatados}
+
 ## INSTRUÇÕES IMPORTANTES
 - SEMPRE cumprimente usando o primeiro nome: "${primeiroNome}"
 - Se o veículo está "Aguardando Instalação", só pode criar sinistro de roubo/furto
 - Se cobertura é "APENAS ROUBO/FURTO", NÃO criar assistência 24h
+- Antes de criar sinistro, verifique se o TIPO está nas COBERTURAS DO PLANO acima
+- Antes de criar assistência, verifique se o SERVIÇO está nos BENEFÍCIOS DO PLANO acima
 - Use SEMPRE os dados acima. NÃO invente informações!
 `;
 }
