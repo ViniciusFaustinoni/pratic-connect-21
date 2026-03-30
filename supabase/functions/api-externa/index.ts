@@ -98,10 +98,17 @@ Deno.serve(async (req) => {
       }
 
       if (req.method === 'GET' && resourceId) {
-        const { data, error } = await supabase.from('associados').select('*').eq('id', resourceId).maybeSingle();
+        const { data, error } = await supabase.from('associados').select('*, contratos!associados_contrato_id_fkey(data_inicio, data_fim)').eq('id', resourceId).maybeSingle();
         if (error) return err(error.message, 'QUERY_ERROR');
         if (!data) return err('Associado não encontrado', 'NOT_FOUND', 404);
-        return json(data);
+        // Flatten contract dates
+        const { contratos, ...rest } = data as any;
+        const result = {
+          ...rest,
+          data_contrato: contratos?.data_inicio || null,
+          data_contrato_final: contratos?.data_fim || null,
+        };
+        return json(result);
       }
     }
 
