@@ -1158,16 +1158,36 @@ export function useAprovarVeiculoServico() {
             const veiculoDesc = veiculoDados ? `${veiculoDados.modelo} - ${veiculoDados.placa}` : 'seu veículo';
             const linkPublico = `${window.location.origin}/acompanhar/${contratoDados.link_token}`;
 
-            const mensagem = `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso. ✅\n\nPara finalizar o processo, acesse o link abaixo e assine digitalmente confirmando a instalação:\n\n${linkPublico}`;
+            // Buscar template Meta para envio oficial
+            const { data: metaTemplate } = await supabase
+              .from('whatsapp_meta_templates')
+              .select('id, nome, status')
+              .eq('nome', 'assinatura_instalacao_v1')
+              .single();
 
-            await supabase.functions.invoke('whatsapp-send-text', {
-              body: {
-                telefone: telefoneEnvio,
-                mensagem,
-                referencia_tipo: 'assinatura_instalacao',
-                referencia_id: data.servicoId,
-              },
-            });
+            if (metaTemplate && metaTemplate.status === 'APPROVED') {
+              // Enviar via template Meta aprovado
+              await supabase.functions.invoke('whatsapp-send-text', {
+                body: {
+                  telefone: telefoneEnvio,
+                  template_nome: metaTemplate.nome,
+                  template_variaveis: [nomeAssociado, veiculoDesc, linkPublico],
+                  referencia_tipo: 'assinatura_instalacao',
+                  referencia_id: data.servicoId,
+                },
+              });
+            } else {
+              // Fallback: enviar como mensagem de texto enquanto template não está aprovado pela Meta
+              const mensagem = `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso. ✅\n\nPara finalizar o processo, acesse o link abaixo e assine digitalmente confirmando a instalação:\n\n${linkPublico}`;
+              await supabase.functions.invoke('whatsapp-send-text', {
+                body: {
+                  telefone: telefoneEnvio,
+                  mensagem,
+                  referencia_tipo: 'assinatura_instalacao',
+                  referencia_id: data.servicoId,
+                },
+              });
+            }
             console.log('[useAprovarVeiculoServico] ✓ WhatsApp de assinatura enviado ao associado');
           }
         }
