@@ -12,11 +12,12 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, ChevronRight, Loader2, Pencil, Trash2, Copy } from 'lucide-react';
+import { Plus, ChevronRight, Loader2, Pencil, Trash2, Copy, Upload } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PlanoFormSheet } from './PlanoFormSheet';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDuplicateProductLine, useDuplicatePlan } from '@/hooks/usePlansAdmin';
+import { ImportarLinhasModal } from './ImportarLinhasModal';
 
 // ── Data hooks ──
 
@@ -181,6 +182,7 @@ export function LinhasPlanos() {
   const [openLines, setOpenLines] = useState<Set<string>>(new Set());
   const [linhaSheet, setLinhaSheet] = useState<{ open: boolean; linha?: any }>({ open: false });
   const [planoSheet, setPlanoSheet] = useState<{ open: boolean; planoId?: string; linhaId?: string }>({ open: false });
+  const [importModal, setImportModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
 
   const { isDiretor, isDesenvolvedor, isAdminMaster } = usePermissions();
@@ -218,7 +220,10 @@ export function LinhasPlanos() {
           <h3 className="text-sm font-semibold">Linhas e Planos</h3>
           <p className="text-xs text-muted-foreground">{linhas.length} linhas cadastradas</p>
         </div>
-        <Button size="sm" onClick={() => setLinhaSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Linha</Button>
+        <div className="flex gap-2">
+          <Button size="sm" variant="outline" onClick={() => setImportModal(true)}><Upload className="h-4 w-4 mr-1" />Importar</Button>
+          <Button size="sm" onClick={() => setLinhaSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Linha</Button>
+        </div>
       </div>
 
       <div className="space-y-2">
@@ -293,6 +298,7 @@ export function LinhasPlanos() {
 
       {linhaSheet.open && <LinhaSheet open linha={linhaSheet.linha} onClose={() => setLinhaSheet({ open: false })} />}
       {planoSheet.open && <PlanoFormSheet open planoId={planoSheet.planoId} linhaId={planoSheet.linhaId} onClose={() => setPlanoSheet({ open: false })} />}
+      <ImportarLinhasModal open={importModal} onClose={() => setImportModal(false)} />
 
       {/* Delete confirmation */}
       <AlertDialog open={!!deleteConfirm} onOpenChange={(v) => !v && setDeleteConfirm(null)}>
