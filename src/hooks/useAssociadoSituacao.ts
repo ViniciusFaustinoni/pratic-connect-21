@@ -15,6 +15,17 @@ export interface CoberturaPorVeiculo {
   diasAtraso: number;
 }
 
+export interface CarenciaItem {
+  nome: string;
+  tipo: 'cobertura' | 'beneficio';
+  carenciaTipo: string;
+  dias: number;
+  multiplicador?: number;
+  inicio: string;
+  fim: string;
+  emCarencia: boolean;
+}
+
 export interface SituacaoAssociado {
   // Carência
   carenciaIsenta: boolean;
@@ -22,6 +33,7 @@ export interface SituacaoAssociado {
   carenciaInicio: string | null;
   carenciaFim: string | null;
   emCarencia: boolean;
+  carenciasItens: CarenciaItem[];
 
   // Inadimplência (geral - pior caso)
   diasAtraso: number;
@@ -77,13 +89,58 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       if (!associadoId) return null;
       const { data, error } = await supabase
         .from('associados')
-        .select('pendencia_rastreador, vendedor_original_id')
+        .select('pendencia_rastreador, vendedor_original_id, plano_id')
         .eq('id', associadoId)
         .maybeSingle();
       if (error) throw error;
       return data;
     },
     enabled: !!associadoId,
+  });
+
+  // Fetch benefits with carencia_ativa for the associado's plano
+  const planoId = associado?.plano_id;
+  const { data: carenciasBeneficios } = useQuery({
+    queryKey: ['carencias-beneficios', planoId],
+    queryFn: async () => {
+      if (!planoId) return [];
+      const { data, error } = await supabase
+        .from('planos_beneficios')
+        .select('benefit_id, benefits!inner(name, carencia_ativa, carencia_tipo, carencia_dias, carencia_multiplicador)')
+        .eq('plano_id', planoId)
+        .eq('benefits.carencia_ativa', true);
+      if (error) throw error;
+      return (data || []).map((row: any) => ({
+        nome: row.benefits.name,
+        tipo: 'beneficio' as const,
+        carenciaTipo: row.benefits.carencia_tipo || 'liberacao',
+        dias: row.benefits.carencia_dias || 0,
+        multiplicador: row.benefits.carencia_multiplicador,
+      }));
+    },
+    enabled: !!planoId,
+  });
+
+  // Fetch coberturas with carencia_ativa for the associado's plano
+  const { data: carenciasCoberturas } = useQuery({
+    queryKey: ['carencias-coberturas', planoId],
+    queryFn: async () => {
+      if (!planoId) return [];
+      const { data, error } = await supabase
+        .from('planos_coberturas')
+        .select('cobertura_id, coberturas!inner(nome, carencia_ativa, carencia_tipo, carencia_dias, carencia_multiplicador)')
+        .eq('plano_id', planoId)
+        .eq('coberturas.carencia_ativa', true);
+      if (error) throw error;
+      return (data || []).map((row: any) => ({
+        nome: row.coberturas.nome,
+        tipo: 'cobertura' as const,
+        carenciaTipo: row.coberturas.carencia_tipo || 'liberacao',
+        dias: row.coberturas.carencia_dias || 0,
+        multiplicador: row.coberturas.carencia_multiplicador,
+      }));
+    },
+    enabled: !!planoId,
   });
 
   // Consultor vinculado + pontuação
@@ -141,12 +198,29 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       diasAtraso: v.diasAtraso,
     }));
 
+    // Build per-item carências
+    const allCarenciaItems = [...(carenciasBeneficios || []), ...(carenciasCoberturas || [])];
+    const carenciasItens: CarenciaItem[] = carenciaInicio
+      ? allCarenciaItems.map(item => {
+          const inicio = new Date(carenciaInicio!);
+          const fim = new Date(inicio);
+          fim.setDate(fim.getDate() + (item.dias || 0));
+          return {
+            ...item,
+            inicio: carenciaInicio!,
+            fim: fim.toISOString().split('T')[0],
+            emCarencia: fim > now,
+          };
+        })
+      : [];
+
     return {
       carenciaIsenta,
       carenciaMotivoIsencao: contrato?.carencia_motivo_isencao || null,
       carenciaInicio,
       carenciaFim,
       emCarencia,
+      carenciasItens,
       diasAtraso,
       statusInadimplencia,
       coberturasSuspensas,
@@ -159,7 +233,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       consultorPontuacao: consultorInfo?.pontuacao ?? null,
       isLoading: isLoadingPrazos || isLoadingContrato || isLoadingAssociado || isLoadingInadimplencia,
     };
-  }, [contrato, associado, inadimplenciaPorVeiculo, algumVeiculoInadimplente, beneficiosAdicionaisSuspensos, prazos, multaRastreador, consultorInfo, isLoadingPrazos, isLoadingContrato, isLoadingAssociado, isLoadingInadimplencia]);
+  }, [contrato, associado, inadimplenciaPorVeiculo, algumVeiculoInadimplente, beneficiosAdicionaisSuspensos, prazos, multaRastreador, consultorInfo, carenciasBeneficios, carenciasCoberturas, isLoadingPrazos, isLoadingContrato, isLoadingAssociado, isLoadingInadimplencia]);
 
   return situacao;
 }

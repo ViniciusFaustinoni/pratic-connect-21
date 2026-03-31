@@ -1,6 +1,6 @@
 import {
   Shield, ShieldAlert, ShieldCheck, ShieldOff, Clock, AlertTriangle,
-  CheckCircle, UserCheck, Star, Truck, Car, Ban,
+  CheckCircle, UserCheck, Star, Truck, Car, Ban, Gift,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -76,6 +76,41 @@ export function AssociadoSituacaoCard({ situacao }: Props) {
             </div>
           ) : (
             <span className="text-xs text-muted-foreground">Carência não registrada</span>
+          )}
+
+          {/* Per-item carências */}
+          {situacao.carenciasItens && situacao.carenciasItens.length > 0 && (
+            <div className="space-y-2 pt-2 border-t border-border/40">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Carências por item</p>
+              {situacao.carenciasItens.map((item, idx) => {
+                const Icon = item.tipo === 'cobertura' ? Shield : Gift;
+                const tipoLabel = item.carenciaTipo === 'multiplicadora'
+                  ? `Multiplicadora (${item.multiplicador || 2}x)`
+                  : 'Liberação';
+                return (
+                  <div key={idx} className="flex items-center justify-between text-xs rounded px-2 py-1.5 bg-muted/50">
+                    <div className="flex items-center gap-1.5">
+                      <Icon className="h-3 w-3 text-primary" />
+                      <span className="font-medium">{item.nome}</span>
+                      <span className="text-muted-foreground">· {tipoLabel}</span>
+                    </div>
+                    <div className="flex items-center gap-2">
+                      <span className="text-muted-foreground">{item.dias}d</span>
+                      <span className="text-muted-foreground">até {formatDate(item.fim)}</span>
+                      {item.emCarencia ? (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-700 border-0">
+                          Em carência
+                        </Badge>
+                      ) : (
+                        <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-emerald-500/10 text-emerald-700 border-0">
+                          Concluída
+                        </Badge>
+                      )}
+                    </div>
+                  </div>
+                );
+              })}
+            </div>
           )}
         </CardContent>
       </Card>
