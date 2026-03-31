@@ -1,40 +1,49 @@
 
 
-# Fix: Mensagem WhatsApp não enviada na aprovação de roubo/furto
+# Correção do PDF de Cotação Comparativa — 6 Problemas
 
-## Causa raiz
+## Arquivo alvo
+`src/lib/gerarPdfCotacao.ts`
 
-Na edge function `ativar-associado` (linhas 103-126), quando o associado **já possui `user_id`** (já foi ativado anteriormente), a função retorna imediatamente após enviar apenas um email de "rastreador ativado" — **sem enviar o WhatsApp com o template `cadastro_aprovado_botao`**.
+## Problema 1 — Textos truncados na capa
+**Causa**: `truncateText(cobertura, maxChars)` na linha 1033 do `desenharCardPlanoExpandido` corta textos longos com "…".
+**Correção**: Usar `doc.splitTextToSize()` em vez de `truncateText` para as coberturas nos cards da capa. Se o texto precisar de 2 linhas, avançar `currentY` proporcionalmente. Ajustar `maxChars` para usar a largura real do card.
 
-Isso acontece porque:
-1. O analista aprova a cobertura roubo/furto
-2. `useAprovarProposta` chama `ativar-associado`
-3. Se o associado já tem conta (ex: reaprovação, segundo veículo, etc.), o early return na linha 104 pula todo o bloco de WhatsApp (linhas 226-349)
+## Problema 2 — Cards com alturas desiguais / INVESTIMENTO desalinhado
+**Causa**: Embora `fixedHeight` já equalize a altura dos cards, o `1º Pagamento` ainda soma adesão + mensalidade (linha 1075: `const primPag = plano.valorAdesao + plano.valorMensal`), o que é o bug de valor já corrigido nas páginas de detalhe mas não na capa.
+**Correção**: 
+- Linha 1075: mudar para `const primPag = plano.valorAdesao` (só adesão).
+- A seção INVESTIMENTO já está ancorada ao fundo do card (linha 1048), o que está correto. Mas o texto ficará mais coerente.
 
-## Correção
+## Problema 3 — "Taxa de Filiação" vs "Taxa de Adesão"
+**Causa**: Na capa (linha 1069), o label é "Taxa de Filiação:". Nas páginas de detalhe (linha 1611) já está "Taxa de Adesão".
+**Correção**: Linha 1069 — mudar de `'Taxa de Filiação:'` para `'Taxa de Adesão:'`. Também no PDF simples, linha 583 ("TAXA DE FILIAÇÃO") e linha 747 ("TAXA DE FILIAÇÃO") devem mudar para "TAXA DE ADESÃO".
 
-### Arquivo: `supabase/functions/ativar-associado/index.ts`
+## Problema 4 — Espaço vazio no card de preço (páginas 2-4)
+**Causa**: O `valorCardHeight` (linha 1356) usa `Math.max(dynamicCardContentH, priceBlockH + 10)` com `priceBlockH = 30`, resultando em no mínimo 40mm mesmo quando o conteúdo é menor. Além disso, o preço está posicionado no centro vertical do card (linha 1421: `y + valorCardHeight / 2 - 4`), deixando espaço em branco.
+**Correção**: Posicionar o preço ao lado do conteúdo (alinhado ao `cardY` da última badge/cota), não ao centro vertical. Reduzir `priceBlockH` para 20 e ajustar o padding. O card ficará mais compacto.
 
-No bloco de early return (linhas 104-126), adicionar o envio do template WhatsApp `cadastro_aprovado_botao` **antes** de retornar. O fluxo será:
+## Problema 5 — Espaço em branco excessivo na página 5 (comparativo)
+**Causa**: O rodapé está fixo em `pageHeight - 20` (linha 1784), deixando um vazio enorme entre a tabela e o rodapé.
+**Correção**: Após renderizar a tabela, calcular o `y` final. Posicionar o rodapé em `Math.max(y + 20, pageHeight - 20)` — ou seja, o rodapé fica logo abaixo da tabela se ela for curta, ou no fundo da página se a tabela for longa.
 
-1. Manter a verificação `if (associado.user_id)` 
-2. Dentro desse bloco, buscar dados do veículo (placa, marca/modelo), plano, e link_token do contrato
-3. Enviar o template `cadastro_aprovado_botao` via `whatsapp-send-text` com os mesmos parâmetros usados no fluxo normal
-4. Manter o email existente
-5. Retornar com a resposta de sucesso
+## Problema 6 — Card SELECT EXCLUSIVE com destaque vermelho sem explicação
+**Causa**: O primeiro card (index 0) recebe `isRecommended = true` automaticamente (linha 1252: `const planoRecomendadoIndex = numPlanos > 1 ? 0 : -1`), mas não há label visual.
+**Correção**: Dentro de `desenharCardPlanoExpandido`, quando `isRecommended` é true, desenhar uma badge "MAIS COMPLETO" acima do card (como uma tag flutuante com fundo dourado/amarelo, posicionada no topo do card). Usar o campo `plano.destaque` se existir, senão usar "MAIS COMPLETO" como padrão.
 
-Essencialmente, duplicar a lógica de envio WhatsApp (linhas 226-349) para dentro do bloco de "já possui acesso", ou extrair essa lógica para uma função reutilizável chamada nos dois caminhos.
+## Correção adicional no PDF simples
+Linhas 575-586: "TAXA DE FILIAÇÃO" → "TAXA DE ADESÃO"
+Linhas 741-750: "TAXA DE FILIAÇÃO" → "TAXA DE ADESÃO"
 
-### Abordagem técnica
+## Resumo de edições
 
-Extrair uma função `enviarWhatsAppBoasVindas(supabaseAdmin, associado, body)` que encapsula:
-- Verificação da Meta config
-- Busca de placa/marca/modelo
-- Busca de cobertura/plano
-- Geração de token e link_token
-- Montagem e envio do template
-
-Chamar essa função tanto no bloco de early return (user_id existe) quanto no fluxo normal (após criação do usuário).
-
-Deploy da edge function após a alteração.
+| Linha(s) | Problema | Mudança |
+|---|---|---|
+| 1033 | P1: truncamento | `splitTextToSize` + quebra de linha |
+| 1069 | P3: nomenclatura | "Taxa de Filiação" → "Taxa de Adesão" |
+| 1075 | P2: valor errado | `valorAdesao + valorMensal` → `valorAdesao` |
+| 583, 747 | P3: nomenclatura | "TAXA DE FILIAÇÃO" → "TAXA DE ADESÃO" |
+| 1345-1431 | P4: card grande | Reduzir altura e reposicionar preço |
+| 1784-1798 | P5: espaço | Rodapé dinâmico |
+| 957-982 | P6: badge | Adicionar label "MAIS COMPLETO" |
 
