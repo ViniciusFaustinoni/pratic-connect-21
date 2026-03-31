@@ -1,69 +1,57 @@
 
 
-# Fix: Benefícios e coberturas excluídos indevidamente da cotação
+# Correção do Layout do PDF de Cotação Comparativa
 
-## Problema
-Itens como **Rastreador** e **Assistência 24h** aparecem como "não cobre" na cotação do Voyage QOO5C17 (FIPE ~R$46k), mesmo estando incluídos no plano Select Basic. Há dois bugs distintos no motor de cotação.
+## Problemas identificados
 
-## Causa raiz
+### Páginas 2 e 3 (Detalhe do plano)
+1. **Card de valor excessivamente alto** — `valorCardHeight` é fixo em 85mm, mas quando o plano não tem cota/deságio, sobra um vazio enorme dentro do card
+2. **Nome do plano duplicado** — aparece no título da página E dentro do card vermelho
+3. **Preço posicionado com offset fixo** — `y + 32` e `y + 44` são relativos ao topo do card, não ao conteúdo real, causando o preço flutuando no meio do vazio
+4. **Espaço vazio excessivo** entre o card e a seção "COBERTURAS INCLUÍDAS"
 
-### Bug 1 — `fipe_range` misturado com elegibilidade
-A função `checkAllRules` avalia TODAS as regras, incluindo `fipe_range` (que é regra de **precificação**, não de elegibilidade). Embora hoje as coberturas com `fipe_range` tenham min=0/max=180k (que passa para a maioria dos veículos), a arquitetura está errada e pode causar falsos negativos em cenários de borda.
+### Página 1 (Capa)
+5. **Cards com alturas diferentes** — quando um plano tem mais coberturas que outro, os cards ficam desiguais visualmente (mas funcionalmente ok)
 
-### Bug 2 — Coberturas não verificadas individualmente para elegibilidade
-O loop de elegibilidade individual (linhas 660-677) só verifica **benefícios** (`planos_beneficios`). As **coberturas** vinculadas via `planos_coberturas` nunca são verificadas para regras de `regiao`, `combustivel`, `tipo_uso`, etc. Se no futuro uma cobertura tiver essas regras, elas seriam ignoradas.
-
-### Bug 3 — Preço de benefícios não resolve FIPE variável
-`somaBeneficios` usa apenas `preco_sugerido` fixo. Se um benefício tiver regra `fipe_range` com faixas de preço, o valor não é resolvido (diferente das coberturas que já fazem isso).
+### Geral
+6. O design é razoável, mas os espaçamentos estão desproporcionais
 
 ## Solução
 
-### Arquivo: `src/hooks/usePlanosCotacao.ts`
+### Arquivo: `src/lib/gerarPdfCotacao.ts`
 
-**1. Separar `fipe_range` de elegibilidade no loop de benefícios (linhas 660-677)**
-Ao verificar regras de cada benefício, filtrar `fipe_range` antes de chamar `checkAllRules`:
+**1. Tornar `valorCardHeight` dinâmico na função `desenharPaginaDetalhesPlano` (linhas ~1313-1390)**
+
+Em vez de `const valorCardHeight = 85`, calcular com base no conteúdo real:
+- Nome do plano: ~16mm
+- Badges (FIPE, ano): ~16mm  
+- Cota/deságio (se houver): ~12mm por linha
+- Preço: ~20mm
+- Total dinâmico com padding
+
+**2. Reposicionar o preço para seguir o fluxo de `cardY`**
+
+Atualmente:
 ```ts
-const benefitRules = allEligibilityRules
-  .filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id)
-  .filter(r => r.rule_type !== 'fipe_range'); // fipe_range é pricing, não elegibilidade
+doc.text(formatCurrency(plano.valorMensal), ..., y + 32, ...);  // offset fixo!
+doc.text('/mês', ..., y + 44, ...);  // offset fixo!
 ```
 
-**2. Adicionar loop de elegibilidade para coberturas individuais**
-Após o loop de benefícios, adicionar verificação das coberturas:
-```ts
-for (const pc of coberturasDoPlano) {
-  const cobId = (pc as any).cobertura_id;
-  const cobRules = allEligibilityRules
-    .filter(r => r.entity_type === 'cobertura' && r.entity_id === cobId)
-    .filter(r => r.rule_type !== 'fipe_range'); // só elegibilidade
-  if (cobRules.length > 0 && !checkAllRules(cobRules, vehicleCtx)) {
-    const cobNome = (pc as any).coberturas?.nome;
-    if (cobNome && !coberturasRemovidas.includes(cobNome)) {
-      coberturasRemovidas.push(cobNome);
-    }
-  }
-}
-```
+Mudar para usar a posição após as badges/cotas, alinhando o preço à direita na mesma altura do nome do plano ou após os badges.
 
-**3. Resolver preço FIPE para benefícios (não só coberturas)**
-Alterar `somaBeneficios` para verificar se o benefício tem `fipe_range` e resolver valor por faixa:
-```ts
-const somaBeneficios = (plano.planos_beneficios || []).reduce((acc, pb) => {
-  const fipeRule = allEligibilityRules.find(
-    r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id
-      && r.rule_type === 'fipe_range' && r.is_active
-  );
-  if (fipeRule) {
-    const faixas = fipeRule.rule_config?.faixas || [];
-    const faixa = faixas.find(f => valorFipe >= f.de && valorFipe < f.ate);
-    return acc + (faixa ? Number(faixa.valor) : 0);
-  }
-  return acc + Number(pb.benefits?.preco_sugerido || 0);
-}, 0);
-```
+**3. Equalizar cards na capa (`desenharCardPlanoExpandido`, linhas ~946-1056)**
 
-## Impacto
-- Rastreador, Assistência e outros benefícios passam a ser exibidos corretamente quando o veículo atende às regras de elegibilidade (região, combustível, tipo de uso, FIPE)
-- Regras de `fipe_range` são usadas APENAS para precificação, nunca para inclusão/exclusão
-- Coberturas e benefícios com preço variável por FIPE são corretamente totalizados no valor mensal
+Calcular a altura máxima entre todos os cards e usar essa altura para todos, garantindo alinhamento visual.
+
+**4. Remover redundância do nome no card de detalhe**
+
+O nome já aparece no header da página (`PLANO ESSENCIAL`). Dentro do card, pode ser substituído por apenas os badges e valores.
+
+## Resumo de mudanças
+
+| Local no código | Problema | Correção |
+|---|---|---|
+| `desenharPaginaDetalhesPlano` linhas 1313-1390 | Card fixo 85mm, preço com offset fixo | Altura dinâmica, preço no fluxo |
+| `desenharCardPlanoExpandido` linhas 946-1056 | Cards com alturas diferentes | Aceitar altura máxima como parâmetro |
+| `desenharPaginaCapa` linhas 1222-1261 | Não calcula altura máxima | Pré-calcular e passar para os cards |
 
