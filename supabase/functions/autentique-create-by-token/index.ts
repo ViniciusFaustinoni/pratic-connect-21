@@ -762,7 +762,7 @@ serve(async (req) => {
         const wppRes = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-          body: JSON.stringify({ telefone: telefoneWpp, template_name: 'assinatura_documento_v2', params: [clienteNome, nomeDoc], button_params: [linkCode] }),
+          body: JSON.stringify({ telefone: telefoneWpp, template_name: 'assinatura_documento_v2', template_params: [clienteNome, nomeDoc], template_button_params: [linkCode] }),
         });
         if (wppRes.ok) {
           console.log('[autentique-create-by-token] WhatsApp assinatura enviado para', telefoneWpp);
