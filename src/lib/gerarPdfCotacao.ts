@@ -1441,8 +1441,8 @@ const desenharPaginaDetalhesPlano = (
     cardY += 12;
   }
 
-  // Price — positioned right-aligned, vertically centered in card
-  const priceY = y + valorCardHeight / 2 - 4;
+  // Price — positioned right-aligned, aligned with content top area
+  const priceY = y + 16;
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
