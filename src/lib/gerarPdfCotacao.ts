@@ -1075,7 +1075,7 @@ const desenharCardPlanoExpandido = (
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
-  doc.text('Taxa de Filiação:', x + padding + 2, investBoxY + 13);
+  doc.text('Taxa de Adesão:', x + padding + 2, investBoxY + 13);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(plano.valorAdesao), x + width - padding - 2, investBoxY + 13, { align: 'right' });
