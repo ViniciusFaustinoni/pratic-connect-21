@@ -184,7 +184,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('planos_coberturas')
-        .select('plano_id, cobertura_id, coberturas:cobertura_id (valor)');
+        .select('plano_id, cobertura_id, coberturas:cobertura_id (nome, valor)');
       if (error) throw error;
       return data;
     },
@@ -633,9 +633,14 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         ? `${cotaPercentual}% (sem mínimo)`
         : `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
 
-      const coberturas = (plano.planos_beneficios || [])
+      // Montar lista de itens incluídos: coberturas + benefícios
+      const coberturasNomes = coberturasDoPlano
+        .map((pc: any) => (pc as any).coberturas?.nome)
+        .filter(Boolean) as string[];
+      const beneficiosNomes = (plano.planos_beneficios || [])
         .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
         .map((pb: any) => pb.custom_text || pb.benefits?.name || 'Benefício');
+      const coberturas = [...coberturasNomes, ...beneficiosNomes];
       const naoInclui: string[] = [];
 
       const isDestaque = !!plano.destaque;
