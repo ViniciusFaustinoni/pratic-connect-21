@@ -1376,8 +1376,8 @@ const desenharPaginaDetalhesPlano = (
   dynamicCardContentH += 6; // bottom padding
   
   // Price block on the right side
-  const priceBlockH = 30;
-  const valorCardHeight = Math.max(dynamicCardContentH, priceBlockH + 10);
+  const priceBlockH = 20;
+  const valorCardHeight = Math.max(dynamicCardContentH, priceBlockH + 6);
   
   drawPremiumCard(doc, margin, y, contentWidth, valorCardHeight, { hasGlow: true });
 
