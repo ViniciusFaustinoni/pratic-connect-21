@@ -362,17 +362,26 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     regioesLoading;
 
   // Helper: build vehicle context for unified rules
-  const buildVehicleContext = (p: typeof params): VehicleContext => ({
-    valorFipe: p.valorFipe,
-    anoVeiculo: p.anoVeiculo || new Date().getFullYear(),
-    categoriaVeiculo: p.tipoVeiculo === 'moto' ? 'moto' : 'passeio',
-    categoriaEspecial: p.categoria,
-    regiao: p.regiao,
-    marca: p.marca,
-    modelo: p.modelo,
-    tipoUso: p.usoApp ? 'aplicativo' : 'particular',
-    combustivel: p.combustivel,
-  });
+  const buildVehicleContext = (p: typeof params): VehicleContext => {
+    // Resolve region slug (e.g. 'rj') to UUID for eligibility rule comparison
+    const regiaoSlug = p.regiao?.toLowerCase();
+    const regiaoMatch = (regioes || []).find(r => 
+      r.codigo?.toLowerCase() === regiaoSlug ||
+      r.nome?.toLowerCase().includes(regiaoSlug || '__none__')
+    );
+    return {
+      valorFipe: p.valorFipe,
+      anoVeiculo: p.anoVeiculo || new Date().getFullYear(),
+      categoriaVeiculo: p.tipoVeiculo === 'moto' ? 'moto' : 'passeio',
+      categoriaEspecial: p.categoria,
+      regiao: p.regiao,
+      regiaoId: regiaoMatch?.id,
+      marca: p.marca,
+      modelo: p.modelo,
+      tipoUso: p.usoApp ? 'aplicativo' : 'particular',
+      combustivel: p.combustivel,
+    };
+  };
 
   const { planos, planosNegados } = useMemo<{ planos: PlanoCotacao[]; planosNegados: PlanoNegadoInfo[] }>(() => {
     const { valorFipe, regiao, combustivel = 'gasolina', categoria, anoVeiculo } = params;
