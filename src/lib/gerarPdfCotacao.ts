@@ -943,6 +943,17 @@ const desenharRodapeCompacto = (
   doc.text(`#${cotacao.numero || 'N/A'} | Página ${paginaAtual} de ${totalPaginas}`, pageWidth - margin, footerY + 10, { align: 'right' });
 };
 
+const calcularAlturaCardPlano = (
+  doc: jsPDF,
+  plano: PlanoParaPdf,
+  width: number,
+  compact: boolean = false
+): number => {
+  const lineHeight = compact ? 5.5 : 7;
+  const numCoberturas = plano.coberturas.length;
+  return 24 + 28 + (numCoberturas * lineHeight) + 36;
+};
+
 const desenharCardPlanoExpandido = (
   doc: jsPDF,
   plano: PlanoParaPdf,
@@ -951,23 +962,18 @@ const desenharCardPlanoExpandido = (
   width: number,
   index: number,
   isRecommended: boolean = false,
-  compact: boolean = false
+  compact: boolean = false,
+  fixedHeight?: number
 ): number => {
   const padding = 6;
   const lineHeight = compact ? 5.5 : 7;
-  const maxCoberturas = plano.coberturas.length;
   const coberturaFontSize = compact ? 7 : 9;
   const maxChars = compact 
     ? Math.floor((width - padding * 2 - 8) / 1.6) 
     : Math.floor((width - padding * 2 - 8) / 1.8);
   
-  const numCoberturas = Math.min(plano.coberturas.length, maxCoberturas);
-  const cardHeight = 
-    24 +
-    28 +
-    (numCoberturas * lineHeight) +
-    (plano.coberturas.length > maxCoberturas ? 10 : 0) +
-    36;
+  const naturalHeight = calcularAlturaCardPlano(doc, plano, width, compact);
+  const cardHeight = fixedHeight || naturalHeight;
   
   drawPremiumCard(doc, x, y, width, cardHeight, { 
     isRecommended, 
@@ -1003,7 +1009,7 @@ const desenharCardPlanoExpandido = (
   doc.text('/mês', x + width / 2, currentY, { align: 'center' });
   currentY += 10;
   
-  const coberturasExibir = plano.coberturas.slice(0, maxCoberturas);
+  const coberturasExibir = plano.coberturas;
   coberturasExibir.forEach((cobertura) => {
     doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
     doc.circle(x + padding + 3, currentY - 1.5, 1.5, 'F');
