@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, FileText } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
+import { useAllEligibilityRules } from '@/hooks/useEntityEligibilityRules';
 import { cn } from '@/lib/utils';
 
 interface Props {
@@ -28,6 +29,18 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   // Data sources
   const { data: coberturas = [] } = useCoberturas(true);
   const { data: benefits = [] } = useBenefits();
+  const { data: allRules = [] } = useAllEligibilityRules();
+
+  // Set of entity_ids that have fipe_range rules (variable pricing)
+  const fipeRangeEntityIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const rule of allRules) {
+      if (rule.rule_type === 'fipe_range') {
+        ids.add(rule.entity_id);
+      }
+    }
+    return ids;
+  }, [allRules]);
 
   // Form state
   const [nome, setNome] = useState('');
@@ -91,16 +104,23 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
 
 
   // Calculate total
-  const valorTotal = useMemo(() => {
+  const { valorTotal, temVariaveis } = useMemo(() => {
     let total = 0;
+    let hasVar = false;
     for (const c of coberturas) {
-      if (selectedCoberturas.has(c.id)) total += (c as any).valor || 0;
+      if (selectedCoberturas.has(c.id)) {
+        if (fipeRangeEntityIds.has(c.id)) { hasVar = true; } 
+        else { total += (c as any).valor || 0; }
+      }
     }
     for (const b of benefits) {
-      if (selectedBeneficios.has(b.id)) total += b.preco_sugerido || 0;
+      if (selectedBeneficios.has(b.id)) {
+        if (fipeRangeEntityIds.has(b.id)) { hasVar = true; }
+        else { total += b.preco_sugerido || 0; }
+      }
     }
-    return total;
-  }, [selectedCoberturas, selectedBeneficios, coberturas, benefits]);
+    return { valorTotal: total, temVariaveis: hasVar };
+  }, [selectedCoberturas, selectedBeneficios, coberturas, benefits, fipeRangeEntityIds]);
 
   // Toggle helpers
   const toggleSet = (set: Set<string>, setter: (s: Set<string>) => void, value: string) => {
@@ -194,6 +214,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
               <div className="bg-primary/10 text-primary px-4 py-2 rounded-lg text-center">
                 <p className="text-[10px] uppercase tracking-wider font-medium">Valor Mensal</p>
                 <p className="text-xl font-bold">R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                {temVariaveis && <p className="text-[10px] text-muted-foreground">(+ itens variáveis por FIPE)</p>}
               </div>
             </div>
             <div><Label>Nome do Plano</Label><Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Select Plus" autoFocus /></div>
@@ -221,7 +242,10 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
                     )}>
                       <Checkbox checked={selectedCoberturas.has(c.id)} onCheckedChange={() => toggleSet(selectedCoberturas, setSelectedCoberturas, c.id)} />
                       <span className="text-sm flex-1">{c.nome}</span>
-                      <span className="text-xs font-medium text-muted-foreground">R$ {((c as any).valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      {fipeRangeEntityIds.has(c.id) 
+                        ? <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">Variável por FIPE</Badge>
+                        : <span className="text-xs font-medium text-muted-foreground">R$ {((c as any).valor || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      }
                     </label>
                   ))}
                 </div>
@@ -239,7 +263,10 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
                     )}>
                       <Checkbox checked={selectedBeneficios.has(b.id)} onCheckedChange={() => toggleSet(selectedBeneficios, setSelectedBeneficios, b.id)} />
                       <span className="text-sm flex-1">{b.name}</span>
-                      <span className="text-xs font-medium text-muted-foreground">R$ {(b.preco_sugerido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      {fipeRangeEntityIds.has(b.id)
+                        ? <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">Variável por FIPE</Badge>
+                        : <span className="text-xs font-medium text-muted-foreground">R$ {(b.preco_sugerido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      }
                     </label>
                   ))}
                 </div>
