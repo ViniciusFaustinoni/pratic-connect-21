@@ -292,7 +292,17 @@ export function LinhasPlanos() {
               <CollapsibleContent>
                 <div className="border-t px-4 py-2 space-y-1 bg-muted/20">
                   {linha.plans.map((plano: any) => (
-                    <div key={plano.id} className="flex items-center gap-1">
+                    <div
+                      key={plano.id}
+                      className={cn('flex items-center gap-1', draggedPlan?.id === plano.id && 'opacity-40')}
+                      draggable
+                      onDragStart={(e) => {
+                        setDraggedPlan({ id: plano.id, fromLineId: linha.id });
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragEnd={() => { setDraggedPlan(null); setDragOverLineId(null); }}
+                    >
+                      <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
                       <button
                         onClick={() => setPlanoSheet({ open: true, planoId: plano.id, linhaId: linha.id })}
                         className="flex-1 flex items-center gap-3 px-3 py-2 rounded-md hover:bg-background transition-colors text-left"
