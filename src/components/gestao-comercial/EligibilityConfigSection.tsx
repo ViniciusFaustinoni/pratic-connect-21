@@ -79,8 +79,13 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
           if (cfg.intervalo) newState.fipeIntervalo = String(cfg.intervalo);
           if (Array.isArray(cfg.faixas)) {
             const valMap: Record<number, string> = {};
-            cfg.faixas.forEach((f: any, i: number) => {
-              if (f.valor != null) valMap[i] = String(f.valor);
+            const cfgMin = cfg.min || 0;
+            const cfgIntervalo = cfg.intervalo || 5000;
+            cfg.faixas.forEach((f: any) => {
+              if (f.valor != null && f.de != null) {
+                const relativeIndex = Math.round((f.de - cfgMin) / cfgIntervalo);
+                if (relativeIndex >= 0) valMap[relativeIndex] = String(f.valor);
+              }
             });
             newState.fipeValoresFaixa = valMap;
           }
