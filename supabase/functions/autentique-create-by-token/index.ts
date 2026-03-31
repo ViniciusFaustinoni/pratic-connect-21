@@ -497,14 +497,19 @@ serve(async (req) => {
     try {
       const { data: templatesAnexos } = await supabase
         .from('documento_templates')
-        .select('nome, conteudo')
+        .select('nome, conteudo, is_default_rastreador')
         .eq('anexar_proposta', true)
         .eq('ativo', true)
         .order('ordem_anexo')
         .order('nome');
 
-      if (templatesAnexos && templatesAnexos.length > 0) {
-        console.log(`[autentique-create-by-token] Anexando ${templatesAnexos.length} template(s) ao documento`);
+      // Filtrar templates de rastreador já injetados dinamicamente via generateSecaoRastreador
+      const templatesFiltrados = (templatesAnexos || []).filter(
+        (t: any) => !t.is_default_rastreador
+      );
+
+      if (templatesFiltrados.length > 0) {
+        console.log(`[autentique-create-by-token] Anexando ${templatesFiltrados.length} template(s) ao documento (excluídos ${(templatesAnexos?.length || 0) - templatesFiltrados.length} template(s) de rastreador já injetados)`);
         let anexosHTML = '';
         for (const tmpl of templatesAnexos) {
           // Substituir variáveis no conteúdo do anexo antes de inserir
