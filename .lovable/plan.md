@@ -1,34 +1,30 @@
 
 
-# Exibir Carência por Benefício e Cobertura na Ficha do Associado
+# Adicionar Configuração de Carência nos Formulários de Gestão Comercial
 
-## Contexto
-O card "Carência" na ficha do associado mostra apenas a carência **geral do contrato** (datas de início/fim). O pedido é que, quando coberturas ou benefícios do plano do associado tiverem `carencia_ativa = true` configurada no catálogo, essas carências individuais também sejam exibidas, calculando as datas a partir da `data_carencia_inicio` do contrato.
+## Problema
+Os formulários de cobertura e benefício na **Gestão Comercial** (`CatalogoCoberturasBeneficios.tsx`) não possuem a seção de carência. O componente `CarenciaConfigSection` já existe e é usado nos formulários antigos do admin, mas não foi integrado aqui.
 
 ## Solução
 
-### 1. `src/hooks/useAssociadoSituacao.ts` — Buscar carências por item do plano
+### `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx`
 
-- Adicionar query que busca o `plano_id` do associado e depois faz JOIN de `planos_beneficios → benefits` e `planos_coberturas → coberturas` filtrando por `carencia_ativa = true`
-- Para cada item, calcular `inicio` (= `data_carencia_inicio` do contrato) e `fim` (= inicio + `carencia_dias` dias)
-- Retornar array `carenciasItens` no `SituacaoAssociado`:
-  ```ts
-  { nome: string; tipo: 'cobertura' | 'beneficio'; carenciaTipo: string; dias: number; multiplicador?: number; inicio: string; fim: string; emCarencia: boolean }[]
-  ```
+**Para ambos os sheets (CoberturaSheet e BeneficioSheet):**
 
-### 2. `src/components/associados/detalhe/AssociadoSituacaoCard.tsx` — Renderizar carências por item
+1. Importar `CarenciaConfigSection` de `@/components/admin/planos/CarenciaConfigSection`
+2. Adicionar estado para os campos de carência (`carencia_ativa`, `carencia_tipo`, `carencia_dias`, `carencia_multiplicador`)
+3. Carregar valores existentes do item ao abrir (usando campos da tabela `coberturas` ou `benefits`)
+4. Renderizar `<CarenciaConfigSection>` entre o campo Valor e o `EligibilityConfigSection`
+5. Incluir os campos de carência no payload do `mutationFn` ao salvar
 
-- Abaixo da carência geral existente, se `situacao.carenciasItens.length > 0`, listar cada item com:
-  - Ícone diferenciado (Shield para cobertura, Gift para benefício)
-  - Nome do item
-  - Tipo de carência: "Liberação" ou "Multiplicadora (Nx)"
-  - Dias e datas
-  - Badge "Em carência" ou "Concluída"
+**CoberturaSheet** — payload adicional:
+```ts
+carencia_ativa, carencia_tipo, carencia_dias, carencia_multiplicador
+```
 
-## Arquivos
+**BeneficioSheet** — idem, usando os mesmos campos da tabela `benefits`
 
 | Arquivo | Ação |
 |---|---|
-| `src/hooks/useAssociadoSituacao.ts` | Buscar itens do plano com carência ativa + calcular datas |
-| `src/components/associados/detalhe/AssociadoSituacaoCard.tsx` | Renderizar lista de carências por item |
+| `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx` | Adicionar `CarenciaConfigSection` + estado + persistência em ambos os sheets |
 
