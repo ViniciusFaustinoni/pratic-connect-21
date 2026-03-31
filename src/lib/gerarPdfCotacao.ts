@@ -948,10 +948,21 @@ const calcularAlturaCardPlano = (
   width: number,
   compact: boolean = false
 ): number => {
+  const padding = 6;
   const lineHeight = compact ? 5.5 : 7;
-  const numCoberturas = plano.coberturas.length;
+  const coberturaFontSize = compact ? 7 : 9;
+  const textMaxWidth = width - padding * 2 - 10;
+  
+  // Calculate total lines needed for coberturas (accounting for text wrapping)
+  doc.setFontSize(coberturaFontSize);
+  let totalCoberturaLines = 0;
+  plano.coberturas.forEach(cobertura => {
+    const wrappedLines = doc.splitTextToSize(cobertura, textMaxWidth);
+    totalCoberturaLines += wrappedLines.length;
+  });
+  
   // header(22) + price(18) + coberturas + separator(6) + invest(26) + bottom padding(4)
-  return 22 + 18 + (numCoberturas * lineHeight) + 6 + 26 + 4;
+  return 22 + 18 + (totalCoberturaLines * lineHeight) + 6 + 26 + 4;
 };
 
 const desenharCardPlanoExpandido = (
