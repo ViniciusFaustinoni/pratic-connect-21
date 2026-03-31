@@ -477,6 +477,8 @@ serve(async (req) => {
           body: JSON.stringify({
             telefone: telFmt,
             mensagem: mensagemBoasVindas,
+            template_name: "cadastro_aprovado_botao",
+            template_params: [dadosNovoTitular.nome, `${veiculoDescricao} (${placaVeiculo})`, novoContrato.numero],
             referencia_tipo: "troca_titularidade",
             referencia_id: solicitacao_id,
           }),

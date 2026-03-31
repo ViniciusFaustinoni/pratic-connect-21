@@ -1176,9 +1176,10 @@ export function useAprovarVeiculoServico() {
               await supabase.functions.invoke('whatsapp-send-text', {
                 body: {
                   telefone: telefoneEnvio,
-                  template_nome: metaTemplate.nome,
-                  template_variaveis: [nomeAssociado, veiculoDesc],
-                  template_botao_variaveis: [tokenAssinatura],
+                  mensagem: `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso.`,
+                  template_name: metaTemplate.nome,
+                  template_params: [nomeAssociado, veiculoDesc],
+                  template_button_params: [tokenAssinatura],
                   referencia_tipo: 'assinatura_instalacao',
                   referencia_id: data.servicoId,
                 },
