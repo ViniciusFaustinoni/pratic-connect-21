@@ -980,6 +980,21 @@ const desenharCardPlanoExpandido = (
     hasGlow: true 
   });
   
+  // Badge "MAIS COMPLETO" for recommended plan
+  if (isRecommended) {
+    const badgeText = 'MAIS COMPLETO';
+    const badgeW = 38;
+    const badgeH = 7;
+    const badgeX = x + (width - badgeW) / 2;
+    const badgeY = y - badgeH / 2;
+    doc.setFillColor(218, 165, 32); // gold
+    doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'bold');
+    doc.text(badgeText, badgeX + badgeW / 2, badgeY + 5, { align: 'center' });
+  }
+  
   let currentY = y + 6;
 
   // Card header with brand primary color
