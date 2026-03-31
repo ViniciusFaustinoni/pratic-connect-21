@@ -19,6 +19,138 @@ function gerarSenhaPadrao(cpf: string): string {
   return `Pratic@${ultimosDigitos}`;
 }
 
+// Função reutilizável para enviar WhatsApp de boas-vindas
+async function enviarWhatsAppBoasVindas(
+  supabaseAdmin: ReturnType<typeof createClient>,
+  associado: Record<string, unknown>,
+  body: AtivarAssociadoRequest
+) {
+  const telefoneWhatsapp = (associado.whatsapp || associado.telefone) as string | null;
+  if (!telefoneWhatsapp) {
+    console.log('[ativar-associado] Sem telefone/whatsapp para envio');
+    return;
+  }
+
+  try {
+    // Verificar se Meta está ativo para usar template
+    const { data: metaConfig } = await supabaseAdmin
+      .from('whatsapp_meta_config')
+      .select('ativo')
+      .limit(1)
+      .maybeSingle();
+
+    const isMetaAtivo = metaConfig?.ativo === true;
+    const primeiroNome = (associado.nome as string)?.split(' ')[0] || 'Cliente';
+    const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
+    const appUrl = supabaseUrl.replace('supabase.co', 'lovable.app').replace('https://iyxdgmukrrdkffraptsx.', 'https://');
+    const senhaPadrao = gerarSenhaPadrao(associado.cpf as string);
+
+    const sendBody: Record<string, unknown> = {
+      telefone: telefoneWhatsapp.replace(/\D/g, ''),
+      mensagem: `Olá ${associado.nome}! 🚗\n\nSeu acesso ao App PRATIC está liberado!\n\n🔗 URL: ${appUrl}/app/login\n👤 Login: ${associado.cpf}\n🔑 Senha: ${senhaPadrao}\n\nNo primeiro acesso você deverá trocar sua senha.`,
+    };
+
+    // Se Meta ativo, usar template cadastro_aprovado_botao
+    if (isMetaAtivo) {
+      // Buscar dados do veículo para o template
+      let placa = 'N/A';
+      let marcaModelo = 'seu veículo';
+      if (body.veiculo_id) {
+        const { data: veiculo } = await supabaseAdmin
+          .from('veiculos')
+          .select('placa, marca, modelo')
+          .eq('id', body.veiculo_id)
+          .single();
+        if (veiculo?.placa) {
+          placa = veiculo.placa;
+          marcaModelo = [veiculo.marca, veiculo.modelo].filter(Boolean).join(' ') || 'seu veículo';
+        }
+      }
+
+      // Buscar plano/cobertura do associado
+      let cobertura = 'Roubo e Furto';
+      if (associado.plano_id) {
+        const { data: plano } = await supabaseAdmin
+          .from('planos')
+          .select('nome')
+          .eq('id', associado.plano_id as string)
+          .single();
+        if (plano?.nome) cobertura = plano.nome;
+      }
+
+      // Gerar token de primeiro acesso (48h)
+      const tokenPrimeiroAcesso = crypto.randomUUID();
+      const expiraEm = new Date(Date.now() + 48 * 60 * 60 * 1000);
+
+      // Invalidar tokens anteriores
+      await supabaseAdmin
+        .from('auth_tokens_primeiro_acesso')
+        .update({ usado: true, usado_em: new Date().toISOString() })
+        .eq('associado_id', associado.id as string)
+        .eq('usado', false);
+
+      // Salvar novo token
+      await supabaseAdmin
+        .from('auth_tokens_primeiro_acesso')
+        .insert({
+          associado_id: associado.id,
+          token: tokenPrimeiroAcesso,
+          expira_em: expiraEm.toISOString(),
+          usado: false
+        });
+
+      // Buscar link_token do contrato
+      let linkToken: string | null = null;
+      
+      if (body.veiculo_id) {
+        const { data: contratoVeiculo } = await supabaseAdmin
+          .from('contratos')
+          .select('link_token')
+          .eq('associado_id', associado.id as string)
+          .eq('veiculo_id', body.veiculo_id)
+          .in('status', ['ativo', 'assinado', 'pendente_assinatura'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        linkToken = contratoVeiculo?.link_token || null;
+      }
+      
+      if (!linkToken) {
+        const { data: contratoFallback } = await supabaseAdmin
+          .from('contratos')
+          .select('link_token')
+          .eq('associado_id', associado.id as string)
+          .in('status', ['ativo', 'assinado', 'pendente_assinatura'])
+          .order('created_at', { ascending: false })
+          .limit(1)
+          .maybeSingle();
+        linkToken = contratoFallback?.link_token || null;
+      }
+
+      console.log(`[ativar-associado] link_token resolvido: ${linkToken} (veiculo_id: ${body.veiculo_id})`);
+
+      sendBody.template_name = 'cadastro_aprovado_botao';
+      sendBody.template_params = [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador'];
+      
+      if (linkToken) {
+        sendBody.template_button_params = [linkToken];
+      } else {
+        console.warn(`[ativar-associado] ⚠️ Nenhum link_token encontrado para associado ${associado.id}. Botão de URL pode não funcionar.`);
+        sendBody.template_button_params = [tokenPrimeiroAcesso];
+      }
+      
+      console.log(`[ativar-associado] Usando template Meta 'cadastro_aprovado_botao' para ${telefoneWhatsapp}`);
+    }
+
+    await supabaseAdmin.functions.invoke('whatsapp-send-text', {
+      body: sendBody,
+    });
+    console.log('[ativar-associado] WhatsApp enviado com sucesso');
+  } catch (whatsappError) {
+    console.error('[ativar-associado] Erro ao enviar WhatsApp:', whatsappError);
+  }
+}
+
 serve(async (req) => {
   // Handle CORS preflight
   if (req.method === "OPTIONS") {
@@ -51,7 +183,6 @@ serve(async (req) => {
       if (error) throw new Error(`Associado não encontrado: ${error.message}`);
       associado = data;
     } else if (veiculo_id) {
-      // Buscar via veículo
       const { data: veiculo, error: veiculoError } = await supabaseAdmin
         .from('veiculos')
         .select('associado_id')
@@ -69,7 +200,6 @@ serve(async (req) => {
       if (error) throw new Error(`Associado não encontrado: ${error.message}`);
       associado = data;
     } else if (rastreador_id) {
-      // Buscar via rastreador
       const { data: rastreador, error: rastreadorError } = await supabaseAdmin
         .from('rastreadores')
         .select('veiculo_id')
@@ -102,9 +232,12 @@ serve(async (req) => {
 
     // Verificar se já tem user_id (já tem acesso)
     if (associado.user_id) {
-      console.log('Associado já possui acesso, apenas notificando...');
+      console.log('Associado já possui acesso, enviando WhatsApp e notificando...');
       
-      // Apenas enviar notificação de que rastreador foi ativado
+      // ENVIAR WHATSAPP mesmo quando já possui acesso
+      await enviarWhatsAppBoasVindas(supabaseAdmin, associado, body);
+
+      // Enviar notificação por email
       await supabaseAdmin.functions.invoke('send-email', {
         body: {
           template: 'rastreador-ativado',
@@ -118,7 +251,7 @@ serve(async (req) => {
       return new Response(
         JSON.stringify({ 
           success: true, 
-          message: 'Associado já possui acesso. Notificação enviada.',
+          message: 'Associado já possui acesso. WhatsApp e notificação enviados.',
           alreadyActive: true 
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
@@ -143,7 +276,6 @@ serve(async (req) => {
     });
 
     if (authError) {
-      // Se o email já existe no Auth, buscar o user existente e vincular
       if ((authError as any).code === 'email_exists' || authError.message?.includes('already been registered')) {
         console.log('Email já registrado no Auth, buscando user existente...');
         const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
@@ -174,7 +306,7 @@ serve(async (req) => {
       console.error('Erro ao vincular associado:', updateAssociadoError);
     }
 
-    // Atualizar profile com primeiro_acesso e tipo
+    // Atualizar profile
     const { error: updateProfileError } = await supabaseAdmin
       .from('profiles')
       .update({
@@ -201,10 +333,10 @@ serve(async (req) => {
       console.error('Erro ao adicionar role:', roleError);
     }
 
-    // URL do app
-    const appUrl = supabaseUrl.replace('supabase.co', 'lovable.app').replace('https://iyxdgmukrrdkffraptsx.', 'https://');
-    
     // Enviar email
+    const supabaseUrlEnv = Deno.env.get("SUPABASE_URL")!;
+    const appUrl = supabaseUrlEnv.replace('supabase.co', 'lovable.app').replace('https://iyxdgmukrrdkffraptsx.', 'https://');
+    
     try {
       await supabaseAdmin.functions.invoke('send-email', {
         body: {
@@ -223,131 +355,8 @@ serve(async (req) => {
       console.error('Erro ao enviar email:', emailError);
     }
 
-    // Enviar WhatsApp (se configurado)
-    if (associado.whatsapp || associado.telefone) {
-      const telefoneWhatsapp = associado.whatsapp || associado.telefone;
-      try {
-        // Verificar se Meta está ativo para usar template
-        const { data: metaConfig } = await supabaseAdmin
-          .from('whatsapp_meta_config')
-          .select('ativo')
-          .limit(1)
-          .maybeSingle();
-
-        const isMetaAtivo = metaConfig?.ativo === true;
-        const primeiroNome = associado.nome?.split(' ')[0] || 'Cliente';
-
-        const sendBody: Record<string, unknown> = {
-          telefone: telefoneWhatsapp.replace(/\D/g, ''),
-          mensagem: `Olá ${associado.nome}! 🚗\n\nSeu acesso ao App PRATIC está liberado!\n\n🔗 URL: ${appUrl}/app/login\n👤 Login: ${associado.cpf}\n🔑 Senha: ${senhaPadrao}\n\nNo primeiro acesso você deverá trocar sua senha.`,
-        };
-
-        // Se Meta ativo, usar template ativacao_conta_pratic com botão de acesso
-        if (isMetaAtivo) {
-          // Buscar dados do veículo para o template
-          let placa = 'N/A';
-          let marcaModelo = 'seu veículo';
-          if (body.veiculo_id) {
-            const { data: veiculo } = await supabaseAdmin
-              .from('veiculos')
-              .select('placa, marca, modelo')
-              .eq('id', body.veiculo_id)
-              .single();
-            if (veiculo?.placa) {
-              placa = veiculo.placa;
-              marcaModelo = [veiculo.marca, veiculo.modelo].filter(Boolean).join(' ') || 'seu veículo';
-            }
-          }
-
-          // Buscar plano/cobertura do associado
-          let cobertura = 'Roubo e Furto';
-          if (associado.plano_id) {
-            const { data: plano } = await supabaseAdmin
-              .from('planos')
-              .select('nome')
-              .eq('id', associado.plano_id)
-              .single();
-            if (plano?.nome) cobertura = plano.nome;
-          }
-
-          // Gerar token de primeiro acesso (48h)
-          const tokenPrimeiroAcesso = crypto.randomUUID();
-          const expiraEm = new Date(Date.now() + 48 * 60 * 60 * 1000);
-
-          // Invalidar tokens anteriores
-          await supabaseAdmin
-            .from('auth_tokens_primeiro_acesso')
-            .update({ usado: true, usado_em: new Date().toISOString() })
-            .eq('associado_id', associado.id)
-            .eq('usado', false);
-
-          // Salvar novo token
-          await supabaseAdmin
-            .from('auth_tokens_primeiro_acesso')
-            .insert({
-              associado_id: associado.id,
-              token: tokenPrimeiroAcesso,
-              expira_em: expiraEm.toISOString(),
-              usado: false
-            });
-
-          // Buscar link_token do contrato para o botão /acompanhar/{{1}}
-          let linkToken: string | null = null;
-          
-          // Prioridade: contrato do veículo específico
-          if (body.veiculo_id) {
-            const { data: contratoVeiculo } = await supabaseAdmin
-              .from('contratos')
-              .select('link_token')
-              .eq('associado_id', associado.id)
-              .eq('veiculo_id', body.veiculo_id)
-              .in('status', ['ativo', 'assinado', 'pendente_assinatura'])
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            linkToken = contratoVeiculo?.link_token || null;
-          }
-          
-          // Fallback: qualquer contrato ativo do associado
-          if (!linkToken) {
-            const { data: contratoFallback } = await supabaseAdmin
-              .from('contratos')
-              .select('link_token')
-              .eq('associado_id', associado.id)
-              .in('status', ['ativo', 'assinado', 'pendente_assinatura'])
-              .order('created_at', { ascending: false })
-              .limit(1)
-              .maybeSingle();
-            linkToken = contratoFallback?.link_token || null;
-          }
-
-          console.log(`[ativar-associado] link_token resolvido: ${linkToken} (veiculo_id: ${body.veiculo_id})`);
-
-          // Template cadastro_aprovado_botao: 5 body params + 1 button param separado
-          // Body: {{1}} nome, {{2}} placa, {{3}} marca+modelo, {{4}} cobertura, {{5}} próximo passo
-          // Button URL: .../acompanhar/{{1}} → DEVE ser contratos.link_token
-          sendBody.template_name = 'cadastro_aprovado_botao';
-          sendBody.template_params = [primeiroNome, placa, marcaModelo, cobertura, 'Instalação do rastreador'];
-          
-          if (linkToken) {
-            sendBody.template_button_params = [linkToken];
-          } else {
-            console.warn(`[ativar-associado] ⚠️ Nenhum link_token encontrado para associado ${associado.id}. Botão de URL pode não funcionar.`);
-            // Enviar tokenPrimeiroAcesso como fallback para não quebrar o envio
-            sendBody.template_button_params = [tokenPrimeiroAcesso];
-          }
-          
-          console.log(`[ativar-associado] Usando template Meta 'cadastro_aprovado_botao' para ${telefoneWhatsapp}`);
-        }
-
-        await supabaseAdmin.functions.invoke('whatsapp-send-text', {
-          body: sendBody,
-        });
-        console.log('WhatsApp enviado');
-      } catch (whatsappError) {
-        console.error('Erro ao enviar WhatsApp:', whatsappError);
-      }
-    }
+    // Enviar WhatsApp usando função reutilizável
+    await enviarWhatsAppBoasVindas(supabaseAdmin, associado, body);
 
     // Registrar histórico
     await supabaseAdmin
