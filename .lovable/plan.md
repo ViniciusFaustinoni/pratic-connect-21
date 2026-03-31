@@ -1,30 +1,36 @@
 
 
-# Adicionar Configuração de Carência nos Formulários de Gestão Comercial
+# Diagnóstico: Por que alguns templates WhatsApp não são disparados
 
-## Problema
-Os formulários de cobertura e benefício na **Gestão Comercial** (`CatalogoCoberturasBeneficios.tsx`) não possuem a seção de carência. O componente `CarenciaConfigSection` já existe e é usado nos formulários antigos do admin, mas não foi integrado aqui.
+## Problemas identificados
 
-## Solução
+### 1. Nome de parâmetros errados (4 edge functions)
+As funções `autentique-create`, `autentique-create-by-token`, `autentique-vistoria-create` e `autentique-evento-create` enviam `params` e `button_params`, mas o `whatsapp-send-text` espera `template_params` e `template_button_params`. Resultado: o template é enviado **sem variáveis** → Meta rejeita por mismatch de parâmetros.
 
-### `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx`
+### 2. Nome de parâmetros errados no frontend (`useServicos.ts`)
+O envio do template `assinatura_instalacao_v1` usa `template_nome`, `template_variaveis` e `template_botao_variaveis` em vez de `template_name`, `template_params` e `template_button_params`. Resultado: o template é completamente ignorado e a mensagem é tratada como texto livre → bloqueada pela Meta.
 
-**Para ambos os sheets (CoberturaSheet e BeneficioSheet):**
+### 3. Envio sem `template_name` (`efetivar-troca-titularidade`)
+A função envia apenas `telefone` e `mensagem` (texto livre) sem template → bloqueado pela Meta fora da janela 24h. Deveria usar `cadastro_aprovado_botao` ou `notificacao_geral_v1`.
 
-1. Importar `CarenciaConfigSection` de `@/components/admin/planos/CarenciaConfigSection`
-2. Adicionar estado para os campos de carência (`carencia_ativa`, `carencia_tipo`, `carencia_dias`, `carencia_multiplicador`)
-3. Carregar valores existentes do item ao abrir (usando campos da tabela `coberturas` ou `benefits`)
-4. Renderizar `<CarenciaConfigSection>` entre o campo Valor e o `EligibilityConfigSection`
-5. Incluir os campos de carência no payload do `mutationFn` ao salvar
+### 4. Fallback para texto livre no `useServicos.ts`
+Quando o template `assinatura_instalacao_v1` não está APPROVED, o fallback envia texto livre sem `template_name` nem `allow_text` → bloqueado pela Meta.
 
-**CoberturaSheet** — payload adicional:
-```ts
-carencia_ativa, carencia_tipo, carencia_dias, carencia_multiplicador
-```
+## Correções
 
-**BeneficioSheet** — idem, usando os mesmos campos da tabela `benefits`
+| Arquivo | Problema | Correção |
+|---|---|---|
+| `supabase/functions/autentique-create/index.ts` | `params` → ignorado | Renomear para `template_params` e `template_button_params` |
+| `supabase/functions/autentique-create-by-token/index.ts` | idem | idem |
+| `supabase/functions/autentique-vistoria-create/index.ts` | idem | idem |
+| `supabase/functions/autentique-evento-create/index.ts` | idem | idem |
+| `src/hooks/useServicos.ts` | `template_nome`, `template_variaveis`, `template_botao_variaveis` | Renomear para `template_name`, `template_params`, `template_button_params`; adicionar `mensagem` obrigatória |
+| `supabase/functions/efetivar-troca-titularidade/index.ts` | Sem template_name | Adicionar `template_name: 'cadastro_aprovado_botao'` com params adequados |
+| Redeploy das 5 edge functions afetadas | — | Deploy automático |
 
-| Arquivo | Ação |
-|---|---|
-| `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx` | Adicionar `CarenciaConfigSection` + estado + persistência em ambos os sheets |
+## Impacto
+
+Essas correções cobrem **todos os cenários onde mensagens são silenciosamente bloqueadas**. Após a correção, o fluxo será:
+- Template APPROVED → envio com parâmetros corretos → entrega garantida
+- Template PENDING → erro explícito no log (sem envio silencioso quebrado)
 
