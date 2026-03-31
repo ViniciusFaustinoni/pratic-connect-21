@@ -687,7 +687,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
         if (allItemRules.length > 0) {
           const passed = checkAllRules(allItemRules, vehicleCtx);
-          console.log(`[DEBUG-ELIG] Benefit "${benefitName}" rules=${allItemRules.length} passed=${passed}`, allItemRules.map(r => `${r.rule_type}:${r.rule_mode}`));
+          // benefício elegibilidade check
           if (!passed && !coberturasRemovidas.includes(benefitName)) {
             coberturasRemovidas.push(benefitName);
           }
