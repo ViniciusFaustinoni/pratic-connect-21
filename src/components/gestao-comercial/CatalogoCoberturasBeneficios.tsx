@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { EligibilityConfigSection, useEligibilityState, saveEligibilityRules, hasEligibilityRules } from './EligibilityConfigSection';
 import { useRulesForEntity } from '@/hooks/useEntityEligibilityRules';
+import { CarenciaConfigSection } from '@/components/admin/planos/CarenciaConfigSection';
 
 
 // ── Delete Confirmation Dialog ──
