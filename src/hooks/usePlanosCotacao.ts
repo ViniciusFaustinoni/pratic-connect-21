@@ -571,8 +571,19 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         return acc + Number(valor);
       }, 0);
 
-      // Soma dos valores dos benefícios vinculados (usando preco_sugerido)
+      // Soma dos valores dos benefícios vinculados (resolve FIPE variável quando disponível)
       const somaBeneficios = (plano.planos_beneficios || []).reduce((acc: number, pb: any) => {
+        // Verificar se o benefício tem regra fipe_range para precificação segmentada
+        const fipeRule = allEligibilityRules.find(
+          r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id
+            && r.rule_type === 'fipe_range' && r.is_active
+        );
+        if (fipeRule) {
+          const faixas = (fipeRule.rule_config as any)?.faixas || [];
+          const faixa = faixas.find((f: any) => valorFipe >= f.de && valorFipe < f.ate);
+          return acc + (faixa ? Number(faixa.valor) : 0);
+        }
+        // Sem fipe_range: usar preco_sugerido estático
         const preco = pb.benefits?.preco_sugerido || 0;
         return acc + Number(preco);
       }, 0);
