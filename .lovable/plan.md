@@ -1,11 +1,11 @@
 
 
-# Remover bloco de carências do Cotador Rápido
+# Remover bloco de carências do Dialog de Cotação Rápida
 
-## O que será feito
-Remover o `Alert` de carências (linhas 1914-1931) do arquivo `src/pages/vendas/Cotador.tsx` que exibe "Carência geral: X dias" e "Carência vidros/faróis: X dias".
+## Causa raiz
+O bloco de carência foi removido do `Cotador.tsx`, mas a tela visível na imagem é o **CotacaoFormDialog.tsx** — um componente diferente que também exibe o mesmo bloco.
 
-## Detalhe técnico
-- Arquivo: `src/pages/vendas/Cotador.tsx`
-- Deletar linhas 1914-1931 (o bloco `{/* Carência */}` com o `<Alert>` azul contendo as duas divs de carência)
+## Correção
+- **Arquivo**: `src/components/cotacoes/CotacaoFormDialog.tsx`
+- **Ação**: Deletar linhas **2091-2108** (o `{/* Carência */}` com o `<Alert>` azul contendo "Carência geral" e "Carência vidros/faróis")
 
