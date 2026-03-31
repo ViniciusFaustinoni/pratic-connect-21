@@ -184,7 +184,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('planos_coberturas')
-        .select('plano_id, cobertura_id, coberturas:cobertura_id (valor, varia_com_fipe)');
+        .select('plano_id, cobertura_id, coberturas:cobertura_id (valor)');
       if (error) throw error;
       return data;
     },
