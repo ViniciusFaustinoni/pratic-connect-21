@@ -1344,20 +1344,18 @@ const desenharPaginaDetalhesPlano = (
 
   // Calculate dynamic card height based on content
   let dynamicCardContentH = 10; // top padding
-  dynamicCardContentH += 14; // plan name row  
-  dynamicCardContentH += 18; // badges row (FIPE + ano)
+  dynamicCardContentH += 14; // badges row (FIPE + ano)
   
   if (plano.cotaPercentual && plano.cotaMinima) dynamicCardContentH += 12;
   if (plano.cotaDesagio && plano.cotaMinimaDesagio) dynamicCardContentH += 12;
   
-  dynamicCardContentH += 8; // bottom padding
+  dynamicCardContentH += 6; // bottom padding
   
-  // Price section needs at least 28 (font size) + spacing
-  const priceBlockH = 32;
-  // Card height = max between left content and right price block, with minimum
-  const valorCardHeight = Math.max(dynamicCardContentH, priceBlockH + 16);
+  // Price block on the right side
+  const priceBlockH = 30;
+  const valorCardHeight = Math.max(dynamicCardContentH, priceBlockH + 10);
   
-  drawPremiumCard(doc, margin, y, contentWidth, valorCardHeight, { isRecommended: true, hasGlow: true });
+  drawPremiumCard(doc, margin, y, contentWidth, valorCardHeight, { hasGlow: true });
 
   let cardY = y + 10;
 
