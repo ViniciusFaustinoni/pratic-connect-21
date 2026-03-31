@@ -108,7 +108,7 @@ serve(async (req) => {
 
     // Buscar veículo pela placa
     console.log(`[SGA Verificar] Buscando veículo com placa: ${placaLimpa}`);
-    const veiculoResponse = await fetch(`${hinovaApiUrl}/veiculo/buscar/${placaLimpa}`, {
+    const veiculoResponse = await fetch(`${hinovaApiUrl}/veiculo/buscar/${placaLimpa}/placa`, {
       method: 'GET',
       headers: {
         'Content-Type': 'application/json',
