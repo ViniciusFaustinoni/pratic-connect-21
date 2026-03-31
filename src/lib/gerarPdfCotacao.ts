@@ -1269,7 +1269,7 @@ const desenharPaginaCapa = (
     const cardWidth = (contentWidth - cardGap) / 2;
     cotacao.planosComparar.forEach((plano, index) => {
       const cardX = margin + (cardWidth + cardGap) * index;
-      desenharCardPlanoExpandido(doc, plano, cardX, y, cardWidth, index, index === planoRecomendadoIndex, false, maxCardHeight);
+      desenharCardPlanoExpandido(doc, plano, cardX, y, cardWidth, index, index === planoRecomendadoIndex, true, maxCardHeight);
     });
     
   } else {
