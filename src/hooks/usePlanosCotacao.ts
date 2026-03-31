@@ -710,7 +710,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
-      console.log(`[DEBUG-ELIG] Final coberturasRemovidas for ${plano.nome}:`, [...coberturasRemovidas]);
+      
 
       const alertaDesagio = gerarMensagemAlertaCategoria(categoria, benefitExclusions || []) || undefined;
 
