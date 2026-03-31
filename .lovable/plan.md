@@ -1,24 +1,40 @@
 
 
-# Fix: Itens com preço variável por FIPE mostram R$ 0,00 no formulário do plano
+# Fix: Mensagem WhatsApp não enviada na aprovação de roubo/furto
 
-## Problema
-Coberturas/benefícios configurados com "Varia com FIPE" têm o campo estático (`valor` / `preco_sugerido`) zerado — o preço real está nas regras `fipe_range` da tabela `entity_eligibility_rules`. O formulário do plano só lê o campo estático, então exibe R$ 0,00.
+## Causa raiz
 
-## Solução
+Na edge function `ativar-associado` (linhas 103-126), quando o associado **já possui `user_id`** (já foi ativado anteriormente), a função retorna imediatamente após enviar apenas um email de "rastreador ativado" — **sem enviar o WhatsApp com o template `cadastro_aprovado_botao`**.
 
-### Arquivo: `src/components/gestao-comercial/PlanoFormSheet.tsx`
+Isso acontece porque:
+1. O analista aprova a cobertura roubo/furto
+2. `useAprovarProposta` chama `ativar-associado`
+3. Se o associado já tem conta (ex: reaprovação, segundo veículo, etc.), o early return na linha 104 pula todo o bloco de WhatsApp (linhas 226-349)
 
-1. **Buscar regras `fipe_range` ativas** para todas as coberturas e benefícios (uma query adicional ao montar o formulário)
+## Correção
 
-2. **Exibir "Variável" em vez de R$ 0,00** — para itens que possuem regra `fipe_range`, mostrar um badge "Variável por FIPE" no lugar do preço estático
+### Arquivo: `supabase/functions/ativar-associado/index.ts`
 
-3. **Ajustar o cálculo de `valorTotal`** — excluir itens com `fipe_range` da soma (já que o valor depende do veículo), e exibir uma nota "(+ itens variáveis)" ao lado do total quando houver itens FIPE-variáveis selecionados
+No bloco de early return (linhas 104-126), adicionar o envio do template WhatsApp `cadastro_aprovado_botao` **antes** de retornar. O fluxo será:
 
-### Detalhes técnicos
+1. Manter a verificação `if (associado.user_id)` 
+2. Dentro desse bloco, buscar dados do veículo (placa, marca/modelo), plano, e link_token do contrato
+3. Enviar o template `cadastro_aprovado_botao` via `whatsapp-send-text` com os mesmos parâmetros usados no fluxo normal
+4. Manter o email existente
+5. Retornar com a resposta de sucesso
 
-- Nova query: `entity_eligibility_rules` filtrada por `rule_type = 'fipe_range'` e `is_active = true`
-- Criar um `Set<string>` de entity_ids que têm fipe_range
-- Na renderização de cada item: se está no set, mostrar badge "Variável por FIPE" em vez do valor
-- No `valorTotal`: adicionar flag `temVariaveis` para indicar que o total é parcial
+Essencialmente, duplicar a lógica de envio WhatsApp (linhas 226-349) para dentro do bloco de "já possui acesso", ou extrair essa lógica para uma função reutilizável chamada nos dois caminhos.
+
+### Abordagem técnica
+
+Extrair uma função `enviarWhatsAppBoasVindas(supabaseAdmin, associado, body)` que encapsula:
+- Verificação da Meta config
+- Busca de placa/marca/modelo
+- Busca de cobertura/plano
+- Geração de token e link_token
+- Montagem e envio do template
+
+Chamar essa função tanto no bloco de early return (user_id existe) quanto no fluxo normal (após criação do usuário).
+
+Deploy da edge function após a alteração.
 
