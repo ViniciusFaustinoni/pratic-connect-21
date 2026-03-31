@@ -37,24 +37,33 @@ export interface EligibilityState {
   selCombustivel: Set<string>;
 }
 
+const EMPTY_RULES: EligibilityRule[] = [];
+
+const createEmptyState = (): EligibilityState => ({
+  elegFipeMin: '', elegFipeMax: '',
+  variaComFipe: false, fipeMin: '', fipeMax: '', fipeIntervalo: '', fipeValoresFaixa: {},
+  selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set(),
+});
+
 export function useEligibilityState(entityType: EntityType, entityId: string | undefined) {
-  const { data: existingRules = [] } = useRulesForEntity(entityType, entityId);
+  const { data: existingRules = EMPTY_RULES } = useRulesForEntity(entityType, entityId);
 
-  const emptyState: EligibilityState = {
-    elegFipeMin: '', elegFipeMax: '',
-    variaComFipe: false, fipeMin: '', fipeMax: '', fipeIntervalo: '', fipeValoresFaixa: {},
-    selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set(),
-  };
-
-  const [state, setState] = useState<EligibilityState>(emptyState);
+  const [state, setState] = useState<EligibilityState>(createEmptyState);
+  const [initialized, setInitialized] = useState<string | undefined>(undefined);
 
   useEffect(() => {
+    // Only reset when entityId actually changes or rules load
+    if (entityId === initialized && existingRules === EMPTY_RULES) return;
+
     if (!entityId || existingRules.length === 0) {
-      setState(emptyState);
+      if (entityId !== initialized) {
+        setState(createEmptyState());
+        setInitialized(entityId);
+      }
       return;
     }
 
-    const newState: EligibilityState = { ...emptyState, selRegioes: new Set(), selUso: new Set(), selPlaca: new Set(), selCombustivel: new Set(), elegFipeMin: '', elegFipeMax: '' };
+    const newState = createEmptyState();
 
     for (const rule of existingRules) {
       const cfg = rule.rule_config as any;
@@ -85,7 +94,6 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
         case 'combustivel':
           newState.selCombustivel = new Set(cfg.values || []);
           break;
-        // tipo_placa stored as a custom rule_type or reuse existing
         default:
           if (rule.rule_type === ('tipo_placa' as any)) {
             newState.selPlaca = new Set(cfg.values || []);
@@ -95,6 +103,7 @@ export function useEligibilityState(entityType: EntityType, entityId: string | u
     }
 
     setState(newState);
+    setInitialized(entityId);
   }, [entityId, existingRules]);
 
   return { state, setState };
