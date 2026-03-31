@@ -245,7 +245,26 @@ export function LinhasPlanos() {
       <div className="space-y-2">
         {linhas.map(linha => (
           <Collapsible key={linha.id} open={openLines.has(linha.id)} onOpenChange={() => toggleLine(linha.id)}>
-            <div className="border rounded-lg overflow-hidden">
+            <div
+              className={cn('border rounded-lg overflow-hidden transition-all', dragOverLineId === linha.id && draggedPlan?.fromLineId !== linha.id && 'ring-2 ring-primary')}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (draggedPlan && draggedPlan.fromLineId !== linha.id) {
+                  setDragOverLineId(linha.id);
+                  if (!openLines.has(linha.id)) {
+                    setOpenLines(prev => new Set(prev).add(linha.id));
+                  }
+                }
+              }}
+              onDragLeave={() => setDragOverLineId(null)}
+              onDrop={() => {
+                if (draggedPlan && draggedPlan.fromLineId !== linha.id) {
+                  movePlan.mutate({ planId: draggedPlan.id, newLineId: linha.id });
+                }
+                setDragOverLineId(null);
+                setDraggedPlan(null);
+              }}
+            >
               <CollapsibleTrigger className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left">
                 <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform', openLines.has(linha.id) && 'rotate-90')} />
                 <div className="flex-1 min-w-0">
