@@ -1251,13 +1251,14 @@ const desenharPaginaCapa = (
   const cardGap = 6;
   const planoRecomendadoIndex = numPlanos > 1 ? 0 : -1;
 
-  // Pre-calculate max card height for equalization
-  const isCompact = numPlanos >= 3;
+  // Pre-calculate max card height for equalization, bounded to available space
+  const isCompact = numPlanos >= 3 || numPlanos === 2;
   const allHeights = cotacao.planosComparar.map(p => calcularAlturaCardPlano(doc, p, 
     numPlanos === 1 ? contentWidth * 0.6 : 
     numPlanos === 2 ? (contentWidth - cardGap) / 2 : 
     (contentWidth - (cardGap * 2)) / 3, isCompact));
-  const maxCardHeight = Math.max(...allHeights);
+  const availableCardHeight = pageHeight - 20 - y - 8; // footer(20) + padding
+  const maxCardHeight = Math.min(Math.max(...allHeights), availableCardHeight);
 
   if (numPlanos === 1) {
     const cardWidth = contentWidth * 0.6;
