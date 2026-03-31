@@ -580,7 +580,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('TAXA DE FILIAÇÃO:', margin + 15, y + 46);
+  doc.text('TAXA DE ADESÃO:', margin + 15, y + 46);
   doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
   doc.setFontSize(14);
   doc.text(formatCurrency(cotacao.valor_adesao), pageWidth - margin - 15, y + 46, { align: 'right' });
