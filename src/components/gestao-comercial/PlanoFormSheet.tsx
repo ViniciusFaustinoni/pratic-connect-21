@@ -214,6 +214,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
               <div className="bg-primary/10 text-primary px-4 py-2 rounded-lg text-center">
                 <p className="text-[10px] uppercase tracking-wider font-medium">Valor Mensal</p>
                 <p className="text-xl font-bold">R$ {valorTotal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</p>
+                {temVariaveis && <p className="text-[10px] text-muted-foreground">(+ itens variáveis por FIPE)</p>}
               </div>
             </div>
             <div><Label>Nome do Plano</Label><Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Select Plus" autoFocus /></div>
