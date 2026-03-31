@@ -184,7 +184,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     queryFn: async () => {
       const { data, error } = await supabase
         .from('planos_coberturas')
-        .select('plano_id, cobertura_id, coberturas:cobertura_id (valor, varia_com_fipe)');
+        .select('plano_id, cobertura_id, coberturas:cobertura_id (valor)');
       if (error) throw error;
       return data;
     },
@@ -542,8 +542,22 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // === NOVO MODELO: Preço = Σ coberturas + Σ benefícios + taxa administrativa ===
       
       // Soma dos valores das coberturas vinculadas ao plano
+      // Se a cobertura tem fipe_range, usa o valor segmentado pela FIPE do veículo
       const coberturasDoPlano = (planoCoberturasData || []).filter(pc => pc.plano_id === plano.id);
       const somaCoberturas = coberturasDoPlano.reduce((acc, pc) => {
+        const cobId = (pc as any).cobertura_id;
+        // Procurar regra fipe_range para esta cobertura
+        const fipeRangeRule = allEligibilityRules.find(
+          r => r.entity_type === 'cobertura' && r.entity_id === cobId && r.rule_type === 'fipe_range' && r.is_active
+        );
+        if (fipeRangeRule) {
+          // Resolver preço pela faixa FIPE do veículo
+          const faixas = (fipeRangeRule.rule_config as any)?.faixas || [];
+          const faixa = faixas.find((f: any) => valorFipe >= f.de && valorFipe < f.ate);
+          const valorFipe_resolved = faixa ? Number(faixa.valor) : 0;
+          return acc + valorFipe_resolved;
+        }
+        // Sem fipe_range: usar valor estático da cobertura
         const valor = (pc as any).coberturas?.valor || 0;
         return acc + Number(valor);
       }, 0);
