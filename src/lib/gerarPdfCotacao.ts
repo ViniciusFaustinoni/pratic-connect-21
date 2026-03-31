@@ -572,7 +572,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setFont('helvetica', 'normal');
   doc.text('valor médio mensal', pageWidth - margin - 15, y + 27, { align: 'right' });
 
-  // Taxa de Filiação destacada dentro do card
+  // Taxa de Adesão destacada dentro do card
   doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
   doc.setLineWidth(0.5);
   doc.line(margin + 10, y + 35, pageWidth - margin - 10, y + 35);
@@ -580,7 +580,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
   doc.setFontSize(11);
   doc.setFont('helvetica', 'bold');
-  doc.text('TAXA DE FILIAÇÃO:', margin + 15, y + 46);
+  doc.text('TAXA DE ADESÃO:', margin + 15, y + 46);
   doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
   doc.setFontSize(14);
   doc.text(formatCurrency(cotacao.valor_adesao), pageWidth - margin - 15, y + 46, { align: 'right' });
@@ -744,7 +744,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('TAXA DE FILIAÇÃO (pagamento único)', labelCol, y + 12);
+  doc.text('TAXA DE ADESÃO (pagamento único)', labelCol, y + 12);
   doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
   doc.setFontSize(14);
   doc.text(formatCurrency(cotacao.valor_adesao), valueCol, y + 12, { align: 'right' });
@@ -948,10 +948,21 @@ const calcularAlturaCardPlano = (
   width: number,
   compact: boolean = false
 ): number => {
+  const padding = 6;
   const lineHeight = compact ? 5.5 : 7;
-  const numCoberturas = plano.coberturas.length;
+  const coberturaFontSize = compact ? 7 : 9;
+  const textMaxWidth = width - padding * 2 - 10;
+  
+  // Calculate total lines needed for coberturas (accounting for text wrapping)
+  doc.setFontSize(coberturaFontSize);
+  let totalCoberturaLines = 0;
+  plano.coberturas.forEach(cobertura => {
+    const wrappedLines = doc.splitTextToSize(cobertura, textMaxWidth);
+    totalCoberturaLines += wrappedLines.length;
+  });
+  
   // header(22) + price(18) + coberturas + separator(6) + invest(26) + bottom padding(4)
-  return 22 + 18 + (numCoberturas * lineHeight) + 6 + 26 + 4;
+  return 22 + 18 + (totalCoberturaLines * lineHeight) + 6 + 26 + 4;
 };
 
 const desenharCardPlanoExpandido = (
@@ -979,6 +990,21 @@ const desenharCardPlanoExpandido = (
     isRecommended, 
     hasGlow: true 
   });
+  
+  // Badge "MAIS COMPLETO" for recommended plan
+  if (isRecommended) {
+    const badgeText = 'MAIS COMPLETO';
+    const badgeW = 38;
+    const badgeH = 7;
+    const badgeX = x + (width - badgeW) / 2;
+    const badgeY = y - badgeH / 2;
+    doc.setFillColor(218, 165, 32); // gold
+    doc.roundedRect(badgeX, badgeY, badgeW, badgeH, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(6);
+    doc.setFont('helvetica', 'bold');
+    doc.text(badgeText, badgeX + badgeW / 2, badgeY + 5, { align: 'center' });
+  }
   
   let currentY = y + 6;
 
@@ -1030,7 +1056,16 @@ const desenharCardPlanoExpandido = (
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(coberturaFontSize);
     doc.setFont('helvetica', 'normal');
-    doc.text(truncateText(cobertura, maxChars), x + padding + 8, currentY);
+    
+    // Use splitTextToSize instead of truncateText to allow wrapping
+    const textMaxWidth = width - padding * 2 - 10;
+    const wrappedLines = doc.splitTextToSize(cobertura, textMaxWidth);
+    wrappedLines.forEach((line: string, lineIdx: number) => {
+      doc.text(line, x + padding + 8, currentY);
+      if (lineIdx < wrappedLines.length - 1) {
+        currentY += lineHeight;
+      }
+    });
     
     currentY += lineHeight;
   });
@@ -1066,13 +1101,13 @@ const desenharCardPlanoExpandido = (
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
-  doc.text('Taxa de Filiação:', x + padding + 2, investBoxY + 13);
+  doc.text('Taxa de Adesão:', x + padding + 2, investBoxY + 13);
   doc.setTextColor(textLight.r, textLight.g, textLight.b);
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(plano.valorAdesao), x + width - padding - 2, investBoxY + 13, { align: 'right' });
 
   // Primeiro pagamento
-  const primPag = plano.valorAdesao + plano.valorMensal;
+  const primPag = plano.valorAdesao;
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
@@ -1352,8 +1387,8 @@ const desenharPaginaDetalhesPlano = (
   dynamicCardContentH += 6; // bottom padding
   
   // Price block on the right side
-  const priceBlockH = 30;
-  const valorCardHeight = Math.max(dynamicCardContentH, priceBlockH + 10);
+  const priceBlockH = 20;
+  const valorCardHeight = Math.max(dynamicCardContentH, priceBlockH + 6);
   
   drawPremiumCard(doc, margin, y, contentWidth, valorCardHeight, { hasGlow: true });
 
@@ -1417,8 +1452,8 @@ const desenharPaginaDetalhesPlano = (
     cardY += 12;
   }
 
-  // Price — positioned right-aligned, vertically centered in card
-  const priceY = y + valorCardHeight / 2 - 4;
+  // Price — positioned right-aligned, aligned with content top area
+  const priceY = y + 16;
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
@@ -1780,8 +1815,8 @@ const desenharPaginaComparativoCoberturas = (
     y += rowHeight;
   });
 
-  // Rodapé simples com paginação
-  const footerY = pageHeight - 20;
+  // Rodapé simples com paginação — dinâmico, sem espaço excessivo
+  const footerY = Math.max(y + 15, pageHeight - 20);
   doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
   doc.rect(0, footerY, pageWidth, 20, 'F');
   drawGradientRect(doc, margin, footerY - 2, contentWidth, 2, glowBlue, brandRed, 50);
