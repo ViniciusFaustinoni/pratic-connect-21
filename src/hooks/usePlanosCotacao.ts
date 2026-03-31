@@ -668,21 +668,38 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       const coberturasRemovidas = getCoberturasRemovidasDinamico(categoria, benefitExclusions || []);
 
-      // Verificar regras unificadas de coberturas e benefícios individuais
+      // Verificar regras unificadas de benefícios individuais (excluindo fipe_range que é precificação)
       const beneficiosDoPlano = plano.planos_beneficios || [];
       for (const pb of beneficiosDoPlano) {
-        // Verificar regras de benefício
-        const benefitRules = allEligibilityRules.filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id);
-        // Verificar regras de cobertura (se o benefício tem cobertura vinculada)
+        // Filtrar fipe_range: é regra de precificação, não de elegibilidade
+        const benefitRules = allEligibilityRules
+          .filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id)
+          .filter(r => r.rule_type !== 'fipe_range');
         const coberturaId = (pb as any).cobertura_id || (pb as any).benefits?.cobertura_id;
         const coberturaRules = coberturaId
-          ? allEligibilityRules.filter(r => r.entity_type === 'cobertura' && r.entity_id === coberturaId)
+          ? allEligibilityRules
+              .filter(r => r.entity_type === 'cobertura' && r.entity_id === coberturaId)
+              .filter(r => r.rule_type !== 'fipe_range')
           : [];
         const allItemRules = [...benefitRules, ...coberturaRules];
         if (allItemRules.length > 0 && !checkAllRules(allItemRules, vehicleCtx)) {
           const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
           if (!coberturasRemovidas.includes(benefitName)) {
             coberturasRemovidas.push(benefitName);
+          }
+        }
+      }
+
+      // Verificar regras de elegibilidade para coberturas individuais (excluindo fipe_range)
+      for (const pc of coberturasDoPlano) {
+        const cobId = (pc as any).cobertura_id;
+        const cobRules = allEligibilityRules
+          .filter(r => r.entity_type === 'cobertura' && r.entity_id === cobId)
+          .filter(r => r.rule_type !== 'fipe_range');
+        if (cobRules.length > 0 && !checkAllRules(cobRules, vehicleCtx)) {
+          const cobNome = (pc as any).coberturas?.nome;
+          if (cobNome && !coberturasRemovidas.includes(cobNome)) {
+            coberturasRemovidas.push(cobNome);
           }
         }
       }
