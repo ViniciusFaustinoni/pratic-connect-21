@@ -169,7 +169,10 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
     case 'regiao': {
       const regioes: string[] = cfg.regioes || cfg.values || [];
       if (regioes.length === 0) return true;
-      const match = !!ctx.regiao && regioes.some(r => r.toLowerCase() === ctx.regiao!.toLowerCase());
+      // Compare against regiaoId (UUID) first, then fallback to slug
+      const matchById = !!ctx.regiaoId && regioes.some(r => r === ctx.regiaoId);
+      const matchBySlug = !!ctx.regiao && regioes.some(r => r.toLowerCase() === ctx.regiao!.toLowerCase());
+      const match = matchById || matchBySlug;
       return isInclude ? match : !match;
     }
     case 'marca_modelo': {
