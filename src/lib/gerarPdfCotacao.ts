@@ -1081,7 +1081,7 @@ const desenharCardPlanoExpandido = (
   doc.text(formatCurrency(plano.valorAdesao), x + width - padding - 2, investBoxY + 13, { align: 'right' });
 
   // Primeiro pagamento
-  const primPag = plano.valorAdesao + plano.valorMensal;
+  const primPag = plano.valorAdesao;
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFontSize(7);
   doc.setFont('helvetica', 'bold');
