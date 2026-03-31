@@ -125,6 +125,18 @@ function useDeleteLinha() {
   });
 }
 
+function useMovePlanToLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ planId, newLineId }: { planId: string; newLineId: string }) => {
+      const { error } = await supabase.from('planos').update({ product_line_id: newLineId }).eq('id', planId);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] }); toast.success('Plano movido para nova linha'); },
+    onError: () => toast.error('Erro ao mover plano'),
+  });
+}
+
 function useDeletePlano() {
   const qc = useQueryClient();
   return useMutation({
