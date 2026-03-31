@@ -15,6 +15,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { EligibilityConfigSection, useEligibilityState, saveEligibilityRules, hasEligibilityRules } from './EligibilityConfigSection';
 import { useRulesForEntity } from '@/hooks/useEntityEligibilityRules';
+import { CarenciaConfigSection } from '@/components/admin/planos/CarenciaConfigSection';
 
 
 // ── Delete Confirmation Dialog ──
@@ -75,6 +76,12 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
   const [descricao, setDescricao] = useState('');
   const [valor, setValor] = useState('0');
   const [variaComFipe, setVariaComFipe] = useState(false);
+  const [carenciaConfig, setCarenciaConfig] = useState({
+    carencia_ativa: false,
+    carencia_tipo: 'liberacao',
+    carencia_dias: '0',
+    carencia_multiplicador: '1',
+  });
 
   const { state: eligState, setState: setEligState } = useEligibilityState('cobertura', item?.id);
 
@@ -82,11 +89,23 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
     setNome(item?.nome || '');
     setDescricao(item?.descricao || '');
     setValor(item?.valor?.toString() || '0');
+    setCarenciaConfig({
+      carencia_ativa: item?.carencia_ativa || false,
+      carencia_tipo: item?.carencia_tipo || 'liberacao',
+      carencia_dias: item?.carencia_dias?.toString() || '0',
+      carencia_multiplicador: item?.carencia_multiplicador?.toString() || '1',
+    });
   }, [item, open]);
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const payload = { nome, descricao, valor: parseFloat(valor) || 0 };
+      const payload = {
+        nome, descricao, valor: parseFloat(valor) || 0,
+        carencia_ativa: carenciaConfig.carencia_ativa,
+        carencia_tipo: carenciaConfig.carencia_tipo,
+        carencia_dias: parseInt(carenciaConfig.carencia_dias) || 0,
+        carencia_multiplicador: parseFloat(carenciaConfig.carencia_multiplicador) || 1,
+      };
       let entityId = item?.id;
       if (entityId) {
         const { error } = await supabase.from('coberturas').update(payload).eq('id', entityId);
@@ -123,6 +142,8 @@ function CoberturaSheet({ open, onClose, item }: { open: boolean; onClose: () =>
             <div><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={valor} onChange={e => setValor(e.target.value)} /></div>
           )}
 
+          <CarenciaConfigSection config={carenciaConfig} onChange={setCarenciaConfig} />
+
           <EligibilityConfigSection entityType="cobertura" entityId={item?.id} onVariaComFipeChange={setVariaComFipe} externalState={{ state: eligState, setState: setEligState }} />
 
           <div className="flex gap-2 pt-4">
@@ -145,6 +166,12 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
   const [description, setDescription] = useState('');
   const [valor, setValor] = useState('0');
   const [variaComFipe, setVariaComFipe] = useState(false);
+  const [carenciaConfig, setCarenciaConfig] = useState({
+    carencia_ativa: false,
+    carencia_tipo: 'liberacao',
+    carencia_dias: '0',
+    carencia_multiplicador: '1',
+  });
 
   const { state: eligState, setState: setEligState } = useEligibilityState('beneficio', item?.id);
 
@@ -152,11 +179,23 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
     setName(item?.name || '');
     setDescription(item?.description || '');
     setValor(item?.preco_sugerido?.toString() || '0');
+    setCarenciaConfig({
+      carencia_ativa: item?.carencia_ativa || false,
+      carencia_tipo: item?.carencia_tipo || 'liberacao',
+      carencia_dias: item?.carencia_dias?.toString() || '0',
+      carencia_multiplicador: item?.carencia_multiplicador?.toString() || '1',
+    });
   }, [item, open]);
 
   const mutation = useMutation({
     mutationFn: async () => {
-      const payload = { name, description, preco_sugerido: parseFloat(valor) || 0 };
+      const payload = {
+        name, description, preco_sugerido: parseFloat(valor) || 0,
+        carencia_ativa: carenciaConfig.carencia_ativa,
+        carencia_tipo: carenciaConfig.carencia_tipo,
+        carencia_dias: parseInt(carenciaConfig.carencia_dias) || 0,
+        carencia_multiplicador: parseFloat(carenciaConfig.carencia_multiplicador) || 1,
+      };
       let entityId = item?.id;
       if (entityId) {
         const { error } = await supabase.from('benefits').update(payload).eq('id', entityId);
@@ -192,6 +231,8 @@ function BeneficioSheet({ open, onClose, item }: { open: boolean; onClose: () =>
           {!variaComFipe && (
             <div><Label>Valor (R$)</Label><Input type="number" step="0.01" min="0" value={valor} onChange={e => setValor(e.target.value)} /></div>
           )}
+
+          <CarenciaConfigSection config={carenciaConfig} onChange={setCarenciaConfig} />
 
           <EligibilityConfigSection entityType="beneficio" entityId={item?.id} onVariaComFipeChange={setVariaComFipe} externalState={{ state: eligState, setState: setEligState }} />
 
