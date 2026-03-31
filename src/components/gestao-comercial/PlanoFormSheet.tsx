@@ -263,7 +263,10 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
                     )}>
                       <Checkbox checked={selectedBeneficios.has(b.id)} onCheckedChange={() => toggleSet(selectedBeneficios, setSelectedBeneficios, b.id)} />
                       <span className="text-sm flex-1">{b.name}</span>
-                      <span className="text-xs font-medium text-muted-foreground">R$ {(b.preco_sugerido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      {fipeRangeEntityIds.has(b.id)
+                        ? <Badge variant="outline" className="text-[10px] bg-amber-50 text-amber-700 border-amber-200">Variável por FIPE</Badge>
+                        : <span className="text-xs font-medium text-muted-foreground">R$ {(b.preco_sugerido || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                      }
                     </label>
                   ))}
                 </div>
