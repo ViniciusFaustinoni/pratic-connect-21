@@ -1,41 +1,34 @@
 
 
-# Fix: Botão CTA do Template `assinatura_instalacao_v1` sem URL base
+# Exibir Carência por Benefício e Cobertura na Ficha do Associado
 
-## Problema
+## Contexto
+O card "Carência" na ficha do associado mostra apenas a carência **geral do contrato** (datas de início/fim). O pedido é que, quando coberturas ou benefícios do plano do associado tiverem `carencia_ativa = true` configurada no catálogo, essas carências individuais também sejam exibidas, calculando as datas a partir da `data_carencia_inicio` do contrato.
 
-O botão de ação do template está com URL = `{{3}}` (só a variável). A Meta exige que botões do tipo URL tenham um **domínio base fixo** com apenas um sufixo dinâmico opcional. Uma URL composta apenas por variável será rejeitada.
+## Solução
 
-Além disso, o corpo tem variáveis `{{1}}` (nome) e `{{2}}` (veículo), e o link está como `{{3}}` no corpo — mas na Meta, **variáveis de botão são numeradas separadamente** das variáveis do corpo. O botão usa `{{1}}` (sua própria primeira variável).
+### 1. `src/hooks/useAssociadoSituacao.ts` — Buscar carências por item do plano
 
-## Correção
+- Adicionar query que busca o `plano_id` do associado e depois faz JOIN de `planos_beneficios → benefits` e `planos_coberturas → coberturas` filtrando por `carencia_ativa = true`
+- Para cada item, calcular `inicio` (= `data_carencia_inicio` do contrato) e `fim` (= inicio + `carencia_dias` dias)
+- Retornar array `carenciasItens` no `SituacaoAssociado`:
+  ```ts
+  { nome: string; tipo: 'cobertura' | 'beneficio'; carenciaTipo: string; dias: number; multiplicador?: number; inicio: string; fim: string; emCarencia: boolean }[]
+  ```
 
-### 1. Migration SQL — Corrigir template no banco
+### 2. `src/components/associados/detalhe/AssociadoSituacaoCard.tsx` — Renderizar carências por item
 
-```sql
-UPDATE whatsapp_meta_templates
-SET 
-  botoes = '[{"type": "URL", "text": "Assinar agora", "url": "https://app.praticprotecao.com.br/acompanhar/{{1}}"}]'::jsonb,
-  variaveis_exemplo = '{"1": "João", "2": "HB20 - ABC1234"}'::jsonb
-WHERE nome = 'assinatura_instalacao_v1';
-```
+- Abaixo da carência geral existente, se `situacao.carenciasItens.length > 0`, listar cada item com:
+  - Ícone diferenciado (Shield para cobertura, Gift para benefício)
+  - Nome do item
+  - Tipo de carência: "Liberação" ou "Multiplicadora (Nx)"
+  - Dias e datas
+  - Badge "Em carência" ou "Concluída"
 
-- URL do botão: `https://app.praticprotecao.com.br/acompanhar/{{1}}` — domínio fixo + token dinâmico
-- Remove a variável `"3"` do `variaveis_exemplo` pois o link agora é do botão (variável separada)
-
-### 2. `src/hooks/useServicos.ts` — Ajustar variáveis de envio
-
-Atualmente envia:
-```ts
-template_variaveis: [nomeAssociado, veiculoDesc, linkPublico]
-```
-
-Deve separar variáveis do corpo e do botão. O corpo tem 2 variáveis (`{{1}}`, `{{2}}`), o botão tem 1 (`{{1}}` do botão = o token do link). Ajustar para enviar apenas o **token** para o botão (não a URL completa), já que a URL base é fixa no template.
-
-Extrair o token do `linkPublico` e enviar de forma adequada conforme a edge function `whatsapp-send-text` espera.
+## Arquivos
 
 | Arquivo | Ação |
 |---|---|
-| Nova migration SQL | UPDATE botões com URL base fixa + remover variável 3 dos exemplos |
-| `src/hooks/useServicos.ts` | Ajustar array de variáveis: corpo `[nome, veiculo]` + botão `[token]` separado |
+| `src/hooks/useAssociadoSituacao.ts` | Buscar itens do plano com carência ativa + calcular datas |
+| `src/components/associados/detalhe/AssociadoSituacaoCard.tsx` | Renderizar lista de carências por item |
 
