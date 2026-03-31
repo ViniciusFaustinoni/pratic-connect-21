@@ -1,36 +1,69 @@
 
 
-# Diagnóstico: Por que alguns templates WhatsApp não são disparados
+# Fix: Benefícios e coberturas excluídos indevidamente da cotação
 
-## Problemas identificados
+## Problema
+Itens como **Rastreador** e **Assistência 24h** aparecem como "não cobre" na cotação do Voyage QOO5C17 (FIPE ~R$46k), mesmo estando incluídos no plano Select Basic. Há dois bugs distintos no motor de cotação.
 
-### 1. Nome de parâmetros errados (4 edge functions)
-As funções `autentique-create`, `autentique-create-by-token`, `autentique-vistoria-create` e `autentique-evento-create` enviam `params` e `button_params`, mas o `whatsapp-send-text` espera `template_params` e `template_button_params`. Resultado: o template é enviado **sem variáveis** → Meta rejeita por mismatch de parâmetros.
+## Causa raiz
 
-### 2. Nome de parâmetros errados no frontend (`useServicos.ts`)
-O envio do template `assinatura_instalacao_v1` usa `template_nome`, `template_variaveis` e `template_botao_variaveis` em vez de `template_name`, `template_params` e `template_button_params`. Resultado: o template é completamente ignorado e a mensagem é tratada como texto livre → bloqueada pela Meta.
+### Bug 1 — `fipe_range` misturado com elegibilidade
+A função `checkAllRules` avalia TODAS as regras, incluindo `fipe_range` (que é regra de **precificação**, não de elegibilidade). Embora hoje as coberturas com `fipe_range` tenham min=0/max=180k (que passa para a maioria dos veículos), a arquitetura está errada e pode causar falsos negativos em cenários de borda.
 
-### 3. Envio sem `template_name` (`efetivar-troca-titularidade`)
-A função envia apenas `telefone` e `mensagem` (texto livre) sem template → bloqueado pela Meta fora da janela 24h. Deveria usar `cadastro_aprovado_botao` ou `notificacao_geral_v1`.
+### Bug 2 — Coberturas não verificadas individualmente para elegibilidade
+O loop de elegibilidade individual (linhas 660-677) só verifica **benefícios** (`planos_beneficios`). As **coberturas** vinculadas via `planos_coberturas` nunca são verificadas para regras de `regiao`, `combustivel`, `tipo_uso`, etc. Se no futuro uma cobertura tiver essas regras, elas seriam ignoradas.
 
-### 4. Fallback para texto livre no `useServicos.ts`
-Quando o template `assinatura_instalacao_v1` não está APPROVED, o fallback envia texto livre sem `template_name` nem `allow_text` → bloqueado pela Meta.
+### Bug 3 — Preço de benefícios não resolve FIPE variável
+`somaBeneficios` usa apenas `preco_sugerido` fixo. Se um benefício tiver regra `fipe_range` com faixas de preço, o valor não é resolvido (diferente das coberturas que já fazem isso).
 
-## Correções
+## Solução
 
-| Arquivo | Problema | Correção |
-|---|---|---|
-| `supabase/functions/autentique-create/index.ts` | `params` → ignorado | Renomear para `template_params` e `template_button_params` |
-| `supabase/functions/autentique-create-by-token/index.ts` | idem | idem |
-| `supabase/functions/autentique-vistoria-create/index.ts` | idem | idem |
-| `supabase/functions/autentique-evento-create/index.ts` | idem | idem |
-| `src/hooks/useServicos.ts` | `template_nome`, `template_variaveis`, `template_botao_variaveis` | Renomear para `template_name`, `template_params`, `template_button_params`; adicionar `mensagem` obrigatória |
-| `supabase/functions/efetivar-troca-titularidade/index.ts` | Sem template_name | Adicionar `template_name: 'cadastro_aprovado_botao'` com params adequados |
-| Redeploy das 5 edge functions afetadas | — | Deploy automático |
+### Arquivo: `src/hooks/usePlanosCotacao.ts`
+
+**1. Separar `fipe_range` de elegibilidade no loop de benefícios (linhas 660-677)**
+Ao verificar regras de cada benefício, filtrar `fipe_range` antes de chamar `checkAllRules`:
+```ts
+const benefitRules = allEligibilityRules
+  .filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id)
+  .filter(r => r.rule_type !== 'fipe_range'); // fipe_range é pricing, não elegibilidade
+```
+
+**2. Adicionar loop de elegibilidade para coberturas individuais**
+Após o loop de benefícios, adicionar verificação das coberturas:
+```ts
+for (const pc of coberturasDoPlano) {
+  const cobId = (pc as any).cobertura_id;
+  const cobRules = allEligibilityRules
+    .filter(r => r.entity_type === 'cobertura' && r.entity_id === cobId)
+    .filter(r => r.rule_type !== 'fipe_range'); // só elegibilidade
+  if (cobRules.length > 0 && !checkAllRules(cobRules, vehicleCtx)) {
+    const cobNome = (pc as any).coberturas?.nome;
+    if (cobNome && !coberturasRemovidas.includes(cobNome)) {
+      coberturasRemovidas.push(cobNome);
+    }
+  }
+}
+```
+
+**3. Resolver preço FIPE para benefícios (não só coberturas)**
+Alterar `somaBeneficios` para verificar se o benefício tem `fipe_range` e resolver valor por faixa:
+```ts
+const somaBeneficios = (plano.planos_beneficios || []).reduce((acc, pb) => {
+  const fipeRule = allEligibilityRules.find(
+    r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id
+      && r.rule_type === 'fipe_range' && r.is_active
+  );
+  if (fipeRule) {
+    const faixas = fipeRule.rule_config?.faixas || [];
+    const faixa = faixas.find(f => valorFipe >= f.de && valorFipe < f.ate);
+    return acc + (faixa ? Number(faixa.valor) : 0);
+  }
+  return acc + Number(pb.benefits?.preco_sugerido || 0);
+}, 0);
+```
 
 ## Impacto
-
-Essas correções cobrem **todos os cenários onde mensagens são silenciosamente bloqueadas**. Após a correção, o fluxo será:
-- Template APPROVED → envio com parâmetros corretos → entrega garantida
-- Template PENDING → erro explícito no log (sem envio silencioso quebrado)
+- Rastreador, Assistência e outros benefícios passam a ser exibidos corretamente quando o veículo atende às regras de elegibilidade (região, combustível, tipo de uso, FIPE)
+- Regras de `fipe_range` são usadas APENAS para precificação, nunca para inclusão/exclusão
+- Coberturas e benefícios com preço variável por FIPE são corretamente totalizados no valor mensal
 
