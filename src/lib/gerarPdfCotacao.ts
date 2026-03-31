@@ -1230,16 +1230,24 @@ const desenharPaginaCapa = (
   const cardGap = 6;
   const planoRecomendadoIndex = numPlanos > 1 ? 0 : -1;
 
+  // Pre-calculate max card height for equalization
+  const isCompact = numPlanos >= 3;
+  const allHeights = cotacao.planosComparar.map(p => calcularAlturaCardPlano(doc, p, 
+    numPlanos === 1 ? contentWidth * 0.6 : 
+    numPlanos === 2 ? (contentWidth - cardGap) / 2 : 
+    (contentWidth - (cardGap * 2)) / 3, isCompact));
+  const maxCardHeight = Math.max(...allHeights);
+
   if (numPlanos === 1) {
     const cardWidth = contentWidth * 0.6;
     const cardX = (pageWidth - cardWidth) / 2;
-    desenharCardPlanoExpandido(doc, cotacao.planosComparar[0], cardX, y, cardWidth, 0, true);
+    desenharCardPlanoExpandido(doc, cotacao.planosComparar[0], cardX, y, cardWidth, 0, true, false, maxCardHeight);
     
   } else if (numPlanos === 2) {
     const cardWidth = (contentWidth - cardGap) / 2;
     cotacao.planosComparar.forEach((plano, index) => {
       const cardX = margin + (cardWidth + cardGap) * index;
-      desenharCardPlanoExpandido(doc, plano, cardX, y, cardWidth, index, index === planoRecomendadoIndex);
+      desenharCardPlanoExpandido(doc, plano, cardX, y, cardWidth, index, index === planoRecomendadoIndex, false, maxCardHeight);
     });
     
   } else {
@@ -1256,13 +1264,9 @@ const desenharPaginaCapa = (
       const startX = (pageWidth - larguraLinha) / 2;
       
       const cardX = startX + (cardWidth + cardGap) * col;
+      const cardY = y + row * (maxCardHeight + cardGap);
       
-      const compactLineHeight = 5.5;
-      const maxCoberturas = Math.max(...cotacao.planosComparar.map(p => p.coberturas.length));
-      const estimatedCardHeight = 24 + 28 + (maxCoberturas * compactLineHeight) + 18;
-      const cardY = y + row * (estimatedCardHeight + cardGap);
-      
-      desenharCardPlanoExpandido(doc, plano, cardX, cardY, cardWidth, index, index === planoRecomendadoIndex, true);
+      desenharCardPlanoExpandido(doc, plano, cardX, cardY, cardWidth, index, index === planoRecomendadoIndex, true, maxCardHeight);
     });
   }
 
