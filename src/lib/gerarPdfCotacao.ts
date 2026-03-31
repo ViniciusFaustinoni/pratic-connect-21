@@ -751,7 +751,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y += 24;
 
-  const primeiroPagamento = (cotacao.valor_adesao || 0) + (cotacao.valor_total_mensal || 0);
+  const primeiroPagamento = cotacao.valor_adesao || 0;
   const diaVencimento = cotacao.dia_vencimento || 10;
   
   doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
@@ -759,10 +759,10 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setTextColor(255, 255, 255);
   doc.setFontSize(12);
   doc.setFont('helvetica', 'bold');
-  doc.text('PRIMEIRO PAGAMENTO', labelCol, y + 11);
+  doc.text('PRIMEIRO PAGAMENTO (Adesão)', labelCol, y + 11);
   doc.setFontSize(9);
   doc.setFont('helvetica', 'normal');
-  doc.text(`Vencimento: dia ${diaVencimento}`, labelCol, y + 20);
+  doc.text(`Mensalidade a partir de 30 dias | Venc.: dia ${diaVencimento}`, labelCol, y + 20);
   doc.setFontSize(18);
   doc.setFont('helvetica', 'bold');
   doc.text(formatCurrency(primeiroPagamento), valueCol, y + 16, { align: 'right' });
