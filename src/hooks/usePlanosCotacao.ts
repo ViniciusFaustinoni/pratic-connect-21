@@ -703,7 +703,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         if (cobRules.length > 0) {
           const passed = checkAllRules(cobRules, vehicleCtx);
           const cobNome = (pc as any).coberturas?.nome;
-          console.log(`[DEBUG-ELIG] Cobertura "${cobNome}" rules=${cobRules.length} passed=${passed}`);
+          // cobertura elegibilidade check
           if (!passed && cobNome && !coberturasRemovidas.includes(cobNome)) {
             coberturasRemovidas.push(cobNome);
           }
