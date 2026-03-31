@@ -995,7 +995,7 @@ const desenharCardPlanoExpandido = (
   const lineToShow = nomeLines[0];
   doc.text(lineToShow, x + width / 2, currentY + 9, { align: 'center' });
   
-  currentY += 28;
+  currentY += 22;
   
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFontSize(18);
@@ -1007,10 +1007,23 @@ const desenharCardPlanoExpandido = (
   doc.setFontSize(7);
   doc.setFont('helvetica', 'normal');
   doc.text('/mês', x + width / 2, currentY, { align: 'center' });
-  currentY += 10;
+  currentY += 8;
+  
+  // Calculate how many coberturas fit before the invest section
+  const investBoxH = 22;
+  const investBottomPadding = 4;
+  const separatorSpace = 4;
+  const investTotalSpace = separatorSpace + investBoxH + investBottomPadding;
+  const availableForCoberturas = cardHeight - (currentY - y) - investTotalSpace;
+  const maxCoberturas = Math.floor(availableForCoberturas / lineHeight);
   
   const coberturasExibir = plano.coberturas;
-  coberturasExibir.forEach((cobertura) => {
+  const coberturasToShow = maxCoberturas >= coberturasExibir.length 
+    ? coberturasExibir 
+    : coberturasExibir.slice(0, Math.max(maxCoberturas - 1, 0));
+  const hasMore = coberturasToShow.length < coberturasExibir.length;
+  
+  coberturasToShow.forEach((cobertura) => {
     doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
     doc.circle(x + padding + 3, currentY - 1.5, 1.5, 'F');
     
@@ -1022,16 +1035,24 @@ const desenharCardPlanoExpandido = (
     currentY += lineHeight;
   });
   
-  currentY += 6;
+  if (hasMore) {
+    const remaining = coberturasExibir.length - coberturasToShow.length;
+    doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
+    doc.setFontSize(coberturaFontSize);
+    doc.setFont('helvetica', 'italic');
+    doc.text(`+ ${remaining} coberturas`, x + padding + 8, currentY);
+    currentY += lineHeight;
+  }
   
-  // Separador visual antes da seção de investimento
+  // Anchor invest section to bottom of card
+  const investBoxY = y + cardHeight - investBoxH - investBottomPadding;
+  
+  // Separador visual
   doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
   doc.setLineWidth(0.5);
-  doc.line(x + padding, currentY - 4, x + width - padding, currentY - 4);
+  doc.line(x + padding, investBoxY - 3, x + width - padding, investBoxY - 3);
   
   // Mini-seção "Investimento" com fundo diferenciado
-  const investBoxY = currentY - 2;
-  const investBoxH = 22;
   doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
   doc.roundedRect(x + 3, investBoxY, width - 6, investBoxH, 2, 2, 'F');
   
