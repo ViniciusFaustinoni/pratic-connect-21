@@ -511,7 +511,7 @@ serve(async (req) => {
       if (templatesFiltrados.length > 0) {
         console.log(`[autentique-create-by-token] Anexando ${templatesFiltrados.length} template(s) ao documento (excluídos ${(templatesAnexos?.length || 0) - templatesFiltrados.length} template(s) de rastreador já injetados)`);
         let anexosHTML = '';
-        for (const tmpl of templatesAnexos) {
+        for (const tmpl of templatesFiltrados) {
           // Substituir variáveis no conteúdo do anexo antes de inserir
           const conteudoSubstituido = substituirVariaveis(tmpl.conteudo, templateData);
           anexosHTML += `
