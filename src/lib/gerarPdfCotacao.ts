@@ -1804,8 +1804,8 @@ const desenharPaginaComparativoCoberturas = (
     y += rowHeight;
   });
 
-  // Rodapé simples com paginação
-  const footerY = pageHeight - 20;
+  // Rodapé simples com paginação — dinâmico, sem espaço excessivo
+  const footerY = Math.max(y + 15, pageHeight - 20);
   doc.setFillColor(headerFooterBg.r, headerFooterBg.g, headerFooterBg.b);
   doc.rect(0, footerY, pageWidth, 20, 'F');
   drawGradientRect(doc, margin, footerY - 2, contentWidth, 2, glowBlue, brandRed, 50);
