@@ -104,16 +104,23 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
 
 
   // Calculate total
-  const valorTotal = useMemo(() => {
+  const { valorTotal, temVariaveis } = useMemo(() => {
     let total = 0;
+    let hasVar = false;
     for (const c of coberturas) {
-      if (selectedCoberturas.has(c.id)) total += (c as any).valor || 0;
+      if (selectedCoberturas.has(c.id)) {
+        if (fipeRangeEntityIds.has(c.id)) { hasVar = true; } 
+        else { total += (c as any).valor || 0; }
+      }
     }
     for (const b of benefits) {
-      if (selectedBeneficios.has(b.id)) total += b.preco_sugerido || 0;
+      if (selectedBeneficios.has(b.id)) {
+        if (fipeRangeEntityIds.has(b.id)) { hasVar = true; }
+        else { total += b.preco_sugerido || 0; }
+      }
     }
-    return total;
-  }, [selectedCoberturas, selectedBeneficios, coberturas, benefits]);
+    return { valorTotal: total, temVariaveis: hasVar };
+  }, [selectedCoberturas, selectedBeneficios, coberturas, benefits, fipeRangeEntityIds]);
 
   // Toggle helpers
   const toggleSet = (set: Set<string>, setter: (s: Set<string>) => void, value: string) => {
