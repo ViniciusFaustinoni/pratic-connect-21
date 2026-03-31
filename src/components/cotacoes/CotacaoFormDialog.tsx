@@ -695,14 +695,21 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         // Auto-detectar combustível do veículo
         if (resultado.vehicleData.combustivel) {
           const combFipe = resultado.vehicleData.combustivel.toLowerCase();
-          const match = combustiveisBanco.find(c => 
-            combFipe.includes(c.value) || combFipe.includes(c.label.toLowerCase())
-          );
-          if (match) setCombustivelSelecionado(match.value);
-          else if (combFipe.includes('flex') || (combFipe.includes('gasolina') && combFipe.includes('álcool'))) setCombustivelSelecionado('flex');
-          else if (combFipe.includes('gasolina')) setCombustivelSelecionado('gasolina');
-          else if (combFipe.includes('diesel')) setCombustivelSelecionado('diesel');
-          else if (combFipe.includes('elétrico') || combFipe.includes('eletrico')) setCombustivelSelecionado('eletrico');
+          // Priorizar detecção de flex: se contém gasolina+álcool/alcool/etanol, é flex
+          const isFlexFipe = combFipe.includes('flex') || 
+            ((combFipe.includes('gasolina') || combFipe.includes('gas')) && 
+             (combFipe.includes('alcool') || combFipe.includes('álcool') || combFipe.includes('etanol')));
+          if (isFlexFipe) {
+            setCombustivelSelecionado('flex');
+          } else {
+            const match = combustiveisBanco.find(c => 
+              combFipe.includes(c.value) || combFipe.includes(c.label.toLowerCase())
+            );
+            if (match) setCombustivelSelecionado(match.value);
+            else if (combFipe.includes('gasolina')) setCombustivelSelecionado('gasolina');
+            else if (combFipe.includes('diesel')) setCombustivelSelecionado('diesel');
+            else if (combFipe.includes('elétrico') || combFipe.includes('eletrico')) setCombustivelSelecionado('eletrico');
+          }
         }
 
         // Preencher valor FIPE diretamente dos dados retornados
