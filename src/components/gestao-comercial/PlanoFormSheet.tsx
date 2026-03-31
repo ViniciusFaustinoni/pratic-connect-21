@@ -13,6 +13,7 @@ import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sh
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Loader2, FileText } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
+import { useAllEligibilityRules } from '@/hooks/useEntityEligibilityRules';
 import { cn } from '@/lib/utils';
 
 interface Props {
