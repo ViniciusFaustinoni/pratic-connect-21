@@ -267,9 +267,8 @@ const drawPremiumCard = (
   doc.roundedRect(x, y, width, height, 4, 4, 'F');
 
   if (isRecommended || hasGlow) {
-    const glowColor = isRecommended ? glowRed : glowBlue;
-    doc.setDrawColor(glowColor.r, glowColor.g, glowColor.b);
-    doc.setLineWidth(1.5);
+    doc.setDrawColor(glowBlue.r, glowBlue.g, glowBlue.b);
+    doc.setLineWidth(1);
     doc.roundedRect(x, y, width, height, 4, 4, 'S');
   } else {
     const border = borderColor || cardBorder;
