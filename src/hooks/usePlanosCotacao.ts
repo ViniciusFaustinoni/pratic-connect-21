@@ -668,9 +668,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       const coberturasRemovidas = getCoberturasRemovidasDinamico(categoria, benefitExclusions || []);
 
-      // DEBUG: log vehicle context and initial removidas
-      console.log(`[DEBUG-ELIG] Plano=${plano.nome} vehicleCtx=`, JSON.stringify(vehicleCtx));
-      console.log(`[DEBUG-ELIG] coberturasRemovidas after getCoberturasRemovidasDinamico:`, [...coberturasRemovidas]);
+      // Verificação de elegibilidade individual de benefícios e coberturas
 
       // Verificar regras unificadas de benefícios individuais (excluindo fipe_range que é precificação)
       const beneficiosDoPlano = plano.planos_beneficios || [];
