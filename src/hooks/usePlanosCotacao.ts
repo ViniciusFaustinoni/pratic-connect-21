@@ -668,6 +668,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
       const coberturasRemovidas = getCoberturasRemovidasDinamico(categoria, benefitExclusions || []);
 
+      // DEBUG: log vehicle context and initial removidas
+      console.log(`[DEBUG-ELIG] Plano=${plano.nome} vehicleCtx=`, JSON.stringify(vehicleCtx));
+      console.log(`[DEBUG-ELIG] coberturasRemovidas after getCoberturasRemovidasDinamico:`, [...coberturasRemovidas]);
+
       // Verificar regras unificadas de benefícios individuais (excluindo fipe_range que é precificação)
       const beneficiosDoPlano = plano.planos_beneficios || [];
       for (const pb of beneficiosDoPlano) {
@@ -682,9 +686,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
               .filter(r => r.rule_type !== 'fipe_range')
           : [];
         const allItemRules = [...benefitRules, ...coberturaRules];
-        if (allItemRules.length > 0 && !checkAllRules(allItemRules, vehicleCtx)) {
-          const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
-          if (!coberturasRemovidas.includes(benefitName)) {
+        const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
+        if (allItemRules.length > 0) {
+          const passed = checkAllRules(allItemRules, vehicleCtx);
+          console.log(`[DEBUG-ELIG] Benefit "${benefitName}" rules=${allItemRules.length} passed=${passed}`, allItemRules.map(r => `${r.rule_type}:${r.rule_mode}`));
+          if (!passed && !coberturasRemovidas.includes(benefitName)) {
             coberturasRemovidas.push(benefitName);
           }
         }
@@ -696,13 +702,17 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         const cobRules = allEligibilityRules
           .filter(r => r.entity_type === 'cobertura' && r.entity_id === cobId)
           .filter(r => r.rule_type !== 'fipe_range');
-        if (cobRules.length > 0 && !checkAllRules(cobRules, vehicleCtx)) {
+        if (cobRules.length > 0) {
+          const passed = checkAllRules(cobRules, vehicleCtx);
           const cobNome = (pc as any).coberturas?.nome;
-          if (cobNome && !coberturasRemovidas.includes(cobNome)) {
+          console.log(`[DEBUG-ELIG] Cobertura "${cobNome}" rules=${cobRules.length} passed=${passed}`);
+          if (!passed && cobNome && !coberturasRemovidas.includes(cobNome)) {
             coberturasRemovidas.push(cobNome);
           }
         }
       }
+
+      console.log(`[DEBUG-ELIG] Final coberturasRemovidas for ${plano.nome}:`, [...coberturasRemovidas]);
 
       const alertaDesagio = gerarMensagemAlertaCategoria(categoria, benefitExclusions || []) || undefined;
 
