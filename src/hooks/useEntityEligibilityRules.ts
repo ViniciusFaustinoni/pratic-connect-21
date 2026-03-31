@@ -128,6 +128,7 @@ export interface VehicleContext {
   categoriaVeiculo?: string;
   categoriaEspecial?: string;
   regiao?: string;
+  regiaoId?: string; // UUID da região para comparação com rules
   marca?: string;
   modelo?: string;
   versao?: string;
