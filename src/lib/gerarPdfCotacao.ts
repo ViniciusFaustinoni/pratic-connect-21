@@ -744,7 +744,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
   doc.setFont('helvetica', 'bold');
   doc.setFontSize(11);
-  doc.text('TAXA DE FILIAÇÃO (pagamento único)', labelCol, y + 12);
+  doc.text('TAXA DE ADESÃO (pagamento único)', labelCol, y + 12);
   doc.setTextColor(textWhite.r, textWhite.g, textWhite.b);
   doc.setFontSize(14);
   doc.text(formatCurrency(cotacao.valor_adesao), valueCol, y + 12, { align: 'right' });
