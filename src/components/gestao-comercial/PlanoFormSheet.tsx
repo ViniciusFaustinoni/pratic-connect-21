@@ -29,6 +29,18 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   // Data sources
   const { data: coberturas = [] } = useCoberturas(true);
   const { data: benefits = [] } = useBenefits();
+  const { data: allRules = [] } = useAllEligibilityRules();
+
+  // Set of entity_ids that have fipe_range rules (variable pricing)
+  const fipeRangeEntityIds = useMemo(() => {
+    const ids = new Set<string>();
+    for (const rule of allRules) {
+      if (rule.rule_type === 'fipe_range') {
+        ids.add(rule.entity_id);
+      }
+    }
+    return ids;
+  }, [allRules]);
 
   // Form state
   const [nome, setNome] = useState('');
