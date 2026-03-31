@@ -15,6 +15,17 @@ export interface CoberturaPorVeiculo {
   diasAtraso: number;
 }
 
+export interface CarenciaItem {
+  nome: string;
+  tipo: 'cobertura' | 'beneficio';
+  carenciaTipo: string;
+  dias: number;
+  multiplicador?: number;
+  inicio: string;
+  fim: string;
+  emCarencia: boolean;
+}
+
 export interface SituacaoAssociado {
   // Carência
   carenciaIsenta: boolean;
@@ -22,6 +33,7 @@ export interface SituacaoAssociado {
   carenciaInicio: string | null;
   carenciaFim: string | null;
   emCarencia: boolean;
+  carenciasItens: CarenciaItem[];
 
   // Inadimplência (geral - pior caso)
   diasAtraso: number;
