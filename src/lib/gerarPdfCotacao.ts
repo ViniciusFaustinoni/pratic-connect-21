@@ -950,7 +950,8 @@ const calcularAlturaCardPlano = (
 ): number => {
   const lineHeight = compact ? 5.5 : 7;
   const numCoberturas = plano.coberturas.length;
-  return 24 + 28 + (numCoberturas * lineHeight) + 36;
+  // header(22) + price(18) + coberturas + separator(6) + invest(26) + bottom padding(4)
+  return 22 + 18 + (numCoberturas * lineHeight) + 6 + 26 + 4;
 };
 
 const desenharCardPlanoExpandido = (
