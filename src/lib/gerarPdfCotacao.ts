@@ -1030,7 +1030,16 @@ const desenharCardPlanoExpandido = (
     doc.setTextColor(textLight.r, textLight.g, textLight.b);
     doc.setFontSize(coberturaFontSize);
     doc.setFont('helvetica', 'normal');
-    doc.text(truncateText(cobertura, maxChars), x + padding + 8, currentY);
+    
+    // Use splitTextToSize instead of truncateText to allow wrapping
+    const textMaxWidth = width - padding * 2 - 10;
+    const wrappedLines = doc.splitTextToSize(cobertura, textMaxWidth);
+    wrappedLines.forEach((line: string, lineIdx: number) => {
+      doc.text(line, x + padding + 8, currentY);
+      if (lineIdx < wrappedLines.length - 1) {
+        currentY += lineHeight;
+      }
+    });
     
     currentY += lineHeight;
   });
