@@ -198,12 +198,29 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       diasAtraso: v.diasAtraso,
     }));
 
+    // Build per-item carências
+    const allCarenciaItems = [...(carenciasBeneficios || []), ...(carenciasCoberturas || [])];
+    const carenciasItens: CarenciaItem[] = carenciaInicio
+      ? allCarenciaItems.map(item => {
+          const inicio = new Date(carenciaInicio!);
+          const fim = new Date(inicio);
+          fim.setDate(fim.getDate() + (item.dias || 0));
+          return {
+            ...item,
+            inicio: carenciaInicio!,
+            fim: fim.toISOString().split('T')[0],
+            emCarencia: fim > now,
+          };
+        })
+      : [];
+
     return {
       carenciaIsenta,
       carenciaMotivoIsencao: contrato?.carencia_motivo_isencao || null,
       carenciaInicio,
       carenciaFim,
       emCarencia,
+      carenciasItens,
       diasAtraso,
       statusInadimplencia,
       coberturasSuspensas,
@@ -216,7 +233,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       consultorPontuacao: consultorInfo?.pontuacao ?? null,
       isLoading: isLoadingPrazos || isLoadingContrato || isLoadingAssociado || isLoadingInadimplencia,
     };
-  }, [contrato, associado, inadimplenciaPorVeiculo, algumVeiculoInadimplente, beneficiosAdicionaisSuspensos, prazos, multaRastreador, consultorInfo, isLoadingPrazos, isLoadingContrato, isLoadingAssociado, isLoadingInadimplencia]);
+  }, [contrato, associado, inadimplenciaPorVeiculo, algumVeiculoInadimplente, beneficiosAdicionaisSuspensos, prazos, multaRastreador, consultorInfo, carenciasBeneficios, carenciasCoberturas, isLoadingPrazos, isLoadingContrato, isLoadingAssociado, isLoadingInadimplencia]);
 
   return situacao;
 }

@@ -1,6 +1,6 @@
 import {
   Shield, ShieldAlert, ShieldCheck, ShieldOff, Clock, AlertTriangle,
-  CheckCircle, UserCheck, Star, Truck, Car, Ban,
+  CheckCircle, UserCheck, Star, Truck, Car, Ban, Gift,
 } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
