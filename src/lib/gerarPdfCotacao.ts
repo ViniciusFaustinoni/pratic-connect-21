@@ -943,6 +943,17 @@ const desenharRodapeCompacto = (
   doc.text(`#${cotacao.numero || 'N/A'} | Página ${paginaAtual} de ${totalPaginas}`, pageWidth - margin, footerY + 10, { align: 'right' });
 };
 
+const calcularAlturaCardPlano = (
+  doc: jsPDF,
+  plano: PlanoParaPdf,
+  width: number,
+  compact: boolean = false
+): number => {
+  const lineHeight = compact ? 5.5 : 7;
+  const numCoberturas = plano.coberturas.length;
+  return 24 + 28 + (numCoberturas * lineHeight) + 36;
+};
+
 const desenharCardPlanoExpandido = (
   doc: jsPDF,
   plano: PlanoParaPdf,
@@ -951,23 +962,18 @@ const desenharCardPlanoExpandido = (
   width: number,
   index: number,
   isRecommended: boolean = false,
-  compact: boolean = false
+  compact: boolean = false,
+  fixedHeight?: number
 ): number => {
   const padding = 6;
   const lineHeight = compact ? 5.5 : 7;
-  const maxCoberturas = plano.coberturas.length;
   const coberturaFontSize = compact ? 7 : 9;
   const maxChars = compact 
     ? Math.floor((width - padding * 2 - 8) / 1.6) 
     : Math.floor((width - padding * 2 - 8) / 1.8);
   
-  const numCoberturas = Math.min(plano.coberturas.length, maxCoberturas);
-  const cardHeight = 
-    24 +
-    28 +
-    (numCoberturas * lineHeight) +
-    (plano.coberturas.length > maxCoberturas ? 10 : 0) +
-    36;
+  const naturalHeight = calcularAlturaCardPlano(doc, plano, width, compact);
+  const cardHeight = fixedHeight || naturalHeight;
   
   drawPremiumCard(doc, x, y, width, cardHeight, { 
     isRecommended, 
@@ -1003,7 +1009,7 @@ const desenharCardPlanoExpandido = (
   doc.text('/mês', x + width / 2, currentY, { align: 'center' });
   currentY += 10;
   
-  const coberturasExibir = plano.coberturas.slice(0, maxCoberturas);
+  const coberturasExibir = plano.coberturas;
   coberturasExibir.forEach((cobertura) => {
     doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
     doc.circle(x + padding + 3, currentY - 1.5, 1.5, 'F');
@@ -1224,16 +1230,24 @@ const desenharPaginaCapa = (
   const cardGap = 6;
   const planoRecomendadoIndex = numPlanos > 1 ? 0 : -1;
 
+  // Pre-calculate max card height for equalization
+  const isCompact = numPlanos >= 3;
+  const allHeights = cotacao.planosComparar.map(p => calcularAlturaCardPlano(doc, p, 
+    numPlanos === 1 ? contentWidth * 0.6 : 
+    numPlanos === 2 ? (contentWidth - cardGap) / 2 : 
+    (contentWidth - (cardGap * 2)) / 3, isCompact));
+  const maxCardHeight = Math.max(...allHeights);
+
   if (numPlanos === 1) {
     const cardWidth = contentWidth * 0.6;
     const cardX = (pageWidth - cardWidth) / 2;
-    desenharCardPlanoExpandido(doc, cotacao.planosComparar[0], cardX, y, cardWidth, 0, true);
+    desenharCardPlanoExpandido(doc, cotacao.planosComparar[0], cardX, y, cardWidth, 0, true, false, maxCardHeight);
     
   } else if (numPlanos === 2) {
     const cardWidth = (contentWidth - cardGap) / 2;
     cotacao.planosComparar.forEach((plano, index) => {
       const cardX = margin + (cardWidth + cardGap) * index;
-      desenharCardPlanoExpandido(doc, plano, cardX, y, cardWidth, index, index === planoRecomendadoIndex);
+      desenharCardPlanoExpandido(doc, plano, cardX, y, cardWidth, index, index === planoRecomendadoIndex, false, maxCardHeight);
     });
     
   } else {
@@ -1250,13 +1264,9 @@ const desenharPaginaCapa = (
       const startX = (pageWidth - larguraLinha) / 2;
       
       const cardX = startX + (cardWidth + cardGap) * col;
+      const cardY = y + row * (maxCardHeight + cardGap);
       
-      const compactLineHeight = 5.5;
-      const maxCoberturas = Math.max(...cotacao.planosComparar.map(p => p.coberturas.length));
-      const estimatedCardHeight = 24 + 28 + (maxCoberturas * compactLineHeight) + 18;
-      const cardY = y + row * (estimatedCardHeight + cardGap);
-      
-      desenharCardPlanoExpandido(doc, plano, cardX, cardY, cardWidth, index, index === planoRecomendadoIndex, true);
+      desenharCardPlanoExpandido(doc, plano, cardX, cardY, cardWidth, index, index === planoRecomendadoIndex, true, maxCardHeight);
     });
   }
 
@@ -1310,28 +1320,26 @@ const desenharPaginaDetalhesPlano = (
 
   y = headerHeight + 8;
 
-  const valorCardHeight = 85;
+  // Calculate dynamic card height based on content
+  let dynamicCardContentH = 10; // top padding
+  dynamicCardContentH += 14; // plan name row  
+  dynamicCardContentH += 18; // badges row (FIPE + ano)
+  
+  if (plano.cotaPercentual && plano.cotaMinima) dynamicCardContentH += 12;
+  if (plano.cotaDesagio && plano.cotaMinimaDesagio) dynamicCardContentH += 12;
+  
+  dynamicCardContentH += 8; // bottom padding
+  
+  // Price section needs at least 28 (font size) + spacing
+  const priceBlockH = 32;
+  // Card height = max between left content and right price block, with minimum
+  const valorCardHeight = Math.max(dynamicCardContentH, priceBlockH + 16);
+  
   drawPremiumCard(doc, margin, y, contentWidth, valorCardHeight, { isRecommended: true, hasGlow: true });
 
   let cardY = y + 10;
 
-  doc.setTextColor(255, 255, 255);
-  doc.setFontSize(16);
-  doc.setFont('helvetica', 'bold');
-  doc.text(truncateText(plano.nome.toUpperCase(), 26), margin + 10, cardY);
-
-  if (plano.adicionalMensal && plano.adicionalMensal > 0) {
-    const adicionalText = `+${formatCurrency(plano.adicionalMensal)}/mês`;
-    const adicionalWidth = adicionalText.length * 3.5 + 10;
-    doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
-    doc.roundedRect(pageWidth - margin - adicionalWidth - 10, cardY - 6, adicionalWidth, 12, 2, 2, 'F');
-    doc.setTextColor(255, 255, 255);
-    doc.setFontSize(8);
-    doc.text(adicionalText, pageWidth - margin - adicionalWidth / 2 - 10, cardY, { align: 'center' });
-  }
-
-  cardY += 12;
-
+  // Badges row (FIPE + ano) — draw FIRST, at the top
   let tagX = margin + 10;
   
   const fipeText = `${plano.coberturaFipe}% FIPE`;
@@ -1355,8 +1363,19 @@ const desenharPaginaDetalhesPlano = (
     doc.text(anoText, tagX + anoWidth / 2, cardY + 3, { align: 'center' });
   }
 
-  cardY += 18;
+  if (plano.adicionalMensal && plano.adicionalMensal > 0) {
+    const adicionalText = `+${formatCurrency(plano.adicionalMensal)}/mês`;
+    const adicionalWidth = adicionalText.length * 3.5 + 10;
+    doc.setFillColor(successGreen.r, successGreen.g, successGreen.b);
+    doc.roundedRect(pageWidth - margin - adicionalWidth - 10, cardY - 6, adicionalWidth, 12, 2, 2, 'F');
+    doc.setTextColor(255, 255, 255);
+    doc.setFontSize(8);
+    doc.text(adicionalText, pageWidth - margin - adicionalWidth / 2 - 10, cardY, { align: 'center' });
+  }
 
+  cardY += 16;
+
+  // Cota info (if applicable)
   if (plano.cotaPercentual && plano.cotaMinima) {
     doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
     doc.setFontSize(9);
@@ -1378,15 +1397,17 @@ const desenharPaginaDetalhesPlano = (
     cardY += 12;
   }
 
+  // Price — positioned right-aligned, vertically centered in card
+  const priceY = y + valorCardHeight / 2 - 4;
   doc.setTextColor(successGreen.r, successGreen.g, successGreen.b);
   doc.setFontSize(28);
   doc.setFont('helvetica', 'bold');
-  doc.text(formatCurrency(plano.valorMensal), pageWidth - margin - 10, y + 32, { align: 'right' });
+  doc.text(formatCurrency(plano.valorMensal), pageWidth - margin - 10, priceY, { align: 'right' });
   
   doc.setTextColor(textMuted.r, textMuted.g, textMuted.b);
   doc.setFontSize(10);
   doc.setFont('helvetica', 'normal');
-  doc.text('/mês', pageWidth - margin - 10, y + 44, { align: 'right' });
+  doc.text('/mês', pageWidth - margin - 10, priceY + 10, { align: 'right' });
 
   y += valorCardHeight + 8;
 
