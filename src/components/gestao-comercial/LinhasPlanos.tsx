@@ -12,7 +12,7 @@ import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
   AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
-import { Plus, ChevronRight, Loader2, Pencil, Trash2, Copy, Upload } from 'lucide-react';
+import { Plus, ChevronRight, Loader2, Pencil, Trash2, Copy, Upload, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { PlanoFormSheet } from './PlanoFormSheet';
 import { usePermissions } from '@/hooks/usePermissions';
@@ -125,6 +125,18 @@ function useDeleteLinha() {
   });
 }
 
+function useMovePlanToLine() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async ({ planId, newLineId }: { planId: string; newLineId: string }) => {
+      const { error } = await supabase.from('planos').update({ product_line_id: newLineId }).eq('id', planId);
+      if (error) throw error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] }); toast.success('Plano movido para nova linha'); },
+    onError: () => toast.error('Erro ao mover plano'),
+  });
+}
+
 function useDeletePlano() {
   const qc = useQueryClient();
   return useMutation({
@@ -192,6 +204,10 @@ export function LinhasPlanos() {
   const deletePlano = useDeletePlano();
   const duplicateLine = useDuplicateProductLine();
   const duplicatePlan = useDuplicatePlan();
+  const movePlan = useMovePlanToLine();
+
+  const [draggedPlan, setDraggedPlan] = useState<{ id: string; fromLineId: string } | null>(null);
+  const [dragOverLineId, setDragOverLineId] = useState<string | null>(null);
 
   const toggleLine = (id: string) => {
     setOpenLines(prev => {
@@ -229,7 +245,26 @@ export function LinhasPlanos() {
       <div className="space-y-2">
         {linhas.map(linha => (
           <Collapsible key={linha.id} open={openLines.has(linha.id)} onOpenChange={() => toggleLine(linha.id)}>
-            <div className="border rounded-lg overflow-hidden">
+            <div
+              className={cn('border rounded-lg overflow-hidden transition-all', dragOverLineId === linha.id && draggedPlan?.fromLineId !== linha.id && 'ring-2 ring-primary')}
+              onDragOver={(e) => {
+                e.preventDefault();
+                if (draggedPlan && draggedPlan.fromLineId !== linha.id) {
+                  setDragOverLineId(linha.id);
+                  if (!openLines.has(linha.id)) {
+                    setOpenLines(prev => new Set(prev).add(linha.id));
+                  }
+                }
+              }}
+              onDragLeave={() => setDragOverLineId(null)}
+              onDrop={() => {
+                if (draggedPlan && draggedPlan.fromLineId !== linha.id) {
+                  movePlan.mutate({ planId: draggedPlan.id, newLineId: linha.id });
+                }
+                setDragOverLineId(null);
+                setDraggedPlan(null);
+              }}
+            >
               <CollapsibleTrigger className="w-full flex items-center gap-3 px-4 py-3 hover:bg-muted/40 transition-colors text-left">
                 <ChevronRight className={cn('h-4 w-4 text-muted-foreground transition-transform', openLines.has(linha.id) && 'rotate-90')} />
                 <div className="flex-1 min-w-0">
@@ -257,7 +292,17 @@ export function LinhasPlanos() {
               <CollapsibleContent>
                 <div className="border-t px-4 py-2 space-y-1 bg-muted/20">
                   {linha.plans.map((plano: any) => (
-                    <div key={plano.id} className="flex items-center gap-1">
+                    <div
+                      key={plano.id}
+                      className={cn('flex items-center gap-1', draggedPlan?.id === plano.id && 'opacity-40')}
+                      draggable
+                      onDragStart={(e) => {
+                        setDraggedPlan({ id: plano.id, fromLineId: linha.id });
+                        e.dataTransfer.effectAllowed = 'move';
+                      }}
+                      onDragEnd={() => { setDraggedPlan(null); setDragOverLineId(null); }}
+                    >
+                      <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
                       <button
                         onClick={() => setPlanoSheet({ open: true, planoId: plano.id, linhaId: linha.id })}
                         className="flex-1 flex items-center gap-3 px-3 py-2 rounded-md hover:bg-background transition-colors text-left"
