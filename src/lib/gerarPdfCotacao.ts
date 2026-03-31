@@ -572,7 +572,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
   doc.setFont('helvetica', 'normal');
   doc.text('valor médio mensal', pageWidth - margin - 15, y + 27, { align: 'right' });
 
-  // Taxa de Filiação destacada dentro do card
+  // Taxa de Adesão destacada dentro do card
   doc.setDrawColor(cardBorder.r, cardBorder.g, cardBorder.b);
   doc.setLineWidth(0.5);
   doc.line(margin + 10, y + 35, pageWidth - margin - 10, y + 35);
