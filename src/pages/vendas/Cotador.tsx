@@ -1911,24 +1911,6 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                 </Alert>
               )}
 
-              {/* Carência */}
-              <Alert className="border-blue-500/50 bg-blue-500/10">
-                <AlertCircle className="h-4 w-4 text-blue-500" />
-                <AlertDescription className="text-sm space-y-1">
-                  <div>
-                    <span className="font-medium">Carência geral:</span>{' '}
-                    {migracaoState.ativo && migracaoConfig?.isentar_carencia
-                      ? 'Sem carência (migração)'
-                      : `${carenciaDias} dias`}
-                  </div>
-                  <div>
-                    <span className="font-medium">Carência vidros/faróis:</span>{' '}
-                    {migracaoState.ativo && migracaoConfig?.isentar_carencia
-                      ? 'Sem carência (migração)'
-                      : `${carenciaVidrosDias} dias`}
-                  </div>
-                </AlertDescription>
-              </Alert>
             </div>
 
 
