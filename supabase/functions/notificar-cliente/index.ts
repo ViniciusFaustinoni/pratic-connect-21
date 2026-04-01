@@ -392,7 +392,7 @@ serve(async (req) => {
             getButtonParams: () => linkToken ? [linkToken] : null,
           },
           cobertura_total_ativada: {
-            template_name: 'cobertura_360_ativada_v2',
+            template_name: 'cobertura_360_ativada_v3',
             getParams: async () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
