@@ -49,7 +49,7 @@ export function TermoFiliacaoTemplate({
   dados, 
   aditivos = [] 
 }: TermoFiliacaoTemplateProps) {
-  const { cliente, veiculo, plano, contrato, empresa } = dados;
+  const { cliente, veiculo, plano, contrato, empresa, consultor } = dados;
   const { data: regrasDepreciacao } = useConfiguracaoJson<RegraDepreciacao[]>('regras_depreciacao', DEPRECIACOES_FALLBACK);
   const regras = regrasDepreciacao ?? DEPRECIACOES_FALLBACK;
   
