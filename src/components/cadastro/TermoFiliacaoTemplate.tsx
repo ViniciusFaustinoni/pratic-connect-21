@@ -121,6 +121,11 @@ export function TermoFiliacaoTemplate({
         <div style={{ fontSize: '11pt', fontWeight: 'bold' }}>
           Nº {contrato.numero}
         </div>
+        {consultor?.nome && (
+          <div style={{ fontSize: '10pt', marginTop: '4pt', color: '#333' }}>
+            <span style={{ fontWeight: 'bold' }}>Consultor Responsável:</span> {consultor.nome}
+          </div>
+        )}
       </div>
 
       {/* SEÇÃO 1: QUALIFICAÇÃO DO ASSOCIADO */}
