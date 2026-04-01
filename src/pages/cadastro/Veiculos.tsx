@@ -237,6 +237,112 @@ export default function Veiculos() {
         </Card>
       </div>
 
+      {/* Consulta de Placa - apenas analista de cadastro */}
+      {hasPerm('canManageCadastro') && (
+        <Card className="border-border/50">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Car className="h-5 w-5" />
+              Consulta de Veículo por Placa
+            </CardTitle>
+            <CardDescription>Consulte informações completas de um veículo pela placa</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <div className="relative flex-1 max-w-xs">
+                <Car className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="ABC1234 ou ABC1D23"
+                  value={placaInput}
+                  onChange={(e) => handlePlacaChange(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+                  className="pl-10 uppercase font-mono text-lg tracking-wider"
+                  maxLength={8}
+                  disabled={lookupLoading}
+                />
+              </div>
+              <Button onClick={handleLookup} disabled={lookupLoading || placaInput.replace(/[^A-Za-z0-9]/g, '').length < 7}>
+                {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+                Consultar
+              </Button>
+            </div>
+
+            {lookupError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{lookupError}</AlertDescription>
+              </Alert>
+            )}
+
+            {lv && (
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  <span className="font-semibold">Veículo Encontrado</span>
+                  <Badge variant="outline" className="font-mono text-base ml-auto">{lv.placa}</Badge>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Identificação</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <InfoItem label="Placa" value={lv.placa} />
+                    <InfoItem label="Chassi" value={lv.chassi} />
+                    <InfoItem label="Renavam" value={lv.renavam} />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Veículo</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <InfoItem label="Marca" value={lv.marca} />
+                    <InfoItem label="Modelo" value={lv.modelo} />
+                    <InfoItem label="Ano" value={lv.ano} />
+                    <InfoItem label="Cor" value={lv.cor} />
+                    <InfoItem label="Tipo" value={lv.tipo_veiculo} />
+                    <InfoItem label="Nº Portas" value={lv.numero_portas} />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Mecânica</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <InfoItem label="Motor" value={lv.motor} />
+                    <InfoItem label="Potência" value={lv.potencia} />
+                    <InfoItem label="Cilindradas" value={lv.cilindradas} />
+                    <InfoItem label="Combustível" value={lv.combustivel} />
+                    <InfoItem label="Câmbio" value={lv.cambio} />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Registro</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <InfoItem label="Município" value={lv.municipio} />
+                    <InfoItem label="UF" value={lv.uf} />
+                    <InfoItem label="Categoria" value={lv.categoria} />
+                    <InfoItem label="Procedência" value={lv.procedencia} />
+                  </div>
+                </div>
+
+                {lf && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">FIPE</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <InfoItem label="Código FIPE" value={lf.codigo} />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Valor FIPE</p>
+                        <p className="font-bold text-primary text-lg">{formatFipeCurrency(lf.valor)}</p>
+                      </div>
+                      <InfoItem label="Referência" value={lf.mesReferencia} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
+
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
         <div className="relative flex-1">
