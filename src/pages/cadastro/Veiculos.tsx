@@ -90,6 +90,53 @@ export default function Veiculos() {
   const { data: veiculos, isLoading } = useVeiculos();
   const { data: associadosData } = useAssociados();
   const associados = associadosData?.associados;
+  const { hasPerm } = usePermissions();
+
+  // Consulta de placa
+  const [placaInput, setPlacaInput] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
+  const [lookupError, setLookupError] = useState('');
+
+  const handlePlacaChange = (value: string) => {
+    const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7);
+    if (cleaned.length >= 4 && /^[A-Z]{3}[0-9]/.test(cleaned) && !/[A-Z]/.test(cleaned[4] || '')) {
+      setPlacaInput(`${cleaned.slice(0, 3)}-${cleaned.slice(3)}`);
+    } else {
+      setPlacaInput(cleaned);
+    }
+    setLookupError('');
+    setLookupResult(null);
+  };
+
+  const handleLookup = async () => {
+    const raw = placaInput.replace(/[^A-Za-z0-9]/g, '');
+    if (raw.length < 7) return;
+    setLookupLoading(true);
+    setLookupError('');
+    setLookupResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('plate-lookup', {
+        body: { placa: raw },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.success) {
+        setLookupResult(data);
+      } else {
+        setLookupError(data?.error || 'Veículo não encontrado');
+      }
+    } catch (err: any) {
+      setLookupError(err.message || 'Erro ao consultar placa');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const formatFipeCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+  const lv = lookupResult?.vehicleData;
+  const lf = lookupResult?.fipeData;
 
   // Create a map of associado_id to nome for quick lookup
   const associadoMap = new Map<string, string>(
