@@ -683,6 +683,21 @@ export default function AprovacaoInstalacaoDetalhe() {
           )}
         </DialogContent>
       </Dialog>
+
+      {/* Video Lightbox */}
+      <Dialog open={!!videoExpandido} onOpenChange={() => setVideoExpandido(null)}>
+        <DialogContent className="max-w-4xl p-1">
+          {videoExpandido && (
+            <video
+              src={videoExpandido}
+              controls
+              autoPlay
+              className="w-full aspect-video object-contain bg-black rounded-lg"
+              playsInline
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </div>
   );
 }
