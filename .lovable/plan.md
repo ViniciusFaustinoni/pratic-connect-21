@@ -1,35 +1,39 @@
 
 
-# Corrigir status de associados criados via API externa
+# Corrigir campos ausentes no Termo de Filiação + Adicionar Consultor
 
 ## Problema
-Na edge function `api-externa/index.ts`, linha 93, o status do associado é **hardcoded** como `'em_analise'`:
-```ts
-const insertData: any = {
-  nome, cpf: cpfLimpo, email, telefone, status: 'em_analise',
-};
+1. O campo **CNH** não aparece no termo de filiação (o template não renderiza nem aceita esse dado)
+2. O **nome do consultor/vendedor** responsável não é exibido no termo
+
+## Correções
+
+### Arquivo 1: `src/types/termo-filiacao.ts`
+- Adicionar campos `cnh`, `cnhValidade`, `cnhCategoria` à interface `ClienteData`
+- Adicionar campo `consultor?: { nome: string }` à interface `DadosTermoFiliacao`
+
+### Arquivo 2: `src/components/cadastro/TermoFiliacaoTemplate.tsx`
+- Na **Seção 1 (Qualificação do Associado)**: adicionar linha com **CNH** entre RG e Data de Nascimento
+- No **cabeçalho ou rodapé do termo**: exibir o **nome do consultor responsável** (ex: "Consultor: Fulano de Tal") — pode ficar logo abaixo do número do contrato ou em uma seção dedicada
+- Extrair `dados.consultor` no destructuring
+
+### Arquivo 3: `src/pages/cadastro/GerarTermo.tsx`
+- Atualizar o mock para incluir CNH e consultor nos dados de exemplo
+
+## Detalhes da renderização
+
+**CNH** — nova linha na seção 1, após RG:
+```
+CNH: 07064650202
 ```
 
-Quando o associado vem do SGA (já ativo), deveria ser possível definir o status via payload da API.
-
-## Correção
-
-**Arquivo**: `supabase/functions/api-externa/index.ts`
-
-**Linha 93**: Permitir que o campo `status` venha no body da requisição, com fallback para `'em_analise'`:
-
-```ts
-const insertData: any = {
-  nome, cpf: cpfLimpo, email, telefone, 
-  status: body.status || 'em_analise',
-};
+**Consultor** — exibido no cabeçalho, abaixo do número do contrato:
 ```
-
-Adicionalmente, adicionar `'status'` à lista de `optionalFields` (linha 95-98) **não é necessário** pois já estará no `insertData` acima.
+Consultor Responsável: Maria Santos
+```
 
 ## Impacto
-- 1 linha alterada na edge function
-- Deploy automático
-- Quem chamar a API com `"status": "ativo"` terá o associado criado como ativo
-- Chamadas sem `status` continuam como `em_analise` (backward compatible)
+- 3 arquivos alterados
+- Apenas visual — não altera dados no banco
+- Backend já mapeia `consultor.nome` e `associado.cnh` nos templates do Autentique
 
