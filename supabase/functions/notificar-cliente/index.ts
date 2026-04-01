@@ -561,7 +561,7 @@ serve(async (req) => {
         if (isMetaAtivo && META_TEMPLATE_MAP[tipo]) {
           const mapping = META_TEMPLATE_MAP[tipo];
           sendBody.template_name = mapping.template_name;
-          sendBody.template_params = mapping.getParams();
+          sendBody.template_params = await Promise.resolve(mapping.getParams());
           
           // Enviar button params explicitamente se disponível
           if (mapping.getButtonParams) {
