@@ -586,6 +586,7 @@ export function AppSidebar() {
             items: group.items.filter(item => 
               item.url === '/cadastro/propostas' ||
               item.url === '/cadastro/associados' ||
+              item.url === '/cadastro/veiculos' ||
               item.url === '/cadastro/recusas-instalador'
             ),
           };
