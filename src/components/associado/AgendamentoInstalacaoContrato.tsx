@@ -151,14 +151,15 @@ export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onC
         contratoId,
         dataAgendada: format(dataSelecionada, 'yyyy-MM-dd'),
         horarioAgendado: horarioSelecionado,
-        endereco: {
-          cep: cep.replace(/\D/g, ''),
-          logradouro,
-          numero,
-          bairro,
-          cidade,
-          estado,
-        },
+          endereco: {
+            cep: cep.replace(/\D/g, ''),
+            logradouro,
+            numero,
+            complemento,
+            bairro,
+            cidade,
+            estado,
+          },
         responsavel: {
           euMesmo,
           nome: euMesmo ? undefined : responsavelNome,
