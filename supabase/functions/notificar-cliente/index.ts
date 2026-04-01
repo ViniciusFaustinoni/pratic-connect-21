@@ -327,7 +327,7 @@ serve(async (req) => {
         // Mapear tipos de notificação para templates aprovados da Meta
         // REGRA: cadastro_aprovado_botao usa 5 body params + 1 button param (link_token)
         // O botão URL é /acompanhar/{{1}} → {{1}} DEVE ser contratos.link_token
-        const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[]; getButtonParams?: () => string[] | null }> = {
+        const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] | Promise<string[]>; getButtonParams?: () => string[] | null }> = {
           cadastro_aprovado: {
             template_name: 'cadastro_aprovado_botao',
             getParams: () => {
