@@ -90,7 +90,7 @@ Deno.serve(async (req) => {
         if (existing) return err('CPF já cadastrado no sistema', 'DUPLICATE_CPF', 409);
 
         const insertData: any = {
-          nome, cpf: cpfLimpo, email, telefone, status: 'em_analise',
+          nome, cpf: cpfLimpo, email, telefone, status: body.status || 'em_analise',
         };
         const optionalFields = ['rg', 'data_nascimento', 'sexo', 'estado_civil', 'profissao', 'whatsapp',
           'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'plano_id', 'dia_vencimento',
