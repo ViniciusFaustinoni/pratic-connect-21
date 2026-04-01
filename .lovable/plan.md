@@ -1,36 +1,116 @@
 
 
-# Trocar template Meta "Cobertura Total" → "Proteção 360"
+# Mensagem de Cobertura 360 com coberturas/benefícios dinâmicos
 
-## Situação atual
-O template Meta `cobertura_total_ativada` tem o header fixo "Cobertura Total Ativada!" — esse texto é imutável porque é aprovado pela Meta. O fallback Evolution já diz "Proteção 360º" corretamente, mas via Meta API vai com o texto antigo.
+## Problema
+O template `cobertura_360_ativada` tem a lista de coberturas e benefícios fixa no texto aprovado pela Meta. Associados com planos diferentes recebem a mesma lista genérica.
 
-## Passo 1 — Criar e registrar novo template Meta
+## Solução
 
-Você precisa criar um novo template na Meta Business Manager (ou via painel de Templates Meta do sistema) com:
-- **Nome**: `protecao_360_ativada` (ou similar)
-- **Header**: `🛡️ Proteção 360 Ativada!`
-- **Corpo**: Mesmo conteúdo do atual, trocando "COBERTURA TOTAL" por "PROTEÇÃO 360"
-- **Variáveis**: mesmas 3 (nome, placa, marca/modelo)
-- **Categoria**: UTILITY
+### Passo 1 — Novo template Meta com variável de lista
+Criar um novo template na Meta Business Manager (ex: `cobertura_360_ativada_v2`) com uma 4ª variável para a lista dinâmica:
 
-Após aprovação pela Meta, registrar na tabela `whatsapp_meta_templates`.
+```
+🛡️ Cobertura 360 Ativada!
 
-## Passo 2 — Atualizar código (após aprovação)
+Parabéns {{1}}! Seu veículo {{2}} ({{3}}) agora está com COBERTURA 360 ativa! ✅
 
-### Arquivo: `supabase/functions/notificar-cliente/index.ts`
-- Linha 365: trocar `template_name: 'cobertura_total_ativada'` por `template_name: 'protecao_360_ativada'`
+O que está incluso na sua cobertura:
 
-### Deploy
-- Deploy da edge function `notificar-cliente`
+{{4}}
 
-## Passo 3 — Desativar template antigo
-Após confirmar que o novo template funciona, desativar `cobertura_total_ativada` na Meta e na tabela `whatsapp_meta_templates`.
+Acesse o App PRATIC para acompanhar seu veículo e solicitar assistência quando precisar.
 
-## Nota importante
-O template `cadastro_aprovado_botao` (usado em outros fluxos) já recebe "Proteção 360º" como variável dinâmica — não precisa de alteração, pois o texto vem do código e não é fixo no template.
+Bem-vindo à família PRATIC! 💙
+```
 
-## Resumo da alteração no código
-- 1 linha alterada em 1 arquivo
-- Depende da aprovação do novo template pela Meta antes de implementar
+A variável `{{4}}` receberá o bloco completo de coberturas/benefícios formatado pelo backend.
+
+### Passo 2 — Edge function: buscar coberturas e benefícios reais
+
+No `notificar-cliente/index.ts`, quando `tipo === 'cobertura_total_ativada'`:
+
+1. Receber `contrato_id` nos `dados` (já temos `associado_id`)
+2. Buscar o `plano_id` do contrato/associado
+3. Buscar coberturas do plano via `planos_coberturas` + `coberturas`
+4. Buscar benefícios do plano via `planos_beneficios` + `benefits`
+5. Montar string formatada:
+```
+🔐 Roubo e Furto
+💥 Colisão
+🔥 Incêndio
+🚗 Assistência 24h
+📍 Rastreamento
+```
+6. Passar como 4º parâmetro do template
+
+### Passo 3 — Atualizar chamadas no frontend
+
+Nos 3 pontos que invocam `cobertura_total_ativada`, adicionar `contrato_id` nos dados:
+- `useAprovacaoMonitoramento.ts` (linha 194)
+- `usePropostasPendentes.ts` (linhas 1554 e 1690)
+
+### Passo 4 — Fallback Evolution (já funciona)
+
+Atualizar a mensagem fallback (linhas 46-61) para também montar a lista dinâmica em vez de hardcoded.
+
+## Detalhes técnicos (edge function)
+
+```typescript
+// Dentro do bloco cobertura_total_ativada no mapeamento Meta:
+cobertura_total_ativada: {
+  template_name: 'cobertura_360_ativada_v2',
+  getParams: async () => {
+    const placa = dados?.placa || 'N/A';
+    const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ');
+    
+    // Buscar plano do associado
+    const { data: assoc } = await supabase
+      .from('associados')
+      .select('plano_id')
+      .eq('id', associadoId)
+      .single();
+    
+    let listaItens = '';
+    if (assoc?.plano_id) {
+      // Coberturas
+      const { data: cobs } = await supabase
+        .from('planos_coberturas')
+        .select('coberturas(nome, icone)')
+        .eq('plano_id', assoc.plano_id);
+      
+      // Benefícios
+      const { data: bens } = await supabase
+        .from('planos_beneficios')
+        .select('benefits(name, category)')
+        .eq('plano_id', assoc.plano_id);
+      
+      const linhas = [];
+      for (const c of cobs || []) {
+        if (c.coberturas) linhas.push(`✓ ${c.coberturas.nome}`);
+      }
+      for (const b of bens || []) {
+        if (b.benefits) linhas.push(`✓ ${b.benefits.name}`);
+      }
+      listaItens = linhas.join('\n');
+    }
+    
+    if (!listaItens) {
+      listaItens = '✓ Proteção completa conforme seu plano';
+    }
+    
+    return [primeiroNome, placa, marcaModelo, listaItens];
+  },
+},
+```
+
+## Sequência de execução
+1. Você cria e aprova o template `cobertura_360_ativada_v2` na Meta com 4 variáveis
+2. Eu atualizo o código da edge function + frontend
+3. Deploy e teste
+
+## Impacto
+- 1 edge function alterada (notificar-cliente)
+- 3 hooks atualizados para passar `contrato_id`
+- Cada associado recebe a lista real do seu plano
 
