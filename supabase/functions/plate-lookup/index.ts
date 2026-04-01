@@ -153,6 +153,8 @@ serve(async (req) => {
       tipo_veiculo: veiculo.tipo_de_veiculo || '',
       categoria: veiculo.categoria || '',
       procedencia: veiculo.procedencia || '',
+      numero_portas: veiculo.qt_portas || veiculo.quantidade_passageiros || '',
+      cambio: veiculo.cambio || '',
     };
 
     // FIPE já vem na resposta da API
