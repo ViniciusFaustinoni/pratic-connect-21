@@ -1,40 +1,30 @@
 
-# Pre-preencher endereço no agendamento de instalação (link público)
+
+# Remover envio duplicado do template "técnico a caminho"
 
 ## Problema
-O componente `AgendamentoInstalacaoContrato` inicia com todos os campos de endereço vazios. O associado já tem CEP, logradouro, bairro, cidade e UF cadastrados (vindo da cotação), mas **número** e **complemento** não são pré-preenchidos porque:
-1. O componente não recebe dados de endereço como prop
-2. O componente não tem campo de complemento
+O template WhatsApp `tecnico_a_caminho_1` está sendo enviado **duas vezes** ao associado:
+1. No `cron-atribuir-tarefas` — quando o instalador/vistoriador é atribuído automaticamente
+2. No `notificar-inicio-rota` — quando o instalador clica "Iniciar Rota"
 
-## Correções
+O correto é enviar **apenas uma vez**, no momento em que o técnico efetivamente inicia o deslocamento (Iniciar Rota). A function `atribuir-proxima-tarefa` já teve essa correção aplicada anteriormente (comentário na linha 1001), mas o `cron-atribuir-tarefas` ainda dispara.
 
-### Arquivo 1: `src/components/associado/AgendamentoInstalacaoContrato.tsx`
-- Adicionar prop opcional `enderecoInicial` com campos `cep`, `logradouro`, `numero`, `complemento`, `bairro`, `cidade`, `estado`
-- Adicionar estado `complemento` (campo que não existe hoje)
-- No `useEffect` inicial, pré-preencher todos os campos com os dados do `enderecoInicial`
-- Adicionar campo de **Complemento** na UI (entre logradouro/número e bairro/cidade)
-- Incluir `complemento` no payload enviado ao confirmar
+## Correção
 
-### Arquivo 2: `src/pages/public/AssociadoVistoria.tsx`
-- Na chamada `<AgendamentoInstalacaoContrato>`, passar o endereço do associado como prop:
-```tsx
-<AgendamentoInstalacaoContrato
-  contratoId={contrato.id}
-  enderecoInicial={{
-    cep: contrato.associados?.cep || '',
-    logradouro: contrato.associados?.logradouro || '',
-    numero: contrato.associados?.numero || '',
-    complemento: contrato.associados?.complemento || '',
-    bairro: contrato.associados?.bairro || '',
-    cidade: contrato.associados?.cidade || '',
-    estado: contrato.associados?.uf || '',
-  }}
-  onConfirmar={...}
-/>
+### Arquivo: `supabase/functions/cron-atribuir-tarefas/index.ts`
+
+**Bloco 1 — Instalações (linhas 773-790)**: Remover ou comentar o bloco que envia `tecnico_em_rota` ao associado na atribuição de instalações.
+
+**Bloco 2 — Vistorias (linhas 941-963)**: Remover ou comentar o bloco que envia `tecnico_em_rota` ao associado na atribuição de vistorias.
+
+Ambos os blocos serão comentados com a mesma nota já presente em `atribuir-proxima-tarefa`:
+```
+// Notificação "técnico a caminho" removida daqui — agora é enviada apenas
+// quando o instalador clica "Iniciar Rota" (via notificar-inicio-rota)
 ```
 
 ## Impacto
-- 2 arquivos alterados
-- Campos pré-preenchidos ao abrir a tela de agendamento
-- Novo campo "Complemento" visível na UI
-- Associado pode editar se necessário
+- 1 edge function alterada, 2 blocos removidos
+- O associado recebe a notificação somente quando o técnico realmente inicia o deslocamento
+- Precisa de deploy da edge function
+
