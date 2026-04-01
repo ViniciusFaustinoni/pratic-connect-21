@@ -30,6 +30,7 @@ import {
   FileText,
   AlertTriangle,
   ExternalLink,
+  Expand,
 } from 'lucide-react';
 import {
   useAprovarInstalacaoMonitoramento,
