@@ -362,7 +362,7 @@ serve(async (req) => {
             getButtonParams: () => linkToken ? [linkToken] : null,
           },
           cobertura_total_ativada: {
-            template_name: 'cobertura_total_ativada',
+            template_name: 'protecao_360_ativada',
             getParams: () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
