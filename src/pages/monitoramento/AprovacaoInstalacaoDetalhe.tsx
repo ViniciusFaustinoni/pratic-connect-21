@@ -551,45 +551,57 @@ export default function AprovacaoInstalacaoDetalhe() {
               Vídeos 360°
             </CardTitle>
           </CardHeader>
-          <CardContent className="space-y-4">
-            {videoInstalador && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
-                    Instalador
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">Gravado pelo vistoriador durante a instalação</span>
+          <CardContent>
+            <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+              {videoInstalador && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-primary/10 text-primary border-primary/30 text-xs">
+                      Instalador
+                    </Badge>
+                  </div>
+                  <div
+                    className="relative rounded-lg overflow-hidden border border-border cursor-pointer group"
+                    onClick={() => setVideoExpandido(videoInstalador)}
+                  >
+                    <video
+                      src={videoInstalador}
+                      className="w-full aspect-video object-contain bg-black pointer-events-none"
+                      preload="metadata"
+                      muted
+                      playsInline
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                      <Expand className="w-8 h-8 text-white" />
+                    </div>
+                  </div>
                 </div>
-                <div className="rounded-lg overflow-hidden bg-muted/50 border border-border">
-                  <video
-                    src={videoInstalador}
-                    controls
-                    className="w-full aspect-video object-contain bg-black"
-                    preload="metadata"
-                    playsInline
-                  />
+              )}
+              {videoAssociado && (
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/30 text-xs">
+                      Associado
+                    </Badge>
+                  </div>
+                  <div
+                    className="relative rounded-lg overflow-hidden border border-border cursor-pointer group"
+                    onClick={() => setVideoExpandido(videoAssociado)}
+                  >
+                    <video
+                      src={videoAssociado}
+                      className="w-full aspect-video object-contain bg-black pointer-events-none"
+                      preload="metadata"
+                      muted
+                      playsInline
+                    />
+                    <div className="absolute inset-0 flex items-center justify-center bg-black/20 group-hover:bg-black/40 transition-colors">
+                      <Expand className="w-8 h-8 text-white" />
+                    </div>
+                  </div>
                 </div>
-              </div>
-            )}
-            {videoAssociado && (
-              <div className="space-y-2">
-                <div className="flex items-center gap-2">
-                  <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/30 text-xs">
-                    Associado
-                  </Badge>
-                  <span className="text-xs text-muted-foreground">Autovistoria gravada pelo associado</span>
-                </div>
-                <div className="rounded-lg overflow-hidden bg-muted/50 border border-border">
-                  <video
-                    src={videoAssociado}
-                    controls
-                    className="w-full aspect-video object-contain bg-black"
-                    preload="metadata"
-                    playsInline
-                  />
-                </div>
-              </div>
-            )}
+              )}
+            </div>
           </CardContent>
         </Card>
       )}
