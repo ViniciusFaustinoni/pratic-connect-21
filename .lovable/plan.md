@@ -1,58 +1,36 @@
 
 
-# Vídeos 360° lado a lado com expansão ao clicar
+# Trocar template Meta "Cobertura Total" → "Proteção 360"
 
-## O que muda
-Os dois vídeos (Instalador e Associado) passam a ser exibidos **lado a lado** em tamanho reduzido. Ao clicar em qualquer um, ele abre em um **Dialog fullscreen** para visualização ampliada.
+## Situação atual
+O template Meta `cobertura_total_ativada` tem o header fixo "Cobertura Total Ativada!" — esse texto é imutável porque é aprovado pela Meta. O fallback Evolution já diz "Proteção 360º" corretamente, mas via Meta API vai com o texto antigo.
 
-## Correção
+## Passo 1 — Criar e registrar novo template Meta
 
-### Arquivo: `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx`
+Você precisa criar um novo template na Meta Business Manager (ou via painel de Templates Meta do sistema) com:
+- **Nome**: `protecao_360_ativada` (ou similar)
+- **Header**: `🛡️ Proteção 360 Ativada!`
+- **Corpo**: Mesmo conteúdo do atual, trocando "COBERTURA TOTAL" por "PROTEÇÃO 360"
+- **Variáveis**: mesmas 3 (nome, placa, marca/modelo)
+- **Categoria**: UTILITY
 
-1. **Layout lado a lado**: Trocar `space-y-4` por `grid grid-cols-1 md:grid-cols-2 gap-4` no container dos vídeos — cada vídeo ocupa metade da largura em desktop.
+Após aprovação pela Meta, registrar na tabela `whatsapp_meta_templates`.
 
-2. **Vídeos menores**: Reduzir o aspect ratio dos vídeos embutidos (thumbnail compacto) e adicionar `cursor-pointer` + overlay com ícone de expandir.
+## Passo 2 — Atualizar código (após aprovação)
 
-3. **Estado de expansão**: Adicionar estado `videoExpandido` (`string | null`) que guarda a URL do vídeo clicado.
+### Arquivo: `supabase/functions/notificar-cliente/index.ts`
+- Linha 365: trocar `template_name: 'cobertura_total_ativada'` por `template_name: 'protecao_360_ativada'`
 
-4. **Dialog de expansão**: Ao clicar no vídeo, abrir um `Dialog` fullscreen com o player em tamanho grande (`max-w-[90vw] aspect-video`), com botão de fechar.
+### Deploy
+- Deploy da edge function `notificar-cliente`
 
-5. **Nos thumbnails**: Os vídeos ficam com `pointer-events-none` nos controles nativos (o clique vai para expandir), e o player ampliado no Dialog terá os controles habilitados.
+## Passo 3 — Desativar template antigo
+Após confirmar que o novo template funciona, desativar `cobertura_total_ativada` na Meta e na tabela `whatsapp_meta_templates`.
 
-## Detalhes técnicos
+## Nota importante
+O template `cadastro_aprovado_botao` (usado em outros fluxos) já recebe "Proteção 360º" como variável dinâmica — não precisa de alteração, pois o texto vem do código e não é fixo no template.
 
-```tsx
-// Novo estado
-const [videoExpandido, setVideoExpandido] = useState<string | null>(null);
-
-// Grid lado a lado
-<CardContent>
-  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
-    {videoInstalador && (
-      <div className="space-y-2 cursor-pointer" onClick={() => setVideoExpandido(videoInstalador)}>
-        <Badge>Instalador</Badge>
-        <div className="relative rounded-lg overflow-hidden border">
-          <video src={videoInstalador} className="w-full aspect-video object-contain bg-black" preload="metadata" muted />
-          <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30">
-            <Expand className="w-8 h-8 text-white" />
-          </div>
-        </div>
-      </div>
-    )}
-    {/* idem para videoAssociado */}
-  </div>
-</CardContent>
-
-// Dialog de expansão
-<Dialog open={!!videoExpandido} onOpenChange={() => setVideoExpandido(null)}>
-  <DialogContent className="max-w-4xl p-0">
-    <video src={videoExpandido} controls autoPlay className="w-full aspect-video" />
-  </DialogContent>
-</Dialog>
-```
-
-## Impacto
-- 1 arquivo, ~30 linhas alteradas
-- Visual mais clean: vídeos compactos lado a lado
-- Expansão com um clique para assistir em detalhe
+## Resumo da alteração no código
+- 1 linha alterada em 1 arquivo
+- Depende da aprovação do novo template pela Meta antes de implementar
 
