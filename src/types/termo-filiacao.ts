@@ -15,6 +15,9 @@ export interface ClienteData {
   email: string;
   telefone: string;
   telefoneSecundario?: string;
+  cnh?: string;
+  cnhValidade?: string;
+  cnhCategoria?: string;
   endereco: {
     cep: string;
     logradouro: string;
