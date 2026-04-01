@@ -770,24 +770,8 @@ Aguardamos sua confirmação! ⚡`;
                 const tecWhatsappLink = tecTelefoneLimpo ? `https://wa.me/55${tecTelefoneLimpo}` : '';
                 const enderecoAssociado = [instCompleta.logradouro, instCompleta.numero, instCompleta.bairro, instCompleta.cidade, instCompleta.uf].filter(Boolean).join(', ');
 
-                // Notificar ASSOCIADO que técnico foi atribuído (template tecnico_a_caminho_1)
-                try {
-                  await supabase.functions.invoke('notificar-cliente', {
-                    body: {
-                      associado_id: instCompleta.associado_id,
-                      tipo: 'tecnico_em_rota',
-                      dados: {
-                        tecnico_nome: tecNome,
-                        tecnico_telefone: tecTelefoneLimpo,
-                        tecnico_whatsapp_link: tecWhatsappLink,
-                        tipo_servico: 'instalação',
-                      }
-                    }
-                  });
-                  console.log(`[cron-atribuir-tarefas] ✓ WhatsApp "técnico a caminho" enviado ao associado ${instCompleta.associado_id}`);
-                } catch (notifAssocErr) {
-                  console.error('[cron-atribuir-tarefas] Erro ao notificar associado (instalação):', notifAssocErr);
-                }
+                // Notificação "técnico a caminho" removida daqui — agora é enviada apenas
+                // quando o instalador clica "Iniciar Rota" (via notificar-inicio-rota)
               }
 
               // 2. Push notification para o instalador
