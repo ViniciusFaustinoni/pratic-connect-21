@@ -155,6 +155,27 @@ function useServicoDetalheAprovacao(servicoId: string | undefined) {
         videoAssociado = autoVistoria?.video_360_url || null;
       }
 
+      // Fallback: buscar vídeo da autovistoria em cotacoes_vistoria_fotos
+      if (!videoAssociado && servico.contrato_id) {
+        const { data: contrato } = await supabase
+          .from('contratos')
+          .select('cotacao_id')
+          .eq('id', servico.contrato_id)
+          .maybeSingle();
+        
+        if (contrato?.cotacao_id) {
+          const { data: fotoVideo } = await supabase
+            .from('cotacoes_vistoria_fotos')
+            .select('arquivo_url')
+            .eq('cotacao_id', contrato.cotacao_id)
+            .eq('tipo', 'video_360')
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          videoAssociado = fotoVideo?.arquivo_url || null;
+        }
+      }
+
       // Checklist
       const checklist: any[] = [];
 
