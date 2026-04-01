@@ -18,22 +18,34 @@ interface PrazoEstado {
   prazo_horas: number;
 }
 
+interface EnderecoInicial {
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  estado?: string;
+}
+
 interface AgendamentoInstalacaoContratoProps {
   contratoId: string;
+  enderecoInicial?: EnderecoInicial;
   onConfirmar: () => void;
 }
 
-export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: AgendamentoInstalacaoContratoProps) {
+export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onConfirmar }: AgendamentoInstalacaoContratoProps) {
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
   const [horarioSelecionado, setHorarioSelecionado] = useState<string | null>(null);
   
   // Estados para endereço
-  const [cep, setCep] = useState('');
-  const [logradouro, setLogradouro] = useState('');
-  const [numero, setNumero] = useState('');
-  const [bairro, setBairro] = useState('');
-  const [cidade, setCidade] = useState('');
-  const [estado, setEstado] = useState('');
+  const [cep, setCep] = useState(enderecoInicial?.cep || '');
+  const [logradouro, setLogradouro] = useState(enderecoInicial?.logradouro || '');
+  const [numero, setNumero] = useState(enderecoInicial?.numero || '');
+  const [complemento, setComplemento] = useState(enderecoInicial?.complemento || '');
+  const [bairro, setBairro] = useState(enderecoInicial?.bairro || '');
+  const [cidade, setCidade] = useState(enderecoInicial?.cidade || '');
+  const [estado, setEstado] = useState(enderecoInicial?.estado || '');
   const [buscandoCep, setBuscandoCep] = useState(false);
   
   // Estados para responsável
@@ -139,14 +151,15 @@ export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: Agend
         contratoId,
         dataAgendada: format(dataSelecionada, 'yyyy-MM-dd'),
         horarioAgendado: horarioSelecionado,
-        endereco: {
-          cep: cep.replace(/\D/g, ''),
-          logradouro,
-          numero,
-          bairro,
-          cidade,
-          estado,
-        },
+          endereco: {
+            cep: cep.replace(/\D/g, ''),
+            logradouro,
+            numero,
+            complemento,
+            bairro,
+            cidade,
+            estado,
+          },
         responsavel: {
           euMesmo,
           nome: euMesmo ? undefined : responsavelNome,
@@ -266,6 +279,16 @@ export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: Agend
                 </div>
               </div>
               
+              <div>
+                <Label htmlFor="complemento" className="text-xs text-muted-foreground">Complemento</Label>
+                <Input
+                  id="complemento"
+                  placeholder="Apto, Bloco..."
+                  value={complemento}
+                  onChange={(e) => setComplemento(e.target.value)}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label htmlFor="bairro" className="text-xs text-muted-foreground">Bairro *</Label>

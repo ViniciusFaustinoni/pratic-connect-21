@@ -22,7 +22,7 @@ export function useContratoByToken(token: string | undefined) {
         .select(`
           *,
           planos:plano_id (nome, descricao),
-          associados:associado_id (nome, email, telefone, cpf, status),
+          associados:associado_id (nome, email, telefone, cpf, status, cep, logradouro, numero, complemento, bairro, cidade, uf),
           leads:lead_id (nome, email, telefone, cpf)
         `)
         .eq('link_token', token)
@@ -688,6 +688,7 @@ export interface AgendarInstalacaoContratoParams {
     cep: string;
     logradouro: string;
     numero: string;
+    complemento?: string;
     bairro: string;
     cidade: string;
     estado: string;

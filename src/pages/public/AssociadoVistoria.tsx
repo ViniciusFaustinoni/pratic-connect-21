@@ -395,6 +395,15 @@ export default function AssociadoVistoria() {
           {etapa === 'agendamento_instalacao' && (
             <AgendamentoInstalacaoContrato
               contratoId={contrato.id}
+              enderecoInicial={{
+                cep: contrato.associados?.cep || '',
+                logradouro: contrato.associados?.logradouro || '',
+                numero: contrato.associados?.numero || '',
+                complemento: contrato.associados?.complemento || '',
+                bairro: contrato.associados?.bairro || '',
+                cidade: contrato.associados?.cidade || '',
+                estado: contrato.associados?.uf || '',
+              }}
               onConfirmar={() => {
                 // Após agendar, gerar link Autentique e ir para confirmação
                 if (token && !contrato?.autentique_url) {
