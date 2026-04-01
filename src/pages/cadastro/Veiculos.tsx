@@ -28,6 +28,51 @@ import { useVeiculos } from '@/hooks/useVeiculos';
 import { useAssociados } from '@/hooks/useAssociados';
 import { STATUS_VEICULO_LABELS, type StatusVeiculo } from '@/types/database';
 
+interface VehicleResult {
+  placa: string;
+  chassi: string;
+  renavam: string;
+  marca: string;
+  modelo: string;
+  marca_modelo: string;
+  ano: string;
+  cor: string;
+  combustivel: string;
+  municipio: string;
+  uf: string;
+  motor: string;
+  potencia: string;
+  cilindradas: string;
+  tipo_veiculo: string;
+  categoria: string;
+  procedencia: string;
+  numero_portas: string;
+  cambio: string;
+}
+
+interface FipeResult {
+  codigo: string;
+  valor: number;
+  mesReferencia: string;
+}
+
+interface LookupResult {
+  success: boolean;
+  vehicleData?: VehicleResult;
+  fipeData?: FipeResult | null;
+  error?: string;
+}
+
+function InfoItem({ label, value }: { label: string; value: string | undefined }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="font-medium text-sm">{value}</p>
+    </div>
+  );
+}
+
 const statusColors: Record<StatusVeiculo, string> = {
   em_analise: 'bg-blue-100 text-blue-800',
   aprovado: 'bg-green-100 text-green-800',
