@@ -252,6 +252,41 @@ serve(async (req) => {
     mensagem = mensagem.replace('{nome}', primeiroNome);
     titulo = titulo.replace('{nome}', primeiroNome);
 
+    // Para cobertura_total_ativada, buscar lista dinâmica de coberturas/benefícios
+    if (tipo === 'cobertura_total_ativada') {
+      try {
+        const { data: assocPlano } = await supabase
+          .from('associados')
+          .select('plano_id')
+          .eq('id', associado_id)
+          .single();
+
+        if (assocPlano?.plano_id) {
+          const { data: cobs } = await supabase
+            .from('planos_coberturas')
+            .select('coberturas(nome)')
+            .eq('plano_id', assocPlano.plano_id);
+
+          const { data: bens } = await supabase
+            .from('planos_beneficios')
+            .select('benefits(name)')
+            .eq('plano_id', assocPlano.plano_id);
+
+          const linhas: string[] = [];
+          for (const c of (cobs || []) as any[]) {
+            if (c.coberturas) linhas.push(`✓ ${c.coberturas.nome}`);
+          }
+          for (const b of (bens || []) as any[]) {
+            if (b.benefits) linhas.push(`✓ ${b.benefits.name}`);
+          }
+          const listaItens = linhas.length > 0 ? linhas.join('\n') : '✓ Proteção completa conforme seu plano';
+          mensagem = mensagem.replace('{lista_itens}', listaItens);
+        }
+      } catch (e) {
+        console.warn('[notificar-cliente] Erro ao buscar coberturas/benefícios para fallback:', e);
+      }
+    }
+
     // Substituir outras variáveis dos dados
     if (dados) {
       Object.entries(dados).forEach(([key, value]) => {
