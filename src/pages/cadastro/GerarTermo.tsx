@@ -42,6 +42,9 @@ const mockAssociado: DadosTermoFiliacao = {
     cpf: '12345678900',
     rg: '12.345.678-9',
     rgOrgao: 'SSP/SP',
+    cnh: '07064650202',
+    cnhCategoria: 'AB',
+    cnhValidade: '2028-12-20',
     dataNascimento: '1990-05-15',
     estadoCivil: 'Solteira',
     profissao: 'Empresária',
@@ -110,6 +113,9 @@ const mockAssociado: DadosTermoFiliacao = {
   indicador: {
     nome: 'Maria Santos',
     cpf: '98765432100',
+  },
+  consultor: {
+    nome: 'Maria Santos',
   },
 };
 

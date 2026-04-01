@@ -49,7 +49,7 @@ export function TermoFiliacaoTemplate({
   dados, 
   aditivos = [] 
 }: TermoFiliacaoTemplateProps) {
-  const { cliente, veiculo, plano, contrato, empresa } = dados;
+  const { cliente, veiculo, plano, contrato, empresa, consultor } = dados;
   const { data: regrasDepreciacao } = useConfiguracaoJson<RegraDepreciacao[]>('regras_depreciacao', DEPRECIACOES_FALLBACK);
   const regras = regrasDepreciacao ?? DEPRECIACOES_FALLBACK;
   
@@ -121,6 +121,11 @@ export function TermoFiliacaoTemplate({
         <div style={{ fontSize: '11pt', fontWeight: 'bold' }}>
           Nº {contrato.numero}
         </div>
+        {consultor?.nome && (
+          <div style={{ fontSize: '10pt', marginTop: '4pt', color: '#333' }}>
+            <span style={{ fontWeight: 'bold' }}>Consultor Responsável:</span> {consultor.nome}
+          </div>
+        )}
       </div>
 
       {/* SEÇÃO 1: QUALIFICAÇÃO DO ASSOCIADO */}
@@ -141,6 +146,24 @@ export function TermoFiliacaoTemplate({
             <span style={{ fontWeight: 'bold' }}>RG:</span> {cliente.rg || '—'}{cliente.rgOrgao ? ` - ${cliente.rgOrgao}` : ''}
           </div>
         </div>
+
+        {cliente.cnh && (
+          <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '6pt' }}>
+            <div style={{ marginRight: '20pt' }}>
+              <span style={{ fontWeight: 'bold' }}>CNH:</span> {cliente.cnh}
+            </div>
+            {cliente.cnhCategoria && (
+              <div style={{ marginRight: '20pt' }}>
+                <span style={{ fontWeight: 'bold' }}>Categoria:</span> {cliente.cnhCategoria}
+              </div>
+            )}
+            {cliente.cnhValidade && (
+              <div>
+                <span style={{ fontWeight: 'bold' }}>Validade:</span> {formatDate(cliente.cnhValidade)}
+              </div>
+            )}
+          </div>
+        )}
         
         <div style={{ display: 'flex', flexWrap: 'wrap', marginBottom: '6pt' }}>
           <div style={{ marginRight: '20pt' }}>
