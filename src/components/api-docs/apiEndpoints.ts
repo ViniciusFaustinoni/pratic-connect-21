@@ -26,7 +26,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: `${BASE_PATH}/associados`,
     title: 'Criar Associado',
-    description: 'Cadastra um novo associado no sistema com status "em_analise".',
+    description: 'Cadastra um novo associado no sistema. O status padrão é "em_analise", mas pode ser definido como "ativo" para migrações do SGA.',
     group: 'Associados',
     fields: [
       { name: 'nome', type: 'string', required: true, description: 'Nome completo do associado' },
