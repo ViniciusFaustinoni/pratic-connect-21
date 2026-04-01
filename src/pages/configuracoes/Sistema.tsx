@@ -1,16 +1,12 @@
 import { useState } from 'react';
-import { Settings, Save, Loader2, Search, Car, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Settings, Save, Loader2 } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
-import { Alert, AlertDescription } from '@/components/ui/alert';
 import { toast } from 'sonner';
-import { supabase } from '@/integrations/supabase/client';
-import { usePermissions } from '@/hooks/usePermissions';
 
 interface VehicleResult {
   placa: string;
