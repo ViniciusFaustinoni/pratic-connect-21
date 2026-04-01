@@ -279,6 +279,16 @@ export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onC
                 </div>
               </div>
               
+              <div>
+                <Label htmlFor="complemento" className="text-xs text-muted-foreground">Complemento</Label>
+                <Input
+                  id="complemento"
+                  placeholder="Apto, Bloco..."
+                  value={complemento}
+                  onChange={(e) => setComplemento(e.target.value)}
+                />
+              </div>
+
               <div className="grid grid-cols-2 gap-2">
                 <div>
                   <Label htmlFor="bairro" className="text-xs text-muted-foreground">Bairro *</Label>
