@@ -26,7 +26,7 @@ export const apiEndpoints: ApiEndpoint[] = [
     method: 'POST',
     path: `${BASE_PATH}/associados`,
     title: 'Criar Associado',
-    description: 'Cadastra um novo associado no sistema com status "em_analise".',
+    description: 'Cadastra um novo associado no sistema. O status padrão é "em_analise", mas pode ser definido como "ativo" para migrações do SGA.',
     group: 'Associados',
     fields: [
       { name: 'nome', type: 'string', required: true, description: 'Nome completo do associado' },
@@ -58,12 +58,13 @@ export const apiEndpoints: ApiEndpoint[] = [
       { name: 'codigo_hinova', type: 'number', required: false, description: 'Código do associado no Hinova' },
       { name: 'sincronizado_hinova', type: 'boolean', required: false, description: 'Se foi sincronizado com Hinova' },
       { name: 'sincronizado_hinova_em', type: 'string (ISO 8601)', required: false, description: 'Data/hora da sincronização com Hinova' },
+      { name: 'status', type: 'string', required: false, description: 'Status inicial do associado. Valores: "em_analise" (padrão), "ativo" (para migrações do SGA). Se não informado, será "em_analise".' },
     ],
     responseExample: {
       id: '550e8400-e29b-41d4-a716-446655440000',
       nome: 'João da Silva',
       cpf: '12345678901',
-      status: 'em_analise',
+      status: 'ativo',
       cnh_validade: '2028-05-15',
       cnh_numero: '12345678900',
       cnh_categoria: 'AB',
