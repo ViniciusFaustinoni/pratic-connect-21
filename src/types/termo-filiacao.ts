@@ -113,6 +113,7 @@ export interface DadosTermoFiliacao {
   contrato: ContratoData;
   empresa: EmpresaData;
   indicador?: IndicadorData;
+  consultor?: { nome: string };
 }
 
 // ============= FORMATADORES =============

@@ -114,6 +114,9 @@ const mockAssociado: DadosTermoFiliacao = {
     nome: 'Maria Santos',
     cpf: '98765432100',
   },
+  consultor: {
+    nome: 'Maria Santos',
+  },
 };
 
 export default function GerarTermo() {
