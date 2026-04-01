@@ -770,24 +770,8 @@ Aguardamos sua confirmação! ⚡`;
                 const tecWhatsappLink = tecTelefoneLimpo ? `https://wa.me/55${tecTelefoneLimpo}` : '';
                 const enderecoAssociado = [instCompleta.logradouro, instCompleta.numero, instCompleta.bairro, instCompleta.cidade, instCompleta.uf].filter(Boolean).join(', ');
 
-                // Notificar ASSOCIADO que técnico foi atribuído (template tecnico_a_caminho_1)
-                try {
-                  await supabase.functions.invoke('notificar-cliente', {
-                    body: {
-                      associado_id: instCompleta.associado_id,
-                      tipo: 'tecnico_em_rota',
-                      dados: {
-                        tecnico_nome: tecNome,
-                        tecnico_telefone: tecTelefoneLimpo,
-                        tecnico_whatsapp_link: tecWhatsappLink,
-                        tipo_servico: 'instalação',
-                      }
-                    }
-                  });
-                  console.log(`[cron-atribuir-tarefas] ✓ WhatsApp "técnico a caminho" enviado ao associado ${instCompleta.associado_id}`);
-                } catch (notifAssocErr) {
-                  console.error('[cron-atribuir-tarefas] Erro ao notificar associado (instalação):', notifAssocErr);
-                }
+                // Notificação "técnico a caminho" removida daqui — agora é enviada apenas
+                // quando o instalador clica "Iniciar Rota" (via notificar-inicio-rota)
               }
 
               // 2. Push notification para o instalador
@@ -938,30 +922,8 @@ Aguardamos sua confirmação! ⚡`;
                 console.log(`[cron-atribuir-tarefas] ✓ WhatsApp completo enviado ao vistoriador ${vistProfile.nome}`);
               }
 
-              // 2. Notificar ASSOCIADO que técnico foi atribuído (template tecnico_a_caminho_1)
-              if (vistCompleta?.associado_id && vistProfile) {
-                const tecNomeVist = vistProfile.nome || 'Vistoriador PRATIC';
-                const tecTelVist = (vistProfile.telefone || '').replace(/\D/g, '');
-                const tecWhatsLinkVist = tecTelVist ? `https://wa.me/55${tecTelVist}` : '';
-
-                try {
-                  await supabase.functions.invoke('notificar-cliente', {
-                    body: {
-                      associado_id: vistCompleta.associado_id,
-                      tipo: 'tecnico_em_rota',
-                      dados: {
-                        tecnico_nome: tecNomeVist,
-                        tecnico_telefone: tecTelVist,
-                        tecnico_whatsapp_link: tecWhatsLinkVist,
-                        tipo_servico: 'vistoria',
-                      }
-                    }
-                  });
-                  console.log(`[cron-atribuir-tarefas] ✓ WhatsApp "técnico a caminho" enviado ao associado ${vistCompleta.associado_id}`);
-                } catch (notifAssocVistErr) {
-                  console.error('[cron-atribuir-tarefas] Erro ao notificar associado (vistoria):', notifAssocVistErr);
-                }
-              }
+              // Notificação "técnico a caminho" removida daqui — agora é enviada apenas
+              // quando o vistoriador clica "Iniciar Rota" (via notificar-inicio-rota)
             } catch (whatsErr) {
               console.error('[cron-atribuir-tarefas] Erro ao enviar notificações de vistoria:', whatsErr);
             }
