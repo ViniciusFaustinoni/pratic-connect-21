@@ -1,30 +1,35 @@
 
 
-# Drag & Drop de Planos entre Linhas
+# Corrigir status de associados criados via API externa
 
-## O que será feito
-Permitir arrastar um plano de uma linha para outra na seção "Linhas e Planos" da Gestão Comercial. Ao soltar o plano em outra linha, seu `product_line_id` será atualizado no banco.
+## Problema
+Na edge function `api-externa/index.ts`, linha 93, o status do associado é **hardcoded** como `'em_analise'`:
+```ts
+const insertData: any = {
+  nome, cpf: cpfLimpo, email, telefone, status: 'em_analise',
+};
+```
 
-## Abordagem técnica
+Quando o associado vem do SGA (já ativo), deveria ser possível definir o status via payload da API.
 
-**Biblioteca**: Usar a API nativa de HTML5 Drag & Drop (sem dependência extra), já que a interação é simples — arrastar um item de uma lista para outra.
+## Correção
 
-**Arquivo**: `src/components/gestao-comercial/LinhasPlanos.tsx`
+**Arquivo**: `supabase/functions/api-externa/index.ts`
 
-### Mudanças:
+**Linha 93**: Permitir que o campo `status` venha no body da requisição, com fallback para `'em_analise'`:
 
-1. **Novo hook `useMovePlanToLine`** — mutation que faz `UPDATE planos SET product_line_id = ? WHERE id = ?` e invalida a query.
+```ts
+const insertData: any = {
+  nome, cpf: cpfLimpo, email, telefone, 
+  status: body.status || 'em_analise',
+};
+```
 
-2. **Estado de drag** — `draggedPlan: { id, fromLineId } | null` no componente principal.
-
-3. **Nos itens de plano (linha ~260)** — adicionar `draggable`, `onDragStart` (setar estado) e `onDragEnd` (limpar estado). Cursor `grab`.
-
-4. **Nas linhas (div da `Collapsible`, ~232)** — adicionar `onDragOver` (preventDefault + highlight visual) e `onDrop` (chamar mutation se linha destino ≠ linha origem). Abrir automaticamente a linha ao passar por cima.
-
-5. **Feedback visual** — borda destacada (ex: `ring-2 ring-primary`) na linha quando um plano está sendo arrastado sobre ela.
+Adicionalmente, adicionar `'status'` à lista de `optionalFields` (linha 95-98) **não é necessário** pois já estará no `insertData` acima.
 
 ## Impacto
-- 1 arquivo alterado, ~40 linhas adicionadas
-- Nenhuma dependência nova
-- Apenas atualiza `product_line_id` — coberturas, benefícios e elegibilidade permanecem intactos
+- 1 linha alterada na edge function
+- Deploy automático
+- Quem chamar a API com `"status": "ativo"` terá o associado criado como ativo
+- Chamadas sem `status` continuam como `em_analise` (backward compatible)
 
