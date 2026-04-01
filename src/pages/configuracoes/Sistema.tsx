@@ -8,50 +8,6 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Switch } from '@/components/ui/switch';
 import { toast } from 'sonner';
 
-interface VehicleResult {
-  placa: string;
-  chassi: string;
-  renavam: string;
-  marca: string;
-  modelo: string;
-  marca_modelo: string;
-  ano: string;
-  cor: string;
-  combustivel: string;
-  municipio: string;
-  uf: string;
-  motor: string;
-  potencia: string;
-  cilindradas: string;
-  tipo_veiculo: string;
-  categoria: string;
-  procedencia: string;
-  numero_portas: string;
-  cambio: string;
-}
-
-interface FipeResult {
-  codigo: string;
-  valor: number;
-  mesReferencia: string;
-}
-
-interface LookupResult {
-  success: boolean;
-  vehicleData?: VehicleResult;
-  fipeData?: FipeResult | null;
-  error?: string;
-}
-
-function InfoItem({ label, value }: { label: string; value: string | undefined }) {
-  if (!value) return null;
-  return (
-    <div>
-      <p className="text-xs text-muted-foreground">{label}</p>
-      <p className="font-medium text-sm">{value}</p>
-    </div>
-  );
-}
 
 export default function Sistema() {
   const [saving, setSaving] = useState(false);
