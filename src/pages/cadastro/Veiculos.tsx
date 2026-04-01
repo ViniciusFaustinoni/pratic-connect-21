@@ -1,10 +1,14 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Car, User, Smartphone } from 'lucide-react';
+import { Search, Car, User, Smartphone, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
-import { Card, CardContent } from '@/components/ui/card';
+import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Button } from '@/components/ui/button';
+import { Alert, AlertDescription } from '@/components/ui/alert';
+import { supabase } from '@/integrations/supabase/client';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Table,
   TableBody,
@@ -24,6 +28,51 @@ import { useVeiculos } from '@/hooks/useVeiculos';
 import { useAssociados } from '@/hooks/useAssociados';
 import { STATUS_VEICULO_LABELS, type StatusVeiculo } from '@/types/database';
 
+interface VehicleResult {
+  placa: string;
+  chassi: string;
+  renavam: string;
+  marca: string;
+  modelo: string;
+  marca_modelo: string;
+  ano: string;
+  cor: string;
+  combustivel: string;
+  municipio: string;
+  uf: string;
+  motor: string;
+  potencia: string;
+  cilindradas: string;
+  tipo_veiculo: string;
+  categoria: string;
+  procedencia: string;
+  numero_portas: string;
+  cambio: string;
+}
+
+interface FipeResult {
+  codigo: string;
+  valor: number;
+  mesReferencia: string;
+}
+
+interface LookupResult {
+  success: boolean;
+  vehicleData?: VehicleResult;
+  fipeData?: FipeResult | null;
+  error?: string;
+}
+
+function InfoItem({ label, value }: { label: string; value: string | undefined }) {
+  if (!value) return null;
+  return (
+    <div>
+      <p className="text-xs text-muted-foreground">{label}</p>
+      <p className="font-medium text-sm">{value}</p>
+    </div>
+  );
+}
+
 const statusColors: Record<StatusVeiculo, string> = {
   em_analise: 'bg-blue-100 text-blue-800',
   aprovado: 'bg-green-100 text-green-800',
@@ -41,6 +90,53 @@ export default function Veiculos() {
   const { data: veiculos, isLoading } = useVeiculos();
   const { data: associadosData } = useAssociados();
   const associados = associadosData?.associados;
+  const { hasPerm } = usePermissions();
+
+  // Consulta de placa
+  const [placaInput, setPlacaInput] = useState('');
+  const [lookupLoading, setLookupLoading] = useState(false);
+  const [lookupResult, setLookupResult] = useState<LookupResult | null>(null);
+  const [lookupError, setLookupError] = useState('');
+
+  const handlePlacaChange = (value: string) => {
+    const cleaned = value.replace(/[^A-Za-z0-9]/g, '').toUpperCase().slice(0, 7);
+    if (cleaned.length >= 4 && /^[A-Z]{3}[0-9]/.test(cleaned) && !/[A-Z]/.test(cleaned[4] || '')) {
+      setPlacaInput(`${cleaned.slice(0, 3)}-${cleaned.slice(3)}`);
+    } else {
+      setPlacaInput(cleaned);
+    }
+    setLookupError('');
+    setLookupResult(null);
+  };
+
+  const handleLookup = async () => {
+    const raw = placaInput.replace(/[^A-Za-z0-9]/g, '');
+    if (raw.length < 7) return;
+    setLookupLoading(true);
+    setLookupError('');
+    setLookupResult(null);
+    try {
+      const { data, error } = await supabase.functions.invoke('plate-lookup', {
+        body: { placa: raw },
+      });
+      if (error) throw new Error(error.message);
+      if (data?.success) {
+        setLookupResult(data);
+      } else {
+        setLookupError(data?.error || 'Veículo não encontrado');
+      }
+    } catch (err: any) {
+      setLookupError(err.message || 'Erro ao consultar placa');
+    } finally {
+      setLookupLoading(false);
+    }
+  };
+
+  const formatFipeCurrency = (value: number) =>
+    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
+
+  const lv = lookupResult?.vehicleData;
+  const lf = lookupResult?.fipeData;
 
   // Create a map of associado_id to nome for quick lookup
   const associadoMap = new Map<string, string>(
@@ -140,6 +236,112 @@ export default function Veiculos() {
           </CardContent>
         </Card>
       </div>
+
+      {/* Consulta de Placa - apenas analista de cadastro */}
+      {hasPerm('canManageCadastro') && (
+        <Card className="border-border/50">
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <Car className="h-5 w-5" />
+              Consulta de Veículo por Placa
+            </CardTitle>
+            <CardDescription>Consulte informações completas de um veículo pela placa</CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex gap-2">
+              <div className="relative flex-1 max-w-xs">
+                <Car className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                <Input
+                  placeholder="ABC1234 ou ABC1D23"
+                  value={placaInput}
+                  onChange={(e) => handlePlacaChange(e.target.value)}
+                  onKeyDown={(e) => e.key === 'Enter' && handleLookup()}
+                  className="pl-10 uppercase font-mono text-lg tracking-wider"
+                  maxLength={8}
+                  disabled={lookupLoading}
+                />
+              </div>
+              <Button onClick={handleLookup} disabled={lookupLoading || placaInput.replace(/[^A-Za-z0-9]/g, '').length < 7}>
+                {lookupLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : <Search className="h-4 w-4 mr-2" />}
+                Consultar
+              </Button>
+            </div>
+
+            {lookupError && (
+              <Alert variant="destructive">
+                <AlertCircle className="h-4 w-4" />
+                <AlertDescription>{lookupError}</AlertDescription>
+              </Alert>
+            )}
+
+            {lv && (
+              <div className="space-y-4 pt-2">
+                <div className="flex items-center gap-2">
+                  <CheckCircle2 className="h-5 w-5 text-green-500" />
+                  <span className="font-semibold">Veículo Encontrado</span>
+                  <Badge variant="outline" className="font-mono text-base ml-auto">{lv.placa}</Badge>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Identificação</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <InfoItem label="Placa" value={lv.placa} />
+                    <InfoItem label="Chassi" value={lv.chassi} />
+                    <InfoItem label="Renavam" value={lv.renavam} />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Veículo</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <InfoItem label="Marca" value={lv.marca} />
+                    <InfoItem label="Modelo" value={lv.modelo} />
+                    <InfoItem label="Ano" value={lv.ano} />
+                    <InfoItem label="Cor" value={lv.cor} />
+                    <InfoItem label="Tipo" value={lv.tipo_veiculo} />
+                    <InfoItem label="Nº Portas" value={lv.numero_portas} />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Mecânica</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <InfoItem label="Motor" value={lv.motor} />
+                    <InfoItem label="Potência" value={lv.potencia} />
+                    <InfoItem label="Cilindradas" value={lv.cilindradas} />
+                    <InfoItem label="Combustível" value={lv.combustivel} />
+                    <InfoItem label="Câmbio" value={lv.cambio} />
+                  </div>
+                </div>
+
+                <div>
+                  <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">Registro</p>
+                  <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                    <InfoItem label="Município" value={lv.municipio} />
+                    <InfoItem label="UF" value={lv.uf} />
+                    <InfoItem label="Categoria" value={lv.categoria} />
+                    <InfoItem label="Procedência" value={lv.procedencia} />
+                  </div>
+                </div>
+
+                {lf && (
+                  <div>
+                    <p className="text-xs font-semibold text-muted-foreground uppercase tracking-wide mb-2">FIPE</p>
+                    <div className="grid grid-cols-2 md:grid-cols-3 gap-3">
+                      <InfoItem label="Código FIPE" value={lf.codigo} />
+                      <div>
+                        <p className="text-xs text-muted-foreground">Valor FIPE</p>
+                        <p className="font-bold text-primary text-lg">{formatFipeCurrency(lf.valor)}</p>
+                      </div>
+                      <InfoItem label="Referência" value={lf.mesReferencia} />
+                    </div>
+                  </div>
+                )}
+              </div>
+            )}
+          </CardContent>
+        </Card>
+      )}
 
       {/* Filters */}
       <div className="flex flex-col gap-4 sm:flex-row sm:items-center">
