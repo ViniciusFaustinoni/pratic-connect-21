@@ -48,12 +48,7 @@ const TEMPLATES: Record<string, {
     mensagem: `Parabéns {nome}! Seu veículo *{placa}* agora está com *PROTEÇÃO 360º* ativa! ✅
 
 *O que está incluso na sua cobertura:*
-🔐 Roubo e Furto
-💥 Colisão
-🔥 Incêndio
-🌧️ Fenômenos Naturais
-🚗 Assistência 24h (guincho, pane seca, chaveiro e mais)
-📍 Rastreamento em tempo real
+{lista_itens}
 
 Acesse o App PRATIC para acompanhar seu veículo e solicitar assistência quando precisar.
 
