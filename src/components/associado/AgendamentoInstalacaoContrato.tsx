@@ -18,22 +18,34 @@ interface PrazoEstado {
   prazo_horas: number;
 }
 
+interface EnderecoInicial {
+  cep?: string;
+  logradouro?: string;
+  numero?: string;
+  complemento?: string;
+  bairro?: string;
+  cidade?: string;
+  estado?: string;
+}
+
 interface AgendamentoInstalacaoContratoProps {
   contratoId: string;
+  enderecoInicial?: EnderecoInicial;
   onConfirmar: () => void;
 }
 
-export function AgendamentoInstalacaoContrato({ contratoId, onConfirmar }: AgendamentoInstalacaoContratoProps) {
+export function AgendamentoInstalacaoContrato({ contratoId, enderecoInicial, onConfirmar }: AgendamentoInstalacaoContratoProps) {
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
   const [horarioSelecionado, setHorarioSelecionado] = useState<string | null>(null);
   
   // Estados para endereço
-  const [cep, setCep] = useState('');
-  const [logradouro, setLogradouro] = useState('');
-  const [numero, setNumero] = useState('');
-  const [bairro, setBairro] = useState('');
-  const [cidade, setCidade] = useState('');
-  const [estado, setEstado] = useState('');
+  const [cep, setCep] = useState(enderecoInicial?.cep || '');
+  const [logradouro, setLogradouro] = useState(enderecoInicial?.logradouro || '');
+  const [numero, setNumero] = useState(enderecoInicial?.numero || '');
+  const [complemento, setComplemento] = useState(enderecoInicial?.complemento || '');
+  const [bairro, setBairro] = useState(enderecoInicial?.bairro || '');
+  const [cidade, setCidade] = useState(enderecoInicial?.cidade || '');
+  const [estado, setEstado] = useState(enderecoInicial?.estado || '');
   const [buscandoCep, setBuscandoCep] = useState(false);
   
   // Estados para responsável
