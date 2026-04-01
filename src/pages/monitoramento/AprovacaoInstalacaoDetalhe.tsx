@@ -219,6 +219,7 @@ export default function AprovacaoInstalacaoDetalhe() {
   const [motivoReprovar, setMotivoReprovar] = useState('');
   const [observacoesAprovacao, setObservacoesAprovacao] = useState('');
   const [selectedImage, setSelectedImage] = useState<string | null>(null);
+  const [videoExpandido, setVideoExpandido] = useState<string | null>(null);
 
   if (isLoading) {
     return (
