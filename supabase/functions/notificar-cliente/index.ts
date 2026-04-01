@@ -357,11 +357,49 @@ serve(async (req) => {
             getButtonParams: () => linkToken ? [linkToken] : null,
           },
           cobertura_total_ativada: {
-            template_name: 'cobertura_360_ativada',
-            getParams: () => {
+            template_name: 'cobertura_360_ativada_v2',
+            getParams: async () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo];
+              
+              // Buscar plano do associado para montar lista dinâmica
+              let listaItens = '';
+              try {
+                const { data: assoc } = await supabase
+                  .from('associados')
+                  .select('plano_id')
+                  .eq('id', associadoId)
+                  .single();
+                
+                if (assoc?.plano_id) {
+                  const { data: cobs } = await supabase
+                    .from('planos_coberturas')
+                    .select('coberturas(nome)')
+                    .eq('plano_id', assoc.plano_id);
+                  
+                  const { data: bens } = await supabase
+                    .from('planos_beneficios')
+                    .select('benefits(name)')
+                    .eq('plano_id', assoc.plano_id);
+                  
+                  const linhas: string[] = [];
+                  for (const c of (cobs || []) as any[]) {
+                    if (c.coberturas) linhas.push(`✓ ${c.coberturas.nome}`);
+                  }
+                  for (const b of (bens || []) as any[]) {
+                    if (b.benefits) linhas.push(`✓ ${b.benefits.name}`);
+                  }
+                  listaItens = linhas.join('\n');
+                }
+              } catch (e) {
+                console.warn('[cobertura_total_ativada] Erro ao buscar coberturas/benefícios:', e);
+              }
+              
+              if (!listaItens) {
+                listaItens = '✓ Proteção completa conforme seu plano';
+              }
+              
+              return [primeiroNome, placa, marcaModelo, listaItens];
             },
           },
           vistoria_aprovada: {
