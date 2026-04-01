@@ -1,49 +1,58 @@
 
 
-# Corrigir vídeo de autovistoria do associado na Aprovação
+# Vídeos 360° lado a lado com expansão ao clicar
 
-## Problema
-Na tela de aprovação (`AprovacaoInstalacaoDetalhe.tsx`), o vídeo do associado (autovistoria) não aparece. O código busca o vídeo na tabela `vistorias` com `neq('modalidade', 'presencial')`, mas neste fluxo a autovistoria do associado é gravada no **fluxo da cotação** e salva na tabela `cotacoes_vistoria_fotos` (tipo `video_360`), e não como um registro separado em `vistorias`.
-
-Dados confirmados no banco:
-- Contrato `8d6d5baf` → cotação `11c71e04`
-- `cotacoes_vistoria_fotos` tem o vídeo: `video_360-1775061231938.webm`
-- Tabela `vistorias` tem apenas 1 registro (presencial/instalador) — sem autovistoria separada
+## O que muda
+Os dois vídeos (Instalador e Associado) passam a ser exibidos **lado a lado** em tamanho reduzido. Ao clicar em qualquer um, ele abre em um **Dialog fullscreen** para visualização ampliada.
 
 ## Correção
 
 ### Arquivo: `src/pages/monitoramento/AprovacaoInstalacaoDetalhe.tsx`
 
-No bloco que busca `videoAssociado` (linhas 138-156), adicionar fallback para buscar em `cotacoes_vistoria_fotos` quando não encontrar na tabela `vistorias`:
+1. **Layout lado a lado**: Trocar `space-y-4` por `grid grid-cols-1 md:grid-cols-2 gap-4` no container dos vídeos — cada vídeo ocupa metade da largura em desktop.
 
-1. Buscar `cotacao_id` do contrato via query em `contratos`
-2. Se `videoAssociado` ainda for null e existir `cotacao_id`, buscar em `cotacoes_vistoria_fotos` onde `tipo = 'video_360'`
+2. **Vídeos menores**: Reduzir o aspect ratio dos vídeos embutidos (thumbnail compacto) e adicionar `cursor-pointer` + overlay com ícone de expandir.
 
-```ts
-// Fallback: buscar vídeo da autovistoria em cotacoes_vistoria_fotos
-if (!videoAssociado && servico.contrato_id) {
-  const { data: contrato } = await supabase
-    .from('contratos')
-    .select('cotacao_id')
-    .eq('id', servico.contrato_id)
-    .maybeSingle();
-  
-  if (contrato?.cotacao_id) {
-    const { data: fotoVideo } = await supabase
-      .from('cotacoes_vistoria_fotos')
-      .select('arquivo_url')
-      .eq('cotacao_id', contrato.cotacao_id)
-      .eq('tipo', 'video_360')
-      .order('created_at', { ascending: false })
-      .limit(1)
-      .maybeSingle();
-    videoAssociado = fotoVideo?.arquivo_url || null;
-  }
-}
+3. **Estado de expansão**: Adicionar estado `videoExpandido` (`string | null`) que guarda a URL do vídeo clicado.
+
+4. **Dialog de expansão**: Ao clicar no vídeo, abrir um `Dialog` fullscreen com o player em tamanho grande (`max-w-[90vw] aspect-video`), com botão de fechar.
+
+5. **Nos thumbnails**: Os vídeos ficam com `pointer-events-none` nos controles nativos (o clique vai para expandir), e o player ampliado no Dialog terá os controles habilitados.
+
+## Detalhes técnicos
+
+```tsx
+// Novo estado
+const [videoExpandido, setVideoExpandido] = useState<string | null>(null);
+
+// Grid lado a lado
+<CardContent>
+  <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+    {videoInstalador && (
+      <div className="space-y-2 cursor-pointer" onClick={() => setVideoExpandido(videoInstalador)}>
+        <Badge>Instalador</Badge>
+        <div className="relative rounded-lg overflow-hidden border">
+          <video src={videoInstalador} className="w-full aspect-video object-contain bg-black" preload="metadata" muted />
+          <div className="absolute inset-0 flex items-center justify-center bg-black/20 hover:bg-black/30">
+            <Expand className="w-8 h-8 text-white" />
+          </div>
+        </div>
+      </div>
+    )}
+    {/* idem para videoAssociado */}
+  </div>
+</CardContent>
+
+// Dialog de expansão
+<Dialog open={!!videoExpandido} onOpenChange={() => setVideoExpandido(null)}>
+  <DialogContent className="max-w-4xl p-0">
+    <video src={videoExpandido} controls autoPlay className="w-full aspect-video" />
+  </DialogContent>
+</Dialog>
 ```
 
 ## Impacto
-- 1 arquivo, ~15 linhas adicionadas
-- Resolve o caso onde a autovistoria foi feita no fluxo de cotação
-- Mantém compatibilidade com o fluxo onde a autovistoria está em `vistorias`
+- 1 arquivo, ~30 linhas alteradas
+- Visual mais clean: vídeos compactos lado a lado
+- Expansão com um clique para assistir em detalhe
 
