@@ -48,12 +48,7 @@ const TEMPLATES: Record<string, {
     mensagem: `Parabéns {nome}! Seu veículo *{placa}* agora está com *PROTEÇÃO 360º* ativa! ✅
 
 *O que está incluso na sua cobertura:*
-🔐 Roubo e Furto
-💥 Colisão
-🔥 Incêndio
-🌧️ Fenômenos Naturais
-🚗 Assistência 24h (guincho, pane seca, chaveiro e mais)
-📍 Rastreamento em tempo real
+{lista_itens}
 
 Acesse o App PRATIC para acompanhar seu veículo e solicitar assistência quando precisar.
 
@@ -257,6 +252,41 @@ serve(async (req) => {
     mensagem = mensagem.replace('{nome}', primeiroNome);
     titulo = titulo.replace('{nome}', primeiroNome);
 
+    // Para cobertura_total_ativada, buscar lista dinâmica de coberturas/benefícios
+    if (tipo === 'cobertura_total_ativada') {
+      try {
+        const { data: assocPlano } = await supabase
+          .from('associados')
+          .select('plano_id')
+          .eq('id', associado_id)
+          .single();
+
+        if (assocPlano?.plano_id) {
+          const { data: cobs } = await supabase
+            .from('planos_coberturas')
+            .select('coberturas(nome)')
+            .eq('plano_id', assocPlano.plano_id);
+
+          const { data: bens } = await supabase
+            .from('planos_beneficios')
+            .select('benefits(name)')
+            .eq('plano_id', assocPlano.plano_id);
+
+          const linhas: string[] = [];
+          for (const c of (cobs || []) as any[]) {
+            if (c.coberturas) linhas.push(`✓ ${c.coberturas.nome}`);
+          }
+          for (const b of (bens || []) as any[]) {
+            if (b.benefits) linhas.push(`✓ ${b.benefits.name}`);
+          }
+          const listaItens = linhas.length > 0 ? linhas.join('\n') : '✓ Proteção completa conforme seu plano';
+          mensagem = mensagem.replace('{lista_itens}', listaItens);
+        }
+      } catch (e) {
+        console.warn('[notificar-cliente] Erro ao buscar coberturas/benefícios para fallback:', e);
+      }
+    }
+
     // Substituir outras variáveis dos dados
     if (dados) {
       Object.entries(dados).forEach(([key, value]) => {
@@ -332,7 +362,7 @@ serve(async (req) => {
         // Mapear tipos de notificação para templates aprovados da Meta
         // REGRA: cadastro_aprovado_botao usa 5 body params + 1 button param (link_token)
         // O botão URL é /acompanhar/{{1}} → {{1}} DEVE ser contratos.link_token
-        const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[]; getButtonParams?: () => string[] | null }> = {
+        const META_TEMPLATE_MAP: Record<string, { template_name: string; getParams: () => string[] | Promise<string[]>; getButtonParams?: () => string[] | null }> = {
           cadastro_aprovado: {
             template_name: 'cadastro_aprovado_botao',
             getParams: () => {
@@ -362,11 +392,49 @@ serve(async (req) => {
             getButtonParams: () => linkToken ? [linkToken] : null,
           },
           cobertura_total_ativada: {
-            template_name: 'cobertura_360_ativada',
-            getParams: () => {
+            template_name: 'cobertura_360_ativada_v2',
+            getParams: async () => {
               const placa = (dados?.placa as string) || 'N/A';
               const marcaModelo = [dados?.marca, dados?.modelo].filter(Boolean).join(' ') || 'seu veículo';
-              return [primeiroNome, placa, marcaModelo];
+              
+              // Buscar plano do associado para montar lista dinâmica
+              let listaItens = '';
+              try {
+                const { data: assoc } = await supabase
+                  .from('associados')
+                  .select('plano_id')
+                  .eq('id', associadoId)
+                  .single();
+                
+                if (assoc?.plano_id) {
+                  const { data: cobs } = await supabase
+                    .from('planos_coberturas')
+                    .select('coberturas(nome)')
+                    .eq('plano_id', assoc.plano_id);
+                  
+                  const { data: bens } = await supabase
+                    .from('planos_beneficios')
+                    .select('benefits(name)')
+                    .eq('plano_id', assoc.plano_id);
+                  
+                  const linhas: string[] = [];
+                  for (const c of (cobs || []) as any[]) {
+                    if (c.coberturas) linhas.push(`✓ ${c.coberturas.nome}`);
+                  }
+                  for (const b of (bens || []) as any[]) {
+                    if (b.benefits) linhas.push(`✓ ${b.benefits.name}`);
+                  }
+                  listaItens = linhas.join('\n');
+                }
+              } catch (e) {
+                console.warn('[cobertura_total_ativada] Erro ao buscar coberturas/benefícios:', e);
+              }
+              
+              if (!listaItens) {
+                listaItens = '✓ Proteção completa conforme seu plano';
+              }
+              
+              return [primeiroNome, placa, marcaModelo, listaItens];
             },
           },
           vistoria_aprovada: {
@@ -528,7 +596,7 @@ serve(async (req) => {
         if (isMetaAtivo && META_TEMPLATE_MAP[tipo]) {
           const mapping = META_TEMPLATE_MAP[tipo];
           sendBody.template_name = mapping.template_name;
-          sendBody.template_params = mapping.getParams();
+          sendBody.template_params = await Promise.resolve(mapping.getParams());
           
           // Enviar button params explicitamente se disponível
           if (mapping.getButtonParams) {
