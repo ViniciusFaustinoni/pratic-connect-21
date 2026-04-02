@@ -1,43 +1,54 @@
 
 
-# Replicar configurações de "Furto - Select Deságio Diesel" para as demais coberturas Deságio Diesel
+# Diagnóstico: Chat IA não registra sinistro/assistência
 
-## Diagnóstico
+## Problema identificado
 
-A cobertura base (coberturas table) já está idêntica em todas as 4 coberturas — mesmos valores, carência, franquia etc. A diferença está nas **regras de elegibilidade** (tabela `entity_eligibility_rules`):
+Os logs mostram claramente que **todas as mensagens recentes** retornam `"Modelo retornou texto puro (sem tool_calls)"`. O modelo `google/gemini-3-flash-preview` está apenas respondendo com texto descritivo (ex: "vou registrar seu sinistro...") mas **nunca chama as tools** `criar_solicitacao_sinistro` ou `criar_solicitacao_assistencia`. Sem tool call, nada é inserido no banco.
 
-| Regra | Furto (fonte) | 70% FIPE / PT / Roubo (destinos) |
-|---|---|---|
-| combustivel | flex | flex (ok) |
-| regiao | mesma região | mesma região (ok) |
-| tipo_uso | particular | particular (ok) |
-| fipe_eligibility | **não existe** | existe (redundante) |
-| fipe_range faixas | **1.5, 1.5, 2.25, 3, 3.75, 4.5...** | 1, 1, 1.5, 2, 2.5, 3... |
+## Causa raiz
 
-Duas diferenças concretas:
-1. **Valores das faixas FIPE** estão diferentes (destinos usam valores menores)
-2. **Regra `fipe_eligibility` extra** nos destinos que a fonte não tem
+Dois fatores combinados:
 
-## Alteração
+1. **System prompt muito longo e complexo** (~170 linhas) com muitas regras condicionais. O modelo Gemini Flash tende a "narrar" as etapas em vez de executar as tools quando o prompt é denso demais.
 
-Uma única migration SQL que:
+2. **`tool_choice: "auto"`** dá ao modelo a liberdade de ignorar as tools. Quando o modelo decide que precisa "coletar mais dados primeiro", ele entra num loop de perguntas textuais e nunca chega a chamar a tool — mesmo quando já tem todas as informações.
 
-1. **Atualiza o `rule_config`** das regras `fipe_range` das 3 coberturas destino para usar exatamente as mesmas faixas da fonte (começando em R$1,50)
-2. **Remove as regras `fipe_eligibility`** redundantes dos 3 destinos (a fonte não as tem)
+## Solução
 
-### Coberturas afetadas
+### 1. Arquivo: `supabase/functions/assistente-chat/index.ts`
 
-| ID | Nome |
-|---|---|
-| `0dc34e13...` | 70% FIPE - Select Deságio Diesel |
-| `3c6b7279...` | Perda Total (PT) - Select Deságio Diesel |
-| `e8768aa0...` | Roubo - Select Deságio Diesel |
+**Adicionar instrução explícita e enfática no system prompt** para forçar o uso de tools:
 
-### Valores das faixas (fonte: Furto)
-0-5k: R$1,50 / 5-10k: R$1,50 / 10-15k: R$2,25 / 15-20k: R$3,00 / 20-25k: R$3,75 / ... incremento de R$0,75 por faixa até 175-180k: R$27,00
+```
+## REGRA CRÍTICA DE EXECUÇÃO
+NUNCA descreva que vai executar uma ação — EXECUTE-A chamando a tool correspondente.
+Quando tiver dados suficientes (tipo, local, descrição), chame a tool IMEDIATAMENTE.
+NÃO peça confirmação final se todos os dados já foram coletados na conversa.
+Se o usuário disse o que aconteceu, onde e quando — chame criar_solicitacao_sinistro ou criar_solicitacao_assistencia.
+```
+
+**Adicionar log do conteúdo da mensagem do modelo** quando não houver tool_calls, para podermos auditar o que ele respondeu:
+
+```ts
+if (!assistantMessage?.tool_calls) {
+  console.log(`[assistente-chat] Resposta texto: ${assistantMessage?.content?.substring(0, 200)}`);
+}
+```
+
+**Adicionar log do número de mensagens e histórico** enviado ao modelo para debugar se o contexto está sendo passado:
+
+```ts
+console.log(`[assistente-chat] Enviando ${aiMessages.length} mensagens ao modelo (${conversationHistory.length} do histórico)`);
+```
+
+### 2. Redeploy da Edge Function
+
+Após as alterações, fazer redeploy de `assistente-chat`.
 
 ## Impacto
-- 1 migration SQL (update + delete)
-- 0 arquivos de código alterados
-- As 3 coberturas passam a ter configurações idênticas à "Furto - Select Deságio Diesel"
+- 1 arquivo alterado (edge function)
+- ~10 linhas adicionadas
+- O modelo passará a executar as tools em vez de apenas descrever as ações
+- Logs melhorados para auditoria futura
 
