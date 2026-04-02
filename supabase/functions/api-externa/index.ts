@@ -16,6 +16,20 @@ function err(message: string, code: string, status = 400) {
   return json({ error: message, code }, status);
 }
 
+function sanitizarEndereco(logradouro: string, numero: string): { logradouro: string; numero: string } {
+  if (!logradouro) return { logradouro, numero };
+  const match = logradouro.match(/^(.+?)\s+(\d{2,5})$/);
+  if (match && (!numero || numero === '1' || numero === 'S/N')) {
+    const parteRua = match[1].trim();
+    const ultimaPalavra = parteRua.split(/\s+/).pop()?.toUpperCase();
+    const prefixosRua = ['RUA', 'AVENIDA', 'AV', 'TRAVESSA', 'TV', 'BECO', 'ALAMEDA', 'AL', 'RODOVIA', 'ESTRADA'];
+    if (!prefixosRua.includes(ultimaPalavra || '')) {
+      return { logradouro: parteRua, numero: match[2] };
+    }
+  }
+  return { logradouro, numero };
+}
+
 // Hash API key using SubtleCrypto (same as frontend)
 async function hashApiKey(key: string): Promise<string> {
   const encoder = new TextEncoder();
