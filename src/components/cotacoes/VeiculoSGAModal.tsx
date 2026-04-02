@@ -38,10 +38,10 @@ export function VeiculoSGAModal({ open, onOpenChange, placa }: VeiculoSGAModalPr
             <AlertTriangle className="h-5 w-5 text-destructive shrink-0 mt-0.5" />
             <div className="space-y-1">
               <p className="text-sm font-medium text-destructive">
-                Este veículo já existe no sistema SGA (Hinova)
+                Este veículo já existe no sistema Pratic
               </p>
               <p className="text-sm text-muted-foreground">
-                Não é possível realizar cotação para veículos que já estão cadastrados na plataforma.
+                Não é possível realizar cotação para veículos que já estão cadastrados no sistema.
               </p>
             </div>
           </div>

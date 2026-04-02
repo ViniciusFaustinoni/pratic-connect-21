@@ -10,17 +10,28 @@ interface SGAVerificacaoResult {
 export function useVerificarVeiculoSGA() {
   return useMutation({
     mutationFn: async (placa: string): Promise<SGAVerificacaoResult> => {
-      const { data, error } = await supabase.functions.invoke('sga-verificar-veiculo', {
-        body: { placa },
-      });
+      const placaNormalizada = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
 
-      if (error) {
-        console.error('[SGA Verificar] Erro na chamada:', error);
-        // Em caso de erro, não bloquear a cotação
-        return { existe: false, aviso: 'Erro ao verificar no SGA' };
+      if (placaNormalizada.length < 7) {
+        return { existe: false };
       }
 
-      return data as SGAVerificacaoResult;
+      const { data, error } = await supabase
+        .from('veiculos')
+        .select('id, placa, modelo, marca, associado_id')
+        .eq('placa', placaNormalizada)
+        .eq('status', 'ativo')
+        .limit(1);
+
+      if (error) {
+        console.error('[Verificar Veículo] Erro na consulta:', error);
+        return { existe: false, aviso: 'Erro ao verificar veículo no sistema' };
+      }
+
+      return {
+        existe: !!(data && data.length > 0),
+        mensagem: data?.length ? 'Veículo já cadastrado no sistema' : undefined,
+      };
     },
   });
 }
