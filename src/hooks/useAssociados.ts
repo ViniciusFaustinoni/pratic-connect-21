@@ -103,7 +103,8 @@ export function useAssociados({ filters, pagination, enabled = true }: UseAssoci
           planos (*),
           contratos!fk_contratos_associado (*),
           veiculos (*)
-        `, { count: 'exact' });
+        `, { count: 'exact' })
+        .eq('origem_cadastro', 'interno');
 
       // Filtro por status (pode ser array)
       if (filters?.status) {
