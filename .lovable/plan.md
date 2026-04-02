@@ -1,52 +1,34 @@
 
 
-# Corrigir logradouro com número embutido
+# Corrigir duplicação de benefícios invisível
 
-## Problema
-O registro do Marcus Vinicius tem `logradouro: "EST CAFUNDA 725"` e `numero: "1"`. O número real (725) está concatenado no logradouro, e o campo `numero` recebeu um valor incorreto ("1"). Isso faz o termo exibir "EST CAFUNDA 725, 1".
+## Problema identificado
 
-Apenas 1 registro tem esse problema atualmente, mas a prevenção deve ser adicionada na importação.
+A duplicação **está funcionando** no banco de dados (há 4 cópias criadas). Porém, o benefício duplicado é criado com `is_active: false` (linha 832 de `usePlansAdmin.ts`), enquanto o hook `useBenefits()` filtra apenas `.eq('is_active', true)` (linha 382 de `usePlans.ts`). Resultado: o item é criado mas nunca aparece na lista.
 
 ## Solução
 
-### 1. Migration — corrigir o registro existente
-```sql
-UPDATE associados 
-SET logradouro = 'EST CAFUNDA', numero = '725'
-WHERE logradouro = 'EST CAFUNDA 725' AND numero = '1';
-```
+### 1. Arquivo: `src/hooks/usePlansAdmin.ts` (useDuplicateBenefit)
 
-### 2. Edge Function `api-externa/index.ts` — sanitizar na importação
-Adicionar função de sanitização antes do insert de associados:
+- Alterar `is_active: false` para `is_active: true` — o benefício duplicado deve manter o mesmo status do original (ou pelo menos ficar ativo para ser visível)
+- Alternativa melhor: copiar o `is_active` do original (`original.is_active`)
 
-```ts
-function sanitizarEndereco(logradouro: string, numero: string): { logradouro: string; numero: string } {
-  // Se o numero parece inválido ('1', vazio) e o logradouro termina com número,
-  // extrair o número do final do logradouro
-  const match = logradouro.match(/^(.+?)\s+(\d{2,5})$/);
-  if (match && (!numero || numero === '1' || numero === 'S/N')) {
-    // Verificar que a parte antes do número não é um nome de rua numérico (Rua 36, etc)
-    const parteRua = match[1].trim();
-    const ultimaPalavra = parteRua.split(/\s+/).pop()?.toUpperCase();
-    const prefixosRua = ['RUA', 'AVENIDA', 'AV', 'TRAVESSA', 'TV', 'BECO', 'ALAMEDA', 'AL', 'RODOVIA', 'ESTRADA'];
-    if (!prefixosRua.includes(ultimaPalavra || '')) {
-      return { logradouro: parteRua, numero: match[2] };
-    }
-  }
-  return { logradouro, numero };
-}
-```
+### 2. Arquivo: `src/hooks/usePlans.ts` (useBenefits)
 
-Aplicar antes do insert: se `body.logradouro` e `body.numero` existem, sanitizar.
+- Remover o filtro `.eq('is_active', true)` para que o catálogo de gestão mostre TODOS os benefícios (ativos e inativos), permitindo ao gestor visualizar e gerenciar tudo
+- Ou criar um hook separado `useAllBenefits` para o catálogo admin
 
-## Arquivos afetados
+### 3. Limpeza dos duplicados de teste
 
-| Arquivo | Alteração |
-|---|---|
-| Migration SQL | Fix do registro existente |
-| `supabase/functions/api-externa/index.ts` | +sanitizarEndereco antes do insert |
+- Remover os 4 registros de cópia criados durante os testes do usuário
+
+## Decisão recomendada
+
+- No catálogo de gestão comercial: mostrar todos os benefícios (remover filtro `is_active`)
+- Manter o filtro `is_active: true` apenas nos hooks usados pelo cotador/site
+- Duplicar com `is_active: true` para feedback imediato
 
 ## Impacto
-- 1 registro corrigido imediatamente
-- Importações futuras terão o endereço sanitizado automaticamente
+- 2 arquivos alterados, ~5 linhas
+- 1 query de limpeza
 
