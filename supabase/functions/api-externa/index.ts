@@ -115,6 +115,13 @@ Deno.serve(async (req) => {
           if (body[f] !== undefined) insertData[f] = body[f];
         }
 
+        // Sanitizar endereço: extrair número embutido no logradouro
+        if (insertData.logradouro) {
+          const enderecoSanitizado = sanitizarEndereco(insertData.logradouro, insertData.numero || '');
+          insertData.logradouro = enderecoSanitizado.logradouro;
+          insertData.numero = enderecoSanitizado.numero;
+        }
+
         const { data, error } = await supabase.from('associados').insert(insertData).select().single();
         if (error) return err(error.message, 'INSERT_ERROR');
 
