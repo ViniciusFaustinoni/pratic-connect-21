@@ -26,7 +26,7 @@ export default function BaseAntiga() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
 
   // Debounce
-  const [timer, setTimer] = useState<NodeJS.Timeout>();
+  const [timer, setTimer] = useState<ReturnType<typeof setTimeout>>();
   const handleSearch = (value: string) => {
     setSearch(value);
     clearTimeout(timer);
