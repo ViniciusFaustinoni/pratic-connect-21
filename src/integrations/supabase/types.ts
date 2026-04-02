@@ -2053,6 +2053,7 @@ export type Database = {
           motivo_cancelamento: string | null
           nome: string
           numero: string | null
+          origem_cadastro: string
           pendencia_rastreador: boolean | null
           pendencia_rastreador_servico_id: string | null
           plano_id: string | null
@@ -2114,6 +2115,7 @@ export type Database = {
           motivo_cancelamento?: string | null
           nome: string
           numero?: string | null
+          origem_cadastro?: string
           pendencia_rastreador?: boolean | null
           pendencia_rastreador_servico_id?: string | null
           plano_id?: string | null
@@ -2175,6 +2177,7 @@ export type Database = {
           motivo_cancelamento?: string | null
           nome?: string
           numero?: string | null
+          origem_cadastro?: string
           pendencia_rastreador?: boolean | null
           pendencia_rastreador_servico_id?: string | null
           plano_id?: string | null
