@@ -187,6 +187,7 @@ const menuConfig: {
         { title: 'Veículos', url: '/cadastro/veiculos', icon: Car },
         { title: 'Processos', url: '/cadastro/processos', icon: ClipboardList },
         { title: 'Recusas do Instalador', url: '/cadastro/recusas-instalador', icon: ShieldAlert },
+        { title: 'Base Antiga', url: '/cadastro/base-antiga', icon: Database },
     ],
   },
   {
