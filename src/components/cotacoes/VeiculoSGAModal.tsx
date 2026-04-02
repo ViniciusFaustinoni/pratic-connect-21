@@ -24,7 +24,7 @@ export function VeiculoSGAModal({ open, onOpenChange, placa }: VeiculoSGAModalPr
             <ShieldAlert className="h-8 w-8 text-destructive" />
           </div>
           <AlertDialogTitle className="text-center text-xl">
-            Veículo já cadastrado no SGA
+            Veículo já cadastrado no sistema
           </AlertDialogTitle>
           <AlertDialogDescription className="text-center">
             <span className="font-mono font-semibold text-lg text-foreground">
