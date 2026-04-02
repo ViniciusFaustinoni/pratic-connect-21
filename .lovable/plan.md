@@ -1,31 +1,54 @@
 
 
-# Corrigir tela em branco ao comunicar sinistro
+# Consolidar Correções de Templates WhatsApp
 
 ## Problema
 
-Na Etapa 1 do formulário de sinistro (`NovoSinistro.tsx`), os tipos de ocorrência são filtrados por `tiposSinistroPermitidos`, que vem do hook `useMinhasCoberturas`. Se o veículo não tem os campos `cobertura_total` ou `cobertura_roubo_furto` marcados como `true` (o que acontece com veículos importados do SGA que não têm esses campos preenchidos), a lista fica vazia e a tela aparece em branco.
+Dois ajustes pendentes nos templates WhatsApp:
 
-## Solução
+1. **Instalação concluída** (`useServicos.ts`): Usa `assinatura_instalacao_v1` — deveria ser `assinatura_documento_v2` com parâmetros ajustados (`nomeDocumento` em vez de `veículo`)
+2. **Técnico inicia rota** (`notificar-inicio-rota`): Envia `servico_atribuido_v1` ao técnico — duplica a notificação já enviada na atribuição. Deve enviar apenas texto com dados do cliente
 
-### 1. Arquivo: `src/hooks/useMinhasCoberturasApp.ts`
+## Alterações
 
-Alterar a lógica de `tiposSinistroPermitidos` para que, quando o veículo não estiver inadimplente, sempre permita ao menos os tipos básicos de sinistro. A cobertura do veículo deve ser tratada como "total" por padrão quando o associado está ativo e adimplente — os campos `cobertura_total`/`cobertura_roubo_furto` são flags opcionais de restrição, não de habilitação.
+### 1. `src/hooks/useServicos.ts` (~linha 1165)
 
-Lógica proposta:
+Trocar template e ajustar parâmetros:
+
+| Campo | Antes | Depois |
+|---|---|---|
+| `template_name` | `assinatura_instalacao_v1` | `assinatura_documento_v2` |
+| `template_params` | `[nome, veículo]` | `[nome, "Termo de Instalação"]` |
+| `template_button_params` | `[tokenAssinatura]` | `[tokenAssinatura]` (sem mudança) |
+
+### 2. `supabase/functions/notificar-inicio-rota/index.ts` (linhas 218-229)
+
+Remover `template_name` e `template_params` da chamada ao `whatsapp-send-text` para o profissional. Manter apenas a mensagem de texto:
+
 ```ts
-const tiposSinistroPermitidos: string[] = inadimplente
-  ? []
-  : ['colisao', 'roubo', 'furto', 'incendio', 'fenomeno_natural', 'vandalismo', 'outro'];
+const { error: whatsappError } = await supabase.functions.invoke('whatsapp-send-text', {
+  body: {
+    telefone: profissionalTelefone,
+    mensagem: mensagem,
+  }
+});
 ```
 
-Manter `temCoberturaTotal` e `temCoberturaRouboFurto` para outros usos (assistência, rastreamento), mas não bloquear tipos de sinistro com base neles.
+## Resumo dos templates nos momentos corretos
 
-### 2. Arquivo: `src/pages/app/NovoSinistro.tsx`
-
-Adicionar fallback: se `tiposDisponiveis` estiver vazio mesmo após o filtro, mostrar todos os tipos com um aviso informativo em vez de tela em branco.
+| Momento | Destinatário | Template |
+|---|---|---|
+| Serviço atribuído (cron) | Técnico | `servico_atribuido_v1` |
+| Técnico inicia tarefa | Associado | `tecnico_a_caminho_1` |
+| Técnico inicia tarefa | Técnico | Apenas texto (dados do cliente) |
+| Instalação concluída | Associado | `assinatura_documento_v2` |
+| Confirmação véspera | Associado | `confirmacao_vespera_v1` |
+| Confirmação manhã | Associado | `confirmacao_manha_v1` |
+| Imprevisto/reagendamento | Associado | `reagendamento_servico` |
 
 ## Impacto
-- 2 arquivos, ~10 linhas alteradas
-- Associados poderão abrir sinistro normalmente independente dos flags de cobertura no veículo
+- 2 arquivos alterados (~8 linhas)
+- 1 Edge Function para redeploy
+- Elimina duplicidade de notificação ao técnico
+- Template correto na conclusão de instalação
 
