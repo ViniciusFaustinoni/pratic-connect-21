@@ -85,9 +85,7 @@ export function useMinhasCoberturas() {
 
     const tiposSinistroPermitidos: string[] = inadimplente
       ? []
-      : temCoberturaTotal
-        ? ['colisao', 'roubo', 'furto', 'incendio', 'fenomeno_natural', 'vandalismo', 'outro']
-        : ['roubo', 'furto'];
+      : ['colisao', 'roubo', 'furto', 'incendio', 'fenomeno_natural', 'vandalismo', 'outro'];
 
     return {
       veiculoId: v.id,
