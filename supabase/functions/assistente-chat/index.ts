@@ -1310,6 +1310,8 @@ ${assistenciasTexto}
 
     if (!assistantMessage?.tool_calls) {
       console.log(`[assistente-chat] Modelo retornou texto puro (sem tool_calls). finish_reason: ${result.choices?.[0]?.finish_reason}`);
+      console.log(`[assistente-chat] Resposta texto: ${assistantMessage?.content?.substring(0, 300)}`);
+      console.log(`[assistente-chat] Enviando ${aiMessages.length} mensagens ao modelo (${conversationHistory.length} do histórico)`);
     }
 
     // Handle tool calls in a loop
