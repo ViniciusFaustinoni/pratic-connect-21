@@ -91,6 +91,7 @@ Deno.serve(async (req) => {
 
         const insertData: any = {
           nome, cpf: cpfLimpo, email, telefone, status: body.status || 'em_analise',
+          origem_cadastro: 'api_externa',
         };
         const optionalFields = ['rg', 'data_nascimento', 'sexo', 'estado_civil', 'profissao', 'whatsapp',
           'cep', 'logradouro', 'numero', 'complemento', 'bairro', 'cidade', 'uf', 'plano_id', 'dia_vencimento',

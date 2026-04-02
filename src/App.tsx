@@ -507,6 +507,7 @@ const App = () => (
               <Route path="/cadastro/instalacoes/:id/ativar" element={<VistoriaCompletaAnalise />} />
               <Route path="/cadastro/processos" element={<ProcessosOperacionais />} />
               <Route path="/cadastro/recusas-instalador" element={<RecusasInstalador />} />
+              <Route path="/cadastro/base-antiga" element={<BaseAntiga />} />
               <Route path="/cadastro/gerar-termo" element={<GerarTermo />} />
               <Route path="/cadastro/migracoes" element={<ProcessosOperacionais />} />
               
