@@ -379,7 +379,6 @@ export function useBenefits() {
       const { data, error } = await supabase
         .from('benefits')
         .select('*')
-        .eq('is_active', true)
         .order('display_order');
       
       if (error) throw error;

@@ -1,0 +1,1 @@
+DELETE FROM benefits WHERE name LIKE '%(cópia)%';
