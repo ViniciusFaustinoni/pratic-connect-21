@@ -181,9 +181,10 @@ Deno.serve(async (req) => {
     }
 
     // ===== PARTE 2: Reagendamento automático de serviços do dia não iniciados =====
+    // ✅ CORRIGIDO: Só marca como nao_compareceu quando a janela de atendimento realmente venceu
     const { data: servicos, error } = await supabase
       .from("servicos")
-      .select("id, tipo, status, reagendamento_enviado_em")
+      .select("id, tipo, status, reagendamento_enviado_em, created_at, hora_agendada, periodo")
       .eq("data_agendada", hoje)
       .eq("status", "agendada")
       .is("reagendamento_enviado_em", null)
@@ -199,11 +200,72 @@ Deno.serve(async (req) => {
 
     if (error) throw error;
 
-    console.log(`[cron-reagendamento] Encontrados ${servicos?.length || 0} serviços pendentes`);
+    console.log(`[cron-reagendamento] Encontrados ${servicos?.length || 0} serviços pendentes para avaliação`);
+
+    // Hora atual em Brasília (formato HH:MM)
+    const horaAtualBrasilia = now.toLocaleTimeString("pt-BR", {
+      timeZone: "America/Sao_Paulo",
+      hour: "2-digit",
+      minute: "2-digit",
+      hour12: false,
+    });
+
+    // Idade mínima: 4 horas desde a criação
+    const IDADE_MINIMA_MS = 4 * 60 * 60 * 1000;
+    // Tolerância após hora agendada: 2 horas
+    const TOLERANCIA_HORA_MIN = "02:00";
+
+    // Mapa de cutoff por período
+    const cutoffPeriodo: Record<string, string> = {
+      manha: "14:00",   // manhã vence às 14h
+      tarde: "19:00",   // tarde vence às 19h
+      noite: "23:00",   // noite vence às 23h
+    };
+    // Cutoff padrão (sem hora nem período): fim do expediente
+    const CUTOFF_PADRAO = "20:00";
+
+    function somarHoras(hora: string, acrescimo: string): string {
+      const [h1, m1] = hora.split(":").map(Number);
+      const [h2, m2] = acrescimo.split(":").map(Number);
+      const totalMin = h1 * 60 + m1 + h2 * 60 + m2;
+      const hh = String(Math.floor(totalMin / 60)).padStart(2, "0");
+      const mm = String(totalMin % 60).padStart(2, "0");
+      return `${hh}:${mm}`;
+    }
 
     let processados = 0;
+    let ignoradosRecente = 0;
+    let ignoradosJanela = 0;
+
     for (const servico of servicos || []) {
       try {
+        // CHECK 1: Idade mínima — nunca reagendar serviço recém-criado
+        const idadeMs = now.getTime() - new Date(servico.created_at).getTime();
+        if (idadeMs < IDADE_MINIMA_MS) {
+          ignoradosRecente++;
+          continue;
+        }
+
+        // CHECK 2: Janela de atendimento ainda não venceu
+        let cutoff: string;
+
+        if (servico.hora_agendada) {
+          // Tem hora específica → cutoff = hora + tolerância
+          cutoff = somarHoras(servico.hora_agendada, TOLERANCIA_HORA_MIN);
+        } else if (servico.periodo && cutoffPeriodo[servico.periodo]) {
+          // Tem período → usar cutoff do período
+          cutoff = cutoffPeriodo[servico.periodo];
+        } else {
+          // Sem hora nem período → cutoff padrão conservador
+          cutoff = CUTOFF_PADRAO;
+        }
+
+        if (horaAtualBrasilia < cutoff) {
+          ignoradosJanela++;
+          continue;
+        }
+
+        // Janela vencida e serviço antigo → marcar como nao_compareceu
         await supabase
           .from("servicos")
           .update({
@@ -217,11 +279,13 @@ Deno.serve(async (req) => {
         });
 
         processados++;
-        console.log(`[cron-reagendamento] Processado: ${servico.id}`);
+        console.log(`[cron-reagendamento] Processado (vencido): ${servico.id} (cutoff=${cutoff})`);
       } catch (e: any) {
         console.error(`[cron-reagendamento] Erro no serviço ${servico.id}:`, e.message);
       }
     }
+
+    console.log(`[cron-reagendamento] Resumo Parte 2: ${processados} reagendados, ${ignoradosRecente} ignorados (recentes), ${ignoradosJanela} ignorados (janela ativa)`);
 
     return new Response(
       JSON.stringify({
