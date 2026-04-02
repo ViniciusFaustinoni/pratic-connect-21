@@ -1,0 +1,1 @@
+UPDATE associados SET logradouro = 'EST CAFUNDA', numero = '725' WHERE id = 'e77e47ce-adf3-4162-9872-e64f1f007bfc';
