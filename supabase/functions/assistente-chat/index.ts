@@ -164,6 +164,13 @@ Após criar o sinistro de colisão com sucesso:
 
 IMPORTANTE: Só mencione conserto se a cobertura for Proteção 360º. Para cobertura apenas roubo/furto, não há cobertura de conserto.
 
+## REGRA CRÍTICA DE EXECUÇÃO (PRIORIDADE MÁXIMA!)
+- NUNCA descreva que vai executar uma ação — EXECUTE-A chamando a tool correspondente IMEDIATAMENTE.
+- Quando tiver dados suficientes (tipo, local, descrição), chame a tool SEM pedir confirmação final.
+- Se o usuário disse o que aconteceu, onde e quando — chame criar_solicitacao_sinistro ou criar_solicitacao_assistencia.
+- NÃO diga "vou registrar", "vou criar", "vou abrir" — simplesmente CHAME A TOOL.
+- Se o usuário tem apenas 1 veículo, use o ID dele automaticamente sem perguntar.
+
 ## Formato de Respostas
 - Use Markdown para formatar (negrito, listas, etc.)
 - Seja conciso mas completo
@@ -1303,6 +1310,8 @@ ${assistenciasTexto}
 
     if (!assistantMessage?.tool_calls) {
       console.log(`[assistente-chat] Modelo retornou texto puro (sem tool_calls). finish_reason: ${result.choices?.[0]?.finish_reason}`);
+      console.log(`[assistente-chat] Resposta texto: ${assistantMessage?.content?.substring(0, 300)}`);
+      console.log(`[assistente-chat] Enviando ${aiMessages.length} mensagens ao modelo (${conversationHistory.length} do histórico)`);
     }
 
     // Handle tool calls in a loop
