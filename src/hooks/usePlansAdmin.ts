@@ -826,10 +826,11 @@ export function useDuplicateBenefit() {
       if (fetchError) throw fetchError;
 
       const { id: _, created_at, ...benefitData } = original;
+      const suffix = Math.random().toString(36).slice(2, 8);
       const newBenefit = {
         ...benefitData,
-        name: `${benefitData.name} (cópia)`,
-        slug: `${benefitData.slug}-copia-${Date.now()}`,
+        name: `${(benefitData.name || '').slice(0, 140)} (cópia)`,
+        slug: `${(benefitData.slug || 'ben').slice(0, 80)}-cp-${suffix}`,
         is_active: original.is_active ?? true,
       };
 
