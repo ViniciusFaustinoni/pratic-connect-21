@@ -67,6 +67,7 @@ import PropostasPendentes from "./pages/cadastro/PropostasPendentes";
 import PropostaAnalise from "./pages/cadastro/PropostaAnalise";
 import VistoriaCompletaAnalise from "./pages/cadastro/VistoriaCompletaAnalise";
 import RecusasInstalador from "./pages/cadastro/RecusasInstalador";
+import BaseAntiga from "./pages/cadastro/BaseAntiga";
 import ProcessosOperacionais from "./pages/cadastro/ProcessosOperacionais";
 import SolicitacoesMigracao from "./pages/cadastro/SolicitacoesMigracao";
 import SinistrosList from "./pages/eventos/SinistrosList";
@@ -506,6 +507,7 @@ const App = () => (
               <Route path="/cadastro/instalacoes/:id/ativar" element={<VistoriaCompletaAnalise />} />
               <Route path="/cadastro/processos" element={<ProcessosOperacionais />} />
               <Route path="/cadastro/recusas-instalador" element={<RecusasInstalador />} />
+              <Route path="/cadastro/base-antiga" element={<BaseAntiga />} />
               <Route path="/cadastro/gerar-termo" element={<GerarTermo />} />
               <Route path="/cadastro/migracoes" element={<ProcessosOperacionais />} />
               
