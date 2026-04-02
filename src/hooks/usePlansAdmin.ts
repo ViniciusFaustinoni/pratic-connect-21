@@ -829,7 +829,7 @@ export function useDuplicateBenefit() {
         ...benefitData,
         name: `${benefitData.name} (cópia)`,
         slug: `${benefitData.slug}-copia-${Date.now()}`,
-        is_active: false,
+        is_active: original.is_active ?? true,
       };
 
       const { data, error } = await supabase
