@@ -1162,7 +1162,7 @@ export function useAprovarVeiculoServico() {
             const { data: metaTemplate } = await supabase
               .from('whatsapp_meta_templates')
               .select('id, nome, status')
-              .eq('nome', 'assinatura_instalacao_v1')
+              .eq('nome', 'assinatura_documento_v2')
               .single();
 
             if (metaTemplate && metaTemplate.status === 'APPROVED') {
@@ -1171,14 +1171,14 @@ export function useAprovarVeiculoServico() {
               const tokenAssinatura = contratoDados.link_token;
 
               // Enviar via template Meta aprovado
-              // Corpo: {{1}} = nome, {{2}} = veículo
+              // Corpo: {{1}} = nome, {{2}} = nome do documento
               // Botão URL: {{1}} = token (variáveis do botão são numeradas separadamente)
               await supabase.functions.invoke('whatsapp-send-text', {
                 body: {
                   telefone: telefoneEnvio,
                   mensagem: `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso.`,
                   template_name: metaTemplate.nome,
-                  template_params: [nomeAssociado, veiculoDesc],
+                  template_params: [nomeAssociado, 'Termo de Instalação'],
                   template_button_params: [tokenAssinatura],
                   referencia_tipo: 'assinatura_instalacao',
                   referencia_id: data.servicoId,
