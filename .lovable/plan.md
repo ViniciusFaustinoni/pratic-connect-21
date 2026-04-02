@@ -1,36 +1,47 @@
 
 
-# Consulta de Placa com número de portas + restrito a Analista de Cadastro
+# Corrigir limite de 1000 registros na contagem de associados
 
-## Alterações
+## Problema
+O hook `useAssociadosContagem` em `src/hooks/useAssociados.ts` faz `.select('status')` e conta os resultados com `data.length`. Como o Supabase limita a 1000 linhas por query, todas as contagens ficam erradas quando há mais de 1000 associados.
 
-### 1. Edge function `plate-lookup/index.ts`
-Adicionar `numero_portas` ao `vehicleData` retornado — a API FipePlacas retorna esse campo como `quantidade_passageiros` ou `qt_portas`. Mapear o campo disponível:
+## Solução
+Substituir a query única que busca todos os registros por queries individuais usando `{ count: 'exact', head: true }` — que retorna apenas a contagem sem baixar dados. Uma query por status + uma para o total.
+
+### Arquivo: `src/hooks/useAssociados.ts` (linhas 220-252)
+
+Substituir a queryFn por:
+
 ```ts
-numero_portas: veiculo.qt_portas || veiculo.quantidade_passageiros || '',
-cambio: veiculo.cambio || '',
+queryFn: async () => {
+  const statuses = ['em_analise', 'aprovado', 'documentacao_pendente', 'aguardando_instalacao', 'ativo', 'inadimplente', 'suspenso', 'cancelado', 'bloqueado'] as const;
+
+  const [totalRes, ...statusRes] = await Promise.all([
+    supabase.from('associados').select('*', { count: 'exact', head: true }),
+    ...statuses.map(s =>
+      supabase.from('associados').select('*', { count: 'exact', head: true }).eq('status', s)
+    ),
+  ]);
+
+  const contagem: ContagemAssociados = {
+    total: totalRes.count || 0,
+    em_analise: 0, aprovado: 0, documentacao_pendente: 0,
+    aguardando_instalacao: 0, ativo: 0, inadimplente: 0,
+    suspenso: 0, cancelado: 0, bloqueado: 0,
+  };
+
+  statuses.forEach((s, i) => {
+    contagem[s] = statusRes[i].count || 0;
+  });
+
+  return contagem;
+},
 ```
 
-### 2. `src/pages/configuracoes/Sistema.tsx`
-Adicionar o card "Consulta de Veículo por Placa" com:
-- Input de placa + botão Consultar
-- Resultado em grid organizado por seções (Identificação, Veículo, Mecânica, Registro, FIPE)
-- Incluir **Número de Portas** e **Câmbio** na seção Veículo
-- **Condição de visibilidade**: o card só aparece se `hasPerm('canManageCadastro')` — que é a permissão do analista de cadastro
-- Importar `usePermissions` para o check
-
-### 3. Campos exibidos
-
-| Seção | Campos |
-|-------|--------|
-| Identificação | Placa, Chassi, Renavam |
-| Veículo | Marca, Modelo, Ano, Cor, Tipo, **Nº Portas** |
-| Mecânica | Motor, Potência, Cilindradas, Combustível, **Câmbio** |
-| Registro | Município, UF, Categoria, Procedência |
-| FIPE | Código, Valor, Mês referência |
+Cada query usa `head: true` (não retorna dados, só o count header), então não há limite de 1000.
 
 ## Impacto
-- 1 edge function: +2 campos no retorno
-- 1 página: card condicional com permissão `canManageCadastro`
-- Deploy da edge function necessário
+- 1 arquivo, ~25 linhas alteradas
+- Contagens corretas independente do número de associados
+- 10 queries paralelas leves (só count, sem dados)
 
