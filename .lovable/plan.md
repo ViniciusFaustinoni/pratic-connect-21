@@ -1,79 +1,44 @@
 
-## Diagnóstico
 
-- Revisei o fluxo de atribuição, os logs das edge functions e o estado atual do banco.
-- O problema **não está no payload de atribuição**: existe profissional com `em_servico = true` e GPS recente.
-- O caso do Marcus mostra a causa com clareza:
-  - instalação `ba5aecdd...` e serviço `b232b3ca...` foram criados às **18:47**
-  - às **19:00** ambos já estavam com status **`nao_compareceu`**
-  - depois disso, o `cron-atribuir-tarefas` passou a logar **“1 profissional em serviço”** e **“Nenhum serviço disponível”**
-- Ou seja: o serviço **não ficou pendente por falha de atribuição**; ele foi **retirado do conjunto elegível antes de poder ser atribuído**.
+# Corrigir erro de duplicação: valor excede varchar(100)
 
-## Causa raiz
+## Problema
 
-A causa raiz está na **Parte 2** de `supabase/functions/cron-reagendamento-automatico/index.ts`.
+Ao duplicar coberturas ou benefícios, o código/slug gerado inclui `Date.now()` (13 dígitos), resultando em valores como `COB-VID-COPIA-1775160096000` que ultrapassam o limite de `varchar(100)` das colunas `coberturas.codigo` e `benefits.slug`.
 
-Hoje ela pega **qualquer serviço de hoje com `status = agendada`** e marca como `nao_compareceu`, sem validar:
-- idade mínima do registro;
-- se a janela do atendimento realmente venceu;
-- se o serviço acabou de ser criado;
-- se ainda existe chance real de atribuição.
+## Solução
 
-Como `cron-atribuir-tarefas` e `atribuir-proxima-tarefa` só consideram `status in ('pendente', 'agendada')`, esse serviço some da atribuição automática e manual.
+### Arquivo: `src/hooks/usePlansAdmin.ts`
 
-Em resumo: existe uma **corrida entre “reagendar” e “atribuir”**, e o cron de reagendamento está atuando cedo demais.
+**Cobertura (linha 653)**: Trocar `Date.now()` por um sufixo curto (6 chars aleatórios) e truncar o código base para garantir que o total fique abaixo de 100 caracteres:
 
-## Correção completa
+```ts
+const suffix = Math.random().toString(36).slice(2, 8);
+const baseCode = (cobData.codigo || 'COB').slice(0, 80);
+codigo: `${baseCode}-CP-${suffix}`,
+```
 
-### 1. Corrigir o gatilho do reagendamento automático
-Arquivo: `supabase/functions/cron-reagendamento-automatico/index.ts`
+**Benefício (linha 831)**: Mesmo tratamento para o `slug`:
 
-Ajustar a Parte 2 para só marcar `nao_compareceu` quando o serviço estiver realmente vencido, com regras seguras:
+```ts
+const suffix = Math.random().toString(36).slice(2, 8);
+const baseSlug = (benefitData.slug || 'ben').slice(0, 80);
+slug: `${baseSlug}-cp-${suffix}`,
+```
 
-- exigir **idade mínima** do serviço;
-- se houver `hora_agendada`, só processar **após essa hora + tolerância**;
-- se não houver hora, usar o **fim do período** (`manha` / `tarde` / `noite`);
-- se não houver nem hora nem período, usar um **cutoff conservador** no fim do dia, nunca minutos após a criação.
+**Benefício nome (linha 830)**: Truncar `name` para caber em 150 chars com o sufixo " (cópia)":
 
-Também adicionar logs separados para:
-- serviços ignorados por serem recentes;
-- serviços ignorados por ainda estarem dentro da janela;
-- serviços efetivamente reagendados.
+```ts
+name: `${benefitData.name.slice(0, 140)} (cópia)`,
+```
 
-### 2. Restaurar o caso já afetado
-Criar migration de correção de dados para:
+**Cobertura nome (linha 652)**: Mesmo tratamento:
 
-- restaurar `servicos.b232b3ca...` para `status = 'agendada'`;
-- limpar `reagendamento_enviado_em` desse serviço, se preenchido;
-- restaurar `instalacoes.ba5aecdd...` para `status = 'agendada'`.
+```ts
+nome: `${cobData.nome.slice(0, 140)} (cópia)`,
+```
 
-Assim o serviço volta a ficar elegível para atribuição.
+## Impacto
+- 1 arquivo, ~6 linhas alteradas
+- Duplicação passa a funcionar sem erro de truncamento
 
-### 3. Melhorar observabilidade do motor de atribuição
-Arquivos:
-- `supabase/functions/cron-atribuir-tarefas/index.ts`
-- `supabase/functions/atribuir-proxima-tarefa/index.ts`
-
-Sem mudar a regra principal de atribuição, adicionar logs de exclusão por motivo:
-- status fora da janela;
-- confirmação WhatsApp;
-- `local_vistoria = base`;
-- falta de coordenadas;
-- bloqueio por horário.
-
-Isso evita novos “sumiços silenciosos” e acelera troubleshooting futuro.
-
-## Arquivos afetados
-
-- `supabase/functions/cron-reagendamento-automatico/index.ts`
-- nova migration SQL de reparo de dados
-- opcional de hardening:
-  - `supabase/functions/cron-atribuir-tarefas/index.ts`
-  - `supabase/functions/atribuir-proxima-tarefa/index.ts`
-
-## Resultado esperado
-
-- instalações recém-criadas não serão mais marcadas como `nao_compareceu` minutos depois;
-- quando houver técnico online, o serviço continuará elegível para o motor de atribuição;
-- o reagendamento automático só atuará quando o atendimento realmente tiver expirado;
-- o fluxo de campo volta a ficar funcional e fluido.
