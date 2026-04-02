@@ -16,6 +16,20 @@ function err(message: string, code: string, status = 400) {
   return json({ error: message, code }, status);
 }
 
+function sanitizarEndereco(logradouro: string, numero: string): { logradouro: string; numero: string } {
+  if (!logradouro) return { logradouro, numero };
+  const match = logradouro.match(/^(.+?)\s+(\d{2,5})$/);
+  if (match && (!numero || numero === '1' || numero === 'S/N')) {
+    const parteRua = match[1].trim();
+    const ultimaPalavra = parteRua.split(/\s+/).pop()?.toUpperCase();
+    const prefixosRua = ['RUA', 'AVENIDA', 'AV', 'TRAVESSA', 'TV', 'BECO', 'ALAMEDA', 'AL', 'RODOVIA', 'ESTRADA'];
+    if (!prefixosRua.includes(ultimaPalavra || '')) {
+      return { logradouro: parteRua, numero: match[2] };
+    }
+  }
+  return { logradouro, numero };
+}
+
 // Hash API key using SubtleCrypto (same as frontend)
 async function hashApiKey(key: string): Promise<string> {
   const encoder = new TextEncoder();
@@ -99,6 +113,13 @@ Deno.serve(async (req) => {
           'telefone_secundario', 'data_adesao', 'codigo_hinova', 'sincronizado_hinova', 'sincronizado_hinova_em'];
         for (const f of optionalFields) {
           if (body[f] !== undefined) insertData[f] = body[f];
+        }
+
+        // Sanitizar endereço: extrair número embutido no logradouro
+        if (insertData.logradouro) {
+          const enderecoSanitizado = sanitizarEndereco(insertData.logradouro, insertData.numero || '');
+          insertData.logradouro = enderecoSanitizado.logradouro;
+          insertData.numero = enderecoSanitizado.numero;
         }
 
         const { data, error } = await supabase.from('associados').insert(insertData).select().single();
