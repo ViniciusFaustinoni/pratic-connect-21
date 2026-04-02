@@ -221,14 +221,19 @@ export function useAssociadosContagem() {
   return useQuery({
     queryKey: ['associados-contagem'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('associados')
-        .select('status');
+      const statuses = ['em_analise', 'aprovado', 'documentacao_pendente', 'aguardando_instalacao', 'ativo', 'inadimplente', 'suspenso', 'cancelado', 'bloqueado'] as const;
 
-      if (error) throw error;
+      const [totalRes, ...statusRes] = await Promise.all([
+        supabase.from('associados').select('*', { count: 'exact', head: true }),
+        ...statuses.map(s =>
+          supabase.from('associados').select('*', { count: 'exact', head: true }).eq('status', s)
+        ),
+      ]);
+
+      if (totalRes.error) throw totalRes.error;
 
       const contagem: ContagemAssociados = {
-        total: data.length,
+        total: totalRes.count || 0,
         em_analise: 0,
         aprovado: 0,
         documentacao_pendente: 0,
@@ -240,11 +245,8 @@ export function useAssociadosContagem() {
         bloqueado: 0,
       };
 
-      data.forEach((assoc) => {
-        const status = assoc.status as keyof typeof contagem;
-        if (status && status in contagem) {
-          contagem[status]++;
-        }
+      statuses.forEach((s, i) => {
+        contagem[s] = statusRes[i].count || 0;
       });
 
       return contagem;
