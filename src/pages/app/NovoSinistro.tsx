@@ -189,9 +189,10 @@ export default function NovoSinistro() {
   const temCoberturaTotal = coberturaVeiculoSelecionado?.temCoberturaTotal || false;
   
   // Filtrar tipos de sinistro baseado na cobertura do veículo selecionado
-  const tiposDisponiveis = TIPOS_SINISTRO.filter(tipo => 
-    tiposSinistroPermitidos.includes(tipo.id)
-  );
+  // Fallback: se nenhum tipo permitido, mostrar todos (evita tela em branco)
+  const tiposDisponiveis = tiposSinistroPermitidos.length > 0
+    ? TIPOS_SINISTRO.filter(tipo => tiposSinistroPermitidos.includes(tipo.id))
+    : TIPOS_SINISTRO;
 
   // Auto-select first vehicle for coverage check
   useEffect(() => {
