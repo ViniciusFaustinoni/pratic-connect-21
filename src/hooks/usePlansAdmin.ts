@@ -647,10 +647,11 @@ export function useDuplicateCobertura() {
       if (fetchError) throw fetchError;
 
       const { id: _, created_at, ...cobData } = original;
+      const suffix = Math.random().toString(36).slice(2, 8);
       const newCob = {
         ...cobData,
-        nome: `${cobData.nome} (cópia)`,
-        codigo: `${cobData.codigo || 'COB'}-COPIA-${Date.now()}`,
+        nome: `${(cobData.nome || '').slice(0, 140)} (cópia)`,
+        codigo: `${(cobData.codigo || 'COB').slice(0, 80)}-CP-${suffix}`,
         ativo: false,
       };
 
@@ -825,10 +826,11 @@ export function useDuplicateBenefit() {
       if (fetchError) throw fetchError;
 
       const { id: _, created_at, ...benefitData } = original;
+      const suffix = Math.random().toString(36).slice(2, 8);
       const newBenefit = {
         ...benefitData,
-        name: `${benefitData.name} (cópia)`,
-        slug: `${benefitData.slug}-copia-${Date.now()}`,
+        name: `${(benefitData.name || '').slice(0, 140)} (cópia)`,
+        slug: `${(benefitData.slug || 'ben').slice(0, 80)}-cp-${suffix}`,
         is_active: original.is_active ?? true,
       };
 
