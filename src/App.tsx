@@ -67,6 +67,7 @@ import PropostasPendentes from "./pages/cadastro/PropostasPendentes";
 import PropostaAnalise from "./pages/cadastro/PropostaAnalise";
 import VistoriaCompletaAnalise from "./pages/cadastro/VistoriaCompletaAnalise";
 import RecusasInstalador from "./pages/cadastro/RecusasInstalador";
+import BaseAntiga from "./pages/cadastro/BaseAntiga";
 import ProcessosOperacionais from "./pages/cadastro/ProcessosOperacionais";
 import SolicitacoesMigracao from "./pages/cadastro/SolicitacoesMigracao";
 import SinistrosList from "./pages/eventos/SinistrosList";
