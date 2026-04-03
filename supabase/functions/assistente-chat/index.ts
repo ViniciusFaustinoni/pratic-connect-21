@@ -1392,7 +1392,80 @@ ${assistenciasTexto}
       assistantMessage = result.choices?.[0]?.message;
     }
 
-    const finalContent = assistantMessage?.content || "Desculpe, não consegui processar sua solicitação.";
+    let finalContent = assistantMessage?.content || "Desculpe, não consegui processar sua solicitação.";
+
+    // Detectar protocolos fabricados (modelo inventou SIN-/ASS- sem chamar tool)
+    const fabricatedProtocol = /SIN-\d{6,8}-\d{2,4}|ASS-\d{6,8}-\d{2,4}|CANC-\d{6,8}-\d{2,4}/.test(finalContent);
+    if (fabricatedProtocol && iterations === 0) {
+      console.warn(`[assistente-chat] ⚠️ Protocolo fabricado detectado! Forçando retry com tool_choice=required`);
+      console.warn(`[assistente-chat] Texto fabricado: ${finalContent.substring(0, 200)}`);
+      
+      // Retry forçando tool call
+      const retryResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: [
+            ...aiMessages,
+            { role: "assistant", content: finalContent },
+            { role: "user", content: "ERRO INTERNO: Você NÃO pode gerar protocolos em texto. Você DEVE chamar a tool (criar_solicitacao_sinistro ou criar_solicitacao_assistencia) para registrar. Execute a tool AGORA com os dados já coletados." },
+          ],
+          tools,
+          tool_choice: "required",
+          stream: false,
+        }),
+        signal: AbortSignal.timeout(25000),
+      });
+      
+      if (retryResponse.ok) {
+        const retryResult = await retryResponse.json();
+        const retryMsg = retryResult.choices?.[0]?.message;
+        if (retryMsg?.tool_calls) {
+          console.log(`[assistente-chat] Retry com tool_choice=required: ${retryMsg.tool_calls.length} tool calls`);
+          for (const toolCall of retryMsg.tool_calls) {
+            const toolName = toolCall.function.name;
+            const toolArgs = JSON.parse(toolCall.function.arguments || "{}");
+            const toolResult = await executeTool(supabase, associado.id, toolName, toolArgs);
+            
+            if (toolName === "criar_solicitacao_sinistro") {
+              try {
+                const parsed = JSON.parse(toolResult);
+                if (parsed?.link_evento_token) capturedLinkEventoToken = parsed.link_evento_token;
+              } catch (_) {}
+            }
+            
+            aiMessages.push(retryMsg);
+            aiMessages.push({ role: "tool", tool_call_id: toolCall.id, content: toolResult });
+          }
+          
+          // Get final response after tool execution
+          const finalResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+            method: "POST",
+            headers: {
+              Authorization: `Bearer ${LOVABLE_API_KEY}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({
+              model: "google/gemini-3-flash-preview",
+              messages: aiMessages,
+              tools,
+              tool_choice: "auto",
+              stream: false,
+            }),
+            signal: AbortSignal.timeout(25000),
+          });
+          
+          if (finalResponse.ok) {
+            const finalResult = await finalResponse.json();
+            finalContent = finalResult.choices?.[0]?.message?.content || finalContent;
+          }
+        }
+      }
+    }
 
     // Save messages to history
     const userMessage = messages[messages.length - 1];
