@@ -408,6 +408,7 @@ export default function Veiculos() {
                   <TableHead>Uso App</TableHead>
                   <TableHead>Associado</TableHead>
                   <TableHead>Status</TableHead>
+                  {isDiretor && <TableHead className="w-12"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
