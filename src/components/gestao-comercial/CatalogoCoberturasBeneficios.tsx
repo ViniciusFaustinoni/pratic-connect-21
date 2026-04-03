@@ -408,6 +408,7 @@ export function CatalogoCoberturasBeneficios() {
           <TabsList>
             <TabsTrigger value="coberturas">Coberturas ({coberturas.length})</TabsTrigger>
             <TabsTrigger value="beneficios">Benefícios ({benefits.length})</TabsTrigger>
+            <TabsTrigger value="atribuicao">Atribuição</TabsTrigger>
           </TabsList>
         </div>
 
