@@ -1272,6 +1272,16 @@ ${assistenciasTexto}
       ...messages,
     ];
 
+    // Detectar intenção de ação para forçar tool_choice
+    const lastUserMsg = (messages[messages.length - 1]?.content || '').toLowerCase();
+    const actionKeywords = ['sinistro', 'colisao', 'colisão', 'batida', 'bateu', 'bati', 'roubo', 'furto',
+      'guincho', 'reboque', 'assistencia', 'assistência', 'pane', 'chaveiro', 'pneu',
+      'isso mesmo', 'sim', 'confirmo', 'pode registrar', 'minha residencia', 'minha residência',
+      'registrar', 'abrir', 'cancelar', 'cancelamento', 'trocar titular', 'vendi'];
+    const isActionContext = actionKeywords.some(kw => lastUserMsg.includes(kw));
+    const initialToolChoice = isActionContext ? "required" : "auto";
+    console.log(`[assistente-chat] tool_choice=${initialToolChoice} (action=${isActionContext}, msg="${lastUserMsg.substring(0, 80)}")`);
+
     // Initial AI call
     let response = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
       method: "POST",
@@ -1283,10 +1293,10 @@ ${assistenciasTexto}
         model: "google/gemini-3-flash-preview",
         messages: aiMessages,
         tools,
-        tool_choice: "auto",
+        tool_choice: initialToolChoice,
         stream: false,
       }),
-      signal: AbortSignal.timeout(25000), // 25 segundos máximo por chamada
+      signal: AbortSignal.timeout(25000),
     });
 
     if (!response.ok) {
