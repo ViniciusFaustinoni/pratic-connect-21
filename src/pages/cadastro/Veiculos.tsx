@@ -1,6 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
-import { Search, Car, User, Smartphone, Loader2, CheckCircle2, AlertCircle } from 'lucide-react';
+import { Search, Car, User, Smartphone, Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
@@ -25,8 +25,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useVeiculos } from '@/hooks/useVeiculos';
+import { useVeiculos, useDeleteVeiculo } from '@/hooks/useVeiculos';
 import { STATUS_VEICULO_LABELS, type StatusVeiculo } from '@/types/database';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface VehicleResult {
   placa: string;
@@ -89,7 +100,12 @@ export default function Veiculos() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
   const { data: veiculos, isLoading } = useVeiculos();
+  const deleteVeiculo = useDeleteVeiculo();
   const { hasPerm } = usePermissions();
+  const { toast } = useToast();
+  const [veiculoToDelete, setVeiculoToDelete] = useState<{ id: string; placa: string } | null>(null);
+
+  const isDiretor = hasPerm?.('diretor') || hasPerm?.('super_admin');
 
   // Consulta de placa
   const [placaInput, setPlacaInput] = useState('');
@@ -392,6 +408,7 @@ export default function Veiculos() {
                   <TableHead>Uso App</TableHead>
                   <TableHead>Associado</TableHead>
                   <TableHead>Status</TableHead>
+                  {isDiretor && <TableHead className="w-12"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -443,6 +460,21 @@ export default function Veiculos() {
                           {STATUS_VEICULO_LABELS[veiculoStatus]}
                         </Badge>
                       </TableCell>
+                      {isDiretor && (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setVeiculoToDelete({ id: veiculo.id, placa: veiculo.placa });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
@@ -456,6 +488,38 @@ export default function Veiculos() {
         onClose={() => setSelectedVeiculoId(null)}
         veiculoId={selectedVeiculoId}
       />
+
+      <AlertDialog open={!!veiculoToDelete} onOpenChange={(open) => !open && setVeiculoToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir veículo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o veículo <strong>{veiculoToDelete?.placa}</strong>? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (veiculoToDelete) {
+                  deleteVeiculo.mutate(veiculoToDelete.id, {
+                    onSuccess: () => {
+                      toast({ title: 'Veículo excluído com sucesso' });
+                      setVeiculoToDelete(null);
+                    },
+                    onError: (err: any) => {
+                      toast({ title: 'Erro ao excluir', description: err.message, variant: 'destructive' });
+                    },
+                  });
+                }
+              }}
+            >
+              {deleteVeiculo.isPending ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
