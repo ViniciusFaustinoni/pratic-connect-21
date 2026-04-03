@@ -107,6 +107,21 @@ serve(async (req) => {
       );
     }
 
+    // Verificar se atribuição manual está ativa
+    const { data: configManual } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'atribuicao_manual_rotas')
+      .maybeSingle();
+
+    if (configManual?.valor === 'true') {
+      console.log("[cron-atribuir-tarefas] Atribuição MANUAL ativa — motor automático desligado");
+      return new Response(
+        JSON.stringify({ resultado: 'manual_ativo', mensagem: 'Atribuição manual ativa — motor automático desligado' }),
+        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
     // Ler configurações dinâmicas
     const raioProximidadeKm = (await getConfiguracaoNumero(supabase, 'fila_raio_proximidade_metros', 500)) / 1000;
     const raioQuaseDisponivelKm = (await getConfiguracaoNumero(supabase, 'fila_raio_quase_disponivel_metros', 1000)) / 1000;
