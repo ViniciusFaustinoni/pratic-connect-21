@@ -1,54 +1,69 @@
 
 
-# Diagnóstico: Chat IA não registra sinistro/assistência
+# Forçar Gemini a executar tools: solução definitiva
 
-## Problema identificado
+## Problema confirmado
 
-Os logs mostram claramente que **todas as mensagens recentes** retornam `"Modelo retornou texto puro (sem tool_calls)"`. O modelo `google/gemini-3-flash-preview` está apenas respondendo com texto descritivo (ex: "vou registrar seu sinistro...") mas **nunca chama as tools** `criar_solicitacao_sinistro` ou `criar_solicitacao_assistencia`. Sem tool call, nada é inserido no banco.
+A conversa do Marcus Vinícius Faustinoni está salva em `chat_mensagens_ia` e mostra o modelo **fabricando protocolos** (SIN-20260402-001, guincho) em texto puro, sem nunca chamar as tools `criar_solicitacao_sinistro` ou `criar_solicitacao_assistencia`. Resultado: zero registros nas tabelas `sinistros` e `chamados_assistencia`.
+
+A instrução "REGRA CRÍTICA DE EXECUÇÃO" adicionada anteriormente ao prompt **não foi suficiente** — o Gemini Flash continua narrando.
 
 ## Causa raiz
 
-Dois fatores combinados:
-
-1. **System prompt muito longo e complexo** (~170 linhas) com muitas regras condicionais. O modelo Gemini Flash tende a "narrar" as etapas em vez de executar as tools quando o prompt é denso demais.
-
-2. **`tool_choice: "auto"`** dá ao modelo a liberdade de ignorar as tools. Quando o modelo decide que precisa "coletar mais dados primeiro", ele entra num loop de perguntas textuais e nunca chega a chamar a tool — mesmo quando já tem todas as informações.
+`tool_choice: "auto"` permite ao modelo ignorar tools. O prompt é muito longo (~1400 linhas incluindo contexto) e o Gemini Flash prioriza fluência textual sobre execução de tools nesse cenário.
 
 ## Solução
 
-### 1. Arquivo: `supabase/functions/assistente-chat/index.ts`
+### Arquivo: `supabase/functions/assistente-chat/index.ts`
 
-**Adicionar instrução explícita e enfática no system prompt** para forçar o uso de tools:
+**1. Trocar `tool_choice` de `"auto"` para forçar uso de tools quando o contexto indica ação**
 
+Implementar detecção de intenção de ação na mensagem do usuário. Quando a mensagem indica sinistro/assistência/colisão/roubo/guincho, usar `tool_choice: "required"` em vez de `"auto"`. Isso obriga o modelo a chamar uma tool.
+
+Lógica:
+```ts
+const lastUserMsg = messages[messages.length - 1]?.content?.toLowerCase() || '';
+const actionKeywords = ['sinistro', 'colisao', 'colisão', 'batida', 'bateu', 'roubo', 'furto', 
+  'guincho', 'reboque', 'assistencia', 'assistência', 'pane', 'chaveiro', 'pneu',
+  'isso mesmo', 'sim', 'confirmo', 'pode registrar', 'minha residencia', 'minha residência',
+  'registrar', 'abrir'];
+const isActionContext = actionKeywords.some(kw => lastUserMsg.includes(kw));
+
+// Em chamadas após tool results, manter "auto"
+const toolChoice = isActionContext ? "required" : "auto";
 ```
-## REGRA CRÍTICA DE EXECUÇÃO
-NUNCA descreva que vai executar uma ação — EXECUTE-A chamando a tool correspondente.
-Quando tiver dados suficientes (tipo, local, descrição), chame a tool IMEDIATAMENTE.
-NÃO peça confirmação final se todos os dados já foram coletados na conversa.
-Se o usuário disse o que aconteceu, onde e quando — chame criar_solicitacao_sinistro ou criar_solicitacao_assistencia.
-```
 
-**Adicionar log do conteúdo da mensagem do modelo** quando não houver tool_calls, para podermos auditar o que ele respondeu:
+Aplicar isso nas **duas chamadas fetch** ao gateway (linhas ~1281 e ~1366).
+
+**2. Adicionar validação pós-resposta: detectar protocolos fabricados**
+
+Após receber a resposta final do modelo, verificar se o texto contém padrões como "SIN-" ou "ASS-" sem que nenhuma tool tenha sido chamada. Se detectado, fazer uma segunda tentativa com `tool_choice: "required"`.
 
 ```ts
-if (!assistantMessage?.tool_calls) {
-  console.log(`[assistente-chat] Resposta texto: ${assistantMessage?.content?.substring(0, 200)}`);
+const fabricatedProtocol = /SIN-\d{8}-\d{3,4}|ASS-\d{8}-\d{3,4}/.test(finalContent);
+const noToolsUsed = iterations === 0;
+if (fabricatedProtocol && noToolsUsed) {
+  console.warn('[assistente-chat] Protocolo fabricado detectado! Forçando tool call...');
+  // Retry com tool_choice: "required"
 }
 ```
 
-**Adicionar log do número de mensagens e histórico** enviado ao modelo para debugar se o contexto está sendo passado:
+**3. Simplificar o system prompt para reduzir a chance de narração**
 
-```ts
-console.log(`[assistente-chat] Enviando ${aiMessages.length} mensagens ao modelo (${conversationHistory.length} do histórico)`);
+Mover a seção "REGRA CRÍTICA DE EXECUÇÃO" para o **início absoluto** do system prompt (antes de qualquer outra instrução), e tornar mais curta e direta:
+
+```
+REGRA #1: NUNCA gere protocolos (SIN-*, ASS-*) em texto. Protocolos só existem quando uma tool retorna.
+REGRA #2: Para registrar qualquer coisa, CHAME a tool. Não narre.
 ```
 
-### 2. Redeploy da Edge Function
+### Redeploy
 
-Após as alterações, fazer redeploy de `assistente-chat`.
+Deploy da edge function `assistente-chat` após as alterações.
 
 ## Impacto
-- 1 arquivo alterado (edge function)
-- ~10 linhas adicionadas
-- O modelo passará a executar as tools em vez de apenas descrever as ações
-- Logs melhorados para auditoria futura
+- 1 arquivo alterado (~20 linhas)
+- O modelo será forçado a chamar tools quando o contexto indicar ação
+- Protocolos fabricados serão detectados e corrigidos
+- Sinistros e assistências passarão a ser registrados no banco
 
