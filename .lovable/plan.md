@@ -1,64 +1,78 @@
-# Nova Aba "Atribuição" em Coberturas e Benefícios
+
+
+# Atribuição Manual de Rotas
 
 ## Resumo
 
-Adicionar uma terceira aba "Atribuição" no componente `CatalogoCoberturasBeneficios` (Gestão Comercial > Coberturas e Benefícios). Essa aba lista todos os planos cadastrados. Ao clicar num plano, abre um modal de busca de associados para atribuí-lo, com opção de enviar ou não o termo de filiação via Autentique.
+Adicionar uma configuração "Atribuição Manual de Rotas" na Gestão Comercial (renomeando "Instalação e Rotas" para "Vistorias") com toggle on/off. Quando ativada, o cron de atribuição automática é desabilitado e uma nova aba "Atribuição Manual" aparece como primeira aba em Serviços de Campo (Monitoramento), com drag-and-drop de tarefas para vistoriadores.
 
-## Arquivos
+## Arquivos e Mudanças
 
-### 1. `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx`
+### 1. Migration SQL — criar a configuração
 
-- Adicionar aba "Atribuição" no `TabsList` existente (ao lado de Coberturas e Benefícios)
-- Renderizar o novo componente `AtribuicaoPlanoTab` no `TabsContent`
+Inserir `atribuicao_manual_rotas` na tabela `configuracoes` com valor `'false'`.
 
-### 2. `src/components/gestao-comercial/AtribuicaoPlanoTab.tsx` (novo)
+### 2. `src/components/gestao-comercial/InstalacaoRotasConfig.tsx`
 
-- Lista todos os planos ativos (via `usePlanos` hook existente)
-- Cada plano mostra: nome, linha, valor mensal, adesão
-- Botão "Atribuir" em cada plano abre o modal de atribuição
+- Renomear título da seção de "Instalação e Rotas" para "Vistorias"
+- Adicionar chave `atribuicao_manual_rotas` no `CONFIG_CHAVES`
+- Adicionar bloco Card no topo com Switch "Atribuição Manual de Rotas" + descrição explicando que desativa o motor automático
+- State e save para o toggle
 
-### 3. `src/components/gestao-comercial/AtribuirPlanoModal.tsx` (novo)
+### 3. `src/components/gestao-comercial/TabNavigation.tsx`
 
-Modal com 2 etapas:
+- Renomear o item "Instalação e Rotas" / shortLabel "Instalação" para "Vistorias" / "Vistorias"
 
-**Etapa 1 — Buscar Associado:**
+### 4. `src/pages/diretoria/GestaoComercial.tsx`
 
-- Input de busca por nome, CPF ou placa
-- Consulta tabela `associados` com filtro
-- Exibe resultado em lista clicável (nome, CPF, plano atual se houver)
-- Ao selecionar, avança para etapa 2
+- Atualizar o banner `sectionBanners[5]` de "Instalação e Rotas" para "Vistorias"
 
-**Etapa 2 — Confirmar Atribuição:**
+### 5. `supabase/functions/cron-atribuir-tarefas/index.ts`
 
-- Resumo: plano selecionado + associado selecionado
-- Pergunta com radio: "Sem envio do termo de filiação" / "Com envio do termo de filiação (Autentique)"
-- Se "Sem envio":
-  - Atualiza `associados.plano_id` diretamente
-  - Cria registro em `contratos` (numero gerado, plano_id, associado_id, status `ativo`, valores do plano)
-  - Toast de sucesso
-- Se "Com envio":
-  - Cria contrato com status `pendente_assinatura`
-  - Invoca `autentique-create-by-token` (edge function existente) para gerar o documento e enviar ao email do associado
-  - Ao ser assinado (webhook Autentique já existente atualiza `autentique_status`), o contrato passa para `assinado` e o `plano_id` do associado é atualizado
-  - Documento assinado fica acessível na aba Documentos do modal de detalhes do associado (já funcional via tabela `contratos` com campos `pdf_url`/`pdf_assinado_url`)
+- Após o check de `fila_atribuicao_ativa`, adicionar check de `atribuicao_manual_rotas`:
+  - Se `atribuicao_manual_rotas === 'true'`, retorna early com mensagem "Atribuição manual ativa — motor automático desligado"
 
-### 4. `src/hooks/useAtribuirPlano.ts` (novo)
+### 6. `src/hooks/useAtribuicaoManual.ts` (novo)
 
-- `useBuscarAssociados(termo)`: busca associados por nome/CPF/placa com debounce
-- `useAtribuirPlanoSemTermo()`: mutation que atualiza `associados.plano_id` e cria contrato ativo
-- `useAtribuirPlanoComTermo()`: mutation que cria contrato `pendente_assinatura` e invoca a edge function do Autentique
+- `useConfigAtribuicaoManual()`: lê `atribuicao_manual_rotas` da tabela `configuracoes`
+- `useServicosParaAtribuir()`: busca serviços da tabela `servicos` com status `agendada` e sem `profissional_id`, incluindo dados do associado/veículo
+- `useVistoriadoresAtivos()`: busca profiles com `em_servico = true` e papel de vistoriador, com localização e tarefa atual
+- `useAtribuirServicoManual()`: mutation que atualiza `servicos.profissional_id`, status para `agendada`, e dispara o template WhatsApp via `supabase.functions.invoke('enviar-template-meta', ...)` (fluxo padrão existente)
 
-## Fluxo Autentique (com termo)
+### 7. `src/components/monitoramento/AtribuicaoManualTab.tsx` (novo)
 
-O sistema já possui a integração completa:
+Layout em 2 colunas:
+- **Coluna esquerda**: lista de serviços pendentes (instalações + vistorias de todos os tipos), agrupados por data, filtráveis por tipo
+- **Coluna direita**: cards dos vistoriadores ativos com seus serviços já atribuídos
 
-- Edge function `autentique-create-by-token` gera o documento e envia para assinatura
-- Contrato criado com `link_token` para rastreio
-- Webhook existente atualiza `autentique_status` e `pdf_assinado_url` no contrato
-- O PDF assinado já aparece nos documentos do associado (modal de detalhes)
+Drag-and-drop usando `@dnd-kit/core` + `@dnd-kit/sortable`:
+- Cada serviço pendente é um `Draggable`
+- Cada card de vistoriador é um `Droppable`
+- Ao soltar, abre confirmação rápida e executa a mutation de atribuição (seguindo fluxo padrão com template Meta)
+
+### 8. `src/pages/monitoramento/VistoriasInstalacoesMon.tsx`
+
+- Importar `useConfigAtribuicaoManual` e `AtribuicaoManualTab`
+- Ler a configuração; se `atribuicao_manual_rotas === true`, adicionar aba "Atribuição Manual" com ícone `Hand` como **primeira aba** (defaultValue condicional)
+- Se desativada, a aba não aparece
+
+### 9. Instalar dependência
+
+- `@dnd-kit/core` e `@dnd-kit/utilities` para drag-and-drop
+
+## Fluxo de atribuição manual
+
+1. Operador arrasta tarefa para card do vistoriador
+2. Dialog de confirmação: "Atribuir [tipo] em [bairro] para [nome]?"
+3. Ao confirmar:
+   - `servicos.profissional_id = vistoriador.id`, `status = 'agendada'`
+   - Invoca `enviar-template-meta` com template `servico_atribuido_v1` para o vistoriador
+   - Toast de sucesso
+4. Tarefa sai da lista de pendentes e aparece no card do vistoriador
 
 ## Impacto
+- 1 migration (1 insert)
+- 3 arquivos modificados (InstalacaoRotasConfig, VistoriasInstalacoesMon, cron-atribuir-tarefas, TabNavigation, GestaoComercial)
+- 2 arquivos novos (hook + componente)
+- 1 dependência npm nova (@dnd-kit/core)
 
-- 1 arquivo modificado (`CatalogoCoberturasBeneficios.tsx`)
-- 3 arquivos novos (componente tab, modal, hook)
-- 0 migrations (usa estrutura existente de `contratos` e `associados`)
