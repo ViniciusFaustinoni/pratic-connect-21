@@ -89,10 +89,10 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
   return useQuery({
     queryKey: ['base-antiga-veiculos', filters, pagination],
     queryFn: async () => {
-      let query = supabase
+      let query = (supabase
         .from('veiculos')
-        .select('id, placa, marca, modelo, ano_fabricacao, ano_modelo, cor, chassi, status, associado_id, associado:associados!inner(id, nome, cpf, origem_cadastro), rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, status, plataforma)', { count: 'exact' })
-        .eq('associado.origem_cadastro' as any, 'api_externa');
+        .select('id, placa, marca, modelo, ano_fabricacao, ano_modelo, cor, chassi, status, associado_id, associado:associados!inner(id, nome, cpf, origem_cadastro), rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, status, plataforma)', { count: 'exact' }) as any)
+        .eq('associado.origem_cadastro', 'api_externa');
 
       if (filters?.search && filters.search.length >= 2) {
         const term = filters.search.trim();
