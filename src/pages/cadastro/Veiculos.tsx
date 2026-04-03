@@ -25,8 +25,19 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { useVeiculos } from '@/hooks/useVeiculos';
+import { useVeiculos, useDeleteVeiculo } from '@/hooks/useVeiculos';
 import { STATUS_VEICULO_LABELS, type StatusVeiculo } from '@/types/database';
+import { useToast } from '@/hooks/use-toast';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from '@/components/ui/alert-dialog';
 
 interface VehicleResult {
   placa: string;
