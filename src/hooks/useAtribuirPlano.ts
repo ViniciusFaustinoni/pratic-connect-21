@@ -25,7 +25,7 @@ export function useBuscarAssociados(termo: string) {
       let query = supabase
         .from('associados')
         .select('id, nome, cpf, email, telefone, status, plano_id')
-        .in('status', ['ativo', 'inadimplente', 'suspenso', 'pendente']);
+        .in('status', ['ativo', 'inadimplente', 'suspenso', 'em_analise', 'aprovado']);
 
       if (cleaned.length >= 3) {
         query = query.or(`nome.ilike.%${termo}%,cpf.ilike.%${cleaned}%,telefone.ilike.%${cleaned}%`);
