@@ -98,6 +98,43 @@ export function useCreateVeiculo() {
   });
 }
 
+export function useDeleteVeiculo() {
+  const queryClient = useQueryClient();
+  
+  return useMutation({
+    mutationFn: async (id: string) => {
+      // Buscar dados do veículo antes de excluir (para log)
+      const { data: veiculo, error: fetchError } = await supabase
+        .from('veiculos')
+        .select('placa, marca, modelo, associado_id')
+        .eq('id', id)
+        .single();
+      
+      if (fetchError) throw fetchError;
+      
+      const { error } = await supabase
+        .from('veiculos')
+        .delete()
+        .eq('id', id);
+      
+      if (error) throw error;
+      return { id, placa: veiculo?.placa, associado_id: veiculo?.associado_id };
+    },
+    onSuccess: (data) => {
+      queryClient.invalidateQueries({ queryKey: ['veiculos'] });
+      if (data.associado_id) {
+        queryClient.invalidateQueries({ queryKey: ['associados', data.associado_id] });
+      }
+      registrarLog({
+        acao: 'excluir',
+        modulo: 'veiculos',
+        descricao: `Veículo ${data.placa} excluído`,
+        entidade_id: data.id,
+      });
+    },
+  });
+}
+
 export function useUpdateVeiculo() {
   const queryClient = useQueryClient();
   
