@@ -460,6 +460,21 @@ export default function Veiculos() {
                           {STATUS_VEICULO_LABELS[veiculoStatus]}
                         </Badge>
                       </TableCell>
+                      {isDiretor && (
+                        <TableCell>
+                          <Button
+                            variant="ghost"
+                            size="icon"
+                            className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              setVeiculoToDelete({ id: veiculo.id, placa: veiculo.placa });
+                            }}
+                          >
+                            <Trash2 className="h-4 w-4" />
+                          </Button>
+                        </TableCell>
+                      )}
                     </TableRow>
                   );
                 })}
