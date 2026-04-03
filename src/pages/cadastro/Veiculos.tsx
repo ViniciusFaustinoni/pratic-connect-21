@@ -137,13 +137,8 @@ export default function Veiculos() {
   const lv = lookupResult?.vehicleData;
   const lf = lookupResult?.fipeData;
 
-  // Create a map of associado_id to nome for quick lookup
-  const associadoMap = new Map<string, string>(
-    associados?.map((a) => [a.id, a.nome]) || []
-  );
-
-  const filteredVeiculos = veiculos?.filter((veiculo) => {
-    const associadoNome = associadoMap.get(veiculo.associado_id) || '';
+  const filteredVeiculos = veiculos?.filter((veiculo: any) => {
+    const associadoNome = veiculo.associado?.nome || '';
     const matchesSearch =
       veiculo.placa.toLowerCase().includes(search.toLowerCase()) ||
       veiculo.marca.toLowerCase().includes(search.toLowerCase()) ||
