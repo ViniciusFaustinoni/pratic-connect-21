@@ -460,7 +460,7 @@ export default function Veiculos() {
                           {STATUS_VEICULO_LABELS[veiculoStatus]}
                         </Badge>
                       </TableCell>
-                      {isDiretor && (
+                      {canDeleteVeiculo && (
                         <TableCell>
                           <Button
                             variant="ghost"
