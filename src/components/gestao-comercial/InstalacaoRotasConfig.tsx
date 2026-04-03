@@ -138,6 +138,10 @@ export function InstalacaoRotasConfig() {
   const { profile } = useAuth();
   const qc = useQueryClient();
 
+  // ── Atribuição Manual state
+  const [atribuicaoManual, setAtribuicaoManual] = useState(false);
+  const [savingAM, setSavingAM] = useState(false);
+
   // ── Bloco 1 state
   const [maxDia, setMaxDia] = useState('6');
   const [horario, setHorario] = useState('08:30');
