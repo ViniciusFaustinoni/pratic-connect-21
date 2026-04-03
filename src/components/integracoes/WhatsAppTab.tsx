@@ -7,6 +7,7 @@ import { WhatsAppIAConfig } from './WhatsAppIAConfig';
 import { WhatsAppStats } from './WhatsAppStats';
 import { WhatsAppProvedorSelector } from './WhatsAppProvedorSelector';
 import { WhatsAppMetaTemplates } from './WhatsAppMetaTemplates';
+import { WhatsAppEnvioLogs } from './WhatsAppEnvioLogs';
 
 export function WhatsAppTab() {
   return (
