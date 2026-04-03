@@ -198,6 +198,7 @@ export function InstalacaoRotasConfig() {
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
+    setAtribuicaoManual(config.atribuicaoManual === 'true');
     setMaxDia(config.maxPorDia);
     setHorario(config.horarioInicio);
     setTempoMedio(config.tempoMedio);
