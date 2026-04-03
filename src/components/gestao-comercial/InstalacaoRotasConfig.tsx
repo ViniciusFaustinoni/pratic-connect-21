@@ -330,6 +330,50 @@ export function InstalacaoRotasConfig() {
 
   return (
     <div className="space-y-6">
+      {/* ── Atribuição Manual de Rotas ── */}
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Truck className="h-4 w-4" />
+            Atribuição Manual de Rotas
+          </CardTitle>
+          <CardDescription>
+            Quando ativada, o motor automático de atribuição por proximidade é desligado e uma aba de atribuição manual aparece no Monitoramento &gt; Serviços de Campo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">
+                {atribuicaoManual ? 'Atribuição Manual Ativada' : 'Atribuição Automática Ativada'}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {atribuicaoManual
+                  ? 'Tarefas são atribuídas manualmente via drag-and-drop no monitoramento'
+                  : 'Tarefas são atribuídas automaticamente por proximidade pelo cron'}
+              </p>
+            </div>
+            <Switch
+              checked={atribuicaoManual}
+              disabled={savingAM}
+              onCheckedChange={async (checked) => {
+                setSavingAM(true);
+                try {
+                  await salvarConfig('atribuicao_manual_rotas', checked ? 'true' : 'false', profile?.id);
+                  setAtribuicaoManual(checked);
+                  toast.success(checked ? 'Atribuição manual ativada' : 'Atribuição automática restaurada');
+                  invalidate();
+                } catch {
+                  toast.error('Erro ao alterar modo de atribuição');
+                } finally {
+                  setSavingAM(false);
+                }
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── Bloco 1 — Capacidade dos Instaladores ── */}
       <Card>
         <CardHeader>
