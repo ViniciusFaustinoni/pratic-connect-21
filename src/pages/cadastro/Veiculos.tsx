@@ -100,7 +100,12 @@ export default function Veiculos() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
   const { data: veiculos, isLoading } = useVeiculos();
+  const deleteVeiculo = useDeleteVeiculo();
   const { hasPerm } = usePermissions();
+  const { toast } = useToast();
+  const [veiculoToDelete, setVeiculoToDelete] = useState<{ id: string; placa: string } | null>(null);
+
+  const isDiretor = hasPerm?.('diretor') || hasPerm?.('super_admin');
 
   // Consulta de placa
   const [placaInput, setPlacaInput] = useState('');
