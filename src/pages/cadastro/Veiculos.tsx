@@ -89,8 +89,6 @@ export default function Veiculos() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
   const { data: veiculos, isLoading } = useVeiculos();
-  const { data: associadosData } = useAssociados();
-  const associados = associadosData?.associados;
   const { hasPerm } = usePermissions();
 
   // Consulta de placa
