@@ -72,7 +72,7 @@ export function useVistoriadoresAtivos() {
         .select('id, tipo, data_agendada, bairro, cidade, profissional_id, status')
         .in('profissional_id', ids)
         .gte('data_agendada', hoje)
-        .in('status', ['agendada', 'em_andamento', 'a_caminho']);
+        .in('status', ['agendada', 'em_andamento', 'em_rota']);
 
       return (profiles || []).map(p => {
         const loc = localizacoes.find(l => l.vistoriador_id === p.id);

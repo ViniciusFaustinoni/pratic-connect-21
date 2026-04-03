@@ -41,7 +41,7 @@ const tabGroups: TabGroup[] = [
     icon: Cog,
     items: [
       { label: 'Regras de Venda', shortLabel: 'Regras', icon: Gavel, description: 'Limites e comissões' },
-      { label: 'Instalação e Rotas', shortLabel: 'Instalação', icon: MapPin, description: 'Bases e rotas' },
+      { label: 'Vistorias', shortLabel: 'Vistorias', icon: MapPin, description: 'Configurações de vistorias e rotas' },
     ],
   },
   {

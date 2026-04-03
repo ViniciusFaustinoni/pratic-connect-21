@@ -26,6 +26,7 @@ interface RegiaoRota {
 }
 
 const CONFIG_CHAVES = [
+  'atribuicao_manual_rotas',
   'instalacao_max_por_dia',
   'instalacao_horario_inicio',
   'instalacao_tempo_medio_minutos',

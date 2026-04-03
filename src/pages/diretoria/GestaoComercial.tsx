@@ -19,7 +19,7 @@ const sectionBanners: Record<number, { title: string; help: string }> = {
   2: { title: 'Simulador de Rateio', help: 'Simule a distribuição de custos entre associados antes de aplicar.' },
   3: { title: 'Configuração do Rateio', help: 'Defina percentuais, tetos, fundo de reserva e variáveis do rateio.' },
   4: { title: 'Regras de Venda', help: 'Configure limites FIPE, comissões e taxas do processo de venda.' },
-  5: { title: 'Instalação e Rotas', help: 'Cadastre bases, parceiros e organize rotas de instalação.' },
+  5: { title: 'Vistorias', help: 'Configure parâmetros de vistorias, rotas e atribuição manual.' },
   6: { title: 'Tabelas de Apoio', help: 'Gerencie categorias de veículo, regiões, tipos de uso e tipos de placa.' },
   7: { title: 'Marcas e Modelos', help: 'Cadastre marcas e modelos de veículos com importação em lote.' },
 };
