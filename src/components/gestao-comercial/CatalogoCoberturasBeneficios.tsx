@@ -439,6 +439,10 @@ export function CatalogoCoberturasBeneficios() {
             onDuplicate={(id) => duplicateBen.mutate(id)}
           />
         </TabsContent>
+
+        <TabsContent value="atribuicao">
+          <AtribuicaoPlanoTab />
+        </TabsContent>
       </Tabs>
 
       {cobSheet.open && <CoberturaSheet open item={cobSheet.item} onClose={() => setCobSheet({ open: false })} />}
