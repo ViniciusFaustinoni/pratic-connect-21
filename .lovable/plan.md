@@ -1,55 +1,64 @@
+# Nova Aba "Atribuição" em Coberturas e Benefícios
 
+## Resumo
 
-# Modal Completo de Detalhes do Veículo
+Adicionar uma terceira aba "Atribuição" no componente `CatalogoCoberturasBeneficios` (Gestão Comercial > Coberturas e Benefícios). Essa aba lista todos os planos cadastrados. Ao clicar num plano, abre um modal de busca de associados para atribuí-lo, com opção de enviar ou não o termo de filiação via Autentique.
 
-## Situação Atual
+## Arquivos
 
-A página `Veiculos.tsx` ao clicar numa linha navega para o detalhe do associado. Existe um `VeiculoDetalhesModal` mas tem apenas 3 abas (Info, Fotos, Documentos) e falta muita informação.
+### 1. `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx`
 
-## Solução
+- Adicionar aba "Atribuição" no `TabsList` existente (ao lado de Coberturas e Benefícios)
+- Renderizar o novo componente `AtribuicaoPlanoTab` no `TabsContent`
 
-Expandir o `VeiculoDetalhesModal` e conectá-lo à tabela de veículos na página `Veiculos.tsx`. O modal terá 6 abas com todas as informações pertinentes.
+### 2. `src/components/gestao-comercial/AtribuicaoPlanoTab.tsx` (novo)
 
-### Estrutura de Abas
+- Lista todos os planos ativos (via `usePlanos` hook existente)
+- Cada plano mostra: nome, linha, valor mensal, adesão
+- Botão "Atribuir" em cada plano abre o modal de atribuição
 
-1. **Resumo** - Dados do veículo + dados do associado vinculado + status coberturas
-2. **Financeiro** - Cobranças/boletos do associado (via `useCobrancasAssociado`)
-3. **Rastreador** - Dados do rastreador vinculado + botão "Ver no Mapa" com `MapaRastreador`
-4. **Eventos** - Sinistros e chamados de assistência do veículo
-5. **Fotos/Docs** - Fotos de vistoria + documentos (já existente, consolidado)
-6. **Histórico** - Timeline de ações/mudanças (via `useAssociadoHistoricoCompleto`)
+### 3. `src/components/gestao-comercial/AtribuirPlanoModal.tsx` (novo)
 
-### Arquivos Alterados
+Modal com 2 etapas:
 
-**1. `src/pages/cadastro/Veiculos.tsx`**
-- Adicionar state para modal (`selectedVeiculoId`, `showModal`)
-- Trocar o `onClick` da `TableRow` de navegar para associado para abrir o modal
-- Importar e renderizar o modal expandido
+**Etapa 1 — Buscar Associado:**
 
-**2. `src/components/cadastro/VeiculoDetalhesModal.tsx`** (reescrever)
-- Receber apenas `veiculoId` e `open/onClose`
-- Buscar internamente: veículo, associado, rastreador, cobranças, sinistros, assistências
-- 6 abas conforme descrito acima
-- Botão "Ver Associado" que navega para `/cadastro/associados/:id`
-- Botão "Ver no Mapa" que abre o `MapaRastreador` inline
+- Input de busca por nome, CPF ou placa
+- Consulta tabela `associados` com filtro
+- Exibe resultado em lista clicável (nome, CPF, plano atual se houver)
+- Ao selecionar, avança para etapa 2
 
-**3. `src/hooks/useVeiculoDetalhes.ts`** (expandir)
-- Adicionar `useVeiculoCompleto(veiculoId)` que busca veículo + associado + rastreador num único hook
-- Adicionar `useEventosVeiculo(veiculoId)` que busca sinistros + assistências do veículo
+**Etapa 2 — Confirmar Atribuição:**
 
-### Dados por Aba
+- Resumo: plano selecionado + associado selecionado
+- Pergunta com radio: "Sem envio do termo de filiação" / "Com envio do termo de filiação (Autentique)"
+- Se "Sem envio":
+  - Atualiza `associados.plano_id` diretamente
+  - Cria registro em `contratos` (numero gerado, plano_id, associado_id, status `ativo`, valores do plano)
+  - Toast de sucesso
+- Se "Com envio":
+  - Cria contrato com status `pendente_assinatura`
+  - Invoca `autentique-create-by-token` (edge function existente) para gerar o documento e enviar ao email do associado
+  - Ao ser assinado (webhook Autentique já existente atualiza `autentique_status`), o contrato passa para `assinado` e o `plano_id` do associado é atualizado
+  - Documento assinado fica acessível na aba Documentos do modal de detalhes do associado (já funcional via tabela `contratos` com campos `pdf_url`/`pdf_assinado_url`)
 
-| Aba | Fonte | Campos |
-|---|---|---|
-| Resumo | `veiculos` + `associados` | Marca, modelo, placa, chassi, FIPE, cor, status, coberturas, nome/CPF/telefone do associado |
-| Financeiro | `asaas_cobrancas` via `useCobrancasAssociado` | Lista de boletos, status, valores, vencimento |
-| Rastreador | `rastreadores` join `veiculos` | IMEI, plataforma, status, último sinal, mapa |
-| Eventos | `sinistros` + `chamados_assistencia` | Protocolo, tipo, status, data |
-| Fotos/Docs | hooks existentes | Fotos de vistoria categorizadas + documentos |
-| Histórico | `useAssociadoHistoricoCompleto` | Timeline de ações |
+### 4. `src/hooks/useAtribuirPlano.ts` (novo)
 
-### Impacto
-- 3 arquivos alterados
-- Modal rico e completo ao clicar em qualquer veículo na listagem
-- Reutiliza hooks e componentes já existentes no projeto
+- `useBuscarAssociados(termo)`: busca associados por nome/CPF/placa com debounce
+- `useAtribuirPlanoSemTermo()`: mutation que atualiza `associados.plano_id` e cria contrato ativo
+- `useAtribuirPlanoComTermo()`: mutation que cria contrato `pendente_assinatura` e invoca a edge function do Autentique
 
+## Fluxo Autentique (com termo)
+
+O sistema já possui a integração completa:
+
+- Edge function `autentique-create-by-token` gera o documento e envia para assinatura
+- Contrato criado com `link_token` para rastreio
+- Webhook existente atualiza `autentique_status` e `pdf_assinado_url` no contrato
+- O PDF assinado já aparece nos documentos do associado (modal de detalhes)
+
+## Impacto
+
+- 1 arquivo modificado (`CatalogoCoberturasBeneficios.tsx`)
+- 3 arquivos novos (componente tab, modal, hook)
+- 0 migrations (usa estrutura existente de `contratos` e `associados`)
