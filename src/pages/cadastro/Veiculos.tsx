@@ -488,6 +488,38 @@ export default function Veiculos() {
         onClose={() => setSelectedVeiculoId(null)}
         veiculoId={selectedVeiculoId}
       />
+
+      <AlertDialog open={!!veiculoToDelete} onOpenChange={(open) => !open && setVeiculoToDelete(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Excluir veículo</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir o veículo <strong>{veiculoToDelete?.placa}</strong>? Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction
+              className="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+              onClick={() => {
+                if (veiculoToDelete) {
+                  deleteVeiculo.mutate(veiculoToDelete.id, {
+                    onSuccess: () => {
+                      toast({ title: 'Veículo excluído com sucesso' });
+                      setVeiculoToDelete(null);
+                    },
+                    onError: (err: any) => {
+                      toast({ title: 'Erro ao excluir', description: err.message, variant: 'destructive' });
+                    },
+                  });
+                }
+              }}
+            >
+              {deleteVeiculo.isPending ? 'Excluindo...' : 'Excluir'}
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
