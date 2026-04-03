@@ -1,69 +1,55 @@
 
 
-# Forçar Gemini a executar tools: solução definitiva
+# Modal Completo de Detalhes do Veículo
 
-## Problema confirmado
+## Situação Atual
 
-A conversa do Marcus Vinícius Faustinoni está salva em `chat_mensagens_ia` e mostra o modelo **fabricando protocolos** (SIN-20260402-001, guincho) em texto puro, sem nunca chamar as tools `criar_solicitacao_sinistro` ou `criar_solicitacao_assistencia`. Resultado: zero registros nas tabelas `sinistros` e `chamados_assistencia`.
-
-A instrução "REGRA CRÍTICA DE EXECUÇÃO" adicionada anteriormente ao prompt **não foi suficiente** — o Gemini Flash continua narrando.
-
-## Causa raiz
-
-`tool_choice: "auto"` permite ao modelo ignorar tools. O prompt é muito longo (~1400 linhas incluindo contexto) e o Gemini Flash prioriza fluência textual sobre execução de tools nesse cenário.
+A página `Veiculos.tsx` ao clicar numa linha navega para o detalhe do associado. Existe um `VeiculoDetalhesModal` mas tem apenas 3 abas (Info, Fotos, Documentos) e falta muita informação.
 
 ## Solução
 
-### Arquivo: `supabase/functions/assistente-chat/index.ts`
+Expandir o `VeiculoDetalhesModal` e conectá-lo à tabela de veículos na página `Veiculos.tsx`. O modal terá 6 abas com todas as informações pertinentes.
 
-**1. Trocar `tool_choice` de `"auto"` para forçar uso de tools quando o contexto indica ação**
+### Estrutura de Abas
 
-Implementar detecção de intenção de ação na mensagem do usuário. Quando a mensagem indica sinistro/assistência/colisão/roubo/guincho, usar `tool_choice: "required"` em vez de `"auto"`. Isso obriga o modelo a chamar uma tool.
+1. **Resumo** - Dados do veículo + dados do associado vinculado + status coberturas
+2. **Financeiro** - Cobranças/boletos do associado (via `useCobrancasAssociado`)
+3. **Rastreador** - Dados do rastreador vinculado + botão "Ver no Mapa" com `MapaRastreador`
+4. **Eventos** - Sinistros e chamados de assistência do veículo
+5. **Fotos/Docs** - Fotos de vistoria + documentos (já existente, consolidado)
+6. **Histórico** - Timeline de ações/mudanças (via `useAssociadoHistoricoCompleto`)
 
-Lógica:
-```ts
-const lastUserMsg = messages[messages.length - 1]?.content?.toLowerCase() || '';
-const actionKeywords = ['sinistro', 'colisao', 'colisão', 'batida', 'bateu', 'roubo', 'furto', 
-  'guincho', 'reboque', 'assistencia', 'assistência', 'pane', 'chaveiro', 'pneu',
-  'isso mesmo', 'sim', 'confirmo', 'pode registrar', 'minha residencia', 'minha residência',
-  'registrar', 'abrir'];
-const isActionContext = actionKeywords.some(kw => lastUserMsg.includes(kw));
+### Arquivos Alterados
 
-// Em chamadas após tool results, manter "auto"
-const toolChoice = isActionContext ? "required" : "auto";
-```
+**1. `src/pages/cadastro/Veiculos.tsx`**
+- Adicionar state para modal (`selectedVeiculoId`, `showModal`)
+- Trocar o `onClick` da `TableRow` de navegar para associado para abrir o modal
+- Importar e renderizar o modal expandido
 
-Aplicar isso nas **duas chamadas fetch** ao gateway (linhas ~1281 e ~1366).
+**2. `src/components/cadastro/VeiculoDetalhesModal.tsx`** (reescrever)
+- Receber apenas `veiculoId` e `open/onClose`
+- Buscar internamente: veículo, associado, rastreador, cobranças, sinistros, assistências
+- 6 abas conforme descrito acima
+- Botão "Ver Associado" que navega para `/cadastro/associados/:id`
+- Botão "Ver no Mapa" que abre o `MapaRastreador` inline
 
-**2. Adicionar validação pós-resposta: detectar protocolos fabricados**
+**3. `src/hooks/useVeiculoDetalhes.ts`** (expandir)
+- Adicionar `useVeiculoCompleto(veiculoId)` que busca veículo + associado + rastreador num único hook
+- Adicionar `useEventosVeiculo(veiculoId)` que busca sinistros + assistências do veículo
 
-Após receber a resposta final do modelo, verificar se o texto contém padrões como "SIN-" ou "ASS-" sem que nenhuma tool tenha sido chamada. Se detectado, fazer uma segunda tentativa com `tool_choice: "required"`.
+### Dados por Aba
 
-```ts
-const fabricatedProtocol = /SIN-\d{8}-\d{3,4}|ASS-\d{8}-\d{3,4}/.test(finalContent);
-const noToolsUsed = iterations === 0;
-if (fabricatedProtocol && noToolsUsed) {
-  console.warn('[assistente-chat] Protocolo fabricado detectado! Forçando tool call...');
-  // Retry com tool_choice: "required"
-}
-```
+| Aba | Fonte | Campos |
+|---|---|---|
+| Resumo | `veiculos` + `associados` | Marca, modelo, placa, chassi, FIPE, cor, status, coberturas, nome/CPF/telefone do associado |
+| Financeiro | `asaas_cobrancas` via `useCobrancasAssociado` | Lista de boletos, status, valores, vencimento |
+| Rastreador | `rastreadores` join `veiculos` | IMEI, plataforma, status, último sinal, mapa |
+| Eventos | `sinistros` + `chamados_assistencia` | Protocolo, tipo, status, data |
+| Fotos/Docs | hooks existentes | Fotos de vistoria categorizadas + documentos |
+| Histórico | `useAssociadoHistoricoCompleto` | Timeline de ações |
 
-**3. Simplificar o system prompt para reduzir a chance de narração**
-
-Mover a seção "REGRA CRÍTICA DE EXECUÇÃO" para o **início absoluto** do system prompt (antes de qualquer outra instrução), e tornar mais curta e direta:
-
-```
-REGRA #1: NUNCA gere protocolos (SIN-*, ASS-*) em texto. Protocolos só existem quando uma tool retorna.
-REGRA #2: Para registrar qualquer coisa, CHAME a tool. Não narre.
-```
-
-### Redeploy
-
-Deploy da edge function `assistente-chat` após as alterações.
-
-## Impacto
-- 1 arquivo alterado (~20 linhas)
-- O modelo será forçado a chamar tools quando o contexto indicar ação
-- Protocolos fabricados serão detectados e corrigidos
-- Sinistros e assistências passarão a ser registrados no banco
+### Impacto
+- 3 arquivos alterados
+- Modal rico e completo ao clicar em qualquer veículo na listagem
+- Reutiliza hooks e componentes já existentes no projeto
 
