@@ -132,6 +132,91 @@ export function useDocumentosAssociadoCompleto(associadoId: string | undefined) 
   });
 }
 
+/**
+ * Hook para buscar veículo completo com associado e rastreador
+ */
+export function useVeiculoCompleto(veiculoId: string | undefined) {
+  return useQuery({
+    queryKey: ['veiculo-completo', veiculoId],
+    queryFn: async () => {
+      if (!veiculoId) return null;
+
+      // Buscar veículo
+      const { data: veiculo, error: errV } = await supabase
+        .from('veiculos')
+        .select('*')
+        .eq('id', veiculoId)
+        .single();
+      if (errV) throw errV;
+
+      // Buscar associado
+      let associado = null;
+      if (veiculo.associado_id) {
+        const { data } = await supabase
+          .from('associados')
+          .select('id, nome, cpf, telefone, email, status, cidade, estado')
+          .eq('id', veiculo.associado_id)
+          .maybeSingle();
+        associado = data;
+      }
+
+      // Buscar rastreador vinculado ao veículo
+      let rastreador = null;
+      const { data: rast } = await supabase
+        .from('rastreadores')
+        .select('id, codigo, numero_serie, plataforma, status, ultimo_sinal, imei')
+        .eq('veiculo_id', veiculoId)
+        .maybeSingle();
+      rastreador = rast;
+
+      // Buscar contrato ativo
+      let contrato = null;
+      const { data: contr } = await supabase
+        .from('contratos')
+        .select('id, numero, status, plano_nome, valor_mensal, data_inicio, data_fim')
+        .eq('veiculo_id', veiculoId)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+      contrato = contr;
+
+      return { veiculo, associado, rastreador, contrato };
+    },
+    enabled: !!veiculoId,
+  });
+}
+
+/**
+ * Hook para buscar eventos (sinistros + assistências) de um veículo
+ */
+export function useEventosVeiculo(veiculoId: string | undefined) {
+  return useQuery({
+    queryKey: ['veiculo-eventos', veiculoId],
+    queryFn: async () => {
+      if (!veiculoId) return { sinistros: [], assistencias: [] };
+
+      const [sinRes, assRes] = await Promise.all([
+        supabase
+          .from('sinistros')
+          .select('id, protocolo, tipo, status, data_ocorrencia, created_at')
+          .eq('veiculo_id', veiculoId)
+          .order('created_at', { ascending: false }),
+        supabase
+          .from('chamados_assistencia')
+          .select('id, protocolo, tipo_servico, status, created_at')
+          .eq('veiculo_id', veiculoId)
+          .order('created_at', { ascending: false }),
+      ]);
+
+      return {
+        sinistros: sinRes.data || [],
+        assistencias: assRes.data || [],
+      };
+    },
+    enabled: !!veiculoId,
+  });
+}
+
 // Tipos de foto agrupados por categoria
 const TIPOS_IDENTIFICACAO = ['selfie', 'chassi', 'motor'];
 const TIPOS_EXTERIOR = ['frente', 'traseira', 'lateral_esquerda', 'lateral_direita', 'roda'];

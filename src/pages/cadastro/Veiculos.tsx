@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { usePermissions } from '@/hooks/usePermissions';
+import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
 import {
   Table,
   TableBody,
@@ -87,6 +88,7 @@ export default function Veiculos() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
   const { data: veiculos, isLoading } = useVeiculos();
   const { data: associadosData } = useAssociados();
   const associados = associadosData?.associados;
@@ -407,12 +409,7 @@ export default function Veiculos() {
                     <TableRow 
                       key={veiculo.id} 
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => {
-                        const associado = associados?.find(a => a.id === veiculo.associado_id);
-                        if (associado) {
-                          navigate(`/cadastro/associados/${associado.id}`);
-                        }
-                      }}
+                      onClick={() => setSelectedVeiculoId(veiculo.id)}
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
@@ -462,6 +459,11 @@ export default function Veiculos() {
           )}
         </CardContent>
       </Card>
+      <VeiculoDetalhesModal
+        open={!!selectedVeiculoId}
+        onClose={() => setSelectedVeiculoId(null)}
+        veiculoId={selectedVeiculoId}
+      />
     </div>
   );
 }
