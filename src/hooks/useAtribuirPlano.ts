@@ -94,6 +94,7 @@ export function useAtribuirPlanoSemTermo() {
           numero,
           associado_id: associadoId,
           plano_id: planoId,
+          data_inicio: new Date().toISOString().split('T')[0],
           veiculo_id: veiculo?.id || null,
           status: 'ativo',
           valor_mensal: plano?.valor_mensal || 0,
