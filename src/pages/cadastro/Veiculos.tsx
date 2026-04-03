@@ -101,11 +101,11 @@ export default function Veiculos() {
   const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
   const { data: veiculos, isLoading } = useVeiculos();
   const deleteVeiculo = useDeleteVeiculo();
-  const { hasPerm } = usePermissions();
+  const { isDiretor, isAdminMaster, isDesenvolvedor, hasPerm } = usePermissions();
   const { toast } = useToast();
   const [veiculoToDelete, setVeiculoToDelete] = useState<{ id: string; placa: string } | null>(null);
 
-  const isDiretor = hasPerm?.('diretor') || hasPerm?.('super_admin');
+  const canDeleteVeiculo = isDiretor || isAdminMaster || isDesenvolvedor;
 
   // Consulta de placa
   const [placaInput, setPlacaInput] = useState('');
@@ -408,7 +408,7 @@ export default function Veiculos() {
                   <TableHead>Uso App</TableHead>
                   <TableHead>Associado</TableHead>
                   <TableHead>Status</TableHead>
-                  {isDiretor && <TableHead className="w-12"></TableHead>}
+                  {canDeleteVeiculo && <TableHead className="w-12"></TableHead>}
                 </TableRow>
               </TableHeader>
               <TableBody>
@@ -460,7 +460,7 @@ export default function Veiculos() {
                           {STATUS_VEICULO_LABELS[veiculoStatus]}
                         </Badge>
                       </TableCell>
-                      {isDiretor && (
+                      {canDeleteVeiculo && (
                         <TableCell>
                           <Button
                             variant="ghost"
