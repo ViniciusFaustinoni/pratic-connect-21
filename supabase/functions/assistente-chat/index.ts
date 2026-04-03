@@ -1374,14 +1374,14 @@ ${assistenciasTexto}
           Authorization: `Bearer ${LOVABLE_API_KEY}`,
           "Content-Type": "application/json",
         },
-        body: JSON.stringify({
+      body: JSON.stringify({
           model: "google/gemini-3-flash-preview",
           messages: aiMessages,
           tools,
-          tool_choice: "auto",
+          tool_choice: "auto", // Após tool results, manter auto
           stream: false,
         }),
-        signal: AbortSignal.timeout(25000), // 25 segundos máximo por chamada
+        signal: AbortSignal.timeout(25000),
       });
 
     if (!response.ok) {
