@@ -26,7 +26,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useVeiculos } from '@/hooks/useVeiculos';
-import { useAssociados } from '@/hooks/useAssociados';
 import { STATUS_VEICULO_LABELS, type StatusVeiculo } from '@/types/database';
 
 interface VehicleResult {
