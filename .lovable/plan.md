@@ -1,47 +1,48 @@
 
 
-# Base Antiga: Separar Associados e Veículos
+# Tela de Log de Envios de Templates Meta
 
 ## Resumo
+Criar uma nova seção na aba WhatsApp (Integrações) que exibe o histórico de envios de templates Meta, incluindo sucessos e erros, usando dados já existentes na tabela `whatsapp_mensagens`.
 
-Transformar a página "Base Antiga" em uma página com 2 abas: **Associados** (conteúdo atual) e **Veículos** (nova listagem de veículos vinculados a associados com `origem_cadastro = 'api_externa'`).
+## Fonte de dados
+A tabela `whatsapp_mensagens` já registra todos os envios com:
+- `direcao = 'saida'` para mensagens enviadas
+- `status` (`enviada`, `erro`, `entregue`, `lida`)
+- `erro_mensagem`, `erro_codigo` para falhas
+- `template_id`, `template_variaveis` para identificar o template usado
+- `telefone`, `created_at`, `provedor`
+
+Não é necessário criar migration — os dados já existem.
 
 ## Alterações
 
-### 1. `src/hooks/useBaseAntiga.ts` — Novo hook `useBaseAntigaVeiculos`
+### 1. Novo hook `src/hooks/useWhatsAppEnvioLogs.ts`
+- Query em `whatsapp_mensagens` filtrando `direcao = 'saida'`
+- Ordenado por `created_at DESC`
+- Suporta filtros: status (todos/enviada/erro), busca por telefone, intervalo de datas
+- Paginação (20 por página)
+- Join com `whatsapp_instancias` para nome da instância
 
-- Query em `veiculos` com join `associado:associados!inner(id, nome, cpf, origem_cadastro)` filtrando `associados.origem_cadastro = 'api_externa'`
-- Busca por placa, chassi, marca/modelo ou nome do associado
-- Paginação idêntica ao hook de associados
-- Join com rastreadores para mostrar status do rastreador
+### 2. Novo componente `src/components/integracoes/WhatsAppEnvioLogs.tsx`
+- Tabela com colunas: Data/Hora, Telefone, Template/Mensagem, Status (badge verde/vermelho), Erro, Provedor
+- Filtros no topo: campo de busca, seletor de status, date range
+- Badge de status: verde para `enviada/entregue/lida`, vermelho para `erro`
+- Tooltip ou expansão para ver `erro_mensagem` completa e `template_variaveis`
+- Paginação inferior
 
-### 2. `src/pages/cadastro/BaseAntiga.tsx` — Adicionar abas
+### 3. Modificar `src/components/integracoes/WhatsAppTab.tsx`
+- Adicionar o componente `WhatsAppEnvioLogs` como nova seção após Templates Meta, com título "Log de Envios"
 
-- Envolver conteúdo atual em `Tabs` com 2 abas: "Associados" e "Veículos"
-- Aba **Associados**: conteúdo existente (sem mudanças)
-- Aba **Veículos**: nova tabela com colunas: Placa, Marca/Modelo, Ano, Cor, Associado (nome), Status, Rastreador
-- Busca e paginação independentes para cada aba
-- Clicar num veículo abre o `VeiculoDetalhesModal` já existente
-- Clicar no nome do associado abre o modal de detalhes do associado (já existente)
+## Layout da tabela
 
-### 3. Sidebar — Atualizar label
-
-- Renomear "Base Antiga" para "Base Antiga" (manter) mas atualizar a descrição na página para "Base Antiga — Associados e Veículos importados"
-
-## Tabela de Veículos (Aba)
-
-| Coluna | Fonte |
-|--------|-------|
-| Placa | `veiculos.placa` |
-| Marca/Modelo | `veiculos.marca` + `veiculos.modelo` |
-| Ano | `veiculos.ano_modelo` |
-| Cor | `veiculos.cor` |
-| Associado | join `associados.nome` |
-| Status | `veiculos.status` |
-| Rastreador | join `rastreadores` (ícone verde/cinza) |
+| Data/Hora | Telefone | Mensagem | Status | Erro | Provedor |
+|-----------|----------|----------|--------|------|----------|
+| 03/04 22:31 | 5571... | Template: assinatura_doc... | ✅ Enviada | — | Meta |
+| 03/04 22:30 | 5511... | Template: boas_vindas | ❌ Erro | Rate limit | Meta |
 
 ## Impacto
-- 1 hook novo (`useBaseAntigaVeiculos`) no arquivo existente
-- 1 página modificada (`BaseAntiga.tsx`)
-- Reutiliza `VeiculoDetalhesModal` existente
+- 0 migrations
+- 2 arquivos novos (hook + componente)
+- 1 arquivo modificado (WhatsAppTab.tsx)
 
