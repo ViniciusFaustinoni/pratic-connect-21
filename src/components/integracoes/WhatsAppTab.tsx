@@ -49,6 +49,11 @@ export function WhatsAppTab() {
       {/* Templates Meta */}
       <WhatsAppMetaTemplates />
 
+      <Separator />
+
+      {/* Log de Envios */}
+      <WhatsAppEnvioLogs />
+
       {/* Info sobre webhook */}
       <Alert>
         <Settings className="h-4 w-4" />
