@@ -262,11 +262,11 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                 <TabsContent value="financeiro" className="p-6 m-0">
                   {loadingCob ? (
                     <LoadingSkeleton />
-                  ) : !cobrancas || (cobrancas as any[]).length === 0 ? (
+                  ) : !cobrancas || !(cobrancas as any)?.faturas?.length ? (
                     <EmptyState icon={DollarSign} text="Nenhuma cobrança encontrada" />
                   ) : (
                     <div className="space-y-2">
-                      {(cobrancas as any[]).slice(0, 50).map((cob: any) => (
+                      {((cobrancas as any).faturas as any[]).slice(0, 50).map((cob: any) => (
                         <div key={cob.id} className="flex items-center justify-between p-3 bg-muted/50 rounded-lg hover:bg-muted transition-colors">
                           <div className="flex items-center gap-3">
                             <DollarSign className="h-4 w-4 text-muted-foreground" />
