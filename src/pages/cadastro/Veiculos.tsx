@@ -435,7 +435,7 @@ export default function Veiculos() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <User className="h-3 w-3 text-muted-foreground" />
-                          {associadoMap.get(veiculo.associado_id) || 'Desconhecido'}
+                          {(veiculo as any).associado?.nome || 'Sem associado'}
                         </div>
                       </TableCell>
                       <TableCell>
