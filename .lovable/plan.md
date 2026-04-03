@@ -1,44 +1,47 @@
 
 
-# Fix: Veículo via API mostra "Associado Desconhecido"
+# Base Antiga: Separar Associados e Veículos
 
-## Causa Raiz
+## Resumo
 
-O problema **não é na API** — o veículo é vinculado corretamente ao associado pelo CPF. O problema está na **página de listagem de veículos** (`Veiculos.tsx`).
+Transformar a página "Base Antiga" em uma página com 2 abas: **Associados** (conteúdo atual) e **Veículos** (nova listagem de veículos vinculados a associados com `origem_cadastro = 'api_externa'`).
 
-A página usa `useAssociados()` para montar um mapa de nomes, mas esse hook:
-1. **Filtra por `origem_cadastro = 'interno'`** (linha 107) — associados criados via API têm `origem_cadastro = 'api_externa'`, então são excluídos
-2. **Pagina com limite de 20** — mesmo se o filtro fosse removido, não traria todos
+## Alterações
 
-Resultado: `associadoMap.get(veiculo.associado_id)` retorna `undefined` → exibe "Desconhecido" (linha 446).
+### 1. `src/hooks/useBaseAntiga.ts` — Novo hook `useBaseAntigaVeiculos`
 
-## Solução
+- Query em `veiculos` com join `associado:associados!inner(id, nome, cpf, origem_cadastro)` filtrando `associados.origem_cadastro = 'api_externa'`
+- Busca por placa, chassi, marca/modelo ou nome do associado
+- Paginação idêntica ao hook de associados
+- Join com rastreadores para mostrar status do rastreador
 
-Substituir a abordagem de carregar todos os associados separadamente. Em vez disso, fazer o join direto na query de veículos.
+### 2. `src/pages/cadastro/BaseAntiga.tsx` — Adicionar abas
 
-### 1. `src/hooks/useVeiculos.ts` — Incluir nome do associado na query
+- Envolver conteúdo atual em `Tabs` com 2 abas: "Associados" e "Veículos"
+- Aba **Associados**: conteúdo existente (sem mudanças)
+- Aba **Veículos**: nova tabela com colunas: Placa, Marca/Modelo, Ano, Cor, Associado (nome), Status, Rastreador
+- Busca e paginação independentes para cada aba
+- Clicar num veículo abre o `VeiculoDetalhesModal` já existente
+- Clicar no nome do associado abre o modal de detalhes do associado (já existente)
 
-Na função `useVeiculos()`, alterar o `.select('*')` para incluir o join com associados:
+### 3. Sidebar — Atualizar label
 
-```typescript
-.select('*, associado:associados(id, nome, cpf)')
-```
+- Renomear "Base Antiga" para "Base Antiga" (manter) mas atualizar a descrição na página para "Base Antiga — Associados e Veículos importados"
 
-Isso retorna o nome do associado diretamente em cada veículo, sem depender de uma segunda query.
+## Tabela de Veículos (Aba)
 
-### 2. `src/pages/cadastro/Veiculos.tsx` — Usar dados do join
-
-- Remover a importação e uso de `useAssociados` (não mais necessário para esta página)
-- Remover a construção do `associadoMap`
-- Na coluna "Associado" (linha 446), usar:
-  ```
-  veiculo.associado?.nome || 'Sem associado'
-  ```
-- Atualizar o filtro de busca para usar `veiculo.associado?.nome` em vez de `associadoMap.get()`
+| Coluna | Fonte |
+|--------|-------|
+| Placa | `veiculos.placa` |
+| Marca/Modelo | `veiculos.marca` + `veiculos.modelo` |
+| Ano | `veiculos.ano_modelo` |
+| Cor | `veiculos.cor` |
+| Associado | join `associados.nome` |
+| Status | `veiculos.status` |
+| Rastreador | join `rastreadores` (ícone verde/cinza) |
 
 ## Impacto
-- 2 arquivos alterados
-- 0 migrations
-- Resolve o problema para associados de qualquer origem (interna, API, base antiga)
-- Remove dependência desnecessária de `useAssociados` na página de veículos
+- 1 hook novo (`useBaseAntigaVeiculos`) no arquivo existente
+- 1 página modificada (`BaseAntiga.tsx`)
+- Reutiliza `VeiculoDetalhesModal` existente
 
