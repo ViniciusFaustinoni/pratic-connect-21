@@ -65,6 +65,7 @@ function useInstalacaoConfigs() {
       const map = Object.fromEntries((data || []).map(d => [d.chave, d]));
 
       return {
+        atribuicaoManual: map.atribuicao_manual_rotas?.valor ?? 'false',
         maxPorDia: map.instalacao_max_por_dia?.valor ?? '6',
         horarioInicio: map.instalacao_horario_inicio?.valor ?? '08:30',
         tempoMedio: map.instalacao_tempo_medio_minutos?.valor ?? '90',
