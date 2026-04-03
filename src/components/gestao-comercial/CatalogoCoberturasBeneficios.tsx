@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { EligibilityConfigSection, useEligibilityState, saveEligibilityRules, hasEligibilityRules } from './EligibilityConfigSection';
 import { useRulesForEntity } from '@/hooks/useEntityEligibilityRules';
 import { CarenciaConfigSection } from '@/components/admin/planos/CarenciaConfigSection';
+import { AtribuicaoPlanoTab } from './AtribuicaoPlanoTab';
 
 
 // ── Delete Confirmation Dialog ──
