@@ -51,12 +51,8 @@ export function AtribuicaoPlanoTab() {
                 <div className="flex-1 min-w-0">
                   <p className="text-sm font-medium truncate">{plano.nome}</p>
                   <div className="flex gap-3 text-xs text-muted-foreground">
-                    {plano.valor_mensal != null && (
-                      <span>Mensal: R$ {plano.valor_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    )}
-                    {plano.valor_adesao != null && (
-                      <span>Adesão: R$ {plano.valor_adesao.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
-                    )}
+                    <span>Adesão: R$ {(plano.valor_adesao || 0).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}</span>
+                    {plano.linha && <span>• {plano.linha}</span>}
                   </div>
                 </div>
                 <Button

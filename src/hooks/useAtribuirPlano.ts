@@ -142,9 +142,10 @@ export function useAtribuirPlanoComTermo() {
           numero,
           associado_id: associadoId,
           plano_id: planoId,
+          data_inicio: new Date().toISOString().split('T')[0],
           veiculo_id: veiculo?.id || null,
-          status: 'pendente_assinatura',
-          valor_mensal: plano?.valor_mensal || 0,
+          status: 'pendente_assinatura' as any,
+          valor_mensal: 0,
           valor_adesao: plano?.valor_adesao || 0,
         })
         .select()
