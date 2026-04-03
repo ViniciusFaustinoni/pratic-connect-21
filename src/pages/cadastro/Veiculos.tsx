@@ -9,6 +9,7 @@ import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
 import { supabase } from '@/integrations/supabase/client';
 import { usePermissions } from '@/hooks/usePermissions';
+import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
 import {
   Table,
   TableBody,
