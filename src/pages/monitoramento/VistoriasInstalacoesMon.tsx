@@ -1,12 +1,19 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wrench, ClipboardCheck, Puzzle, Truck, PackageX } from 'lucide-react';
+import { Wrench, ClipboardCheck, Puzzle, Truck, PackageX, Hand } from 'lucide-react';
 import Instalacoes from './Instalacoes';
 import Vistorias from './Vistorias';
 import MonitoramentoEncaixes from './Encaixes';
 import ViagensTab from './ViagensTab';
 import RetiradasContent from './RetiradasContent';
+import { useConfigAtribuicaoManual } from '@/hooks/useAtribuicaoManual';
+import { lazy, Suspense } from 'react';
+import { Loader2 } from 'lucide-react';
+
+const AtribuicaoManualTab = lazy(() => import('@/components/monitoramento/AtribuicaoManualTab'));
 
 export default function VistoriasInstalacoesMon() {
+  const { data: manualAtiva } = useConfigAtribuicaoManual();
+
   return (
     <div className="container mx-auto py-6 space-y-4">
       <div>
@@ -16,8 +23,14 @@ export default function VistoriasInstalacoesMon() {
         </p>
       </div>
 
-      <Tabs defaultValue="instalacoes" className="w-full">
+      <Tabs defaultValue={manualAtiva ? 'atribuicao-manual' : 'instalacoes'} className="w-full">
         <TabsList>
+          {manualAtiva && (
+            <TabsTrigger value="atribuicao-manual" className="gap-2">
+              <Hand className="h-4 w-4" />
+              Atribuição Manual
+            </TabsTrigger>
+          )}
           <TabsTrigger value="instalacoes" className="gap-2">
             <Wrench className="h-4 w-4" />
             Instalações
@@ -39,6 +52,14 @@ export default function VistoriasInstalacoesMon() {
             Viagens
           </TabsTrigger>
         </TabsList>
+
+        {manualAtiva && (
+          <TabsContent value="atribuicao-manual">
+            <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+              <AtribuicaoManualTab />
+            </Suspense>
+          </TabsContent>
+        )}
 
         <TabsContent value="instalacoes">
           <Instalacoes />

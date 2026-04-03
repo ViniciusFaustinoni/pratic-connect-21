@@ -26,6 +26,7 @@ interface RegiaoRota {
 }
 
 const CONFIG_CHAVES = [
+  'atribuicao_manual_rotas',
   'instalacao_max_por_dia',
   'instalacao_horario_inicio',
   'instalacao_tempo_medio_minutos',
@@ -64,6 +65,7 @@ function useInstalacaoConfigs() {
       const map = Object.fromEntries((data || []).map(d => [d.chave, d]));
 
       return {
+        atribuicaoManual: map.atribuicao_manual_rotas?.valor ?? 'false',
         maxPorDia: map.instalacao_max_por_dia?.valor ?? '6',
         horarioInicio: map.instalacao_horario_inicio?.valor ?? '08:30',
         tempoMedio: map.instalacao_tempo_medio_minutos?.valor ?? '90',
@@ -136,6 +138,10 @@ export function InstalacaoRotasConfig() {
   const { profile } = useAuth();
   const qc = useQueryClient();
 
+  // ── Atribuição Manual state
+  const [atribuicaoManual, setAtribuicaoManual] = useState(false);
+  const [savingAM, setSavingAM] = useState(false);
+
   // ── Bloco 1 state
   const [maxDia, setMaxDia] = useState('6');
   const [horario, setHorario] = useState('08:30');
@@ -192,6 +198,7 @@ export function InstalacaoRotasConfig() {
   // ── Populate state from DB
   useEffect(() => {
     if (!config) return;
+    setAtribuicaoManual(config.atribuicaoManual === 'true');
     setMaxDia(config.maxPorDia);
     setHorario(config.horarioInicio);
     setTempoMedio(config.tempoMedio);
@@ -323,6 +330,50 @@ export function InstalacaoRotasConfig() {
 
   return (
     <div className="space-y-6">
+      {/* ── Atribuição Manual de Rotas ── */}
+      <Card className="border-primary/20">
+        <CardHeader>
+          <CardTitle className="flex items-center gap-2 text-base">
+            <Truck className="h-4 w-4" />
+            Atribuição Manual de Rotas
+          </CardTitle>
+          <CardDescription>
+            Quando ativada, o motor automático de atribuição por proximidade é desligado e uma aba de atribuição manual aparece no Monitoramento &gt; Serviços de Campo.
+          </CardDescription>
+        </CardHeader>
+        <CardContent>
+          <div className="flex items-center justify-between">
+            <div className="space-y-0.5">
+              <Label className="text-sm font-medium">
+                {atribuicaoManual ? 'Atribuição Manual Ativada' : 'Atribuição Automática Ativada'}
+              </Label>
+              <p className="text-xs text-muted-foreground">
+                {atribuicaoManual
+                  ? 'Tarefas são atribuídas manualmente via drag-and-drop no monitoramento'
+                  : 'Tarefas são atribuídas automaticamente por proximidade pelo cron'}
+              </p>
+            </div>
+            <Switch
+              checked={atribuicaoManual}
+              disabled={savingAM}
+              onCheckedChange={async (checked) => {
+                setSavingAM(true);
+                try {
+                  await salvarConfig('atribuicao_manual_rotas', checked ? 'true' : 'false', profile?.id);
+                  setAtribuicaoManual(checked);
+                  toast.success(checked ? 'Atribuição manual ativada' : 'Atribuição automática restaurada');
+                  invalidate();
+                } catch {
+                  toast.error('Erro ao alterar modo de atribuição');
+                } finally {
+                  setSavingAM(false);
+                }
+              }}
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       {/* ── Bloco 1 — Capacidade dos Instaladores ── */}
       <Card>
         <CardHeader>
