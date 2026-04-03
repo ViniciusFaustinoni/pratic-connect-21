@@ -149,7 +149,7 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                 <TabsList className="h-12 bg-transparent p-0 gap-2">
                   {[
                     { v: 'resumo', icon: Car, label: 'Resumo' },
-                    { v: 'financeiro', icon: DollarSign, label: 'Financeiro', count: (cobrancas as any)?.length },
+                    { v: 'financeiro', icon: DollarSign, label: 'Financeiro', count: (cobrancas as any)?.faturas?.length },
                     { v: 'rastreador', icon: MapPin, label: 'Rastreador' },
                     { v: 'eventos', icon: AlertTriangle, label: 'Eventos', count: totalEventos },
                     { v: 'fotos', icon: Image, label: 'Fotos/Docs', count: totalFotos + todosDocumentos.length },

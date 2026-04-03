@@ -937,8 +937,7 @@ export default function AssociadoDetalhe() {
       <VeiculoDetalhesModal
         open={!!veiculoDetalhesId}
         onClose={() => setVeiculoDetalhesId(null)}
-        veiculo={veiculos?.find(v => v.id === veiculoDetalhesId) || null}
-        associadoId={id || ''}
+        veiculoId={veiculoDetalhesId || null}
       />
 
       <VeiculoEditDialog

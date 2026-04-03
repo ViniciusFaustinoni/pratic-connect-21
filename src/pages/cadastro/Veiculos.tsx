@@ -408,12 +408,7 @@ export default function Veiculos() {
                     <TableRow 
                       key={veiculo.id} 
                       className="cursor-pointer hover:bg-muted/50"
-                      onClick={() => {
-                        const associado = associados?.find(a => a.id === veiculo.associado_id);
-                        if (associado) {
-                          navigate(`/cadastro/associados/${associado.id}`);
-                        }
-                      }}
+                      onClick={() => setSelectedVeiculoId(veiculo.id)}
                     >
                       <TableCell>
                         <div className="flex items-center gap-3">
