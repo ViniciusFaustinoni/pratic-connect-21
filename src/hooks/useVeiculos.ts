@@ -36,7 +36,7 @@ export function useVeiculos(associadoId?: string) {
     queryFn: async () => {
       let query = supabase
         .from('veiculos')
-        .select('*')
+        .select('*, associado:associados(id, nome, cpf)')
         .order('created_at', { ascending: false });
       
       if (associadoId) {

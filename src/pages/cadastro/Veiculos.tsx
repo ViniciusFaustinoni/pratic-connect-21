@@ -26,7 +26,6 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { useVeiculos } from '@/hooks/useVeiculos';
-import { useAssociados } from '@/hooks/useAssociados';
 import { STATUS_VEICULO_LABELS, type StatusVeiculo } from '@/types/database';
 
 interface VehicleResult {
@@ -90,8 +89,6 @@ export default function Veiculos() {
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
   const { data: veiculos, isLoading } = useVeiculos();
-  const { data: associadosData } = useAssociados();
-  const associados = associadosData?.associados;
   const { hasPerm } = usePermissions();
 
   // Consulta de placa
@@ -140,13 +137,8 @@ export default function Veiculos() {
   const lv = lookupResult?.vehicleData;
   const lf = lookupResult?.fipeData;
 
-  // Create a map of associado_id to nome for quick lookup
-  const associadoMap = new Map<string, string>(
-    associados?.map((a) => [a.id, a.nome]) || []
-  );
-
-  const filteredVeiculos = veiculos?.filter((veiculo) => {
-    const associadoNome = associadoMap.get(veiculo.associado_id) || '';
+  const filteredVeiculos = veiculos?.filter((veiculo: any) => {
+    const associadoNome = veiculo.associado?.nome || '';
     const matchesSearch =
       veiculo.placa.toLowerCase().includes(search.toLowerCase()) ||
       veiculo.marca.toLowerCase().includes(search.toLowerCase()) ||
@@ -443,7 +435,7 @@ export default function Veiculos() {
                       <TableCell>
                         <div className="flex items-center gap-2">
                           <User className="h-3 w-3 text-muted-foreground" />
-                          {associadoMap.get(veiculo.associado_id) || 'Desconhecido'}
+                          {(veiculo as any).associado?.nome || 'Sem associado'}
                         </div>
                       </TableCell>
                       <TableCell>
