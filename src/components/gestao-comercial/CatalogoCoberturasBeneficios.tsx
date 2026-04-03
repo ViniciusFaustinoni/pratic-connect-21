@@ -16,6 +16,7 @@ import { toast } from 'sonner';
 import { EligibilityConfigSection, useEligibilityState, saveEligibilityRules, hasEligibilityRules } from './EligibilityConfigSection';
 import { useRulesForEntity } from '@/hooks/useEntityEligibilityRules';
 import { CarenciaConfigSection } from '@/components/admin/planos/CarenciaConfigSection';
+import { AtribuicaoPlanoTab } from './AtribuicaoPlanoTab';
 
 
 // ── Delete Confirmation Dialog ──
@@ -407,6 +408,7 @@ export function CatalogoCoberturasBeneficios() {
           <TabsList>
             <TabsTrigger value="coberturas">Coberturas ({coberturas.length})</TabsTrigger>
             <TabsTrigger value="beneficios">Benefícios ({benefits.length})</TabsTrigger>
+            <TabsTrigger value="atribuicao">Atribuição</TabsTrigger>
           </TabsList>
         </div>
 
@@ -436,6 +438,10 @@ export function CatalogoCoberturasBeneficios() {
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'beneficio' })}
             onDuplicate={(id) => duplicateBen.mutate(id)}
           />
+        </TabsContent>
+
+        <TabsContent value="atribuicao">
+          <AtribuicaoPlanoTab />
         </TabsContent>
       </Tabs>
 
