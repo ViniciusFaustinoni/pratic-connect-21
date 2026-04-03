@@ -87,6 +87,7 @@ export default function Veiculos() {
   const navigate = useNavigate();
   const [search, setSearch] = useState('');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
   const { data: veiculos, isLoading } = useVeiculos();
   const { data: associadosData } = useAssociados();
   const associados = associadosData?.associados;
