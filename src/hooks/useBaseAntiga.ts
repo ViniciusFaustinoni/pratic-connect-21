@@ -82,6 +82,51 @@ export function useBaseAntigaAssociados(filters?: BaseAntigaFilters, pagination?
   });
 }
 
+export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: { page: number; pageSize: number }) {
+  const page = pagination?.page ?? 1;
+  const pageSize = pagination?.pageSize ?? 20;
+
+  return useQuery({
+    queryKey: ['base-antiga-veiculos', filters, pagination],
+    queryFn: async () => {
+      let query = (supabase
+        .from('veiculos')
+        .select('id, placa, marca, modelo, ano_fabricacao, ano_modelo, cor, chassi, status, associado_id, associado:associados!inner(id, nome, cpf, origem_cadastro), rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, status, plataforma)', { count: 'exact' }) as any)
+        .eq('associado.origem_cadastro', 'api_externa');
+
+      if (filters?.search && filters.search.length >= 2) {
+        const term = filters.search.trim();
+        const upper = term.toUpperCase();
+        // Search by plate, chassi, marca/modelo
+        query = query.or(`placa.ilike.%${upper}%,chassi.ilike.%${upper}%,marca.ilike.%${term}%,modelo.ilike.%${term}%`);
+      }
+
+      query = query
+        .order('created_at', { ascending: false })
+        .range((page - 1) * pageSize, page * pageSize - 1);
+
+      const { data, error, count } = await query;
+      if (error) throw error;
+
+      const veiculos = (data || []).map((v: any) => ({
+        ...v,
+        associado: Array.isArray(v.associado) ? v.associado[0] : v.associado,
+        rastreador: Array.isArray(v.rastreador) && v.rastreador.length > 0 ? v.rastreador[0] : v.rastreador || null,
+      }));
+
+      return {
+        veiculos,
+        pagination: {
+          page,
+          pageSize,
+          total: count || 0,
+          totalPages: Math.ceil((count || 0) / pageSize),
+        },
+      };
+    },
+  });
+}
+
 export function useBaseAntigaDetalhe(id: string | undefined) {
   return useQuery({
     queryKey: ['base-antiga-detalhe', id],

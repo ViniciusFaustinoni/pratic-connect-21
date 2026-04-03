@@ -1,14 +1,15 @@
 import { useState } from 'react';
-import { useBaseAntigaAssociados, useBaseAntigaDetalhe } from '@/hooks/useBaseAntiga';
+import { useBaseAntigaAssociados, useBaseAntigaDetalhe, useBaseAntigaVeiculos } from '@/hooks/useBaseAntiga';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
 import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
+import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
 
 const STATUS_COLORS: Record<string, string> = {
   ativo: 'bg-green-100 text-green-800',
@@ -20,42 +21,46 @@ const STATUS_COLORS: Record<string, string> = {
 };
 
 export default function BaseAntiga() {
+  const [mainTab, setMainTab] = useState('associados');
+
+  // Associados state
   const [search, setSearch] = useState('');
   const [debouncedSearch, setDebouncedSearch] = useState('');
   const [page, setPage] = useState(1);
   const [selectedId, setSelectedId] = useState<string | null>(null);
-
-  // Debounce
   const [timer, setTimer] = useState<ReturnType<typeof setTimeout>>();
+
+  // Veiculos state
+  const [vSearch, setVSearch] = useState('');
+  const [vDebouncedSearch, setVDebouncedSearch] = useState('');
+  const [vPage, setVPage] = useState(1);
+  const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
+  const [vTimer, setVTimer] = useState<ReturnType<typeof setTimeout>>();
+
   const handleSearch = (value: string) => {
     setSearch(value);
     clearTimeout(timer);
-    const t = setTimeout(() => {
-      setDebouncedSearch(value);
-      setPage(1);
-    }, 400);
+    const t = setTimeout(() => { setDebouncedSearch(value); setPage(1); }, 400);
     setTimer(t);
   };
 
-  const { data, isLoading } = useBaseAntigaAssociados(
-    { search: debouncedSearch },
-    { page, pageSize: 20 }
-  );
+  const handleVSearch = (value: string) => {
+    setVSearch(value);
+    clearTimeout(vTimer);
+    const t = setTimeout(() => { setVDebouncedSearch(value); setVPage(1); }, 400);
+    setVTimer(t);
+  };
 
+  const { data, isLoading } = useBaseAntigaAssociados({ search: debouncedSearch }, { page, pageSize: 20 });
   const { data: detalhe, isLoading: loadingDetalhe } = useBaseAntigaDetalhe(selectedId ?? undefined);
+  const { data: vData, isLoading: vLoading } = useBaseAntigaVeiculos({ search: vDebouncedSearch }, { page: vPage, pageSize: 20 });
 
   const formatCpf = (cpf: string) => {
     if (!cpf || cpf.length !== 11) return cpf;
     return `${cpf.slice(0, 3)}.${cpf.slice(3, 6)}.${cpf.slice(6, 9)}-${cpf.slice(9)}`;
   };
-
-  const formatDate = (d: string | null) => {
-    if (!d) return '—';
-    return new Date(d).toLocaleDateString('pt-BR');
-  };
-
-  const formatCurrency = (v: number) =>
-    new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+  const formatDate = (d: string | null) => !d ? '—' : new Date(d).toLocaleDateString('pt-BR');
+  const formatCurrency = (v: number) => new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
 
   return (
     <div className="space-y-4">
@@ -65,127 +70,171 @@ export default function BaseAntiga() {
             <Database className="h-6 w-6 text-muted-foreground" />
             Base Antiga (SGA)
           </h1>
-          <p className="text-sm text-muted-foreground">Associados importados do sistema SGA/Hinova</p>
+          <p className="text-sm text-muted-foreground">Associados e Veículos importados do sistema SGA/Hinova</p>
         </div>
-        {data && (
-          <Badge variant="secondary" className="text-sm">
-            {data.pagination.total} registros
-          </Badge>
-        )}
       </div>
 
-      <div className="relative max-w-md">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por nome, CPF, placa ou chassi..."
-          value={search}
-          onChange={e => handleSearch(e.target.value)}
-          className="pl-10"
-        />
-      </div>
+      <Tabs value={mainTab} onValueChange={setMainTab}>
+        <TabsList>
+          <TabsTrigger value="associados" className="gap-1.5">
+            <User className="h-4 w-4" /> Associados
+            {data && <Badge variant="secondary" className="ml-1 text-xs">{data.pagination.total}</Badge>}
+          </TabsTrigger>
+          <TabsTrigger value="veiculos" className="gap-1.5">
+            <Car className="h-4 w-4" /> Veículos
+            {vData && <Badge variant="secondary" className="ml-1 text-xs">{vData.pagination.total}</Badge>}
+          </TabsTrigger>
+        </TabsList>
 
-      <Card>
-        <CardContent className="p-0">
-          <Table>
-            <TableHeader>
-              <TableRow>
-                <TableHead>Nome</TableHead>
-                <TableHead>CPF</TableHead>
-                <TableHead>Telefone</TableHead>
-                <TableHead>Cidade/UF</TableHead>
-                <TableHead>Plano</TableHead>
-                <TableHead>Status</TableHead>
-                <TableHead>Cód. Hinova</TableHead>
-              </TableRow>
-            </TableHeader>
-            <TableBody>
-              {isLoading ? (
-                Array.from({ length: 5 }).map((_, i) => (
-                  <TableRow key={i}>
-                    {Array.from({ length: 7 }).map((_, j) => (
-                      <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
-                    ))}
-                  </TableRow>
-                ))
-              ) : !data?.associados.length ? (
-                <TableRow>
-                  <TableCell colSpan={7} className="text-center py-8 text-muted-foreground">
-                    Nenhum associado encontrado
-                  </TableCell>
-                </TableRow>
-              ) : (
-                data.associados.map((a: any) => (
-                  <TableRow
-                    key={a.id}
-                    className="cursor-pointer hover:bg-muted/50"
-                    onClick={() => setSelectedId(a.id)}
-                  >
-                    <TableCell className="font-medium">
-                      {a.nome}
-                      <Badge variant="outline" className="ml-2 text-xs bg-violet-50 text-violet-700 border-violet-200">SGA</Badge>
-                    </TableCell>
-                    <TableCell className="font-mono text-sm">{formatCpf(a.cpf)}</TableCell>
-                    <TableCell>{a.telefone || '—'}</TableCell>
-                    <TableCell>{a.cidade ? `${a.cidade}/${a.uf}` : '—'}</TableCell>
-                    <TableCell>{(a as any).planos?.nome || '—'}</TableCell>
-                    <TableCell>
-                      <Badge className={STATUS_COLORS[a.status] || 'bg-gray-100 text-gray-800'}>
-                        {a.status?.replace(/_/g, ' ')}
-                      </Badge>
-                    </TableCell>
-                    <TableCell className="font-mono">{a.codigo_hinova || '—'}</TableCell>
-                  </TableRow>
-                ))
-              )}
-            </TableBody>
-          </Table>
-        </CardContent>
-      </Card>
-
-      {/* Pagination */}
-      {data && data.pagination.totalPages > 1 && (
-        <div className="flex items-center justify-between">
-          <p className="text-sm text-muted-foreground">
-            Página {data.pagination.page} de {data.pagination.totalPages}
-          </p>
-          <div className="flex gap-2">
-            <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}>
-              <ChevronLeft className="h-4 w-4 mr-1" /> Anterior
-            </Button>
-            <Button variant="outline" size="sm" disabled={page >= data.pagination.totalPages} onClick={() => setPage(p => p + 1)}>
-              Próximo <ChevronRight className="h-4 w-4 ml-1" />
-            </Button>
+        {/* ====== ABA ASSOCIADOS ====== */}
+        <TabsContent value="associados" className="space-y-4 mt-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por nome, CPF, placa ou chassi..." value={search} onChange={e => handleSearch(e.target.value)} className="pl-10" />
           </div>
-        </div>
-      )}
 
-      {/* Detail Modal */}
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Nome</TableHead>
+                    <TableHead>CPF</TableHead>
+                    <TableHead>Telefone</TableHead>
+                    <TableHead>Cidade/UF</TableHead>
+                    <TableHead>Plano</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Cód. Hinova</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {isLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>{Array.from({ length: 7 }).map((_, j) => (<TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>))}</TableRow>
+                    ))
+                  ) : !data?.associados.length ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum associado encontrado</TableCell></TableRow>
+                  ) : (
+                    data.associados.map((a: any) => (
+                      <TableRow key={a.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(a.id)}>
+                        <TableCell className="font-medium">
+                          {a.nome}
+                          <Badge variant="outline" className="ml-2 text-xs bg-violet-50 text-violet-700 border-violet-200">SGA</Badge>
+                        </TableCell>
+                        <TableCell className="font-mono text-sm">{formatCpf(a.cpf)}</TableCell>
+                        <TableCell>{a.telefone || '—'}</TableCell>
+                        <TableCell>{a.cidade ? `${a.cidade}/${a.uf}` : '—'}</TableCell>
+                        <TableCell>{(a as any).planos?.nome || '—'}</TableCell>
+                        <TableCell><Badge className={STATUS_COLORS[a.status] || 'bg-gray-100 text-gray-800'}>{a.status?.replace(/_/g, ' ')}</Badge></TableCell>
+                        <TableCell className="font-mono">{a.codigo_hinova || '—'}</TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {data && data.pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Página {data.pagination.page} de {data.pagination.totalPages}</p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={page <= 1} onClick={() => setPage(p => p - 1)}><ChevronLeft className="h-4 w-4 mr-1" /> Anterior</Button>
+                <Button variant="outline" size="sm" disabled={page >= data.pagination.totalPages} onClick={() => setPage(p => p + 1)}>Próximo <ChevronRight className="h-4 w-4 ml-1" /></Button>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+
+        {/* ====== ABA VEÍCULOS ====== */}
+        <TabsContent value="veiculos" className="space-y-4 mt-4">
+          <div className="relative max-w-md">
+            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+            <Input placeholder="Buscar por placa, chassi, marca ou modelo..." value={vSearch} onChange={e => handleVSearch(e.target.value)} className="pl-10" />
+          </div>
+
+          <Card>
+            <CardContent className="p-0">
+              <Table>
+                <TableHeader>
+                  <TableRow>
+                    <TableHead>Placa</TableHead>
+                    <TableHead>Marca/Modelo</TableHead>
+                    <TableHead>Ano</TableHead>
+                    <TableHead>Cor</TableHead>
+                    <TableHead>Associado</TableHead>
+                    <TableHead>Status</TableHead>
+                    <TableHead>Rastreador</TableHead>
+                  </TableRow>
+                </TableHeader>
+                <TableBody>
+                  {vLoading ? (
+                    Array.from({ length: 5 }).map((_, i) => (
+                      <TableRow key={i}>{Array.from({ length: 7 }).map((_, j) => (<TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>))}</TableRow>
+                    ))
+                  ) : !vData?.veiculos.length ? (
+                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum veículo encontrado</TableCell></TableRow>
+                  ) : (
+                    vData.veiculos.map((v: any) => (
+                      <TableRow key={v.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedVeiculoId(v.id)}>
+                        <TableCell className="font-mono font-bold">{v.placa || '—'}</TableCell>
+                        <TableCell>{[v.marca, v.modelo].filter(Boolean).join(' ') || '—'}</TableCell>
+                        <TableCell>{v.ano_fabricacao && v.ano_modelo ? `${v.ano_fabricacao}/${v.ano_modelo}` : v.ano_modelo || '—'}</TableCell>
+                        <TableCell>{v.cor || '—'}</TableCell>
+                        <TableCell>
+                          <span className="text-sm">{v.associado?.nome || '—'}</span>
+                        </TableCell>
+                        <TableCell><Badge className={STATUS_COLORS[v.status] || 'bg-gray-100 text-gray-800'}>{v.status?.replace(/_/g, ' ') || '—'}</Badge></TableCell>
+                        <TableCell>
+                          {v.rastreador ? (
+                            <div className="flex items-center gap-1">
+                              <Radio className={`h-3.5 w-3.5 ${v.rastreador.status === 'ativo' ? 'text-green-600' : 'text-gray-400'}`} />
+                              <span className="text-xs">{v.rastreador.codigo}</span>
+                            </div>
+                          ) : (
+                            <span className="text-xs text-muted-foreground">—</span>
+                          )}
+                        </TableCell>
+                      </TableRow>
+                    ))
+                  )}
+                </TableBody>
+              </Table>
+            </CardContent>
+          </Card>
+
+          {vData && vData.pagination.totalPages > 1 && (
+            <div className="flex items-center justify-between">
+              <p className="text-sm text-muted-foreground">Página {vData.pagination.page} de {vData.pagination.totalPages}</p>
+              <div className="flex gap-2">
+                <Button variant="outline" size="sm" disabled={vPage <= 1} onClick={() => setVPage(p => p - 1)}><ChevronLeft className="h-4 w-4 mr-1" /> Anterior</Button>
+                <Button variant="outline" size="sm" disabled={vPage >= vData.pagination.totalPages} onClick={() => setVPage(p => p + 1)}>Próximo <ChevronRight className="h-4 w-4 ml-1" /></Button>
+              </div>
+            </div>
+          )}
+        </TabsContent>
+      </Tabs>
+
+      {/* Detail Modal - Associado */}
       <Dialog open={!!selectedId} onOpenChange={open => !open && setSelectedId(null)}>
         <DialogContent className="max-w-3xl max-h-[85vh] overflow-y-auto">
           {loadingDetalhe ? (
-            <div className="space-y-4 p-4">
-              <Skeleton className="h-6 w-48" />
-              <Skeleton className="h-40 w-full" />
-            </div>
+            <div className="space-y-4 p-4"><Skeleton className="h-6 w-48" /><Skeleton className="h-40 w-full" /></div>
           ) : detalhe ? (
             <>
               <DialogHeader>
                 <DialogTitle className="flex items-center gap-2">
                   {detalhe.associado.nome}
                   <Badge variant="outline" className="bg-violet-50 text-violet-700 border-violet-200">SGA</Badge>
-                  <Badge className={STATUS_COLORS[detalhe.associado.status] || ''}>
-                    {detalhe.associado.status?.replace(/_/g, ' ')}
-                  </Badge>
+                  <Badge className={STATUS_COLORS[detalhe.associado.status] || ''}>{detalhe.associado.status?.replace(/_/g, ' ')}</Badge>
                 </DialogTitle>
               </DialogHeader>
-
               <Tabs defaultValue="dados" className="mt-2">
                 <TabsList className="w-full justify-start">
                   <TabsTrigger value="dados" className="gap-1"><User className="h-3.5 w-3.5" /> Dados</TabsTrigger>
                   <TabsTrigger value="veiculos" className="gap-1"><Car className="h-3.5 w-3.5" /> Veículos ({detalhe.veiculos.length})</TabsTrigger>
                   <TabsTrigger value="boletos" className="gap-1"><Receipt className="h-3.5 w-3.5" /> Boletos ({detalhe.cobrancas.length})</TabsTrigger>
                 </TabsList>
-
                 <TabsContent value="dados" className="mt-4">
                   <div className="grid grid-cols-2 gap-4 text-sm">
                     <Info label="CPF" value={formatCpf(detalhe.associado.cpf)} />
@@ -200,7 +249,6 @@ export default function BaseAntiga() {
                     <Info label="Dia Vencimento" value={detalhe.associado.dia_vencimento} />
                   </div>
                 </TabsContent>
-
                 <TabsContent value="veiculos" className="mt-4">
                   {detalhe.veiculos.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">Nenhum veículo vinculado</p>
@@ -235,7 +283,6 @@ export default function BaseAntiga() {
                     </div>
                   )}
                 </TabsContent>
-
                 <TabsContent value="boletos" className="mt-4">
                   {detalhe.cobrancas.length === 0 ? (
                     <p className="text-center text-muted-foreground py-8">Nenhum boleto encontrado</p>
@@ -256,11 +303,7 @@ export default function BaseAntiga() {
                             <TableCell>{c.referencia || c.tipo}</TableCell>
                             <TableCell>{formatDate(c.data_vencimento)}</TableCell>
                             <TableCell>{formatCurrency(c.valor)}</TableCell>
-                            <TableCell>
-                              <Badge variant={c.status === 'RECEIVED' || c.status === 'CONFIRMED' ? 'default' : 'secondary'}>
-                                {c.status}
-                              </Badge>
-                            </TableCell>
+                            <TableCell><Badge variant={c.status === 'RECEIVED' || c.status === 'CONFIRMED' ? 'default' : 'secondary'}>{c.status}</Badge></TableCell>
                             <TableCell>{formatDate(c.data_pagamento)}</TableCell>
                           </TableRow>
                         ))}
@@ -273,6 +316,13 @@ export default function BaseAntiga() {
           ) : null}
         </DialogContent>
       </Dialog>
+
+      {/* Detail Modal - Veículo */}
+      <VeiculoDetalhesModal
+        open={!!selectedVeiculoId}
+        onClose={() => setSelectedVeiculoId(null)}
+        veiculoId={selectedVeiculoId || ''}
+      />
     </div>
   );
 }
