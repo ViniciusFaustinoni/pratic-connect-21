@@ -101,11 +101,11 @@ export default function Veiculos() {
   const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
   const { data: veiculos, isLoading } = useVeiculos();
   const deleteVeiculo = useDeleteVeiculo();
-  const { isDiretor, isSuperAdmin } = usePermissions();
+  const { isDiretor, isAdminMaster, isDesenvolvedor, hasPerm } = usePermissions();
   const { toast } = useToast();
   const [veiculoToDelete, setVeiculoToDelete] = useState<{ id: string; placa: string } | null>(null);
 
-  const canDeleteVeiculo = isDiretor || isSuperAdmin;
+  const canDeleteVeiculo = isDiretor || isAdminMaster || isDesenvolvedor;
 
   // Consulta de placa
   const [placaInput, setPlacaInput] = useState('');
