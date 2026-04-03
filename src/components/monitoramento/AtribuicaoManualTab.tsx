@@ -116,6 +116,19 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
           </div>
           <div className="flex-1 min-w-0">
             <CardTitle className="text-sm truncate">{vistoriador.nome}</CardTitle>
+            {vistoriador.bairroAtual ? (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Navigation className="h-3 w-3 text-green-500" />
+                {vistoriador.bairroAtual}
+              </p>
+            ) : vistoriador.latitude ? (
+              <p className="text-xs text-muted-foreground italic">Localizando...</p>
+            ) : null}
+            {vistoriador.ultimaAtualizacao && (
+              <p className="text-[10px] text-muted-foreground/70">
+                Atualizado {formatDistanceToNow(new Date(vistoriador.ultimaAtualizacao), { locale: ptBR, addSuffix: true })}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
               {vistoriador.tarefas.length} tarefa(s) atribuída(s)
             </p>
