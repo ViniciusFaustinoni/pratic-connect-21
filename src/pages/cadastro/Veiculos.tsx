@@ -459,6 +459,11 @@ export default function Veiculos() {
           )}
         </CardContent>
       </Card>
+      <VeiculoDetalhesModal
+        open={!!selectedVeiculoId}
+        onClose={() => setSelectedVeiculoId(null)}
+        veiculoId={selectedVeiculoId}
+      />
     </div>
   );
 }
