@@ -7,7 +7,8 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar } from 'lucide-react';
+import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation } from 'lucide-react';
+import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { format, parseISO, isToday, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -115,6 +116,19 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
           </div>
           <div className="flex-1 min-w-0">
             <CardTitle className="text-sm truncate">{vistoriador.nome}</CardTitle>
+            {vistoriador.bairroAtual ? (
+              <p className="text-xs text-muted-foreground flex items-center gap-1">
+                <Navigation className="h-3 w-3 text-green-500" />
+                {vistoriador.bairroAtual}
+              </p>
+            ) : vistoriador.latitude ? (
+              <p className="text-xs text-muted-foreground italic">Localizando...</p>
+            ) : null}
+            {vistoriador.ultimaAtualizacao && (
+              <p className="text-[10px] text-muted-foreground/70">
+                Atualizado {formatDistanceToNow(new Date(vistoriador.ultimaAtualizacao), { locale: ptBR, addSuffix: true })}
+              </p>
+            )}
             <p className="text-xs text-muted-foreground">
               {vistoriador.tarefas.length} tarefa(s) atribuída(s)
             </p>

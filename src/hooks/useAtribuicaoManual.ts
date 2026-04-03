@@ -43,11 +43,31 @@ export function useServicosParaAtribuir() {
   });
 }
 
+async function reverseGeocodeBairro(lat: number, lng: number): Promise<string | null> {
+  try {
+    const url = `https://nominatim.openstreetmap.org/reverse?format=json&lat=${lat}&lon=${lng}&addressdetails=1&accept-language=pt-BR`;
+    const res = await fetch(url, {
+      headers: { 'User-Agent': 'PraticConnect/1.0', 'Accept-Language': 'pt-BR' },
+    });
+    if (!res.ok) return null;
+    const data = await res.json();
+    const addr = data.address || {};
+    const bairro = addr.suburb || addr.neighbourhood || addr.city_district || '';
+    const cidade = addr.city || addr.town || addr.municipality || '';
+    return [bairro, cidade].filter(Boolean).join(', ') || null;
+  } catch {
+    return null;
+  }
+}
+
+function sleep(ms: number) {
+  return new Promise(resolve => setTimeout(resolve, ms));
+}
+
 export function useVistoriadoresAtivos() {
   return useQuery({
     queryKey: ['vistoriadores-ativos-manual'],
     queryFn: async () => {
-      // Fetch profiles that are vistoriadores and em_servico
       const { data: localizacoes, error: locErr } = await supabase
         .from('vistoriadores_localizacao')
         .select('vistoriador_id, latitude, longitude, em_servico, updated_at')
@@ -65,7 +85,6 @@ export function useVistoriadoresAtivos() {
 
       if (profErr) throw profErr;
 
-      // Get current tasks for each vistoriador
       const hoje = new Date().toISOString().split('T')[0];
       const { data: servicosAtribuidos } = await supabase
         .from('servicos')
@@ -73,6 +92,17 @@ export function useVistoriadoresAtivos() {
         .in('profissional_id', ids)
         .gte('data_agendada', hoje)
         .in('status', ['agendada', 'em_andamento', 'em_rota']);
+
+      // Reverse geocode sequencialmente (1/s Nominatim policy)
+      const bairroMap: Record<string, string | null> = {};
+      for (const loc of localizacoes) {
+        if (loc.latitude && loc.longitude) {
+          bairroMap[loc.vistoriador_id] = await reverseGeocodeBairro(loc.latitude, loc.longitude);
+          if (localizacoes.indexOf(loc) < localizacoes.length - 1) {
+            await sleep(1100);
+          }
+        }
+      }
 
       return (profiles || []).map(p => {
         const loc = localizacoes.find(l => l.vistoriador_id === p.id);
@@ -82,11 +112,13 @@ export function useVistoriadoresAtivos() {
           latitude: loc?.latitude,
           longitude: loc?.longitude,
           ultimaAtualizacao: loc?.updated_at,
+          bairroAtual: bairroMap[p.id] || null,
           tarefas,
         };
       });
     },
     refetchInterval: 30000,
+    staleTime: 25000,
   });
 }
 
