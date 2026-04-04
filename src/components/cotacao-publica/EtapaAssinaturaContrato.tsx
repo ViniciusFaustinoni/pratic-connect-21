@@ -290,11 +290,16 @@ export function EtapaAssinaturaContrato({
         // Fallback: verificar diretamente no banco
         const { data, error } = await publicSupabase
           .from('contratos')
-          .select('status')
+          .select('status, autentique_url')
           .eq('id', contrato.id)
           .maybeSingle();
 
         if (error || !data) return;
+
+        // Atualizar linkAssinatura se disponível e não setado
+        if (data.autentique_url && !contrato?.linkAssinatura) {
+          setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
+        }
 
         if (data?.status === 'assinado' || data?.status === 'ativo') {
           console.log('[EtapaAssinatura] Contrato assinado detectado via banco!');
