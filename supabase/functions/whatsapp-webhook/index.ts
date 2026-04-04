@@ -2468,6 +2468,18 @@ Responda *1*, *2* ou *3*.`;
     
     // CRIAR NOVO SERVIÇO
     const servicoOriginalDados = contextoAtual.servico_original || servicoOriginal;
+
+    // Validar que o serviço original tem associado e veículo
+    if (!servicoOriginalDados.associado_id || !servicoOriginalDados.veiculo_id) {
+      console.error(`[whatsapp-webhook] Serviço original incompleto: associado_id=${servicoOriginalDados.associado_id}, veiculo_id=${servicoOriginalDados.veiculo_id}`);
+      const { data: cfgTelOrfao } = await supabase.from("configuracoes").select("valor").eq("chave", "assistencia_telefone_central").maybeSingle();
+      const telOrfao = cfgTelOrfao?.valor || "0800 980 0001";
+      const msgOrfao = `Desculpe, não foi possível reagendar automaticamente. Entre em contato com a central ${telOrfao}.`;
+      await sendWhatsAppMessage(apiUrl, instancia.instance_name, confirmacao.telefone, msgOrfao);
+      await saveWhatsAppLog(supabase, instancia.id, confirmacao.telefone, msgOrfao, "saida");
+      return new Response(JSON.stringify({ ok: false, error: "servico_incompleto" }), { headers: corsHeaders });
+    }
+
     const tipoServico = servicoOriginalDados.tipo === 'instalacao' 
       ? 'instalação do rastreador' 
       : servicoOriginalDados.tipo === 'vistoria' 

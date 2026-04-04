@@ -121,6 +121,11 @@ Deno.serve(async (req) => {
       }
     }
 
+    // Validar que o serviço original tem associado e veículo
+    if (!servico.associado_id || !servico.veiculo_id) {
+      throw new Error("Serviço original incompleto (sem associado ou veículo). Não é possível reagendar.");
+    }
+
     // Geocodificar endereço
     const coords = await geocodificarEndereco(endereco);
 

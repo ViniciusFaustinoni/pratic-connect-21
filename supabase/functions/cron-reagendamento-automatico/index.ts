@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
 
     const { data: orfaos, error: orfaosError } = await supabase
       .from("servicos")
-      .select("id, status, reagendamento_enviado_em, imprevisto_origem, profissional_id, latitude, longitude")
+      .select("id, status, reagendamento_enviado_em, imprevisto_origem, profissional_id, latitude, longitude, associado_id, veiculo_id")
       .not("imprevisto_registrado_em", "is", null)
       .lt("imprevisto_registrado_em", threshold30min)
       .in("status", ["em_andamento", "em_rota", "agendada", "imprevisto_pendente"]);
