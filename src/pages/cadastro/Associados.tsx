@@ -983,7 +983,7 @@ export default function Associados() {
         <Dialog open={!!detalheAssociadoId} onOpenChange={(open) => !open && setDetalheAssociadoId(null)}>
           <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto overflow-x-hidden">
             {detalheAssociadoId && (
-              <div className="p-4 sm:p-6">
+              <div className="p-4 sm:p-6 min-w-0 w-full overflow-hidden">
                 <AssociadoDetalhe 
                   associadoId={detalheAssociadoId} 
                   isModal 
