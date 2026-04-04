@@ -50,6 +50,8 @@ import { CancelarAssociadoDialog } from '@/components/cadastro/CancelarAssociado
 import { ExcluirAssociadoDialog, type TipoExclusao } from '@/components/cadastro/ExcluirAssociadoDialog';
 import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastreador';
 import { supabase } from '@/integrations/supabase/client';
+import { useCoberturasBeneficiosPlano } from '@/hooks/useCoberturasBeneficiosPlano';
+import { Gift } from 'lucide-react';
 import { SubstituicaoStatusCard } from '@/components/substituicao/SubstituicaoStatusCard';
 import { TIPO_ENTRADA_SHORT_LABELS } from '@/components/associados/detalhe/OrigemCadastroCard';
 import { ReativacaoWizard } from '@/components/associados/reativacao/ReativacaoWizard';
