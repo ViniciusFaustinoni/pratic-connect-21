@@ -172,11 +172,44 @@ serve(async (req) => {
     if (contrato.autentique_documento_id) {
       console.log(`[autentique-create] Contrato já possui documento Autentique: ${contrato.autentique_documento_id}`);
       
+      let signatureLink = contrato.autentique_url;
+      
+      // Se não temos o link salvo, buscar na API do Autentique
+      if (!signatureLink) {
+        console.log('[autentique-create] autentique_url ausente, buscando na API do Autentique...');
+        try {
+          const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
+          const query = `query { document(id: "${contrato.autentique_documento_id}") { signatures { link { short_link } } } }`;
+          const resp = await fetch(AUTENTIQUE_API_URL, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${autentiqueApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ query }),
+          });
+          const result = await resp.json();
+          signatureLink = result?.data?.document?.signatures?.[0]?.link?.short_link || null;
+          console.log('[autentique-create] Link obtido da API:', signatureLink);
+          
+          // Salvar no banco para próximas chamadas
+          if (signatureLink) {
+            await supabase
+              .from("contratos")
+              .update({ autentique_url: signatureLink })
+              .eq("id", contratoId);
+            console.log('[autentique-create] autentique_url salvo no banco');
+          }
+        } catch (err) {
+          console.warn('[autentique-create] Erro ao buscar link na API Autentique:', err);
+        }
+      }
+      
       return new Response(
         JSON.stringify({
           success: true,
           documentId: contrato.autentique_documento_id,
-          signatureLink: contrato.autentique_url,
+          signatureLink,
           message: "Documento existente retornado - contrato já foi enviado para assinatura",
         }),
         {
