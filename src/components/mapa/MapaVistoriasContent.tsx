@@ -835,7 +835,29 @@ export function MapaVistoriasContent() {
     </div>
   );
 
-  if (isMobile) {
+  // Dialog de confirmação de atribuição drag-and-drop
+  const renderConfirmationDialog = () => (
+    <AlertDialog open={!!dragConfirmation} onOpenChange={(open) => !open && setDragConfirmation(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar Atribuição</AlertDialogTitle>
+          <AlertDialogDescription>
+            Deseja atribuir o serviço <strong>{dragConfirmation?.servicoPlaca || 'sem placa'}</strong> ao técnico{' '}
+            <strong>{dragConfirmation?.profissionalNome}</strong>?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction 
+            onClick={confirmarAtribuicaoDrag}
+            disabled={atribuirMutation.isPending}
+          >
+            {atribuirMutation.isPending ? 'Atribuindo...' : 'Confirmar Atribuição'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
     return (
       <div className="relative h-full flex flex-col">
         {/* Mapa fullscreen */}
