@@ -110,40 +110,6 @@ export function AssociadoResumoTab({
       {/* Tipo de Entrada */}
       {associado?.id && <OrigemCadastroCard associadoId={associado.id} canLinkToAssociado={canLinkToAssociado} />}
 
-      {/* Info Grid */}
-      <div className="grid sm:grid-cols-2 gap-3">
-        {/* Plano & Contrato */}
-        <Card className="border-border/60">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <Shield className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold">Plano & Contrato</span>
-            </div>
-            <InfoRow label="Plano" value={associado.planos?.nome || '—'} highlight />
-            <InfoRow label="Mensalidade" value={contrato?.valor_mensal ? formatCurrency(contrato.valor_mensal) : '—'} />
-            <InfoRow label="Dia vencimento" value={`Todo dia ${contrato?.dia_vencimento || associado.dia_vencimento || 15}`} />
-            <InfoRow label="Início contrato" value={contrato?.data_inicio ? formatDate(contrato.data_inicio) : '—'} />
-          </CardContent>
-        </Card>
-
-        {/* Próximos Vencimentos */}
-        <Card className="border-border/60">
-          <CardContent className="p-4 space-y-3">
-            <div className="flex items-center gap-2 mb-1">
-              <CreditCard className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold">Vencimentos</span>
-            </div>
-            <InfoRow
-              label="Mensalidade"
-              value={resumoFinanceiro?.proximaCobranca?.data_vencimento
-                ? formatDate(resumoFinanceiro.proximaCobranca.data_vencimento) : '—'}
-            />
-            <InfoRow label="CNH vence" value={associado?.cnh_validade ? formatDate(associado.cnh_validade) : contrato?.cliente_cnh_validade ? formatDate(contrato.cliente_cnh_validade) : 'Não informado'} />
-            <InfoRow label="CRLV vence" value="Não informado" />
-          </CardContent>
-        </Card>
-      </div>
-
       {/* Recent Activity */}
       <Card className="border-border/60">
         <CardContent className="p-4">

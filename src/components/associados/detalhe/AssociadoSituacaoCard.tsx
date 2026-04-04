@@ -252,30 +252,6 @@ export function AssociadoSituacaoCard({ situacao, associado, contrato, resumoFin
         </Card>
       )}
 
-      {/* Consultor vinculado */}
-      {situacao.consultorNome && (
-        <Card className="border-border/60">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center gap-2 mb-1">
-              <UserCheck className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold">Consultor Vinculado</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Nome</span>
-              <span className="font-medium">{situacao.consultorNome}</span>
-            </div>
-            {situacao.consultorPontuacao !== null && (
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Pontuação gerada</span>
-                <span className="font-medium flex items-center gap-1">
-                  <Star className="h-3 w-3 text-amber-500" />
-                  {situacao.consultorPontuacao} pts
-                </span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
