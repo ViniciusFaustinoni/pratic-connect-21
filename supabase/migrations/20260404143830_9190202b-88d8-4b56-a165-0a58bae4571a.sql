@@ -1,0 +1,1 @@
+UPDATE contratos SET autentique_url = NULL WHERE autentique_url LIKE '%assinar.autentique.com.br%';
