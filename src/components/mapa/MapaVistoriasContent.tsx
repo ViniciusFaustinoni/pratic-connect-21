@@ -898,6 +898,7 @@ export function MapaVistoriasContent() {
           </DrawerContent>
         </Drawer>
       </div>
+      </>
     );
   }
 
