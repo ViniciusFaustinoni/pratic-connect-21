@@ -171,7 +171,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
   const [excluirDialogOpen, setExcluirDialogOpen] = useState(false);
   const [tipoExclusao, setTipoExclusao] = useState<TipoExclusao | null>(null);
-  const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string }>({ open: false, url: '', tipo: '' });
+  const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string; mediaType?: 'image' | 'video' | 'pdf' }>({ open: false, url: '', tipo: '' });
   const [veiculoDetalhesId, setVeiculoDetalhesId] = useState<string | null>(null);
   const [veiculoEditar, setVeiculoEditar] = useState<any>(null);
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
@@ -694,6 +694,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                 {isLoadingDocs || isLoadingDocsCotacao ? (
                   <Skeleton className="h-48 w-full m-4" />
                 ) : todosDocumentos.length > 0 ? (
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
@@ -725,11 +726,23 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                           </TableCell>
                           <TableCell>
                             {'arquivo_url' in d && d.arquivo_url ? (
-                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => window.open(d.arquivo_url, '_blank')}>
+                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
+                                const url = d.arquivo_url as string;
+                                const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(url);
+                                const isPdf = /\.pdf($|\?)/i.test(url);
+                                setFotoModal({ open: true, url, tipo: TIPO_DOCUMENTO_LABELS[d.tipo] || d.tipo, mediaType: isVideo ? 'video' : isPdf ? 'pdf' : 'image' });
+                              }}>
                                 <Eye className="h-3 w-3" />
                               </Button>
                             ) : d.fonte === 'documentos' ? (
-                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => navigate(`/cadastro/documentos/${d.id}`)}>
+                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
+                                const url = (d as any).arquivo_url;
+                                if (url) {
+                                  const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(url);
+                                  const isPdf = /\.pdf($|\?)/i.test(url);
+                                  setFotoModal({ open: true, url, tipo: TIPO_DOCUMENTO_LABELS[d.tipo] || d.tipo, mediaType: isVideo ? 'video' : isPdf ? 'pdf' : 'image' });
+                                }
+                              }}>
                                 <Eye className="h-3 w-3" />
                               </Button>
                             ) : null}
@@ -738,6 +751,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10">
                     <FileText className="h-8 w-8 text-muted-foreground/40" />
@@ -764,16 +778,23 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                       <div key={cat} className="mb-4 last:mb-0">
                         <p className="text-xs font-medium text-muted-foreground mb-2 capitalize">{cat} ({fotos.length})</p>
                         <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
-                          {fotos.map((foto: any) => (
-                            <div key={foto.id} className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50 aspect-square"
-                              onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo) })}>
-                              <img src={foto.arquivo_url} alt={formatarTipoFoto(foto.tipo)}
-                                className="w-full h-full object-cover transition-transform group-hover:scale-105" />
-                              <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
-                                <Eye className="h-5 w-5 text-white" />
+                          {fotos.map((foto: any) => {
+                            const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(foto.arquivo_url || '');
+                            return (
+                              <div key={foto.id} className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50 aspect-square"
+                                onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo), mediaType: isVideo ? 'video' : 'image' })}>
+                                {isVideo ? (
+                                  <video src={foto.arquivo_url} className="w-full h-full object-cover" muted preload="metadata" />
+                                ) : (
+                                  <img src={foto.arquivo_url} alt={formatarTipoFoto(foto.tipo)}
+                                    className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                )}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Eye className="h-5 w-5 text-white" />
+                                </div>
                               </div>
-                            </div>
-                          ))}
+                            );
+                          })}
                         </div>
                       </div>
                     );
@@ -990,11 +1011,17 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
         </DialogContent>
       </Dialog>
 
-      {/* Modal Foto */}
+      {/* Modal Foto/Vídeo/Documento */}
       <Dialog open={fotoModal.open} onOpenChange={(open) => setFotoModal({ ...fotoModal, open })}>
         <DialogContent className="max-w-3xl">
           <h3 className="text-lg font-semibold">{fotoModal.tipo}</h3>
-          <img src={fotoModal.url} alt={fotoModal.tipo} className="w-full max-h-[70vh] object-contain rounded-lg" />
+          {fotoModal.mediaType === 'video' ? (
+            <video src={fotoModal.url} controls autoPlay className="w-full max-h-[70vh] rounded-lg" />
+          ) : fotoModal.mediaType === 'pdf' ? (
+            <iframe src={fotoModal.url} className="w-full h-[70vh] rounded-lg border-0" title={fotoModal.tipo} />
+          ) : (
+            <img src={fotoModal.url} alt={fotoModal.tipo} className="w-full max-h-[70vh] object-contain rounded-lg" />
+          )}
         </DialogContent>
       </Dialog>
 
