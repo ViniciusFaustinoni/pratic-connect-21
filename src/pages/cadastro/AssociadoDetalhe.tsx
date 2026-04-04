@@ -171,7 +171,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [cancelarDialogOpen, setCancelarDialogOpen] = useState(false);
   const [excluirDialogOpen, setExcluirDialogOpen] = useState(false);
   const [tipoExclusao, setTipoExclusao] = useState<TipoExclusao | null>(null);
-  const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string }>({ open: false, url: '', tipo: '' });
+  const [fotoModal, setFotoModal] = useState<{ open: boolean; url: string; tipo: string; mediaType?: 'image' | 'video' | 'pdf' }>({ open: false, url: '', tipo: '' });
   const [veiculoDetalhesId, setVeiculoDetalhesId] = useState<string | null>(null);
   const [veiculoEditar, setVeiculoEditar] = useState<any>(null);
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
