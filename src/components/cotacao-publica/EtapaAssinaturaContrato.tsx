@@ -645,7 +645,7 @@ export function EtapaAssinaturaContrato({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.1 }}
-              className="space-y-2"
+              className="space-y-3"
             >
               <p className="text-xs text-center text-muted-foreground">
                 Ou clique abaixo para assinar diretamente:
@@ -660,6 +660,7 @@ export function EtapaAssinaturaContrato({
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </Button>
+              <CopyLinkButton link={contrato.linkAssinatura} />
             </motion.div>
           )}
 
