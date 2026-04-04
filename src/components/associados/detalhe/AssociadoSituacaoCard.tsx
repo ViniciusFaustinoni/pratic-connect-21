@@ -35,9 +35,9 @@ export function AssociadoSituacaoCard({ situacao }: Props) {
   const InadIcon = inadConfig.icon;
 
   return (
-    <div className="grid sm:grid-cols-2 gap-3">
+    <div className="grid sm:grid-cols-2 gap-3 min-w-0">
       {/* Carência */}
-      <Card className="border-border/60">
+      <Card className="border-border/60 min-w-0 overflow-hidden">
         <CardContent className="p-4 space-y-3">
           <div className="flex items-center gap-2 mb-1">
             <Clock className="h-4 w-4 text-primary" />
