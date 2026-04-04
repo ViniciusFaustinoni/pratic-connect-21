@@ -1,53 +1,43 @@
 
 
-# Mostrar Carência Real de Cada Cobertura e Benefício
+# Dados da CNH não exibidos na aba Dados Pessoais
 
 ## Diagnóstico
 
-O contrato do associado tem carência geral registrada (02/04/2026 a 31/07/2026 = ~120 dias), porém **nenhum** item do plano (coberturas e benefícios) tem `carencia_ativa = true` no catálogo. O código atual só exibe itens na seção "Carências por item" quando `carencia_ativa = true`, resultando na lista vazia.
+Os campos `cnh_numero` e `cnh_categoria` estão **NULL** no banco de dados para este associado. Apenas `cnh_validade` tem valor (2033-01-18).
 
-O card mostra apenas as datas gerais do contrato, sem detalhar quais coberturas/benefícios estão sob carência.
+O OCR **extrai** corretamente os dados da CNH (`numero_registro`, `categoria`, `validade`), mas essa extração só é gravada na tabela `associados` quando o documento é enviado pelo fluxo de **contratação** (`useCotacaoContratacao.ts`). Documentos enviados por outros caminhos (upload direto, fila de documentos) **não atualizam** os campos de CNH do associado.
 
-## Proposta
+## Solução
 
-Quando o contrato tiver carência geral (datas início/fim), mostrar **todos** os itens do plano (coberturas e benefícios) com a carência do contrato aplicada. Itens que tiverem `carencia_ativa = true` no catálogo usam seus dias específicos (override individual); os demais herdam o período geral do contrato.
+Criar um mecanismo que, ao processar OCR de uma CNH (em qualquer fluxo), atualize automaticamente os campos `cnh_numero`, `cnh_categoria` e `cnh_validade` na tabela `associados`.
 
-## Alteração
+### 1. Alterar `src/hooks/useContratoDocumentos.ts`
 
-### `src/hooks/useAssociadoSituacao.ts`
-
-1. Adicionar query para buscar **todas** coberturas e benefícios do plano (não só as com `carencia_ativa = true`)
-2. Na construção de `carenciasItens`:
-   - Se o item tem `carencia_ativa = true` e `carencia_dias > 0`: usar os dias específicos do catálogo
-   - Senão: usar o período geral do contrato (`data_carencia_inicio` → `data_carencia_fim`)
-3. Cada item terá `emCarencia` calculado individualmente com base na sua data de fim
+Após o OCR retornar com sucesso para um documento tipo `cnh`, buscar o `associado_id` do contrato e atualizar os campos CNH no registro do associado:
 
 ```text
-Exemplo resultado:
-┌──────────────────────────────────────────────────────────────┐
-│ 🛡️ Colisão - Select    · Liberação   120d  até 31/07/2026  │
-│ 🛡️ Roubo - Select      · Liberação   120d  até 31/07/2026  │
-│ 🛡️ Furto - Select      · Liberação   120d  até 31/07/2026  │
-│ 🎁 Assistência 24h     · Liberação   120d  até 31/07/2026  │
-│ 🎁 Carro Reserva       · Multiplicadora (2x) 90d até 01/07 │
-└──────────────────────────────────────────────────────────────┘
+Se tipo === 'cnh' && ocrResult.sucesso && ocrResult.dados:
+  → buscar associado_id pelo contrato_id
+  → update associados SET cnh_numero, cnh_categoria, cnh_validade
+    WHERE id = associado_id
+    (só atualizar campos que vieram do OCR e que estejam NULL no associado)
 ```
 
-### Detalhes técnicos
+### 2. Alterar `src/hooks/useUploadDocumento.ts` (upload direto)
 
-**`useAssociadoSituacao.ts`** — Queries de carência (linhas ~101-144):
-- Remover filtro `.eq('benefits.carencia_ativa', true)` e `.eq('coberturas.carencia_ativa', true)`
-- Buscar todos os itens do plano com seus campos de carência
+Mesmo tratamento: após OCR de CNH com sucesso, gravar os dados extraídos no associado.
 
-**`useAssociadoSituacao.ts`** — Construção de `carenciasItens` (linhas ~201-215):
-- Para cada item:
-  - Se `carencia_ativa && carencia_dias > 0`: `fim = inicio + carencia_dias`
-  - Senão: `fim = contrato.data_carencia_fim` (período geral)
-  - `dias = diferença em dias entre inicio e fim`
-  - `carenciaTipo`: do catálogo se `carencia_ativa`, senão `'liberacao'`
+### 3. Alterar a edge function `document-ocr` (opcional mas recomendado)
+
+Garantir que o campo `categoria` seja retornado no objeto `dados` da resposta (já está no prompt, verificar se chega no resultado).
+
+## Dados existentes
+
+Para o associado Marcus Vinicius que já tem documentos processados, verificar se há `ocr_resultado` com dados da CNH salvos nos documentos — se sim, rodar um script de correção para preencher os campos `cnh_numero` e `cnh_categoria` a partir dos dados já extraídos.
 
 ## Impacto
-- 1 arquivo alterado (`useAssociadoSituacao.ts`)
-- 0 componentes alterados (a UI já renderiza `carenciasItens` corretamente)
+- 2 arquivos alterados (`useContratoDocumentos.ts`, `useUploadDocumento.ts`)
 - 0 migrations
+- Dados existentes podem ser corrigidos via script pontual
 
