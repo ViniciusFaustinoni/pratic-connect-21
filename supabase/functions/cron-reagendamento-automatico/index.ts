@@ -251,6 +251,18 @@ Deno.serve(async (req) => {
 
     for (const servico of servicos || []) {
       try {
+        // Guard: cancelar serviços sem associado ou veículo
+        if (!servico.associado_id || !servico.veiculo_id) {
+          await supabase.from("servicos").update({
+            status: "cancelada",
+            observacoes: "Cancelado automaticamente: sem associado/veículo vinculado",
+            updated_at: new Date().toISOString(),
+          }).eq("id", servico.id);
+          console.log(`[cron-reagendamento] Serviço cancelado (sem associado/veículo): ${servico.id}`);
+          processados++;
+          continue;
+        }
+
         // CHECK 1: Idade mínima — nunca reagendar serviço recém-criado
         const idadeMs = now.getTime() - new Date(servico.created_at).getTime();
         if (idadeMs < IDADE_MINIMA_MS) {
