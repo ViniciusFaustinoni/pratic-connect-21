@@ -694,6 +694,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                 {isLoadingDocs || isLoadingDocsCotacao ? (
                   <Skeleton className="h-48 w-full m-4" />
                 ) : todosDocumentos.length > 0 ? (
+                  <div className="overflow-x-auto">
                   <Table>
                     <TableHeader>
                       <TableRow>
