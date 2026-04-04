@@ -1,94 +1,30 @@
 
 
-# Corrigir endpoint Rede Veículos na Edge Function `posicao-veiculo`
+# Corrigir limite de 1000 registros nas métricas de rastreadores
 
 ## Problema
-A edge function `posicao-veiculo` usa um endpoint genérico inexistente (`GET /veiculos/{codigo}/posicao`) para Rede Veículos. O endpoint correto, já implementado em `rastreador-posicao`, é `POST /obterUltimaPosicaoValida/` com body codificado como `json=` URL-encoded.
-
-Além disso, o mapeamento de campos da resposta está errado em `posicao-veiculo` (espera `data_hora`, `ignition`, `speed` em vez dos campos reais `dataGPRS`, `ignicaoLigada`, `velocidade`).
+O hook `useRastreadoresMetricas` em `src/hooks/useRastreadores.ts` faz `supabase.from('rastreadores').select('status, ultima_comunicacao')` sem paginação. O Supabase retorna no máximo 1000 linhas por padrão, então com 1000+ rastreadores, as métricas ficam truncadas (mostra "1000 cadastrados" em vez do total real, e contagens de online/offline incorretas).
 
 ## Solução
+Substituir a query que busca todas as linhas por **queries paralelas com `count: 'exact', head: true`** para cada status, similar ao padrão já usado no projeto (`PageHeader.tsx`).
 
-### `supabase/functions/posicao-veiculo/index.ts`
+Para as métricas de comunicação (online/offline/atenção), que dependem de `ultima_comunicacao`, usar **fetch recursivo com `.range()`** para buscar todos os rastreadores instalados (ou uma RPC/view se disponível).
 
-**1. Reescrever `getPosicaoRedeVeiculos` (linhas 195-233)**
+### Abordagem concreta em `src/hooks/useRastreadores.ts`:
 
-Substituir o endpoint GET genérico pela chamada correta:
+1. **Contagens por status** — usar `{ count: 'exact', head: true }` em paralelo:
+   - `total`: count sem filtro
+   - `estoque`: `.eq('status', 'estoque')`
+   - `instalados`: `.eq('status', 'instalado')`
+   - `manutencao`: `.eq('status', 'manutencao')`
+   - `baixados`: `.eq('status', 'baixado')`
 
-```typescript
-async function getPosicaoRedeVeiculos(
-  token: string,
-  codigoRastreador: string,
-  baseUrl: string,
-  placa?: string,
-  cpfCnpj?: string
-): Promise<PosicaoPadrao> {
-  const url = `${baseUrl}/obterUltimaPosicaoValida/`;
-  
-  const payload = JSON.stringify({
-    chassi: "",
-    placa: placa || "",
-    imei: codigoRastreador || "",
-    cpfCnpjCliente: cpfCnpj || ""
-  });
+2. **Online/Offline/Atenção** — buscar apenas rastreadores instalados com `ultima_comunicacao` usando fetch recursivo com `.range()` (somente `ultima_comunicacao` é necessário, payload leve). Loop em páginas de 1000 até esgotar.
 
-  const response = await fetch(url, {
-    method: 'POST',
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/x-www-form-urlencoded',
-    },
-    body: `json=${encodeURIComponent(payload)}`
-  });
+3. Classificar cada rastreador instalado com a função `isRastreadorOnline` existente.
 
-  if (!response.ok) {
-    const error = await response.text();
-    throw new Error(`Erro Rede Veículos ${response.status}: ${error}`);
-  }
-
-  const rawData = await response.json();
-  // A resposta pode vir como array [{error, message}]
-  const data = Array.isArray(rawData) ? rawData[0]?.message || rawData[0] : rawData;
-
-  if (!data?.latitude || !data?.longitude) {
-    throw new Error('Coordenadas ausentes na resposta Rede Veículos');
-  }
-
-  return {
-    latitude: parseFloat(data.latitude),
-    longitude: parseFloat(data.longitude),
-    velocidade: parseInt(data.velocidade || '0', 10),
-    direcao: undefined,
-    ignicao: data.ignicaoLigada === 'S',
-    data_posicao: data.dataGPRS || data.dataGPS || new Date().toISOString(),
-    dados_extras: {
-      endereco: data.endereco,
-      voltagemBateria: data.voltagemBateria,
-      movimento: data.movimento,
-      bloqueado: data.bloqueado,
-      statusGPRS: data.statusGPRS,
-      statusGPS: data.statusGPS,
-      imei: data.imei,
-      placa: data.placa,
-      chassi: data.chassi,
-    }
-  };
-}
-```
-
-**2. Atualizar a chamada à função (onde `getPosicaoRedeVeiculos` é invocada)**
-
-Passar `placa` e `cpfCnpj` do associado como parâmetros adicionais, buscando-os do veículo/associado que já estão disponíveis no contexto.
-
-**3. Converter formato de data**
-
-A resposta retorna datas em `dd/MM/yyyy HH:mm:ss`. Converter para ISO antes de salvar.
-
-## Deploy
-Redeployar a edge function `posicao-veiculo` após a correção.
-
-## Arquivos
+## Arquivo alterado
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/posicao-veiculo/index.ts` | Corrigir endpoint e mapeamento de campos |
+| `src/hooks/useRastreadores.ts` | Reescrever `useRastreadoresMetricas` com contagens paralelas + fetch paginado |
 
