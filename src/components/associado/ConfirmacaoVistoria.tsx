@@ -296,35 +296,41 @@ export function ConfirmacaoVistoria({
             </AlertDescription>
           </Alert>
         ) : urlAssinatura ? (
-          <div className="bg-blue-50 dark:bg-blue-950/30 border border-blue-200 dark:border-blue-800 p-4 rounded-lg space-y-4">
+          <div className="bg-primary/5 border border-primary/20 p-4 rounded-lg space-y-4">
             <div className="flex items-start gap-3">
-              <Mail className="h-5 w-5 text-blue-600 mt-0.5" />
+              <FileSignature className="h-5 w-5 text-primary mt-0.5" />
               <div>
-                <h4 className="font-semibold text-blue-800 dark:text-blue-300">
-                  Verifique seu Email
+                <h4 className="font-semibold text-foreground">
+                  Assine seu Contrato
                 </h4>
-                <p className="text-sm text-blue-700 dark:text-blue-400 mt-1">
-                  Enviamos o contrato para <strong>{clienteEmail || 'seu email cadastrado'}</strong>. 
-                  Siga as instruções abaixo para assinar.
+                <p className="text-sm text-muted-foreground mt-1">
+                  Clique no botão abaixo para acessar e assinar seu contrato digital.
                 </p>
               </div>
             </div>
 
-            <div className="border-t border-blue-200 dark:border-blue-700 pt-3">
-              <h5 className="text-sm font-medium text-blue-800 dark:text-blue-300 mb-2">
-                Passo a passo para assinar:
-              </h5>
-              <ol className="text-sm text-blue-700 dark:text-blue-400 space-y-2 list-decimal list-inside">
-                <li>Acesse a caixa de entrada do email <strong>{clienteEmail || 'cadastrado'}</strong></li>
-                <li>Procure por um email da <strong>Autentique</strong> (verifique spam/lixo eletrônico)</li>
-                <li>Clique no link <strong>"Assinar Documento"</strong> no email</li>
-                <li>Leia o contrato e clique em <strong>"Assinar"</strong></li>
-                <li>Volte para esta página - atualizaremos automaticamente quando concluir</li>
-              </ol>
+            <div className="flex flex-col gap-2">
+              <Button
+                className="w-full"
+                onClick={() => window.open(urlAssinatura, '_blank')}
+              >
+                <ExternalLink className="h-4 w-4 mr-2" />
+                Acessar e Assinar Documento
+              </Button>
+              
+              <Button
+                variant="outline"
+                size="sm"
+                className="w-full"
+                onClick={handleCopyLink}
+              >
+                {copied ? <CheckCircle className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+                {copied ? 'Link Copiado!' : 'Copiar Link'}
+              </Button>
             </div>
 
             {/* Indicador de verificação automática + botão manual */}
-            <div className="flex items-center justify-between gap-2 text-xs text-blue-600 dark:text-blue-400 bg-blue-100 dark:bg-blue-900/50 px-3 py-2 rounded">
+            <div className="flex items-center justify-between gap-2 text-xs text-muted-foreground bg-muted/50 px-3 py-2 rounded">
               <div className="flex items-center gap-2">
                 <RefreshCw className={`h-3 w-3 ${isCheckingStatus ? 'animate-spin' : ''}`} />
                 <span>Verificando automaticamente...</span>
@@ -333,7 +339,7 @@ export function ConfirmacaoVistoria({
                 <Button
                   size="sm"
                   variant="ghost"
-                  className="h-6 px-2 text-xs text-blue-700 hover:bg-blue-200 dark:text-blue-300 dark:hover:bg-blue-800"
+                  className="h-6 px-2 text-xs"
                   onClick={handleSyncAssinatura}
                   disabled={syncContrato.isPending}
                 >
@@ -345,59 +351,6 @@ export function ConfirmacaoVistoria({
                 </Button>
               )}
             </div>
-
-            {/* Opção de reenvio após 30 segundos */}
-            {showResendOption && (
-              <div className="mt-4 bg-yellow-50 dark:bg-yellow-950/30 border border-yellow-200 dark:border-yellow-800 p-4 rounded-lg space-y-3">
-                <div className="flex items-center gap-2">
-                  <AlertCircle className="h-5 w-5 text-yellow-600" />
-                  <p className="text-sm font-medium text-yellow-700 dark:text-yellow-400">
-                    Ainda não recebeu o email?
-                  </p>
-                </div>
-                
-                <p className="text-sm text-yellow-700 dark:text-yellow-400">
-                  Confirme se o email <strong>{clienteEmail || 'cadastrado'}</strong> está correto.
-                </p>
-                
-                <div className="flex flex-col gap-2">
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    className="w-full border-yellow-500 text-yellow-700 hover:bg-yellow-100 dark:text-yellow-400 dark:hover:bg-yellow-900"
-                    onClick={handleResendEmail}
-                    disabled={isResending}
-                  >
-                    {isResending ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                    )}
-                    Reenviar Email
-                  </Button>
-                  
-                  <Button
-                    variant="ghost"
-                    size="sm"
-                    className="w-full text-yellow-600 dark:text-yellow-400"
-                    onClick={() => setShowEmailIncorrect(true)}
-                  >
-                    O email está incorreto
-                  </Button>
-                </div>
-
-                {/* Alerta quando email está incorreto */}
-                {showEmailIncorrect && (
-                  <Alert className="bg-orange-50 dark:bg-orange-950/30 border-orange-200 dark:border-orange-800">
-                    <AlertCircle className="h-4 w-4 text-orange-600" />
-                    <AlertDescription className="text-orange-700 dark:text-orange-400">
-                      Para corrigir o email, entre em contato com seu vendedor ou 
-                      nossa central de atendimento pelo WhatsApp.
-                    </AlertDescription>
-                  </Alert>
-                )}
-              </div>
-            )}
           </div>
         ) : (isAutentiqueTimeout || generationError) ? (
           <div className="bg-yellow-50 dark:bg-yellow-950/20 border border-yellow-200 dark:border-yellow-900 p-4 rounded-lg space-y-3">
