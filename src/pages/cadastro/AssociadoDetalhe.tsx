@@ -543,9 +543,8 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
             </Card>
 
             <Card className="border-border/60">
-              <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold">Plano e Contrato</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold">Contrato</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <DataField label="Plano" value={associado.planos?.nome || '—'} />
                 <DataField label="Adesão" value={formatDate(associado.data_adesao)} />
                 <DataField label="Contrato" value={associado.contratos?.[0]?.numero || '—'} />
                 <div className="grid grid-cols-2 gap-3">
