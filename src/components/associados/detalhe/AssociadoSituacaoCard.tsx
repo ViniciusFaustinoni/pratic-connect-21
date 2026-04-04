@@ -35,10 +35,10 @@ export function AssociadoSituacaoCard({ situacao }: Props) {
   const InadIcon = inadConfig.icon;
 
   return (
-    <div className="grid sm:grid-cols-2 gap-3">
+    <div className="grid sm:grid-cols-2 gap-3 min-w-0">
       {/* Carência */}
-      <Card className="border-border/60">
-        <CardContent className="p-4 space-y-3">
+      <Card className="border-border/60 min-w-0 overflow-hidden">
+        <CardContent className="p-4 space-y-3 overflow-hidden">
           <div className="flex items-center gap-2 mb-1">
             <Clock className="h-4 w-4 text-primary" />
             <span className="text-sm font-semibold">Carência</span>
@@ -88,15 +88,15 @@ export function AssociadoSituacaoCard({ situacao }: Props) {
                   ? `Multiplicadora (${item.multiplicador || 2}x)`
                   : 'Liberação';
                 return (
-                  <div key={idx} className="flex items-center justify-between text-xs rounded px-2 py-1.5 bg-muted/50">
-                    <div className="flex items-center gap-1.5">
-                      <Icon className="h-3 w-3 text-primary" />
-                      <span className="font-medium">{item.nome}</span>
-                      <span className="text-muted-foreground">· {tipoLabel}</span>
+                  <div key={idx} className="flex flex-wrap items-center gap-x-2 gap-y-1 text-xs rounded px-2 py-1.5 bg-muted/50">
+                    <div className="flex items-center gap-1.5 min-w-0">
+                      <Icon className="h-3 w-3 text-primary shrink-0" />
+                      <span className="font-medium truncate">{item.nome}</span>
+                      <span className="text-muted-foreground whitespace-nowrap">· {tipoLabel}</span>
                     </div>
-                    <div className="flex items-center gap-2">
-                      <span className="text-muted-foreground">{item.dias}d</span>
-                      <span className="text-muted-foreground">até {formatDate(item.fim)}</span>
+                    <div className="flex items-center gap-2 ml-auto">
+                      <span className="text-muted-foreground whitespace-nowrap">{item.dias}d</span>
+                      <span className="text-muted-foreground whitespace-nowrap">até {formatDate(item.fim)}</span>
                       {item.emCarencia ? (
                         <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-700 border-0">
                           Em carência
