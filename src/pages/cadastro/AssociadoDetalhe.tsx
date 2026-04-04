@@ -649,6 +649,8 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                         </div>
                       </div>
                     </CardContent>
+                    {/* Plano, Coberturas e Benefícios */}
+                    <PlanoCoberturasSection associadoId={id} planoNome={associado?.planos?.nome} />
                     <BlocoDepreciacaoVeiculo veiculo={v} />
                   </Card>
                 ))}
