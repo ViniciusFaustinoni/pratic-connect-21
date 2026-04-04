@@ -1,24 +1,40 @@
 
 
-# Filtrar Veículos da Base Nova na Aba Veículos
+# Mostrar Fotos do Instalador + Autovistoria na Aba Documentos
 
 ## Problema
-A página `Cadastro > Veículos` exibe todos os veículos sem distinção de origem. Veículos da base antiga já aparecem na área "Base Antiga", causando duplicidade.
+A aba Documentos usa `useFotosAutovistoriaCotacao` que busca apenas fotos da tabela `cotacoes_vistoria_fotos` (autovistoria do associado). Fotos do instalador ficam na tabela `vistoria_fotos` (via `vistorias`) e não são exibidas.
+
+## Solução
+Substituir `useFotosAutovistoriaCotacao` por `useFotosVistoriaUnificada` **e** manter fallback para autovistoria, mostrando **ambas** as galerias quando existirem.
 
 ## Alterações
 
-### 1. `src/hooks/useVeiculos.ts` — Filtrar por associado interno
-Na função `useVeiculos`, adicionar join com `associados` e filtro `origem_cadastro = 'interno'`:
-- Alterar o select para incluir filtro via inner join: `.select('*, associado:associados!inner(id, nome, cpf, origem_cadastro)')` 
-- Adicionar `.eq('associado.origem_cadastro', 'interno')` quando não há `associadoId` específico
+### 1. `src/hooks/useFotosAutovistoria.ts` — Retornar ambas as fontes
+Modificar `useFotosVistoriaUnificada` para retornar fotos de **ambas** as tabelas (não apenas priorizar uma). Adicionar campo `fotosAutovistoria` ao retorno, buscando `cotacoes_vistoria_fotos` mesmo quando `vistoria_fotos` tem dados.
 
-### 2. `src/pages/cadastro/Veiculos.tsx` — Filtrar stats
-Nas queries de stats (linhas 183-205), adicionar o mesmo filtro de origem interna:
-- Usar inner join com associados e filtrar `origem_cadastro = 'interno'` nas 3 queries (total, ativos, valor FIPE)
+### 2. `src/pages/cadastro/AssociadoDetalhe.tsx`
+- Trocar `useFotosAutovistoriaCotacao(cotacaoId)` por `useFotosVistoriaUnificada({ contratoId: contrato?.id, cotacaoId })`
+- Renderizar **duas galerias separadas**:
+  - "Galeria do Instalador" — fotos de `vistoria_fotos` (quando existirem)
+  - "Galeria de Autovistoria" — fotos de `cotacoes_vistoria_fotos` (quando existirem)
+- Atualizar contadores para somar ambas as fontes
+
+## Layout esperado
+```text
+┌─────────────────────────────────┐
+│ 📷 Galeria do Instalador   [12]│
+│ Exterior (5)  Interior (4) ... │
+│ [img] [img] [img] [vid] ...    │
+├─────────────────────────────────┤
+│ 📷 Galeria de Autovistoria  [3]│
+│ Outros (1)                     │
+│ [img] [vid] ...                │
+└─────────────────────────────────┘
+```
 
 ## Impacto
 - 2 arquivos alterados
-- Veículos de associados da base antiga deixam de aparecer na listagem principal
-- Stats refletem apenas a base nova
-- Nenhuma funcionalidade perdida (base antiga continua acessível na seção dedicada)
+- Instalador e autovistoria exibidos lado a lado
+- Nenhuma funcionalidade perdida
 
