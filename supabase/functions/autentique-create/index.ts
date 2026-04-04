@@ -179,7 +179,7 @@ serve(async (req) => {
         console.log('[autentique-create] autentique_url ausente, buscando na API do Autentique...');
         try {
           const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
-          const query = `query { document(id: "${contrato.autentique_documento_id}") { signatures { link { short_link } } } }`;
+          const query = `query { document(id: "${contrato.autentique_documento_id}") { signatures { public_id link { short_link } } } }`;
           const resp = await fetch(AUTENTIQUE_API_URL, {
             method: "POST",
             headers: {
@@ -189,8 +189,15 @@ serve(async (req) => {
             body: JSON.stringify({ query }),
           });
           const result = await resp.json();
-          signatureLink = result?.data?.document?.signatures?.[0]?.link?.short_link || null;
-          console.log('[autentique-create] Link obtido da API:', signatureLink);
+          const sig = result?.data?.document?.signatures?.[0];
+          signatureLink = sig?.link?.short_link || null;
+          // Fallback: construir link a partir do public_id
+          if (!signatureLink && sig?.public_id) {
+            signatureLink = `https://assinar.autentique.com.br/${sig.public_id}`;
+            console.log('[autentique-create] Link construído via public_id:', signatureLink);
+          } else {
+            console.log('[autentique-create] Link obtido da API:', signatureLink);
+          }
           
           // Salvar no banco para próximas chamadas
           if (signatureLink) {
