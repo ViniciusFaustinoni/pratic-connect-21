@@ -29,13 +29,16 @@ export async function syncCnhDataToAssociado(
 
     const updates: Record<string, string> = {};
 
-    if (!associado.cnh_numero && cnhNumero) {
-      updates.cnh_numero = cnhNumero;
+    if (!associado.cnh_numero && cnhNumero && cnhNumero !== 'ilegivel') {
+      // Clean RG value - remove non-alphanumeric suffixes like "DETRAN RJ", "DIC RJ", "IFP RJ"
+      updates.cnh_numero = cnhNumero.replace(/\s*(DETRAN|DIC|IFP|DICRJ|IFPRJ|PMERJRJ|DETRANRJ)[\s\w]*/gi, '').trim();
     }
-    if (!associado.cnh_categoria && cnhCategoria) {
-      updates.cnh_categoria = cnhCategoria;
+    if (!associado.cnh_categoria && cnhCategoria && cnhCategoria !== 'ilegivel') {
+      // Clean categoria - keep only valid letters (A, B, C, D, E, AB, ACC, etc.)
+      const cleanCat = cnhCategoria.replace(/[^A-E]/gi, '').toUpperCase();
+      if (cleanCat) updates.cnh_categoria = cleanCat;
     }
-    if (!associado.cnh_validade && cnhValidade) {
+    if (!associado.cnh_validade && cnhValidade && cnhValidade !== 'ilegivel') {
       updates.cnh_validade = cnhValidade;
     }
 
