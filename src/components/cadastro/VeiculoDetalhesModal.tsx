@@ -303,16 +303,8 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                         <InfoItem label="Último Sinal" value={formatDateTime(rastreador.ultimo_sinal)} />
                       </div>
                       <Separator />
-                      <div>
-                        <Button variant="outline" onClick={() => setShowMapa(!showMapa)}>
-                          <MapPin className="h-4 w-4 mr-2" />
-                          {showMapa ? 'Ocultar Mapa' : 'Ver no Mapa'}
-                        </Button>
-                        {showMapa && (
-                          <div className="mt-4 rounded-lg overflow-hidden border">
-                            <MapaRastreador rastreadorId={rastreador.id} altura="400px" />
-                          </div>
-                        )}
+                      <div className="rounded-lg overflow-hidden border">
+                        <MapaRastreador rastreadorId={rastreador.id} altura="400px" />
                       </div>
                     </>
                   ) : (
