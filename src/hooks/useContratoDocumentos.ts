@@ -163,10 +163,17 @@ export function useUploadDocumentoContrato() {
         } else if (cotacaoId) {
           const { data: cotacao } = await supabase
             .from('cotacoes')
-            .select('associado_id')
+            .select('cliente_cpf')
             .eq('id', cotacaoId)
             .single();
-          associadoId = cotacao?.associado_id || null;
+          if (cotacao?.cliente_cpf) {
+            const { data: assoc } = await supabase
+              .from('associados')
+              .select('id')
+              .eq('cpf', cotacao.cliente_cpf)
+              .maybeSingle();
+            associadoId = assoc?.id || null;
+          }
         }
         if (associadoId) {
           await syncCnhDataToAssociado(associadoId, ocrResult.dados);
