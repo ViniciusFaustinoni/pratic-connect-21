@@ -123,9 +123,9 @@ export default function BaseAntiga() {
                     <TableHead>Telefone</TableHead>
                     <TableHead>Cidade/UF</TableHead>
                     <TableHead>Plano</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Cód. Hinova</TableHead>
-                  </TableRow>
+                     <TableHead>Status</TableHead>
+                     <TableHead>Cód. Hinova</TableHead>
+                     {canDelete && <TableHead className="w-12"></TableHead>}
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
