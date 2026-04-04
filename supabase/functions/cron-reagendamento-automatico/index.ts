@@ -38,7 +38,7 @@ Deno.serve(async (req) => {
 
     const { data: orfaos, error: orfaosError } = await supabase
       .from("servicos")
-      .select("id, status, reagendamento_enviado_em, imprevisto_origem, profissional_id, latitude, longitude")
+      .select("id, status, reagendamento_enviado_em, imprevisto_origem, profissional_id, latitude, longitude, associado_id, veiculo_id")
       .not("imprevisto_registrado_em", "is", null)
       .lt("imprevisto_registrado_em", threshold30min)
       .in("status", ["em_andamento", "em_rota", "agendada", "imprevisto_pendente"]);
@@ -50,6 +50,18 @@ Deno.serve(async (req) => {
     let orfaosProcessados = 0;
     for (const orfao of orfaos || []) {
       try {
+        // Guard: cancelar órfãos sem associado ou veículo
+        if (!orfao.associado_id || !orfao.veiculo_id) {
+          await supabase.from("servicos").update({
+            status: "cancelada",
+            observacoes: "Cancelado automaticamente: sem associado/veículo vinculado",
+            updated_at: new Date().toISOString(),
+          }).eq("id", orfao.id);
+          console.log(`[cron-reagendamento] Órfão cancelado (sem associado/veículo): ${orfao.id}`);
+          orfaosProcessados++;
+          continue;
+        }
+
         const origem = orfao.imprevisto_origem || 'associado'; // default = associado (comportamento anterior)
 
         if (origem === 'instalador' && orfao.latitude && orfao.longitude) {
@@ -184,7 +196,7 @@ Deno.serve(async (req) => {
     // ✅ CORRIGIDO: Só marca como nao_compareceu quando a janela de atendimento realmente venceu
     const { data: servicos, error } = await supabase
       .from("servicos")
-      .select("id, tipo, status, reagendamento_enviado_em, created_at, hora_agendada, periodo")
+      .select("id, tipo, status, reagendamento_enviado_em, created_at, hora_agendada, periodo, associado_id, veiculo_id")
       .eq("data_agendada", hoje)
       .eq("status", "agendada")
       .is("reagendamento_enviado_em", null)
@@ -239,6 +251,18 @@ Deno.serve(async (req) => {
 
     for (const servico of servicos || []) {
       try {
+        // Guard: cancelar serviços sem associado ou veículo
+        if (!servico.associado_id || !servico.veiculo_id) {
+          await supabase.from("servicos").update({
+            status: "cancelada",
+            observacoes: "Cancelado automaticamente: sem associado/veículo vinculado",
+            updated_at: new Date().toISOString(),
+          }).eq("id", servico.id);
+          console.log(`[cron-reagendamento] Serviço cancelado (sem associado/veículo): ${servico.id}`);
+          processados++;
+          continue;
+        }
+
         // CHECK 1: Idade mínima — nunca reagendar serviço recém-criado
         const idadeMs = now.getTime() - new Date(servico.created_at).getTime();
         if (idadeMs < IDADE_MINIMA_MS) {
