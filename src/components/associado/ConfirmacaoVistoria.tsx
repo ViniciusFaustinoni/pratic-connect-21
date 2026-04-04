@@ -171,15 +171,7 @@ export function ConfirmacaoVistoria({
     setTimeout(() => setCopied(false), 2000);
   };
 
-  // Placeholder to keep line structure
-  const _unusedResend = async () => {
-    try {
-      console.error('[ConfirmacaoVistoria] Erro ao reenviar email:', err);
-      toast.error('Erro ao reenviar email. Tente novamente.');
-    } finally {
-      setIsResending(false);
-    }
-  };
+  
   
   // Função para tentar novamente
   const handleRetry = () => {
