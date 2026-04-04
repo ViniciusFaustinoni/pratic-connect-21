@@ -176,12 +176,31 @@ export default function Veiculos() {
     }).format(value);
   };
 
-  // Stats
-  const stats = {
-    total: veiculos?.length || 0,
-    ativos: veiculos?.filter((v) => (v.status as StatusVeiculo) === 'ativo' || (!v.status && v.ativo)).length || 0,
-    valorTotal: veiculos?.filter((v) => (v.status as StatusVeiculo) === 'ativo' || (!v.status && v.ativo)).reduce((acc, v) => acc + (v.valor_fipe || 0), 0) || 0,
-  };
+  // Stats with exact counts (bypass 1000 row limit)
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['veiculos-stats'],
+    queryFn: async () => {
+      const [totalRes, ativosRes, valorRes] = await Promise.all([
+        supabase.from('veiculos').select('id', { count: 'exact', head: true }),
+        supabase.from('veiculos').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
+        supabase.from('veiculos').select('valor_fipe').eq('status', 'ativo'),
+      ]);
+
+      if (totalRes.error) throw totalRes.error;
+      if (ativosRes.error) throw ativosRes.error;
+      if (valorRes.error) throw valorRes.error;
+
+      const valorTotal = (valorRes.data || []).reduce((acc, v) => acc + (Number(v.valor_fipe) || 0), 0);
+
+      return {
+        total: totalRes.count || 0,
+        ativos: ativosRes.count || 0,
+        valorTotal,
+      };
+    },
+  });
+
+  const stats = statsData || { total: 0, ativos: 0, valorTotal: 0 };
 
   return (
     <div className="space-y-6">
