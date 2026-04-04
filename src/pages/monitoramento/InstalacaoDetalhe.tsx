@@ -208,7 +208,7 @@ export default function InstalacaoDetalhePage() {
   });
 
   // Contar fotos e documentos
-  const totalFotos = fotosData?.fotos?.length || 0;
+  const totalFotos = (fotosData?.fotosInstalador?.length || 0) + (fotosData?.fotosAutovistoria?.length || 0);
   const totalDocs = documentos?.length || 0;
 
   return (
