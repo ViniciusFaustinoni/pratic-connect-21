@@ -3378,104 +3378,93 @@ serve(async (req) => {
       if (cpfLimpo.length === 11 && tipoPrincipal === 'texto') {
         console.log(`[whatsapp-webhook] Tentando identificar por CPF: ${cpfLimpo}`);
         
-        // Buscar associado pelo CPF
+        // Buscar associado pelo CPF (qualquer status)
         const { data: associadoPorCpf } = await supabase
           .from("associados")
           .select("id, nome, status, whatsapp, telefone")
           .eq("cpf", cpfLimpo)
-          .eq("status", "ativo")
+          .order("created_at", { ascending: false })
           .maybeSingle();
         
         if (associadoPorCpf) {
-          // Atualizar o whatsapp do associado com esse número
-          await supabase
-            .from("associados")
-            .update({ 
-              whatsapp: telefone,
-              updated_at: new Date().toISOString()
-            })
-            .eq("id", associadoPorCpf.id);
-          
-          const primeiroNome = associadoPorCpf.nome.split(' ')[0];
-          
-          await sendWhatsAppMessage(
-            apiUrl,
-            instancia.instance_name,
-            telefone,
-            `Encontrei você, *${primeiroNome}*! 🎉
-
-Seu número foi vinculado ao seu cadastro. A partir de agora, posso te ajudar diretamente por aqui!
-
-Como posso te ajudar hoje? 😊`
-          );
-          
-          await saveWhatsAppLog(supabase, instancia.id, telefone, `CPF identificado: ${cpfLimpo}`, "entrada", messageId);
-          await saveWhatsAppLog(supabase, instancia.id, telefone, `Associado vinculado: ${associadoPorCpf.nome}`, "saida");
-          
-          console.log(`[whatsapp-webhook] Associado ${associadoPorCpf.nome} vinculado ao telefone ${telefone}`);
-          
-          return new Response(JSON.stringify({ ok: true, cpf_linked: true, associado_id: associadoPorCpf.id }), { headers: corsHeaders });
+          if (associadoPorCpf.status === "ativo") {
+            // Vincular telefone ao associado ativo
+            await supabase
+              .from("associados")
+              .update({ whatsapp: telefone, updated_at: new Date().toISOString() })
+              .eq("id", associadoPorCpf.id);
+            
+            const primeiroNome = associadoPorCpf.nome.split(' ')[0];
+            await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
+              `Encontrei você, *${primeiroNome}*! 🎉\n\nSeu número foi vinculado ao seu cadastro. A partir de agora, posso te ajudar diretamente por aqui!\n\nComo posso te ajudar hoje? 😊`
+            );
+            
+            await saveWhatsAppLog(supabase, instancia.id, telefone, `CPF identificado: ${cpfLimpo}`, "entrada", messageId);
+            await saveWhatsAppLog(supabase, instancia.id, telefone, `Associado vinculado: ${associadoPorCpf.nome}`, "saida");
+            
+            return new Response(JSON.stringify({ ok: true, cpf_linked: true, associado_id: associadoPorCpf.id }), { headers: corsHeaders });
+          } else {
+            // CPF encontrado mas não ativo → informar status
+            const primeiroNome = associadoPorCpf.nome.split(' ')[0];
+            await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId);
+            await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
+              `Olá *${primeiroNome}*! Encontrei seu cadastro, porém ele está com status *${associadoPorCpf.status}*.\n\nPor favor, entre em contato com nossa central para mais informações:\n📞 *Central PRATICCAR*: (31) 3889-1256`
+            );
+            return new Response(JSON.stringify({ ok: true, cpf_found_inactive: true }), { headers: corsHeaders });
+          }
         } else {
-      // CPF não encontrado - delegar para Maya
-      }
-      
-      // Verificar se a mensagem é um CPF (11 dígitos)
-      // (mantido abaixo)
-      }
-      
-      // Criar lead automaticamente para número desconhecido
-      console.log(`[whatsapp-webhook] Criando lead automático para número desconhecido: ${telefone}`);
-      const nomeContato = data?.pushName || "Contato WhatsApp";
-      
-      const { data: leadCriado } = await supabase.from("leads").insert({
-        nome: nomeContato,
-        telefone: telefoneLimpo,
-        origem: "whatsapp_organico" as any,
-        etapa: "novo" as any,
-        observacoes: "Lead criado automaticamente via WhatsApp",
-        data_primeiro_contato: new Date().toISOString(),
-        data_ultimo_contato: new Date().toISOString(),
-      }).select("id").maybeSingle();
-
-      if (leadCriado) {
-        await supabase.from("leads_historico").insert({
-          lead_id: leadCriado.id,
-          tipo: "mensagem_whatsapp",
-          descricao: `Primeiro contato via WhatsApp: ${mensagemTexto.substring(0, 500)}`,
-          dados_extras: { telefone, tipo_mensagem: tipoPrincipal },
-        });
-      }
-
-      // Salvar mensagem para histórico
+          // CPF não encontrado
           await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId);
-          
-          await sendWhatsAppMessage(
-            apiUrl,
-            instancia.instance_name,
-            telefone,
-            `Não encontrei nenhum associado ativo com esse CPF. 😕
-
-Verifique se o CPF está correto ou entre em contato com nossa central para mais informações.
-
-📞 *Central de Atendimento*: Entre em contato pelo site praticcar.com.br`
+          await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
+            `Não encontrei nenhum cadastro com esse CPF. 😕\n\nSe você deseja contratar um plano de proteção veicular, nosso consultor pode te ajudar! Aguarde um momento. 🚗`
           );
-          
-          return new Response(JSON.stringify({ ok: true, cpf_not_found: true }), { headers: corsHeaders });
+          // Continuar para criar lead e delegar para Maya
         }
       }
       
-      // Salvar mensagem mesmo assim para histórico
+      // ========================================
+      // CRIAR LEAD AUTOMATICAMENTE + DELEGAR PARA MAYA
+      // ========================================
+      const nomeContato = data?.pushName || "Contato WhatsApp";
+      
+      // Verificar se já existe lead para este telefone
+      const { data: leadExistente2 } = await supabase
+        .from("leads")
+        .select("id")
+        .or(`telefone.in.(${telefonesBusca.join(",")})`)
+        .maybeSingle();
+
+      let leadIdFinal = leadExistente2?.id;
+
+      if (!leadExistente2) {
+        console.log(`[whatsapp-webhook] Criando lead automático para: ${telefone} (${nomeContato})`);
+        const { data: leadCriado } = await supabase.from("leads").insert({
+          nome: nomeContato,
+          telefone: telefoneLimpo,
+          origem: "whatsapp_organico" as any,
+          etapa: "novo" as any,
+          observacoes: "Lead criado automaticamente via WhatsApp",
+          data_primeiro_contato: new Date().toISOString(),
+          data_ultimo_contato: new Date().toISOString(),
+        }).select("id").maybeSingle();
+        
+        leadIdFinal = leadCriado?.id;
+        
+        if (leadCriado) {
+          await supabase.from("leads_historico").insert({
+            lead_id: leadCriado.id,
+            tipo: "mensagem_whatsapp",
+            descricao: `Primeiro contato via WhatsApp: ${mensagemTexto.substring(0, 500)}`,
+            dados_extras: { telefone, tipo_mensagem: tipoPrincipal },
+          });
+        }
+      }
+
+      // Salvar mensagem para histórico
       await saveWhatsAppLog(
-        supabase, 
-        instancia.id, 
-        telefone, 
-        mensagemTexto, 
-        "entrada",
-        messageId,
-        tipoPrincipal,
-        mediaArmazenada || undefined,
-        mediaMimetype || undefined,
-        mediaFilename || undefined
+        supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId,
+        tipoPrincipal, mediaArmazenada || undefined, mediaMimetype || undefined, mediaFilename || undefined,
+        leadIdFinal || undefined, leadIdFinal ? "lead" : undefined, nomeContato
       );
       
       // ========================================
@@ -3501,15 +3490,11 @@ Verifique se o CPF está correto ou entre em contato com nossa central para mais
         console.log(`[whatsapp-webhook] Agente consultor respondeu:`, JSON.stringify(agentResult).substring(0, 200));
       } catch (agentErr: any) {
         console.error(`[whatsapp-webhook] Erro ao delegar para agente-consultor-ia:`, agentErr);
-        // Fallback: pedir CPF como antes
-        await sendWhatsAppMessage(
-          apiUrl,
-          instancia.instance_name,
-          telefone,
-          `Olá! 👋 Não consegui identificar seu número em nosso sistema.\n\nPor favor, me informe seu *CPF* (apenas números) para que eu possa te ajudar.\n\nSe você ainda não é associado PRATIC, acesse nosso site ou entre em contato conosco! 📞`
+        await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
+          `Olá! 👋 Seja bem-vindo à *PRATICCAR*! 🚗\n\nNosso consultor entrará em contato em breve para apresentar nossos planos de proteção veicular.\n\nSe preferir, acesse nosso site: praticcar.com.br 📞`
         );
       }
-      return new Response(JSON.stringify({ ok: true, delegated_to_agent: true }), { headers: corsHeaders });
+      return new Response(JSON.stringify({ ok: true, delegated_to_agent: true, lead_created: !leadExistente2 }), { headers: corsHeaders });
     }
 
     // ========================================
