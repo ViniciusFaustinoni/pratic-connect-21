@@ -1,22 +1,60 @@
 
 
-# Abrir Detalhes da Instalação em Modal Centralizado (Dialog)
+# Preencher Espaço Vazio na Situação Financeira
 
 ## Problema
-Atualmente, o componente `InstalacaoDetailDrawer` usa um `Drawer` (painel lateral que sobe de baixo). O usuário quer que ao clicar num item da lista, abra um modal centralizado. Além disso, as linhas da tabela têm `cursor-pointer` mas não têm `onClick`.
+
+O card "Situação Financeira" (coluna direita do grid em `AssociadoSituacaoCard`) mostra apenas o status de inadimplência ("Adimplente") e fica com muito espaço vazio, enquanto cards abaixo (Plano & Contrato, Vencimentos, Consultor Vinculado) repetem informações em cards separados.
+
+## Solução
+
+Mover as informações de **Plano & Contrato**, **Vencimentos** e **Consultor Vinculado** para dentro do card "Situação Financeira", preenchendo o espaço vazio. Remover os cards duplicados do `AssociadoResumoTab`.
 
 ## Alterações
 
-### 1. `src/components/instalacoes/InstalacaoDetailDrawer.tsx`
-- Trocar `Drawer`/`DrawerContent`/`DrawerHeader`/`DrawerTitle` por `Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle` (já importados no arquivo)
-- Ajustar classes do `DialogContent` para ser largo e com scroll: `max-w-4xl max-h-[90vh] overflow-y-auto`
-- Remover imports não utilizados de Drawer
+### 1. `src/components/associados/detalhe/AssociadoSituacaoCard.tsx`
 
-### 2. `src/pages/monitoramento/Instalacoes.tsx`
-- Adicionar `onClick={() => handleOpenDetail(instalacao.id)}` no `<TableRow>` (linha 185) para que clicar na linha inteira abra o modal
+Expandir o card "Situação Financeira" adicionando após o status de inadimplência:
+- **Plano & Contrato**: nome do plano, mensalidade, dia vencimento, início contrato
+- **Vencimentos**: próxima mensalidade, CNH vence, CRLV vence
+- **Consultor Vinculado**: nome e pontuação (já existe no card, mover para dentro do financeiro)
+
+Para isso, o componente precisa receber props adicionais: `associado`, `contrato`, `resumoFinanceiro` (mesmos dados já passados ao `AssociadoResumoTab`).
+
+Atualizar a interface `Props` para aceitar esses dados opcionais.
+
+### 2. `src/components/associados/detalhe/AssociadoResumoTab.tsx`
+
+- Passar `associado`, `contrato` e `resumoFinanceiro` para `AssociadoSituacaoCard`
+- Remover o grid de "Plano & Contrato" e "Vencimentos" (linhas 113-145) pois estará consolidado
+- O card de Consultor Vinculado já está no `AssociadoSituacaoCard`, então remover da lista separada se duplicado
+
+### Layout Final do Card Situação Financeira
+
+```text
+┌─────────────────────────────────────┐
+│ Situação Financeira                 │
+│ ✓ Adimplente                        │
+│                                     │
+│ ─── Plano & Contrato ───           │
+│ Plano          Select Exclusive     │
+│ Mensalidade    R$ 180,00            │
+│ Dia venc.      Todo dia 10          │
+│ Início         01/04/2026           │
+│                                     │
+│ ─── Vencimentos ───                │
+│ Mensalidade    —                    │
+│ CNH vence      17/01/2033           │
+│ CRLV vence     Não informado        │
+│                                     │
+│ ─── Consultor ───                  │
+│ Nome           [TESTE] Vendedor CLT │
+│ Pontuação      ☆ 0 pts              │
+└─────────────────────────────────────┘
+```
 
 ## Impacto
 - 2 arquivos alterados
-- Funcionalidade idêntica, apenas layout muda de drawer lateral para modal centralizado
-- Clique na linha da tabela também abre o modal
+- Cards redundantes removidos, layout mais compacto
+- Nenhuma funcionalidade perdida
 
