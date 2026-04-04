@@ -172,11 +172,51 @@ serve(async (req) => {
     if (contrato.autentique_documento_id) {
       console.log(`[autentique-create] Contrato já possui documento Autentique: ${contrato.autentique_documento_id}`);
       
+      let signatureLink = contrato.autentique_url;
+      
+      // Se não temos o link salvo, buscar na API do Autentique
+      if (!signatureLink) {
+        console.log('[autentique-create] autentique_url ausente, buscando na API do Autentique...');
+        try {
+          const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
+          const query = `query { document(id: "${contrato.autentique_documento_id}") { signatures { public_id link { short_link } } } }`;
+          const resp = await fetch(AUTENTIQUE_API_URL, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${autentiqueApiKey}`,
+              "Content-Type": "application/json",
+            },
+            body: JSON.stringify({ query }),
+          });
+          const result = await resp.json();
+          const sig = result?.data?.document?.signatures?.[0];
+          signatureLink = sig?.link?.short_link || null;
+          // Fallback: construir link a partir do public_id
+          if (!signatureLink && sig?.public_id) {
+            signatureLink = `https://assinar.autentique.com.br/${sig.public_id}`;
+            console.log('[autentique-create] Link construído via public_id:', signatureLink);
+          } else {
+            console.log('[autentique-create] Link obtido da API:', signatureLink);
+          }
+          
+          // Salvar no banco para próximas chamadas
+          if (signatureLink) {
+            await supabase
+              .from("contratos")
+              .update({ autentique_url: signatureLink })
+              .eq("id", contratoId);
+            console.log('[autentique-create] autentique_url salvo no banco');
+          }
+        } catch (err) {
+          console.warn('[autentique-create] Erro ao buscar link na API Autentique:', err);
+        }
+      }
+      
       return new Response(
         JSON.stringify({
           success: true,
           documentId: contrato.autentique_documento_id,
-          signatureLink: contrato.autentique_url,
+          signatureLink,
           message: "Documento existente retornado - contrato já foi enviado para assinatura",
         }),
         {
@@ -691,7 +731,29 @@ serve(async (req) => {
     }
 
     // Obter link de assinatura
-    const signatureLink = document.signatures?.[0]?.link?.short_link;
+    let signatureLink = document.signatures?.[0]?.link?.short_link;
+
+    // Se o link não veio na criação, buscar com retry após 2s
+    if (!signatureLink && document.id) {
+      console.log('[autentique-create] short_link não retornado na criação, tentando buscar...');
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const query = `query { document(id: "${document.id}") { signatures { link { short_link } } } }`;
+        const retryResp = await fetch(AUTENTIQUE_API_URL, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${autentiqueApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ query }),
+        });
+        const retryData = await retryResp.json();
+        signatureLink = retryData?.data?.document?.signatures?.[0]?.link?.short_link || null;
+        console.log('[autentique-create] Link obtido no retry:', signatureLink);
+      } catch (err) {
+        console.warn('[autentique-create] Retry falhou:', err);
+      }
+    }
 
     // Atualizar contrato com dados do Autentique
     const { error: updateError } = await supabase
