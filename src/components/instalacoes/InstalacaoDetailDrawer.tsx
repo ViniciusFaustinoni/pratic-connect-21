@@ -668,7 +668,7 @@ export function InstalacaoDetailDrawer({
             </section>
           </div>
         )}
-      </DrawerContent>
-    </Drawer>
+      </DialogContent>
+    </Dialog>
   );
 }
