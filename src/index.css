@@ -468,6 +468,18 @@
   }
 }
 
+/* Marcador arrastável no mapa */
+.draggable-marker-icon {
+  background: transparent !important;
+  border: none !important;
+}
+.draggable-marker-icon:hover {
+  cursor: grab !important;
+}
+.leaflet-dragging .draggable-marker-icon {
+  cursor: grabbing !important;
+}
+
 /* Logo PRATIC styles */
 .pratic-logo-text {
   font-weight: 700;

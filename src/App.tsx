@@ -630,7 +630,7 @@ const App = () => (
               <Route path="/diretoria/vistorias-instalacoes" element={<Rotas />} />
               <Route path="/diretoria/gestao-vistorias-instalacoes" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
               <Route path="/monitoramento/estoque" element={<Navigate to="/monitoramento/rastreadores" replace />} />
-              <Route path="/monitoramento/mapa" element={<Navigate to="/monitoramento/rastreadores" replace />} />
+              <Route path="/monitoramento/mapa" element={<Mapa />} />
               <Route path="/monitoramento/rastreadores" element={<Rastreadores />} />
               <Route path="/monitoramento/config-plataformas" element={<Navigate to="/configuracoes/integracoes" replace />} />
               <Route path="/monitoramento/alertas" element={<AlertasMonitoramento />} />

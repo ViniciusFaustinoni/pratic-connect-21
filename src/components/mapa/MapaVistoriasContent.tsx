@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import { RotaPolyline } from "@/components/mapa/RotaPolyline";
 import L from "leaflet";
@@ -31,6 +31,16 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Search,
   ClipboardCheck,
   Phone,
@@ -45,18 +55,21 @@ import {
   User,
   List,
   Filter,
+  GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
-import { useVistoriadoresRealtime } from "@/hooks/useVistoriadoresRealtime";
+import { useVistoriadoresRealtime, VistoriadorLocalizacao } from "@/hooks/useVistoriadoresRealtime";
 import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
 import { createColoredMarkerSvg, svgToDataUrl, createVistoriadorMarkerSvg, COR_VISTORIADOR } from "@/lib/rota-colors";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useConfigAtribuicaoManual, useAtribuirServicoManual } from "@/hooks/useAtribuicaoManual";
 
 // Cores para o mapa do coordenador - por status de conclusão
 const COR_REALIZADA = '#10B981';   // Verde
 const COR_A_REALIZAR = '#EF4444'; // Vermelho
+const COR_DRAGGABLE = '#F59E0B';  // Amarelo - serviços arrastáveis
 
 // Status que indicam vistoria realizada
 const STATUS_REALIZADOS = ['concluida', 'aprovada', 'reprovada', 'em_analise'];
@@ -74,21 +87,39 @@ function getCorPorStatus(status: string): string {
 // Cache de ícones por cor
 const iconCache = new Map<string, L.Icon>();
 
-function getColoredIcon(color: string): L.Icon {
-  const cacheKey = `icon-${color}`;
+function getColoredIcon(color: string, draggable = false): L.Icon {
+  const cacheKey = `icon-${color}-${draggable}`;
   if (iconCache.has(cacheKey)) {
     return iconCache.get(cacheKey)!;
   }
   
   const icon = new L.Icon({
     iconUrl: svgToDataUrl(createColoredMarkerSvg(color)),
-    iconSize: [32, 40],
-    iconAnchor: [16, 40],
-    popupAnchor: [0, -40],
+    iconSize: draggable ? [38, 48] : [32, 40],
+    iconAnchor: draggable ? [19, 48] : [16, 40],
+    popupAnchor: [0, draggable ? -48 : -40],
   });
   
   iconCache.set(cacheKey, icon);
   return icon;
+}
+
+// Ícone especial para pin arrastável (com indicador de grip)
+function getDraggableIcon(color: string): L.DivIcon {
+  return L.divIcon({
+    html: `
+      <div style="position:relative;cursor:grab;">
+        <img src="${svgToDataUrl(createColoredMarkerSvg(color))}" width="38" height="48" style="filter: drop-shadow(0 0 6px ${color}80);" />
+        <div style="position:absolute;top:-8px;right:-8px;background:#F59E0B;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><circle cx="8" cy="4" r="2"/><circle cx="16" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="20" r="2"/><circle cx="16" cy="20" r="2"/></svg>
+        </div>
+      </div>
+    `,
+    className: 'draggable-marker-icon',
+    iconSize: [38, 48],
+    iconAnchor: [19, 48],
+    popupAnchor: [0, -48],
+  });
 }
 
 // Cache de ícones de vistoriador
@@ -126,6 +157,8 @@ export function MapaVistoriasContent() {
   const isMobile = useIsMobile();
   const { data: vistorias, isLoading } = useVistoriasMapa();
   const { data: vistoriadores, isLoading: isLoadingVistoriadores } = useVistoriadoresRealtime();
+  const { data: atribuicaoManualAtiva } = useConfigAtribuicaoManual();
+  const atribuirMutation = useAtribuirServicoManual();
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroBusca, setFiltroBusca] = useState("");
@@ -133,6 +166,20 @@ export function MapaVistoriasContent() {
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  
+  // Drag-and-drop state
+  const [dragConfirmation, setDragConfirmation] = useState<{
+    servicoId: string;
+    servicoPlaca: string | null;
+    profissionalId: string;
+    profissionalNome: string;
+  } | null>(null);
+  const vistoriadoresRef = useRef<VistoriadorLocalizacao[]>([]);
+
+  // Manter ref atualizada para uso no callback do dragend
+  useEffect(() => {
+    vistoriadoresRef.current = vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
+  }, [vistoriadores]);
 
   // Vistoriadores em serviço
   const vistoriadoresEmServico = useMemo(() => {
@@ -249,6 +296,63 @@ export function MapaVistoriasContent() {
   const abrirGoogleMaps = (lat: number, lng: number) => {
     window.open(`https://www.google.com/maps?q=${lat},${lng}`, "_blank");
   };
+
+  // Distância em metros entre dois pontos (Haversine simplificado)
+  const distanciaMetros = useCallback((lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }, []);
+
+  // Handler para quando um pin de serviço é solto após arrastar
+  const handleMarkerDragEnd = useCallback((vistoria: VistoriaMapa, event: L.DragEndEvent) => {
+    const marker = event.target as L.Marker;
+    const dropPos = marker.getLatLng();
+    
+    // Encontrar técnico mais próximo do ponto de drop (raio de 500m)
+    const RAIO_PROXIMIDADE = 500; // metros
+    let tecnicoMaisProximo: VistoriadorLocalizacao | null = null;
+    let menorDistancia = Infinity;
+
+    for (const tec of vistoriadoresRef.current) {
+      const dist = distanciaMetros(dropPos.lat, dropPos.lng, tec.latitude, tec.longitude);
+      if (dist < RAIO_PROXIMIDADE && dist < menorDistancia) {
+        menorDistancia = dist;
+        tecnicoMaisProximo = tec;
+      }
+    }
+
+    // Voltar o marcador para a posição original
+    if (vistoria.latitude && vistoria.longitude) {
+      marker.setLatLng([vistoria.latitude, vistoria.longitude]);
+    }
+
+    if (tecnicoMaisProximo) {
+      setDragConfirmation({
+        servicoId: vistoria.id,
+        servicoPlaca: vistoria.veiculo_placa,
+        profissionalId: tecnicoMaisProximo.vistoriador_id,
+        profissionalNome: tecnicoMaisProximo.vistoriador_nome,
+      });
+    } else {
+      toast.error('Solte o pin sobre um técnico para atribuir', {
+        description: 'Arraste o serviço até o marcador azul de um técnico no mapa.',
+        duration: 3000,
+      });
+    }
+  }, [distanciaMetros]);
+
+  // Confirmar atribuição via drag
+  const confirmarAtribuicaoDrag = useCallback(() => {
+    if (!dragConfirmation) return;
+    atribuirMutation.mutate({
+      servicoId: dragConfirmation.servicoId,
+      profissionalId: dragConfirmation.profissionalId,
+    });
+    setDragConfirmation(null);
+  }, [dragConfirmation, atribuirMutation]);
 
   const centroInicial: [number, number] = [-22.9068, -43.1729];
 
@@ -519,12 +623,17 @@ export function MapaVistoriasContent() {
       {vistoriasComCoordenadas.map((v) => {
         const markerColor = getCorPorStatus(v.status);
         const isRealizada = STATUS_REALIZADOS.includes(v.status);
+        const isDraggable = !!atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada;
         
         return (
           <Marker
-            key={`marker-${v.id}-${markerColor}`}
+            key={`marker-${v.id}-${markerColor}-${isDraggable}`}
             position={[v.latitude!, v.longitude!]}
-            icon={getColoredIcon(markerColor)}
+            icon={isDraggable ? getDraggableIcon(COR_A_REALIZAR) : getColoredIcon(markerColor)}
+            draggable={isDraggable}
+            eventHandlers={isDraggable ? {
+              dragend: (e) => handleMarkerDragEnd(v, e),
+            } : undefined}
           >
             <Popup>
               <div className="min-w-[200px]">
@@ -532,11 +641,18 @@ export function MapaVistoriasContent() {
                   <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
                   <span 
                     className="text-xs px-2 py-0.5 rounded text-white"
-                    style={{ backgroundColor: markerColor }}
+                    style={{ backgroundColor: isDraggable ? COR_DRAGGABLE : markerColor }}
                   >
-                    {isRealizada ? "Realizada" : "A Realizar"}
+                    {isDraggable ? "Arraste →" : isRealizada ? "Realizada" : "A Realizar"}
                   </span>
                 </div>
+
+                {isDraggable && (
+                  <div className="mb-2 p-1.5 rounded text-xs text-amber-800 bg-amber-50 border border-amber-200 flex items-center gap-1">
+                    <GripVertical className="h-3 w-3" />
+                    Arraste até um técnico para atribuir
+                  </div>
+                )}
 
                 <div className="text-xs space-y-1 mb-2">
                   <p><strong>Tipo:</strong> {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}</p>
@@ -694,6 +810,18 @@ export function MapaVistoriasContent() {
             <Badge variant="outline" className="text-xs">{linhasDeRota.length}</Badge>
           </div>
         )}
+
+        {atribuicaoManualAtiva && (
+          <>
+            <div className="border-t my-2" />
+            <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+              <GripVertical className="h-4 w-4 text-amber-600 flex-shrink-0" />
+              <span className="flex-1 text-left text-amber-700 dark:text-amber-400 text-xs">
+                Arraste pins sem técnico até um profissional
+              </span>
+            </div>
+          </>
+        )}
         
         {filtroStatus !== "todos" && (
           <button
@@ -707,8 +835,34 @@ export function MapaVistoriasContent() {
     </div>
   );
 
+  // Dialog de confirmação de atribuição drag-and-drop
+  const renderConfirmationDialog = () => (
+    <AlertDialog open={!!dragConfirmation} onOpenChange={(open) => !open && setDragConfirmation(null)}>
+      <AlertDialogContent>
+        <AlertDialogHeader>
+          <AlertDialogTitle>Confirmar Atribuição</AlertDialogTitle>
+          <AlertDialogDescription>
+            Deseja atribuir o serviço <strong>{dragConfirmation?.servicoPlaca || 'sem placa'}</strong> ao técnico{' '}
+            <strong>{dragConfirmation?.profissionalNome}</strong>?
+          </AlertDialogDescription>
+        </AlertDialogHeader>
+        <AlertDialogFooter>
+          <AlertDialogCancel>Cancelar</AlertDialogCancel>
+          <AlertDialogAction 
+            onClick={confirmarAtribuicaoDrag}
+            disabled={atribuirMutation.isPending}
+          >
+            {atribuirMutation.isPending ? 'Atribuindo...' : 'Confirmar Atribuição'}
+          </AlertDialogAction>
+        </AlertDialogFooter>
+      </AlertDialogContent>
+    </AlertDialog>
+  );
+
   if (isMobile) {
     return (
+      <>
+      {renderConfirmationDialog()}
       <div className="relative h-full flex flex-col">
         {/* Mapa fullscreen */}
         <div className="flex-1 rounded-lg overflow-hidden relative">
@@ -744,50 +898,62 @@ export function MapaVistoriasContent() {
           </DrawerContent>
         </Drawer>
       </div>
+      </>
     );
   }
 
   // === LAYOUT DESKTOP ===
   return (
-    <div className="flex h-full gap-4">
-      {/* Sidebar */}
-      <Card className="w-80 flex-shrink-0 flex flex-col">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">Vistorias</CardTitle>
+    <>
+      {renderConfirmationDialog()}
+      <div className="flex h-full gap-4">
+        {/* Sidebar */}
+        <Card className="w-80 flex-shrink-0 flex flex-col">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base">Vistorias</CardTitle>
+              </div>
+              <Badge variant="secondary">{vistoriasFiltradas.length}</Badge>
             </div>
-            <Badge variant="secondary">{vistoriasFiltradas.length}</Badge>
-          </div>
-          {renderFilters()}
-        </CardHeader>
+            {renderFilters()}
+          </CardHeader>
 
-        <CardContent className="flex-1 overflow-hidden p-0">
-          <ScrollArea className="h-full px-4 pb-4">
-            {renderVistoriasList()}
-          </ScrollArea>
-        </CardContent>
-      </Card>
+          <CardContent className="flex-1 overflow-hidden p-0">
+            <ScrollArea className="h-full px-4 pb-4">
+              {renderVistoriasList()}
+            </ScrollArea>
+          </CardContent>
+        </Card>
 
-      {/* Mapa */}
-      <Card className="flex-1 flex flex-col overflow-hidden">
-        <CardHeader className="pb-2 flex-row items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-red-600" />
-            <CardTitle className="text-base">Mapa de Vistorias</CardTitle>
-          </div>
-          <Badge variant="outline" className="gap-1.5 text-xs">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            Ao vivo
-          </Badge>
-        </CardHeader>
+        {/* Mapa */}
+        <Card className="flex-1 flex flex-col overflow-hidden">
+          <CardHeader className="pb-2 flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-red-600" />
+              <CardTitle className="text-base">Mapa de Vistorias</CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              {atribuicaoManualAtiva && (
+                <Badge variant="outline" className="gap-1.5 text-xs text-amber-600 border-amber-300">
+                  <GripVertical className="h-3 w-3" />
+                  Drag & Drop ativo
+                </Badge>
+              )}
+              <Badge variant="outline" className="gap-1.5 text-xs">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                Ao vivo
+              </Badge>
+            </div>
+          </CardHeader>
 
-        <CardContent className="flex-1 p-0 relative">
-          {renderMapa()}
-          {renderLegenda()}
-        </CardContent>
-      </Card>
-    </div>
+          <CardContent className="flex-1 p-0 relative">
+            {renderMapa()}
+            {renderLegenda()}
+          </CardContent>
+        </Card>
+      </div>
+    </>
   );
 }
