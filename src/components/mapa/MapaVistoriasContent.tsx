@@ -623,12 +623,17 @@ export function MapaVistoriasContent() {
       {vistoriasComCoordenadas.map((v) => {
         const markerColor = getCorPorStatus(v.status);
         const isRealizada = STATUS_REALIZADOS.includes(v.status);
+        const isDraggable = !!atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada;
         
         return (
           <Marker
-            key={`marker-${v.id}-${markerColor}`}
+            key={`marker-${v.id}-${markerColor}-${isDraggable}`}
             position={[v.latitude!, v.longitude!]}
-            icon={getColoredIcon(markerColor)}
+            icon={isDraggable ? getDraggableIcon(COR_A_REALIZAR) : getColoredIcon(markerColor)}
+            draggable={isDraggable}
+            eventHandlers={isDraggable ? {
+              dragend: (e) => handleMarkerDragEnd(v, e),
+            } : undefined}
           >
             <Popup>
               <div className="min-w-[200px]">
@@ -636,11 +641,18 @@ export function MapaVistoriasContent() {
                   <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
                   <span 
                     className="text-xs px-2 py-0.5 rounded text-white"
-                    style={{ backgroundColor: markerColor }}
+                    style={{ backgroundColor: isDraggable ? COR_DRAGGABLE : markerColor }}
                   >
-                    {isRealizada ? "Realizada" : "A Realizar"}
+                    {isDraggable ? "Arraste →" : isRealizada ? "Realizada" : "A Realizar"}
                   </span>
                 </div>
+
+                {isDraggable && (
+                  <div className="mb-2 p-1.5 rounded text-xs text-amber-800 bg-amber-50 border border-amber-200 flex items-center gap-1">
+                    <GripVertical className="h-3 w-3" />
+                    Arraste até um técnico para atribuir
+                  </div>
+                )}
 
                 <div className="text-xs space-y-1 mb-2">
                   <p><strong>Tipo:</strong> {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}</p>
