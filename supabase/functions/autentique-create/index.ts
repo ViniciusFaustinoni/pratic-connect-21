@@ -115,7 +115,7 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
       ${dados.indicador.cpf ? `
       <tr>
         <td style="padding: 6px; border: 1px solid #ddd;">CPF:</td>
-        <td style="padding: 6px; border: 1px solid #ddd;">${formatCPF(dados.indicador.cpf)}</td>
+        <td style="padding: 6px; border: 1px solid #ddd;">${dados.indicador.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}</td>
       </tr>` : ''}
       ${dados.consultor?.nome ? `
       <tr>
