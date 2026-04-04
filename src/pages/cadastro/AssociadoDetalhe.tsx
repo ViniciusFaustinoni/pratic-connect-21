@@ -725,11 +725,23 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                           </TableCell>
                           <TableCell>
                             {'arquivo_url' in d && d.arquivo_url ? (
-                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => window.open(d.arquivo_url, '_blank')}>
+                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
+                                const url = d.arquivo_url as string;
+                                const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(url);
+                                const isPdf = /\.pdf($|\?)/i.test(url);
+                                setFotoModal({ open: true, url, tipo: TIPO_DOCUMENTO_LABELS[d.tipo] || d.tipo, mediaType: isVideo ? 'video' : isPdf ? 'pdf' : 'image' });
+                              }}>
                                 <Eye className="h-3 w-3" />
                               </Button>
                             ) : d.fonte === 'documentos' ? (
-                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => navigate(`/cadastro/documentos/${d.id}`)}>
+                              <Button size="sm" variant="ghost" className="h-7 text-xs" onClick={() => {
+                                const url = (d as any).arquivo_url;
+                                if (url) {
+                                  const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(url);
+                                  const isPdf = /\.pdf($|\?)/i.test(url);
+                                  setFotoModal({ open: true, url, tipo: TIPO_DOCUMENTO_LABELS[d.tipo] || d.tipo, mediaType: isVideo ? 'video' : isPdf ? 'pdf' : 'image' });
+                                }
+                              }}>
                                 <Eye className="h-3 w-3" />
                               </Button>
                             ) : null}
