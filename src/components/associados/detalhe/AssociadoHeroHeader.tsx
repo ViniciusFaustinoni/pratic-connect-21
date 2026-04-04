@@ -189,27 +189,6 @@ export function AssociadoHeroHeader({
               disabled={!veiculosComRastreador || veiculosComRastreador.length === 0}>
               <Map className="h-3.5 w-3.5 mr-1.5" /> Mapa
             </Button>
-            {status === 'ativo' && (
-              <Button size="sm" variant="outline" onClick={() => navigate(`/cadastro/associados/${id}/substituicao`)}>
-                <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> Substituir
-              </Button>
-            )}
-            {status === 'ativo' && !permissions.isAnalistaCadastroOnly && onTrocaTitularidade && (
-              <Button size="sm" variant="outline" onClick={onTrocaTitularidade}>
-                <Users className="h-3.5 w-3.5 mr-1.5" /> Troca Titular
-              </Button>
-            )}
-            {status === 'ativo' && (
-              <Button size="sm" variant="outline" className="text-amber-600 hover:text-amber-700 hover:border-amber-300" onClick={onSuspender}>
-                <Pause className="h-3.5 w-3.5 mr-1.5" /> Suspender
-              </Button>
-            )}
-            {(status === 'suspenso' || coberturasSuspensas) && (
-              <Button size="sm" variant="outline" className="text-emerald-600 hover:text-emerald-700 hover:border-emerald-300" onClick={onReativar} disabled={isReativando}>
-                {isReativando ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Play className="h-3.5 w-3.5 mr-1.5" />}
-                Reativar
-              </Button>
-            )}
 
             {/* Sync button */}
             {statusPlataforma?.dados?.veiculosVinculados > 0 && (
