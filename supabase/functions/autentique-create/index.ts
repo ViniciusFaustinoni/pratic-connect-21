@@ -179,7 +179,7 @@ serve(async (req) => {
         console.log('[autentique-create] autentique_url ausente, buscando na API do Autentique...');
         try {
           const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
-          const query = `query { document(id: "${contrato.autentique_documento_id}") { signatures { public_id link { short_link } } } }`;
+          const query = `query { document(id: "${contrato.autentique_documento_id}") { signatures { public_id action { name } link { short_link } } } }`;
           const resp = await fetch(AUTENTIQUE_API_URL, {
             method: "POST",
             headers: {
@@ -189,12 +189,15 @@ serve(async (req) => {
             body: JSON.stringify({ query }),
           });
           const result = await resp.json();
-          const sig = result?.data?.document?.signatures?.[0];
-          signatureLink = sig?.link?.short_link || null;
+          console.log('[autentique-create] Query doc result:', JSON.stringify(result, null, 2));
+          // Encontrar o signatário com action SIGN (não o observador)
+          const signatures = result?.data?.document?.signatures || [];
+          const signerWithAction = signatures.find((s: any) => s?.action?.name === 'SIGN') || signatures[0];
+          signatureLink = signerWithAction?.link?.short_link || null;
           // Fallback: gerar link via mutation createLinkToSignature
-          if (!signatureLink && sig?.public_id) {
+          if (!signatureLink && signerWithAction?.public_id) {
             try {
-              const createLinkMutation = `mutation { createLinkToSignature(public_id: "${sig.public_id}") { short_link } }`;
+              const createLinkMutation = `mutation { createLinkToSignature(public_id: "${signerWithAction.public_id}") { short_link } }`;
               const linkResp = await fetch(AUTENTIQUE_API_URL, {
                 method: "POST",
                 headers: {
@@ -204,6 +207,7 @@ serve(async (req) => {
                 body: JSON.stringify({ query: createLinkMutation }),
               });
               const linkResult = await linkResp.json();
+              console.log('[autentique-create] createLinkToSignature response:', JSON.stringify(linkResult, null, 2));
               signatureLink = linkResult?.data?.createLinkToSignature?.short_link || null;
               console.log('[autentique-create] Link gerado via createLinkToSignature:', signatureLink);
             } catch (linkErr) {
