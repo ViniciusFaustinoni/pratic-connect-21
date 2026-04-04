@@ -150,8 +150,15 @@ const getTituloEvento = (tipo: string) => {
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
-export default function AssociadoDetalhe() {
-  const { id } = useParams<{ id: string }>();
+interface AssociadoDetalheProps {
+  associadoId?: string;
+  isModal?: boolean;
+  onClose?: () => void;
+}
+
+export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose }: AssociadoDetalheProps = {}) {
+  const params = useParams<{ id: string }>();
+  const id = propId || params.id;
   const navigate = useNavigate();
   const { isAnalistaCadastroOnly, isDiretor, isGerencia, isDesenvolvedor, isAdminMaster } = usePermissions();
 
