@@ -213,7 +213,37 @@ export function UnifiedDocumentUploader({
         console.error('Database insert error:', insertError);
       }
 
-      // 5. Atualizar documento com resultado
+      // 5. Sync CNH data to associado if detected
+      if (ocrResult.tipo_detectado === 'cnh' && ocrResult.sucesso && ocrResult.dados) {
+        let associadoId: string | null = null;
+        if (contratoId) {
+          const { data: contrato } = await supabase
+            .from('contratos')
+            .select('associado_id')
+            .eq('id', contratoId)
+            .single();
+          associadoId = contrato?.associado_id || null;
+        } else if (cotacaoId) {
+          const { data: cotacao } = await supabase
+            .from('cotacoes')
+            .select('cliente_cpf')
+            .eq('id', cotacaoId)
+            .single();
+          if (cotacao?.cliente_cpf) {
+            const { data: assoc } = await supabase
+              .from('associados')
+              .select('id')
+              .eq('cpf', cotacao.cliente_cpf)
+              .maybeSingle();
+            associadoId = assoc?.id || null;
+          }
+        }
+        if (associadoId) {
+          await syncCnhDataToAssociado(associadoId, ocrResult.dados as Record<string, string | undefined>);
+        }
+      }
+
+      // 6. Atualizar documento com resultado
       const successDoc: DocumentoUnificado = {
         id: docData?.id || tempId,
         arquivo_url: arquivoUrl,
