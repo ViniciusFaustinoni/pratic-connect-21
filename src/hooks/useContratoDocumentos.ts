@@ -149,6 +149,30 @@ export function useUploadDocumentoContrato() {
         })
         .eq('id', docData.id);
 
+      // Sync CNH data to associado if applicable
+      if (tipo === 'cnh' && ocrResult.sucesso && ocrResult.dados) {
+        // Find associado_id from contrato or cotação
+        let associadoId: string | null = null;
+        if (contratoId) {
+          const { data: contrato } = await supabase
+            .from('contratos')
+            .select('associado_id')
+            .eq('id', contratoId)
+            .single();
+          associadoId = contrato?.associado_id || null;
+        } else if (cotacaoId) {
+          const { data: cotacao } = await supabase
+            .from('cotacoes')
+            .select('associado_id')
+            .eq('id', cotacaoId)
+            .single();
+          associadoId = cotacao?.associado_id || null;
+        }
+        if (associadoId) {
+          await syncCnhDataToAssociado(associadoId, ocrResult.dados);
+        }
+      }
+
       return {
         documento: {
           ...docData,
