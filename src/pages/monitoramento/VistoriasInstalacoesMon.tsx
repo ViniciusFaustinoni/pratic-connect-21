@@ -1,5 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wrench, ClipboardCheck, Puzzle, Truck, PackageX, Hand } from 'lucide-react';
+import { Wrench, ClipboardCheck, Puzzle, Truck, PackageX, Hand, History } from 'lucide-react';
 import Instalacoes from './Instalacoes';
 import Vistorias from './Vistorias';
 import MonitoramentoEncaixes from './Encaixes';

@@ -139,6 +139,16 @@ export function useAtribuirServicoManual() {
 
       if (error) throw error;
 
+      // Registrar no log de atribuições
+      const { data: { user } } = await supabase.auth.getUser();
+      await supabase.from('servicos_atribuicoes_log').insert({
+        servico_id: servicoId,
+        profissional_id: profissionalId,
+        tipo_atribuicao: 'manual',
+        atribuido_por: user?.id || null,
+        observacoes: 'Atribuição manual pelo painel',
+      });
+
       // Get servico + profissional data for WhatsApp notification
       const { data: servico } = await supabase
         .from('servicos')
