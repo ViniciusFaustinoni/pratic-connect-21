@@ -1,32 +1,22 @@
 
 
-# Organizar Botões do Header do Modal sem Overflow
+# Abrir Detalhes da Instalação em Modal Centralizado (Dialog)
 
 ## Problema
+Atualmente, o componente `InstalacaoDetailDrawer` usa um `Drawer` (painel lateral que sobe de baixo). O usuário quer que ao clicar num item da lista, abra um modal centralizado. Além disso, as linhas da tabela têm `cursor-pointer` mas não têm `onClick`.
 
-Os botões de ação (Mapa, Substituir, Troca Titular, Suspender, Reativar, Sync, Menu) ficam todos em uma linha horizontal, causando overflow quando o modal não tem largura suficiente — especialmente com nomes longos de associados.
+## Alterações
 
-## Solução
+### 1. `src/components/instalacoes/InstalacaoDetailDrawer.tsx`
+- Trocar `Drawer`/`DrawerContent`/`DrawerHeader`/`DrawerTitle` por `Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle` (já importados no arquivo)
+- Ajustar classes do `DialogContent` para ser largo e com scroll: `max-w-4xl max-h-[90vh] overflow-y-auto`
+- Remover imports não utilizados de Drawer
 
-Mover os botões **Substituir**, **Troca Titular**, **Suspender** e **Reativar** para dentro do `DropdownMenu` (menu "...") que já existe. Manter visíveis apenas **Mapa** e o **menu "..."** (e Sync se aplicável).
-
-### `src/components/associados/detalhe/AssociadoHeroHeader.tsx`
-
-**Botões visíveis (linha 187):** Manter apenas Mapa + Sync + DropdownMenu
-
-**Dentro do DropdownMenu (linha 235):** Adicionar no topo:
-- Substituir Placa (se ativo)
-- Troca de Titularidade (se ativo e com permissão)
-- Separator
-- Suspender (se ativo)
-- Reativar (se suspenso)
-- Separator
-- (itens existentes: Documentos, Financeiro, WhatsApp, Cancelar, etc.)
-
-**Remover** os `<Button>` individuais de Substituir, Troca Titular, Suspender e Reativar do layout principal (linhas 192-212).
+### 2. `src/pages/monitoramento/Instalacoes.tsx`
+- Adicionar `onClick={() => handleOpenDetail(instalacao.id)}` no `<TableRow>` (linha 185) para que clicar na linha inteira abra o modal
 
 ## Impacto
-- 1 arquivo alterado
-- Botões reorganizados, nenhuma funcionalidade removida
-- Elimina overflow horizontal no header
+- 2 arquivos alterados
+- Funcionalidade idêntica, apenas layout muda de drawer lateral para modal centralizado
+- Clique na linha da tabela também abre o modal
 
