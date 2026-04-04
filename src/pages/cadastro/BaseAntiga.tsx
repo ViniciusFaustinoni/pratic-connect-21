@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { useBaseAntigaAssociados, useBaseAntigaDetalhe, useBaseAntigaVeiculos } from '@/hooks/useBaseAntiga';
+import { useDeleteBaseAntiga } from '@/hooks/useDeleteBaseAntiga';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt } from 'lucide-react';
+import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
 
@@ -54,6 +57,23 @@ export default function BaseAntiga() {
   const { data, isLoading } = useBaseAntigaAssociados({ search: debouncedSearch }, { page, pageSize: 20 });
   const { data: detalhe, isLoading: loadingDetalhe } = useBaseAntigaDetalhe(selectedId ?? undefined);
   const { data: vData, isLoading: vLoading } = useBaseAntigaVeiculos({ search: vDebouncedSearch }, { page: vPage, pageSize: 20 });
+  const { isDiretor, isAdminMaster, isDesenvolvedor } = usePermissions();
+  const canDelete = isDiretor || isAdminMaster || isDesenvolvedor;
+  const deleteAssociado = useDeleteBaseAntiga('associado');
+  const deleteVeiculo = useDeleteBaseAntiga('veiculo');
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; nome: string; tipo: 'associado' | 'veiculo' } | null>(null);
+
+  const handleDelete = (e: React.MouseEvent, id: string, nome: string, tipo: 'associado' | 'veiculo') => {
+    e.stopPropagation();
+    setDeleteConfirm({ id, nome, tipo });
+  };
+
+  const confirmDelete = () => {
+    if (!deleteConfirm) return;
+    const mutation = deleteConfirm.tipo === 'associado' ? deleteAssociado : deleteVeiculo;
+    mutation.mutate(deleteConfirm.id);
+    setDeleteConfirm(null);
+  };
 
   const formatCpf = (cpf: string) => {
     if (!cpf || cpf.length !== 11) return cpf;
@@ -103,17 +123,18 @@ export default function BaseAntiga() {
                     <TableHead>Telefone</TableHead>
                     <TableHead>Cidade/UF</TableHead>
                     <TableHead>Plano</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Cód. Hinova</TableHead>
-                  </TableRow>
+                     <TableHead>Status</TableHead>
+                     <TableHead>Cód. Hinova</TableHead>
+                     {canDelete && <TableHead className="w-12"></TableHead>}
+                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {isLoading ? (
                     Array.from({ length: 5 }).map((_, i) => (
-                      <TableRow key={i}>{Array.from({ length: 7 }).map((_, j) => (<TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>))}</TableRow>
-                    ))
-                  ) : !data?.associados.length ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum associado encontrado</TableCell></TableRow>
+                       <TableRow key={i}>{Array.from({ length: canDelete ? 8 : 7 }).map((_, j) => (<TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>))}</TableRow>
+                     ))
+                   ) : !data?.associados.length ? (
+                     <TableRow><TableCell colSpan={canDelete ? 8 : 7} className="text-center py-8 text-muted-foreground">Nenhum associado encontrado</TableCell></TableRow>
                   ) : (
                     data.associados.map((a: any) => (
                       <TableRow key={a.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(a.id)}>
@@ -126,9 +147,16 @@ export default function BaseAntiga() {
                         <TableCell>{a.cidade ? `${a.cidade}/${a.uf}` : '—'}</TableCell>
                         <TableCell>{(a as any).planos?.nome || '—'}</TableCell>
                         <TableCell><Badge className={STATUS_COLORS[a.status] || 'bg-gray-100 text-gray-800'}>{a.status?.replace(/_/g, ' ')}</Badge></TableCell>
-                        <TableCell className="font-mono">{a.codigo_hinova || '—'}</TableCell>
-                      </TableRow>
-                    ))
+                         <TableCell className="font-mono">{a.codigo_hinova || '—'}</TableCell>
+                         {canDelete && (
+                           <TableCell>
+                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => handleDelete(e, a.id, a.nome, 'associado')}>
+                               <Trash2 className="h-4 w-4" />
+                             </Button>
+                           </TableCell>
+                         )}
+                       </TableRow>
+                     ))
                   )}
                 </TableBody>
               </Table>
@@ -163,17 +191,18 @@ export default function BaseAntiga() {
                     <TableHead>Ano</TableHead>
                     <TableHead>Cor</TableHead>
                     <TableHead>Associado</TableHead>
-                    <TableHead>Status</TableHead>
-                    <TableHead>Rastreador</TableHead>
-                  </TableRow>
+                     <TableHead>Status</TableHead>
+                     <TableHead>Rastreador</TableHead>
+                     {canDelete && <TableHead className="w-12"></TableHead>}
+                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {vLoading ? (
                     Array.from({ length: 5 }).map((_, i) => (
-                      <TableRow key={i}>{Array.from({ length: 7 }).map((_, j) => (<TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>))}</TableRow>
-                    ))
-                  ) : !vData?.veiculos.length ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum veículo encontrado</TableCell></TableRow>
+                       <TableRow key={i}>{Array.from({ length: canDelete ? 8 : 7 }).map((_, j) => (<TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>))}</TableRow>
+                     ))
+                   ) : !vData?.veiculos.length ? (
+                     <TableRow><TableCell colSpan={canDelete ? 8 : 7} className="text-center py-8 text-muted-foreground">Nenhum veículo encontrado</TableCell></TableRow>
                   ) : (
                     vData.veiculos.map((v: any) => (
                       <TableRow key={v.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedVeiculoId(v.id)}>
@@ -193,8 +222,15 @@ export default function BaseAntiga() {
                             </div>
                           ) : (
                             <span className="text-xs text-muted-foreground">—</span>
-                          )}
-                        </TableCell>
+                         )}
+                         </TableCell>
+                         {canDelete && (
+                           <TableCell>
+                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => handleDelete(e, v.id, v.placa || 'Veículo', 'veiculo')}>
+                               <Trash2 className="h-4 w-4" />
+                             </Button>
+                           </TableCell>
+                         )}
                       </TableRow>
                     ))
                   )}
@@ -323,6 +359,28 @@ export default function BaseAntiga() {
         onClose={() => setSelectedVeiculoId(null)}
         veiculoId={selectedVeiculoId || ''}
       />
+
+      {/* Confirmation Dialog - Delete */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir {deleteConfirm?.tipo === 'associado' ? 'o associado' : 'o veículo'}{' '}
+              <strong>{deleteConfirm?.nome}</strong> da base antiga?
+              {deleteConfirm?.tipo === 'associado' && ' Todos os veículos vinculados também serão excluídos.'}
+              <br /><br />
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
