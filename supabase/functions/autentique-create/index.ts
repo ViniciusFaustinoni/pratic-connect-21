@@ -145,6 +145,7 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
     ${conteudoHTML}
     ${aditivosHTML}
     ${rastreadorHTML}
+    ${indicadorHTML}
     ${assinaturaHTML}
     ${generateFooter(dados)}
   </div>
