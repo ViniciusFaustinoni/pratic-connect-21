@@ -783,15 +783,15 @@ export default function Associados() {
                                 <Eye className="mr-2 h-4 w-4" />
                                 Ver detalhes
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}?edit=true`)}>
+                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
                                 <Edit className="mr-2 h-4 w-4" />
                                 Editar dados
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}?tab=documentos`)}>
+                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
                                 <FileText className="mr-2 h-4 w-4" />
                                 Ver documentos
                               </DropdownMenuItem>
-                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}?tab=boletos`)}>
+                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
                                 <Receipt className="mr-2 h-4 w-4" />
                                 Ver boletos
                               </DropdownMenuItem>
