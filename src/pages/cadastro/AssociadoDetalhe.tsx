@@ -377,9 +377,11 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
     <div className="space-y-4">
       {/* Breadcrumb removido — já existe no header global */}
 
-      <Button variant="ghost" size="sm" className="h-8 text-xs -ml-2" onClick={() => navigate('/cadastro/associados')}>
-        <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> Voltar
-      </Button>
+      {!isModal && (
+        <Button variant="ghost" size="sm" className="h-8 text-xs -ml-2" onClick={() => navigate('/cadastro/associados')}>
+          <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> Voltar
+        </Button>
+      )}
 
       {/* Alerts */}
       {status === 'suspenso' && (
