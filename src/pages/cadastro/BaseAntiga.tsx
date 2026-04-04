@@ -130,10 +130,10 @@ export default function BaseAntiga() {
                 <TableBody>
                   {isLoading ? (
                     Array.from({ length: 5 }).map((_, i) => (
-                      <TableRow key={i}>{Array.from({ length: 7 }).map((_, j) => (<TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>))}</TableRow>
-                    ))
-                  ) : !data?.associados.length ? (
-                    <TableRow><TableCell colSpan={7} className="text-center py-8 text-muted-foreground">Nenhum associado encontrado</TableCell></TableRow>
+                       <TableRow key={i}>{Array.from({ length: canDelete ? 8 : 7 }).map((_, j) => (<TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>))}</TableRow>
+                     ))
+                   ) : !data?.associados.length ? (
+                     <TableRow><TableCell colSpan={canDelete ? 8 : 7} className="text-center py-8 text-muted-foreground">Nenhum associado encontrado</TableCell></TableRow>
                   ) : (
                     data.associados.map((a: any) => (
                       <TableRow key={a.id} className="cursor-pointer hover:bg-muted/50" onClick={() => setSelectedId(a.id)}>
