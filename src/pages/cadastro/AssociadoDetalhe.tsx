@@ -546,13 +546,67 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
               <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold">Contrato</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-sm">
                 <DataField label="Adesão" value={formatDate(associado.data_adesao)} />
-                <DataField label="Contrato" value={associado.contratos?.[0]?.numero || '—'} />
+                <DataField label="Contrato" value={contrato?.numero || associado.contratos?.[0]?.numero || '—'} />
                 <div className="grid grid-cols-2 gap-3">
                   <DataField label="Vencimento" value={`Todo dia ${associado.dia_vencimento || 15}`} />
                   <DataField label="Mensalidade" value={contrato?.valor_mensal ? formatCurrency(contrato.valor_mensal) : '—'} />
                 </div>
+                {(contrato?.pdf_assinado_url || contrato?.pdf_url) && (
+                  <Button
+                    size="sm"
+                    variant="outline"
+                    className="w-full mt-2"
+                    onClick={() => setShowContratoPdf(true)}
+                  >
+                    <FileText className="mr-1.5 h-3.5 w-3.5" />
+                    {contrato?.pdf_assinado_url ? 'Ver Contrato Assinado' : 'Ver Contrato'}
+                  </Button>
+                )}
               </CardContent>
             </Card>
+
+            {/* Modal de visualização do contrato PDF */}
+            <Dialog open={showContratoPdf} onOpenChange={setShowContratoPdf}>
+              <DialogContent className="max-w-4xl max-h-[90vh] overflow-auto">
+                <DialogHeader>
+                  <DialogTitle>Contrato {contrato?.numero || ''}</DialogTitle>
+                </DialogHeader>
+                <div className="flex flex-col items-center py-4">
+                  {(() => {
+                    const pdfUrl = contrato?.pdf_assinado_url || contrato?.pdf_url || '';
+                    return (
+                      <object
+                        data={pdfUrl}
+                        type="application/pdf"
+                        className="w-full h-[60vh] rounded-lg border"
+                      >
+                        <iframe
+                          src={`https://docs.google.com/gview?url=${encodeURIComponent(pdfUrl)}&embedded=true`}
+                          className="w-full h-[60vh] rounded-lg border-0"
+                          title="Contrato PDF"
+                        />
+                      </object>
+                    );
+                  })()}
+                </div>
+                <div className="flex justify-end">
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    asChild
+                  >
+                    <a
+                      href={contrato?.pdf_assinado_url || contrato?.pdf_url || ''}
+                      target="_blank"
+                      rel="noopener noreferrer"
+                      download
+                    >
+                      <FileText className="mr-1.5 h-3.5 w-3.5" /> Baixar PDF
+                    </a>
+                  </Button>
+                </div>
+              </DialogContent>
+            </Dialog>
           </div>
         )}
 

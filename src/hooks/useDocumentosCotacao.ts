@@ -65,7 +65,7 @@ export function useContratoDoAssociado(associadoId: string | undefined) {
 
       const { data, error } = await supabase
         .from('contratos')
-        .select('id, cotacao_id, status, valor_mensal, valor_adesao, dia_vencimento, data_inicio, cliente_cnh_validade')
+        .select('id, cotacao_id, status, valor_mensal, valor_adesao, dia_vencimento, data_inicio, cliente_cnh_validade, pdf_url, pdf_assinado_url, numero')
         .eq('associado_id', associadoId)
         .order('created_at', { ascending: false })
         .limit(1)
