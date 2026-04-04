@@ -52,6 +52,10 @@ export default function VistoriasInstalacoesMon() {
             <Truck className="h-4 w-4" />
             Viagens
           </TabsTrigger>
+          <TabsTrigger value="historico" className="gap-2">
+            <History className="h-4 w-4" />
+            Histórico
+          </TabsTrigger>
         </TabsList>
 
         {manualAtiva && (
@@ -80,6 +84,12 @@ export default function VistoriasInstalacoesMon() {
 
         <TabsContent value="viagens">
           <ViagensTab />
+        </TabsContent>
+
+        <TabsContent value="historico">
+          <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+            <HistoricoAtribuicoesTab />
+          </Suspense>
         </TabsContent>
       </Tabs>
     </div>
