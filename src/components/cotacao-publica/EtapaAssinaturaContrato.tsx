@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback } from 'react';
-import { FileSignature, Loader2, AlertCircle, ExternalLink, RefreshCw, CheckCircle2, Shield, Clock, Mail, MousePointer, PenTool, ArrowRight } from 'lucide-react';
+import { FileSignature, Loader2, AlertCircle, ExternalLink, RefreshCw, CheckCircle2, Shield, Clock, Mail, MousePointer, PenTool, ArrowRight, Copy, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -27,6 +27,26 @@ interface ContratoInfo {
   autentiqueDocumentoId?: string;
   linkAssinatura?: string;
   status?: string;
+}
+
+function CopyLinkButton({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      toast.success('Link copiado!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Erro ao copiar');
+    }
+  };
+  return (
+    <Button variant="outline" size="sm" className="w-full" onClick={handleCopy}>
+      {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+      {copied ? 'Link Copiado!' : 'Copiar Link de Assinatura'}
+    </Button>
+  );
 }
 
 export function EtapaAssinaturaContrato({
@@ -645,7 +665,7 @@ export function EtapaAssinaturaContrato({
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
               transition={{ delay: 0.1 }}
-              className="space-y-2"
+              className="space-y-3"
             >
               <p className="text-xs text-center text-muted-foreground">
                 Ou clique abaixo para assinar diretamente:
@@ -660,6 +680,7 @@ export function EtapaAssinaturaContrato({
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </Button>
+              <CopyLinkButton link={contrato.linkAssinatura} />
             </motion.div>
           )}
 
