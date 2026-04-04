@@ -53,7 +53,7 @@ import { usePlanos } from '@/hooks/usePlanos';
 import { AssociadoFilters } from '@/components/cadastro/AssociadoFilters';
 import { ConfirmacaoAcaoDialog } from '@/components/associados/ConfirmacaoAcaoDialog';
 import { useToast } from '@/hooks/use-toast';
-import { Sheet, SheetContent } from '@/components/ui/sheet';
+import { Dialog, DialogContent } from '@/components/ui/dialog';
 import AssociadoDetalhe from './AssociadoDetalhe';
 
 const statusColors: Record<StatusAssociado, string> = {
