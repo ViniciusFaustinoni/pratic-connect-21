@@ -146,8 +146,14 @@ export default function BaseAntiga() {
                         <TableCell>{a.cidade ? `${a.cidade}/${a.uf}` : '—'}</TableCell>
                         <TableCell>{(a as any).planos?.nome || '—'}</TableCell>
                         <TableCell><Badge className={STATUS_COLORS[a.status] || 'bg-gray-100 text-gray-800'}>{a.status?.replace(/_/g, ' ')}</Badge></TableCell>
-                        <TableCell className="font-mono">{a.codigo_hinova || '—'}</TableCell>
-                      </TableRow>
+                         <TableCell className="font-mono">{a.codigo_hinova || '—'}</TableCell>
+                         {canDelete && (
+                           <TableCell>
+                             <Button variant="ghost" size="icon" className="h-8 w-8 text-destructive hover:text-destructive hover:bg-destructive/10" onClick={(e) => handleDelete(e, a.id, a.nome, 'associado')}>
+                               <Trash2 className="h-4 w-4" />
+                             </Button>
+                           </TableCell>
+                         )}
                     ))
                   )}
                 </TableBody>
