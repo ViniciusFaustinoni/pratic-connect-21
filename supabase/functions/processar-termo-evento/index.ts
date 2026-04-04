@@ -136,6 +136,7 @@ serve(async (req) => {
         ja_pagou: jaPagou,
         ja_assinou_termo: jaAssinouTermo,
         autentique_documento_id: sinistro.autentique_documento_id || null,
+        autentique_url: sinistro.autentique_url || null,
         sinistro: {
           id: sinistro.id,
           protocolo: sinistro.protocolo,

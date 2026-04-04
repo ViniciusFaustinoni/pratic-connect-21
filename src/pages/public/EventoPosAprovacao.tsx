@@ -181,6 +181,7 @@ export default function EventoPosAprovacao() {
             token={token!}
             associado={associado!}
             autentiqueDocumentoId={data.autentique_documento_id}
+            autentiqueUrl={data.autentique_url}
             onAssinado={() => setEtapa('sucesso')}
           />
         )}
