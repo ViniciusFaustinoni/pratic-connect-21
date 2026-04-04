@@ -323,7 +323,7 @@ serve(async (req) => {
     // Buscar o veículo
     const { data: veiculo, error: veicError } = await supabaseAdmin
       .from('veiculos')
-      .select('id, placa, modelo, marca, associado_id')
+      .select('id, placa, modelo, marca, associado_id, associado:associados(cpf)')
       .eq('id', veiculo_id)
       .single();
 
