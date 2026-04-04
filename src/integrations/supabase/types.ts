@@ -22484,6 +22484,89 @@ export type Database = {
           },
         ]
       }
+      servicos_atribuicoes_log: {
+        Row: {
+          atribuido_por: string | null
+          created_at: string | null
+          distancia_km: number | null
+          id: string
+          observacoes: string | null
+          profissional_id: string
+          servico_id: string
+          tipo_atribuicao: string
+        }
+        Insert: {
+          atribuido_por?: string | null
+          created_at?: string | null
+          distancia_km?: number | null
+          id?: string
+          observacoes?: string | null
+          profissional_id: string
+          servico_id: string
+          tipo_atribuicao?: string
+        }
+        Update: {
+          atribuido_por?: string | null
+          created_at?: string | null
+          distancia_km?: number | null
+          id?: string
+          observacoes?: string | null
+          profissional_id?: string
+          servico_id?: string
+          tipo_atribuicao?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "servicos_atribuicoes_log_atribuido_por_fkey"
+            columns: ["atribuido_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_atribuicoes_log_atribuido_por_fkey"
+            columns: ["atribuido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "servicos_atribuicoes_log_atribuido_por_fkey"
+            columns: ["atribuido_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "servicos_atribuicoes_log_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "servicos_atribuicoes_log_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "servicos_atribuicoes_log_profissional_id_fkey"
+            columns: ["profissional_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "servicos_atribuicoes_log_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       sga_health_checks: {
         Row: {
           conexao_ok: boolean

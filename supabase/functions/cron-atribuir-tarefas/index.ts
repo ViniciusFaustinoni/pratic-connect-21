@@ -714,6 +714,19 @@ Aguardamos sua confirmação! ⚡`;
         if (atualizado) {
           console.log(`[cron-atribuir-tarefas] ✓ Serviço ${servico.id} atribuído ao profissional ${prof.vistoriador_id}`);
 
+          // Registrar no log de atribuições
+          try {
+            await supabase.from('servicos_atribuicoes_log').insert({
+              servico_id: servico.id,
+              profissional_id: prof.vistoriador_id,
+              tipo_atribuicao: servico.is_encaixe ? 'encaixe' : 'automatica',
+              distancia_km: servico.distancia_km || null,
+              observacoes: servico.is_encaixe ? 'Encaixe automático' : 'Atribuição automática por proximidade',
+            });
+          } catch (logErr) {
+            console.error(`[cron-atribuir-tarefas] Erro ao registrar log de atribuição:`, logErr);
+          }
+
           // SINCRONIZAR COM TABELA DE ORIGEM (instalacoes ou vistorias)
           if (servico.instalacao_origem_id) {
             console.log(`[cron-atribuir-tarefas] Sincronizando com instalacoes ${servico.instalacao_origem_id}`);
