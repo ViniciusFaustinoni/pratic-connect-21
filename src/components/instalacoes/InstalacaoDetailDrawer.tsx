@@ -263,7 +263,7 @@ export function InstalacaoDetailDrawer({
               </Badge>
             )}
           </div>
-        </DrawerHeader>
+        </DialogHeader>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
