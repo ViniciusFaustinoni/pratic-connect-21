@@ -105,7 +105,7 @@ export function AssociadoResumoTab({
       </div>
 
       {/* Situação do Associado */}
-      {situacao && <AssociadoSituacaoCard situacao={situacao} />}
+      {situacao && <AssociadoSituacaoCard situacao={situacao} associado={associado} contrato={contrato} resumoFinanceiro={resumoFinanceiro} />}
 
       {/* Tipo de Entrada */}
       {associado?.id && <OrigemCadastroCard associadoId={associado.id} canLinkToAssociado={canLinkToAssociado} />}
