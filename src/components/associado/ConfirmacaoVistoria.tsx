@@ -49,11 +49,8 @@ export function ConfirmacaoVistoria({
   const [progressoGeracao, setProgressoGeracao] = useState<ProgressoEtapa>(null);
   const [linkGerado, setLinkGerado] = useState<string | null>(null);
   
-  // Estados para reenvio de email após 30 segundos
-  const [showResendOption, setShowResendOption] = useState(false);
-  const [timeWaiting, setTimeWaiting] = useState(0);
-  const [isResending, setIsResending] = useState(false);
-  const [showEmailIncorrect, setShowEmailIncorrect] = useState(false);
+  // Estado para copiar link
+  const [copied, setCopied] = useState(false);
   
   // Estado para botão de sincronização manual (público)
   const [showSyncOption, setShowSyncOption] = useState(false);
