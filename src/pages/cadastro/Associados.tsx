@@ -981,7 +981,7 @@ export default function Associados() {
 
         {/* Detalhe do Associado em Dialog centralizado */}
         <Dialog open={!!detalheAssociadoId} onOpenChange={(open) => !open && setDetalheAssociadoId(null)}>
-          <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto">
+          <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto overflow-x-hidden">
             {detalheAssociadoId && (
               <div className="p-4 sm:p-6">
                 <AssociadoDetalhe 
