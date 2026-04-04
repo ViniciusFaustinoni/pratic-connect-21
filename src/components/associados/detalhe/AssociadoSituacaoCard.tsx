@@ -98,7 +98,16 @@ export function AssociadoSituacaoCard({ situacao, associado, contrato, resumoFin
                       <span className="text-muted-foreground whitespace-nowrap">· {tipoLabel}</span>
                     </div>
                     <div className="flex items-center gap-2 ml-auto">
-                      <span className="text-muted-foreground whitespace-nowrap">{item.dias}d</span>
+                      {item.emCarencia ? (() => {
+                        const hoje = new Date();
+                        hoje.setHours(0, 0, 0, 0);
+                        const fim = new Date(item.fim);
+                        fim.setHours(0, 0, 0, 0);
+                        const restantes = Math.max(0, Math.ceil((fim.getTime() - hoje.getTime()) / (1000 * 60 * 60 * 24)));
+                        return <span className="text-amber-700 font-medium whitespace-nowrap">{restantes}d restantes</span>;
+                      })() : (
+                        <span className="text-muted-foreground whitespace-nowrap">{item.dias}d</span>
+                      )}
                       <span className="text-muted-foreground whitespace-nowrap">até {formatDate(item.fim)}</span>
                       {item.emCarencia ? (
                         <Badge variant="secondary" className="text-[10px] px-1.5 py-0 bg-amber-500/10 text-amber-700 border-0">
