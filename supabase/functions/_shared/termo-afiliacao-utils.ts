@@ -165,6 +165,11 @@ export interface TrocaTitularidadeData {
   cenario_label: string;
 }
 
+export interface IndicadorData {
+  nome: string;
+  cpf?: string;
+}
+
 export interface TermoAfiliacaoData {
   cliente: ClienteData;
   veiculo: VeiculoData;
@@ -172,6 +177,7 @@ export interface TermoAfiliacaoData {
   contrato: ContratoData;
   empresa: EmpresaData;
   consultor?: { nome: string };
+  indicador?: IndicadorData;
   configRastreador?: {
     fipeMinCarro: number;
     fipeMinMoto: number;
