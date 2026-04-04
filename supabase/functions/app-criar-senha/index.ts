@@ -180,8 +180,14 @@ serve(async (req) => {
           cpf: associado.cpf,
           tipo: 'associado',
           ativo: true,
-          bloqueado: false
+          bloqueado: false,
+          primeiro_acesso: false
         });
+    } else {
+      await supabase
+        .from('profiles')
+        .update({ primeiro_acesso: false })
+        .eq('user_id', userId);
     }
 
     // 8. Adicionar role de associado
