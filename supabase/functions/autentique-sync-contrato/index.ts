@@ -559,7 +559,8 @@ serve(async (req) => {
           success: true, 
           atualizado: true, 
           mensagem: "Documento foi visualizado",
-          status: "visualizado"
+          status: "visualizado",
+          autentique_url: autentiqueUrlFinal
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
