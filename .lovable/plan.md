@@ -1,43 +1,37 @@
 
 
-# Dados da CNH não exibidos na aba Dados Pessoais
+# Mostrar Mapa Automaticamente na Aba Rastreador
 
-## Diagnóstico
+## Situação Atual
 
-Os campos `cnh_numero` e `cnh_categoria` estão **NULL** no banco de dados para este associado. Apenas `cnh_validade` tem valor (2033-01-18).
+A aba "Rastreador" no modal de detalhes do veículo já tem o componente `MapaRastreador`, mas ele fica oculto atrás de um botão "Ver no Mapa" (toggle `showMapa`). O mapa deveria ser exibido automaticamente quando há rastreador.
 
-O OCR **extrai** corretamente os dados da CNH (`numero_registro`, `categoria`, `validade`), mas essa extração só é gravada na tabela `associados` quando o documento é enviado pelo fluxo de **contratação** (`useCotacaoContratacao.ts`). Documentos enviados por outros caminhos (upload direto, fila de documentos) **não atualizam** os campos de CNH do associado.
+## Alteração
 
-## Solução
+### `src/components/cadastro/VeiculoDetalhesModal.tsx` (linhas ~306-316)
 
-Criar um mecanismo que, ao processar OCR de uma CNH (em qualquer fluxo), atualize automaticamente os campos `cnh_numero`, `cnh_categoria` e `cnh_validade` na tabela `associados`.
+Remover o botão toggle e exibir o mapa diretamente quando há rastreador:
 
-### 1. Alterar `src/hooks/useContratoDocumentos.ts`
+```tsx
+// DE:
+<Button variant="outline" onClick={() => setShowMapa(!showMapa)}>
+  <MapPin /> {showMapa ? 'Ocultar Mapa' : 'Ver no Mapa'}
+</Button>
+{showMapa && (
+  <div className="mt-4 rounded-lg overflow-hidden border">
+    <MapaRastreador rastreadorId={rastreador.id} altura="400px" />
+  </div>
+)}
 
-Após o OCR retornar com sucesso para um documento tipo `cnh`, buscar o `associado_id` do contrato e atualizar os campos CNH no registro do associado:
-
-```text
-Se tipo === 'cnh' && ocrResult.sucesso && ocrResult.dados:
-  → buscar associado_id pelo contrato_id
-  → update associados SET cnh_numero, cnh_categoria, cnh_validade
-    WHERE id = associado_id
-    (só atualizar campos que vieram do OCR e que estejam NULL no associado)
+// PARA:
+<div className="rounded-lg overflow-hidden border">
+  <MapaRastreador rastreadorId={rastreador.id} altura="400px" />
+</div>
 ```
 
-### 2. Alterar `src/hooks/useUploadDocumento.ts` (upload direto)
-
-Mesmo tratamento: após OCR de CNH com sucesso, gravar os dados extraídos no associado.
-
-### 3. Alterar a edge function `document-ocr` (opcional mas recomendado)
-
-Garantir que o campo `categoria` seja retornado no objeto `dados` da resposta (já está no prompt, verificar se chega no resultado).
-
-## Dados existentes
-
-Para o associado Marcus Vinicius que já tem documentos processados, verificar se há `ocr_resultado` com dados da CNH salvos nos documentos — se sim, rodar um script de correção para preencher os campos `cnh_numero` e `cnh_categoria` a partir dos dados já extraídos.
+Remover o state `showMapa` se não for usado em outro lugar.
 
 ## Impacto
-- 2 arquivos alterados (`useContratoDocumentos.ts`, `useUploadDocumento.ts`)
-- 0 migrations
-- Dados existentes podem ser corrigidos via script pontual
+- 1 arquivo alterado
+- Mapa aparece imediatamente ao abrir a aba Rastreador
 
