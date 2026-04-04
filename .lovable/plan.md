@@ -1,56 +1,59 @@
 
 
-# Corrigir Botão de Assinatura Direta na Página Pública
+# Corrigir Link de Assinatura Autentique (DNS_PROBE_FINISHED_NXDOMAIN)
 
 ## Problema
-Na etapa "Aguardando Assinatura" da página pública de contratação, o botão "Assinar Contrato Agora" (link direto para o Autentique) não aparece. O botão está condicionado a `contrato?.linkAssinatura`, que pode ser `null` em dois cenários:
+O fallback `https://assinar.autentique.com.br/{public_id}` está errado — esse domínio não existe. Quando a API do Autentique não retorna `short_link` na criação ou no retry, o sistema grava essa URL inválida no banco.
 
-1. A Edge Function `autentique-create` retorna `signatureLink: null` porque a API do Autentique nem sempre retorna o `short_link` imediatamente na criação do documento
-2. Ao recarregar a página, o polling verifica apenas o `status` do contrato mas nunca re-busca o `autentique_url` do banco para atualizar o estado local
+A solução correta é usar a mutation `createLinkToSignature(public_id)` da API do Autentique para gerar o `short_link` real.
 
 ## Solução
 
-### `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`
+### `supabase/functions/autentique-create/index.ts`
 
-**1. Polling deve atualizar o `linkAssinatura`**
-No `useEffect` de polling (linha ~251), ao consultar o contrato no banco (linha ~277), também buscar `autentique_url` e atualizar o estado do `contrato` se o link estiver disponível mas ainda não estiver no estado local:
+**1. Substituir fallback de URL construída por chamada à mutation `createLinkToSignature`**
 
+Em dois locais do arquivo:
+
+**Linha ~194 (busca de documento existente):** Substituir:
 ```typescript
-const { data } = await publicSupabase
-  .from('contratos')
-  .select('status, autentique_url')  // adicionar autentique_url
-  .eq('id', contrato.id)
-  .maybeSingle();
-
-// Atualizar linkAssinatura se disponível e não setado
-if (data?.autentique_url && !contrato?.linkAssinatura) {
-  setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
+if (!signatureLink && sig?.public_id) {
+  signatureLink = `https://assinar.autentique.com.br/${sig.public_id}`;
+}
+```
+Por:
+```typescript
+if (!signatureLink && sig?.public_id) {
+  const createLinkMutation = `mutation { createLinkToSignature(public_id: "${sig.public_id}") { short_link } }`;
+  const linkResp = await fetch(AUTENTIQUE_API_URL, {
+    method: "POST",
+    headers: { "Authorization": `Bearer ${autentiqueApiKey}`, "Content-Type": "application/json" },
+    body: JSON.stringify({ query: createLinkMutation }),
+  });
+  const linkResult = await linkResp.json();
+  signatureLink = linkResult?.data?.createLinkToSignature?.short_link || null;
 }
 ```
 
-**2. Fallback após envio para Autentique**
-Após chamar `autentique-create`, se `signatureLink` for null, agendar uma re-busca do `autentique_url` do banco após 3 segundos (a API do Autentique pode demorar para gerar o short_link):
-
+**Linha ~737 (retry após criação):** Adicionar a mesma mutation como segundo fallback se o retry de query também não retornar `short_link`:
 ```typescript
-if (!linkAssinatura) {
-  setTimeout(async () => {
-    const { data: retry } = await publicSupabase
-      .from('contratos')
-      .select('autentique_url')
-      .eq('id', contratoId)
-      .maybeSingle();
-    if (retry?.autentique_url) {
-      setContrato(prev => prev ? { ...prev, linkAssinatura: retry.autentique_url } : prev);
-    }
-  }, 3000);
+if (!signatureLink) {
+  // Tentar gerar link via mutation createLinkToSignature
+  const publicId = retryData?.data?.document?.signatures?.[0]?.public_id;
+  if (publicId) {
+    const createLinkMutation = `mutation { createLinkToSignature(public_id: "${publicId}") { short_link } }`;
+    // ... fetch e extrair short_link
+  }
 }
 ```
 
-**3. Verificação manual também atualiza o link**
-Na função `verificarManualmente` (linha ~310), também buscar `autentique_url` e atualizar o estado.
+Também atualizar o retry query para incluir `public_id` no select: `signatures { public_id link { short_link } }`.
+
+### Correção de dados existentes
+Executar query SQL para identificar contratos com `autentique_url` contendo o domínio errado e limpar para que o polling do frontend re-busque via a edge function corrigida.
 
 ## Arquivo alterado
 | Arquivo | Ação |
 |---------|------|
-| `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx` | Polling e fallback para buscar/exibir link de assinatura |
+| `supabase/functions/autentique-create/index.ts` | Substituir fallback por `createLinkToSignature` mutation |
 
