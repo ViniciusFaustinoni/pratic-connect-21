@@ -1,40 +1,74 @@
 
 
-# Mostrar Fotos do Instalador + Autovistoria na Aba Documentos
+# Aba Histórico de Atribuições em Serviços de Campo
 
 ## Problema
-A aba Documentos usa `useFotosAutovistoriaCotacao` que busca apenas fotos da tabela `cotacoes_vistoria_fotos` (autovistoria do associado). Fotos do instalador ficam na tabela `vistoria_fotos` (via `vistorias`) e não são exibidas.
+Não existe registro nem visualização do histórico de atribuições (manuais ou automáticas) de serviços a profissionais.
 
 ## Solução
-Substituir `useFotosAutovistoriaCotacao` por `useFotosVistoriaUnificada` **e** manter fallback para autovistoria, mostrando **ambas** as galerias quando existirem.
 
-## Alterações
+### 1. Migração SQL — Criar tabela `servicos_atribuicoes_log`
+Tabela dedicada para registrar cada atribuição:
 
-### 1. `src/hooks/useFotosAutovistoria.ts` — Retornar ambas as fontes
-Modificar `useFotosVistoriaUnificada` para retornar fotos de **ambas** as tabelas (não apenas priorizar uma). Adicionar campo `fotosAutovistoria` ao retorno, buscando `cotacoes_vistoria_fotos` mesmo quando `vistoria_fotos` tem dados.
+```sql
+CREATE TABLE servicos_atribuicoes_log (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  servico_id uuid REFERENCES servicos(id) ON DELETE CASCADE NOT NULL,
+  profissional_id uuid REFERENCES profiles(id) NOT NULL,
+  tipo_atribuicao text NOT NULL DEFAULT 'automatica', -- 'manual' ou 'automatica'
+  atribuido_por uuid REFERENCES profiles(id), -- NULL = automático, preenchido = quem atribuiu manualmente
+  distancia_km numeric,
+  observacoes text,
+  created_at timestamptz DEFAULT now()
+);
 
-### 2. `src/pages/cadastro/AssociadoDetalhe.tsx`
-- Trocar `useFotosAutovistoriaCotacao(cotacaoId)` por `useFotosVistoriaUnificada({ contratoId: contrato?.id, cotacaoId })`
-- Renderizar **duas galerias separadas**:
-  - "Galeria do Instalador" — fotos de `vistoria_fotos` (quando existirem)
-  - "Galeria de Autovistoria" — fotos de `cotacoes_vistoria_fotos` (quando existirem)
-- Atualizar contadores para somar ambas as fontes
+ALTER TABLE servicos_atribuicoes_log ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated users can view logs" ON servicos_atribuicoes_log FOR SELECT TO authenticated USING (true);
+CREATE POLICY "System can insert logs" ON servicos_atribuicoes_log FOR INSERT TO authenticated WITH CHECK (true);
 
-## Layout esperado
-```text
-┌─────────────────────────────────┐
-│ 📷 Galeria do Instalador   [12]│
-│ Exterior (5)  Interior (4) ... │
-│ [img] [img] [img] [vid] ...    │
-├─────────────────────────────────┤
-│ 📷 Galeria de Autovistoria  [3]│
-│ Outros (1)                     │
-│ [img] [vid] ...                │
-└─────────────────────────────────┘
+CREATE INDEX idx_atribuicoes_log_created ON servicos_atribuicoes_log(created_at DESC);
+CREATE INDEX idx_atribuicoes_log_servico ON servicos_atribuicoes_log(servico_id);
 ```
 
-## Impacto
-- 2 arquivos alterados
-- Instalador e autovistoria exibidos lado a lado
-- Nenhuma funcionalidade perdida
+### 2. Registrar atribuições automáticas — `cron-atribuir-tarefas/index.ts`
+Após atribuição bem-sucedida (~linha 714), inserir registro no log:
+```typescript
+await supabase.from('servicos_atribuicoes_log').insert({
+  servico_id: servico.id,
+  profissional_id: prof.vistoriador_id,
+  tipo_atribuicao: tipoAtribuicao, // 'hoje', 'amanha', 'encaixe'
+  distancia_km: servico.distancia_km,
+});
+```
+
+### 3. Registrar atribuições manuais — `useAtribuicaoManual.ts`
+No `useAtribuirServicoManual`, após update com sucesso, inserir log com `tipo_atribuicao: 'manual'` e `atribuido_por` = usuário logado.
+
+### 4. Hook `useHistoricoAtribuicoes` — novo arquivo
+Query na tabela `servicos_atribuicoes_log` com joins em `servicos` (tipo, associado, veículo), `profiles` (profissional) e `profiles` (atribuidor). Suporte a filtros por data, tipo de atribuição e profissional. Paginação.
+
+### 5. Componente `HistoricoAtribuicoesTab` — novo arquivo
+Tabela com colunas:
+- Data/Hora
+- Tipo Serviço (instalação/vistoria/retirada)
+- Associado / Placa
+- Profissional atribuído
+- Tipo (badge: Manual / Automática / Encaixe)
+- Atribuído por (nome ou "Sistema")
+- Distância (km)
+
+Filtros: período, tipo de atribuição, profissional.
+
+### 6. `VistoriasInstalacoesMon.tsx` — Adicionar aba
+Nova tab "Histórico" com ícone `History`, carregando `HistoricoAtribuicoesTab` via lazy import.
+
+## Arquivos
+| Arquivo | Ação |
+|---------|------|
+| Migração SQL | Criar tabela `servicos_atribuicoes_log` |
+| `supabase/functions/cron-atribuir-tarefas/index.ts` | Inserir log após atribuição |
+| `src/hooks/useAtribuicaoManual.ts` | Inserir log após atribuição manual |
+| `src/hooks/useHistoricoAtribuicoes.ts` | Novo hook de consulta |
+| `src/components/monitoramento/HistoricoAtribuicoesTab.tsx` | Novo componente |
+| `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` | Adicionar aba |
 
