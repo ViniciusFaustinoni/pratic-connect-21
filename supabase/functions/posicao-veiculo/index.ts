@@ -191,21 +191,45 @@ async function getPosicaoSoftruckComRetry(
   throw new Error('Erro inesperado ao buscar posição');
 }
 
-// Buscar posição Rede Veículos
+// Converter data no formato "dd/MM/yyyy HH:mm:ss" para ISO
+function parseDateBR(dateStr: string): string {
+  if (!dateStr) return new Date().toISOString();
+  // Formato: "31/03/2026 22:15:08"
+  const match = dateStr.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+  if (match) {
+    const [, dia, mes, ano, hora, min, seg] = match;
+    return new Date(`${ano}-${mes}-${dia}T${hora}:${min}:${seg}-03:00`).toISOString();
+  }
+  // Se já estiver em formato ISO ou outro, retornar como está
+  return dateStr;
+}
+
+// Buscar posição Rede Veículos via POST /obterUltimaPosicaoValida/
 async function getPosicaoRedeVeiculos(
   token: string,
   codigoRastreador: string,
-  baseUrl: string
+  baseUrl: string,
+  placa?: string,
+  cpfCnpj?: string
 ): Promise<PosicaoPadrao> {
-  const url = `${baseUrl}/veiculos/${codigoRastreador}/posicao`;
+  const url = `${baseUrl}/obterUltimaPosicaoValida/`;
+
+  const payload = JSON.stringify({
+    chassi: "",
+    placa: placa || "",
+    imei: codigoRastreador || "",
+    cpfCnpjCliente: cpfCnpj || ""
+  });
+
+  console.log(`[RedeVeiculos] POST ${url} imei=${codigoRastreador} placa=${placa || ''}`);
 
   const response = await fetch(url, {
-    method: 'GET',
+    method: 'POST',
     headers: {
       'Authorization': `Bearer ${token}`,
-      'Content-Type': 'application/json',
-      'Accept': 'application/json',
-    }
+      'Content-Type': 'application/x-www-form-urlencoded',
+    },
+    body: `json=${encodeURIComponent(payload)}`
   });
 
   if (!response.ok) {
@@ -213,21 +237,39 @@ async function getPosicaoRedeVeiculos(
     throw new Error(`Erro Rede Veículos ${response.status}: ${error}`);
   }
 
-  const data = await response.json();
+  const rawData = await response.json();
+  // A resposta vem como array: [{error, message: {...}}]
+  const item = Array.isArray(rawData) ? rawData[0] : rawData;
 
-  // Mapear resposta para formato padronizado
+  if (item?.error === "true" || item?.error === true) {
+    throw new Error(`Rede Veículos retornou erro: ${JSON.stringify(item)}`);
+  }
+
+  const data = item?.message || item;
+
+  if (!data?.latitude || !data?.longitude) {
+    throw new Error('Coordenadas ausentes na resposta Rede Veículos');
+  }
+
+  const dataPosicao = parseDateBR(data.dataGPRS || data.dataGPS || '');
+
   return {
-    latitude: parseFloat(data.latitude || data.lat || 0),
-    longitude: parseFloat(data.longitude || data.lng || data.lon || 0),
-    velocidade: parseInt(data.velocidade || data.speed || 0),
-    direcao: data.direcao || data.heading || data.curso,
-    ignicao: Boolean(data.ignicao || data.ignition || data.ign),
-    data_posicao: data.data_hora || data.timestamp || new Date().toISOString(),
+    latitude: parseFloat(data.latitude),
+    longitude: parseFloat(data.longitude),
+    velocidade: parseInt(data.velocidade || '0', 10),
+    direcao: undefined,
+    ignicao: data.ignicaoLigada === 'S',
+    data_posicao: dataPosicao,
     dados_extras: {
-      odometer: data.odometro || data.hodometro,
-      battery: data.bateria || data.battery,
-      gsm: data.sinal || data.gsm,
-      altitude: data.altitude,
+      endereco: data.endereco,
+      voltagemBateria: data.voltagemBateria,
+      movimento: data.movimento,
+      bloqueado: data.bloqueado,
+      statusGPRS: data.statusGPRS,
+      statusGPS: data.statusGPS,
+      imei: data.imei,
+      placa: data.placa,
+      chassi: data.chassi,
     }
   };
 }
