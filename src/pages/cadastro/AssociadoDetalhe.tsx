@@ -294,7 +294,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
       toast.success('Cancelamento registrado');
       setRastreadorModalOpen(false);
       setRastreadorModalData(null);
-      navigate('/cadastro/associados');
+      if (isModal && onClose) onClose(); else navigate('/cadastro/associados');
     } catch (error) {
       console.error('[handleConfirmRastreadorModal] Erro:', error);
       toast.error('Erro ao processar cancelamento');
