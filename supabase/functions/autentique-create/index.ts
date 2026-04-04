@@ -100,8 +100,34 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
   const rastreadorResult = exigeRastreador(dados.veiculo, dados.configRastreador);
   const rastreadorHTML = rastreadorResult.exige ? generateSecaoRastreador(dados) : '';
   
+  // Injetar seção de indicador se existir nos dados
+  let indicadorHTML = '';
+  if (dados.indicador?.nome) {
+    indicadorHTML = `
+    <table class="table-valores" style="margin-top: 15pt; width: 100%; border-collapse: collapse;">
+      <tr class="header-row">
+        <td colspan="2" style="background-color: #f0f0f0; font-weight: bold; padding: 8px;">ASSOCIADO INDICADOR</td>
+      </tr>
+      <tr>
+        <td style="padding: 6px; border: 1px solid #ddd; width: 30%;">Nome:</td>
+        <td style="padding: 6px; border: 1px solid #ddd;">${dados.indicador.nome}</td>
+      </tr>
+      ${dados.indicador.cpf ? `
+      <tr>
+        <td style="padding: 6px; border: 1px solid #ddd;">CPF:</td>
+        <td style="padding: 6px; border: 1px solid #ddd;">${dados.indicador.cpf.replace(/(\d{3})(\d{3})(\d{3})(\d{2})/, '$1.$2.$3-$4')}</td>
+      </tr>` : ''}
+      ${dados.consultor?.nome ? `
+      <tr>
+        <td style="padding: 6px; border: 1px solid #ddd;">Consultor:</td>
+        <td style="padding: 6px; border: 1px solid #ddd;">${dados.consultor.nome}</td>
+      </tr>` : ''}
+    </table>`;
+    console.log('[autentique-create] Seção indicador injetada no HTML do template DB');
+  }
+
   // 5. Só injetar assinatura padrão se o conteúdo + aditivos não contiverem uma
-  const conteudoCompleto = conteudoHTML + (aditivosHTML || '') + rastreadorHTML;
+  const conteudoCompleto = conteudoHTML + (aditivosHTML || '') + rastreadorHTML + indicadorHTML;
   const assinaturaHTML = hasSignatureArea(conteudoCompleto) ? '' : generateSecaoAssinatura(dados);
   
   // 6. Montar HTML completo
@@ -119,6 +145,7 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
     ${conteudoHTML}
     ${aditivosHTML}
     ${rastreadorHTML}
+    ${indicadorHTML}
     ${assinaturaHTML}
     ${generateFooter(dados)}
   </div>
