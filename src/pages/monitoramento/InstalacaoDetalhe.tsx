@@ -84,8 +84,7 @@ export default function InstalacaoDetalhePage() {
     if (!fotosData?.fotosInstalador && !fotosData?.fotosAutovistoria) return null;
     const todasFotos = [...(fotosData?.fotosInstalador || []), ...(fotosData?.fotosAutovistoria || [])];
     return agruparFotosPorCategoria(todasFotos);
-
-  // Calcular se está atrasada - DEVE vir ANTES de qualquer return condicional
+  }, [fotosData?.fotosInstalador, fotosData?.fotosAutovistoria]);
   const isAtrasada = useMemo(() => {
     if (!instalacao) return false;
     if (['concluida', 'cancelada'].includes(instalacao.status)) return false;
