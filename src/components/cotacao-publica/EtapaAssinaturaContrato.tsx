@@ -229,6 +229,20 @@ export function EtapaAssinaturaContrato({
       } : null);
 
       setEtapaInterna('aguardando_assinatura');
+
+      // Fallback: se link não veio na resposta, buscar do banco após 3s
+      if (!linkAssinatura) {
+        setTimeout(async () => {
+          const { data: retry } = await publicSupabase
+            .from('contratos')
+            .select('autentique_url')
+            .eq('id', contratoId)
+            .maybeSingle();
+          if (retry?.autentique_url) {
+            setContrato(prev => prev ? { ...prev, linkAssinatura: retry.autentique_url } : prev);
+          }
+        }, 3000);
+      }
     } catch (error: any) {
       console.error('[EtapaAssinatura] Erro no Autentique:', error);
       setErro(error.message || 'Erro ao enviar para assinatura digital');
@@ -276,11 +290,16 @@ export function EtapaAssinaturaContrato({
         // Fallback: verificar diretamente no banco
         const { data, error } = await publicSupabase
           .from('contratos')
-          .select('status')
+          .select('status, autentique_url')
           .eq('id', contrato.id)
           .maybeSingle();
 
         if (error || !data) return;
+
+        // Atualizar linkAssinatura se disponível e não setado
+        if (data.autentique_url && !contrato?.linkAssinatura) {
+          setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
+        }
 
         if (data?.status === 'assinado' || data?.status === 'ativo') {
           console.log('[EtapaAssinatura] Contrato assinado detectado via banco!');
@@ -319,6 +338,11 @@ export function EtapaAssinaturaContrato({
       });
 
       console.log('[EtapaAssinatura] Resultado sync manual:', syncResult);
+
+      // Atualizar link se veio na sync
+      if (syncResult?.autentique_url && !contrato?.linkAssinatura) {
+        setContrato(prev => prev ? { ...prev, linkAssinatura: syncResult.autentique_url } : prev);
+      }
 
       // CORRIGIDO: Verificar campo 'status' em vez de 'novoStatus'
       if (syncResult?.status === 'assinado') {
