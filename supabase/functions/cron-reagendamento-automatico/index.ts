@@ -196,7 +196,7 @@ Deno.serve(async (req) => {
     // ✅ CORRIGIDO: Só marca como nao_compareceu quando a janela de atendimento realmente venceu
     const { data: servicos, error } = await supabase
       .from("servicos")
-      .select("id, tipo, status, reagendamento_enviado_em, created_at, hora_agendada, periodo")
+      .select("id, tipo, status, reagendamento_enviado_em, created_at, hora_agendada, periodo, associado_id, veiculo_id")
       .eq("data_agendada", hoje)
       .eq("status", "agendada")
       .is("reagendamento_enviado_em", null)
