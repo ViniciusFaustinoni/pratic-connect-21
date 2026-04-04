@@ -198,15 +198,33 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       diasAtraso: v.diasAtraso,
     }));
 
-    // Build per-item carências
+    // Build per-item carências — items with carencia_ativa use their own days, others inherit contract period
     const allCarenciaItems = [...(carenciasBeneficios || []), ...(carenciasCoberturas || [])];
-    const carenciasItens: CarenciaItem[] = carenciaInicio
+    const carenciasItens: CarenciaItem[] = (carenciaInicio && carenciaFim)
       ? allCarenciaItems.map(item => {
           const inicio = new Date(carenciaInicio!);
-          const fim = new Date(inicio);
-          fim.setDate(fim.getDate() + (item.dias || 0));
+          let fim: Date;
+          let dias: number;
+          let carenciaTipo = item.carenciaTipo;
+
+          if (item.carenciaAtiva && item.dias > 0) {
+            // Item has specific carência config — use its own days
+            fim = new Date(inicio);
+            fim.setDate(fim.getDate() + item.dias);
+            dias = item.dias;
+          } else {
+            // Inherit general contract carência period
+            fim = new Date(carenciaFim!);
+            dias = Math.round((fim.getTime() - inicio.getTime()) / (1000 * 60 * 60 * 24));
+            carenciaTipo = 'liberacao';
+          }
+
           return {
-            ...item,
+            nome: item.nome,
+            tipo: item.tipo,
+            carenciaTipo,
+            dias,
+            multiplicador: item.multiplicador,
             inicio: carenciaInicio!,
             fim: fim.toISOString().split('T')[0],
             emCarencia: fim > now,
