@@ -751,6 +751,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                       ))}
                     </TableBody>
                   </Table>
+                  </div>
                 ) : (
                   <div className="flex flex-col items-center justify-center py-10">
                     <FileText className="h-8 w-8 text-muted-foreground/40" />
