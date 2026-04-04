@@ -235,8 +235,9 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const { data: cobrancasData, isLoading: isLoadingCobrancas } = useCobrancasAssociado(id);
   const { data: historico, isLoading: isLoadingHistorico } = useAssociadoHistoricoCompleto(id);
   const { data: documentosCotacao, isLoading: isLoadingDocsCotacao } = useDocumentosCotacao(cotacaoId);
-  const { data: fotosAutovistoria, isLoading: isLoadingFotos } = useFotosAutovistoriaCotacao(cotacaoId);
-  const fotosAgrupadas = fotosAutovistoria ? agruparFotosPorCategoria(fotosAutovistoria) : null;
+  const { data: vistoriaUnificada, isLoading: isLoadingFotos } = useFotosVistoriaUnificada({ contratoId: contrato?.id, cotacaoId });
+  const fotosInstaladorAgrupadas = vistoriaUnificada?.fotosInstalador?.length ? agruparFotosPorCategoria(vistoriaUnificada.fotosInstalador) : null;
+  const fotosAutovistoriaAgrupadas = vistoriaUnificada?.fotosAutovistoria?.length ? agruparFotosPorCategoria(vistoriaUnificada.fotosAutovistoria) : null;
   const { data: veiculosComRastreador } = useVeiculosComRastreador(id);
 
   const { suspenderAssociado, reativarAssociado, isSuspendendo, isReativando } = useAssociadoActions();
