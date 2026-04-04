@@ -297,6 +297,63 @@ export function MapaVistoriasContent() {
     window.open(`https://www.google.com/maps?q=${lat},${lng}`, "_blank");
   };
 
+  // Distância em metros entre dois pontos (Haversine simplificado)
+  const distanciaMetros = useCallback((lat1: number, lng1: number, lat2: number, lng2: number) => {
+    const R = 6371000;
+    const dLat = (lat2 - lat1) * Math.PI / 180;
+    const dLng = (lng2 - lng1) * Math.PI / 180;
+    const a = Math.sin(dLat / 2) ** 2 + Math.cos(lat1 * Math.PI / 180) * Math.cos(lat2 * Math.PI / 180) * Math.sin(dLng / 2) ** 2;
+    return R * 2 * Math.atan2(Math.sqrt(a), Math.sqrt(1 - a));
+  }, []);
+
+  // Handler para quando um pin de serviço é solto após arrastar
+  const handleMarkerDragEnd = useCallback((vistoria: VistoriaMapa, event: L.DragEndEvent) => {
+    const marker = event.target as L.Marker;
+    const dropPos = marker.getLatLng();
+    
+    // Encontrar técnico mais próximo do ponto de drop (raio de 500m)
+    const RAIO_PROXIMIDADE = 500; // metros
+    let tecnicoMaisProximo: VistoriadorLocalizacao | null = null;
+    let menorDistancia = Infinity;
+
+    for (const tec of vistoriadoresRef.current) {
+      const dist = distanciaMetros(dropPos.lat, dropPos.lng, tec.latitude, tec.longitude);
+      if (dist < RAIO_PROXIMIDADE && dist < menorDistancia) {
+        menorDistancia = dist;
+        tecnicoMaisProximo = tec;
+      }
+    }
+
+    // Voltar o marcador para a posição original
+    if (vistoria.latitude && vistoria.longitude) {
+      marker.setLatLng([vistoria.latitude, vistoria.longitude]);
+    }
+
+    if (tecnicoMaisProximo) {
+      setDragConfirmation({
+        servicoId: vistoria.id,
+        servicoPlaca: vistoria.veiculo_placa,
+        profissionalId: tecnicoMaisProximo.vistoriador_id,
+        profissionalNome: tecnicoMaisProximo.vistoriador_nome,
+      });
+    } else {
+      toast.error('Solte o pin sobre um técnico para atribuir', {
+        description: 'Arraste o serviço até o marcador azul de um técnico no mapa.',
+        duration: 3000,
+      });
+    }
+  }, [distanciaMetros]);
+
+  // Confirmar atribuição via drag
+  const confirmarAtribuicaoDrag = useCallback(() => {
+    if (!dragConfirmation) return;
+    atribuirMutation.mutate({
+      servicoId: dragConfirmation.servicoId,
+      profissionalId: dragConfirmation.profissionalId,
+    });
+    setDragConfirmation(null);
+  }, [dragConfirmation, atribuirMutation]);
+
   const centroInicial: [number, number] = [-22.9068, -43.1729];
 
   // Filtros sidebar content
