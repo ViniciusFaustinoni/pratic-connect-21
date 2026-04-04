@@ -858,7 +858,11 @@ export function MapaVistoriasContent() {
       </AlertDialogContent>
     </AlertDialog>
   );
+
+  if (isMobile) {
     return (
+      <>
+      {renderConfirmationDialog()}
       <div className="relative h-full flex flex-col">
         {/* Mapa fullscreen */}
         <div className="flex-1 rounded-lg overflow-hidden relative">
