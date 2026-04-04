@@ -359,6 +359,28 @@ export default function BaseAntiga() {
         onClose={() => setSelectedVeiculoId(null)}
         veiculoId={selectedVeiculoId || ''}
       />
+
+      {/* Confirmation Dialog - Delete */}
+      <AlertDialog open={!!deleteConfirm} onOpenChange={(open) => !open && setDeleteConfirm(null)}>
+        <AlertDialogContent>
+          <AlertDialogHeader>
+            <AlertDialogTitle>Confirmar exclusão</AlertDialogTitle>
+            <AlertDialogDescription>
+              Tem certeza que deseja excluir {deleteConfirm?.tipo === 'associado' ? 'o associado' : 'o veículo'}{' '}
+              <strong>{deleteConfirm?.nome}</strong> da base antiga?
+              {deleteConfirm?.tipo === 'associado' && ' Todos os veículos vinculados também serão excluídos.'}
+              <br /><br />
+              Esta ação não pode ser desfeita.
+            </AlertDialogDescription>
+          </AlertDialogHeader>
+          <AlertDialogFooter>
+            <AlertDialogCancel>Cancelar</AlertDialogCancel>
+            <AlertDialogAction onClick={confirmDelete} className="bg-destructive text-destructive-foreground hover:bg-destructive/90">
+              Excluir
+            </AlertDialogAction>
+          </AlertDialogFooter>
+        </AlertDialogContent>
+      </AlertDialog>
     </div>
   );
 }
