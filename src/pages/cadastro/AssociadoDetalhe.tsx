@@ -150,8 +150,15 @@ const getTituloEvento = (tipo: string) => {
 // ============================================
 // COMPONENTE PRINCIPAL
 // ============================================
-export default function AssociadoDetalhe() {
-  const { id } = useParams<{ id: string }>();
+interface AssociadoDetalheProps {
+  associadoId?: string;
+  isModal?: boolean;
+  onClose?: () => void;
+}
+
+export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose }: AssociadoDetalheProps = {}) {
+  const params = useParams<{ id: string }>();
+  const id = propId || params.id;
   const navigate = useNavigate();
   const { isAnalistaCadastroOnly, isDiretor, isGerencia, isDesenvolvedor, isAdminMaster } = usePermissions();
 
@@ -287,7 +294,7 @@ export default function AssociadoDetalhe() {
       toast.success('Cancelamento registrado');
       setRastreadorModalOpen(false);
       setRastreadorModalData(null);
-      navigate('/cadastro/associados');
+      if (isModal && onClose) onClose(); else navigate('/cadastro/associados');
     } catch (error) {
       console.error('[handleConfirmRastreadorModal] Erro:', error);
       toast.error('Erro ao processar cancelamento');
@@ -317,7 +324,7 @@ export default function AssociadoDetalhe() {
       <div className="flex flex-col items-center justify-center h-64">
         <User className="h-12 w-12 text-muted-foreground/50" />
         <h3 className="mt-4 font-semibold">Associado não encontrado</h3>
-        <Button variant="link" onClick={() => navigate('/cadastro/associados')}>
+        <Button variant="link" onClick={() => isModal && onClose ? onClose() : navigate('/cadastro/associados')}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
         </Button>
       </div>
@@ -370,9 +377,11 @@ export default function AssociadoDetalhe() {
     <div className="space-y-4">
       {/* Breadcrumb removido — já existe no header global */}
 
-      <Button variant="ghost" size="sm" className="h-8 text-xs -ml-2" onClick={() => navigate('/cadastro/associados')}>
-        <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> Voltar
-      </Button>
+      {!isModal && (
+        <Button variant="ghost" size="sm" className="h-8 text-xs -ml-2" onClick={() => navigate('/cadastro/associados')}>
+          <ArrowLeft className="mr-1.5 h-3.5 w-3.5" /> Voltar
+        </Button>
+      )}
 
       {/* Alerts */}
       {status === 'suspenso' && (
