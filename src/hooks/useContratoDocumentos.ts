@@ -1,6 +1,7 @@
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { syncCnhDataToAssociado } from '@/utils/syncCnhData';
 
 export type TipoDocumentoContrato = 'crlv' | 'cnh' | 'rg' | 'comprovante_residencia' | 'laudo_vistoria';
 
@@ -147,6 +148,37 @@ export function useUploadDocumentoContrato() {
           status: 'pendente',
         })
         .eq('id', docData.id);
+
+      // Sync CNH data to associado if applicable
+      if (tipo === 'cnh' && ocrResult.sucesso && ocrResult.dados) {
+        // Find associado_id from contrato or cotação
+        let associadoId: string | null = null;
+        if (contratoId) {
+          const { data: contrato } = await supabase
+            .from('contratos')
+            .select('associado_id')
+            .eq('id', contratoId)
+            .single();
+          associadoId = contrato?.associado_id || null;
+        } else if (cotacaoId) {
+          const { data: cotacao } = await supabase
+            .from('cotacoes')
+            .select('cliente_cpf')
+            .eq('id', cotacaoId)
+            .single();
+          if (cotacao?.cliente_cpf) {
+            const { data: assoc } = await supabase
+              .from('associados')
+              .select('id')
+              .eq('cpf', cotacao.cliente_cpf)
+              .maybeSingle();
+            associadoId = assoc?.id || null;
+          }
+        }
+        if (associadoId) {
+          await syncCnhDataToAssociado(associadoId, ocrResult.dados);
+        }
+      }
 
       return {
         documento: {

@@ -1,0 +1,1 @@
+UPDATE public.associados SET cnh_numero = '223091224', cnh_categoria = 'B' WHERE id = 'e77e47ce-adf3-4162-9872-e64f1f007bfc' AND (cnh_numero IS NULL OR cnh_categoria IS NULL);
