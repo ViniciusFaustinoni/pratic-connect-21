@@ -157,6 +157,8 @@ export function MapaVistoriasContent() {
   const isMobile = useIsMobile();
   const { data: vistorias, isLoading } = useVistoriasMapa();
   const { data: vistoriadores, isLoading: isLoadingVistoriadores } = useVistoriadoresRealtime();
+  const { data: atribuicaoManualAtiva } = useConfigAtribuicaoManual();
+  const atribuirMutation = useAtribuirServicoManual();
   const [filtroTipo, setFiltroTipo] = useState("todos");
   const [filtroStatus, setFiltroStatus] = useState("todos");
   const [filtroBusca, setFiltroBusca] = useState("");
@@ -164,6 +166,20 @@ export function MapaVistoriasContent() {
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  
+  // Drag-and-drop state
+  const [dragConfirmation, setDragConfirmation] = useState<{
+    servicoId: string;
+    servicoPlaca: string | null;
+    profissionalId: string;
+    profissionalNome: string;
+  } | null>(null);
+  const vistoriadoresRef = useRef<VistoriadorLocalizacao[]>([]);
+
+  // Manter ref atualizada para uso no callback do dragend
+  useEffect(() => {
+    vistoriadoresRef.current = vistoriadores?.filter(v => v.em_servico && v.latitude && v.longitude) || [];
+  }, [vistoriadores]);
 
   // Vistoriadores em serviço
   const vistoriadoresEmServico = useMemo(() => {
