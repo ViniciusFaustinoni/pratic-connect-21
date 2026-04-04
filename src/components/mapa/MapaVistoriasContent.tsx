@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
 import { RotaPolyline } from "@/components/mapa/RotaPolyline";
 import L from "leaflet";
@@ -31,6 +31,16 @@ import {
   DrawerTrigger,
 } from "@/components/ui/drawer";
 import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+} from "@/components/ui/alert-dialog";
+import {
   Search,
   ClipboardCheck,
   Phone,
@@ -45,18 +55,21 @@ import {
   User,
   List,
   Filter,
+  GripVertical,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
-import { useVistoriadoresRealtime } from "@/hooks/useVistoriadoresRealtime";
+import { useVistoriadoresRealtime, VistoriadorLocalizacao } from "@/hooks/useVistoriadoresRealtime";
 import { TIPO_VISTORIA_LABELS } from "@/types/servicos-rota";
 import { createColoredMarkerSvg, svgToDataUrl, createVistoriadorMarkerSvg, COR_VISTORIADOR } from "@/lib/rota-colors";
 import { cn } from "@/lib/utils";
 import { useIsMobile } from "@/hooks/use-mobile";
+import { useConfigAtribuicaoManual, useAtribuirServicoManual } from "@/hooks/useAtribuicaoManual";
 
 // Cores para o mapa do coordenador - por status de conclusão
 const COR_REALIZADA = '#10B981';   // Verde
 const COR_A_REALIZAR = '#EF4444'; // Vermelho
+const COR_DRAGGABLE = '#F59E0B';  // Amarelo - serviços arrastáveis
 
 // Status que indicam vistoria realizada
 const STATUS_REALIZADOS = ['concluida', 'aprovada', 'reprovada', 'em_analise'];
