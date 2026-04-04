@@ -978,6 +978,21 @@ export default function Associados() {
           planos={planos}
           cidades={cidades}
         />
+
+        {/* Detalhe do Associado em Sheet */}
+        <Sheet open={!!detalheAssociadoId} onOpenChange={(open) => !open && setDetalheAssociadoId(null)}>
+          <SheetContent side="right" className="w-full sm:max-w-[900px] lg:max-w-[1100px] p-0 overflow-y-auto">
+            {detalheAssociadoId && (
+              <div className="p-4 sm:p-6">
+                <AssociadoDetalhe 
+                  associadoId={detalheAssociadoId} 
+                  isModal 
+                  onClose={() => setDetalheAssociadoId(null)} 
+                />
+              </div>
+            )}
+          </SheetContent>
+        </Sheet>
       </div>
     </TooltipProvider>
   );
