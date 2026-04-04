@@ -1,70 +1,56 @@
 
 
-# Reestruturação do Mapa de Monitoramento em Abas
+# Corrigir Botão de Assinatura Direta na Página Pública
 
-## Resumo
-Substituir a estrutura atual do mapa (2 abas: Veículos + Vistorias) por 3 abas com propósitos distintos: **Associados**, **Equipe** e **Atribuições** (condicional). Remover filtros de data do mapa de vistorias. Adicionar funcionalidade de cancelamento de rota atribuída para Coordenador de Monitoramento e Diretor.
+## Problema
+Na etapa "Aguardando Assinatura" da página pública de contratação, o botão "Assinar Contrato Agora" (link direto para o Autentique) não aparece. O botão está condicionado a `contrato?.linkAssinatura`, que pode ser `null` em dois cenários:
 
-## Estrutura das Abas
+1. A Edge Function `autentique-create` retorna `signatureLink: null` porque a API do Autentique nem sempre retorna o `short_link` imediatamente na criação do documento
+2. Ao recarregar a página, o polling verifica apenas o `status` do contrato mas nunca re-busca o `autentique_url` do banco para atualizar o estado local
 
-```text
-┌─────────────┬──────────┬──────────────────┐
-│ Associados  │  Equipe  │  Atribuições*    │
-└─────────────┴──────────┴──────────────────┘
-* só aparece se atribuição manual estiver ativa
+## Solução
+
+### `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`
+
+**1. Polling deve atualizar o `linkAssinatura`**
+No `useEffect` de polling (linha ~251), ao consultar o contrato no banco (linha ~277), também buscar `autentique_url` e atualizar o estado do `contrato` se o link estiver disponível mas ainda não estiver no estado local:
+
+```typescript
+const { data } = await publicSupabase
+  .from('contratos')
+  .select('status, autentique_url')  // adicionar autentique_url
+  .eq('id', contrato.id)
+  .maybeSingle();
+
+// Atualizar linkAssinatura se disponível e não setado
+if (data?.autentique_url && !contrato?.linkAssinatura) {
+  setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
+}
 ```
 
-### Aba 1 — Associados
-- Mapa satélite com barra de pesquisa por placa (já existe como aba "Veículos")
-- Busca exibe o veículo encontrado no mapa (comportamento atual mantido)
-- Renomear de "Veículos" para "Associados"
+**2. Fallback após envio para Autentique**
+Após chamar `autentique-create`, se `signatureLink` for null, agendar uma re-busca do `autentique_url` do banco após 3 segundos (a API do Autentique pode demorar para gerar o short_link):
 
-### Aba 2 — Equipe
-- Mapa mostrando apenas os técnicos em campo (marcadores azuis do `useVistoriadoresRealtime`)
-- Popup de cada técnico com nome, status operacional, tempo da última atualização, botão WhatsApp
-- Sem sidebar de lista de serviços; foco apenas na localização da equipe
+```typescript
+if (!linkAssinatura) {
+  setTimeout(async () => {
+    const { data: retry } = await publicSupabase
+      .from('contratos')
+      .select('autentique_url')
+      .eq('id', contratoId)
+      .maybeSingle();
+    if (retry?.autentique_url) {
+      setContrato(prev => prev ? { ...prev, linkAssinatura: retry.autentique_url } : prev);
+    }
+  }, 3000);
+}
+```
 
-### Aba 3 — Atribuições (condicional)
-- Só aparece se `useConfigAtribuicaoManual` retornar `true`
-- Mapa com técnicos + serviços pendentes (sem filtro de data — mostra serviços do dia atual e atrasados)
-- Drag-and-drop de pins para atribuição manual (funcionalidade já implementada no MapaVistoriasContent)
-- Linhas de rota dos serviços já atribuídos (polylines técnico → próxima tarefa)
-- **Novo**: botão "Cancelar Atribuição" no popup de serviços já atribuídos, visível para `isCoordenadorMonitoramento` e `isDiretor`
-- Cancelar atribuição = setar `profissional_id = null` e `status = 'pendente'` no serviço
+**3. Verificação manual também atualiza o link**
+Na função `verificarManualmente` (linha ~310), também buscar `autentique_url` e atualizar o estado.
 
-## Alterações Técnicas
-
-### 1. `src/pages/monitoramento/Mapa.tsx`
-- Reestruturar as abas: `associados`, `equipe`, `atribuicoes`
-- Aba `associados`: manter código existente de busca por placa e mapa de veículos
-- Aba `equipe`: novo componente inline ou extraído, usando `useVistoriadoresRealtime` para renderizar apenas marcadores de técnicos
-- Aba `atribuicoes`: renderizar `MapaVistoriasContent` (condicional via `useConfigAtribuicaoManual`)
-
-### 2. `src/components/mapa/MapaVistoriasContent.tsx`
-- Remover filtro de data (calendar, navegação anterior/próximo/hoje)
-- Manter filtro hardcoded para data de hoje + atrasados (sem input do usuário)
-- Remover filtro de tipo de vistoria e filtro de status da sidebar
-- Manter apenas busca por placa/associado/bairro na sidebar
-- Adicionar botão "Cancelar Atribuição" no popup de serviços que já têm `vistoriador_id`, visível apenas para coordenador/diretor
-- Remover sidebar de lista de vistorias (ou simplificá-la para listar apenas serviços pendentes)
-
-### 3. `src/hooks/useDesatribuirServico.ts` (novo)
-- Hook com `useMutation` que faz:
-  - `UPDATE servicos SET profissional_id = NULL, status = 'pendente' WHERE id = ?`
-  - Registra no `servicos_atribuicoes_log` com `tipo_atribuicao = 'cancelamento_manual'`
-  - Invalida queries relevantes
-
-### 4. `src/hooks/useAtribuicaoManual.ts`
-- Sem alterações (já funcional)
-
-## Permissões
-- Cancelamento de atribuição: `isCoordenadorMonitoramento || isDiretor || isAdminMaster || isDesenvolvedor`
-- Importar `usePermissions` no `MapaVistoriasContent`
-
-## Arquivos
+## Arquivo alterado
 | Arquivo | Ação |
 |---------|------|
-| `src/pages/monitoramento/Mapa.tsx` | Reestruturar 3 abas |
-| `src/components/mapa/MapaVistoriasContent.tsx` | Remover filtros de data, adicionar cancelamento |
-| `src/hooks/useDesatribuirServico.ts` | Novo hook de cancelamento de atribuição |
+| `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx` | Polling e fallback para buscar/exibir link de assinatura |
 
