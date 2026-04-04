@@ -904,45 +904,56 @@ export function MapaVistoriasContent() {
 
   // === LAYOUT DESKTOP ===
   return (
-    <div className="flex h-full gap-4">
-      {/* Sidebar */}
-      <Card className="w-80 flex-shrink-0 flex flex-col">
-        <CardHeader className="pb-3">
-          <div className="flex items-center justify-between">
-            <div className="flex items-center gap-2">
-              <ClipboardCheck className="h-5 w-5 text-primary" />
-              <CardTitle className="text-base">Vistorias</CardTitle>
+    <>
+      {renderConfirmationDialog()}
+      <div className="flex h-full gap-4">
+        {/* Sidebar */}
+        <Card className="w-80 flex-shrink-0 flex flex-col">
+          <CardHeader className="pb-3">
+            <div className="flex items-center justify-between">
+              <div className="flex items-center gap-2">
+                <ClipboardCheck className="h-5 w-5 text-primary" />
+                <CardTitle className="text-base">Vistorias</CardTitle>
+              </div>
+              <Badge variant="secondary">{vistoriasFiltradas.length}</Badge>
             </div>
-            <Badge variant="secondary">{vistoriasFiltradas.length}</Badge>
-          </div>
-          {renderFilters()}
-        </CardHeader>
+            {renderFilters()}
+          </CardHeader>
 
-        <CardContent className="flex-1 overflow-hidden p-0">
-          <ScrollArea className="h-full px-4 pb-4">
-            {renderVistoriasList()}
-          </ScrollArea>
-        </CardContent>
-      </Card>
+          <CardContent className="flex-1 overflow-hidden p-0">
+            <ScrollArea className="h-full px-4 pb-4">
+              {renderVistoriasList()}
+            </ScrollArea>
+          </CardContent>
+        </Card>
 
-      {/* Mapa */}
-      <Card className="flex-1 flex flex-col overflow-hidden">
-        <CardHeader className="pb-2 flex-row items-center justify-between">
-          <div className="flex items-center gap-2">
-            <MapPin className="h-5 w-5 text-red-600" />
-            <CardTitle className="text-base">Mapa de Vistorias</CardTitle>
-          </div>
-          <Badge variant="outline" className="gap-1.5 text-xs">
-            <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
-            Ao vivo
-          </Badge>
-        </CardHeader>
+        {/* Mapa */}
+        <Card className="flex-1 flex flex-col overflow-hidden">
+          <CardHeader className="pb-2 flex-row items-center justify-between">
+            <div className="flex items-center gap-2">
+              <MapPin className="h-5 w-5 text-red-600" />
+              <CardTitle className="text-base">Mapa de Vistorias</CardTitle>
+            </div>
+            <div className="flex items-center gap-2">
+              {atribuicaoManualAtiva && (
+                <Badge variant="outline" className="gap-1.5 text-xs text-amber-600 border-amber-300">
+                  <GripVertical className="h-3 w-3" />
+                  Drag & Drop ativo
+                </Badge>
+              )}
+              <Badge variant="outline" className="gap-1.5 text-xs">
+                <span className="h-2 w-2 rounded-full bg-green-500 animate-pulse" />
+                Ao vivo
+              </Badge>
+            </div>
+          </CardHeader>
 
-        <CardContent className="flex-1 p-0 relative">
-          {renderMapa()}
-          {renderLegenda()}
-        </CardContent>
-      </Card>
-    </div>
+          <CardContent className="flex-1 p-0 relative">
+            {renderMapa()}
+            {renderLegenda()}
+          </CardContent>
+        </Card>
+      </div>
+    </>
   );
 }
