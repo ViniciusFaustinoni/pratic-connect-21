@@ -212,6 +212,32 @@ export function AssociadoHeroHeader({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                {status === 'ativo' && (
+                  <>
+                    <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${id}/substituicao`)}>
+                      <ArrowLeftRight className="mr-2 h-4 w-4" /> Substituir Placa
+                    </DropdownMenuItem>
+                    {!permissions.isAnalistaCadastroOnly && onTrocaTitularidade && (
+                      <DropdownMenuItem onClick={onTrocaTitularidade}>
+                        <Users className="mr-2 h-4 w-4" /> Troca de Titularidade
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={onSuspender} className="text-amber-600 focus:text-amber-600">
+                      <Pause className="mr-2 h-4 w-4" /> Suspender
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {(status === 'suspenso' || coberturasSuspensas) && (
+                  <>
+                    <DropdownMenuItem onClick={onReativar} disabled={isReativando} className="text-emerald-600 focus:text-emerald-600">
+                      {isReativando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                      Reativar
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {!permissions.isAnalistaCadastroOnly && (
                   <DropdownMenuItem onClick={() => setActiveTab('documentos')}>
                     <FileCheck className="mr-2 h-4 w-4" /> Documentos
