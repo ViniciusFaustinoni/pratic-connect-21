@@ -120,47 +120,65 @@ export function useRastreadoresMetricas() {
   return useQuery({
     queryKey: ['rastreadores-metricas'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rastreadores')
-        .select('status, ultima_comunicacao');
+      // 1. Contagens por status em paralelo (sem limite de 1000)
+      const [totalRes, estoqueRes, instaladosRes, manutencaoRes, baixadosRes] = await Promise.all([
+        supabase.from('rastreadores').select('*', { count: 'exact', head: true }),
+        supabase.from('rastreadores').select('*', { count: 'exact', head: true }).eq('status', 'estoque'),
+        supabase.from('rastreadores').select('*', { count: 'exact', head: true }).eq('status', 'instalado'),
+        supabase.from('rastreadores').select('*', { count: 'exact', head: true }).eq('status', 'manutencao'),
+        supabase.from('rastreadores').select('*', { count: 'exact', head: true }).eq('status', 'baixado'),
+      ]);
 
-      if (error) throw error;
+      // 2. Fetch recursivo dos instalados para calcular online/offline
+      const allInstalados: { ultima_comunicacao: string | null }[] = [];
+      const PAGE_SIZE = 1000;
+      let from = 0;
+      let hasMore = true;
 
-      const now = new Date();
-      const metricas: RastreadoresMetricas = {
-        total: data.length,
-        estoque: 0,
-        instalados: 0,
-        manutencao: 0,
-        baixados: 0,
-        online: 0,
-        offline: 0,
-        alertas: 0,
-      };
+      while (hasMore) {
+        const { data: page, error } = await supabase
+          .from('rastreadores')
+          .select('ultima_comunicacao')
+          .eq('status', 'instalado')
+          .range(from, from + PAGE_SIZE - 1);
 
-      data.forEach(r => {
-        switch (r.status) {
-          case 'estoque':
-            metricas.estoque++;
-            break;
-          case 'instalado':
-            metricas.instalados++;
-            const online = isRastreadorOnline(r.ultima_comunicacao);
-            if (online) {
-              metricas.online++;
-            } else {
-              metricas.offline++;
-              metricas.alertas++; // Installed but offline = alert
-            }
-            break;
-          case 'manutencao':
-            metricas.manutencao++;
-            break;
-          case 'baixado':
-            metricas.baixados++;
-            break;
+        if (error) throw error;
+        if (!page || page.length === 0) {
+          hasMore = false;
+        } else {
+          allInstalados.push(...page);
+          if (page.length < PAGE_SIZE) {
+            hasMore = false;
+          } else {
+            from += PAGE_SIZE;
+          }
+        }
+      }
+
+      // 3. Classificar online/offline/alertas
+      let online = 0;
+      let offline = 0;
+      let alertas = 0;
+
+      allInstalados.forEach(r => {
+        if (isRastreadorOnline(r.ultima_comunicacao)) {
+          online++;
+        } else {
+          offline++;
+          alertas++;
         }
       });
+
+      const metricas: RastreadoresMetricas = {
+        total: totalRes.count ?? 0,
+        estoque: estoqueRes.count ?? 0,
+        instalados: instaladosRes.count ?? 0,
+        manutencao: manutencaoRes.count ?? 0,
+        baixados: baixadosRes.count ?? 0,
+        online,
+        offline,
+        alertas,
+      };
 
       return metricas;
     },
