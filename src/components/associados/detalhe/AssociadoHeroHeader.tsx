@@ -189,27 +189,6 @@ export function AssociadoHeroHeader({
               disabled={!veiculosComRastreador || veiculosComRastreador.length === 0}>
               <Map className="h-3.5 w-3.5 mr-1.5" /> Mapa
             </Button>
-            {status === 'ativo' && (
-              <Button size="sm" variant="outline" onClick={() => navigate(`/cadastro/associados/${id}/substituicao`)}>
-                <ArrowLeftRight className="h-3.5 w-3.5 mr-1.5" /> Substituir
-              </Button>
-            )}
-            {status === 'ativo' && !permissions.isAnalistaCadastroOnly && onTrocaTitularidade && (
-              <Button size="sm" variant="outline" onClick={onTrocaTitularidade}>
-                <Users className="h-3.5 w-3.5 mr-1.5" /> Troca Titular
-              </Button>
-            )}
-            {status === 'ativo' && (
-              <Button size="sm" variant="outline" className="text-amber-600 hover:text-amber-700 hover:border-amber-300" onClick={onSuspender}>
-                <Pause className="h-3.5 w-3.5 mr-1.5" /> Suspender
-              </Button>
-            )}
-            {(status === 'suspenso' || coberturasSuspensas) && (
-              <Button size="sm" variant="outline" className="text-emerald-600 hover:text-emerald-700 hover:border-emerald-300" onClick={onReativar} disabled={isReativando}>
-                {isReativando ? <Loader2 className="h-3.5 w-3.5 mr-1.5 animate-spin" /> : <Play className="h-3.5 w-3.5 mr-1.5" />}
-                Reativar
-              </Button>
-            )}
 
             {/* Sync button */}
             {statusPlataforma?.dados?.veiculosVinculados > 0 && (
@@ -233,6 +212,32 @@ export function AssociadoHeroHeader({
                 </Button>
               </DropdownMenuTrigger>
               <DropdownMenuContent align="end" className="w-56">
+                {status === 'ativo' && (
+                  <>
+                    <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${id}/substituicao`)}>
+                      <ArrowLeftRight className="mr-2 h-4 w-4" /> Substituir Placa
+                    </DropdownMenuItem>
+                    {!permissions.isAnalistaCadastroOnly && onTrocaTitularidade && (
+                      <DropdownMenuItem onClick={onTrocaTitularidade}>
+                        <Users className="mr-2 h-4 w-4" /> Troca de Titularidade
+                      </DropdownMenuItem>
+                    )}
+                    <DropdownMenuSeparator />
+                    <DropdownMenuItem onClick={onSuspender} className="text-amber-600 focus:text-amber-600">
+                      <Pause className="mr-2 h-4 w-4" /> Suspender
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
+                {(status === 'suspenso' || coberturasSuspensas) && (
+                  <>
+                    <DropdownMenuItem onClick={onReativar} disabled={isReativando} className="text-emerald-600 focus:text-emerald-600">
+                      {isReativando ? <Loader2 className="mr-2 h-4 w-4 animate-spin" /> : <Play className="mr-2 h-4 w-4" />}
+                      Reativar
+                    </DropdownMenuItem>
+                    <DropdownMenuSeparator />
+                  </>
+                )}
                 {!permissions.isAnalistaCadastroOnly && (
                   <DropdownMenuItem onClick={() => setActiveTab('documentos')}>
                     <FileCheck className="mr-2 h-4 w-4" /> Documentos
