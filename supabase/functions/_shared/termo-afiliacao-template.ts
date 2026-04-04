@@ -654,6 +654,24 @@ const generateSecao4 = (data: TermoAfiliacaoData): string => {
     A quota mensal é pós-paga e calculada por rateio entre os associados, 
     podendo variar mensalmente conforme os custos do período.
   </p>
+
+  ${data.indicador?.nome ? `
+  <table class="table-valores" style="margin-top: 15pt;">
+    <tr class="header-row">
+      <td colspan="2">ASSOCIADO INDICADOR</td>
+    </tr>
+    <tr>
+      <td>Nome:</td>
+      <td>${data.indicador.nome}</td>
+    </tr>
+    ${data.consultor?.nome ? `
+    <tr>
+      <td>Consultor:</td>
+      <td>${data.consultor.nome}</td>
+    </tr>
+    ` : ''}
+  </table>
+  ` : ''}
 </div>
 `;
 };
