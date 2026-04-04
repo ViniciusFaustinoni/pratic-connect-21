@@ -979,9 +979,9 @@ export default function Associados() {
           cidades={cidades}
         />
 
-        {/* Detalhe do Associado em Sheet */}
-        <Sheet open={!!detalheAssociadoId} onOpenChange={(open) => !open && setDetalheAssociadoId(null)}>
-          <SheetContent side="right" className="w-full sm:max-w-[900px] lg:max-w-[1100px] p-0 overflow-y-auto">
+        {/* Detalhe do Associado em Dialog centralizado */}
+        <Dialog open={!!detalheAssociadoId} onOpenChange={(open) => !open && setDetalheAssociadoId(null)}>
+          <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto">
             {detalheAssociadoId && (
               <div className="p-4 sm:p-6">
                 <AssociadoDetalhe 
@@ -991,8 +991,8 @@ export default function Associados() {
                 />
               </div>
             )}
-          </SheetContent>
-        </Sheet>
+          </DialogContent>
+        </Dialog>
       </div>
     </TooltipProvider>
   );
