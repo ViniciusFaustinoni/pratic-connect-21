@@ -154,7 +154,8 @@ export default function BaseAntiga() {
                              </Button>
                            </TableCell>
                          )}
-                    ))
+                       </TableRow>
+                     ))
                   )}
                 </TableBody>
               </Table>
