@@ -55,13 +55,19 @@ export function useFotosVistoriaUnificada(params: {
   return useQuery({
     queryKey: ['vistoria-fotos-unificada', contratoId, cotacaoId],
     queryFn: async (): Promise<{
-      fotos: FotoAutovistoria[];
+      fotosInstalador: FotoAutovistoria[];
+      fotosAutovistoria: FotoAutovistoria[];
       vistoriaId: string | null;
-      origem: 'vistoria_fotos' | 'cotacoes_vistoria_fotos' | null;
       video360Url: string | null;
       modalidade: string | null;
     }> => {
-      // 1. Tentar buscar vistoria vinculada ao contrato (nova arquitetura)
+      let fotosInstalador: FotoAutovistoria[] = [];
+      let fotosAutovistoria: FotoAutovistoria[] = [];
+      let vistoriaId: string | null = null;
+      let video360Url: string | null = null;
+      let modalidade: string | null = null;
+
+      // 1. Buscar fotos do instalador (vistoria_fotos)
       if (contratoId) {
         const { data: vistoria } = await supabase
           .from('vistorias')
@@ -72,45 +78,36 @@ export function useFotosVistoriaUnificada(params: {
           .maybeSingle();
 
         if (vistoria?.id) {
-          const { data: fotos, error } = await supabase
+          vistoriaId = vistoria.id;
+          video360Url = vistoria.video_360_url || null;
+          modalidade = vistoria.modalidade || null;
+
+          const { data: fotos } = await supabase
             .from('vistoria_fotos')
             .select('id, tipo, arquivo_url, created_at')
             .eq('vistoria_id', vistoria.id)
             .order('created_at', { ascending: true });
 
-          if (!error && fotos && fotos.length > 0) {
-            return {
-              fotos: fotos as FotoAutovistoria[],
-              vistoriaId: vistoria.id,
-              origem: 'vistoria_fotos',
-              video360Url: vistoria.video_360_url || null,
-              modalidade: vistoria.modalidade || null,
-            };
+          if (fotos && fotos.length > 0) {
+            fotosInstalador = fotos as FotoAutovistoria[];
           }
         }
       }
 
-      // 2. Fallback: buscar em cotacoes_vistoria_fotos (legado)
+      // 2. Buscar fotos de autovistoria (cotacoes_vistoria_fotos)
       if (cotacaoId) {
-        const { data: fotosLegado, error } = await supabase
+        const { data: fotosLegado } = await supabase
           .from('cotacoes_vistoria_fotos')
           .select('id, tipo, arquivo_url, created_at')
           .eq('cotacao_id', cotacaoId)
           .order('created_at', { ascending: true });
 
-        if (!error && fotosLegado && fotosLegado.length > 0) {
-          return {
-            fotos: fotosLegado as FotoAutovistoria[],
-            vistoriaId: null,
-            origem: 'cotacoes_vistoria_fotos',
-            video360Url: null,
-            modalidade: 'autovistoria', // Legado é sempre autovistoria
-          };
+        if (fotosLegado && fotosLegado.length > 0) {
+          fotosAutovistoria = fotosLegado as FotoAutovistoria[];
         }
       }
 
-      // 3. Sem fotos encontradas
-      return { fotos: [], vistoriaId: null, origem: null, video360Url: null, modalidade: null };
+      return { fotosInstalador, fotosAutovistoria, vistoriaId, video360Url, modalidade };
     },
     enabled: !!(contratoId || cotacaoId),
   });
