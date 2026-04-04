@@ -56,7 +56,7 @@ serve(async (req) => {
       .from("sinistros")
       .select(`
         id, protocolo, tipo, data_ocorrencia, descricao, status, cobranca_cota_id,
-        cota_paga, cota_paga_em, termo_anuencia_assinado, autentique_documento_id,
+        cota_paga, cota_paga_em, termo_anuencia_assinado, autentique_documento_id, autentique_url,
         associado:associados!sinistros_associado_id_fkey(
           id, nome, cpf, email, telefone, whatsapp, plano_id
         ),
