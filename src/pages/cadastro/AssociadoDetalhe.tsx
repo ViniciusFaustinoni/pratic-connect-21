@@ -324,7 +324,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
       <div className="flex flex-col items-center justify-center h-64">
         <User className="h-12 w-12 text-muted-foreground/50" />
         <h3 className="mt-4 font-semibold">Associado não encontrado</h3>
-        <Button variant="link" onClick={() => navigate('/cadastro/associados')}>
+        <Button variant="link" onClick={() => isModal && onClose ? onClose() : navigate('/cadastro/associados')}>
           <ArrowLeft className="mr-2 h-4 w-4" /> Voltar
         </Button>
       </div>
