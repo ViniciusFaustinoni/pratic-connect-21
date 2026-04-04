@@ -3207,13 +3207,82 @@ serve(async (req) => {
       return new Response(JSON.stringify({ ok: true, ignored: "IA desabilitada" }), { headers: corsHeaders });
     }
 
-    // Buscar associado pelo telefone
+    // Buscar associado pelo telefone (qualquer status)
     const { data: associado } = await supabase
       .from("associados")
-      .select("id, nome, status")
+      .select("id, nome, status, origem_cadastro")
       .or(`whatsapp.in.(${telefonesBusca.join(",")}),telefone.in.(${telefonesBusca.join(",")})`)
-      .eq("status", "ativo")
+      .order("created_at", { ascending: false })
       .maybeSingle();
+
+    // ========================================
+    // ASSOCIADO ENCONTRADO MAS NÃO ATIVO
+    // ========================================
+    if (associado && associado.status !== "ativo") {
+      console.log(`[whatsapp-webhook] Associado encontrado com status ${associado.status}: ${associado.nome}`);
+      const primeiroNome = associado.nome?.split(' ')[0] || 'Cliente';
+      
+      await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId, tipoPrincipal, mediaArmazenada || undefined, mediaMimetype || undefined, mediaFilename || undefined, associado.id, "associado", associado.nome);
+
+      if (associado.status === "suspenso" || associado.status === "bloqueado") {
+        await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
+          `Olá *${primeiroNome}*! 👋\n\nIdentifiquei seu cadastro, porém ele encontra-se *temporariamente suspenso*.\n\nPor favor, entre em contato com nossa central para regularizar sua situação:\n📞 *Central PRATICCAR*: (31) 3889-1256\n📧 financeiro@praticcar.com.br\n\nEstamos à disposição! 😊`
+        );
+        return new Response(JSON.stringify({ ok: true, associado_status: associado.status }), { headers: corsHeaders });
+      }
+      
+      if (associado.status === "em_analise" || associado.status === "pendente") {
+        await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
+          `Olá *${primeiroNome}*! 👋\n\nSeu cadastro está *em processamento* pela nossa equipe. Em breve você receberá uma atualização!\n\nSe tiver alguma dúvida, estamos à disposição. 😊`
+        );
+        return new Response(JSON.stringify({ ok: true, associado_status: associado.status }), { headers: corsHeaders });
+      }
+
+      if (associado.status === "cancelado") {
+        // Associado cancelado → criar lead para recontratação
+        console.log(`[whatsapp-webhook] Associado cancelado, criando lead para recontratação: ${telefone}`);
+        
+        const { data: leadExistente } = await supabase
+          .from("leads")
+          .select("id")
+          .or(`telefone.in.(${telefonesBusca.join(",")})`)
+          .maybeSingle();
+
+        if (!leadExistente) {
+          await supabase.from("leads").insert({
+            nome: associado.nome || "Contato WhatsApp",
+            telefone: telefoneLimpo,
+            origem: "whatsapp_organico" as any,
+            etapa: "novo" as any,
+            observacoes: `Lead criado automaticamente via WhatsApp. Ex-associado (cancelado). ID anterior: ${associado.id}`,
+          });
+        }
+
+        // Delegar para Maya
+        try {
+          await fetch(`${Deno.env.get("SUPABASE_URL")}/functions/v1/agente-consultor-ia`, {
+            method: "POST",
+            headers: {
+              "Content-Type": "application/json",
+              Authorization: `Bearer ${Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")}`,
+            },
+            body: JSON.stringify({ telefone, texto: mensagemTexto, tipo_msg: tipoPrincipal }),
+          });
+        } catch (agentErr: any) {
+          console.error(`[whatsapp-webhook] Erro delegação agente (cancelado):`, agentErr);
+          await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
+            `Olá *${primeiroNome}*! 👋\n\nQue bom te ver de volta! 🚗\n\nVimos que você já fez parte da PRATICCAR. Gostaria de conhecer nossos planos atuais de proteção veicular?\n\nNosso consultor entrará em contato em breve! 😊`
+          );
+        }
+        return new Response(JSON.stringify({ ok: true, associado_status: "cancelado", lead_created: true }), { headers: corsHeaders });
+      }
+
+      // Outros status não mapeados → orientar contato com central
+      await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
+        `Olá *${primeiroNome}*! 👋\n\nIdentifiquei seu cadastro. Para melhor atendê-lo, por favor entre em contato com nossa central:\n📞 *Central PRATICCAR*: (31) 3889-1256\n\nEstamos à disposição! 😊`
+      );
+      return new Response(JSON.stringify({ ok: true, associado_status: associado.status }), { headers: corsHeaders });
+    }
 
     // ========================================
     // SE NÃO É ASSOCIADO, VERIFICAR SE É LEAD
