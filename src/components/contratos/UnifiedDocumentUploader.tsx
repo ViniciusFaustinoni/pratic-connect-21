@@ -20,6 +20,7 @@ import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
+import { syncCnhDataToAssociado } from '@/utils/syncCnhData';
 
 
 export type TipoDocumentoDetectado = 'cnh' | 'rg' | 'crlv' | 'nota_fiscal_veiculo' | 'comprovante_residencia' | 'outro';
