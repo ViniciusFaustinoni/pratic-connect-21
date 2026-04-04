@@ -24,9 +24,12 @@ const STATUS_INADIMPLENCIA_CONFIG = {
 
 interface Props {
   situacao: SituacaoAssociado;
+  associado?: any;
+  contrato?: any;
+  resumoFinanceiro?: any;
 }
 
-export function AssociadoSituacaoCard({ situacao }: Props) {
+export function AssociadoSituacaoCard({ situacao, associado, contrato, resumoFinanceiro }: Props) {
   if (situacao.isLoading) {
     return <Skeleton className="h-48 w-full rounded-lg" />;
   }
