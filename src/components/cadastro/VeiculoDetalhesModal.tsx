@@ -87,7 +87,7 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
   const navigate = useNavigate();
   const [activeTab, setActiveTab] = useState('resumo');
   const [fotoPreview, setFotoPreview] = useState<{ url: string; tipo: string } | null>(null);
-  const [showMapa, setShowMapa] = useState(false);
+  
   const [openCategories, setOpenCategories] = useState<Record<string, boolean>>({
     identificacao: true, exterior: true, interior: false, outros: false,
   });
