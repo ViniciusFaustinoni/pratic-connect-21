@@ -179,7 +179,7 @@ serve(async (req) => {
         console.log('[autentique-create] autentique_url ausente, buscando na API do Autentique...');
         try {
           const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
-          const query = `query { document(id: "${contrato.autentique_documento_id}") { signatures { public_id link { short_link } } } }`;
+          const query = `query { document(id: "${contrato.autentique_documento_id}") { signatures { public_id action { name } link { short_link } } } }`;
           const resp = await fetch(AUTENTIQUE_API_URL, {
             method: "POST",
             headers: {
