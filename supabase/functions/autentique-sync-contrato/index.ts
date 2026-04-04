@@ -521,7 +521,8 @@ serve(async (req) => {
           atualizado: true, 
           mensagem: "Assinatura confirmada e contrato atualizado!",
           status: "assinado",
-          signedFileUrl: anexoUrl || signedFileUrl || null
+          signedFileUrl: anexoUrl || signedFileUrl || null,
+          autentique_url: autentiqueUrlFinal
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
