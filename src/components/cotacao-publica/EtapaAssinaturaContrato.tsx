@@ -339,6 +339,11 @@ export function EtapaAssinaturaContrato({
 
       console.log('[EtapaAssinatura] Resultado sync manual:', syncResult);
 
+      // Atualizar link se veio na sync
+      if (syncResult?.autentique_url && !contrato?.linkAssinatura) {
+        setContrato(prev => prev ? { ...prev, linkAssinatura: syncResult.autentique_url } : prev);
+      }
+
       // CORRIGIDO: Verificar campo 'status' em vez de 'novoStatus'
       if (syncResult?.status === 'assinado') {
         toast.success('Contrato assinado com sucesso!');
