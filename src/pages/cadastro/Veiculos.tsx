@@ -255,7 +255,7 @@ export default function Veiculos() {
                 <Car className="h-5 w-5 text-accent" />
               </div>
               <div>
-                {isLoading ? (
+                {statsLoading ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className="text-2xl font-bold">{formatCurrency(stats.valorTotal)}</p>
