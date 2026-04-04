@@ -705,44 +705,6 @@ export function OrigemCadastroCard({ associadoId, canLinkToAssociado = false }: 
             </div>
           )}
 
-          {/* Carência de Vidros e Faróis */}
-          <div className="col-span-2">
-            <span className="text-xs text-muted-foreground inline-flex items-center gap-1">
-              <ShieldCheck className="h-3 w-3" />
-              Carência — Vidros e Faróis
-            </span>
-            {(() => {
-              const vidrosIsenta = data.carenciaVidros.isenta;
-              const vidrosMotivo = data.carenciaVidros.motivoIsencao;
-              const vidrosFim = data.carenciaVidros.fim;
-
-              if (vidrosIsenta) {
-                return (
-                  <p className="text-xs font-medium mt-0.5 text-emerald-600 dark:text-emerald-400">
-                    Isento — origem: {vidrosMotivo || 'migração aprovada'}
-                  </p>
-                );
-              }
-              if (vidrosFim) {
-                const now = new Date();
-                const fim = new Date(vidrosFim);
-                if (fim > now) {
-                  const diasRestantes = Math.ceil((fim.getTime() - now.getTime()) / 86400000);
-                  return (
-                    <p className="text-xs font-medium mt-0.5 text-amber-600 dark:text-amber-400">
-                      Em carência — {diasRestantes} dias restantes (término em {formatDate(vidrosFim)})
-                    </p>
-                  );
-                }
-                return (
-                  <p className="text-xs font-medium mt-0.5 text-emerald-600 dark:text-emerald-400">
-                    Disponível sem restrição
-                  </p>
-                );
-              }
-              return <p className="text-xs font-medium mt-0.5 text-muted-foreground">Sem dados</p>;
-            })()}
-          </div>
         </div>
       </CardContent>
     </Card>
