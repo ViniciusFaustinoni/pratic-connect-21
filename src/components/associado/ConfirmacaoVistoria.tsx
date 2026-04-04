@@ -162,26 +162,18 @@ export function ConfirmacaoVistoria({
     await syncContrato.mutateAsync({ contratoToken });
   };
   
-  // Função para reenviar email
-  const handleResendEmail = async () => {
-    if (!autentiqueDocumentoId) {
-      toast.error('ID do documento não disponível');
-      return;
-    }
-    
-    setIsResending(true);
+  // Função para copiar link
+  const handleCopyLink = () => {
+    if (!urlAssinatura) return;
+    navigator.clipboard.writeText(urlAssinatura);
+    setCopied(true);
+    toast.success('Link copiado!');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  // Placeholder to keep line structure
+  const _unusedResend = async () => {
     try {
-      const { error } = await supabase.functions.invoke('autentique-resend', {
-        body: { documentId: autentiqueDocumentoId }
-      });
-      
-      if (error) throw error;
-      
-      toast.success('Email reenviado com sucesso!');
-      setShowResendOption(false);
-      setTimeWaiting(0);
-      setShowEmailIncorrect(false);
-    } catch (err: any) {
       console.error('[ConfirmacaoVistoria] Erro ao reenviar email:', err);
       toast.error('Erro ao reenviar email. Tente novamente.');
     } finally {
