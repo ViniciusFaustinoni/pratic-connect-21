@@ -376,6 +376,22 @@ serve(async (req) => {
       })),
     });
 
+    // ========== Extrair link de assinatura do signatário SIGN ==========
+    const signerForLink = signersWithSignAction[0] || signatures[0];
+    const signatureLink = signerForLink?.link?.short_link || null;
+
+    // Salvar autentique_url no banco se ausente
+    if (signatureLink && !contrato.autentique_url) {
+      console.log("[autentique-sync-contrato] Salvando autentique_url no banco:", signatureLink);
+      await supabase
+        .from("contratos")
+        .update({ autentique_url: signatureLink })
+        .eq("id", contrato.id);
+    }
+
+    const autentiqueUrlFinal = signatureLink || contrato.autentique_url || null;
+    console.log("[autentique-sync-contrato] autentique_url final:", autentiqueUrlFinal);
+
     // ========== FALLBACK: Se a API mostra "pending" mas o PDF assinado está disponível ==========
     // Autentique às vezes demora para propagar o status via GraphQL, mas o PDF já está pronto.
     if (overallStatus === "pending" && document.files?.signed) {
