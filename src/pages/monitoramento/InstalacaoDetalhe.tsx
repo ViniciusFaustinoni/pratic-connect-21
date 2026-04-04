@@ -81,9 +81,9 @@ export default function InstalacaoDetalhePage() {
 
   // Agrupar fotos por categoria
   const fotosAgrupadas = useMemo(() => {
-    if (!fotosData?.fotos) return null;
-    return agruparFotosPorCategoria(fotosData.fotos);
-  }, [fotosData?.fotos]);
+    if (!fotosData?.fotosInstalador && !fotosData?.fotosAutovistoria) return null;
+    const todasFotos = [...(fotosData?.fotosInstalador || []), ...(fotosData?.fotosAutovistoria || [])];
+    return agruparFotosPorCategoria(todasFotos);
 
   // Calcular se está atrasada - DEVE vir ANTES de qualquer return condicional
   const isAtrasada = useMemo(() => {

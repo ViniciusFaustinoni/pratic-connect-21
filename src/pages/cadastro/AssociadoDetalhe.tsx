@@ -817,18 +817,60 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
               </CardContent>
             </Card>
 
+            {/* Galeria do Instalador */}
+            {fotosInstaladorAgrupadas && (vistoriaUnificada?.fotosInstalador?.length || 0) > 0 && (
+              <Card className="border-border/60">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Camera className="h-4 w-4" /> Galeria do Instalador
+                    <Badge variant="secondary" className="text-[10px] ml-1">{vistoriaUnificada?.fotosInstalador?.length}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {['exterior', 'identificacao', 'interior', 'outros'].map((cat) => {
+                    const fotos = fotosInstaladorAgrupadas[cat as keyof typeof fotosInstaladorAgrupadas];
+                    if (!fotos || fotos.length === 0) return null;
+                    return (
+                      <div key={cat} className="mb-4 last:mb-0">
+                        <p className="text-xs font-medium text-muted-foreground mb-2 capitalize">{cat} ({fotos.length})</p>
+                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                          {fotos.map((foto: any) => {
+                            const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(foto.arquivo_url || '');
+                            return (
+                              <div key={foto.id} className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50 aspect-square"
+                                onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo), mediaType: isVideo ? 'video' : 'image' })}>
+                                {isVideo ? (
+                                  <video src={foto.arquivo_url} className="w-full h-full object-cover" muted preload="metadata" />
+                                ) : (
+                                  <img src={foto.arquivo_url} alt={formatarTipoFoto(foto.tipo)}
+                                    className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                )}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Eye className="h-5 w-5 text-white" />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Galeria de Autovistoria */}
-            {fotosAgrupadas && (totalFotos > 0) && (
+            {fotosAutovistoriaAgrupadas && (vistoriaUnificada?.fotosAutovistoria?.length || 0) > 0 && (
               <Card className="border-border/60">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Camera className="h-4 w-4" /> Galeria de Autovistoria
-                    <Badge variant="secondary" className="text-[10px] ml-1">{totalFotos}</Badge>
+                    <Badge variant="secondary" className="text-[10px] ml-1">{vistoriaUnificada?.fotosAutovistoria?.length}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {['exterior', 'documentos', 'interior', 'outros'].map((cat) => {
-                    const fotos = fotosAgrupadas[cat as keyof typeof fotosAgrupadas];
+                  {['exterior', 'identificacao', 'interior', 'outros'].map((cat) => {
+                    const fotos = fotosAutovistoriaAgrupadas[cat as keyof typeof fotosAutovistoriaAgrupadas];
                     if (!fotos || fotos.length === 0) return null;
                     return (
                       <div key={cat} className="mb-4 last:mb-0">
