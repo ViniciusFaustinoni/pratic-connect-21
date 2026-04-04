@@ -3416,7 +3416,37 @@ Como posso te ajudar hoje? 😊`
           
           return new Response(JSON.stringify({ ok: true, cpf_linked: true, associado_id: associadoPorCpf.id }), { headers: corsHeaders });
         } else {
-          // CPF não encontrado
+      // CPF não encontrado - delegar para Maya
+      }
+      
+      // Verificar se a mensagem é um CPF (11 dígitos)
+      // (mantido abaixo)
+      }
+      
+      // Criar lead automaticamente para número desconhecido
+      console.log(`[whatsapp-webhook] Criando lead automático para número desconhecido: ${telefone}`);
+      const nomeContato = data?.pushName || "Contato WhatsApp";
+      
+      const { data: leadCriado } = await supabase.from("leads").insert({
+        nome: nomeContato,
+        telefone: telefoneLimpo,
+        origem: "whatsapp_organico" as any,
+        etapa: "novo" as any,
+        observacoes: "Lead criado automaticamente via WhatsApp",
+        data_primeiro_contato: new Date().toISOString(),
+        data_ultimo_contato: new Date().toISOString(),
+      }).select("id").maybeSingle();
+
+      if (leadCriado) {
+        await supabase.from("leads_historico").insert({
+          lead_id: leadCriado.id,
+          tipo: "mensagem_whatsapp",
+          descricao: `Primeiro contato via WhatsApp: ${mensagemTexto.substring(0, 500)}`,
+          dados_extras: { telefone, tipo_mensagem: tipoPrincipal },
+        });
+      }
+
+      // Salvar mensagem para histórico
           await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId);
           
           await sendWhatsAppMessage(
