@@ -572,7 +572,8 @@ serve(async (req) => {
         success: true, 
         atualizado: false, 
         mensagem: "Documento ainda não foi assinado",
-        status: overallStatus
+        status: overallStatus,
+        autentique_url: autentiqueUrlFinal
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
