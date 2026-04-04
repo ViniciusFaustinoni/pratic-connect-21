@@ -31,7 +31,7 @@ import {
 import { useAssociado, useVeiculosDoAssociado, useAssociadoStats, useAssociadoActions } from '@/hooks/useAssociados';
 import { useDocumentosPorAssociado } from '@/hooks/useDocumentos';
 import { useContratoDoAssociado, useDocumentosCotacao, useResumoFinanceiroAssociado, useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
-import { useFotosAutovistoriaCotacao, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
+import { useFotosVistoriaUnificada, agruparFotosPorCategoria, formatarTipoFoto } from '@/hooks/useFotosAutovistoria';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
 import { VeiculoEditDialog } from '@/components/veiculos/VeiculoEditDialog';
@@ -235,8 +235,9 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const { data: cobrancasData, isLoading: isLoadingCobrancas } = useCobrancasAssociado(id);
   const { data: historico, isLoading: isLoadingHistorico } = useAssociadoHistoricoCompleto(id);
   const { data: documentosCotacao, isLoading: isLoadingDocsCotacao } = useDocumentosCotacao(cotacaoId);
-  const { data: fotosAutovistoria, isLoading: isLoadingFotos } = useFotosAutovistoriaCotacao(cotacaoId);
-  const fotosAgrupadas = fotosAutovistoria ? agruparFotosPorCategoria(fotosAutovistoria) : null;
+  const { data: vistoriaUnificada, isLoading: isLoadingFotos } = useFotosVistoriaUnificada({ contratoId: contrato?.id, cotacaoId });
+  const fotosInstaladorAgrupadas = vistoriaUnificada?.fotosInstalador?.length ? agruparFotosPorCategoria(vistoriaUnificada.fotosInstalador) : null;
+  const fotosAutovistoriaAgrupadas = vistoriaUnificada?.fotosAutovistoria?.length ? agruparFotosPorCategoria(vistoriaUnificada.fotosAutovistoria) : null;
   const { data: veiculosComRastreador } = useVeiculosComRastreador(id);
 
   const { suspenderAssociado, reativarAssociado, isSuspendendo, isReativando } = useAssociadoActions();
@@ -371,7 +372,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const docsPendentes = todosDocumentos.filter(d => d.status === 'pendente').length;
   const docsAprovados = todosDocumentos.filter(d => d.status === 'aprovado').length;
   const docsReprovados = todosDocumentos.filter(d => d.status === 'reprovado').length;
-  const totalFotos = fotosAutovistoria?.length || 0;
+  const totalFotos = (vistoriaUnificada?.fotosInstalador?.length || 0) + (vistoriaUnificada?.fotosAutovistoria?.length || 0);
 
   // ============================================
   // RENDER
@@ -816,18 +817,60 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
               </CardContent>
             </Card>
 
+            {/* Galeria do Instalador */}
+            {fotosInstaladorAgrupadas && (vistoriaUnificada?.fotosInstalador?.length || 0) > 0 && (
+              <Card className="border-border/60">
+                <CardHeader className="pb-3">
+                  <CardTitle className="text-sm font-semibold flex items-center gap-2">
+                    <Camera className="h-4 w-4" /> Galeria do Instalador
+                    <Badge variant="secondary" className="text-[10px] ml-1">{vistoriaUnificada?.fotosInstalador?.length}</Badge>
+                  </CardTitle>
+                </CardHeader>
+                <CardContent>
+                  {['exterior', 'identificacao', 'interior', 'outros'].map((cat) => {
+                    const fotos = fotosInstaladorAgrupadas[cat as keyof typeof fotosInstaladorAgrupadas];
+                    if (!fotos || fotos.length === 0) return null;
+                    return (
+                      <div key={cat} className="mb-4 last:mb-0">
+                        <p className="text-xs font-medium text-muted-foreground mb-2 capitalize">{cat} ({fotos.length})</p>
+                        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+                          {fotos.map((foto: any) => {
+                            const isVideo = /\.(mp4|webm|mov|avi)($|\?)/i.test(foto.arquivo_url || '');
+                            return (
+                              <div key={foto.id} className="relative group cursor-pointer rounded-lg overflow-hidden border bg-muted/50 aspect-square"
+                                onClick={() => setFotoModal({ open: true, url: foto.arquivo_url, tipo: formatarTipoFoto(foto.tipo), mediaType: isVideo ? 'video' : 'image' })}>
+                                {isVideo ? (
+                                  <video src={foto.arquivo_url} className="w-full h-full object-cover" muted preload="metadata" />
+                                ) : (
+                                  <img src={foto.arquivo_url} alt={formatarTipoFoto(foto.tipo)}
+                                    className="w-full h-full object-cover transition-transform group-hover:scale-105" />
+                                )}
+                                <div className="absolute inset-0 bg-black/40 opacity-0 group-hover:opacity-100 transition-opacity flex items-center justify-center">
+                                  <Eye className="h-5 w-5 text-white" />
+                                </div>
+                              </div>
+                            );
+                          })}
+                        </div>
+                      </div>
+                    );
+                  })}
+                </CardContent>
+              </Card>
+            )}
+
             {/* Galeria de Autovistoria */}
-            {fotosAgrupadas && (totalFotos > 0) && (
+            {fotosAutovistoriaAgrupadas && (vistoriaUnificada?.fotosAutovistoria?.length || 0) > 0 && (
               <Card className="border-border/60">
                 <CardHeader className="pb-3">
                   <CardTitle className="text-sm font-semibold flex items-center gap-2">
                     <Camera className="h-4 w-4" /> Galeria de Autovistoria
-                    <Badge variant="secondary" className="text-[10px] ml-1">{totalFotos}</Badge>
+                    <Badge variant="secondary" className="text-[10px] ml-1">{vistoriaUnificada?.fotosAutovistoria?.length}</Badge>
                   </CardTitle>
                 </CardHeader>
                 <CardContent>
-                  {['exterior', 'documentos', 'interior', 'outros'].map((cat) => {
-                    const fotos = fotosAgrupadas[cat as keyof typeof fotosAgrupadas];
+                  {['exterior', 'identificacao', 'interior', 'outros'].map((cat) => {
+                    const fotos = fotosAutovistoriaAgrupadas[cat as keyof typeof fotosAutovistoriaAgrupadas];
                     if (!fotos || fotos.length === 0) return null;
                     return (
                       <div key={cat} className="mb-4 last:mb-0">

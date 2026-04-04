@@ -81,11 +81,10 @@ export default function InstalacaoDetalhePage() {
 
   // Agrupar fotos por categoria
   const fotosAgrupadas = useMemo(() => {
-    if (!fotosData?.fotos) return null;
-    return agruparFotosPorCategoria(fotosData.fotos);
-  }, [fotosData?.fotos]);
-
-  // Calcular se está atrasada - DEVE vir ANTES de qualquer return condicional
+    if (!fotosData?.fotosInstalador && !fotosData?.fotosAutovistoria) return null;
+    const todasFotos = [...(fotosData?.fotosInstalador || []), ...(fotosData?.fotosAutovistoria || [])];
+    return agruparFotosPorCategoria(todasFotos);
+  }, [fotosData?.fotosInstalador, fotosData?.fotosAutovistoria]);
   const isAtrasada = useMemo(() => {
     if (!instalacao) return false;
     if (['concluida', 'cancelada'].includes(instalacao.status)) return false;
@@ -209,7 +208,7 @@ export default function InstalacaoDetalhePage() {
   });
 
   // Contar fotos e documentos
-  const totalFotos = fotosData?.fotos?.length || 0;
+  const totalFotos = (fotosData?.fotosInstalador?.length || 0) + (fotosData?.fotosAutovistoria?.length || 0);
   const totalDocs = documentos?.length || 0;
 
   return (
