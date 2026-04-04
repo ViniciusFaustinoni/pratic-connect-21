@@ -181,8 +181,8 @@ export default function Veiculos() {
     queryKey: ['veiculos-stats'],
     queryFn: async () => {
       const [totalRes, ativosRes] = await Promise.all([
-        supabase.from('veiculos').select('id', { count: 'exact', head: true }),
-        supabase.from('veiculos').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
+        supabase.from('veiculos').select('id, associado:associados!inner(id)', { count: 'exact', head: true }).eq('associado.origem_cadastro', 'interno'),
+        supabase.from('veiculos').select('id, associado:associados!inner(id)', { count: 'exact', head: true }).eq('status', 'ativo').eq('associado.origem_cadastro', 'interno'),
       ]);
 
       if (totalRes.error) throw totalRes.error;
@@ -195,8 +195,9 @@ export default function Veiculos() {
       while (true) {
         const { data: page, error } = await supabase
           .from('veiculos')
-          .select('valor_fipe')
+          .select('valor_fipe, associado:associados!inner(id)')
           .eq('status', 'ativo')
+          .eq('associado.origem_cadastro', 'interno')
           .range(from, from + pageSize - 1);
         if (error) throw error;
         valorTotal += (page || []).reduce((acc, v) => acc + (Number(v.valor_fipe) || 0), 0);
