@@ -29,6 +29,26 @@ interface ContratoInfo {
   status?: string;
 }
 
+function CopyLinkButton({ link }: { link: string }) {
+  const [copied, setCopied] = useState(false);
+  const handleCopy = async () => {
+    try {
+      await navigator.clipboard.writeText(link);
+      setCopied(true);
+      toast.success('Link copiado!');
+      setTimeout(() => setCopied(false), 2000);
+    } catch {
+      toast.error('Erro ao copiar');
+    }
+  };
+  return (
+    <Button variant="outline" size="sm" className="w-full" onClick={handleCopy}>
+      {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+      {copied ? 'Link Copiado!' : 'Copiar Link de Assinatura'}
+    </Button>
+  );
+}
+
 export function EtapaAssinaturaContrato({
   cotacaoId,
   tokenPublico,
