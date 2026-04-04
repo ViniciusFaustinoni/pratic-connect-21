@@ -87,21 +87,39 @@ function getCorPorStatus(status: string): string {
 // Cache de ícones por cor
 const iconCache = new Map<string, L.Icon>();
 
-function getColoredIcon(color: string): L.Icon {
-  const cacheKey = `icon-${color}`;
+function getColoredIcon(color: string, draggable = false): L.Icon {
+  const cacheKey = `icon-${color}-${draggable}`;
   if (iconCache.has(cacheKey)) {
     return iconCache.get(cacheKey)!;
   }
   
   const icon = new L.Icon({
     iconUrl: svgToDataUrl(createColoredMarkerSvg(color)),
-    iconSize: [32, 40],
-    iconAnchor: [16, 40],
-    popupAnchor: [0, -40],
+    iconSize: draggable ? [38, 48] : [32, 40],
+    iconAnchor: draggable ? [19, 48] : [16, 40],
+    popupAnchor: [0, draggable ? -48 : -40],
   });
   
   iconCache.set(cacheKey, icon);
   return icon;
+}
+
+// Ícone especial para pin arrastável (com indicador de grip)
+function getDraggableIcon(color: string): L.DivIcon {
+  return L.divIcon({
+    html: `
+      <div style="position:relative;cursor:grab;">
+        <img src="${svgToDataUrl(createColoredMarkerSvg(color))}" width="38" height="48" style="filter: drop-shadow(0 0 6px ${color}80);" />
+        <div style="position:absolute;top:-8px;right:-8px;background:#F59E0B;border-radius:50%;width:18px;height:18px;display:flex;align-items:center;justify-content:center;border:2px solid white;box-shadow:0 1px 3px rgba(0,0,0,0.3);">
+          <svg width="10" height="10" viewBox="0 0 24 24" fill="white"><circle cx="8" cy="4" r="2"/><circle cx="16" cy="4" r="2"/><circle cx="8" cy="12" r="2"/><circle cx="16" cy="12" r="2"/><circle cx="8" cy="20" r="2"/><circle cx="16" cy="20" r="2"/></svg>
+        </div>
+      </div>
+    `,
+    className: 'draggable-marker-icon',
+    iconSize: [38, 48],
+    iconAnchor: [19, 48],
+    popupAnchor: [0, -48],
+  });
 }
 
 // Cache de ícones de vistoriador
