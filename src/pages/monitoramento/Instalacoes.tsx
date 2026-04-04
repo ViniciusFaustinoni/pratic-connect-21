@@ -182,7 +182,7 @@ export default function Instalacoes() {
                 </TableHeader>
                 <TableBody>
                   {instalacoes.map((instalacao) => (
-                    <TableRow key={instalacao.id} className="cursor-pointer hover:bg-muted/50">
+                    <TableRow key={instalacao.id} className="cursor-pointer hover:bg-muted/50" onClick={() => handleOpenDetail(instalacao.id)}>
                       <TableCell>
                         <div className="flex flex-col">
                           <span className="font-medium">

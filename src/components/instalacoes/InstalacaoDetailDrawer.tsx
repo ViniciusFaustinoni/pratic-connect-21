@@ -26,12 +26,6 @@ import {
   Image,
 } from 'lucide-react';
 import {
-  Drawer,
-  DrawerContent,
-  DrawerHeader,
-  DrawerTitle,
-} from '@/components/ui/drawer';
-import {
   AlertDialog,
   AlertDialogAction,
   AlertDialogCancel,
@@ -258,18 +252,18 @@ export function InstalacaoDetailDrawer({
   if (!instalacaoId) return null;
 
   return (
-    <Drawer open={open} onOpenChange={onOpenChange}>
-      <DrawerContent className="max-h-[90vh]">
-        <DrawerHeader className="border-b pb-4">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto">
+        <DialogHeader className="border-b pb-4">
           <div className="flex items-center justify-between">
-            <DrawerTitle>Detalhes da Instalação</DrawerTitle>
+            <DialogTitle>Detalhes da Instalação</DialogTitle>
             {instalacao && (
               <Badge className={cn(isAtrasada ? "bg-orange-500 text-white" : STATUS_INSTALACAO_COLORS[instalacao.status])}>
                 {isAtrasada ? "Atrasada" : STATUS_INSTALACAO_LABELS[instalacao.status]}
               </Badge>
             )}
           </div>
-        </DrawerHeader>
+        </DialogHeader>
 
         {isLoading ? (
           <div className="flex items-center justify-center py-12">
@@ -674,7 +668,7 @@ export function InstalacaoDetailDrawer({
             </section>
           </div>
         )}
-      </DrawerContent>
-    </Drawer>
+      </DialogContent>
+    </Dialog>
   );
 }
