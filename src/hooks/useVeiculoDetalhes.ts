@@ -154,7 +154,7 @@ export function useVeiculoCompleto(veiculoId: string | undefined) {
       if (veiculo.associado_id) {
         const { data } = await supabase
           .from('associados')
-          .select('id, nome, cpf, telefone, email, status, cidade, estado')
+          .select('id, nome, cpf, telefone, email, status, cidade, uf')
           .eq('id', veiculo.associado_id)
           .maybeSingle();
         associado = data;
