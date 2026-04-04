@@ -30,9 +30,8 @@ export function ProtectedRoute({
     return <>{children}</>;
   }
 
-  // Loading state - aguardar profile carregar se temos user mas profile ainda não veio
-  // Isso evita decisões prematuras sobre permissões
-  if (!initialized || loading || (user && !profile)) {
+  // Loading real — auth ainda inicializando ou dados carregando
+  if (!initialized || loading) {
     return (
       <div className="flex min-h-screen items-center justify-center bg-background">
         <div className="flex flex-col items-center gap-4">
@@ -46,6 +45,12 @@ export function ProtectedRoute({
   // Não autenticado
   if (!user) {
     return <Navigate to={authRedirect} state={{ from: location }} replace />;
+  }
+
+  // Usuário autenticado mas sem perfil (perfil não existe ou falha na busca)
+  if (!profile) {
+    console.warn('[ProtectedRoute] Usuário autenticado sem profile, redirecionando para login');
+    return <Navigate to={authRedirect} state={{ from: location, error: 'profile_not_found' }} replace />;
   }
 
   // Verificar primeiro_acesso - redirecionar para definir senha
