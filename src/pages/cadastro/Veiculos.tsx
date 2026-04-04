@@ -1,5 +1,6 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { useQuery } from '@tanstack/react-query';
 import { Search, Car, User, Smartphone, Loader2, CheckCircle2, AlertCircle, Trash2 } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -175,12 +176,43 @@ export default function Veiculos() {
     }).format(value);
   };
 
-  // Stats
-  const stats = {
-    total: veiculos?.length || 0,
-    ativos: veiculos?.filter((v) => (v.status as StatusVeiculo) === 'ativo' || (!v.status && v.ativo)).length || 0,
-    valorTotal: veiculos?.filter((v) => (v.status as StatusVeiculo) === 'ativo' || (!v.status && v.ativo)).reduce((acc, v) => acc + (v.valor_fipe || 0), 0) || 0,
-  };
+  // Stats with exact counts (bypass 1000 row limit)
+  const { data: statsData, isLoading: statsLoading } = useQuery({
+    queryKey: ['veiculos-stats'],
+    queryFn: async () => {
+      const [totalRes, ativosRes] = await Promise.all([
+        supabase.from('veiculos').select('id', { count: 'exact', head: true }),
+        supabase.from('veiculos').select('id', { count: 'exact', head: true }).eq('status', 'ativo'),
+      ]);
+
+      if (totalRes.error) throw totalRes.error;
+      if (ativosRes.error) throw ativosRes.error;
+
+      // Sum valor_fipe with pagination to bypass 1000 limit
+      let valorTotal = 0;
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data: page, error } = await supabase
+          .from('veiculos')
+          .select('valor_fipe')
+          .eq('status', 'ativo')
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        valorTotal += (page || []).reduce((acc, v) => acc + (Number(v.valor_fipe) || 0), 0);
+        if (!page || page.length < pageSize) break;
+        from += pageSize;
+      }
+
+      return {
+        total: totalRes.count || 0,
+        ativos: ativosRes.count || 0,
+        valorTotal,
+      };
+    },
+  });
+
+  const stats = statsData || { total: 0, ativos: 0, valorTotal: 0 };
 
   return (
     <div className="space-y-6">
@@ -201,7 +233,7 @@ export default function Veiculos() {
                 <Car className="h-5 w-5 text-primary" />
               </div>
               <div>
-                {isLoading ? (
+                {statsLoading ? (
                   <Skeleton className="h-8 w-12" />
                 ) : (
                   <p className="text-2xl font-bold">{stats.total}</p>
@@ -218,7 +250,7 @@ export default function Veiculos() {
                 <Car className="h-5 w-5 text-green-500" />
               </div>
               <div>
-                {isLoading ? (
+                {statsLoading ? (
                   <Skeleton className="h-8 w-12" />
                 ) : (
                   <p className="text-2xl font-bold">{stats.ativos}</p>
@@ -235,7 +267,7 @@ export default function Veiculos() {
                 <Car className="h-5 w-5 text-accent" />
               </div>
               <div>
-                {isLoading ? (
+                {statsLoading ? (
                   <Skeleton className="h-8 w-24" />
                 ) : (
                   <p className="text-2xl font-bold">{formatCurrency(stats.valorTotal)}</p>
