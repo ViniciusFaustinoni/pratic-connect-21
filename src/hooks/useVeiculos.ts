@@ -34,14 +34,24 @@ export function useVeiculos(associadoId?: string) {
   return useQuery({
     queryKey: ['veiculos', associadoId],
     queryFn: async () => {
+      if (associadoId) {
+        // Busca específica por associado — sem filtro de origem
+        const query = supabase
+          .from('veiculos')
+          .select('*, associado:associados(id, nome, cpf)')
+          .eq('associado_id', associadoId)
+          .order('created_at', { ascending: false });
+        const { data, error } = await query;
+        if (error) throw error;
+        return data as Veiculo[];
+      }
+
+      // Listagem geral — apenas base nova (interno)
       let query = supabase
         .from('veiculos')
-        .select('*, associado:associados(id, nome, cpf)')
+        .select('*, associado:associados!inner(id, nome, cpf, origem_cadastro)')
+        .eq('associado.origem_cadastro', 'interno')
         .order('created_at', { ascending: false });
-      
-      if (associadoId) {
-        query = query.eq('associado_id', associadoId);
-      }
       
       const { data, error } = await query;
       
