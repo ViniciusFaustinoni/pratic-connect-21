@@ -1,32 +1,22 @@
 
 
-# Centralizar Modais de Detalhes (Associado e Veículo)
-
-## Situação Atual
-
-- **Veículo**: Já usa `Dialog` (centralizado) — OK
-- **Associado**: Usa `Sheet` (painel lateral direito) — precisa mudar para `Dialog` centralizado
+# Remover Rolagem Lateral do Modal de Detalhes do Associado
 
 ## Alteração
 
-### `src/pages/cadastro/Associados.tsx`
+### `src/pages/cadastro/Associados.tsx` (linha 984)
 
-Substituir o `Sheet`/`SheetContent` por `Dialog`/`DialogContent`:
+Adicionar `overflow-x-hidden` ao `DialogContent`:
 
 ```tsx
 // DE:
-<Sheet open={!!detalheAssociadoId} onOpenChange={...}>
-  <SheetContent side="right" className="w-full sm:max-w-[900px] lg:max-w-[1100px] p-0 overflow-y-auto">
+<DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto">
 
 // PARA:
-<Dialog open={!!detalheAssociadoId} onOpenChange={...}>
-  <DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto">
+<DialogContent className="max-w-5xl max-h-[92vh] p-0 overflow-y-auto overflow-x-hidden">
 ```
 
-- Atualizar imports: remover `Sheet`/`SheetContent`, adicionar `Dialog`/`DialogContent`
-- Manter o conteúdo interno igual (`AssociadoDetalhe` com `isModal`)
-
 ## Impacto
-- 1 arquivo alterado
-- Modal do associado passa a abrir centralizado, igual ao do veículo
+- 1 linha alterada
+- Conteúdo que ultrapassa a largura será cortado em vez de gerar scroll horizontal
 
