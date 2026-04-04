@@ -752,7 +752,7 @@ serve(async (req) => {
       console.log('[autentique-create] short_link não retornado na criação, tentando buscar...');
       await new Promise(r => setTimeout(r, 2000));
       try {
-        const query = `query { document(id: "${document.id}") { signatures { link { short_link } } } }`;
+        const query = `query { document(id: "${document.id}") { signatures { public_id link { short_link } } } }`;
         const retryResp = await fetch(AUTENTIQUE_API_URL, {
           method: "POST",
           headers: {
@@ -764,6 +764,29 @@ serve(async (req) => {
         const retryData = await retryResp.json();
         signatureLink = retryData?.data?.document?.signatures?.[0]?.link?.short_link || null;
         console.log('[autentique-create] Link obtido no retry:', signatureLink);
+        
+        // Se ainda não tem link, tentar gerar via mutation createLinkToSignature
+        if (!signatureLink) {
+          const publicId = retryData?.data?.document?.signatures?.[0]?.public_id;
+          if (publicId) {
+            try {
+              const createLinkMutation = `mutation { createLinkToSignature(public_id: "${publicId}") { short_link } }`;
+              const linkResp2 = await fetch(AUTENTIQUE_API_URL, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${autentiqueApiKey}`,
+                  "Content-Type": "application/json",
+                },
+                body: JSON.stringify({ query: createLinkMutation }),
+              });
+              const linkResult2 = await linkResp2.json();
+              signatureLink = linkResult2?.data?.createLinkToSignature?.short_link || null;
+              console.log('[autentique-create] Link gerado via createLinkToSignature (retry):', signatureLink);
+            } catch (linkErr) {
+              console.warn('[autentique-create] Falha createLinkToSignature no retry:', linkErr);
+            }
+          }
+        }
       } catch (err) {
         console.warn('[autentique-create] Retry falhou:', err);
       }
