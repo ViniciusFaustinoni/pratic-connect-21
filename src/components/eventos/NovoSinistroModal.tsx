@@ -218,13 +218,15 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
     queryFn: async () => {
       if (searchAssociado.length < 3) return [];
       
-      const isBuscaPlaca = /^[A-Za-z]{3}/i.test(searchAssociado.replace(/\s/g, ''));
+      // Detect plate pattern: 3 letters + 1 digit (e.g. ABC1D23 or ABC-1234)
+      const cleaned = searchAssociado.replace(/[\s-]/g, '');
+      const isBuscaPlaca = /^[A-Za-z]{3}\d/.test(cleaned);
       
       if (isBuscaPlaca) {
         const { data: veiculos } = await supabase
           .from('veiculos')
           .select('associado_id, placa, associado:associados!inner(id, nome, cpf, status)')
-          .ilike('placa', `%${searchAssociado}%`)
+          .ilike('placa', `%${cleaned}%`)
           .limit(10);
         
         if (!veiculos) return [];
@@ -239,10 +241,15 @@ export function NovoSinistroModal({ open, onClose, onSuccess }: NovoSinistroModa
         return Array.from(associadoMap.values());
       }
       
+      // Strip non-digits for CPF search
+      const digitsOnly = searchAssociado.replace(/\D/g, '');
+      const cpfFilter = digitsOnly.length >= 3 ? `cpf.ilike.%${digitsOnly}%` : '';
+      const orFilter = [`nome.ilike.%${searchAssociado}%`, cpfFilter].filter(Boolean).join(',');
+      
       const { data } = await supabase
         .from('associados')
         .select('id, nome, cpf')
-        .or(`nome.ilike.%${searchAssociado}%,cpf.ilike.%${searchAssociado}%`)
+        .or(orFilter)
         .eq('status', 'ativo')
         .limit(10);
       return data || [];
