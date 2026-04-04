@@ -448,10 +448,13 @@ serve(async (req) => {
           ? (plataforma?.api_url_producao || 'https://api.redesimples.com.br/api/v2')
           : (plataforma?.api_url_sandbox || 'https://sandbox.redesimples.com.br/api/v2');
 
+        const cpfAssociado = (veiculo as any)?.associado?.cpf || '';
         posicao = await getPosicaoRedeVeiculos(
           redeToken,
           rastreador.codigo,
-          baseUrl
+          baseUrl,
+          veiculo.placa,
+          cpfAssociado
         );
       } else {
         // Softruck (padrão) - com retry automático em erro 401
