@@ -185,6 +185,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const [editTelefoneSecundario, setEditTelefoneSecundario] = useState('');
   const [editEmail, setEditEmail] = useState('');
   const [isSavingContatos, setIsSavingContatos] = useState(false);
+  const [showContratoPdf, setShowContratoPdf] = useState(false);
 
   const canEditContatos = isDiretor || isAnalistaCadastroOnly || isDesenvolvedor || isAdminMaster;
 
