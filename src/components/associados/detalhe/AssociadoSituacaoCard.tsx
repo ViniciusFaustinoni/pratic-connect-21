@@ -24,9 +24,12 @@ const STATUS_INADIMPLENCIA_CONFIG = {
 
 interface Props {
   situacao: SituacaoAssociado;
+  associado?: any;
+  contrato?: any;
+  resumoFinanceiro?: any;
 }
 
-export function AssociadoSituacaoCard({ situacao }: Props) {
+export function AssociadoSituacaoCard({ situacao, associado, contrato, resumoFinanceiro }: Props) {
   if (situacao.isLoading) {
     return <Skeleton className="h-48 w-full rounded-lg" />;
   }
@@ -154,6 +157,66 @@ export function AssociadoSituacaoCard({ situacao }: Props) {
               <ShieldOff className="h-3 w-3 mr-1" /> Coberturas suspensas
             </Badge>
           )}
+
+          {/* Plano & Contrato */}
+          {associado && (
+            <div className="space-y-1.5 pt-2 border-t border-border/40">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Plano & Contrato</p>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Plano</span>
+                <span className="font-medium text-primary">{associado.planos?.nome || '—'}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Mensalidade</span>
+                <span className="font-medium">{contrato?.valor_mensal ? formatCurrency(contrato.valor_mensal) : '—'}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Dia venc.</span>
+                <span className="font-medium">Todo dia {contrato?.dia_vencimento || associado.dia_vencimento || 15}</span>
+              </div>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Início contrato</span>
+                <span className="font-medium">{contrato?.data_inicio ? formatDate(contrato.data_inicio) : '—'}</span>
+              </div>
+            </div>
+          )}
+
+          {/* Vencimentos */}
+          <div className="space-y-1.5 pt-2 border-t border-border/40">
+            <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Vencimentos</p>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">Mensalidade</span>
+              <span className="font-medium">{resumoFinanceiro?.proximaCobranca?.data_vencimento ? formatDate(resumoFinanceiro.proximaCobranca.data_vencimento) : '—'}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">CNH vence</span>
+              <span className="font-medium">{associado?.cnh_validade ? formatDate(associado.cnh_validade) : contrato?.cliente_cnh_validade ? formatDate(contrato.cliente_cnh_validade) : 'Não informado'}</span>
+            </div>
+            <div className="flex justify-between text-xs">
+              <span className="text-muted-foreground">CRLV vence</span>
+              <span className="font-medium">Não informado</span>
+            </div>
+          </div>
+
+          {/* Consultor */}
+          {situacao.consultorNome && (
+            <div className="space-y-1.5 pt-2 border-t border-border/40">
+              <p className="text-[11px] font-medium text-muted-foreground uppercase tracking-wide">Consultor</p>
+              <div className="flex justify-between text-xs">
+                <span className="text-muted-foreground">Nome</span>
+                <span className="font-medium">{situacao.consultorNome}</span>
+              </div>
+              {situacao.consultorPontuacao !== null && (
+                <div className="flex justify-between text-xs">
+                  <span className="text-muted-foreground">Pontuação</span>
+                  <span className="font-medium flex items-center gap-1">
+                    <Star className="h-3 w-3 text-amber-500" />
+                    {situacao.consultorPontuacao} pts
+                  </span>
+                </div>
+              )}
+            </div>
+          )}
         </CardContent>
       </Card>
 
@@ -189,30 +252,6 @@ export function AssociadoSituacaoCard({ situacao }: Props) {
         </Card>
       )}
 
-      {/* Consultor vinculado */}
-      {situacao.consultorNome && (
-        <Card className="border-border/60">
-          <CardContent className="p-4 space-y-2">
-            <div className="flex items-center gap-2 mb-1">
-              <UserCheck className="h-4 w-4 text-primary" />
-              <span className="text-sm font-semibold">Consultor Vinculado</span>
-            </div>
-            <div className="flex justify-between text-xs">
-              <span className="text-muted-foreground">Nome</span>
-              <span className="font-medium">{situacao.consultorNome}</span>
-            </div>
-            {situacao.consultorPontuacao !== null && (
-              <div className="flex justify-between text-xs">
-                <span className="text-muted-foreground">Pontuação gerada</span>
-                <span className="font-medium flex items-center gap-1">
-                  <Star className="h-3 w-3 text-amber-500" />
-                  {situacao.consultorPontuacao} pts
-                </span>
-              </div>
-            )}
-          </CardContent>
-        </Card>
-      )}
     </div>
   );
 }
