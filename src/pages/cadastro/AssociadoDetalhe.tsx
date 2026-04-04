@@ -372,7 +372,7 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
   const docsPendentes = todosDocumentos.filter(d => d.status === 'pendente').length;
   const docsAprovados = todosDocumentos.filter(d => d.status === 'aprovado').length;
   const docsReprovados = todosDocumentos.filter(d => d.status === 'reprovado').length;
-  const totalFotos = fotosAutovistoria?.length || 0;
+  const totalFotos = (vistoriaUnificada?.fotosInstalador?.length || 0) + (vistoriaUnificada?.fotosAutovistoria?.length || 0);
 
   // ============================================
   // RENDER
