@@ -1,74 +1,46 @@
 
 
-# Aba Histórico de Atribuições em Serviços de Campo
+# Validação de associado_id e veiculo_id no Reagendamento Automático
 
 ## Problema
-Não existe registro nem visualização do histórico de atribuições (manuais ou automáticas) de serviços a profissionais.
+Quando um serviço é reagendado automaticamente (via link público ou WhatsApp), o novo serviço copia `associado_id` e `veiculo_id` do original. Se o original já tem esses campos NULL, cria-se um serviço órfão que aparece no mapa sem dados.
 
-## Solução
+## Alterações
 
-### 1. Migração SQL — Criar tabela `servicos_atribuicoes_log`
-Tabela dedicada para registrar cada atribuição:
-
-```sql
-CREATE TABLE servicos_atribuicoes_log (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  servico_id uuid REFERENCES servicos(id) ON DELETE CASCADE NOT NULL,
-  profissional_id uuid REFERENCES profiles(id) NOT NULL,
-  tipo_atribuicao text NOT NULL DEFAULT 'automatica', -- 'manual' ou 'automatica'
-  atribuido_por uuid REFERENCES profiles(id), -- NULL = automático, preenchido = quem atribuiu manualmente
-  distancia_km numeric,
-  observacoes text,
-  created_at timestamptz DEFAULT now()
-);
-
-ALTER TABLE servicos_atribuicoes_log ENABLE ROW LEVEL SECURITY;
-CREATE POLICY "Authenticated users can view logs" ON servicos_atribuicoes_log FOR SELECT TO authenticated USING (true);
-CREATE POLICY "System can insert logs" ON servicos_atribuicoes_log FOR INSERT TO authenticated WITH CHECK (true);
-
-CREATE INDEX idx_atribuicoes_log_created ON servicos_atribuicoes_log(created_at DESC);
-CREATE INDEX idx_atribuicoes_log_servico ON servicos_atribuicoes_log(servico_id);
-```
-
-### 2. Registrar atribuições automáticas — `cron-atribuir-tarefas/index.ts`
-Após atribuição bem-sucedida (~linha 714), inserir registro no log:
+### 1. `supabase/functions/reagendar-vistoria-publica/index.ts`
+Antes do insert (linha ~131), adicionar validação:
 ```typescript
-await supabase.from('servicos_atribuicoes_log').insert({
-  servico_id: servico.id,
-  profissional_id: prof.vistoriador_id,
-  tipo_atribuicao: tipoAtribuicao, // 'hoje', 'amanha', 'encaixe'
-  distancia_km: servico.distancia_km,
-});
+if (!servico.associado_id || !servico.veiculo_id) {
+  throw new Error("Serviço original incompleto (sem associado ou veículo). Não é possível reagendar.");
+}
 ```
 
-### 3. Registrar atribuições manuais — `useAtribuicaoManual.ts`
-No `useAtribuirServicoManual`, após update com sucesso, inserir log com `tipo_atribuicao: 'manual'` e `atribuido_por` = usuário logado.
+### 2. `supabase/functions/whatsapp-webhook/index.ts`
+Antes do insert do novo serviço (linha ~2477), adicionar a mesma validação:
+```typescript
+if (!servicoOriginalDados.associado_id || !servicoOriginalDados.veiculo_id) {
+  // Informar o cliente que precisa ligar para a central
+  const msg = `Desculpe, não foi possível reagendar automaticamente. Entre em contato com a central ${tel0800}.`;
+  await sendWhatsAppMessage(...);
+  return new Response(JSON.stringify({ ok: false, error: "servico_incompleto" }), { headers: corsHeaders });
+}
+```
 
-### 4. Hook `useHistoricoAtribuicoes` — novo arquivo
-Query na tabela `servicos_atribuicoes_log` com joins em `servicos` (tipo, associado, veículo), `profiles` (profissional) e `profiles` (atribuidor). Suporte a filtros por data, tipo de atribuição e profissional. Paginação.
+### 3. `supabase/functions/cron-reagendamento-automatico/index.ts`
+Na Parte 1 (órfãos, linha ~160) e Parte 2 (vencidos, linha ~268), antes de chamar `enviar-link-reagendamento`, validar que o serviço tem `associado_id` e `veiculo_id`. Se não tiver, cancelar direto em vez de tentar reagendar:
+```typescript
+if (!orfao.associado_id || !orfao.veiculo_id) {
+  await supabase.from("servicos").update({ status: "cancelada", observacoes: "Cancelado automaticamente: sem associado/veículo vinculado" }).eq("id", orfao.id);
+  continue;
+}
+```
 
-### 5. Componente `HistoricoAtribuicoesTab` — novo arquivo
-Tabela com colunas:
-- Data/Hora
-- Tipo Serviço (instalação/vistoria/retirada)
-- Associado / Placa
-- Profissional atribuído
-- Tipo (badge: Manual / Automática / Encaixe)
-- Atribuído por (nome ou "Sistema")
-- Distância (km)
+Adicionar `associado_id, veiculo_id` ao select de serviços (~linha 190) para ter acesso a esses campos.
 
-Filtros: período, tipo de atribuição, profissional.
-
-### 6. `VistoriasInstalacoesMon.tsx` — Adicionar aba
-Nova tab "Histórico" com ícone `History`, carregando `HistoricoAtribuicoesTab` via lazy import.
-
-## Arquivos
+## Arquivos alterados
 | Arquivo | Ação |
 |---------|------|
-| Migração SQL | Criar tabela `servicos_atribuicoes_log` |
-| `supabase/functions/cron-atribuir-tarefas/index.ts` | Inserir log após atribuição |
-| `src/hooks/useAtribuicaoManual.ts` | Inserir log após atribuição manual |
-| `src/hooks/useHistoricoAtribuicoes.ts` | Novo hook de consulta |
-| `src/components/monitoramento/HistoricoAtribuicoesTab.tsx` | Novo componente |
-| `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` | Adicionar aba |
+| `supabase/functions/reagendar-vistoria-publica/index.ts` | Guard antes do insert |
+| `supabase/functions/whatsapp-webhook/index.ts` | Guard antes do insert |
+| `supabase/functions/cron-reagendamento-automatico/index.ts` | Cancelar órfãos sem associado em vez de reagendar |
 
