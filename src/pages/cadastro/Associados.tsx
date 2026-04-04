@@ -666,7 +666,7 @@ export default function Associados() {
                     >
                       <TableCell 
                         className="font-medium"
-                        onClick={() => navigate(`/cadastro/associados/${associado.id}`)}
+                        onClick={() => setDetalheAssociadoId(associado.id)}
                       >
                         <div className="flex items-center gap-2.5">
                           <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary text-xs font-semibold shrink-0">
@@ -675,14 +675,14 @@ export default function Associados() {
                           <span className="truncate max-w-[180px]">{associado.nome}</span>
                         </div>
                       </TableCell>
-                      <TableCell onClick={() => navigate(`/cadastro/associados/${associado.id}`)} className="text-muted-foreground">
+                      <TableCell onClick={() => setDetalheAssociadoId(associado.id)} className="text-muted-foreground">
                         {formatCpf(associado.cpf)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <span 
                             className="text-muted-foreground cursor-pointer"
-                            onClick={() => navigate(`/cadastro/associados/${associado.id}`)}
+                            onClick={() => setDetalheAssociadoId(associado.id)}
                           >
                             {formatTelefone(associado.telefone)}
                           </span>
@@ -701,7 +701,7 @@ export default function Associados() {
                           </Tooltip>
                         </div>
                       </TableCell>
-                      <TableCell onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
+                      <TableCell onClick={() => setDetalheAssociadoId(associado.id)}>
                         {associado.veiculos && associado.veiculos.length > 0 ? (
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded border border-border">
@@ -725,10 +725,10 @@ export default function Associados() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell onClick={() => navigate(`/cadastro/associados/${associado.id}`)} className="text-muted-foreground">
+                      <TableCell onClick={() => setDetalheAssociadoId(associado.id)} className="text-muted-foreground">
                         {associado.planos?.nome || '—'}
                       </TableCell>
-                      <TableCell onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
+                      <TableCell onClick={() => setDetalheAssociadoId(associado.id)}>
                         <div className="flex flex-col gap-1">
                           <Badge className={`${statusColors[associado.status]} border-0 gap-1.5`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${statusDotColors[associado.status]}`} />
@@ -752,7 +752,7 @@ export default function Associados() {
                           })()}
                         </div>
                       </TableCell>
-                      <TableCell onClick={() => navigate(`/cadastro/associados/${associado.id}`)} className="text-muted-foreground text-sm">
+                      <TableCell onClick={() => setDetalheAssociadoId(associado.id)} className="text-muted-foreground text-sm">
                         {formatDate(associado.data_adesao)}
                       </TableCell>
                       <TableCell>
@@ -764,7 +764,7 @@ export default function Associados() {
                                 variant="ghost" 
                                 size="icon" 
                                 className="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
-                                onClick={() => navigate(`/cadastro/associados/${associado.id}`)}
+                                onClick={() => setDetalheAssociadoId(associado.id)}
                               >
                                 <Eye className="h-3.5 w-3.5" />
                               </Button>
@@ -779,7 +779,7 @@ export default function Associados() {
                               </Button>
                             </DropdownMenuTrigger>
                             <DropdownMenuContent align="end">
-                              <DropdownMenuItem onClick={() => navigate(`/cadastro/associados/${associado.id}`)}>
+                              <DropdownMenuItem onClick={() => setDetalheAssociadoId(associado.id)}>
                                 <Eye className="mr-2 h-4 w-4" />
                                 Ver detalhes
                               </DropdownMenuItem>
