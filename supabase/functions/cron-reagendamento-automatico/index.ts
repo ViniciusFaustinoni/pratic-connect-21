@@ -50,6 +50,18 @@ Deno.serve(async (req) => {
     let orfaosProcessados = 0;
     for (const orfao of orfaos || []) {
       try {
+        // Guard: cancelar órfãos sem associado ou veículo
+        if (!orfao.associado_id || !orfao.veiculo_id) {
+          await supabase.from("servicos").update({
+            status: "cancelada",
+            observacoes: "Cancelado automaticamente: sem associado/veículo vinculado",
+            updated_at: new Date().toISOString(),
+          }).eq("id", orfao.id);
+          console.log(`[cron-reagendamento] Órfão cancelado (sem associado/veículo): ${orfao.id}`);
+          orfaosProcessados++;
+          continue;
+        }
+
         const origem = orfao.imprevisto_origem || 'associado'; // default = associado (comportamento anterior)
 
         if (origem === 'instalador' && orfao.latitude && orfao.longitude) {
