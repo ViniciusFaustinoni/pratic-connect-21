@@ -1,60 +1,71 @@
 
 
-# Reconhecimento de Associados e Criação Automática de Leads via WhatsApp
+# Remover Template WhatsApp e Mostrar Link Autentique na Tela Pública
 
-## Situação Atual
+## Resumo
 
-O webhook WhatsApp busca associados **apenas com status 'ativo'** e **apenas na base principal** (`associados`). Se não encontra, verifica se é um lead existente; se também não, delega para o agente Maya (consultor IA) que pede CPF como fallback. A IA não busca na base antiga nem reconhece associados com outros status (suspenso, em análise, etc.).
+Parar de enviar o template WhatsApp `assinatura_documento_v2` com o link da Autentique. Em vez disso, mostrar o link diretamente na tela pública onde o associado já está (página de confirmação), com botões "Acessar Documento" e "Copiar Link".
 
 ## Alterações
 
-### 1. Expandir busca de associados no webhook (`whatsapp-webhook/index.ts`)
+### 1. Frontend — `ConfirmacaoVistoria.tsx` (contrato/filiação)
 
-**Linha ~3211**: Remover o filtro `.eq("status", "ativo")` e buscar associado com qualquer status. Também buscar na base antiga caso não encontre na principal.
+Substituir a seção "Verifique seu Email" (linhas 330-433) por uma nova seção com:
+- Botão primário **"Acessar e Assinar Documento"** que abre `urlAssinatura` em nova aba
+- Botão secundário **"Copiar Link"** que copia a URL para clipboard
+- Manter o indicador de verificação automática e o botão "Verificar Agora"
+- Remover referências a "verifique seu email" e "reenvio de email" (toda a lógica de `showResendOption`, `handleResendEmail`, `showEmailIncorrect`)
 
+### 2. Frontend — `EventoAguardandoTermo.tsx` (sinistros/eventos)
+
+Atualizar para receber `autentiqueUrl` como prop e mostrar:
+- Botão **"Acessar e Assinar Termo"** (abre link)
+- Botão **"Copiar Link"** 
+- Remover texto "Verifique seu e-mail e WhatsApp"
+- Manter polling de verificação automática
+
+### 3. Edge Functions — Remover envio do template WhatsApp
+
+Em **4 edge functions**, remover o bloco `try/catch` que envia o template `assinatura_documento_v2` via `whatsapp-send-text`:
+
+| Arquivo | Linhas aproximadas |
+|---------|-------------------|
+| `autentique-create-by-token/index.ts` | 761-784 |
+| `autentique-create/index.ts` | ~725-750 |
+| `autentique-evento-create/index.ts` | 461-476 |
+| `autentique-vistoria-create/index.ts` | ~365-375 |
+
+Manter a atualização de `whatsapp_enviado` como false / remover campos obsoletos.
+
+### 4. Template WhatsApp na base
+
+Desativar o template `assinatura_documento_v2` na tabela `whatsapp_meta_templates` (set `status = 'DELETED'` ou equivalente).
+
+## Detalhes técnicos
+
+**ConfirmacaoVistoria** — A seção `urlAssinatura` (linha 330) passa a renderizar:
 ```
-Fluxo proposto:
-1. Buscar em "associados" por telefone/whatsapp (SEM filtro de status)
-2. Se encontrou:
-   - Status "ativo" → fluxo normal de IA (já existe)
-   - Status "suspenso" → informar que está suspenso, orientar contato com central
-   - Status "em_analise"/"pendente" → informar que cadastro está em processamento
-   - Status "cancelado" → oferecer recontratação (gerar lead)
-3. Se NÃO encontrou na base principal → buscar na base antiga (origem_cadastro filtro)
-   - Se encontrou → informar que é da base legada, orientar atualização cadastral
-4. Se NÃO encontrou em nenhuma base → verificar leads (já existe)
-5. Se NÃO é lead → criar lead automaticamente + delegar para Maya
+┌──────────────────────────────────┐
+│ 📝 Assine seu Contrato           │
+│                                  │
+│ Clique abaixo para acessar e     │
+│ assinar seu contrato digital.    │
+│                                  │
+│ [🔗 Acessar e Assinar Documento] │
+│ [📋 Copiar Link]                 │
+│                                  │
+│ 🔄 Verificando automaticamente.. │
+└──────────────────────────────────┘
 ```
 
-### 2. Criar lead automaticamente para números desconhecidos
+**EventoAguardandoTermo** — Layout similar, com `autentiqueUrl` vindo do sinistro.
 
-**Seção "NÚMERO DESCONHECIDO" (linha ~3301)**: Antes de delegar para o agente Maya, criar automaticamente um lead na tabela `leads` com os dados disponíveis (telefone, nome do contato do WhatsApp). Isso garante que todo contato desconhecido entre no funil de vendas.
-
-```text
-Dados do lead automático:
-- telefone: número do chamador
-- nome: nome_contato do WhatsApp (pushName) ou "Contato WhatsApp"
-- origem: "whatsapp_organico"
-- etapa: "novo"
-- observacoes: "Lead criado automaticamente via WhatsApp"
-```
-
-### 3. Ajustar resposta da Maya para oferecer contratação
-
-No fallback do agente-consultor-ia, quando o contato é novo (não é lead prévio), a primeira mensagem deve incluir oferta de plano. A Maya já faz isso via suas configurações — basta garantir que o lead seja criado antes da delegação para que ela tenha contexto.
-
-### 4. Busca na base antiga
-
-Adicionar query adicional na tabela `associados` filtrando por `origem_cadastro` diferente do padrão interno quando a busca principal não retorna resultado, para cobrir registros importados via API/SGA.
-
-## Resumo Técnico
-
-| Arquivo | Alteração |
-|---------|-----------|
-| `supabase/functions/whatsapp-webhook/index.ts` | Expandir busca (remover filtro status=ativo), adicionar lógica por status, busca base antiga, criação automática de lead |
-
-- ~60 linhas adicionadas/modificadas
-- 1 arquivo alterado
-- Nenhuma tabela nova necessária
-- Nenhuma edge function nova necessária
+## Arquivos alterados
+- `src/components/associado/ConfirmacaoVistoria.tsx`
+- `src/components/evento/EventoAguardandoTermo.tsx`
+- `supabase/functions/autentique-create-by-token/index.ts`
+- `supabase/functions/autentique-create/index.ts`
+- `supabase/functions/autentique-evento-create/index.ts`
+- `supabase/functions/autentique-vistoria-create/index.ts`
+- 1 migração SQL para desativar o template
 
