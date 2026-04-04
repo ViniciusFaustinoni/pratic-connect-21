@@ -1,22 +1,32 @@
 
 
-# Remover Carência de Vidros e Faróis Duplicada do Card "Tipo de Entrada"
+# Organizar Botões do Header do Modal sem Overflow
 
-## Diagnóstico
+## Problema
 
-O componente `OrigemCadastroCard.tsx` (card "Tipo de Entrada") tem uma seção **hardcoded** de "Carência — Vidros e Faróis" (linhas 744-780) que exibe informações de carência diretamente neste card. Essa informação já é exibida corretamente na seção dedicada de Carências (`AssociadoSituacaoCard`), que lista **todos** os itens do plano com seus respectivos prazos.
+Os botões de ação (Mapa, Substituir, Troca Titular, Suspender, Reativar, Sync, Menu) ficam todos em uma linha horizontal, causando overflow quando o modal não tem largura suficiente — especialmente com nomes longos de associados.
 
-Não faz sentido manter essa exibição duplicada e em destaque no card de Tipo de Entrada.
+## Solução
 
-## Alteração
+Mover os botões **Substituir**, **Troca Titular**, **Suspender** e **Reativar** para dentro do `DropdownMenu` (menu "...") que já existe. Manter visíveis apenas **Mapa** e o **menu "..."** (e Sync se aplicável).
 
-### `src/components/associados/detalhe/OrigemCadastroCard.tsx`
+### `src/components/associados/detalhe/AssociadoHeroHeader.tsx`
 
-- Remover o bloco de "Carência — Vidros e Faróis" (linhas 744-780) do card de Tipo de Entrada
-- Se houver outro bloco similar de "Carência Vidros e Faróis (reativação)" (linhas ~559-563), remover também, pois a seção de carências já cobre esse caso
+**Botões visíveis (linha 187):** Manter apenas Mapa + Sync + DropdownMenu
+
+**Dentro do DropdownMenu (linha 235):** Adicionar no topo:
+- Substituir Placa (se ativo)
+- Troca de Titularidade (se ativo e com permissão)
+- Separator
+- Suspender (se ativo)
+- Reativar (se suspenso)
+- Separator
+- (itens existentes: Documentos, Financeiro, WhatsApp, Cancelar, etc.)
+
+**Remover** os `<Button>` individuais de Substituir, Troca Titular, Suspender e Reativar do layout principal (linhas 192-212).
 
 ## Impacto
 - 1 arquivo alterado
-- ~40 linhas removidas
-- A informação continua disponível na seção dedicada de Carências
+- Botões reorganizados, nenhuma funcionalidade removida
+- Elimina overflow horizontal no header
 
