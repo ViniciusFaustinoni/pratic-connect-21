@@ -194,6 +194,7 @@ export default function BaseAntiga() {
                      <TableHead>Status</TableHead>
                      <TableHead>Rastreador</TableHead>
                      {canDelete && <TableHead className="w-12"></TableHead>}
+                   </TableRow>
                 </TableHeader>
                 <TableBody>
                   {vLoading ? (
