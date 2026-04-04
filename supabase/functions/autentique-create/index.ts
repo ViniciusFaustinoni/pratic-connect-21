@@ -724,7 +724,29 @@ serve(async (req) => {
     }
 
     // Obter link de assinatura
-    const signatureLink = document.signatures?.[0]?.link?.short_link;
+    let signatureLink = document.signatures?.[0]?.link?.short_link;
+
+    // Se o link não veio na criação, buscar com retry após 2s
+    if (!signatureLink && document.id) {
+      console.log('[autentique-create] short_link não retornado na criação, tentando buscar...');
+      await new Promise(r => setTimeout(r, 2000));
+      try {
+        const query = `query { document(id: "${document.id}") { signatures { link { short_link } } } }`;
+        const retryResp = await fetch(AUTENTIQUE_API_URL, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${autentiqueApiKey}`,
+            "Content-Type": "application/json",
+          },
+          body: JSON.stringify({ query }),
+        });
+        const retryData = await retryResp.json();
+        signatureLink = retryData?.data?.document?.signatures?.[0]?.link?.short_link || null;
+        console.log('[autentique-create] Link obtido no retry:', signatureLink);
+      } catch (err) {
+        console.warn('[autentique-create] Retry falhou:', err);
+      }
+    }
 
     // Atualizar contrato com dados do Autentique
     const { error: updateError } = await supabase
