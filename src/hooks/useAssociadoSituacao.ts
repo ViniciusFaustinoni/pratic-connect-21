@@ -98,7 +98,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
     enabled: !!associadoId,
   });
 
-  // Fetch benefits with carencia_ativa for the associado's plano
+  // Fetch ALL benefits for the associado's plano
   const planoId = associado?.plano_id;
   const { data: carenciasBeneficios } = useQuery({
     queryKey: ['carencias-beneficios', planoId],
@@ -107,12 +107,12 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       const { data, error } = await supabase
         .from('planos_beneficios')
         .select('benefit_id, benefits!inner(name, carencia_ativa, carencia_tipo, carencia_dias, carencia_multiplicador)')
-        .eq('plano_id', planoId)
-        .eq('benefits.carencia_ativa', true);
+        .eq('plano_id', planoId);
       if (error) throw error;
       return (data || []).map((row: any) => ({
         nome: row.benefits.name,
         tipo: 'beneficio' as const,
+        carenciaAtiva: row.benefits.carencia_ativa || false,
         carenciaTipo: row.benefits.carencia_tipo || 'liberacao',
         dias: row.benefits.carencia_dias || 0,
         multiplicador: row.benefits.carencia_multiplicador,
@@ -121,7 +121,7 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
     enabled: !!planoId,
   });
 
-  // Fetch coberturas with carencia_ativa for the associado's plano
+  // Fetch ALL coberturas for the associado's plano
   const { data: carenciasCoberturas } = useQuery({
     queryKey: ['carencias-coberturas', planoId],
     queryFn: async () => {
@@ -129,12 +129,12 @@ export function useAssociadoSituacao(associadoId: string | undefined, contratoId
       const { data, error } = await supabase
         .from('planos_coberturas')
         .select('cobertura_id, coberturas!inner(nome, carencia_ativa, carencia_tipo, carencia_dias, carencia_multiplicador)')
-        .eq('plano_id', planoId)
-        .eq('coberturas.carencia_ativa', true);
+        .eq('plano_id', planoId);
       if (error) throw error;
       return (data || []).map((row: any) => ({
         nome: row.coberturas.nome,
         tipo: 'cobertura' as const,
+        carenciaAtiva: row.coberturas.carencia_ativa || false,
         carenciaTipo: row.coberturas.carencia_tipo || 'liberacao',
         dias: row.coberturas.carencia_dias || 0,
         multiplicador: row.coberturas.carencia_multiplicador,
