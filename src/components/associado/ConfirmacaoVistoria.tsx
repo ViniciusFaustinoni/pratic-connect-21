@@ -145,24 +145,11 @@ export function ConfirmacaoVistoria({
   const isGenerating = gerarAutentique.isPending || isGeneratingLink || progressoGeracao !== null;
   const urlAssinatura = autentiqueUrl || linkGerado;
   
-  // Timer de 30 segundos para mostrar opção de reenvio e 45 segundos para sync manual
+  // Timer para mostrar sync manual após 45 segundos
   useEffect(() => {
-    // Só iniciar timer quando houver URL mas ainda não foi assinado
     if (urlAssinatura && !contratoFoiAssinado) {
-      const interval = setInterval(() => {
-        setTimeWaiting(prev => {
-          const newTime = prev + 1;
-          if (newTime >= 30) {
-            setShowResendOption(true);
-          }
-          if (newTime >= 45) {
-            setShowSyncOption(true);
-          }
-          return newTime;
-        });
-      }, 1000);
-
-      return () => clearInterval(interval);
+      const timer = setTimeout(() => setShowSyncOption(true), 45000);
+      return () => clearTimeout(timer);
     }
   }, [urlAssinatura, contratoFoiAssinado]);
   
