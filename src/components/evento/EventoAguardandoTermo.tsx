@@ -1,22 +1,24 @@
 import { useState, useEffect, useRef } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
-import { FileText, Loader2, CheckCircle2, ExternalLink } from 'lucide-react';
+import { FileText, Loader2, CheckCircle2, ExternalLink, Copy, CheckCircle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
+import { toast } from 'sonner';
 
 interface Props {
   token: string;
   associado: { nome: string };
   autentiqueDocumentoId?: string | null;
+  autentiqueUrl?: string | null;
   onAssinado: () => void;
 }
 
-export default function EventoAguardandoTermo({ token, associado, autentiqueDocumentoId, onAssinado }: Props) {
+export default function EventoAguardandoTermo({ token, associado, autentiqueDocumentoId, autentiqueUrl, onAssinado }: Props) {
   const [checking, setChecking] = useState(false);
+  const [copied, setCopied] = useState(false);
   const pollingRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   useEffect(() => {
-    // Poll every 10s
     pollingRef.current = setInterval(async () => {
       try {
         setChecking(true);
@@ -39,6 +41,14 @@ export default function EventoAguardandoTermo({ token, associado, autentiqueDocu
     };
   }, [token, onAssinado]);
 
+  const handleCopy = () => {
+    if (!autentiqueUrl) return;
+    navigator.clipboard.writeText(autentiqueUrl);
+    setCopied(true);
+    toast.success('Link copiado!');
+    setTimeout(() => setCopied(false), 2000);
+  };
+
   return (
     <Card>
       <CardContent className="pt-6 text-center space-y-4">
@@ -49,17 +59,38 @@ export default function EventoAguardandoTermo({ token, associado, autentiqueDocu
         <h2 className="text-xl font-bold text-green-700">Pagamento Confirmado!</h2>
 
         <p className="text-muted-foreground text-sm">
-          Olá {associado.nome}, enviamos o <strong>Termo de Entrada de Evento</strong> para
-          assinatura digital via <strong>Autentique</strong>.
+          Olá {associado.nome}, clique no botão abaixo para acessar e assinar o{' '}
+          <strong>Termo de Entrada de Evento</strong> digitalmente.
         </p>
 
-        <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-2">
-          <p className="font-medium">📧 Verifique seu e-mail e WhatsApp</p>
-          <p className="text-muted-foreground text-xs">
-            Você receberá um link da Autentique para assinar o termo digitalmente.
-            Após a assinatura, esta página será atualizada automaticamente.
-          </p>
-        </div>
+        {autentiqueUrl ? (
+          <div className="space-y-2">
+            <Button
+              className="w-full"
+              onClick={() => window.open(autentiqueUrl, '_blank')}
+            >
+              <ExternalLink className="h-4 w-4 mr-2" />
+              Acessar e Assinar Termo
+            </Button>
+            
+            <Button
+              variant="outline"
+              size="sm"
+              className="w-full"
+              onClick={handleCopy}
+            >
+              {copied ? <CheckCircle className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
+              {copied ? 'Link Copiado!' : 'Copiar Link'}
+            </Button>
+          </div>
+        ) : (
+          <div className="bg-muted/50 rounded-lg p-4 text-sm space-y-2">
+            <p className="font-medium">⏳ Gerando documento...</p>
+            <p className="text-muted-foreground text-xs">
+              O termo está sendo preparado. O botão para assinatura aparecerá em instantes.
+            </p>
+          </div>
+        )}
 
         <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
           <Loader2 className="h-3 w-3 animate-spin" />

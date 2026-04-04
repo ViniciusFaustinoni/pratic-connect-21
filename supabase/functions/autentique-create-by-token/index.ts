@@ -758,30 +758,7 @@ serve(async (req) => {
       },
     });
 
-    // Enviar link de assinatura via WhatsApp (fire-and-forget)
-    try {
-      const telefoneWpp = clienteTelefone || contrato.cliente_telefone || contrato.associados?.telefone || contrato.leads?.telefone;
-      if (signatureLink && telefoneWpp) {
-        const linkCode = signatureLink.replace('https://assina.ae/', '');
-        const nomeDoc = `Termo de Afiliação ${contrato.numero}`;
-        const wppRes = await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-          body: JSON.stringify({ telefone: telefoneWpp, template_name: 'assinatura_documento_v2', template_params: [clienteNome, nomeDoc], template_button_params: [linkCode] }),
-        });
-        if (wppRes.ok) {
-          console.log('[autentique-create-by-token] WhatsApp assinatura enviado para', telefoneWpp);
-          await supabase.from('contratos').update({ whatsapp_enviado: true, whatsapp_enviado_em: new Date().toISOString() }).eq('id', contrato.id);
-        } else {
-          const wppErr = await wppRes.text();
-          console.error('[autentique-create-by-token] WhatsApp falhou:', wppErr);
-          await supabase.from('contratos').update({ whatsapp_erro: wppErr.substring(0, 500) }).eq('id', contrato.id);
-        }
-      }
-    } catch (whatsErr: any) {
-      console.error('[autentique-create-by-token] Erro ao enviar WhatsApp assinatura (não-fatal):', whatsErr);
-      await supabase.from('contratos').update({ whatsapp_erro: (whatsErr?.message || 'Erro desconhecido').substring(0, 500) }).eq('id', contrato.id);
-    }
+    // WhatsApp template sending removed - link is now shown directly on the public page
 
     // Registrar no histórico do lead se existir
     if (contrato.lead_id) {

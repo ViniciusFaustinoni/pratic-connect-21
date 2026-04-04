@@ -1,0 +1,1 @@
+UPDATE whatsapp_meta_templates SET status = 'DELETED', updated_at = now() WHERE nome = 'assinatura_documento_v2';

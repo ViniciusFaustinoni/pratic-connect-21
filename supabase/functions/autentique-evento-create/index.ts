@@ -458,22 +458,7 @@ serve(async (req) => {
       observacao: `Termo de Entrada de Evento enviado para assinatura via Autentique`,
     });
 
-    // Enviar link de assinatura via WhatsApp (fire-and-forget)
-    try {
-      const telefoneWpp = associado.whatsapp || associado.telefone;
-      if (signatureLink && telefoneWpp) {
-        const linkCode = signatureLink.replace('https://assina.ae/', '');
-        const nomeDoc = `Termo de Entrada de Evento ${sinistro.protocolo}`;
-        await fetch(`${SUPABASE_URL}/functions/v1/whatsapp-send-text`, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${SUPABASE_SERVICE_ROLE_KEY}` },
-          body: JSON.stringify({ telefone: telefoneWpp, template_name: 'assinatura_documento_v2', template_params: [associado.nome, nomeDoc], template_button_params: [linkCode] }),
-        });
-        console.log('[autentique-evento-create] WhatsApp assinatura enviado para', telefoneWpp);
-      }
-    } catch (whatsErr) {
-      console.error('[autentique-evento-create] Erro ao enviar WhatsApp assinatura (não-fatal):', whatsErr);
-    }
+    // WhatsApp template sending removed - link is now shown directly on the public page
 
     console.log("[autentique-evento-create] ✓ Documento criado e sinistro atualizado");
 

@@ -14,6 +14,7 @@ interface EventoAprovadoData {
   ja_pagou?: boolean;
   ja_assinou_termo?: boolean;
   autentique_documento_id?: string | null;
+  autentique_url?: string | null;
   sinistro?: {
     id: string;
     protocolo: string;
@@ -180,6 +181,7 @@ export default function EventoPosAprovacao() {
             token={token!}
             associado={associado!}
             autentiqueDocumentoId={data.autentique_documento_id}
+            autentiqueUrl={data.autentique_url}
             onAssinado={() => setEtapa('sucesso')}
           />
         )}
