@@ -540,7 +540,8 @@ serve(async (req) => {
           success: true, 
           atualizado: true, 
           mensagem: "Documento foi rejeitado",
-          status: "rejeitado"
+          status: "rejeitado",
+          autentique_url: autentiqueUrlFinal
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
