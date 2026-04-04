@@ -8,6 +8,7 @@ interface SyncResult {
   mensagem: string;
   status?: string;
   signedFileUrl?: string;
+  autentique_url?: string;
   error?: string;
 }
 

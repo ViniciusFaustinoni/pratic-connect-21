@@ -376,6 +376,22 @@ serve(async (req) => {
       })),
     });
 
+    // ========== Extrair link de assinatura do signatário SIGN ==========
+    const signerForLink = signersWithSignAction[0] || signatures[0];
+    const signatureLink = signerForLink?.link?.short_link || null;
+
+    // Salvar autentique_url no banco se ausente
+    if (signatureLink && !contrato.autentique_url) {
+      console.log("[autentique-sync-contrato] Salvando autentique_url no banco:", signatureLink);
+      await supabase
+        .from("contratos")
+        .update({ autentique_url: signatureLink })
+        .eq("id", contrato.id);
+    }
+
+    const autentiqueUrlFinal = signatureLink || contrato.autentique_url || null;
+    console.log("[autentique-sync-contrato] autentique_url final:", autentiqueUrlFinal);
+
     // ========== FALLBACK: Se a API mostra "pending" mas o PDF assinado está disponível ==========
     // Autentique às vezes demora para propagar o status via GraphQL, mas o PDF já está pronto.
     if (overallStatus === "pending" && document.files?.signed) {
@@ -505,7 +521,8 @@ serve(async (req) => {
           atualizado: true, 
           mensagem: "Assinatura confirmada e contrato atualizado!",
           status: "assinado",
-          signedFileUrl: anexoUrl || signedFileUrl || null
+          signedFileUrl: anexoUrl || signedFileUrl || null,
+          autentique_url: autentiqueUrlFinal
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -523,7 +540,8 @@ serve(async (req) => {
           success: true, 
           atualizado: true, 
           mensagem: "Documento foi rejeitado",
-          status: "rejeitado"
+          status: "rejeitado",
+          autentique_url: autentiqueUrlFinal
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -541,7 +559,8 @@ serve(async (req) => {
           success: true, 
           atualizado: true, 
           mensagem: "Documento foi visualizado",
-          status: "visualizado"
+          status: "visualizado",
+          autentique_url: autentiqueUrlFinal
         }),
         { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
@@ -553,7 +572,8 @@ serve(async (req) => {
         success: true, 
         atualizado: false, 
         mensagem: "Documento ainda não foi assinado",
-        status: overallStatus
+        status: overallStatus,
+        autentique_url: autentiqueUrlFinal
       }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
