@@ -1,30 +1,55 @@
 
 
-# Corrigir limite de 1000 registros nas métricas de rastreadores
+# Corrigir Indicador Ausente no Termo de Filiação (Template do Banco)
 
 ## Problema
-O hook `useRastreadoresMetricas` em `src/hooks/useRastreadores.ts` faz `supabase.from('rastreadores').select('status, ultima_comunicacao')` sem paginação. O Supabase retorna no máximo 1000 linhas por padrão, então com 1000+ rastreadores, as métricas ficam truncadas (mostra "1000 cadastrados" em vez do total real, e contagens de online/offline incorretas).
+O template do banco de dados (`AF1`) não contém a seção "ASSOCIADO INDICADOR" nem as variáveis `{{indicador.nome}}` / `{{indicador.cpf}}`. Como o sistema prioriza o template do banco sobre o hardcoded, a seção do indicador nunca aparece — mesmo quando os dados existem na cotação.
+
+O template hardcoded tem a seção (linhas 658-673 de `termo-afiliacao-template.ts`), mas ele só é usado como fallback quando não há template no banco.
 
 ## Solução
-Substituir a query que busca todas as linhas por **queries paralelas com `count: 'exact', head: true`** para cada status, similar ao padrão já usado no projeto (`PageHeader.tsx`).
+Injetar a seção "ASSOCIADO INDICADOR" dinamicamente no HTML final quando `templateData.indicador?.nome` estiver preenchido, no fluxo do template do banco (`gerarHTMLDoTemplate`). Isso segue o mesmo padrão já usado para injetar aditivos e seção de rastreador.
 
-Para as métricas de comunicação (online/offline/atenção), que dependem de `ultima_comunicacao`, usar **fetch recursivo com `.range()`** para buscar todos os rastreadores instalados (ou uma RPC/view se disponível).
+### `supabase/functions/autentique-create/index.ts`
 
-### Abordagem concreta em `src/hooks/useRastreadores.ts`:
+Na função `gerarHTMLDoTemplate` (após a geração do `conteudoHTML`, antes do return final), adicionar:
 
-1. **Contagens por status** — usar `{ count: 'exact', head: true }` em paralelo:
-   - `total`: count sem filtro
-   - `estoque`: `.eq('status', 'estoque')`
-   - `instalados`: `.eq('status', 'instalado')`
-   - `manutencao`: `.eq('status', 'manutencao')`
-   - `baixados`: `.eq('status', 'baixado')`
+```typescript
+// Injetar seção de indicador se existir nos dados
+if (dados.indicador?.nome) {
+  const indicadorHTML = `
+  <table class="table-valores" style="margin-top: 15pt; width: 100%; border-collapse: collapse;">
+    <tr class="header-row">
+      <td colspan="2" style="background-color: #f0f0f0; font-weight: bold; padding: 8px;">ASSOCIADO INDICADOR</td>
+    </tr>
+    <tr>
+      <td style="padding: 6px; border: 1px solid #ddd; width: 30%;">Nome:</td>
+      <td style="padding: 6px; border: 1px solid #ddd;">${dados.indicador.nome}</td>
+    </tr>
+    ${dados.indicador.cpf ? `
+    <tr>
+      <td style="padding: 6px; border: 1px solid #ddd;">CPF:</td>
+      <td style="padding: 6px; border: 1px solid #ddd;">${formatCPF(dados.indicador.cpf)}</td>
+    </tr>` : ''}
+    ${dados.consultor?.nome ? `
+    <tr>
+      <td style="padding: 6px; border: 1px solid #ddd;">Consultor:</td>
+      <td style="padding: 6px; border: 1px solid #ddd;">${dados.consultor.nome}</td>
+    </tr>` : ''}
+  </table>`;
+  
+  // Inserir antes da seção de assinatura ou no final do conteúdo
+  conteudoHTML += indicadorHTML;
+}
+```
 
-2. **Online/Offline/Atenção** — buscar apenas rastreadores instalados com `ultima_comunicacao` usando fetch recursivo com `.range()` (somente `ultima_comunicacao` é necessário, payload leve). Loop em páginas de 1000 até esgotar.
+Isso garante que o indicador apareça independentemente de o template do banco ter ou não a variável.
 
-3. Classificar cada rastreador instalado com a função `isRastreadorOnline` existente.
+### Deploy
+Redeployar `autentique-create` após a correção.
 
 ## Arquivo alterado
 | Arquivo | Ação |
 |---------|------|
-| `src/hooks/useRastreadores.ts` | Reescrever `useRastreadoresMetricas` com contagens paralelas + fetch paginado |
+| `supabase/functions/autentique-create/index.ts` | Injetar seção indicador no fluxo de template do banco |
 
