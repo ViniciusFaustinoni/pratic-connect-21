@@ -459,6 +459,31 @@ serve(async (req) => {
     }
     templateData.prazo_instalacao = prazoInstalacao;
 
+    // ============= BUSCAR INDICADOR DA COTAÇÃO =============
+    if (contrato.cotacao_id) {
+      const { data: cotacaoData } = await supabase
+        .from('cotacoes')
+        .select('indicador_id, indicador_nome')
+        .eq('id', contrato.cotacao_id)
+        .maybeSingle();
+      
+      if (cotacaoData?.indicador_nome) {
+        let indicadorCpf = '';
+        if (cotacaoData.indicador_id) {
+          const { data: indicadorAssoc } = await supabase
+            .from('associados')
+            .select('cpf')
+            .eq('id', cotacaoData.indicador_id)
+            .maybeSingle();
+          indicadorCpf = indicadorAssoc?.cpf || '';
+        }
+        templateData.indicador = {
+          nome: cotacaoData.indicador_nome,
+          cpf: indicadorCpf,
+        };
+        console.log(`[autentique-create] Indicador encontrado: ${cotacaoData.indicador_nome}`);
+      }
+    }
     // Fetch migration data if applicable
     if (contrato.tipo_entrada === 'migracao') {
       let solMigracao = null;

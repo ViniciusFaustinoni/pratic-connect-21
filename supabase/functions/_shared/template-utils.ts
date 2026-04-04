@@ -245,6 +245,15 @@ export function criarMapeamentoVariaveis(dados: TermoAfiliacaoData): Record<stri
       'troca.cenario_label': dados.trocaTitularidade.cenario_label || '—',
     } : {}),
 
+    // Indicador (quando aplicável)
+    ...(dados.indicador ? {
+      'indicador.nome': dados.indicador.nome || '—',
+      'indicador.cpf': dados.indicador.cpf ? formatCPF(dados.indicador.cpf) : '—',
+    } : {
+      'indicador.nome': '—',
+      'indicador.cpf': '—',
+    }),
+
     // Oficina (quando aplicável — vinculada via OS)
     ...(dados.oficina ? {
       'oficina.nome': dados.oficina.nome || '—',
