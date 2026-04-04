@@ -1,13 +1,16 @@
 import { useState } from 'react';
 import { useBaseAntigaAssociados, useBaseAntigaDetalhe, useBaseAntigaVeiculos } from '@/hooks/useBaseAntiga';
+import { useDeleteBaseAntiga } from '@/hooks/useDeleteBaseAntiga';
+import { usePermissions } from '@/hooks/usePermissions';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent } from '@/components/ui/card';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt } from 'lucide-react';
+import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt, Trash2 } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
 
