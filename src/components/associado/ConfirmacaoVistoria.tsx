@@ -1,7 +1,7 @@
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useEffect, useState } from 'react';
-import { CheckCircle, Calendar, Camera, Clock, FileSignature, Loader2, RefreshCw, AlertCircle, PartyPopper, Circle, Mail } from 'lucide-react';
+import { CheckCircle, Calendar, Camera, Clock, FileSignature, Loader2, RefreshCw, AlertCircle, PartyPopper, Circle, ExternalLink, Copy } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Alert, AlertDescription } from '@/components/ui/alert';
