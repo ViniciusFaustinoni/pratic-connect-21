@@ -50,6 +50,8 @@ import { CancelarAssociadoDialog } from '@/components/cadastro/CancelarAssociado
 import { ExcluirAssociadoDialog, type TipoExclusao } from '@/components/cadastro/ExcluirAssociadoDialog';
 import { useCriarSolicitacaoRetiradaCadastro } from '@/hooks/useRetiradaRastreador';
 import { supabase } from '@/integrations/supabase/client';
+import { useCoberturasBeneficiosPlano } from '@/hooks/useCoberturasBeneficiosPlano';
+import { Gift } from 'lucide-react';
 import { SubstituicaoStatusCard } from '@/components/substituicao/SubstituicaoStatusCard';
 import { TIPO_ENTRADA_SHORT_LABELS } from '@/components/associados/detalhe/OrigemCadastroCard';
 import { ReativacaoWizard } from '@/components/associados/reativacao/ReativacaoWizard';
@@ -541,9 +543,8 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
             </Card>
 
             <Card className="border-border/60">
-              <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold">Plano e Contrato</CardTitle></CardHeader>
+              <CardHeader className="pb-3"><CardTitle className="text-sm font-semibold">Contrato</CardTitle></CardHeader>
               <CardContent className="space-y-3 text-sm">
-                <DataField label="Plano" value={associado.planos?.nome || '—'} />
                 <DataField label="Adesão" value={formatDate(associado.data_adesao)} />
                 <DataField label="Contrato" value={associado.contratos?.[0]?.numero || '—'} />
                 <div className="grid grid-cols-2 gap-3">
@@ -648,6 +649,8 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
                         </div>
                       </div>
                     </CardContent>
+                    {/* Plano, Coberturas e Benefícios */}
+                    <PlanoCoberturasSection associadoId={id} planoNome={associado?.planos?.nome} />
                     <BlocoDepreciacaoVeiculo veiculo={v} />
                   </Card>
                 ))}
@@ -1033,6 +1036,61 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
 }
 
 // ============================================
+// PlanoCoberturasSection - shows plan coverages and benefits inside vehicle cards
+function PlanoCoberturasSection({ associadoId, planoNome }: { associadoId: string | undefined; planoNome?: string | null }) {
+  const { data } = useCoberturasBeneficiosPlano(associadoId);
+  const coberturas = data?.coberturas || [];
+  const beneficios = data?.beneficios || [];
+
+  if (!planoNome && coberturas.length === 0 && beneficios.length === 0) {
+    return (
+      <div className="px-4 pb-3 sm:px-5">
+        <p className="text-xs text-muted-foreground italic">Sem plano atribuído</p>
+      </div>
+    );
+  }
+
+  return (
+    <div className="px-4 pb-4 sm:px-5 space-y-3">
+      <Separator />
+      {planoNome && (
+        <div className="flex items-center gap-2">
+          <CreditCard className="h-3.5 w-3.5 text-primary" />
+          <span className="text-sm font-semibold">{planoNome}</span>
+        </div>
+      )}
+      {coberturas.length > 0 && (
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <Shield className="h-3 w-3" /> Coberturas
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {coberturas.map((c) => (
+              <Badge key={c.id} variant="outline" className="text-[10px] font-normal bg-primary/5 border-primary/20 text-foreground">
+                {c.nome}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+      {beneficios.length > 0 && (
+        <div className="space-y-1.5">
+          <span className="text-xs font-medium text-muted-foreground flex items-center gap-1">
+            <Gift className="h-3 w-3" /> Benefícios
+          </span>
+          <div className="flex flex-wrap gap-1.5">
+            {beneficios.map((b) => (
+              <Badge key={b.id} variant="outline" className="text-[10px] font-normal bg-accent/50 border-accent text-foreground">
+                {b.nome}
+              </Badge>
+            ))}
+          </div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // SUB-COMPONENTS
 // ============================================
 function DataField({ label, value, mono, small }: { label: string; value: string; mono?: boolean; small?: boolean }) {
