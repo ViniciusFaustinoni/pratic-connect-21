@@ -57,6 +57,23 @@ export default function BaseAntiga() {
   const { data, isLoading } = useBaseAntigaAssociados({ search: debouncedSearch }, { page, pageSize: 20 });
   const { data: detalhe, isLoading: loadingDetalhe } = useBaseAntigaDetalhe(selectedId ?? undefined);
   const { data: vData, isLoading: vLoading } = useBaseAntigaVeiculos({ search: vDebouncedSearch }, { page: vPage, pageSize: 20 });
+  const { isDiretor, isAdminMaster, isDesenvolvedor } = usePermissions();
+  const canDelete = isDiretor || isAdminMaster || isDesenvolvedor;
+  const deleteAssociado = useDeleteBaseAntiga('associado');
+  const deleteVeiculo = useDeleteBaseAntiga('veiculo');
+  const [deleteConfirm, setDeleteConfirm] = useState<{ id: string; nome: string; tipo: 'associado' | 'veiculo' } | null>(null);
+
+  const handleDelete = (e: React.MouseEvent, id: string, nome: string, tipo: 'associado' | 'veiculo') => {
+    e.stopPropagation();
+    setDeleteConfirm({ id, nome, tipo });
+  };
+
+  const confirmDelete = () => {
+    if (!deleteConfirm) return;
+    const mutation = deleteConfirm.tipo === 'associado' ? deleteAssociado : deleteVeiculo;
+    mutation.mutate(deleteConfirm.id);
+    setDeleteConfirm(null);
+  };
 
   const formatCpf = (cpf: string) => {
     if (!cpf || cpf.length !== 11) return cpf;
