@@ -1,50 +1,50 @@
 
 
-# Corrigir Definição de Senha Aparecendo Duas Vezes
+# Corrigir App do Associado Travado no Loading
 
 ## Problema
-Quando um associado define sua senha pela primeira vez via link/token (`app-criar-senha`), o campo `primeiro_acesso` no profile **não é marcado como `false`**. Ao fazer login em seguida, os guards (`AuthGuard`, `ProtectedRoute`, etc.) detectam `primeiro_acesso: true` e redirecionam para `/definir-senha` novamente — forçando o associado a definir a senha duas vezes.
+O `ProtectedRoute` (linha 35) tem a condição:
+```typescript
+if (!initialized || loading || (user && !profile))
+```
+
+Quando `initialized = true` e `loading = false`, mas o `profile` é `null` (busca falhou, perfil não existe no banco, ou erro de RLS), a condição `(user && !profile)` fica `true` **permanentemente**, resultando em spinner infinito.
+
+O `fetchProfile` no `AuthContext` retorna `null` silenciosamente em caso de erro ou perfil inexistente, mas o `ProtectedRoute` interpreta isso como "ainda carregando".
 
 ## Causa raiz
-No edge function `app-criar-senha`:
-- **Caminho "novo usuário"** (linhas 172-184): cria o profile **sem** incluir `primeiro_acesso: false`, então o valor padrão do banco (`true`) é usado.
-- **Profile criado por trigger**: se o trigger do auth já criou o profile, o código pula a criação mas **não atualiza** `primeiro_acesso` para `false`.
+A lógica assume que se há `user` sem `profile`, os dados ainda estão sendo buscados. Mas após `initialized = true`, isso significa que a busca **já terminou** e o perfil simplesmente não existe.
 
 ## Solução
 
-### `supabase/functions/app-criar-senha/index.ts`
+### `src/components/ProtectedRoute.tsx`
 
-1. **Na inserção de novo profile** (linha 172-184): adicionar `primeiro_acesso: false` ao objeto de insert.
-
-2. **Se profile já existe** (quando `existingProfile` é encontrado): adicionar um `update` para setar `primeiro_acesso: false` nesse profile existente.
+Separar a condição de loading real da condição de "perfil inexistente":
 
 ```typescript
-// Caminho 1: Profile novo — incluir primeiro_acesso: false
-if (!existingProfile) {
-  await supabase.from('profiles').insert({
-    user_id: userId,
-    nome: associado.nome,
-    email: associado.email || email,
-    telefone: associado.telefone,
-    cpf: associado.cpf,
-    tipo: 'associado',
-    ativo: true,
-    bloqueado: false,
-    primeiro_acesso: false  // ← ADICIONAR
-  });
-} else {
-  // Caminho 2: Profile já existe (trigger) — garantir primeiro_acesso = false
-  await supabase.from('profiles')
-    .update({ primeiro_acesso: false })
-    .eq('user_id', userId);
+// Loading real — auth ainda inicializando ou dados carregando
+if (!initialized || loading) {
+  return <LoadingSpinner />;
 }
+
+// Não autenticado
+if (!user) {
+  return <Navigate to={authRedirect} ... />;
+}
+
+// Usuário autenticado mas sem perfil (perfil não existe ou falha na busca)
+// Em vez de travar no spinner, redirecionar para login com mensagem
+if (!profile) {
+  return <Navigate to={authRedirect} state={{ error: 'profile_not_found' }} replace />;
+}
+
+// ... resto da lógica (primeiro_acesso, tipo, roles)
 ```
 
-### Deploy
-Redeployar a edge function `app-criar-senha`.
+Isso garante que o app nunca fique preso em loading infinito quando o perfil não é encontrado.
 
 ## Arquivo alterado
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/app-criar-senha/index.ts` | Adicionar `primeiro_acesso: false` nos dois caminhos de profile |
+| `src/components/ProtectedRoute.tsx` | Remover `(user && !profile)` do loading e tratar como redirect |
 
