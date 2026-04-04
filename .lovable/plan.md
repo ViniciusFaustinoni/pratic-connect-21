@@ -1,48 +1,63 @@
 
 
-# Tela de Log de Envios de Templates Meta
+# Coberturas e Benefícios do Plano na Aba Veículos
 
-## Resumo
-Criar uma nova seção na aba WhatsApp (Integrações) que exibe o histórico de envios de templates Meta, incluindo sucessos e erros, usando dados já existentes na tabela `whatsapp_mensagens`.
+## Situação Atual
 
-## Fonte de dados
-A tabela `whatsapp_mensagens` já registra todos os envios com:
-- `direcao = 'saida'` para mensagens enviadas
-- `status` (`enviada`, `erro`, `entregue`, `lida`)
-- `erro_mensagem`, `erro_codigo` para falhas
-- `template_id`, `template_variaveis` para identificar o template usado
-- `telefone`, `created_at`, `provedor`
+- `plano_id` está na tabela `associados`, não em `veiculos` — todos os veículos de um associado compartilham o mesmo plano
+- O card de cada veículo na aba "Veículos" do modal mostra dados técnicos (placa, chassi, FIPE, rastreador) mas **não** mostra o plano, coberturas e benefícios
+- O hook `useCoberturasBeneficiosPlano` já busca coberturas e benefícios a partir do `associadoId`
 
-Não é necessário criar migration — os dados já existem.
+## Proposta — Fase 1 (sem migration)
 
-## Alterações
+Exibir dentro de cada card de veículo na aba "Veículos" do modal de detalhes do associado:
+- **Nome do plano** do associado (já disponível em `associado.planos?.nome`)
+- **Lista de coberturas** com ícones (Shield) e badges
+- **Lista de benefícios** com ícones (Gift) e badges
 
-### 1. Novo hook `src/hooks/useWhatsAppEnvioLogs.ts`
-- Query em `whatsapp_mensagens` filtrando `direcao = 'saida'`
-- Ordenado por `created_at DESC`
-- Suporta filtros: status (todos/enviada/erro), busca por telefone, intervalo de datas
-- Paginação (20 por página)
-- Join com `whatsapp_instancias` para nome da instância
+Como atualmente 1 associado = 1 plano, todos os veículos mostrarão o mesmo plano. Isso já prepara a UI para quando a migração for feita.
 
-### 2. Novo componente `src/components/integracoes/WhatsAppEnvioLogs.tsx`
-- Tabela com colunas: Data/Hora, Telefone, Template/Mensagem, Status (badge verde/vermelho), Erro, Provedor
-- Filtros no topo: campo de busca, seletor de status, date range
-- Badge de status: verde para `enviada/entregue/lida`, vermelho para `erro`
-- Tooltip ou expansão para ver `erro_mensagem` completa e `template_variaveis`
-- Paginação inferior
+## Proposta — Fase 2 (migration futura, NÃO incluída agora)
 
-### 3. Modificar `src/components/integracoes/WhatsAppTab.tsx`
-- Adicionar o componente `WhatsAppEnvioLogs` como nova seção após Templates Meta, com título "Log de Envios"
+Adicionar `plano_id` na tabela `veiculos` para permitir planos diferentes por veículo. **Isso será feito em uma etapa separada** para não quebrar fluxos existentes.
 
-## Layout da tabela
+## Alterações — Fase 1
 
-| Data/Hora | Telefone | Mensagem | Status | Erro | Provedor |
-|-----------|----------|----------|--------|------|----------|
-| 03/04 22:31 | 5571... | Template: assinatura_doc... | ✅ Enviada | — | Meta |
-| 03/04 22:30 | 5511... | Template: boas_vindas | ❌ Erro | Rate limit | Meta |
+### 1. `src/pages/cadastro/AssociadoDetalhe.tsx`
+
+Na aba `veiculos` (linha ~559):
+- Importar e usar `useCoberturasBeneficiosPlano(id)` para buscar coberturas e benefícios do plano do associado
+- Dentro de cada card de veículo (após o bloco de dados técnicos e antes do `BlocoDepreciacaoVeiculo`), adicionar uma seção colapsável ou fixa com:
+
+```text
+┌─────────────────────────────────────────┐
+│ 🚗 Toyota Corolla 2023     [Ativo]      │
+│ Placa: ABC-1234  Chassi: ...            │
+│ Valor FIPE: R$ 95.000                   │
+│ ──────────────────────────────────────  │
+│ 📋 Plano: Proteção Total Plus           │
+│                                          │
+│ 🛡️ Coberturas:                          │
+│   • Colisão  • Roubo/Furto  • Incêndio  │
+│   • Fenômenos Naturais  • Vidros         │
+│                                          │
+│ 🎁 Benefícios:                          │
+│   • Assistência 24h  • Rastreador        │
+│   • Carro Reserva                        │
+└─────────────────────────────────────────┘
+```
+
+- Coberturas exibidas como badges compactos com ícone Shield
+- Benefícios exibidos como badges compactos com ícone Gift/Star
+- Se não houver plano, exibir "Sem plano atribuído"
+
+### 2. Remover seção "Plano e Contrato" da aba Resumo
+
+A seção de plano (linhas ~543-554) que atualmente fica na aba "resumo" será **movida** para dentro da aba "veiculos", já que o plano pertence conceptualmente ao veículo.
 
 ## Impacto
+- 1 arquivo alterado (`AssociadoDetalhe.tsx`)
+- 1 hook reutilizado (`useCoberturasBeneficiosPlano`)
 - 0 migrations
-- 2 arquivos novos (hook + componente)
-- 1 arquivo modificado (WhatsAppTab.tsx)
+- 0 dependências novas
 
