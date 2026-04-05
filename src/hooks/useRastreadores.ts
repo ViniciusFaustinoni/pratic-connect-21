@@ -80,16 +80,18 @@ export function useRastreadores(filters?: RastreadorFilters) {
       if (filters?.comunicacao && filters.comunicacao !== 'todos') {
         result = result.filter(r => {
           if (r.status !== 'instalado') return filters.comunicacao === 'online' ? false : true;
-          if (!r.ultima_comunicacao) {
-            return filters.comunicacao === 'offline';
-          }
-          const lastComm = new Date(r.ultima_comunicacao);
-          const now = new Date();
-          const diffHours = (now.getTime() - lastComm.getTime()) / (1000 * 60 * 60);
+          const online = isRastreadorOnline(r.ultima_comunicacao);
           
-          if (filters.comunicacao === 'online') return diffHours < 1;
-          if (filters.comunicacao === 'atencao') return diffHours >= 1 && diffHours < 24;
-          if (filters.comunicacao === 'offline') return diffHours >= 24;
+          if (filters.comunicacao === 'online') return online;
+          if (filters.comunicacao === 'atencao') {
+            // 1-24h sem sinal: has communication but within the "not online" window
+            if (!r.ultima_comunicacao) return false;
+            const lastComm = new Date(r.ultima_comunicacao);
+            const now = new Date();
+            const diffHours = (now.getTime() - lastComm.getTime()) / (1000 * 60 * 60);
+            return diffHours >= 1 && diffHours < 24;
+          }
+          if (filters.comunicacao === 'offline') return !online;
           return true;
         });
       }
