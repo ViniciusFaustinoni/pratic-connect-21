@@ -1,41 +1,67 @@
 
 
-# Fix: Atribuição Automática Ocorrendo com Modo Manual Ativo
+# Fix: Rastreadores Offline — `plataforma_veiculo_id` Não Populado
 
 ## Problema
 
-A configuração "Atribuição Manual Ativada" desliga corretamente o motor principal (`cron-atribuir-tarefas`), mas existe um **segundo motor de atribuição** — `processar-encaixes-automaticos` — que roda a cada 10 minutos via pg_cron e **não verifica** a flag `atribuicao_manual_rotas`. Esse motor busca instalações/vistorias com `permite_encaixe=true`, encontra profissionais próximos e atribui automaticamente, ignorando completamente o modo manual.
+Todos os 5.072 rastreadores Softruck estão offline porque `plataforma_veiculo_id` é NULL em todos. O `sync-rastreadores` exige ambos `plataforma_device_id` E `plataforma_veiculo_id` para sincronizar, então zero rastreadores passam o filtro.
 
-## Solução
+## Causa Raiz
 
-Adicionar a verificação da flag `atribuicao_manual_rotas` no início da edge function `processar-encaixes-automaticos`, fazendo-a sair imediatamente quando o modo manual estiver ativo — igual ao que `cron-atribuir-tarefas` já faz.
+O fluxo de instalação/cadastro nunca popula `plataforma_veiculo_id`. O campo `plataforma_device_id` está preenchido (com o IMEI), mas o ID do veículo na plataforma Softruck não é salvo.
 
-## Arquivo Alterado
+## Solução em 2 Partes
+
+### Parte 1: Flexibilizar o filtro do sync (correção imediata)
+
+Alterar `sync-rastreadores` para aceitar rastreadores Softruck que tenham **apenas** `plataforma_device_id` (sem exigir `plataforma_veiculo_id`). A API Softruck pode ser consultada usando apenas o device ID — o `plataforma_veiculo_id` pode ser obtido via lookup e salvo automaticamente.
+
+**Arquivo**: `supabase/functions/sync-rastreadores/index.ts`
+
+- Linha 447-449: Alterar filtro para aceitar Softruck com apenas `plataforma_device_id`
+- Linha 188-197: Antes de pular por falta de `vehicleId`, fazer lookup automático via `softruck-api` (operação `getVehicleByDevice`) e salvar o `plataforma_veiculo_id` no banco
+- Se a API não suportar lookup por device, usar o `plataforma_device_id` como `vehicleId` no tracking (muitas APIs Softruck aceitam o IMEI como identificador)
+
+### Parte 2: Fallback — usar device ID como vehicle ID
+
+Se a Softruck aceitar o device ID no endpoint de tracking (o que é comum), a correção mais simples é:
+
+**Arquivo**: `supabase/functions/sync-rastreadores/index.ts`
+
+- Linha 190: `const vehicleId = rast.plataforma_veiculo_id || rast.plataforma_device_id;`
+- Linha 448-449: `return !!r.plataforma_device_id;` (remover exigência de `plataforma_veiculo_id`)
+
+Isso desbloquearia imediatamente todos os 5.072 rastreadores para sincronização.
+
+## Arquivos Alterados
 
 | Arquivo | Ação |
 |---------|------|
-| `supabase/functions/processar-encaixes-automaticos/index.ts` | Adicionar check de `atribuicao_manual_rotas` logo após criar o client Supabase (~linha 121) |
+| `supabase/functions/sync-rastreadores/index.ts` | Flexibilizar filtro e fallback de vehicle ID |
 
 ## Detalhes Técnicos
 
-Após a linha 121 (`console.log("[processar-encaixes-automaticos] Iniciando...")`), inserir:
-
+### Filtro (linha ~447-452)
 ```typescript
-// Verificar se atribuição manual está ativa
-const { data: configManual } = await supabase
-  .from('configuracoes')
-  .select('valor')
-  .eq('chave', 'atribuicao_manual_rotas')
-  .maybeSingle();
+// Antes:
+if (r.plataforma === 'softruck') {
+  return r.plataforma_device_id && r.plataforma_veiculo_id;
+}
 
-if (configManual?.valor === 'true') {
-  console.log("[processar-encaixes-automaticos] Atribuição MANUAL ativa — encaixes automáticos desligados");
-  return new Response(
-    JSON.stringify({ sucesso: true, mensagem: 'Atribuição manual ativa — encaixes automáticos desligados', processados: 0 }),
-    { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-  );
+// Depois:
+if (r.plataforma === 'softruck') {
+  return !!r.plataforma_device_id;
 }
 ```
 
-Isso garante que **nenhum motor de atribuição** funcione quando o modo manual está ligado. A edge function precisa ser re-deployed após a alteração.
+### Sync function (linha ~190)
+```typescript
+// Antes:
+const vehicleId = rast.plataforma_veiculo_id;
+
+// Depois:
+const vehicleId = rast.plataforma_veiculo_id || rast.plataforma_device_id;
+```
+
+Após deploy, o cron de sincronização (a cada ~7 min) começará a buscar posições de todos os rastreadores. Se a API Softruck rejeitar o device ID como vehicle ID, será necessário investigar o endpoint correto da Softruck e criar um passo de auto-discovery do vehicle ID.
 
