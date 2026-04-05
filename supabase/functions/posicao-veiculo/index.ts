@@ -192,17 +192,17 @@ async function getPosicaoSoftruckComRetry(
         : (attrs.timestamp || new Date().toISOString());
 
       return {
-        latitude: attrs.latitude,
-        longitude: attrs.longitude,
-        velocidade: attrs.speed || 0,
-        direcao: attrs.course,
-        ignicao: attrs.ignition || false,
-        data_posicao: attrs.timestamp || new Date().toISOString(),
+        latitude,
+        longitude,
+        velocidade: parseInt(attrs.spd || attrs.speed || '0', 10),
+        direcao: attrs.dir || attrs.course,
+        ignicao: Boolean(attrs.ign || attrs.ignition),
+        data_posicao: dataPosicao,
         dados_extras: {
           altitude: attrs.altitude,
           satellites: attrs.satellites,
           odometer: attrs.odometer,
-          battery: attrs.battery,
+          battery: attrs.bl || attrs.battery,
         }
       };
 
