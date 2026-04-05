@@ -446,9 +446,9 @@ export function useVeiculosSemRastreador() {
   });
 }
 
-// Rastreadores disponíveis (em estoque)
+// Rastreadores disponíveis (em estoque) - fetches all stock items (no pagination)
 export function useRastreadoresDisponiveis() {
-  return useRastreadores({ status: ['estoque'] });
+  return useRastreadores({ status: ['estoque'], pageSize: 1000 });
 }
 
 // Contagem de rastreadores (alias para useRastreadoresMetricas)
