@@ -128,7 +128,7 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
       const veiculos = (dataRes.data || []).map((v: any) => ({
         ...v,
         associado: Array.isArray(v.associado) ? v.associado[0] : v.associado,
-        rastreador: Array.isArray(v.rastreador) && v.rastreador.length > 0 ? v.rastreador[0] : v.rastreador || null,
+        rastreador: Array.isArray(v.rastreador) ? (v.rastreador.length > 0 ? v.rastreador[0] : null) : v.rastreador || null,
       }));
 
       return {
