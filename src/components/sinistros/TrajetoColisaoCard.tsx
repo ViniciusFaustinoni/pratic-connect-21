@@ -293,6 +293,14 @@ export function TrajetoColisaoCard({
             </div>
           ) : (
             <>
+              {historico?.periodo_expandido && (
+                <Alert className="mx-3 mt-3 border-amber-300 bg-amber-50 dark:bg-amber-950/30">
+                  <AlertTriangle className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-xs text-amber-800 dark:text-amber-300">
+                    {historico.mensagem}
+                  </AlertDescription>
+                </Alert>
+              )}
               {renderMap('200px')}
               <div className="p-3 border-t space-y-2">
                 <div className="flex items-center justify-between text-xs">
