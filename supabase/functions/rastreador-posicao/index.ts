@@ -264,43 +264,52 @@ async function getPosicaoRedeVeiculos(
   console.log(`[Rede Veículos] Resposta:`, JSON.stringify(data).slice(0, 500));
   
   if (data.error === 'true' || data.error === true) {
-    throw new Error(`Rede Veículos: ${sanitizeRedeVeiculosErrorMessage(data.message)}`);
+    const msg = typeof data.message === 'string' ? data.message : 'Erro na API';
+    throw new Error(`Rede Veículos: ${sanitizeRedeVeiculosErrorMessage(msg)}`);
   }
+  
+  // A resposta pode vir em dois formatos:
+  // Produção: { error: "false", message: { latitude, longitude, ... } }
+  // Sandbox:  { latlon: "-22.9|-43.5", velocidade: "0", ... }
+  const posData = (typeof data.message === 'object' && data.message !== null) ? data.message : data;
   
   let latitude: number | null = null;
   let longitude: number | null = null;
   
-  if (data.latlon && typeof data.latlon === 'string' && data.latlon.includes('|')) {
-    const parts = data.latlon.split('|');
+  // Formato com latlon separado por pipe (sandbox)
+  if (posData.latlon && typeof posData.latlon === 'string' && posData.latlon.includes('|')) {
+    const parts = posData.latlon.split('|');
     latitude = parseFloat(parts[0]);
     longitude = parseFloat(parts[1]);
-  } else if (data.latitude && data.longitude) {
-    latitude = parseFloat(data.latitude);
-    longitude = parseFloat(data.longitude);
+  }
+  // Formato com lat/lng separados (produção)
+  else if (posData.latitude && posData.longitude) {
+    latitude = parseFloat(posData.latitude);
+    longitude = parseFloat(posData.longitude);
   }
   
   if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
-    throw new Error(`Rede Veículos: coordenadas ausentes na resposta. Campos: ${Object.keys(data).join(', ')}`);
+    throw new Error(`Rede Veículos: coordenadas ausentes na resposta. Campos: ${Object.keys(posData).join(', ')}`);
   }
 
   return {
     latitude,
     longitude,
-    velocidade: parseInt(data.velocidade || '0', 10),
+    velocidade: parseInt(posData.velocidade || '0', 10),
     direcao: undefined,
-    ignicao: data.ignicaoLigada === 'S',
-    data_posicao: data.dataGPRS || data.dataGPS || new Date().toISOString(),
-    endereco: undefined,
+    ignicao: posData.ignicaoLigada === 'S',
+    data_posicao: posData.dataGPRS || posData.dataGPS || new Date().toISOString(),
+    endereco: posData.endereco || undefined,
     dados_extras: {
-      voltagemBateria: data.voltagemBateria,
-      movimento: data.movimento,
-      bloqueado: data.bloqueado,
-      statusGPRS: data.statusGPRS,
-      statusGPS: data.statusGPS,
-      satelites: data.satelites,
-      imei: data.imei,
-      placa: data.placa,
-      chassi: data.chassi,
+      voltagemBateria: posData.voltagemBateria,
+      movimento: posData.movimento,
+      bloqueado: posData.bloqueado,
+      statusGPRS: posData.statusGPRS,
+      statusGPS: posData.statusGPS,
+      satelites: posData.satelites,
+      imei: posData.imei,
+      placa: posData.placa,
+      chassi: posData.chassi,
     }
   };
 }

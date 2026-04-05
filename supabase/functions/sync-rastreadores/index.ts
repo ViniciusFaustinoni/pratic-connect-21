@@ -450,20 +450,25 @@ async function syncRedeVeiculos(
 
       // Verificar se a API retornou erro
       if (data.error === 'true' || data.error === true) {
-        throw new Error(data.message || 'Erro na API');
+        const msg = typeof data.message === 'string' ? data.message : 'Erro na API';
+        throw new Error(msg);
       }
 
-      // A API retorna coordenadas no campo "latlon" formato "-22.902362|-43.57716"
+      // A resposta pode vir em dois formatos:
+      // Produção: { error: "false", message: { latitude, longitude, ... } }
+      // Sandbox:  { latlon: "-22.9|-43.5", velocidade: "0", ... }
+      const posData = (typeof data.message === 'object' && data.message !== null) ? data.message : data;
+
       let lat: number | null = null;
       let lng: number | null = null;
       
-      if (data.latlon && typeof data.latlon === 'string' && data.latlon.includes('|')) {
-        const parts = data.latlon.split('|');
+      if (posData.latlon && typeof posData.latlon === 'string' && posData.latlon.includes('|')) {
+        const parts = posData.latlon.split('|');
         lat = parseFloat(parts[0]);
         lng = parseFloat(parts[1]);
-      } else if (data.latitude && data.longitude) {
-        lat = parseFloat(data.latitude);
-        lng = parseFloat(data.longitude);
+      } else if (posData.latitude && posData.longitude) {
+        lat = parseFloat(posData.latitude);
+        lng = parseFloat(posData.longitude);
       }
 
       if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
@@ -471,20 +476,20 @@ async function syncRedeVeiculos(
           rastreador_id: rast.id,
           latitude: lat,
           longitude: lng,
-          velocidade: parseInt(data.velocidade || '0', 10),
-          ignicao: data.ignicaoLigada === 'S',
-          data_posicao: data.dataGPRS || data.dataGPS || new Date().toISOString(),
+          velocidade: parseInt(posData.velocidade || '0', 10),
+          ignicao: posData.ignicaoLigada === 'S',
+          data_posicao: posData.dataGPRS || posData.dataGPS || new Date().toISOString(),
           odometro: undefined,
           direcao: undefined,
-          bateria_nivel: data.voltagemBateria ? parseFloat(data.voltagemBateria) : undefined,
+          bateria_nivel: posData.voltagemBateria ? parseFloat(posData.voltagemBateria) : undefined,
           sinal_gsm: undefined,
         });
         result.sucesso++;
         console.log(`[Rede Veículos] ${rast.codigo}: lat=${lat}, lng=${lng}`);
       } else {
         result.falhas++;
-        result.erros.push(`${rast.codigo}: Sem dados de posição. Campos: ${Object.keys(data).join(', ')}`);
-        console.warn(`[Rede Veículos] ${rast.codigo}: Resposta sem latlon:`, JSON.stringify(data).slice(0, 300));
+        result.erros.push(`${rast.codigo}: Sem dados de posição. Campos: ${Object.keys(posData).join(', ')}`);
+        console.warn(`[Rede Veículos] ${rast.codigo}: Resposta sem coords:`, JSON.stringify(data).slice(0, 300));
       }
     } catch (error: unknown) {
       result.falhas++;
