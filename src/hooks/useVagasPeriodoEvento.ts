@@ -1,5 +1,6 @@
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
+import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { LIMITE_VAGAS_POR_PERIODO, type Periodo } from '@/data/autovistoriaConfig';
 
 interface VagasDisponiveis {
