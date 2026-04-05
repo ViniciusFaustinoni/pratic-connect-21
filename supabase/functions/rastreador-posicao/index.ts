@@ -352,9 +352,18 @@ serve(async (req) => {
       );
     }
 
-    // Fallback: usa id_plataforma se campos específicos estiverem vazios
-    const vehicleId = rastreador.plataforma_veiculo_id || rastreador.id_plataforma;
+    // Resolve vehicle/device IDs with fallback chain
+    let vehicleId = rastreador.plataforma_veiculo_id || rastreador.veiculo?.softruck_vehicle_id || rastreador.id_plataforma;
     const deviceId = rastreador.plataforma_device_id || rastreador.id_plataforma;
+
+    // If resolved from vehicle cache, persist on rastreador
+    if (!rastreador.plataforma_veiculo_id && rastreador.veiculo?.softruck_vehicle_id) {
+      await supabase
+        .from('rastreadores')
+        .update({ plataforma_veiculo_id: rastreador.veiculo.softruck_vehicle_id })
+        .eq('id', rastreador_id);
+      console.log(`[rastreador-posicao] Persistido vehicleId ${vehicleId} do cache veículo`);
+    }
 
     const baseUrl = plataforma.ambiente_atual === 'producao'
       ? plataforma.api_url_producao
