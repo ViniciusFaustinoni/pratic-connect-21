@@ -1,76 +1,62 @@
 
-# Corrigir Edição de Contatos do Associado
 
-## Problema Identificado
+# Fix: Trajeto do Veículo Não Aparece no Sinistro
 
-A função `handleSaveContatos` em `AssociadoDetalhe.tsx` faz um `supabase.update()` que, quando bloqueado por RLS, retorna **sem erro** (PostgREST não reporta erro quando 0 rows são afetadas). O código interpreta isso como sucesso, exibe "Contatos atualizados com sucesso", mas os dados não persistem.
+## Root Cause
 
-Embora a policy `Staff can manage associates` (ALL, `is_funcionario(auth.uid())`) deveria permitir a atualização, pode haver um conflito sutil com a policy UPDATE específica para anon+authenticated. Além disso, o código não verifica se a atualização realmente afetou alguma linha.
+Two problems combine to show "Nenhum trajeto encontrado":
 
-## Solução
+**1. Softruck API `limit=100` is far too low.** The edge function requests trajectories with `limit=100`, which is insufficient for 4 hours of GPS data (typically thousands of points). The API likely returns paginated results and with only 100 allowed, it may return 0 or too few.
 
-Duas correções complementares:
+**2. The 4h window misses all local data.** The sinistro `SIN-20260405-0018` has `data_ocorrencia = 2026-04-05 01:49 UTC`. The component calculates a window of `21:49 UTC Apr 4` to `01:49 UTC Apr 5`. But the local `rastreador_posicoes` table has data only up to `13:19 UTC Apr 4` — 8.5 hours before the window starts. The fallback query correctly returns 0 rows because no positions exist in that timeframe.
 
-### 1. Verificar se o update afetou rows (garantia de feedback correto)
+The vehicle was stationary at the collision coordinates (-22.919342, -43.416578) from at least 11:49 UTC onward, with the last collected position at 13:19 UTC. After that, no more positions were collected (rastreador likely went offline).
 
-No `handleSaveContatos`, usar `.select()` após o `.update()` para verificar se dados foram retornados. Se não, tratar como erro.
+## Solution
 
-```typescript
-const { data, error } = await supabase
-  .from('associados')
-  .update({
-    telefone: editTelefone,
-    telefone_secundario: editTelefoneSecundario || null,
-    email: editEmail,
-    updated_at: new Date().toISOString(),
-  })
-  .eq('id', id)
-  .select()
-  .single();
+### Change 1: Edge Function `rastreador-historico/index.ts`
+- Increase Softruck API limit from `100` to `5000` to capture full trajectory data
+- When both API and local fallback return 0 points for the requested window, **expand the search backward** to find the nearest available positions (up to 24h before `data_inicio`). This ensures trajectory data is shown even when the rastreador stopped communicating before the event
 
-if (error) throw error;
-if (!data) throw new Error('Nenhum registro atualizado');
+### Change 2: Frontend `TrajetoColisaoCard.tsx`
+- Expand the default window from 4h to 8h before the collision when no data is found, with an automatic retry
+- Show an informational message when displaying data from an expanded period (e.g., "Exibindo trajeto expandido - dados disponíveis até X horas antes do sinistro")
+
+## Technical Details
+
+### Edge Function Changes (`supabase/functions/rastreador-historico/index.ts`)
+
+**Line 132**: Change `limit=100` to `limit=5000`
+
+**After line 352** (fallback local empty): Add an expanded search block:
+```
+// If both API and local returned 0, try expanding window backward (up to 24h)
+if (data_inicio) {
+  const expandedStart = new Date(new Date(data_inicio).getTime() - 20 * 3600000).toISOString();
+  const { data: expandedData } = await supabase
+    .from('rastreador_posicoes')
+    .select('*')
+    .eq('rastreador_id', rastreador_id)
+    .gte('data_posicao', expandedStart)
+    .lte('data_posicao', data_fim || fim)
+    .order('data_posicao', { ascending: true })
+    .limit(2000);
+
+  if (expandedData?.length) {
+    // transform and return with expanded period message
+  }
+}
 ```
 
-### 2. Usar edge function RPC como fallback seguro
+### Frontend Changes (`TrajetoColisaoCard.tsx`)
 
-Criar uma função SQL `update_associado_contatos` com SECURITY DEFINER que só permite funcionários atualizarem, contornando qualquer conflito de policies:
+- When `historico` returns with `trajeto.length === 0`, display the expanded period message from the edge function
+- No window change needed on frontend — the edge function handles the expansion automatically
 
-```sql
-CREATE OR REPLACE FUNCTION update_associado_contatos(
-  _associado_id uuid,
-  _telefone text,
-  _telefone_secundario text,
-  _email text
-) RETURNS void
-LANGUAGE plpgsql
-SECURITY DEFINER
-SET search_path = public
-AS $$
-BEGIN
-  IF NOT is_funcionario(auth.uid()) THEN
-    RAISE EXCEPTION 'Sem permissão';
-  END IF;
-  
-  UPDATE associados
-  SET telefone = _telefone,
-      telefone_secundario = _telefone_secundario,
-      email = _email,
-      updated_at = now()
-  WHERE id = _associado_id;
-END;
-$$;
-```
+## Files Changed
 
-E no frontend, substituir o update direto por `supabase.rpc('update_associado_contatos', {...})`.
+| File | Action |
+|------|--------|
+| `supabase/functions/rastreador-historico/index.ts` | Increase API limit to 5000; add expanded fallback search |
+| `src/components/sinistros/TrajetoColisaoCard.tsx` | Show expanded period info when returned by API |
 
-## Arquivos Alterados
-
-| Arquivo | Ação |
-|---------|------|
-| `src/pages/cadastro/AssociadoDetalhe.tsx` | Usar `.select().single()` no update + tratar caso de 0 rows |
-| Migration SQL | Criar função `update_associado_contatos` como fallback |
-
-## Abordagem recomendada
-
-Começar pela **correção 1** (`.select().single()`) que é mínima e já resolve o feedback falso de sucesso. Se o update realmente falha por RLS, o erro ficará visível e poderemos aplicar a correção 2 (RPC function).
