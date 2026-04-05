@@ -1,54 +1,39 @@
 
 
-# Filtro por Clique nos Cards de Métricas de Rastreadores
+# Corrigir Todos os Rastreadores Softruck
 
-## Problema
-Os cards de métricas (Total, Online, Atenção, Offline, Estoque) são apenas visuais — não aplicam filtro ao serem clicados.
+## Situação Atual
 
-## Solução
+| Estado | Quantidade |
+|--------|-----------|
+| Total Softruck instalados | 5.072 |
+| Já com `plataforma_veiculo_id` | 793 (15%) |
+| Sem vehicle ID, mas com placa | 4.279 (85%) |
+| Sem dados para resolver | 0 |
 
-### Arquivo: `src/components/rastreadores/RastreadorMetrics.tsx`
+O reconciliador `popular-ids-softruck` **já funciona** — testei agora e resolveu 5/5 via `api_device`. O problema é que ele nunca foi executado em escala.
 
-1. Adicionar prop `onFilterClick: (filter: Partial<RastreadorFilters>) => void` e `activeFilter?: string` ao componente
-2. Adicionar um campo `filterKey` a cada métrica que mapeia para os filtros corretos:
-   - **Total**: limpa todos os filtros (reset)
-   - **Online**: `{ comunicacao: 'online', status: ['instalado'] }`
-   - **Atenção**: `{ comunicacao: 'atencao', status: ['instalado'] }` (novo valor, ver abaixo)
-   - **Offline**: `{ comunicacao: 'offline', status: ['instalado'] }`
-   - **Estoque**: `{ status: ['estoque'] }`
-3. Tornar os cards clicáveis com `cursor-pointer` e visual de card ativo (borda highlight)
+## Plano
 
-### Arquivo: `src/hooks/useRastreadores.ts`
+### 1. Executar o reconciliador em massa
 
-Estender o tipo `comunicacao` de `'online' | 'offline' | 'todos'` para incluir `'atencao'` (1-24h sem sinal). Ajustar a query para filtrar:
-- `online`: `ultima_comunicacao >= 1h atrás` (ou threshold existente)
-- `atencao`: `ultima_comunicacao` entre 1h e 24h
-- `offline`: `ultima_comunicacao < 24h atrás` ou NULL
+Rodar `popular-ids-softruck` em batches de 30, iterando pelos 4.279 rastreadores pendentes. Cada batch leva ~6-8 segundos (30 × 200ms rate limit). Total estimado: ~143 batches, ~17 minutos.
 
-### Arquivo: `src/pages/monitoramento/Rastreadores.tsx`
+Vou criar um script que chama a edge function em loop com offsets incrementais, aguardando cada batch completar antes de iniciar o próximo. Isso respeita o rate limit da Softruck (50 req/min) e evita timeouts.
 
-Passar `onFilterClick` e `activeFilter` para `RastreadorMetrics`, conectando ao `setFilters` existente.
+### 2. Verificar resultados
+
+Após o processamento, consultar o banco para confirmar quantos foram resolvidos e quantos falharam. Os que falharem serão listados com o motivo para análise individual.
+
+### 3. Validar sincronização
+
+Após popular os IDs, o cron `sync-rastreadores` (que roda a cada ~7 min) passará a buscar posições de todos os rastreadores corrigidos automaticamente. Verificar na próxima execução se as posições estão sendo inseridas.
 
 ## Detalhes Técnicos
 
-```typescript
-// RastreadorMetrics - cada card ganha filterKey
-{
-  label: 'Online',
-  filterKey: 'online',
-  filterValue: { comunicacao: 'online', status: ['instalado'] },
-  ...
-}
-
-// onClick handler
-onClick={() => {
-  if (activeFilter === metric.filterKey) {
-    onFilterClick({}); // toggle off = reset
-  } else {
-    onFilterClick(metric.filterValue);
-  }
-}
-
-// Visual: ring-2 ring-offset-2 no card ativo
-```
+- Edge function: `popular-ids-softruck` com `batch_size=30` e `offset` incremental
+- Resolução via: `api_device` (busca veículo associado ao device pelo IMEI na Softruck)
+- Persistência: grava `plataforma_veiculo_id` no rastreador e `softruck_vehicle_id` no veículo
+- Rate limit: 200ms entre cada chamada à API Softruck dentro do batch
+- Pausa de 2s entre batches para não sobrecarregar
 
