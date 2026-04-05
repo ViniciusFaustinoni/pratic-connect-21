@@ -24,7 +24,7 @@ async function getAuthToken(forceRefresh = false): Promise<string> {
     throw new Error('Credenciais Softruck não configuradas');
   }
 
-  const response = await fetch(`${BASE_URL}/v1/login`, {
+  const response = await fetch(`${BASE_URL}/v2/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'public-key': publicKey },
     body: JSON.stringify({ username, password }),
