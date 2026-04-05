@@ -196,7 +196,7 @@ export default function ConfigPlataformas() {
                 </div>
 
                 {/* Estatísticas */}
-                <div className="grid grid-cols-1 sm:grid-cols-3 gap-4 p-4 bg-muted/50 rounded-lg">
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4 p-4 bg-muted/50 rounded-lg">
                   <div className="text-center">
                     <div className="text-2xl font-bold">{stats.total}</div>
                     <div className="text-xs text-muted-foreground">Total</div>
@@ -204,10 +204,6 @@ export default function ConfigPlataformas() {
                   <div className="text-center">
                     <div className="text-2xl font-bold text-green-600">{stats.ativos}</div>
                     <div className="text-xs text-muted-foreground">Instalados</div>
-                  </div>
-                  <div className="text-center">
-                    <div className="text-2xl font-bold text-blue-600">{stats.online}</div>
-                    <div className="text-xs text-muted-foreground">Online</div>
                   </div>
                 </div>
 
