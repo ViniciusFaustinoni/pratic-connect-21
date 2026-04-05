@@ -1,0 +1,1 @@
+CREATE INDEX idx_associados_origem_cadastro ON public.associados (origem_cadastro);
