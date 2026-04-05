@@ -78,17 +78,6 @@ export default function ConfigPlataformas() {
             Gerencie as integrações com plataformas de rastreamento
           </p>
         </div>
-        <Button 
-          onClick={() => syncRastreadores.mutate(undefined)}
-          disabled={syncRastreadores.isPending}
-        >
-          {syncRastreadores.isPending ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4 mr-2" />
-          )}
-          Sincronizar Todas
-        </Button>
       </div>
 
       {/* Plataformas */}
