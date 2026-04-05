@@ -1,44 +1,67 @@
 
 
-# Condicionar Aba "Reparo" à Vistoria Concluída
+# Fix: Template Meta Não Enviado na Atribuição Manual de Vistoria
 
-## Problema
+## Causa Raiz
 
-A aba "Reparo" aparece sempre no sinistro, mesmo antes da vistoria do regulador ser concluída. O orçamento de reparo só faz sentido após a vistoria ser finalizada (quando o regulador envia o documento de orçamento processado via OCR).
+Dois problemas combinados impedem o envio:
+
+1. **Edge function inexistente**: O hook `useAtribuicaoManual` chama `supabase.functions.invoke('enviar-template-meta')` — essa edge function **não existe**. A função correta é `whatsapp-send-text`.
+
+2. **Formato de parâmetros errado**: O hook envia `variaveis: { '1': ..., '2': ... }` (objeto com chaves numéricas), mas `whatsapp-send-text` espera `template_params: [...]` (array de strings).
+
+3. **Erro silencioso**: O `catch` apenas faz `console.error`, então a falha passa despercebida.
+
+Como a atribuição automática (cron) está desligada ("Atribuição MANUAL ativa — motor automático desligado"), o fluxo que **funciona** (no cron) nunca roda. O fluxo manual é o único ativo e está quebrado.
 
 ## Solução
 
-Condicionar a exibição da aba "Reparo" à existência de uma vistoria com status `concluida` para o sinistro. A variável `vistoriaEvento` já é carregada no componente — basta verificar seu status.
+Corrigir o hook `useAtribuicaoManual` para:
+- Chamar `whatsapp-send-text` em vez de `enviar-template-meta`
+- Usar `template_params` (array) em vez de `variaveis` (objeto)
+- Incluir `referencia_tipo` e `referencia_id` para rastreabilidade
 
 ## Arquivo Alterado
 
 | Arquivo | Ação |
 |---------|------|
-| `src/pages/eventos/SinistroDetalhe.tsx` | Condicionar renderização da TabsTrigger e TabsContent "reparo" a `vistoriaEvento?.status === 'concluida'` |
+| `src/hooks/useAtribuicaoManual.ts` | Corrigir chamada de edge function e formato de parâmetros |
 
 ## Detalhes Técnicos
 
-### `SinistroDetalhe.tsx`
+### `useAtribuicaoManual.ts` — linhas 169-191
 
-**Linha ~296**: Ajustar o `grid-cols` dinamicamente (5 ou 4 colunas conforme visibilidade da aba).
-
-**Linhas ~300-301**: Envolver a `TabsTrigger value="reparo"` em condicional:
-```tsx
-{vistoriaEvento?.status === 'concluida' && (
-  <TabsTrigger value="reparo" className="text-xs sm:text-sm gap-1">
-    <Wrench className="h-3.5 w-3.5 hidden sm:block" /> Reparo
-  </TabsTrigger>
-)}
+**Antes** (quebrado):
+```ts
+await supabase.functions.invoke('enviar-template-meta', {
+  body: {
+    telefone,
+    template_name: 'servico_atribuido_v1',
+    variaveis: { '1': ..., '2': ..., '3': ..., '4': ..., '5': ..., '6': ... },
+  },
+});
 ```
 
-**Linhas ~324-333**: Envolver a `TabsContent value="reparo"` na mesma condicional:
-```tsx
-{vistoriaEvento?.status === 'concluida' && (
-  <TabsContent value="reparo" className="mt-4">
-    <SinistroDetalheReparo ... />
-  </TabsContent>
-)}
+**Depois** (corrigido):
+```ts
+const enderecoCompleto = [servico?.logradouro, servico?.numero, servico?.bairro, servico?.cidade]
+  .filter(Boolean).join(', ') || 'A definir';
+
+await supabase.functions.invoke('whatsapp-send-text', {
+  body: {
+    telefone: telefone.replace(/\D/g, ''),
+    mensagem: `Nova tarefa atribuída: ${servico?.tipo || 'Serviço'} - ${assocData?.nome || 'Cliente'}`,
+    template_name: 'servico_atribuido_v1',
+    template_params: [
+      profissional.nome?.split(' ')[0] || 'Técnico',
+      servico?.tipo || 'Serviço',
+      `${assocData?.nome || 'Cliente'} - ${veicData?.placa || ''}`,
+    ],
+    referencia_tipo: 'servico',
+    referencia_id: servicoId,
+  },
+});
 ```
 
-Alteração mínima — apenas 2 blocos condicionais adicionados ao redor do código já existente.
+Isso alinha o formato com o que o cron já usa com sucesso para instalações e vistorias, garantindo que o template `servico_atribuido_v1` seja enviado via Meta API ao técnico quando qualquer tarefa (vistoria, instalação, etc.) é atribuída manualmente.
 
