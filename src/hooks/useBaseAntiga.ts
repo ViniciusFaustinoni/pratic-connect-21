@@ -89,26 +89,43 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
   return useQuery({
     queryKey: ['base-antiga-veiculos', filters, pagination],
     queryFn: async () => {
-      let query = (supabase
+      // 1) Lightweight count query (head-only, no joins with rastreadores)
+      let countQuery = (supabase
         .from('veiculos')
-        .select('id, placa, marca, modelo, ano_fabricacao, ano_modelo, cor, chassi, status, associado_id, associado:associados!inner(id, nome, cpf, origem_cadastro), rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, status, plataforma)', { count: 'exact' }) as any)
+        .select('id, associado:associados!inner(id, origem_cadastro)', { count: 'exact', head: true }) as any)
         .eq('associado.origem_cadastro', 'api_externa');
 
       if (filters?.search && filters.search.length >= 2) {
         const term = filters.search.trim();
         const upper = term.toUpperCase();
-        // Search by plate, chassi, marca/modelo
-        query = query.or(`placa.ilike.%${upper}%,chassi.ilike.%${upper}%,marca.ilike.%${term}%,modelo.ilike.%${term}%`);
+        countQuery = countQuery.or(`placa.ilike.%${upper}%,chassi.ilike.%${upper}%,marca.ilike.%${term}%,modelo.ilike.%${term}%`);
       }
 
-      query = query
+      // 2) Data query (no count)
+      let dataQuery = (supabase
+        .from('veiculos')
+        .select('id, placa, marca, modelo, ano_fabricacao, ano_modelo, cor, chassi, status, associado_id, associado:associados!inner(id, nome, cpf, origem_cadastro), rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, status, plataforma)') as any)
+        .eq('associado.origem_cadastro', 'api_externa');
+
+      if (filters?.search && filters.search.length >= 2) {
+        const term = filters.search.trim();
+        const upper = term.toUpperCase();
+        dataQuery = dataQuery.or(`placa.ilike.%${upper}%,chassi.ilike.%${upper}%,marca.ilike.%${term}%,modelo.ilike.%${term}%`);
+      }
+
+      dataQuery = dataQuery
         .order('created_at', { ascending: false })
         .range((page - 1) * pageSize, page * pageSize - 1);
 
-      const { data, error, count } = await query;
-      if (error) throw error;
+      // Run both in parallel
+      const [countRes, dataRes] = await Promise.all([countQuery, dataQuery]);
 
-      const veiculos = (data || []).map((v: any) => ({
+      if (countRes.error) throw countRes.error;
+      if (dataRes.error) throw dataRes.error;
+
+      const total = countRes.count || 0;
+
+      const veiculos = (dataRes.data || []).map((v: any) => ({
         ...v,
         associado: Array.isArray(v.associado) ? v.associado[0] : v.associado,
         rastreador: Array.isArray(v.rastreador) && v.rastreador.length > 0 ? v.rastreador[0] : v.rastreador || null,
@@ -119,8 +136,8 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
         pagination: {
           page,
           pageSize,
-          total: count || 0,
-          totalPages: Math.ceil((count || 0) / pageSize),
+          total,
+          totalPages: Math.ceil(total / pageSize),
         },
       };
     },
