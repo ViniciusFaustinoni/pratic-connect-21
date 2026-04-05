@@ -11,16 +11,12 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import {
-  Wifi,
-  WifiOff,
   Eye,
   Wrench,
   MapPin,
   Car,
   User,
   Radio,
-  Gauge,
-  Zap,
   PackageMinus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
