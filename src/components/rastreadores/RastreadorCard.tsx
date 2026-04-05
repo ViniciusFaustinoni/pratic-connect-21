@@ -99,28 +99,6 @@ export function RastreadorCard({
               {STATUS_RASTREADOR_LABELS[rastreador.status]}
             </Badge>
             
-            {isInstalled && (
-              <Badge
-                variant="outline"
-                className={cn(
-                  "text-xs",
-                  online
-                    ? "border-emerald-500 text-emerald-600 bg-emerald-500/10"
-                    : "border-red-500 text-red-600 bg-red-500/10"
-                )}
-              >
-                {online ? (
-                  <>
-                    <Wifi className="mr-1 h-3 w-3" /> Online
-                  </>
-                ) : (
-                  <>
-                    <WifiOff className="mr-1 h-3 w-3" /> Offline
-                  </>
-                )}
-              </Badge>
-            )}
-
             <Badge variant="outline" className="text-xs">
               {plataformaLabel}
             </Badge>
