@@ -149,7 +149,7 @@ export function PlataformasConfigPanel() {
       {plataformas && plataformas.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2">
           {plataformas.map((plataforma) => {
-            const stats = contagem?.[plataforma.plataforma] || { total: 0, ativos: 0, online: 0 };
+            const stats = contagem?.[plataforma.plataforma] || { total: 0, ativos: 0 };
             const icone = ICONE_MAP[plataforma.icone || 'server'] || ICONE_MAP.server;
 
             return (
