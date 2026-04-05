@@ -172,12 +172,12 @@ export default function Campanhas() {
                 ))}
               </SelectContent>
             </Select>
-            <Select value={tipoFilter} onValueChange={setTipoFilter}>
+            <Select value={tipoFilter || 'todos'} onValueChange={(v) => setTipoFilter(v === 'todos' ? '' : v)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos os tipos</SelectItem>
+                <SelectItem value="todos">Todos os tipos</SelectItem>
                 {Object.entries(tipoConfig).map(([value, { label }]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
