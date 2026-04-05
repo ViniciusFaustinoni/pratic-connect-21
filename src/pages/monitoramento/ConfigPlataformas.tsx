@@ -85,7 +85,7 @@ export default function ConfigPlataformas() {
         {plataformas?.map((plataforma) => {
           const stats = estatisticas?.[plataforma.codigo] || { total: 0, ativos: 0, online: 0 };
           const isTesting = testingPlatform === plataforma.codigo;
-          const isSyncing = syncingPlatform === plataforma.codigo;
+          
 
           return (
             <Card key={plataforma.id} className={!plataforma.ativa ? 'opacity-60' : ''}>
