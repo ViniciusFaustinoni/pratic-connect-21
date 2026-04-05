@@ -160,39 +160,6 @@ export function RastreadorCard({
             </div>
           )}
 
-          {/* Dados de comunicação (apenas se instalado) */}
-          {isInstalled && (
-            <div className="space-y-2 pt-2 border-t text-xs text-muted-foreground">
-              <div className="flex items-center gap-4">
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger className="flex items-center gap-1">
-                      <Gauge className="h-3.5 w-3.5" />
-                      <span>{rastreador.ultima_velocidade ?? 0} km/h</span>
-                    </TooltipTrigger>
-                    <TooltipContent>Última velocidade</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-
-                <TooltipProvider>
-                  <Tooltip>
-                    <TooltipTrigger className="flex items-center gap-1">
-                      <Zap className={cn(
-                        "h-3.5 w-3.5",
-                        rastreador.ultima_ignicao ? "text-emerald-500" : "text-muted-foreground"
-                      )} />
-                      <span>{rastreador.ultima_ignicao ? 'Ligado' : 'Desligado'}</span>
-                    </TooltipTrigger>
-                    <TooltipContent>Ignição</TooltipContent>
-                  </Tooltip>
-                </TooltipProvider>
-              </div>
-              
-              <p className="text-xs">
-                Última comunicação: <span className={offline ? "text-red-500 font-medium" : ""}>{getLastCommText()}</span>
-              </p>
-            </div>
-          )}
 
           {/* Ações rápidas */}
           <div className="flex gap-2 pt-3 border-t" onClick={(e) => e.stopPropagation()}>

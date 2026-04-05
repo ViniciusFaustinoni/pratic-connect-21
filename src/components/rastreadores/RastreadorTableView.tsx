@@ -271,42 +271,7 @@ export function RastreadorTableView({
                   )}
                 </TableCell>
 
-                {/* Comunicação com destaque visual */}
-                <TableCell>
-                  {isInstalled ? (
-                    <div className="flex flex-col gap-1">
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-xs w-fit",
-                          online
-                            ? "border-emerald-500 text-emerald-600 bg-emerald-500/10"
-                            : "border-red-500 text-red-600 bg-red-500/10"
-                        )}
-                      >
-                        {online ? (
-                          <>
-                            <Wifi className="mr-1 h-3 w-3" /> Online
-                          </>
-                        ) : (
-                          <>
-                            <WifiOff className="mr-1 h-3 w-3" /> Offline
-                          </>
-                        )}
-                      </Badge>
-                      <span className={cn(
-                        "text-xs",
-                        offline ? "text-red-500" : "text-muted-foreground"
-                      )}>
-                        {getLastCommText(rastreador.ultima_comunicacao)}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">
