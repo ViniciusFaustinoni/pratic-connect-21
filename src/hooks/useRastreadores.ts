@@ -55,8 +55,14 @@ export function useRastreadores(filters?: RastreadorFilters) {
             associados (id, nome, email, telefone, cpf)
           ),
           portador:profiles!rastreadores_portador_id_fkey(id, nome)
-        `)
-        .order('created_at', { ascending: false });
+        `);
+
+      // When filtering by online communication, order by ultima_comunicacao to get online ones first
+      if (filters?.comunicacao === 'online') {
+        query = query.order('ultima_comunicacao', { ascending: false, nullsFirst: false });
+      } else {
+        query = query.order('created_at', { ascending: false });
+      }
 
       if (filters?.status && filters.status.length > 0) {
         query = query.in('status', filters.status);
