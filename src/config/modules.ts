@@ -71,7 +71,6 @@ export const MODULE_ITEMS: Record<string, ModuleItem[]> = {
     { id: 'sla', label: 'SLA' },
     { id: 'sindicancias', label: 'Sindicâncias' },
     { id: 'sindicantes', label: 'Sindicantes' },
-    { id: 'solicitacoes_ia', label: 'Solicitações IA' },
   ],
   assistencia: [
     { id: 'dashboard', label: 'Dashboard' },
