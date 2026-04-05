@@ -279,7 +279,11 @@ export default function Rastreadores() {
 
 // Componente separado para o conteúdo de rastreadores
 interface RastreadoresContentProps {
-  rastreadores: ReturnType<typeof useRastreadores>['data'];
+  rastreadores: RastreadorWithRelations[] | undefined;
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  onPageChange: (page: number) => void;
   metricas: ReturnType<typeof useRastreadoresMetricas>['data'];
   isLoading: boolean;
   isLoadingMetricas: boolean;
@@ -300,6 +304,10 @@ interface RastreadoresContentProps {
 
 function RastreadoresContent({
   rastreadores,
+  totalCount,
+  totalPages,
+  currentPage,
+  onPageChange,
   metricas,
   isLoading,
   isLoadingMetricas,
