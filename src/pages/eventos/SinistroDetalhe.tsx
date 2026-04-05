@@ -293,13 +293,15 @@ export default function SinistroDetalhe() {
         {/* Tabs - Left */}
         <div className="lg:col-span-2">
           <Tabs defaultValue="info" className="w-full">
-            <TabsList className="w-full grid grid-cols-3 sm:grid-cols-5 h-auto">
+            <TabsList className={`w-full grid grid-cols-3 ${vistoriaEvento?.status === 'concluida' ? 'sm:grid-cols-5' : 'sm:grid-cols-4'} h-auto`}>
               <TabsTrigger value="info" className="text-xs sm:text-sm gap-1">
                 <FileText className="h-3.5 w-3.5 hidden sm:block" /> Informações
               </TabsTrigger>
-              <TabsTrigger value="reparo" className="text-xs sm:text-sm gap-1">
-                <Wrench className="h-3.5 w-3.5 hidden sm:block" /> Reparo
-              </TabsTrigger>
+              {vistoriaEvento?.status === 'concluida' && (
+                <TabsTrigger value="reparo" className="text-xs sm:text-sm gap-1">
+                  <Wrench className="h-3.5 w-3.5 hidden sm:block" /> Reparo
+                </TabsTrigger>
+              )}
               <TabsTrigger value="docs" className="text-xs sm:text-sm gap-1">
                 <FileText className="h-3.5 w-3.5 hidden sm:block" /> Documentos
               </TabsTrigger>
@@ -321,16 +323,18 @@ export default function SinistroDetalhe() {
               />
             </TabsContent>
 
-            <TabsContent value="reparo" className="mt-4">
-              <SinistroDetalheReparo
-                sinistro={sinistro}
-                terceirosData={terceirosData}
-                isDiretor={isDiretor}
-                isRegulador={isRegulador}
-                isAnalista={isAnalistaEventosOnly || isDiretor}
-                onOpenAtribuirFornecedores={() => setShowAtribuirFornecedores(true)}
-              />
-            </TabsContent>
+            {vistoriaEvento?.status === 'concluida' && (
+              <TabsContent value="reparo" className="mt-4">
+                <SinistroDetalheReparo
+                  sinistro={sinistro}
+                  terceirosData={terceirosData}
+                  isDiretor={isDiretor}
+                  isRegulador={isRegulador}
+                  isAnalista={isAnalistaEventosOnly || isDiretor}
+                  onOpenAtribuirFornecedores={() => setShowAtribuirFornecedores(true)}
+                />
+              </TabsContent>
+            )}
 
             <TabsContent value="docs" className="mt-4">
               <SinistroDetalheDocs
