@@ -292,13 +292,26 @@ async function getPosicaoRedeVeiculos(
     throw new Error(`Rede Veículos: coordenadas ausentes na resposta. Campos: ${Object.keys(posData).join(', ')}`);
   }
 
+  // Converter data DD/MM/YYYY HH:mm:ss para ISO
+  const rawDate = posData.dataGPRS || posData.dataGPS || '';
+  let dataPosicaoISO = new Date().toISOString();
+  if (rawDate) {
+    const match = rawDate.match(/^(\d{2})\/(\d{2})\/(\d{4})\s+(\d{2}):(\d{2}):(\d{2})$/);
+    if (match) {
+      const [, dd, mm, yyyy, hh, min, ss] = match;
+      dataPosicaoISO = `${yyyy}-${mm}-${dd}T${hh}:${min}:${ss}-03:00`;
+    } else {
+      dataPosicaoISO = rawDate;
+    }
+  }
+
   return {
     latitude,
     longitude,
     velocidade: parseInt(posData.velocidade || '0', 10),
     direcao: undefined,
     ignicao: posData.ignicaoLigada === 'S',
-    data_posicao: posData.dataGPRS || posData.dataGPS || new Date().toISOString(),
+    data_posicao: dataPosicaoISO,
     endereco: posData.endereco || undefined,
     dados_extras: {
       voltagemBateria: posData.voltagemBateria,
