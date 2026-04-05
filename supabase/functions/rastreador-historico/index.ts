@@ -127,7 +127,7 @@ async function buscarTrajetoSoftruckComRetry(
       
       const queryParams = [
         `filters[acc][btw]=${encodeURIComponent(inicio)},${encodeURIComponent(fim)}`,
-        `limit=5000`,
+        `limit=100`,
       ].join('&');
 
       const url = `${baseUrl}/vehicles/${vehicleId}/trajectories/?${queryParams}`;
