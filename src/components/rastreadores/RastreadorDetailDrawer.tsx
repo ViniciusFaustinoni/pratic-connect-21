@@ -40,7 +40,6 @@ import {
   useRastreador,
   useUpdateRastreadorStatus,
   useDeleteRastreador,
-  isRastreadorOnline,
   type StatusRastreador,
 } from '@/hooks/useRastreadores';
 import { STATUS_RASTREADOR_LABELS, STATUS_RASTREADOR_COLORS, PLATAFORMA_RASTREADOR_LABELS } from '@/types/database';
