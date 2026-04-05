@@ -47,25 +47,6 @@ export function RastreadorCard({
 }: RastreadorCardProps) {
   const isInstalled = rastreador.status === 'instalado';
   const isEstoque = rastreador.status === 'estoque';
-  const online = isInstalled && isRastreadorOnline(rastreador.ultima_comunicacao);
-  const offline = isInstalled && !online;
-
-  // Calcular tempo desde última comunicação
-  const getLastCommText = () => {
-    if (!rastreador.ultima_comunicacao) return 'Sem comunicação';
-    try {
-      return `há ${formatDistanceToNow(new Date(rastreador.ultima_comunicacao), { locale: ptBR })}`;
-    } catch {
-      return 'Data inválida';
-    }
-  };
-
-  // Determinar cor da barra de status
-  const getStatusBarColor = () => {
-    if (!isInstalled) return 'bg-gradient-to-r from-muted to-muted/50';
-    if (online) return 'bg-gradient-to-r from-emerald-500 to-emerald-400';
-    return 'bg-gradient-to-r from-red-500 to-red-400';
-  };
 
   return (
     <motion.div
