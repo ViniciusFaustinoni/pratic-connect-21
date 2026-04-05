@@ -162,7 +162,8 @@ export function MapaVistoriasContent() {
     if (!vistorias) return [];
     return vistorias.filter((v) => {
       if (!v.data_agendada) return false;
-      const dataVistoria = new Date(v.data_agendada + 'T00:00:00');
+      const dateStr = v.data_agendada.split('T')[0];
+      const dataVistoria = new Date(dateStr + 'T00:00:00');
       const hojeNorm = new Date(hoje);
       hojeNorm.setHours(0, 0, 0, 0);
       const isHoje = isSameDay(dataVistoria, hojeNorm);
