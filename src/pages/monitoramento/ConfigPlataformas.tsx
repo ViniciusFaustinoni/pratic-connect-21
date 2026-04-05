@@ -83,7 +83,7 @@ export default function ConfigPlataformas() {
       {/* Plataformas */}
       <div className="grid gap-6">
         {plataformas?.map((plataforma) => {
-          const stats = estatisticas?.[plataforma.codigo] || { total: 0, ativos: 0, online: 0 };
+          const stats = estatisticas?.[plataforma.codigo] || { total: 0, ativos: 0 };
           const isTesting = testingPlatform === plataforma.codigo;
           
 
