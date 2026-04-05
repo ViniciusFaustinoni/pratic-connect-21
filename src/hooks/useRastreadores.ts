@@ -57,9 +57,19 @@ export function useRastreadores(filters?: RastreadorFilters) {
           portador:profiles!rastreadores_portador_id_fkey(id, nome)
         `);
 
-      // When filtering by online communication, order by ultima_comunicacao to get online ones first
+      // When filtering by communication status, use server-side filters where possible
       if (filters?.comunicacao === 'online') {
+        const threshold = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        query = query.gte('ultima_comunicacao', threshold);
         query = query.order('ultima_comunicacao', { ascending: false, nullsFirst: false });
+      } else if (filters?.comunicacao === 'offline') {
+        // For offline, we need those with old or null communication - order by created_at
+        query = query.order('created_at', { ascending: false });
+      } else if (filters?.comunicacao === 'atencao') {
+        const threshold1h = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
+        const threshold24h = new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
+        query = query.lt('ultima_comunicacao', threshold1h).gte('ultima_comunicacao', threshold24h);
+        query = query.order('ultima_comunicacao', { ascending: false });
       } else {
         query = query.order('created_at', { ascending: false });
       }
