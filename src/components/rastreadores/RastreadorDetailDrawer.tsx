@@ -148,7 +148,7 @@ export function RastreadorDetailDrawer({
           </div>
         ) : (
           <>
-            <SheetHeader>
+            <DialogHeader>
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
                   <SheetTitle className="flex items-center gap-2">
