@@ -24,7 +24,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { isRastreadorOnline, type RastreadorWithRelations } from '@/hooks/useRastreadores';
+import { type RastreadorWithRelations } from '@/hooks/useRastreadores';
 import { STATUS_RASTREADOR_LABELS, STATUS_RASTREADOR_COLORS } from '@/types/database';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
