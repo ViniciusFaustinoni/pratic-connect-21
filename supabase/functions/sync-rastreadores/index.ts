@@ -188,11 +188,11 @@ async function syncSoftruck(
     try {
       // Usar IDs corretos da plataforma (endpoint v2 requer ambos)
       const deviceId = rast.plataforma_device_id;
-      const vehicleId = rast.plataforma_veiculo_id || deviceId;
+      const vehicleId = rast.plataforma_veiculo_id;
       
-      if (!deviceId) {
+      if (!deviceId || !vehicleId) {
         result.falhas++;
-        result.erros.push(`${rast.codigo}: device ID não configurado`);
+        result.erros.push(`${rast.codigo}: device/vehicle ID não configurados`);
         continue;
       }
       
