@@ -55,7 +55,7 @@ export default function EventoAgendamento({ token, onAgendado }: Props) {
 
   // Vagas para data selecionada
   const dataFormatada = dataSelecionada ? format(dataSelecionada, 'yyyy-MM-dd') : null;
-  const { data: vagasData, isLoading: isLoadingVagas } = useVagasPeriodoEvento(dataFormatada);
+  const { data: vagasData, isLoading: isLoadingVagas, error: vagasError } = useVagasPeriodoEvento(dataFormatada, true);
 
   // Períodos disponíveis para a data
   const periodosDisponiveis = dataSelecionada ? getPeriodosParaDia(dataSelecionada) : [];
