@@ -20,6 +20,14 @@ export interface RastreadorFilters {
   plataforma?: string;
   search?: string;
   comunicacao?: 'online' | 'offline' | 'atencao' | 'todos';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface RastreadoresPaginatedResult {
+  items: RastreadorWithRelations[];
+  total: number;
+  totalPages: number;
 }
 
 export interface RastreadoresMetricas {
@@ -45,7 +53,12 @@ export function isRastreadorOnline(ultimaComunicacao: string | null): boolean {
 export function useRastreadores(filters?: RastreadorFilters) {
   return useQuery({
     queryKey: ['rastreadores', filters],
-    queryFn: async () => {
+    queryFn: async (): Promise<RastreadoresPaginatedResult> => {
+      const page = filters?.page ?? 1;
+      const pageSize = filters?.pageSize ?? 50;
+      const from = (page - 1) * pageSize;
+      const to = from + pageSize - 1;
+
       let query = supabase
         .from('rastreadores')
         .select(`
@@ -55,7 +68,7 @@ export function useRastreadores(filters?: RastreadorFilters) {
             associados (id, nome, email, telefone, cpf)
           ),
           portador:profiles!rastreadores_portador_id_fkey(id, nome)
-        `);
+        `, { count: 'exact' });
 
       // When filtering by communication status, use server-side filters where possible
       if (filters?.comunicacao === 'online') {
@@ -63,7 +76,6 @@ export function useRastreadores(filters?: RastreadorFilters) {
         query = query.gte('ultima_comunicacao', threshold);
         query = query.order('ultima_comunicacao', { ascending: false, nullsFirst: false });
       } else if (filters?.comunicacao === 'offline') {
-        // For offline, we need those with old or null communication - order by created_at
         query = query.order('created_at', { ascending: false });
       } else if (filters?.comunicacao === 'atencao') {
         const threshold1h = new Date(Date.now() - 1 * 60 * 60 * 1000).toISOString();
@@ -86,11 +98,13 @@ export function useRastreadores(filters?: RastreadorFilters) {
         query = query.or(`codigo.ilike.%${filters.search}%,numero_serie.ilike.%${filters.search}%,imei.ilike.%${filters.search}%`);
       }
 
-      const { data, error } = await query;
+      query = query.range(from, to);
+
+      const { data, error, count } = await query;
 
       if (error) throw error;
 
-      // Filter by communication status if needed
+      // Filter by communication status if needed (client-side refinement)
       let result = data as RastreadorWithRelations[];
       
       if (filters?.comunicacao && filters.comunicacao !== 'todos') {
@@ -100,7 +114,6 @@ export function useRastreadores(filters?: RastreadorFilters) {
           
           if (filters.comunicacao === 'online') return online;
           if (filters.comunicacao === 'atencao') {
-            // 1-24h sem sinal: has communication but within the "not online" window
             if (!r.ultima_comunicacao) return false;
             const lastComm = new Date(r.ultima_comunicacao);
             const now = new Date();
@@ -112,7 +125,12 @@ export function useRastreadores(filters?: RastreadorFilters) {
         });
       }
 
-      return result;
+      const total = count ?? 0;
+      return {
+        items: result,
+        total,
+        totalPages: Math.ceil(total / pageSize),
+      };
     },
   });
 }
@@ -428,9 +446,9 @@ export function useVeiculosSemRastreador() {
   });
 }
 
-// Rastreadores disponíveis (em estoque)
+// Rastreadores disponíveis (em estoque) - fetches all stock items (no pagination)
 export function useRastreadoresDisponiveis() {
-  return useRastreadores({ status: ['estoque'] });
+  return useRastreadores({ status: ['estoque'], pageSize: 1000 });
 }
 
 // Contagem de rastreadores (alias para useRastreadoresMetricas)

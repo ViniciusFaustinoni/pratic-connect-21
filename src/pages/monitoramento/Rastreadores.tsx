@@ -63,7 +63,7 @@ export default function Rastreadores() {
   const [showForm, setShowForm] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>({});
+  const [filters, setFilters] = useState<Filters>({ page: 1, pageSize: 50 });
   const [activeMetricFilter, setActiveMetricFilter] = useState('');
   const [activeTab, setActiveTab] = useState('visao-geral');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -79,7 +79,11 @@ export default function Rastreadores() {
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
   const [rastreadorMapaId, setRastreadorMapaId] = useState<string | null>(null);
 
-  const { data: rastreadores, isLoading } = useRastreadores(filters);
+  const { data: paginatedResult, isLoading } = useRastreadores(filters);
+  const rastreadores = paginatedResult?.items;
+  const totalCount = paginatedResult?.total ?? 0;
+  const totalPages = paginatedResult?.totalPages ?? 1;
+  const currentPage = filters.page ?? 1;
   const { data: metricas, isLoading: isLoadingMetricas } = useRastreadoresMetricas();
   const { data: plataformasLabels } = usePlataformasLabels();
   const { isDiretor, isDesenvolvedor, canManageEquipeEstoque } = usePermissions();
@@ -167,11 +171,15 @@ export default function Rastreadores() {
         <TabsContent value="visao-geral" className="space-y-6 mt-6">
           <RastreadoresContent
             rastreadores={rastreadores}
+            totalCount={totalCount}
+            totalPages={totalPages}
+            currentPage={currentPage}
+            onPageChange={(p) => setFilters(prev => ({ ...prev, page: p }))}
             metricas={metricas}
             isLoading={isLoading}
             isLoadingMetricas={isLoadingMetricas}
             filters={filters}
-            onFiltersChange={(f) => { setFilters(f); setActiveMetricFilter(''); }}
+            onFiltersChange={(f) => { setFilters({ ...f, page: 1 }); setActiveMetricFilter(''); }}
             onOpenDetails={handleOpenDetails}
             onEdit={handleEdit}
             onNewRastreador={handleNewRastreador}
@@ -182,7 +190,7 @@ export default function Rastreadores() {
             canManageEquipe={canManageEquipeEstoque}
             onViewMap={handleViewMap}
             activeMetricFilter={activeMetricFilter}
-            onMetricFilterClick={(f, key) => { setFilters(f); setActiveMetricFilter(key); }}
+            onMetricFilterClick={(f, key) => { setFilters({ ...f, page: 1 }); setActiveMetricFilter(key); }}
           />
         </TabsContent>
 
@@ -271,7 +279,11 @@ export default function Rastreadores() {
 
 // Componente separado para o conteúdo de rastreadores
 interface RastreadoresContentProps {
-  rastreadores: ReturnType<typeof useRastreadores>['data'];
+  rastreadores: RastreadorWithRelations[] | undefined;
+  totalCount: number;
+  totalPages: number;
+  currentPage: number;
+  onPageChange: (page: number) => void;
   metricas: ReturnType<typeof useRastreadoresMetricas>['data'];
   isLoading: boolean;
   isLoadingMetricas: boolean;
@@ -292,6 +304,10 @@ interface RastreadoresContentProps {
 
 function RastreadoresContent({
   rastreadores,
+  totalCount,
+  totalPages,
+  currentPage,
+  onPageChange,
   metricas,
   isLoading,
   isLoadingMetricas,
@@ -401,7 +417,7 @@ function RastreadoresContent({
       <RastreadorListHeader
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}
-        totalCount={rastreadores?.length || 0}
+        totalCount={totalCount}
         onNewRastreador={onNewRastreador}
       />
 
@@ -437,6 +453,33 @@ function RastreadoresContent({
           canManageEquipe={canManageEquipe}
           onViewMap={onViewMap}
         />
+      )}
+
+      {/* Paginação */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t pt-4">
+          <p className="text-sm text-muted-foreground">
+            Página {currentPage} de {totalPages} ({totalCount} rastreadores)
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage <= 1}
+              onClick={() => onPageChange(currentPage - 1)}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage >= totalPages}
+              onClick={() => onPageChange(currentPage + 1)}
+            >
+              Próximo
+            </Button>
+          </div>
+        </div>
       )}
 
       <RastreadorBatchActions
