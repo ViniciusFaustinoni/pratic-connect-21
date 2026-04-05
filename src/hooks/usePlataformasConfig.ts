@@ -217,27 +217,3 @@ export function useTestarConexaoPlataforma() {
     },
   });
 }
-
-// Hook para sincronizar rastreadores de uma plataforma
-export function useSyncRastreadores() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (plataformaCodigo: string) => {
-      const response = await supabase.functions.invoke('rastreador-sync', {
-        body: { plataforma_codigo: plataformaCodigo },
-      });
-
-      if (response.error) throw response.error;
-      return response.data;
-    },
-    onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
-      queryClient.invalidateQueries({ queryKey: ['plataformas-estatisticas'] });
-      toast.success('Sincronização iniciada!');
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro ao sincronizar: ${error.message}`);
-    },
-  });
-}
