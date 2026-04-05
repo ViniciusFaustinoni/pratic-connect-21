@@ -426,9 +426,9 @@ serve(async (req) => {
     let query = supabase
       .from("rastreadores")
       .select(`
-        id, codigo, imei, plataforma, id_plataforma, plataforma_device_id, plataforma_veiculo_id,
+        id, codigo, imei, plataforma, id_plataforma, plataforma_device_id, plataforma_veiculo_id, veiculo_id,
         veiculo:veiculos(
-          placa, chassi,
+          id, placa, chassi, softruck_vehicle_id,
           associado:associados(cpf)
         )
       `)
@@ -445,11 +445,16 @@ serve(async (req) => {
     }
 
     // Filtrar rastreadores que possuem IDs de plataforma válidos
-    // Para Softruck: precisa de plataforma_device_id E plataforma_veiculo_id
+    // Para Softruck: precisa de plataforma_device_id (vehicleId pode ser resolvido via fallback)
     // Para outras: precisa de id_plataforma
     const rastreadoresValidos = (rastreadores || []).filter((r) => {
       if (r.plataforma === 'softruck') {
-        return !!r.plataforma_device_id && !!r.plataforma_veiculo_id;
+        // Accept if has device_id AND (has vehicle_id OR has vehicle with softruck_vehicle_id OR has vehicle with plate)
+        if (!r.plataforma_device_id) return false;
+        if (r.plataforma_veiculo_id) return true;
+        if (r.veiculo?.softruck_vehicle_id) return true;
+        if (r.veiculo?.placa) return true;
+        return false;
       }
       return r.id_plataforma && r.id_plataforma.trim() !== "";
     });
