@@ -396,7 +396,7 @@ function RastreadoresContent({
 
   return (
     <>
-      <RastreadorMetrics metricas={metricas} isLoading={isLoadingMetricas} />
+      <RastreadorMetrics metricas={metricas} isLoading={isLoadingMetricas} onFilterClick={onMetricFilterClick} activeFilter={activeMetricFilter} />
       <RastreadorFiltersV2 filters={filters} onFiltersChange={onFiltersChange} />
       <RastreadorListHeader
         viewMode={viewMode}
