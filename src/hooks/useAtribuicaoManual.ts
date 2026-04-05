@@ -169,21 +169,27 @@ export function useAtribuirServicoManual() {
       // Send WhatsApp template to vistoriador
       if (profissional?.telefone || profissional?.whatsapp) {
         try {
-          const telefone = profissional.whatsapp || profissional.telefone;
+          const telefone = (profissional.whatsapp || profissional.telefone || '').replace(/\D/g, '');
           const assocData = servico?.associado as any;
           const veicData = servico?.veiculo as any;
-          await supabase.functions.invoke('enviar-template-meta', {
+          const enderecoCompleto = [servico?.logradouro, servico?.numero, servico?.bairro, servico?.cidade]
+            .filter(Boolean).join(', ') || 'A definir';
+
+          await supabase.functions.invoke('whatsapp-send-text', {
             body: {
               telefone,
+              mensagem: `Nova tarefa atribuída: ${servico?.tipo || 'Serviço'} - ${assocData?.nome || 'Cliente'}`,
               template_name: 'servico_atribuido_v1',
-              variaveis: {
-                '1': profissional.nome || 'Técnico',
-                '2': servico?.tipo || 'Serviço',
-                '3': assocData?.nome || 'Cliente',
-                '4': `${servico?.logradouro || ''} ${servico?.numero || ''}, ${servico?.bairro || ''} - ${servico?.cidade || ''}`.trim(),
-                '5': servico?.data_agendada || '',
-                '6': servico?.hora_agendada || 'A definir',
-              },
+              template_params: [
+                profissional.nome?.split(' ')[0] || 'Técnico',
+                servico?.tipo || 'Serviço',
+                `${assocData?.nome || 'Cliente'} - ${veicData?.placa || ''}`,
+                enderecoCompleto,
+                servico?.data_agendada || '',
+                servico?.hora_agendada || 'A definir',
+              ],
+              referencia_tipo: 'servico',
+              referencia_id: servicoId,
             },
           });
         } catch (e) {
