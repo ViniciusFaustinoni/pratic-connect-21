@@ -56,7 +56,7 @@ export function RastreadorMetrics({ metricas, isLoading, onFilterClick, activeFi
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 gap-3">
       {metrics.map((metric) => {
         const isActive = activeFilter === metric.filterKey;
         return (
