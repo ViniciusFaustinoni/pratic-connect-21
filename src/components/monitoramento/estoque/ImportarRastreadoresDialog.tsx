@@ -86,7 +86,12 @@ export function ImportarRastreadoresDialog({
 
   const validarDados = useCallback(async (rows: RastreadorImportRow[]): Promise<RastreadorImportRow[]> => {
     const uniqueImeis = [...new Set(rows.map(r => r.imei).filter(Boolean))];
-    const uniquePlacas = [...new Set(rows.map(r => r.placa).filter(Boolean))] as string[];
+    const placaRegex = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+    const uniquePlacas = [...new Set(
+      rows
+        .map(r => r.placa ? r.placa.toUpperCase().replace(/[^A-Z0-9]/g, '') : '')
+        .filter(p => p && placaRegex.test(p))
+    )];
 
     // Fetch existing trackers by IMEI (batch in chunks of 100)
     let existentesList: { id: string; imei: string; veiculo_id: string | null }[] = [];
@@ -143,12 +148,17 @@ export function ImportarRastreadoresDialog({
       let veiculo_encontrado = false;
       if (row.placa) {
         const placaNorm = row.placa.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        const vid = veiculosMap.get(placaNorm);
-        if (vid) {
-          veiculo_id = vid;
-          veiculo_encontrado = true;
+        if (!placaRegex.test(placaNorm)) {
+          // Not a valid Brazilian plate format — ignore silently
+          row.placa = undefined;
         } else {
-          avisos.push('Placa não encontrada no sistema');
+          const vid = veiculosMap.get(placaNorm);
+          if (vid) {
+            veiculo_id = vid;
+            veiculo_encontrado = true;
+          } else {
+            avisos.push('Placa não encontrada no sistema');
+          }
         }
       }
 
