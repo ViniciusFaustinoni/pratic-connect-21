@@ -1,4 +1,4 @@
-import { Radio, Wifi, WifiOff, AlertTriangle, Package } from 'lucide-react';
+import { Radio, Package } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { RastreadoresMetricas, RastreadorFilters } from '@/hooks/useRastreadores';
