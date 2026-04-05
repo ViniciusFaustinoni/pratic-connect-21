@@ -1,33 +1,41 @@
 
 
-# Plano: Corrigir contagens nas plataformas
+# Plano: Unificar Pré-Análise e Solicitações IA
 
-## Problemas identificados
+## Contexto
 
-1. **Contagens truncadas**: `useRastreadoresPorPlataforma()` faz `supabase.from('rastreadores').select('plataforma, status')` que retorna no máximo 1.000 linhas. Com ~6.000+ rastreadores Softruck, os números Total (988) e Instalados (736) estão errados — refletem apenas uma amostra.
+Existem duas páginas separadas que tratam de itens em estágio inicial:
+- **Pré-Análise** (`EventosPreAnalise.tsx`): sinistros com status `comunicado`, `documentacao_pendente`, `aguardando_vistoria`
+- **Solicitações IA** (`SolicitacoesIA.tsx`): registros de `chat_solicitacoes_ia` pendentes de aprovação
 
-2. **"Online" sempre 0**: O campo `online` nunca é incrementado na lógica. E como removemos a busca em massa de posições, esse dado não existe mais.
+A ideia é juntar tudo em **Pré-Análise**, com badges indicando a origem: **IA** (chat) ou **App** (sistema/manual).
 
-## Correções
+## Alterações
 
-### 1. `src/hooks/usePlataformasCRUD.ts` — Usar contagem via `head: true`
+### 1. `EventosPreAnalise.tsx` — Reformular com duas fontes de dados
 
-Substituir a query que baixa todas as linhas por queries paralelas com `{ count: 'exact', head: true }` para cada plataforma. Isso retorna o total real sem limite de 1.000 linhas.
+- **Query 1**: Sinistros em pré-análise (já existente) — marcados com badge "App"
+- **Query 2**: `chat_solicitacoes_ia` com status `pendente` — marcados com badge "IA"
+- Mesclar ambos em uma lista unificada, ordenada por `created_at` desc
+- Adicionar coluna **Origem** na tabela com badges coloridos:
+  - `IA` → badge roxo/azul com ícone Bot
+  - `App` → badge cinza/verde
+- Adicionar filtro de origem (Todos / IA / App)
+- Para itens de origem IA: ao clicar na linha, abrir dialog de aprovação/rejeição (reutilizar lógica do `SolicitacoesIA.tsx` — mutation `aprovar-solicitacao-ia`, botões Aprovar/Rejeitar, campo motivo)
+- Para itens de origem App (sinistros): manter comportamento atual (navegar para detalhe)
 
-```
-// Para cada plataforma, fazer 2 queries paralelas:
-// 1. Total: .from('rastreadores').select('*', { count: 'exact', head: true }).eq('plataforma', codigo)
-// 2. Instalados: mesma query + .eq('status', 'instalado')
-```
+### 2. `AppSidebar.tsx` — Remover "Solicitações IA" do menu Eventos
 
-### 2. Remover coluna "Online" dos cards de plataforma
+Remover a linha `{ title: 'Solicitações IA', url: '/eventos/solicitacoes-ia', icon: Bot }`.
 
-Já que não há mais busca em massa, o dado "Online" não existe. Remover de ambos:
-- `src/components/rastreadores/PlataformasConfigPanel.tsx` — remover o terceiro item do grid (Online), ajustar grid para `grid-cols-2`
-- `src/pages/monitoramento/ConfigPlataformas.tsx` — mesmo ajuste
+### 3. `modules.ts` — Remover sub-item `solicitacoes_ia` do módulo eventos
+
+### 4. Manter rota `/eventos/solicitacoes-ia` no App.tsx
+
+Redirecionar para `/eventos/pre_analise` para não quebrar links existentes.
 
 ## Arquivos alterados
-- `src/hooks/usePlataformasCRUD.ts` — corrigir query para contagem exata
-- `src/components/rastreadores/PlataformasConfigPanel.tsx` — remover coluna Online
-- `src/pages/monitoramento/ConfigPlataformas.tsx` — remover coluna Online
+- `src/pages/eventos/EventosPreAnalise.tsx` — adicionar query de solicitações IA, merge, badges, dialog de aprovação
+- `src/components/layout/AppSidebar.tsx` — remover item do menu
+- `src/config/modules.ts` — remover `solicitacoes_ia` de eventos
 
