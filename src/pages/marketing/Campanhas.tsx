@@ -161,23 +161,23 @@ export default function Campanhas() {
                 className="pl-10"
               />
             </div>
-            <Select value={statusFilter} onValueChange={setStatusFilter}>
+            <Select value={statusFilter || 'todos'} onValueChange={(v) => setStatusFilter(v === 'todos' ? '' : v)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Status" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos os status</SelectItem>
+                <SelectItem value="todos">Todos os status</SelectItem>
                 {Object.entries(statusConfig).map(([value, { label }]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}
               </SelectContent>
             </Select>
-            <Select value={tipoFilter} onValueChange={setTipoFilter}>
+            <Select value={tipoFilter || 'todos'} onValueChange={(v) => setTipoFilter(v === 'todos' ? '' : v)}>
               <SelectTrigger className="w-[180px]">
                 <SelectValue placeholder="Tipo" />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="">Todos os tipos</SelectItem>
+                <SelectItem value="todos">Todos os tipos</SelectItem>
                 {Object.entries(tipoConfig).map(([value, { label }]) => (
                   <SelectItem key={value} value={value}>{label}</SelectItem>
                 ))}

@@ -599,7 +599,7 @@ export default function MarketingDashboard() {
               <Button variant="outline" className="justify-start" onClick={() => setShowIndicacaoModal(true)}>
                 <UserPlus className="mr-2 h-4 w-4" /> Nova Indicação
               </Button>
-              <Button variant="outline" className="justify-start" onClick={() => navigate('/vendas/relatorios')}>
+              <Button variant="outline" className="justify-start" onClick={() => navigate('/marketing/relatorios')}>
                 <BarChart3 className="mr-2 h-4 w-4" /> Ver Relatórios
               </Button>
             </CardContent>
