@@ -126,17 +126,16 @@ export function RastreadorTableView({
         <TableBody>
           {rastreadores.map((rastreador) => {
             const isInstalled = rastreador.status === 'instalado';
-            const online = isRastreadorOnline(rastreador.ultima_comunicacao);
             const isEstoque = rastreador.status === 'estoque';
-            const offline = isInstalled && !online;
 
             return (
               <TableRow 
                 key={rastreador.id} 
                 className={cn(
-                  selectedIds.has(rastreador.id) && 'bg-muted/50',
-                  offline && 'bg-red-500/5'
+                  "cursor-pointer hover:bg-muted/50",
+                  selectedIds.has(rastreador.id) && 'bg-muted/50'
                 )}
+                onClick={() => onOpenDetails(rastreador.id)}
               >
                 <TableCell>
                   {isEstoque ? (
