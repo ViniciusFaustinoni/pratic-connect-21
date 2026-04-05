@@ -129,7 +129,6 @@ export function RastreadorDetailDrawer({
     setComandoDialog({ open: false, tipo: 'bloquear' });
   };
 
-  const isOnline = rastreador ? isRastreadorOnline(rastreador.ultima_comunicacao) : false;
   const isInstalled = rastreador?.status === 'instalado';
 
   return (
