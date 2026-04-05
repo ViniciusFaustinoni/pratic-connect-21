@@ -12,15 +12,17 @@ interface VagasDisponiveis {
  * Hook para verificar vagas disponíveis por período para vistorias de evento (sinistro).
  * Conta vistorias_evento agendadas (não canceladas) para a data.
  */
-export function useVagasPeriodoEvento(data: string | null) {
+export function useVagasPeriodoEvento(data: string | null, usePublicClient = false) {
   return useQuery({
-    queryKey: ['vagas-periodo-evento', data],
+    queryKey: ['vagas-periodo-evento', data, usePublicClient],
     queryFn: async (): Promise<VagasDisponiveis> => {
       if (!data) {
         return { manha: LIMITE_VAGAS_POR_PERIODO, tarde: LIMITE_VAGAS_POR_PERIODO };
       }
 
-      const { data: vistorias, error } = await supabase
+      const client = usePublicClient ? publicSupabase : supabase;
+
+      const { data: vistorias, error } = await client
         .from('vistorias_evento' as any)
         .select('horario_agendado')
         .eq('data_agendada', data)
