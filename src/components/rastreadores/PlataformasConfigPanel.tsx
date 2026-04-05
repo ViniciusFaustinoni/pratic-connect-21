@@ -27,7 +27,7 @@ import {
   Pencil,
   Trash2,
   Radio,
-  RefreshCw,
+  
   Loader2,
   Satellite,
   Truck,
@@ -45,7 +45,7 @@ import {
   useRastreadoresPorPlataforma,
   type PlataformaCompleta,
 } from '@/hooks/usePlataformasCRUD';
-import { useTestarConexaoPlataforma, useSyncRastreadores } from '@/hooks/usePlataformasConfig';
+import { useTestarConexaoPlataforma } from '@/hooks/usePlataformasConfig';
 import { PlataformaFormDialog } from './PlataformaFormDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 
@@ -64,14 +64,13 @@ export function PlataformasConfigPanel() {
   const [editingPlataforma, setEditingPlataforma] = useState<PlataformaCompleta | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [syncingId, setSyncingId] = useState<string | null>(null);
+  
 
   const { data: plataformas, isLoading } = usePlataformasCompletas();
   const { data: contagem } = useRastreadoresPorPlataforma();
   const updateMutation = useUpdatePlataforma();
   const deleteMutation = useDeletePlataforma();
   const testarConexao = useTestarConexaoPlataforma();
-  const syncRastreadores = useSyncRastreadores();
 
   const handleEdit = (plataforma: PlataformaCompleta) => {
     setEditingPlataforma(plataforma);
@@ -113,14 +112,6 @@ export function PlataformasConfigPanel() {
     }
   };
 
-  const handleSync = async (plataforma: PlataformaCompleta) => {
-    setSyncingId(plataforma.id);
-    try {
-      await syncRastreadores.mutateAsync(plataforma.plataforma);
-    } finally {
-      setSyncingId(null);
-    }
-  };
 
   if (isLoading) {
     return (
@@ -203,17 +194,6 @@ export function PlataformasConfigPanel() {
                               <Radio className="mr-2 h-4 w-4" />
                             )}
                             Testar Conexão
-                          </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleSync(plataforma)}
-                            disabled={syncingId === plataforma.id}
-                          >
-                            {syncingId === plataforma.id ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="mr-2 h-4 w-4" />
-                            )}
-                            Sincronizar
                           </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem

@@ -3,7 +3,6 @@ import {
   Settings, 
   Wifi, 
   WifiOff, 
-  RefreshCw, 
   CheckCircle, 
   XCircle,
   Loader2,
@@ -24,17 +23,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { usePlataformasConfig, useUpdatePlataformaConfig, usePlataformasEstatisticas } from '@/hooks/usePlataformasConfig';
 import { useTestarConexaoPlataforma } from '@/hooks/useRastreadorAuth';
-import { useSyncRastreadores } from '@/hooks/useRastreadorPosicao';
 
 export default function ConfigPlataformas() {
   const { data: plataformas, isLoading } = usePlataformasConfig();
   const { data: estatisticas } = usePlataformasEstatisticas();
   const updateConfig = useUpdatePlataformaConfig();
   const testarConexao = useTestarConexaoPlataforma();
-  const syncRastreadores = useSyncRastreadores();
   
   const [testingPlatform, setTestingPlatform] = useState<string | null>(null);
-  const [syncingPlatform, setSyncingPlatform] = useState<string | null>(null);
 
   const handleTestarConexao = async (codigo: string) => {
     setTestingPlatform(codigo);
@@ -42,15 +38,6 @@ export default function ConfigPlataformas() {
       await testarConexao.mutateAsync(codigo as 'softruck' | 'rede_veiculos');
     } finally {
       setTestingPlatform(null);
-    }
-  };
-
-  const handleSincronizar = async (codigo: string) => {
-    setSyncingPlatform(codigo);
-    try {
-      await syncRastreadores.mutateAsync(codigo as 'softruck' | 'rede_veiculos');
-    } finally {
-      setSyncingPlatform(null);
     }
   };
 
@@ -91,17 +78,6 @@ export default function ConfigPlataformas() {
             Gerencie as integrações com plataformas de rastreamento
           </p>
         </div>
-        <Button 
-          onClick={() => syncRastreadores.mutate(undefined)}
-          disabled={syncRastreadores.isPending}
-        >
-          {syncRastreadores.isPending ? (
-            <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-          ) : (
-            <RefreshCw className="h-4 w-4 mr-2" />
-          )}
-          Sincronizar Todas
-        </Button>
       </div>
 
       {/* Plataformas */}
@@ -109,7 +85,7 @@ export default function ConfigPlataformas() {
         {plataformas?.map((plataforma) => {
           const stats = estatisticas?.[plataforma.codigo] || { total: 0, ativos: 0, online: 0 };
           const isTesting = testingPlatform === plataforma.codigo;
-          const isSyncing = syncingPlatform === plataforma.codigo;
+          
 
           return (
             <Card key={plataforma.id} className={!plataforma.ativa ? 'opacity-60' : ''}>
@@ -250,18 +226,6 @@ export default function ConfigPlataformas() {
                       <CheckCircle className="h-4 w-4 mr-2" />
                     )}
                     Testar Conexão
-                  </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleSincronizar(plataforma.codigo)}
-                    disabled={isSyncing || !plataforma.ativa}
-                  >
-                    {isSyncing ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                    )}
-                    Sincronizar Agora
                   </Button>
                 </div>
 
