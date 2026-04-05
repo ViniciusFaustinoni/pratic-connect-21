@@ -187,12 +187,12 @@ async function syncSoftruck(
   for (const rast of rastreadores) {
     try {
       // Usar IDs corretos da plataforma (endpoint v2 requer ambos)
-      const vehicleId = rast.plataforma_veiculo_id;
       const deviceId = rast.plataforma_device_id;
+      const vehicleId = rast.plataforma_veiculo_id || deviceId;
       
-      if (!vehicleId || !deviceId) {
+      if (!deviceId) {
         result.falhas++;
-        result.erros.push(`${rast.codigo}: IDs de veículo/device não configurados`);
+        result.erros.push(`${rast.codigo}: device ID não configurado`);
         continue;
       }
       
@@ -446,7 +446,7 @@ serve(async (req) => {
     // Para outras: precisa de id_plataforma
     const rastreadoresValidos = (rastreadores || []).filter((r) => {
       if (r.plataforma === 'softruck') {
-        return r.plataforma_device_id && r.plataforma_veiculo_id;
+        return !!r.plataforma_device_id;
       }
       return r.id_plataforma && r.id_plataforma.trim() !== "";
     });
