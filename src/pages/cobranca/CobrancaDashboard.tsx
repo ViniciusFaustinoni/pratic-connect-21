@@ -227,7 +227,7 @@ export default function CobrancaDashboard() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate('/cobranca/fila')}>Fila de Trabalho</Button>
           <Button variant="outline" onClick={() => navigate('/cobranca/acordos/novo')}>Novo Acordo</Button>
-          <Button variant="outline" onClick={() => navigate('/cobranca/reguas')}>Régua de Cobrança</Button>
+          <Button variant="outline" onClick={() => navigate('/cobranca/regua')}>Régua de Cobrança</Button>
         </div>
       </div>
 
@@ -466,10 +466,9 @@ export default function CobrancaDashboard() {
           <Card>
             <CardHeader><CardTitle>Ações Rápidas</CardTitle></CardHeader>
             <CardContent className="space-y-2">
-              <Button className="w-full justify-start" variant="default"><Play className="mr-2 h-4 w-4" />Iniciar Atendimento</Button>
-              <Button className="w-full justify-start" variant="outline"><Search className="mr-2 h-4 w-4" />Buscar Inadimplente</Button>
-              <Button className="w-full justify-start" variant="outline"><FileText className="mr-2 h-4 w-4" />Gerar Relatório</Button>
-              <Button className="w-full justify-start" variant="outline" onClick={() => navigate('/cobranca/reguas')}><Settings className="mr-2 h-4 w-4" />Configurar Régua</Button>
+              <Button className="w-full justify-start" variant="default" onClick={() => navigate('/cobranca/fila')}><Play className="mr-2 h-4 w-4" />Iniciar Atendimento</Button>
+              <Button className="w-full justify-start" variant="outline" onClick={() => navigate('/cobranca/inadimplentes')}><Search className="mr-2 h-4 w-4" />Buscar Inadimplente</Button>
+              <Button className="w-full justify-start" variant="outline" onClick={() => navigate('/cobranca/regua')}><Settings className="mr-2 h-4 w-4" />Configurar Régua</Button>
             </CardContent>
           </Card>
 
