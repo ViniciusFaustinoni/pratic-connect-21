@@ -300,7 +300,7 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                         <InfoItem label="Nº Série" value={rastreador.numero_serie} mono />
                         <InfoItem label="Plataforma" value={rastreador.plataforma} />
                         <InfoItem label="Status" value={rastreador.status} />
-                        <InfoItem label="Último Sinal" value={formatDateTime(rastreador.ultimo_sinal)} />
+                        <InfoItem label="Último Sinal" value={formatDateTime(rastreador.ultima_comunicacao)} />
                       </div>
                       <Separator />
                       <div className="rounded-lg overflow-hidden border">
