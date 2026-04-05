@@ -340,7 +340,8 @@ export function EtapaAssinaturaContrato({
 
     // Verificar imediatamente e depois a cada 15 segundos
     verificarAssinatura();
-    const interval = setInterval(verificarAssinatura, 15000);
+    const pollingInterval = contrato?.linkAssinatura ? 15000 : 5000;
+    const interval = setInterval(verificarAssinatura, pollingInterval);
 
     return () => clearInterval(interval);
   }, [etapaInterna, contrato?.id, cotacaoId, onContratoAssinado]);
