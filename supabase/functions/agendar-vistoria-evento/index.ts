@@ -6,12 +6,7 @@ const corsHeaders = {
   "Access-Control-Allow-Headers": "authorization, x-client-info, apikey, content-type",
 };
 
-// Slots de 30 em 30 min, das 08:00 às 17:00
-const SLOTS = Array.from({ length: 19 }, (_, i) => {
-  const h = Math.floor(i / 2) + 8;
-  const m = (i % 2) * 30;
-  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
-});
+const LIMITE_VAGAS_POR_PERIODO = 10;
 
 /**
  * Geocodifica um endereço usando Nominatim (OpenStreetMap)
@@ -72,47 +67,24 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const { action, token, data_agendada, horario_agendado, endereco, permite_encaixe } = body;
+    const { token, data_agendada, periodo, endereco, permite_encaixe } = body;
 
     const supabase = createClient(
       Deno.env.get("SUPABASE_URL")!,
       Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!
     );
 
-    // ACTION: horarios - retorna slots disponíveis para uma data
-    if (action === "horarios") {
-      if (!data_agendada) {
-        return new Response(
-          JSON.stringify({ error: "data_agendada é obrigatório" }),
-          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
-      }
-
-      const { data: ocupados } = await supabase
-        .from("vistorias_evento")
-        .select("horario_agendado")
-        .eq("data_agendada", data_agendada)
-        .neq("status", "cancelada");
-
-      const horariosOcupados = new Set(
-        (ocupados || []).map((v: any) => v.horario_agendado?.substring(0, 5))
-      );
-
-      const disponíveis = SLOTS.map((slot) => ({
-        horario: slot,
-        disponivel: !horariosOcupados.has(slot),
-      }));
-
+    // Validação
+    if (!token || !data_agendada || !periodo) {
       return new Response(
-        JSON.stringify({ slots: disponíveis }),
-        { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        JSON.stringify({ error: "token, data_agendada e periodo são obrigatórios" }),
+        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
 
-    // ACTION: agendar (default)
-    if (!token || !data_agendada || !horario_agendado) {
+    if (periodo !== "manha" && periodo !== "tarde") {
       return new Response(
-        JSON.stringify({ error: "token, data_agendada e horario_agendado são obrigatórios" }),
+        JSON.stringify({ error: "periodo deve ser 'manha' ou 'tarde'" }),
         { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
       );
     }
@@ -162,20 +134,21 @@ serve(async (req) => {
       );
     }
 
-    // Verificar disponibilidade do horário
-    const { data: conflito } = await supabase
-      .from("vistorias_evento")
-      .select("id")
-      .eq("data_agendada", data_agendada)
-      .eq("horario_agendado", horario_agendado + ":00")
-      .neq("status", "cancelada")
-      .maybeSingle();
+    // Controle de vagas por período
+    if (!permite_encaixe) {
+      const { count } = await supabase
+        .from("vistorias_evento")
+        .select("id", { count: "exact", head: true })
+        .eq("data_agendada", data_agendada)
+        .eq("horario_agendado", periodo)
+        .neq("status", "cancelada");
 
-    if (conflito) {
-      return new Response(
-        JSON.stringify({ error: "Este horário já está ocupado. Escolha outro." }),
-        { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+      if ((count || 0) >= LIMITE_VAGAS_POR_PERIODO) {
+        return new Response(
+          JSON.stringify({ error: `Não há vagas disponíveis para o período ${periodo === 'manha' ? 'Manhã' : 'Tarde'} nesta data.` }),
+          { status: 409, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
     }
 
     // Geocodificar endereço
@@ -186,14 +159,14 @@ serve(async (req) => {
       endereco?.cidade
     );
 
-    // Criar vistoria
+    // Criar vistoria — salva periodo no campo horario_agendado
     const { data: vistoria, error: vistoriaError } = await supabase
       .from("vistorias_evento")
       .insert({
         sinistro_id: link.sinistro_id,
         link_id: link.id,
         data_agendada,
-        horario_agendado: horario_agendado + ":00",
+        horario_agendado: periodo,
         endereco_rua: endereco?.rua || null,
         endereco_numero: endereco?.numero || null,
         endereco_bairro: endereco?.bairro || null,
@@ -243,6 +216,7 @@ serve(async (req) => {
       if (reguladores?.length) {
         const assocNome = (sinistroData as any)?.associado?.nome || "Associado";
         const veicPlaca = (sinistroData as any)?.veiculo?.placa || "—";
+        const periodoLabel = periodo === "manha" ? "Manhã" : "Tarde";
         const enderecoStr = [endereco?.rua, endereco?.numero, endereco?.bairro, endereco?.cidade]
           .filter(Boolean)
           .join(", ");
@@ -250,7 +224,7 @@ serve(async (req) => {
         const notificacoes = reguladores.map((r: any) => ({
           user_id: r.user_id,
           titulo: "Nova Vistoria de Evento Agendada",
-          mensagem: `${assocNome} - ${veicPlaca} - ${data_agendada} às ${horario_agendado} - ${enderecoStr}`,
+          mensagem: `${assocNome} - ${veicPlaca} - ${data_agendada} (${periodoLabel}) - ${enderecoStr}`,
           tipo: "vistoria_evento",
           lida: false,
         }));

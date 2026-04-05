@@ -1,15 +1,24 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Calendar } from '@/components/ui/calendar';
 import { Card, CardContent } from '@/components/ui/card';
-import { Loader2, CalendarDays, MapPin, CheckCircle } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Loader2, CalendarDays, MapPin, CheckCircle, Sun, Sunset, Info } from 'lucide-react';
 import { publicSupabase } from '@/integrations/supabase/publicClient';
-import { format, addDays, isWeekend } from 'date-fns';
+import { format, addDays, isBefore, startOfDay } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { toast } from 'sonner';
 import { cn } from '@/lib/utils';
+import {
+  isDomingo,
+  isSabado,
+  getPeriodosParaDia,
+  LIMITE_VAGAS_POR_PERIODO,
+  type Periodo,
+  type PeriodoConfig,
+} from '@/data/autovistoriaConfig';
+import { useVagasPeriodoEvento } from '@/hooks/useVagasPeriodoEvento';
 
 interface Props {
   token: string;
@@ -18,9 +27,8 @@ interface Props {
 
 export default function EventoAgendamento({ token, onAgendado }: Props) {
   const [dataSelecionada, setDataSelecionada] = useState<Date | undefined>();
-  const [horarioSelecionado, setHorarioSelecionado] = useState<string | null>(null);
-  const [slots, setSlots] = useState<{ horario: string; disponivel: boolean }[]>([]);
-  const [loadingSlots, setLoadingSlots] = useState(false);
+  const [periodoSelecionado, setPeriodoSelecionado] = useState<Periodo | null>(null);
+  const [permiteEncaixe, setPermiteEncaixe] = useState(false);
   const [salvando, setSalvando] = useState(false);
   const [agendado, setAgendado] = useState(false);
   const [dadosAgendamento, setDadosAgendamento] = useState<any>(null);
@@ -33,44 +41,42 @@ export default function EventoAgendamento({ token, onAgendado }: Props) {
     complemento: '',
   });
 
-  // Calcular datas disponíveis (próximos 15 dias úteis)
-  const hoje = new Date();
-  hoje.setHours(0, 0, 0, 0);
-  const diasUteis: Date[] = [];
-  let dia = addDays(hoje, 1);
-  while (diasUteis.length < 15) {
-    if (!isWeekend(dia)) diasUteis.push(new Date(dia));
-    dia = addDays(dia, 1);
-  }
-
-  const disabledDays = (date: Date) => {
-    return !diasUteis.some(d => d.toDateString() === date.toDateString());
-  };
-
-  const buscarHorarios = async (date: Date) => {
-    setLoadingSlots(true);
-    setHorarioSelecionado(null);
-    try {
-      const dataStr = format(date, 'yyyy-MM-dd');
-      const { data, error } = await publicSupabase.functions.invoke('agendar-vistoria-evento', {
-        body: { action: 'horarios', data_agendada: dataStr },
-      });
-      if (error) throw error;
-      setSlots(data?.slots || []);
-    } catch {
-      toast.error('Erro ao buscar horários');
-    } finally {
-      setLoadingSlots(false);
+  // Próximos 5 dias úteis (excl. domingos)
+  const datasDisponiveis = useMemo(() => {
+    const resultado: Date[] = [];
+    const hoje = startOfDay(new Date());
+    let dia = addDays(hoje, 1);
+    while (resultado.length < 5) {
+      if (!isDomingo(dia)) resultado.push(new Date(dia));
+      dia = addDays(dia, 1);
     }
+    return resultado;
+  }, []);
+
+  // Vagas para data selecionada
+  const dataFormatada = dataSelecionada ? format(dataSelecionada, 'yyyy-MM-dd') : null;
+  const { data: vagasData, isLoading: isLoadingVagas } = useVagasPeriodoEvento(dataFormatada);
+
+  // Períodos disponíveis para a data
+  const periodosDisponiveis = dataSelecionada ? getPeriodosParaDia(dataSelecionada) : [];
+
+  const handleSelectDate = (date: Date) => {
+    setDataSelecionada(date);
+    setPeriodoSelecionado(null);
   };
 
-  const handleSelectDate = (date: Date | undefined) => {
-    setDataSelecionada(date);
-    if (date) buscarHorarios(date);
+  const getVagasParaPeriodo = (periodo: Periodo): number => {
+    if (!vagasData) return LIMITE_VAGAS_POR_PERIODO;
+    return vagasData[periodo];
+  };
+
+  const isPeriodoDisponivel = (periodo: Periodo): boolean => {
+    if (permiteEncaixe) return true;
+    return getVagasParaPeriodo(periodo) > 0;
   };
 
   const handleConfirmar = async () => {
-    if (!dataSelecionada || !horarioSelecionado) return;
+    if (!dataSelecionada || !periodoSelecionado) return;
     if (!endereco.rua || !endereco.bairro || !endereco.cidade) {
       toast.error('Preencha os campos de endereço obrigatórios');
       return;
@@ -82,8 +88,9 @@ export default function EventoAgendamento({ token, onAgendado }: Props) {
         body: {
           token,
           data_agendada: format(dataSelecionada, 'yyyy-MM-dd'),
-          horario_agendado: horarioSelecionado,
+          periodo: periodoSelecionado,
           endereco,
+          permite_encaixe: permiteEncaixe,
         },
       });
       if (error) throw error;
@@ -100,6 +107,10 @@ export default function EventoAgendamento({ token, onAgendado }: Props) {
   };
 
   if (agendado && dadosAgendamento) {
+    const periodoLabel = dadosAgendamento.horario_agendado === 'manha' ? 'Manhã (08:00–12:00)' :
+      dadosAgendamento.horario_agendado === 'tarde' ? 'Tarde (14:00–18:00)' :
+      dadosAgendamento.horario_agendado;
+
     return (
       <div className="space-y-4 text-center">
         <CheckCircle className="h-14 w-14 mx-auto text-green-500" />
@@ -116,8 +127,8 @@ export default function EventoAgendamento({ token, onAgendado }: Props) {
               </span>
             </div>
             <div className="flex justify-between">
-              <span className="text-muted-foreground">Horário</span>
-              <span className="font-medium">{dadosAgendamento.horario_agendado?.substring(0, 5)}</span>
+              <span className="text-muted-foreground">Período</span>
+              <span className="font-medium">{periodoLabel}</span>
             </div>
             <div className="flex justify-between">
               <span className="text-muted-foreground">Endereço</span>
@@ -131,7 +142,7 @@ export default function EventoAgendamento({ token, onAgendado }: Props) {
     );
   }
 
-  const canConfirm = dataSelecionada && horarioSelecionado && endereco.rua && endereco.bairro && endereco.cidade;
+  const canConfirm = dataSelecionada && periodoSelecionado && endereco.rua && endereco.bairro && endereco.cidade;
 
   return (
     <div className="space-y-5">
@@ -144,53 +155,105 @@ export default function EventoAgendamento({ token, onAgendado }: Props) {
         </p>
       </div>
 
-      {/* Calendário */}
+      {/* Datas */}
       <div>
         <Label className="text-sm font-medium mb-2 block">Selecione a data</Label>
-        <div className="flex justify-center">
-          <Calendar
-            mode="single"
-            selected={dataSelecionada}
-            onSelect={handleSelectDate}
-            disabled={disabledDays}
-            locale={ptBR}
-            className="rounded-md border pointer-events-auto"
-          />
+        <div className="grid grid-cols-3 sm:grid-cols-5 gap-2">
+          {datasDisponiveis.map((d) => {
+            const isSelected = dataSelecionada?.toDateString() === d.toDateString();
+            return (
+              <Button
+                key={d.toISOString()}
+                variant={isSelected ? 'default' : 'outline'}
+                size="sm"
+                onClick={() => handleSelectDate(d)}
+                className="flex flex-col h-auto py-2"
+              >
+                <span className="text-xs capitalize">
+                  {format(d, 'EEE', { locale: ptBR })}
+                </span>
+                <span className="text-sm font-semibold">
+                  {format(d, 'dd/MM')}
+                </span>
+                {isSabado(d) && (
+                  <span className="text-[10px] text-muted-foreground">Só manhã</span>
+                )}
+              </Button>
+            );
+          })}
         </div>
       </div>
 
-      {/* Horários */}
+      {/* Períodos */}
       {dataSelecionada && (
-        <div>
-          <Label className="text-sm font-medium mb-2 block">Selecione o horário</Label>
-          {loadingSlots ? (
+        <div className="space-y-3">
+          <Label className="text-sm font-medium block">Selecione o período</Label>
+          {isLoadingVagas ? (
             <div className="flex items-center justify-center py-4">
               <Loader2 className="h-5 w-5 animate-spin text-primary" />
             </div>
           ) : (
-            <div className="grid grid-cols-3 sm:grid-cols-4 gap-2">
-              {slots.map((slot) => (
-                <Button
-                  key={slot.horario}
-                  variant={horarioSelecionado === slot.horario ? 'default' : 'outline'}
-                  size="sm"
-                  disabled={!slot.disponivel}
-                  onClick={() => setHorarioSelecionado(slot.horario)}
-                  className={cn(
-                    'text-xs',
-                    !slot.disponivel && 'opacity-40 line-through'
-                  )}
-                >
-                  {slot.horario}
-                </Button>
-              ))}
+            <div className="grid grid-cols-2 gap-3">
+              {periodosDisponiveis.map((p) => {
+                const vagas = getVagasParaPeriodo(p.id);
+                const disponivel = isPeriodoDisponivel(p.id);
+                const isSelected = periodoSelecionado === p.id;
+                const Icon = p.id === 'manha' ? Sun : Sunset;
+
+                return (
+                  <button
+                    key={p.id}
+                    onClick={() => disponivel && setPeriodoSelecionado(p.id)}
+                    disabled={!disponivel}
+                    className={cn(
+                      'relative flex flex-col items-center gap-1 p-4 rounded-lg border-2 transition-all',
+                      isSelected
+                        ? 'border-primary bg-primary/10 ring-2 ring-primary/20'
+                        : disponivel
+                        ? 'border-border hover:border-primary/50 cursor-pointer'
+                        : 'border-border opacity-50 cursor-not-allowed bg-muted/30'
+                    )}
+                  >
+                    <Icon className={cn('h-6 w-6', isSelected ? 'text-primary' : 'text-muted-foreground')} />
+                    <span className={cn('font-semibold text-sm', isSelected && 'text-primary')}>
+                      {p.label}
+                    </span>
+                    <span className="text-xs text-muted-foreground">
+                      {p.horarioInicio} – {p.horarioFim}
+                    </span>
+                    <span className={cn(
+                      'text-xs font-medium',
+                      vagas === 0 ? 'text-destructive' : vagas <= 3 ? 'text-amber-600' : 'text-green-600'
+                    )}>
+                      {vagas === 0 ? 'Lotado' : `${vagas} vaga${vagas !== 1 ? 's' : ''}`}
+                    </span>
+                    {permiteEncaixe && vagas === 0 && (
+                      <span className="text-[10px] text-amber-600 font-medium">Encaixe</span>
+                    )}
+                  </button>
+                );
+              })}
             </div>
           )}
+
+          {/* Switch encaixe */}
+          <div className="flex items-center justify-between rounded-lg border p-3 bg-muted/30">
+            <div className="flex items-center gap-2">
+              <Info className="h-4 w-4 text-muted-foreground" />
+              <div>
+                <p className="text-sm font-medium">Permitir encaixe</p>
+                <p className="text-xs text-muted-foreground">
+                  Permite agendar mesmo quando não há vagas
+                </p>
+              </div>
+            </div>
+            <Switch checked={permiteEncaixe} onCheckedChange={setPermiteEncaixe} />
+          </div>
         </div>
       )}
 
       {/* Endereço */}
-      {horarioSelecionado && (
+      {periodoSelecionado && (
         <div className="space-y-3">
           <div className="flex items-center gap-2">
             <MapPin className="h-4 w-4 text-primary" />
@@ -230,8 +293,8 @@ export default function EventoAgendamento({ token, onAgendado }: Props) {
         </div>
       )}
 
-      {/* Botão confirmar */}
-      {horarioSelecionado && (
+      {/* Confirmar */}
+      {periodoSelecionado && (
         <Button
           className="w-full"
           disabled={!canConfirm || salvando}
