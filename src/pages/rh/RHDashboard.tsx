@@ -572,7 +572,7 @@ export default function RHDashboard() {
               <Button 
                 variant="outline" 
                 className="w-full justify-start"
-                onClick={() => navigate('/rh/departamentos')}
+                onClick={() => navigate('/rh/organograma')}
               >
                 <Building className="mr-2 h-4 w-4" />
                 Ver Organograma
