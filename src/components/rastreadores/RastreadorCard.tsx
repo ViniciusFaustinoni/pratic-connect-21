@@ -59,8 +59,7 @@ export function RastreadorCard({
       <Card 
         className={cn(
           "group overflow-hidden hover:shadow-lg transition-all duration-200 cursor-pointer",
-          isSelected && "ring-2 ring-primary",
-          offline && "border-red-500/30"
+          isSelected && "ring-2 ring-primary"
         )}
         onClick={onViewDetails}
       >
