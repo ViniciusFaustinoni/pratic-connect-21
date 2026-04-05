@@ -86,6 +86,84 @@ interface SyncResult {
 }
 
 // =====================================================
+// BUSCA PAGINADA DE RASTREADORES
+// =====================================================
+
+async function fetchAllRastreadoresInstalados(
+  supabase: any,
+  plataformaFiltro: string | null
+): Promise<Rastreador[]> {
+  const allRastreadores: Rastreador[] = [];
+  const PAGE_SIZE = 1000;
+  let from = 0;
+
+  while (true) {
+    let query = supabase
+      .from("rastreadores")
+      .select(`
+        id, codigo, imei, plataforma, id_plataforma, plataforma_device_id, plataforma_veiculo_id, veiculo_id,
+        veiculo:veiculos(
+          id, placa, chassi, softruck_vehicle_id,
+          associado:associados(cpf)
+        )
+      `)
+      .eq("status", "instalado")
+      .range(from, from + PAGE_SIZE - 1);
+
+    if (plataformaFiltro) {
+      query = query.eq("plataforma", plataformaFiltro);
+    }
+
+    const { data, error } = await query;
+
+    if (error) {
+      throw new Error(`Erro ao buscar rastreadores (offset ${from}): ${error.message}`);
+    }
+
+    if (!data || data.length === 0) break;
+
+    allRastreadores.push(...(data as Rastreador[]));
+    console.log(`[sync-rastreadores] Página ${Math.floor(from / PAGE_SIZE) + 1}: ${data.length} registros`);
+
+    if (data.length < PAGE_SIZE) break;
+    from += PAGE_SIZE;
+  }
+
+  return allRastreadores;
+}
+
+// =====================================================
+// ROUND-ROBIN: Controle de offset rotativo
+// =====================================================
+
+async function getRoundRobinOffset(supabase: any, plataforma: string): Promise<number> {
+  const { data } = await supabase
+    .from("rastreadores_config_plataformas")
+    .select("config")
+    .eq("plataforma", plataforma)
+    .single();
+
+  return (data?.config as any)?.sync_offset ?? 0;
+}
+
+async function saveRoundRobinOffset(supabase: any, plataforma: string, offset: number): Promise<void> {
+  // Merge into existing config JSON
+  const { data: existing } = await supabase
+    .from("rastreadores_config_plataformas")
+    .select("config")
+    .eq("plataforma", plataforma)
+    .single();
+
+  const currentConfig = (existing?.config as Record<string, unknown>) || {};
+  const newConfig = { ...currentConfig, sync_offset: offset };
+
+  await supabase
+    .from("rastreadores_config_plataformas")
+    .update({ config: newConfig })
+    .eq("plataforma", plataforma);
+}
+
+// =====================================================
 // AUTENTICAÇÃO SOFTRUCK COM RETRY
 // =====================================================
 
@@ -247,9 +325,6 @@ async function syncSoftruck(
       const trackingData = responseData.data;
       
       // Formato da API v2 Softruck:
-      // - data.type = "Feature" (GeoJSON)
-      // - data.attributes contém: ign, dir, spd, bl (bateria)
-      // - data.attributes.geometry.coordinates = [longitude, latitude]
       const gpsFeature = trackingData?.data?.attributes || trackingData?.data || trackingData;
       
       // Extrair coordenadas do GeoJSON (coordinates = [lng, lat])
@@ -257,17 +332,14 @@ async function syncSoftruck(
       let longitude: number | null = null;
       
       if (gpsFeature?.geometry?.coordinates) {
-        // GeoJSON: coordinates = [longitude, latitude]
         longitude = parseFloat(gpsFeature.geometry.coordinates[0]);
         latitude = parseFloat(gpsFeature.geometry.coordinates[1]);
       } else if (gpsFeature?.latitude && gpsFeature?.longitude) {
-        // Formato alternativo com lat/lng direto
         latitude = parseFloat(gpsFeature.latitude);
         longitude = parseFloat(gpsFeature.longitude);
       }
 
       if (latitude && longitude && !isNaN(latitude) && !isNaN(longitude)) {
-        // Converter timestamp Unix para ISO string se necessário
         const actTimestamp = gpsFeature?.act;
         const dataPosicao = actTimestamp 
           ? new Date(actTimestamp * 1000).toISOString() 
@@ -410,6 +482,49 @@ async function syncRedeVeiculos(
 }
 
 // =====================================================
+// ATUALIZAR ultima_comunicacao nos rastreadores
+// =====================================================
+
+async function atualizarUltimaComunicacao(supabase: any, posicoes: Posicao[]): Promise<number> {
+  if (posicoes.length === 0) return 0;
+
+  let atualizados = 0;
+
+  // Agrupar por rastreador_id, manter a posição mais recente
+  const mapaRecente: Record<string, Posicao> = {};
+  for (const p of posicoes) {
+    const atual = mapaRecente[p.rastreador_id];
+    if (!atual || new Date(p.data_posicao) > new Date(atual.data_posicao)) {
+      mapaRecente[p.rastreador_id] = p;
+    }
+  }
+
+  // Update em lotes de 50
+  const entries = Object.entries(mapaRecente);
+  for (let i = 0; i < entries.length; i += 50) {
+    const batch = entries.slice(i, i + 50);
+    const promises = batch.map(([rastId, pos]) =>
+      supabase
+        .from("rastreadores")
+        .update({
+          ultima_comunicacao: pos.data_posicao,
+          ultima_posicao_lat: pos.latitude,
+          ultima_posicao_lng: pos.longitude,
+          ultima_velocidade: pos.velocidade,
+          ultima_ignicao: pos.ignicao,
+        })
+        .eq("id", rastId)
+    );
+
+    const results = await Promise.all(promises);
+    atualizados += results.filter(r => !r.error).length;
+  }
+
+  console.log(`[sync-rastreadores] ${atualizados}/${entries.length} rastreadores atualizados (ultima_comunicacao)`);
+  return atualizados;
+}
+
+// =====================================================
 // HANDLER PRINCIPAL
 // =====================================================
 
@@ -424,13 +539,15 @@ serve(async (req) => {
   console.log(`[sync-rastreadores] Iniciando sincronização: ${new Date().toISOString()}`);
 
   try {
-    // Verificar se foi solicitada uma plataforma específica
+    // Verificar se foi solicitada uma plataforma específica ou batch_size
     let plataformaFiltro: string | null = null;
+    let batchSize = 200; // Default: processar 200 por execução
     try {
       const body = await req.json();
       plataformaFiltro = body?.plataforma || null;
+      if (body?.batch_size) batchSize = Math.min(body.batch_size, 500);
     } catch {
-      // Sem body ou body inválido - sincroniza todas
+      // Sem body ou body inválido - usa defaults
     }
 
     // Criar cliente Supabase com service role
@@ -443,42 +560,34 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
-    // Buscar rastreadores instalados com dados de plataforma, veículo e associado
-    let query = supabase
-      .from("rastreadores")
-      .select(`
-        id, codigo, imei, plataforma, id_plataforma, plataforma_device_id, plataforma_veiculo_id, veiculo_id,
-        veiculo:veiculos(
-          id, placa, chassi, softruck_vehicle_id,
-          associado:associados(cpf)
-        )
-      `)
-      .eq("status", "instalado");
+    // ========== BUSCA PAGINADA ==========
+    // Buscar TODOS os rastreadores instalados (sem limite de 1000)
+    const todosRastreadores = await fetchAllRastreadoresInstalados(supabase, plataformaFiltro);
+    console.log(`[sync-rastreadores] Total de rastreadores instalados: ${todosRastreadores.length}`);
 
-    if (plataformaFiltro) {
-      query = query.eq("plataforma", plataformaFiltro);
-    }
-
-    const { data: rastreadores, error: errRast } = await query;
-
-    if (errRast) {
-      throw new Error(`Erro ao buscar rastreadores: ${errRast.message}`);
-    }
-
-    // Filtrar rastreadores que possuem IDs de plataforma válidos
-    // Para Softruck: precisa de plataforma_device_id (vehicleId pode ser resolvido via fallback)
-    // Para outras: precisa de id_plataforma
-    const rastreadoresValidos = (rastreadores || []).filter((r) => {
+    // ========== FILTRAR VÁLIDOS ==========
+    // Softruck: precisa de plataforma_device_id + alguma forma de resolver vehicleId
+    // Rede Veículos: precisa de (imei OU codigo) + veículo com placa + associado com CPF
+    const rastreadoresValidos = todosRastreadores.filter((r) => {
       if (r.plataforma === 'softruck') {
-        // Accept if has device_id AND (has vehicle_id OR has vehicle with softruck_vehicle_id OR has vehicle with plate)
         if (!r.plataforma_device_id) return false;
         if (r.plataforma_veiculo_id) return true;
         if (r.veiculo?.softruck_vehicle_id) return true;
         if (r.veiculo?.placa) return true;
         return false;
       }
+      if (r.plataforma === 'rede_veiculos') {
+        // Aceitar se tiver (imei ou codigo) E veículo com placa E associado com CPF
+        const temIdentificador = r.imei || r.codigo;
+        const temPlaca = r.veiculo?.placa;
+        const temCpf = r.veiculo?.associado?.cpf;
+        return Boolean(temIdentificador && temPlaca && temCpf);
+      }
+      // Outras plataformas: exigir id_plataforma
       return r.id_plataforma && r.id_plataforma.trim() !== "";
     });
+
+    console.log(`[sync-rastreadores] Rastreadores válidos para sync: ${rastreadoresValidos.length}`);
 
     if (rastreadoresValidos.length === 0) {
       console.log("[sync-rastreadores] Nenhum rastreador para sincronizar");
@@ -487,6 +596,7 @@ serve(async (req) => {
           success: true,
           message: "Nenhum rastreador para sincronizar",
           total_rastreadores: 0,
+          total_instalados: todosRastreadores.length,
           sincronizados: 0,
           duracao_ms: Date.now() - startTime,
         }),
@@ -494,20 +604,17 @@ serve(async (req) => {
       );
     }
 
-    console.log(`[sync-rastreadores] Encontrados ${rastreadoresValidos.length} rastreadores`);
-
-    // Agrupar rastreadores por plataforma
+    // ========== ROUND-ROBIN: Selecionar lote da vez ==========
+    // Agrupar por plataforma
     const porPlataforma: Record<string, Rastreador[]> = {};
     for (const r of rastreadoresValidos) {
       const plat = r.plataforma || "outro";
-      if (!porPlataforma[plat]) {
-        porPlataforma[plat] = [];
-      }
+      if (!porPlataforma[plat]) porPlataforma[plat] = [];
       porPlataforma[plat].push(r as Rastreador);
     }
 
     console.log(
-      "[sync-rastreadores] Rastreadores por plataforma:",
+      "[sync-rastreadores] Rastreadores válidos por plataforma:",
       Object.entries(porPlataforma)
         .map(([k, v]) => `${k}: ${v.length}`)
         .join(", ")
@@ -516,30 +623,45 @@ serve(async (req) => {
     // Obter configurações das plataformas
     const configs = getPlataformasConfig();
 
-    // Sincronizar cada plataforma
+    // Sincronizar cada plataforma com round-robin
     const todasPosicoes: Posicao[] = [];
     const resultados: SyncResult[] = [];
 
-    for (const [plataforma, rasts] of Object.entries(porPlataforma)) {
-      console.log(`[sync-rastreadores] Sincronizando ${plataforma} (${rasts.length} rastreadores)...`);
+    for (const [plataforma, todosRasts] of Object.entries(porPlataforma)) {
+      // Round-robin: pegar offset atual e selecionar sub-lote
+      const offset = await getRoundRobinOffset(supabase, plataforma);
+      const loteAtual = todosRasts.slice(offset, offset + batchSize);
+      
+      // Calcular próximo offset
+      const proximoOffset = (offset + batchSize >= todosRasts.length) ? 0 : offset + batchSize;
+      
+      console.log(
+        `[sync-rastreadores] ${plataforma}: lote ${offset}-${offset + loteAtual.length} de ${todosRasts.length} (próximo offset: ${proximoOffset})`
+      );
+
+      if (loteAtual.length === 0) {
+        // Reset offset if we went past the end
+        await saveRoundRobinOffset(supabase, plataforma, 0);
+        continue;
+      }
 
       let syncResult: { posicoes: Posicao[]; result: SyncResult };
 
       switch (plataforma) {
         case "softruck":
-          syncResult = await syncSoftruck(rasts, configs.softruck, supabase);
+          syncResult = await syncSoftruck(loteAtual, configs.softruck, supabase);
           break;
         case "rede_veiculos":
-          syncResult = await syncRedeVeiculos(rasts, configs.rede_veiculos);
+          syncResult = await syncRedeVeiculos(loteAtual, configs.rede_veiculos);
           break;
         default:
           syncResult = {
             posicoes: [],
             result: {
               plataforma,
-              total: rasts.length,
+              total: loteAtual.length,
               sucesso: 0,
-              falhas: rasts.length,
+              falhas: loteAtual.length,
               erros: [`Plataforma "${plataforma}" não suportada`],
             },
           };
@@ -547,6 +669,9 @@ serve(async (req) => {
 
       todasPosicoes.push(...syncResult.posicoes);
       resultados.push(syncResult.result);
+
+      // Salvar próximo offset para a próxima execução
+      await saveRoundRobinOffset(supabase, plataforma, proximoOffset);
 
       console.log(
         `[sync-rastreadores] ${plataforma}: ${syncResult.result.sucesso}/${syncResult.result.total} sucesso`
@@ -570,6 +695,9 @@ serve(async (req) => {
     }
 
     console.log(`[sync-rastreadores] ${posicoesInseridas} posições inseridas`);
+
+    // ========== ATUALIZAR ultima_comunicacao ==========
+    const rastreadoresAtualizados = await atualizarUltimaComunicacao(supabase, todasPosicoes);
 
     // Limpar posições com mais de 7 dias
     let posicoesRemovidas = 0;
@@ -598,10 +726,13 @@ serve(async (req) => {
     return new Response(
       JSON.stringify({
         success: true,
-        total_rastreadores: rastreadoresValidos.length,
+        total_instalados: todosRastreadores.length,
+        total_validos: rastreadoresValidos.length,
+        lote_processado: todasPosicoes.length > 0 ? batchSize : 0,
         sincronizados: totalSucesso,
         falhas: totalFalhas,
         posicoes_inseridas: posicoesInseridas,
+        rastreadores_atualizados: rastreadoresAtualizados,
         posicoes_removidas: posicoesRemovidas,
         duracao_ms: duracao,
         results: resultados,
