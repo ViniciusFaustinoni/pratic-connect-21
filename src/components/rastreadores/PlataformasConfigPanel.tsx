@@ -112,14 +112,6 @@ export function PlataformasConfigPanel() {
     }
   };
 
-  const handleSync = async (plataforma: PlataformaCompleta) => {
-    setSyncingId(plataforma.id);
-    try {
-      await syncRastreadores.mutateAsync(plataforma.plataforma);
-    } finally {
-      setSyncingId(null);
-    }
-  };
 
   if (isLoading) {
     return (
