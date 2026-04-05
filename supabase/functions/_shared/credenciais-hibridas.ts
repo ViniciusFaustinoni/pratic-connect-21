@@ -19,6 +19,19 @@ interface CredenciaisRedeVeiculos {
   bearer_token: string;
 }
 
+function normalizarSecret(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const semAspas = value.trim().replace(/^['"]|['"]$/g, '');
+  if (!semAspas) return null;
+
+  if (/^bearer\s+/i.test(semAspas)) {
+    return semAspas.replace(/^bearer\s+/i, '').trim();
+  }
+
+  return semAspas;
+}
+
 /**
  * Deriva chave usando PBKDF2 (mesmo método do integracoes-credenciais)
  */

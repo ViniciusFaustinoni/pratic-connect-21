@@ -209,6 +209,19 @@ async function getPosicaoSoftruckComRetry(
 }
 
 /**
+ * Sanitiza mensagens externas para não expor tokens/secrets em logs e respostas
+ */
+function sanitizeRedeVeiculosErrorMessage(message: unknown): string {
+  const text = typeof message === 'string' ? message : 'Erro na API';
+
+  if (/token incorreto/i.test(text)) {
+    return 'Token incorreto';
+  }
+
+  return text;
+}
+
+/**
  * Busca posição do rastreador na Rede Veículos
  * Usa o endpoint POST /obterUltimaPosicaoValida/ conforme documentação
  */
@@ -250,12 +263,10 @@ async function getPosicaoRedeVeiculos(
   
   console.log(`[Rede Veículos] Resposta:`, JSON.stringify(data).slice(0, 500));
   
-  // Verificar se a API retornou erro
   if (data.error === 'true' || data.error === true) {
-    throw new Error(`Rede Veículos: ${data.message || 'Erro na API'}`);
+    throw new Error(`Rede Veículos: ${sanitizeRedeVeiculosErrorMessage(data.message)}`);
   }
   
-  // A API retorna coordenadas no campo "latlon" formato "-22.902362|-43.57716"
   let latitude: number | null = null;
   let longitude: number | null = null;
   
@@ -264,7 +275,6 @@ async function getPosicaoRedeVeiculos(
     latitude = parseFloat(parts[0]);
     longitude = parseFloat(parts[1]);
   } else if (data.latitude && data.longitude) {
-    // Fallback caso a API mude para campos separados
     latitude = parseFloat(data.latitude);
     longitude = parseFloat(data.longitude);
   }
