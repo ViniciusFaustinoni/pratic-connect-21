@@ -301,7 +301,7 @@ serve(async (req) => {
       .select(`
         *,
         veiculo:veiculos(
-          id, placa, modelo, marca, chassi,
+          id, placa, modelo, marca, chassi, softruck_vehicle_id,
           associado:associados(cpf)
         )
       `)
