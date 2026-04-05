@@ -64,6 +64,7 @@ export default function Rastreadores() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({});
+  const [activeMetricFilter, setActiveMetricFilter] = useState('');
   const [activeTab, setActiveTab] = useState('visao-geral');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('rastreadores-view-mode');
