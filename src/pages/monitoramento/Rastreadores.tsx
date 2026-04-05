@@ -417,7 +417,7 @@ function RastreadoresContent({
       <RastreadorListHeader
         viewMode={viewMode}
         onViewModeChange={onViewModeChange}
-        totalCount={rastreadores?.length || 0}
+        totalCount={totalCount}
         onNewRastreador={onNewRastreador}
       />
 
@@ -453,6 +453,33 @@ function RastreadoresContent({
           canManageEquipe={canManageEquipe}
           onViewMap={onViewMap}
         />
+      )}
+
+      {/* Paginação */}
+      {totalPages > 1 && (
+        <div className="flex items-center justify-between border-t pt-4">
+          <p className="text-sm text-muted-foreground">
+            Página {currentPage} de {totalPages} ({totalCount} rastreadores)
+          </p>
+          <div className="flex items-center gap-2">
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage <= 1}
+              onClick={() => onPageChange(currentPage - 1)}
+            >
+              Anterior
+            </Button>
+            <Button
+              variant="outline"
+              size="sm"
+              disabled={currentPage >= totalPages}
+              onClick={() => onPageChange(currentPage + 1)}
+            >
+              Próximo
+            </Button>
+          </div>
+        </div>
       )}
 
       <RastreadorBatchActions
