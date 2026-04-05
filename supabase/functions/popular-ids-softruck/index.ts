@@ -35,8 +35,9 @@ async function getAuthToken(forceRefresh = false): Promise<string> {
   }
 
   const data = await response.json();
-  cachedToken = data.token || data.access_token;
-  tokenExpiresAt = Date.now() + 55 * 60 * 1000;
+  cachedToken = data.token || data.access_token || data.data?.token;
+  if (!cachedToken) throw new Error('Token Softruck não retornado');
+  tokenExpiresAt = Date.now() + 6 * 24 * 60 * 60 * 1000;
   return cachedToken!;
 }
 
