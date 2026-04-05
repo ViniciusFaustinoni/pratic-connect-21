@@ -434,20 +434,44 @@ export default function AppRastreamento() {
           )
         )}
 
-        {/* Offline Overlay (curto período) */}
-        {!aguardandoPrimeiraPosicao && !isOnline && (horasSemCom === null || horasSemCom < 4) && (
-          <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm">
-            <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
-              <WifiOff className="h-8 w-8 text-accent" />
+        {/* Offline Overlay (curto período) - só mostra após dados carregarem */}
+        {!aguardandoPrimeiraPosicao && !isOnline && !isLoading && (horasSemCom === null || horasSemCom < 4) && (
+          hasValidPosition ? (
+            /* Banner não-bloqueante quando há última posição válida */
+            <div className="absolute top-2 left-2 right-2 z-[1000] bg-accent/90 backdrop-blur-sm text-accent-foreground rounded-lg p-3 shadow-lg">
+              <div className="flex items-center gap-2">
+                <WifiOff className="h-4 w-4 flex-shrink-0" />
+                <div className="flex-1 min-w-0">
+                  <p className="text-sm font-medium">Rastreador offline</p>
+                  <p className="text-xs opacity-80">Última posição: {tempoDesdeAtualizacao}</p>
+                </div>
+                <Button 
+                  size="sm" 
+                  variant="secondary" 
+                  onClick={handleRefresh} 
+                  disabled={isRefreshing}
+                  className="flex-shrink-0 h-7 text-xs"
+                >
+                  <RefreshCw className={cn("h-3 w-3 mr-1", isRefreshing && "animate-spin")} />
+                  Reconectar
+                </Button>
+              </div>
             </div>
-            <h3 className="mt-4 text-lg font-semibold">Rastreador offline</h3>
-            <p className="mt-1 text-sm text-muted-foreground">
-              Última posição: {tempoDesdeAtualizacao}
-            </p>
-            <Button className="mt-4" onClick={handleRefresh}>
-              Tentar reconectar
-            </Button>
-          </div>
+          ) : (
+            /* Overlay full-screen apenas quando NÃO há posição válida */
+            <div className="absolute inset-0 z-[1000] flex flex-col items-center justify-center bg-background/90 backdrop-blur-sm">
+              <div className="flex h-16 w-16 items-center justify-center rounded-full bg-accent/10">
+                <WifiOff className="h-8 w-8 text-accent" />
+              </div>
+              <h3 className="mt-4 text-lg font-semibold">Rastreador offline</h3>
+              <p className="mt-1 text-sm text-muted-foreground">
+                Última posição: {tempoDesdeAtualizacao}
+              </p>
+              <Button className="mt-4" onClick={handleRefresh}>
+                Tentar reconectar
+              </Button>
+            </div>
+          )
         )}
 
         {hasValidPosition ? (
