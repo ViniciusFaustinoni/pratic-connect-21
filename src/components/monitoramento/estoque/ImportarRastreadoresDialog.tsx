@@ -86,7 +86,12 @@ export function ImportarRastreadoresDialog({
 
   const validarDados = useCallback(async (rows: RastreadorImportRow[]): Promise<RastreadorImportRow[]> => {
     const uniqueImeis = [...new Set(rows.map(r => r.imei).filter(Boolean))];
-    const uniquePlacas = [...new Set(rows.map(r => r.placa).filter(Boolean))] as string[];
+    const placaRegex = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+    const uniquePlacas = [...new Set(
+      rows
+        .map(r => r.placa ? r.placa.toUpperCase().replace(/[^A-Z0-9]/g, '') : '')
+        .filter(p => p && placaRegex.test(p))
+    )];
 
     // Fetch existing trackers by IMEI (batch in chunks of 100)
     let existentesList: { id: string; imei: string; veiculo_id: string | null }[] = [];
