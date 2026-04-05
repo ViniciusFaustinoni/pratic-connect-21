@@ -11,9 +11,6 @@ interface RastreadorMetricsProps {
 }
 
 export function RastreadorMetrics({ metricas, isLoading, onFilterClick, activeFilter }: RastreadorMetricsProps) {
-  const atencao = (metricas?.alertas || 0) - (metricas?.offline || 0);
-  const atencaoCount = atencao > 0 ? atencao : 0;
-
   const metrics = [
     {
       label: 'Total',
@@ -77,11 +74,7 @@ export function RastreadorMetrics({ metricas, isLoading, onFilterClick, activeFi
             }}
           >
             <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn(
-                "p-2.5 rounded-lg relative",
-                metric.iconBg,
-                metric.pulse && "after:absolute after:inset-0 after:rounded-lg after:animate-ping after:bg-red-500/30"
-              )}>
+              <div className={cn("p-2.5 rounded-lg", metric.iconBg)}>
                 <metric.icon className="h-5 w-5" />
               </div>
               <div>

@@ -598,7 +598,7 @@ export function RastreadorDetailDrawer({
             />
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }
