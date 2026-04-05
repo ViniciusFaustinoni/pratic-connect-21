@@ -306,6 +306,8 @@ function RastreadoresContent({
   isDiretor,
   canManageEquipe,
   onViewMap,
+  activeMetricFilter,
+  onMetricFilterClick,
 }: RastreadoresContentProps) {
   const queryClient = useQueryClient();
   const [portadorDialogOpen, setPortadorDialogOpen] = useState(false);
