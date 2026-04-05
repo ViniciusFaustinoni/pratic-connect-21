@@ -71,7 +71,6 @@ export function PlataformasConfigPanel() {
   const updateMutation = useUpdatePlataforma();
   const deleteMutation = useDeletePlataforma();
   const testarConexao = useTestarConexaoPlataforma();
-  const syncRastreadores = useSyncRastreadores();
 
   const handleEdit = (plataforma: PlataformaCompleta) => {
     setEditingPlataforma(plataforma);
