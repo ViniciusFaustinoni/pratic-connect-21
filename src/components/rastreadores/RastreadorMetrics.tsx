@@ -39,8 +39,8 @@ export function RastreadorMetrics({ metricas, isLoading, onFilterClick, activeFi
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {[...Array(5)].map((_, i) => (
+      <div className="grid grid-cols-2 gap-3">
+        {[...Array(2)].map((_, i) => (
           <Card key={i} className="animate-pulse">
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-muted" />
