@@ -227,7 +227,7 @@ export default function CobrancaDashboard() {
         <div className="flex gap-2">
           <Button variant="outline" onClick={() => navigate('/cobranca/fila')}>Fila de Trabalho</Button>
           <Button variant="outline" onClick={() => navigate('/cobranca/acordos/novo')}>Novo Acordo</Button>
-          <Button variant="outline" onClick={() => navigate('/cobranca/reguas')}>Régua de Cobrança</Button>
+          <Button variant="outline" onClick={() => navigate('/cobranca/regua')}>Régua de Cobrança</Button>
         </div>
       </div>
 
