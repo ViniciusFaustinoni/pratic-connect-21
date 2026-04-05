@@ -340,10 +340,11 @@ export function EtapaAssinaturaContrato({
 
     // Verificar imediatamente e depois a cada 15 segundos
     verificarAssinatura();
-    const interval = setInterval(verificarAssinatura, 15000);
+    const pollingInterval = contrato?.linkAssinatura ? 15000 : 5000;
+    const interval = setInterval(verificarAssinatura, pollingInterval);
 
     return () => clearInterval(interval);
-  }, [etapaInterna, contrato?.id, cotacaoId, onContratoAssinado]);
+  }, [etapaInterna, contrato?.id, contrato?.linkAssinatura, cotacaoId, onContratoAssinado]);
 
   // Verificar manualmente
   const verificarManualmente = async () => {
@@ -659,8 +660,8 @@ export function EtapaAssinaturaContrato({
 
           <Separator className="my-2" />
 
-          {/* Botão de assinatura direta */}
-          {contrato?.linkAssinatura && (
+          {/* Botão de assinatura direta ou loading */}
+          {contrato?.linkAssinatura ? (
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -681,6 +682,20 @@ export function EtapaAssinaturaContrato({
                 </a>
               </Button>
               <CopyLinkButton link={contrato.linkAssinatura} />
+            </motion.div>
+          ) : (
+            <motion.div
+              initial={{ opacity: 0 }}
+              animate={{ opacity: 1 }}
+              className="space-y-3 text-center p-4 bg-amber-50 border border-amber-200 rounded-lg"
+            >
+              <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-600" />
+              <p className="text-sm font-medium text-amber-800">
+                Aguarde... estamos gerando seu link de assinatura
+              </p>
+              <p className="text-xs text-amber-600">
+                Isso pode levar alguns segundos
+              </p>
             </motion.div>
           )}
 
