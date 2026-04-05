@@ -9,11 +9,11 @@ import {
 import { formatDistanceToNow, format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
-  Sheet,
-  SheetContent,
-  SheetHeader,
-  SheetTitle,
-} from '@/components/ui/sheet';
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Separator } from '@/components/ui/separator';
@@ -27,8 +27,6 @@ import {
   Radio,
   Car,
   User,
-  Wifi,
-  WifiOff,
   Wrench,
   Package,
   XCircle,
@@ -42,7 +40,6 @@ import {
   useRastreador,
   useUpdateRastreadorStatus,
   useDeleteRastreador,
-  isRastreadorOnline,
   type StatusRastreador,
 } from '@/hooks/useRastreadores';
 import { STATUS_RASTREADOR_LABELS, STATUS_RASTREADOR_COLORS, PLATAFORMA_RASTREADOR_LABELS } from '@/types/database';
@@ -132,12 +129,11 @@ export function RastreadorDetailDrawer({
     setComandoDialog({ open: false, tipo: 'bloquear' });
   };
 
-  const isOnline = rastreador ? isRastreadorOnline(rastreador.ultima_comunicacao) : false;
   const isInstalled = rastreador?.status === 'instalado';
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
@@ -148,37 +144,17 @@ export function RastreadorDetailDrawer({
           </div>
         ) : (
           <>
-            <SheetHeader>
+            <DialogHeader>
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <SheetTitle className="flex items-center gap-2">
+                  <DialogTitle className="flex items-center gap-2">
                     <Radio className="h-5 w-5" />
                     {rastreador.codigo}
-                  </SheetTitle>
+                  </DialogTitle>
                   <div className="flex items-center gap-2">
                     <Badge className={STATUS_RASTREADOR_COLORS[rastreador.status]}>
                       {STATUS_RASTREADOR_LABELS[rastreador.status]}
                     </Badge>
-                    {isInstalled && (
-                      <Badge
-                        variant="outline"
-                        className={
-                          isOnline
-                            ? 'border-green-500 text-green-600'
-                            : 'border-destructive text-destructive'
-                        }
-                      >
-                        {isOnline ? (
-                          <>
-                            <Wifi className="mr-1 h-3 w-3" /> Online
-                          </>
-                        ) : (
-                          <>
-                            <WifiOff className="mr-1 h-3 w-3" /> Offline
-                          </>
-                        )}
-                      </Badge>
-                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
@@ -228,7 +204,7 @@ export function RastreadorDetailDrawer({
                   )}
                 </div>
               </div>
-            </SheetHeader>
+            </DialogHeader>
 
             <Tabs defaultValue="info" className="mt-6">
               <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
@@ -618,7 +594,7 @@ export function RastreadorDetailDrawer({
             />
           </>
         )}
-      </SheetContent>
-    </Sheet>
+      </DialogContent>
+    </Dialog>
   );
 }

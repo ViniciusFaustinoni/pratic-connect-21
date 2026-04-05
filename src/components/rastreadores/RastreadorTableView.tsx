@@ -1,4 +1,4 @@
-import { Radio, Loader2, Plus, Wifi, WifiOff, MoreHorizontal, Eye, Pencil, Wrench, PackageMinus, Trash2, UserPlus, Package, MapPin } from 'lucide-react';
+import { Radio, Loader2, Plus, MoreHorizontal, Eye, Pencil, Wrench, PackageMinus, Trash2, UserPlus, Package, MapPin } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -24,7 +24,7 @@ import {
   TooltipTrigger,
 } from '@/components/ui/tooltip';
 import { cn } from '@/lib/utils';
-import { isRastreadorOnline, type RastreadorWithRelations } from '@/hooks/useRastreadores';
+import { type RastreadorWithRelations } from '@/hooks/useRastreadores';
 import { STATUS_RASTREADOR_LABELS, STATUS_RASTREADOR_COLORS } from '@/types/database';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
@@ -120,24 +120,22 @@ export function RastreadorTableView({
             <TableHead>Plataforma</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="min-w-[200px]">Veículo / Associado</TableHead>
-            <TableHead>Comunicação</TableHead>
             <TableHead className="w-[70px]">Ações</TableHead>
           </TableRow>
         </TableHeader>
         <TableBody>
           {rastreadores.map((rastreador) => {
             const isInstalled = rastreador.status === 'instalado';
-            const online = isRastreadorOnline(rastreador.ultima_comunicacao);
             const isEstoque = rastreador.status === 'estoque';
-            const offline = isInstalled && !online;
 
             return (
               <TableRow 
                 key={rastreador.id} 
                 className={cn(
-                  selectedIds.has(rastreador.id) && 'bg-muted/50',
-                  offline && 'bg-red-500/5'
+                  "cursor-pointer hover:bg-muted/50",
+                  selectedIds.has(rastreador.id) && 'bg-muted/50'
                 )}
+                onClick={() => onOpenDetails(rastreador.id)}
               >
                 <TableCell>
                   {isEstoque ? (
@@ -273,42 +271,7 @@ export function RastreadorTableView({
                   )}
                 </TableCell>
 
-                {/* Comunicação com destaque visual */}
-                <TableCell>
-                  {isInstalled ? (
-                    <div className="flex flex-col gap-1">
-                      <Badge
-                        variant="outline"
-                        className={cn(
-                          "text-xs w-fit",
-                          online
-                            ? "border-emerald-500 text-emerald-600 bg-emerald-500/10"
-                            : "border-red-500 text-red-600 bg-red-500/10"
-                        )}
-                      >
-                        {online ? (
-                          <>
-                            <Wifi className="mr-1 h-3 w-3" /> Online
-                          </>
-                        ) : (
-                          <>
-                            <WifiOff className="mr-1 h-3 w-3" /> Offline
-                          </>
-                        )}
-                      </Badge>
-                      <span className={cn(
-                        "text-xs",
-                        offline ? "text-red-500" : "text-muted-foreground"
-                      )}>
-                        {getLastCommText(rastreador.ultima_comunicacao)}
-                      </span>
-                    </div>
-                  ) : (
-                    <span className="text-muted-foreground">-</span>
-                  )}
-                </TableCell>
-
-                <TableCell>
+                <TableCell onClick={(e) => e.stopPropagation()}>
                   <DropdownMenu>
                     <DropdownMenuTrigger asChild>
                       <Button variant="ghost" size="icon" className="h-8 w-8">

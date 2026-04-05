@@ -1,4 +1,4 @@
-import { Radio, Wifi, WifiOff, AlertTriangle, Package } from 'lucide-react';
+import { Radio, Package } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
 import type { RastreadoresMetricas, RastreadorFilters } from '@/hooks/useRastreadores';
@@ -11,9 +11,6 @@ interface RastreadorMetricsProps {
 }
 
 export function RastreadorMetrics({ metricas, isLoading, onFilterClick, activeFilter }: RastreadorMetricsProps) {
-  const atencao = (metricas?.alertas || 0) - (metricas?.offline || 0);
-  const atencaoCount = atencao > 0 ? atencao : 0;
-
   const metrics = [
     {
       label: 'Total',
@@ -24,37 +21,6 @@ export function RastreadorMetrics({ metricas, isLoading, onFilterClick, activeFi
       iconBg: 'bg-primary/20',
       filterKey: 'total',
       filterValue: {} as Partial<RastreadorFilters>,
-    },
-    {
-      label: 'Online',
-      value: metricas?.online || 0,
-      description: 'comunicando',
-      icon: Wifi,
-      className: 'bg-emerald-500/10 text-emerald-600',
-      iconBg: 'bg-emerald-500/20',
-      filterKey: 'online',
-      filterValue: { comunicacao: 'online' as const, status: ['instalado'] } as Partial<RastreadorFilters>,
-    },
-    {
-      label: 'Atenção',
-      value: atencaoCount,
-      description: '1-24h sem sinal',
-      icon: AlertTriangle,
-      className: 'bg-amber-500/10 text-amber-600',
-      iconBg: 'bg-amber-500/20',
-      filterKey: 'atencao',
-      filterValue: { comunicacao: 'atencao' as const, status: ['instalado'] } as Partial<RastreadorFilters>,
-    },
-    {
-      label: 'Offline',
-      value: metricas?.offline || 0,
-      description: '+24h sem sinal',
-      icon: WifiOff,
-      className: 'bg-red-500/10 text-red-600',
-      iconBg: 'bg-red-500/20',
-      pulse: (metricas?.offline || 0) > 0,
-      filterKey: 'offline',
-      filterValue: { comunicacao: 'offline' as const, status: ['instalado'] } as Partial<RastreadorFilters>,
     },
     {
       label: 'Estoque',
@@ -70,8 +36,8 @@ export function RastreadorMetrics({ metricas, isLoading, onFilterClick, activeFi
 
   if (isLoading) {
     return (
-      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-        {[...Array(5)].map((_, i) => (
+      <div className="grid grid-cols-2 gap-3">
+        {[...Array(2)].map((_, i) => (
           <Card key={i} className="animate-pulse">
             <CardContent className="p-4 flex items-center gap-3">
               <div className="w-10 h-10 rounded-lg bg-muted" />
@@ -87,7 +53,7 @@ export function RastreadorMetrics({ metricas, isLoading, onFilterClick, activeFi
   }
 
   return (
-    <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
+    <div className="grid grid-cols-2 gap-3">
       {metrics.map((metric) => {
         const isActive = activeFilter === metric.filterKey;
         return (
@@ -108,11 +74,7 @@ export function RastreadorMetrics({ metricas, isLoading, onFilterClick, activeFi
             }}
           >
             <CardContent className="p-4 flex items-center gap-3">
-              <div className={cn(
-                "p-2.5 rounded-lg relative",
-                metric.iconBg,
-                metric.pulse && "after:absolute after:inset-0 after:rounded-lg after:animate-ping after:bg-red-500/30"
-              )}>
+              <div className={cn("p-2.5 rounded-lg", metric.iconBg)}>
                 <metric.icon className="h-5 w-5" />
               </div>
               <div>
