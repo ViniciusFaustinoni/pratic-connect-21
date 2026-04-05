@@ -159,26 +159,6 @@ export function RastreadorDetailDrawer({
                     <Badge className={STATUS_RASTREADOR_COLORS[rastreador.status]}>
                       {STATUS_RASTREADOR_LABELS[rastreador.status]}
                     </Badge>
-                    {isInstalled && (
-                      <Badge
-                        variant="outline"
-                        className={
-                          isOnline
-                            ? 'border-green-500 text-green-600'
-                            : 'border-destructive text-destructive'
-                        }
-                      >
-                        {isOnline ? (
-                          <>
-                            <Wifi className="mr-1 h-3 w-3" /> Online
-                          </>
-                        ) : (
-                          <>
-                            <WifiOff className="mr-1 h-3 w-3" /> Offline
-                          </>
-                        )}
-                      </Badge>
-                    )}
                   </div>
                 </div>
                 <div className="flex gap-2">
