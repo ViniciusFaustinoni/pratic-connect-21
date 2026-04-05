@@ -212,11 +212,7 @@ const menuConfig: {
           url: '/monitoramento/mapa',
           icon: Map,
         },
-        {
-          title: 'Alertas',
-          url: '/monitoramento/alertas',
-          icon: Bell,
-        },
+        // Alertas removido temporariamente
         {
           title: 'Ressalvas Pendentes',
           url: '/monitoramento/ressalvas-pendentes',
