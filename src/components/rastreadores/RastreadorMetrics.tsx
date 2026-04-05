@@ -1,15 +1,16 @@
 import { Radio, Wifi, WifiOff, AlertTriangle, Package } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { cn } from '@/lib/utils';
-import type { RastreadoresMetricas } from '@/hooks/useRastreadores';
+import type { RastreadoresMetricas, RastreadorFilters } from '@/hooks/useRastreadores';
 
 interface RastreadorMetricsProps {
   metricas: RastreadoresMetricas | undefined;
   isLoading?: boolean;
+  onFilterClick?: (filter: Partial<RastreadorFilters>, filterKey: string) => void;
+  activeFilter?: string;
 }
 
-export function RastreadorMetrics({ metricas, isLoading }: RastreadorMetricsProps) {
-  // Calcular "atenção" como rastreadores instalados sem comunicação mas não ainda offline crítico
+export function RastreadorMetrics({ metricas, isLoading, onFilterClick, activeFilter }: RastreadorMetricsProps) {
   const atencao = (metricas?.alertas || 0) - (metricas?.offline || 0);
   const atencaoCount = atencao > 0 ? atencao : 0;
 
@@ -21,6 +22,8 @@ export function RastreadorMetrics({ metricas, isLoading }: RastreadorMetricsProp
       icon: Radio,
       className: 'bg-primary/10 text-primary',
       iconBg: 'bg-primary/20',
+      filterKey: 'total',
+      filterValue: {} as Partial<RastreadorFilters>,
     },
     {
       label: 'Online',
@@ -29,6 +32,8 @@ export function RastreadorMetrics({ metricas, isLoading }: RastreadorMetricsProp
       icon: Wifi,
       className: 'bg-emerald-500/10 text-emerald-600',
       iconBg: 'bg-emerald-500/20',
+      filterKey: 'online',
+      filterValue: { comunicacao: 'online' as const, status: ['instalado'] } as Partial<RastreadorFilters>,
     },
     {
       label: 'Atenção',
@@ -37,6 +42,8 @@ export function RastreadorMetrics({ metricas, isLoading }: RastreadorMetricsProp
       icon: AlertTriangle,
       className: 'bg-amber-500/10 text-amber-600',
       iconBg: 'bg-amber-500/20',
+      filterKey: 'atencao',
+      filterValue: { comunicacao: 'atencao' as const, status: ['instalado'] } as Partial<RastreadorFilters>,
     },
     {
       label: 'Offline',
@@ -46,6 +53,8 @@ export function RastreadorMetrics({ metricas, isLoading }: RastreadorMetricsProp
       className: 'bg-red-500/10 text-red-600',
       iconBg: 'bg-red-500/20',
       pulse: (metricas?.offline || 0) > 0,
+      filterKey: 'offline',
+      filterValue: { comunicacao: 'offline' as const, status: ['instalado'] } as Partial<RastreadorFilters>,
     },
     {
       label: 'Estoque',
@@ -54,6 +63,8 @@ export function RastreadorMetrics({ metricas, isLoading }: RastreadorMetricsProp
       icon: Package,
       className: 'bg-blue-500/10 text-blue-600',
       iconBg: 'bg-blue-500/20',
+      filterKey: 'estoque',
+      filterValue: { status: ['estoque'] } as Partial<RastreadorFilters>,
     },
   ];
 
@@ -77,29 +88,41 @@ export function RastreadorMetrics({ metricas, isLoading }: RastreadorMetricsProp
 
   return (
     <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-5 gap-3">
-      {metrics.map((metric) => (
-        <Card 
-          key={metric.label} 
-          className={cn(
-            "border-border/50 hover:border-border transition-colors cursor-default overflow-hidden",
-            metric.className
-          )}
-        >
-          <CardContent className="p-4 flex items-center gap-3">
-            <div className={cn(
-              "p-2.5 rounded-lg relative",
-              metric.iconBg,
-              metric.pulse && "after:absolute after:inset-0 after:rounded-lg after:animate-ping after:bg-red-500/30"
-            )}>
-              <metric.icon className="h-5 w-5" />
-            </div>
-            <div>
-              <p className="text-2xl font-bold leading-none">{metric.value}</p>
-              <p className="text-xs opacity-80 mt-0.5">{metric.description}</p>
-            </div>
-          </CardContent>
-        </Card>
-      ))}
+      {metrics.map((metric) => {
+        const isActive = activeFilter === metric.filterKey;
+        return (
+          <Card
+            key={metric.label}
+            className={cn(
+              "border-border/50 hover:border-border transition-all cursor-pointer overflow-hidden",
+              metric.className,
+              isActive && "ring-2 ring-primary ring-offset-2 ring-offset-background"
+            )}
+            onClick={() => {
+              if (!onFilterClick) return;
+              if (isActive) {
+                onFilterClick({}, '');
+              } else {
+                onFilterClick(metric.filterValue, metric.filterKey);
+              }
+            }}
+          >
+            <CardContent className="p-4 flex items-center gap-3">
+              <div className={cn(
+                "p-2.5 rounded-lg relative",
+                metric.iconBg,
+                metric.pulse && "after:absolute after:inset-0 after:rounded-lg after:animate-ping after:bg-red-500/30"
+              )}>
+                <metric.icon className="h-5 w-5" />
+              </div>
+              <div>
+                <p className="text-2xl font-bold leading-none">{metric.value}</p>
+                <p className="text-xs opacity-80 mt-0.5">{metric.description}</p>
+              </div>
+            </CardContent>
+          </Card>
+        );
+      })}
     </div>
   );
 }

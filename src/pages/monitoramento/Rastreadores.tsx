@@ -64,6 +64,7 @@ export default function Rastreadores() {
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
   const [filters, setFilters] = useState<Filters>({});
+  const [activeMetricFilter, setActiveMetricFilter] = useState('');
   const [activeTab, setActiveTab] = useState('visao-geral');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
     const saved = localStorage.getItem('rastreadores-view-mode');
@@ -170,7 +171,7 @@ export default function Rastreadores() {
             isLoading={isLoading}
             isLoadingMetricas={isLoadingMetricas}
             filters={filters}
-            onFiltersChange={setFilters}
+            onFiltersChange={(f) => { setFilters(f); setActiveMetricFilter(''); }}
             onOpenDetails={handleOpenDetails}
             onEdit={handleEdit}
             onNewRastreador={handleNewRastreador}
@@ -180,6 +181,8 @@ export default function Rastreadores() {
             isDiretor={isDiretor}
             canManageEquipe={canManageEquipeEstoque}
             onViewMap={handleViewMap}
+            activeMetricFilter={activeMetricFilter}
+            onMetricFilterClick={(f, key) => { setFilters(f); setActiveMetricFilter(key); }}
           />
         </TabsContent>
 
@@ -283,6 +286,8 @@ interface RastreadoresContentProps {
   isDiretor: boolean;
   canManageEquipe: boolean;
   onViewMap: (rastreadorId: string) => void;
+  activeMetricFilter: string;
+  onMetricFilterClick: (filter: Partial<Filters>, filterKey: string) => void;
 }
 
 function RastreadoresContent({
@@ -301,6 +306,8 @@ function RastreadoresContent({
   isDiretor,
   canManageEquipe,
   onViewMap,
+  activeMetricFilter,
+  onMetricFilterClick,
 }: RastreadoresContentProps) {
   const queryClient = useQueryClient();
   const [portadorDialogOpen, setPortadorDialogOpen] = useState(false);
@@ -389,7 +396,7 @@ function RastreadoresContent({
 
   return (
     <>
-      <RastreadorMetrics metricas={metricas} isLoading={isLoadingMetricas} />
+      <RastreadorMetrics metricas={metricas} isLoading={isLoadingMetricas} onFilterClick={onMetricFilterClick} activeFilter={activeMetricFilter} />
       <RastreadorFiltersV2 filters={filters} onFiltersChange={onFiltersChange} />
       <RastreadorListHeader
         viewMode={viewMode}

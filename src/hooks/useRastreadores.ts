@@ -19,7 +19,7 @@ export interface RastreadorFilters {
   status?: StatusRastreador[];
   plataforma?: string;
   search?: string;
-  comunicacao?: 'online' | 'offline' | 'todos';
+  comunicacao?: 'online' | 'offline' | 'atencao' | 'todos';
 }
 
 export interface RastreadoresMetricas {
@@ -79,9 +79,18 @@ export function useRastreadores(filters?: RastreadorFilters) {
       
       if (filters?.comunicacao && filters.comunicacao !== 'todos') {
         result = result.filter(r => {
-          if (r.status !== 'instalado') return true; // Only filter installed trackers
-          const online = isRastreadorOnline(r.ultima_comunicacao);
-          return filters.comunicacao === 'online' ? online : !online;
+          if (r.status !== 'instalado') return filters.comunicacao === 'online' ? false : true;
+          if (!r.ultima_comunicacao) {
+            return filters.comunicacao === 'offline';
+          }
+          const lastComm = new Date(r.ultima_comunicacao);
+          const now = new Date();
+          const diffHours = (now.getTime() - lastComm.getTime()) / (1000 * 60 * 60);
+          
+          if (filters.comunicacao === 'online') return diffHours < 1;
+          if (filters.comunicacao === 'atencao') return diffHours >= 1 && diffHours < 24;
+          if (filters.comunicacao === 'offline') return diffHours >= 24;
+          return true;
         });
       }
 
