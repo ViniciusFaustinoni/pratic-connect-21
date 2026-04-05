@@ -1,0 +1,1 @@
+CREATE INDEX idx_veiculos_created_at ON public.veiculos (created_at DESC);
