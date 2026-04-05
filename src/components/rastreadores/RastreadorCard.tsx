@@ -20,7 +20,7 @@ import {
   PackageMinus,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { isRastreadorOnline, type RastreadorWithRelations } from '@/hooks/useRastreadores';
+import { type RastreadorWithRelations } from '@/hooks/useRastreadores';
 import { STATUS_RASTREADOR_LABELS, STATUS_RASTREADOR_COLORS } from '@/types/database';
 import { motion } from 'framer-motion';
 
