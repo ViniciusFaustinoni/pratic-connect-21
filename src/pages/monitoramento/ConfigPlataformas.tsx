@@ -227,18 +227,6 @@ export default function ConfigPlataformas() {
                     )}
                     Testar Conexão
                   </Button>
-                  <Button
-                    variant="outline"
-                    onClick={() => handleSincronizar(plataforma.codigo)}
-                    disabled={isSyncing || !plataforma.ativa}
-                  >
-                    {isSyncing ? (
-                      <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                    ) : (
-                      <RefreshCw className="h-4 w-4 mr-2" />
-                    )}
-                    Sincronizar Agora
-                  </Button>
                 </div>
 
                 {/* Aviso de Secrets */}
