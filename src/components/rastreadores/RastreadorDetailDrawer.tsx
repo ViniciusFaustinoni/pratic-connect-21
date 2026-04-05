@@ -208,7 +208,7 @@ export function RastreadorDetailDrawer({
                   )}
                 </div>
               </div>
-            </SheetHeader>
+            </DialogHeader>
 
             <Tabs defaultValue="info" className="mt-6">
               <TabsList className="grid w-full grid-cols-2 sm:grid-cols-4">
