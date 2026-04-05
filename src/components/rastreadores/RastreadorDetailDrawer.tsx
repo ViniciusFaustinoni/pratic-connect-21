@@ -136,8 +136,8 @@ export function RastreadorDetailDrawer({
   const isInstalled = rastreador?.status === 'instalado';
 
   return (
-    <Sheet open={open} onOpenChange={onOpenChange}>
-      <SheetContent className="w-full sm:max-w-lg overflow-y-auto">
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-2xl max-h-[90vh] overflow-y-auto">
         {isLoading ? (
           <div className="flex items-center justify-center h-full">
             <Loader2 className="h-8 w-8 animate-spin text-muted-foreground" />
