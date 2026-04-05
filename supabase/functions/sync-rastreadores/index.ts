@@ -1,6 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
-import { resolveSoftruckIds, getSoftruckAuthToken } from "../_shared/softruck-id-resolver.ts";
+import { getCredenciaisSoftruck, getCredenciaisRedeVeiculos } from "../_shared/credenciais-hibridas.ts";
 
 // =====================================================
 // CONFIGURAÇÃO
@@ -15,30 +15,64 @@ interface PlataformaConfig {
   baseUrl: string;
   apiKey?: string;
   enabled: boolean;
-  // Softruck específico
   publicKey?: string;
-  username?: string;
-  password?: string;
+  token?: string;
 }
 
-const getPlataformasConfig = (): Record<string, PlataformaConfig> => ({
-  softruck: {
-    baseUrl: Deno.env.get("SOFTRUCK_AMBIENTE") === "producao" 
-      ? "https://api.softruck.com/v2"
-      : "https://api.apiary.softruck.com/v2",
-    publicKey: Deno.env.get("SOFTRUCK_PUBLIC_KEY") || "",
-    username: Deno.env.get("SOFTRUCK_USERNAME") || "",
-    password: Deno.env.get("SOFTRUCK_PASSWORD") || "",
-    enabled: Boolean(Deno.env.get("SOFTRUCK_PUBLIC_KEY") && Deno.env.get("SOFTRUCK_USERNAME")),
-  },
-  rede_veiculos: {
-    baseUrl: Deno.env.get("REDE_VEICULOS_AMBIENTE") === "producao"
-      ? "https://integracao.redeveiculos.com/api/v2/prod"
-      : "https://integracao.redeveiculos.com/api/v2/sandbox",
-    apiKey: Deno.env.get("REDE_VEICULOS_TOKEN") || "",
-    enabled: Boolean(Deno.env.get("REDE_VEICULOS_TOKEN")),
-  },
-});
+/**
+ * Busca configuração das plataformas do BANCO DE DADOS (rastreadores_config_plataformas)
+ * em vez de variáveis de ambiente. Isso garante que o ambiente correto (produção/sandbox)
+ * seja usado, e que as credenciais venham do credenciais-hibridas (criptografadas).
+ */
+async function getPlataformasConfigFromDB(supabase: any): Promise<Record<string, PlataformaConfig>> {
+  const configs: Record<string, PlataformaConfig> = {
+    softruck: { baseUrl: "https://api.softruck.com/v2", enabled: false },
+    rede_veiculos: { baseUrl: "https://integracao.redeveiculos.com/api/v2/prod", enabled: false },
+  };
+
+  try {
+    // Buscar configurações de todas as plataformas do banco
+    const { data: plataformas, error } = await supabase
+      .from("rastreadores_config_plataformas")
+      .select("plataforma, ambiente_atual, api_url_producao, api_url_sandbox, config");
+
+    if (!error && plataformas) {
+      for (const p of plataformas) {
+        const url = p.ambiente_atual === "producao"
+          ? (p.api_url_producao || configs[p.plataforma]?.baseUrl)
+          : (p.api_url_sandbox || configs[p.plataforma]?.baseUrl);
+
+        if (p.plataforma === "softruck") {
+          const creds = await getCredenciaisSoftruck(supabase);
+          if (creds) {
+            configs.softruck = {
+              baseUrl: url || "https://api.softruck.com/v2",
+              publicKey: creds.public_key,
+              enabled: true,
+            };
+          }
+          console.log(`[Config] Softruck: ambiente=${p.ambiente_atual}, url=${configs.softruck.baseUrl}, enabled=${configs.softruck.enabled}`);
+        }
+
+        if (p.plataforma === "rede_veiculos") {
+          const creds = await getCredenciaisRedeVeiculos(supabase);
+          if (creds) {
+            configs.rede_veiculos = {
+              baseUrl: url || "https://integracao.redeveiculos.com/api/v2/prod",
+              apiKey: creds.bearer_token,
+              enabled: true,
+            };
+          }
+          console.log(`[Config] Rede Veículos: ambiente=${p.ambiente_atual}, url=${configs.rede_veiculos.baseUrl}, enabled=${configs.rede_veiculos.enabled}`);
+        }
+      }
+    }
+  } catch (err) {
+    console.error("[Config] Erro ao buscar config do banco:", err);
+  }
+
+  return configs;
+}
 
 // =====================================================
 // TIPOS
@@ -147,7 +181,6 @@ async function getRoundRobinOffset(supabase: any, plataforma: string): Promise<n
 }
 
 async function saveRoundRobinOffset(supabase: any, plataforma: string, offset: number): Promise<void> {
-  // Merge into existing config JSON
   const { data: existing } = await supabase
     .from("rastreadores_config_plataformas")
     .select("config")
@@ -172,7 +205,6 @@ async function getSoftruckToken(
   config: PlataformaConfig,
   forceRefresh = false
 ): Promise<string> {
-  // Verificar cache (se não forçar refresh)
   if (!forceRefresh) {
     const { data: cached } = await supabase
       .from("rastreadores_tokens_cache")
@@ -189,18 +221,21 @@ async function getSoftruckToken(
     }
   }
 
-  // Obter novo token
   console.log("[Softruck] Obtendo novo token...");
   
+  // Buscar credenciais do banco
+  const creds = await getCredenciaisSoftruck(supabase);
+  if (!creds) throw new Error("Credenciais Softruck não encontradas");
+
   const response = await fetch(`${config.baseUrl}/auth/login`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "public-key": config.publicKey || "",
+      "public-key": creds.public_key,
     },
     body: JSON.stringify({
-      username: config.username,
-      password: config.password,
+      username: creds.username,
+      password: creds.password,
     }),
   });
 
@@ -215,14 +250,12 @@ async function getSoftruckToken(
     throw new Error("Token Softruck não retornado na resposta");
   }
 
-  // Buscar plataforma_id
   const { data: plataforma } = await supabase
     .from("rastreadores_config_plataformas")
     .select("id")
     .eq("plataforma", "softruck")
     .single();
 
-  // Salvar no cache (expira em 6 dias)
   const expiresAt = new Date(Date.now() + 6 * 24 * 60 * 60 * 1000);
   
   await supabase.from("rastreadores_tokens_cache").insert({
@@ -235,6 +268,54 @@ async function getSoftruckToken(
 
   console.log("[Softruck] Novo token obtido e cacheado");
   return data.data.token;
+}
+
+// =====================================================
+// RESOLVER IMEI BRUTO → HASH ID via API Softruck
+// =====================================================
+
+async function resolveImeiToDeviceId(
+  token: string,
+  publicKey: string,
+  baseUrl: string,
+  imei: string
+): Promise<{ deviceHashId: string; vehicleId: string | null } | null> {
+  try {
+    const url = `${baseUrl}/devices?filters[devices.imei][eq]=${encodeURIComponent(imei)}&includes[vehicle][]=plate`;
+    console.log(`[Softruck Resolver] Buscando device por IMEI: ${imei}`);
+
+    const response = await fetch(url, {
+      headers: {
+        "Authorization": `Bearer ${token}`,
+        "public-key": publicKey,
+        "Content-Type": "application/json",
+      },
+    });
+
+    if (!response.ok) {
+      console.warn(`[Softruck Resolver] IMEI ${imei}: HTTP ${response.status}`);
+      return null;
+    }
+
+    const result = await response.json();
+    const device = result?.data?.[0];
+
+    if (!device?.id) {
+      console.warn(`[Softruck Resolver] IMEI ${imei}: device não encontrado na API`);
+      return null;
+    }
+
+    const deviceHashId = device.id;
+    const vehicleId = device?.relationships?.vehicle?.id
+      || device?.relationships?.vehicle?.data?.id
+      || null;
+
+    console.log(`[Softruck Resolver] IMEI ${imei} → deviceId=${deviceHashId}, vehicleId=${vehicleId}`);
+    return { deviceHashId, vehicleId };
+  } catch (e) {
+    console.error(`[Softruck Resolver] Erro ao resolver IMEI ${imei}:`, e);
+    return null;
+  }
 }
 
 // =====================================================
@@ -256,7 +337,7 @@ async function syncSoftruck(
   const posicoes: Posicao[] = [];
 
   if (!config.enabled) {
-    result.erros.push("API Softruck não configurada (secrets faltando)");
+    result.erros.push("API Softruck não configurada");
     result.falhas = rastreadores.length;
     return { posicoes, result };
   }
@@ -264,12 +345,21 @@ async function syncSoftruck(
   const supabaseUrl = Deno.env.get("SUPABASE_URL");
   const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
-  // Para cada rastreador, buscar posição via softruck-api
+  // Obter token Softruck para resolução de IMEIs
+  let softruckToken: string | null = null;
+  try {
+    softruckToken = await getSoftruckToken(supabase, config);
+  } catch (err) {
+    console.error("[Softruck] Falha ao obter token para resolver IMEIs:", err);
+  }
+
+  let imeisResolvidos = 0;
+  let imeisFalhas = 0;
+
   for (const rast of rastreadores) {
     try {
-      // Resolve vehicle ID using shared resolver with fallback chain
       let vehicleId = rast.plataforma_veiculo_id;
-      const deviceId = rast.plataforma_device_id;
+      let deviceId = rast.plataforma_device_id;
 
       if (!deviceId) {
         result.falhas++;
@@ -277,13 +367,59 @@ async function syncSoftruck(
         continue;
       }
 
-      // If no vehicleId, try to resolve it
+      // ========== CORREÇÃO 2: Resolver IMEI bruto → hash ID ==========
+      const isRawImei = /^\d{10,}$/.test(deviceId);
+      if (isRawImei && softruckToken && config.publicKey) {
+        console.log(`[Softruck] ${rast.codigo}: IMEI bruto detectado (${deviceId}), resolvendo...`);
+        const resolved = await resolveImeiToDeviceId(
+          softruckToken,
+          config.publicKey,
+          config.baseUrl,
+          deviceId
+        );
+
+        if (resolved) {
+          // Atualizar no banco para futuras execuções
+          const updateData: Record<string, string> = {
+            plataforma_device_id: resolved.deviceHashId,
+          };
+          if (resolved.vehicleId) {
+            updateData.plataforma_veiculo_id = resolved.vehicleId;
+            vehicleId = resolved.vehicleId;
+          }
+
+          await supabase
+            .from("rastreadores")
+            .update(updateData)
+            .eq("id", rast.id);
+
+          // Também salvar no veículo se disponível
+          if (resolved.vehicleId && rast.veiculo_id) {
+            await supabase
+              .from("veiculos")
+              .update({ softruck_vehicle_id: resolved.vehicleId })
+              .eq("id", rast.veiculo_id);
+          }
+
+          deviceId = resolved.deviceHashId;
+          imeisResolvidos++;
+          console.log(`[Softruck] ${rast.codigo}: IMEI resolvido → device=${deviceId}, vehicle=${vehicleId}`);
+        } else {
+          imeisFalhas++;
+          result.falhas++;
+          result.erros.push(`${rast.codigo}: IMEI ${deviceId} não encontrado na API Softruck`);
+          continue;
+        }
+
+        // Rate limit para resolução de IMEI (extra delay)
+        await new Promise(resolve => setTimeout(resolve, 300));
+      }
+
+      // If no vehicleId, try to resolve it from cache
       if (!vehicleId) {
-        // Quick check: cached on vehicle table
         vehicleId = rast.veiculo?.softruck_vehicle_id || null;
         
         if (vehicleId) {
-          // Persist on rastreador for future syncs
           await supabase
             .from('rastreadores')
             .update({ plataforma_veiculo_id: vehicleId })
@@ -300,7 +436,6 @@ async function syncSoftruck(
       
       console.log(`[Softruck] Buscando posição: ${rast.codigo}`);
       
-      // Chamar softruck-api que já tem autenticação funcionando
       const response = await fetch(`${supabaseUrl}/functions/v1/softruck-api`, {
         method: "POST",
         headers: {
@@ -323,11 +458,8 @@ async function syncSoftruck(
       }
 
       const trackingData = responseData.data;
-      
-      // Formato da API v2 Softruck:
       const gpsFeature = trackingData?.data?.attributes || trackingData?.data || trackingData;
       
-      // Extrair coordenadas do GeoJSON (coordinates = [lng, lat])
       let latitude: number | null = null;
       let longitude: number | null = null;
       
@@ -371,8 +503,11 @@ async function syncSoftruck(
       console.error(`[Softruck] Erro no rastreador ${rast.codigo}:`, error);
     }
     
-    // Rate limiting: delay entre requisições (Softruck limita 50 req/min)
     await new Promise(resolve => setTimeout(resolve, 200));
+  }
+
+  if (imeisResolvidos > 0 || imeisFalhas > 0) {
+    console.log(`[Softruck] IMEIs resolvidos: ${imeisResolvidos}, falhas: ${imeisFalhas}`);
   }
 
   return { posicoes, result };
@@ -380,7 +515,8 @@ async function syncSoftruck(
 
 async function syncRedeVeiculos(
   rastreadores: Rastreador[],
-  config: PlataformaConfig
+  config: PlataformaConfig,
+  supabase: any
 ): Promise<{ posicoes: Posicao[]; result: SyncResult }> {
   const result: SyncResult = {
     plataforma: "rede_veiculos",
@@ -391,15 +527,14 @@ async function syncRedeVeiculos(
   };
   const posicoes: Posicao[] = [];
 
-  if (!config.enabled) {
-    result.erros.push("API Rede Veículos não configurada (REDE_VEICULOS_TOKEN faltando)");
+  if (!config.enabled || !config.apiKey) {
+    result.erros.push("API Rede Veículos não configurada (credenciais faltando)");
     result.falhas = rastreadores.length;
     return { posicoes, result };
   }
 
   for (const rast of rastreadores) {
     try {
-      // Obter dados necessários para a API
       const imei = rast.imei || rast.codigo || '';
       const placa = rast.veiculo?.placa || '';
       const cpfCnpj = rast.veiculo?.associado?.cpf || '';
@@ -416,7 +551,6 @@ async function syncRedeVeiculos(
         continue;
       }
       
-      // Montar payload conforme documentação da API
       const payload = JSON.stringify({
         chassi: "",
         placa: placa || "",
@@ -426,7 +560,6 @@ async function syncRedeVeiculos(
       
       console.log(`[Rede Veículos] POST /obterUltimaPosicaoValida/ para ${rast.codigo}`);
       
-      // Chamada à API da Rede Veículos usando endpoint correto
       const response = await fetch(
         `${config.baseUrl}/obterUltimaPosicaoValida/`,
         {
@@ -448,15 +581,11 @@ async function syncRedeVeiculos(
       
       console.log(`[Rede Veículos] ${rast.codigo}: Resposta:`, JSON.stringify(data).slice(0, 300));
 
-      // Verificar se a API retornou erro
       if (data.error === 'true' || data.error === true) {
         const msg = typeof data.message === 'string' ? data.message : 'Erro na API';
         throw new Error(msg);
       }
 
-      // A resposta pode vir em dois formatos:
-      // Produção: { error: "false", message: { latitude, longitude, ... } }
-      // Sandbox:  { latlon: "-22.9|-43.5", velocidade: "0", ... }
       const posData = (typeof data.message === 'object' && data.message !== null) ? data.message : data;
 
       let lat: number | null = null;
@@ -498,7 +627,6 @@ async function syncRedeVeiculos(
       console.error(`[Rede Veículos] Erro no rastreador ${rast.codigo}:`, error);
     }
     
-    // Rate limiting: delay entre requisições
     await new Promise(resolve => setTimeout(resolve, 200));
   }
 
@@ -514,7 +642,6 @@ async function atualizarUltimaComunicacao(supabase: any, posicoes: Posicao[]): P
 
   let atualizados = 0;
 
-  // Agrupar por rastreador_id, manter a posição mais recente
   const mapaRecente: Record<string, Posicao> = {};
   for (const p of posicoes) {
     const atual = mapaRecente[p.rastreador_id];
@@ -523,7 +650,6 @@ async function atualizarUltimaComunicacao(supabase: any, posicoes: Posicao[]): P
     }
   }
 
-  // Update em lotes de 50
   const entries = Object.entries(mapaRecente);
   for (let i = 0; i < entries.length; i += 50) {
     const batch = entries.slice(i, i + 50);
@@ -553,7 +679,6 @@ async function atualizarUltimaComunicacao(supabase: any, posicoes: Posicao[]): P
 // =====================================================
 
 serve(async (req) => {
-  // CORS preflight
   if (req.method === "OPTIONS") {
     return new Response(null, { headers: corsHeaders });
   }
@@ -563,18 +688,16 @@ serve(async (req) => {
   console.log(`[sync-rastreadores] Iniciando sincronização: ${new Date().toISOString()}`);
 
   try {
-    // Verificar se foi solicitada uma plataforma específica ou batch_size
     let plataformaFiltro: string | null = null;
-    let batchSize = 200; // Default: processar 200 por execução
+    let batchSize = 200;
     try {
       const body = await req.json();
       plataformaFiltro = body?.plataforma || null;
       if (body?.batch_size) batchSize = Math.min(body.batch_size, 500);
     } catch {
-      // Sem body ou body inválido - usa defaults
+      // Sem body ou body inválido
     }
 
-    // Criar cliente Supabase com service role
     const supabaseUrl = Deno.env.get("SUPABASE_URL");
     const supabaseKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY");
 
@@ -584,30 +707,32 @@ serve(async (req) => {
 
     const supabase = createClient(supabaseUrl, supabaseKey);
 
+    // ========== CORREÇÃO 1 & 3: Ler config do BANCO ==========
+    const configs = await getPlataformasConfigFromDB(supabase);
+
     // ========== BUSCA PAGINADA ==========
-    // Buscar TODOS os rastreadores instalados (sem limite de 1000)
     const todosRastreadores = await fetchAllRastreadoresInstalados(supabase, plataformaFiltro);
     console.log(`[sync-rastreadores] Total de rastreadores instalados: ${todosRastreadores.length}`);
 
     // ========== FILTRAR VÁLIDOS ==========
-    // Softruck: precisa de plataforma_device_id + alguma forma de resolver vehicleId
-    // Rede Veículos: precisa de (imei OU codigo) + veículo com placa + associado com CPF
     const rastreadoresValidos = todosRastreadores.filter((r) => {
       if (r.plataforma === 'softruck') {
+        // Aceitar também IMEIs brutos — serão resolvidos durante o sync
         if (!r.plataforma_device_id) return false;
+        // Se for IMEI bruto, aceitar (será resolvido)
+        if (/^\d{10,}$/.test(r.plataforma_device_id)) return true;
+        // Se já tem hash, precisa de vehicleId
         if (r.plataforma_veiculo_id) return true;
         if (r.veiculo?.softruck_vehicle_id) return true;
         if (r.veiculo?.placa) return true;
         return false;
       }
       if (r.plataforma === 'rede_veiculos') {
-        // Aceitar se tiver (imei ou codigo) E veículo com placa E associado com CPF
         const temIdentificador = r.imei || r.codigo;
         const temPlaca = r.veiculo?.placa;
         const temCpf = r.veiculo?.associado?.cpf;
         return Boolean(temIdentificador && temPlaca && temCpf);
       }
-      // Outras plataformas: exigir id_plataforma
       return r.id_plataforma && r.id_plataforma.trim() !== "";
     });
 
@@ -628,8 +753,7 @@ serve(async (req) => {
       );
     }
 
-    // ========== ROUND-ROBIN: Selecionar lote da vez ==========
-    // Agrupar por plataforma
+    // ========== ROUND-ROBIN ==========
     const porPlataforma: Record<string, Rastreador[]> = {};
     for (const r of rastreadoresValidos) {
       const plat = r.plataforma || "outro";
@@ -644,19 +768,12 @@ serve(async (req) => {
         .join(", ")
     );
 
-    // Obter configurações das plataformas
-    const configs = getPlataformasConfig();
-
-    // Sincronizar cada plataforma com round-robin
     const todasPosicoes: Posicao[] = [];
     const resultados: SyncResult[] = [];
 
     for (const [plataforma, todosRasts] of Object.entries(porPlataforma)) {
-      // Round-robin: pegar offset atual e selecionar sub-lote
       const offset = await getRoundRobinOffset(supabase, plataforma);
       const loteAtual = todosRasts.slice(offset, offset + batchSize);
-      
-      // Calcular próximo offset
       const proximoOffset = (offset + batchSize >= todosRasts.length) ? 0 : offset + batchSize;
       
       console.log(
@@ -664,7 +781,6 @@ serve(async (req) => {
       );
 
       if (loteAtual.length === 0) {
-        // Reset offset if we went past the end
         await saveRoundRobinOffset(supabase, plataforma, 0);
         continue;
       }
@@ -676,7 +792,7 @@ serve(async (req) => {
           syncResult = await syncSoftruck(loteAtual, configs.softruck, supabase);
           break;
         case "rede_veiculos":
-          syncResult = await syncRedeVeiculos(loteAtual, configs.rede_veiculos);
+          syncResult = await syncRedeVeiculos(loteAtual, configs.rede_veiculos, supabase);
           break;
         default:
           syncResult = {
@@ -694,7 +810,6 @@ serve(async (req) => {
       todasPosicoes.push(...syncResult.posicoes);
       resultados.push(syncResult.result);
 
-      // Salvar próximo offset para a próxima execução
       await saveRoundRobinOffset(supabase, plataforma, proximoOffset);
 
       console.log(
@@ -702,7 +817,7 @@ serve(async (req) => {
       );
     }
 
-    // Salvar posições no banco (em lotes de 100)
+    // Salvar posições no banco
     let posicoesInseridas = 0;
     const BATCH_SIZE = 100;
 
@@ -720,10 +835,9 @@ serve(async (req) => {
 
     console.log(`[sync-rastreadores] ${posicoesInseridas} posições inseridas`);
 
-    // ========== ATUALIZAR ultima_comunicacao ==========
     const rastreadoresAtualizados = await atualizarUltimaComunicacao(supabase, todasPosicoes);
 
-    // Limpar posições com mais de 7 dias
+    // Limpar posições antigas (>7 dias)
     let posicoesRemovidas = 0;
     const seteDiasAtras = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000).toISOString();
     const { count: deletados, error: errDelete } = await supabase
@@ -738,7 +852,6 @@ serve(async (req) => {
       console.log(`[sync-rastreadores] ${posicoesRemovidas} posições antigas removidas (>7 dias)`);
     }
 
-    // Calcular totais
     const totalSucesso = resultados.reduce((sum, r) => sum + r.sucesso, 0);
     const totalFalhas = resultados.reduce((sum, r) => sum + r.falhas, 0);
     const duracao = Date.now() - startTime;
