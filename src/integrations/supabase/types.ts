@@ -28867,6 +28867,15 @@ export type Database = {
       resetar_contadores_distribuicao: { Args: never; Returns: undefined }
       show_limit: { Args: never; Returns: number }
       show_trgm: { Args: { "": string }; Returns: string[] }
+      update_associado_contatos: {
+        Args: {
+          _associado_id: string
+          _email?: string
+          _telefone: string
+          _telefone_secundario?: string
+        }
+        Returns: undefined
+      }
       verificar_acordos_quebrados: { Args: never; Returns: number }
     }
     Enums: {
