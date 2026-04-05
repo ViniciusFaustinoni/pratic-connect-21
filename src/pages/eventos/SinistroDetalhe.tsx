@@ -323,16 +323,18 @@ export default function SinistroDetalhe() {
               />
             </TabsContent>
 
-            <TabsContent value="reparo" className="mt-4">
-              <SinistroDetalheReparo
-                sinistro={sinistro}
-                terceirosData={terceirosData}
-                isDiretor={isDiretor}
-                isRegulador={isRegulador}
-                isAnalista={isAnalistaEventosOnly || isDiretor}
-                onOpenAtribuirFornecedores={() => setShowAtribuirFornecedores(true)}
-              />
-            </TabsContent>
+            {vistoriaEvento?.status === 'concluida' && (
+              <TabsContent value="reparo" className="mt-4">
+                <SinistroDetalheReparo
+                  sinistro={sinistro}
+                  terceirosData={terceirosData}
+                  isDiretor={isDiretor}
+                  isRegulador={isRegulador}
+                  isAnalista={isAnalistaEventosOnly || isDiretor}
+                  onOpenAtribuirFornecedores={() => setShowAtribuirFornecedores(true)}
+                />
+              </TabsContent>
+            )}
 
             <TabsContent value="docs" className="mt-4">
               <SinistroDetalheDocs
