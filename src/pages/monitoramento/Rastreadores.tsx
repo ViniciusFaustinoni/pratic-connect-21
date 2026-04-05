@@ -171,11 +171,15 @@ export default function Rastreadores() {
         <TabsContent value="visao-geral" className="space-y-6 mt-6">
           <RastreadoresContent
             rastreadores={rastreadores}
+            totalCount={totalCount}
+            totalPages={totalPages}
+            currentPage={currentPage}
+            onPageChange={(p) => setFilters(prev => ({ ...prev, page: p }))}
             metricas={metricas}
             isLoading={isLoading}
             isLoadingMetricas={isLoadingMetricas}
             filters={filters}
-            onFiltersChange={(f) => { setFilters(f); setActiveMetricFilter(''); }}
+            onFiltersChange={(f) => { setFilters({ ...f, page: 1 }); setActiveMetricFilter(''); }}
             onOpenDetails={handleOpenDetails}
             onEdit={handleEdit}
             onNewRastreador={handleNewRastreador}
@@ -186,7 +190,7 @@ export default function Rastreadores() {
             canManageEquipe={canManageEquipeEstoque}
             onViewMap={handleViewMap}
             activeMetricFilter={activeMetricFilter}
-            onMetricFilterClick={(f, key) => { setFilters(f); setActiveMetricFilter(key); }}
+            onMetricFilterClick={(f, key) => { setFilters({ ...f, page: 1 }); setActiveMetricFilter(key); }}
           />
         </TabsContent>
 
