@@ -120,7 +120,6 @@ export function RastreadorTableView({
             <TableHead>Plataforma</TableHead>
             <TableHead>Status</TableHead>
             <TableHead className="min-w-[200px]">Veículo / Associado</TableHead>
-            <TableHead>Comunicação</TableHead>
             <TableHead className="w-[70px]">Ações</TableHead>
           </TableRow>
         </TableHeader>
