@@ -27,8 +27,6 @@ import {
   Radio,
   Car,
   User,
-  Wifi,
-  WifiOff,
   Wrench,
   Package,
   XCircle,
