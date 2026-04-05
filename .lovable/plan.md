@@ -1,77 +1,41 @@
 
 
-# Importação em Massa de Rastreadores (Formato Placa/IMEI)
+# Validar formato de placa antes de vincular veículo
 
-## Contexto
-A planilha enviada tem 3 colunas: **Placa**, **Imei**, **Local da instalação do equipamento**. O dialog atual (`ImportarRastreadoresDialog`) aceita apenas o formato de entrada de estoque (IMEI + plataforma obrigatória na planilha). Precisa ser adaptado para:
-- Aceitar o formato da planilha (Placa, Imei, Local)
-- Perguntar a plataforma antes do upload (seletor global)
-- Fazer upsert: atualizar rastreadores existentes pelo IMEI
-- Vincular automaticamente ao veículo pela placa
-- Local de instalação opcional
+## Problema
+Se a planilha contiver um valor na coluna "Placa" que não é uma placa válida (texto aleatório, número solto, etc.), o sistema tenta buscar no banco e gera um aviso desnecessário. O correto é: se não for reconhecido como placa brasileira, ignorar silenciosamente e criar o rastreador sem vínculo.
 
-## Alterações
+## Alteração
 
 ### Arquivo: `src/components/monitoramento/estoque/ImportarRastreadoresDialog.tsx`
 
-**1. Adicionar seleção de plataforma como primeiro passo**
-- Novo step `selecionar_plataforma` antes do upload
-- Select com as plataformas disponíveis do hook `usePlataformasOptions`
-- A plataforma escolhida aplica-se a todos os registros do lote
+Na função `validarDados`, adicionar validação de formato de placa brasileira (antiga `ABC-1234` e Mercosul `ABC1D23`) **antes** de tentar resolver o veículo:
 
-**2. Adaptar parser para aceitar o formato da planilha**
-- Mapear colunas: `Placa` -> placa, `Imei` -> imei, `Local da instalação do equipamento` -> local_instalacao
-- Manter compatibilidade com o formato antigo (imei, plataforma, numero_serie...)
-- Tratar "Não informado" como null para local_instalacao
+```typescript
+// Regex para placa brasileira (antiga e Mercosul)
+const placaRegex = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
 
-**3. Adaptar validação para upsert + vínculo por placa**
-- Ao validar, se IMEI já existe: marcar como "atualização" em vez de erro
-- Buscar veículos por placa em batch (`supabase.from('veiculos').select('id, placa').in('placa', placas)`)
-- Se placa não encontrada no sistema: warning (não erro bloqueante), importa sem vínculo
-- Se placa encontrada: vincular `veiculo_id`
-
-**4. Adaptar importação (mutação) para upsert**
-- IMEI novo: insert com status `instalado` (se tem placa/veículo) ou `estoque` (sem placa)
-- IMEI existente: update dos campos `veiculo_id`, `local_instalacao`, `plataforma`
-- Preencher `local_instalacao` no rastreador
-
-**5. Atualizar preview/tabela**
-- Mostrar colunas: Linha, Placa, IMEI, Local, Status (Novo/Atualização/Erro)
-- Mostrar se veículo foi encontrado no sistema
-
-**6. Atualizar template de download**
-- Gerar template com colunas: Placa, Imei, Local da instalação do equipamento
-
-## Fluxo do usuário
-1. Clica "Importar"
-2. Seleciona a plataforma (ex: rede_veiculos)
-3. Faz upload da planilha ou arrasta
-4. Vê preview com status de cada linha (novo/atualização, veículo encontrado/não)
-5. Confirma importação
-6. Sistema cria/atualiza rastreadores e vincula aos veículos
-
-## Detalhes Tecnicas
-
-```text
-Step flow: selecionar_plataforma → upload → preview → importing → result
-
-Parser mapping:
-  row.Placa || row.placa → placa
-  row.Imei  || row.imei  || row.IMEI → imei
-  row['Local da instalação do equipamento'] || row.local_instalacao → local_instalacao
-  "Não informado" → null
-
-Validation:
-  - Fetch veiculos by placa batch: .in('placa', uniquePlacas)
-  - Fetch rastreadores by imei batch: .in('imei', uniqueImeis)
-  - Mark each row: { acao: 'criar' | 'atualizar', veiculo_encontrado: boolean }
-
-Import logic per row:
-  if existing IMEI:
-    UPDATE rastreadores SET veiculo_id, local_instalacao, plataforma WHERE imei = ?
-  else:
-    INSERT rastreadores { codigo, imei, plataforma, veiculo_id, local_instalacao, status }
-  
-  status = veiculo_id ? 'instalado' : 'estoque'
+if (row.placa) {
+  const placaNorm = row.placa.toUpperCase().replace(/[^A-Z0-9]/g, '');
+  if (!placaRegex.test(placaNorm)) {
+    // Não é uma placa válida — ignorar, criar sem vínculo
+    row.placa = undefined;
+  } else {
+    const vid = veiculosMap.get(placaNorm);
+    if (vid) {
+      veiculo_id = vid;
+      veiculo_encontrado = true;
+    } else {
+      avisos.push('Placa não encontrada no sistema');
+    }
+  }
+}
 ```
+
+Também ajustar o filtro de placas únicas (linha 89) para só incluir placas com formato válido, evitando buscas desnecessárias no banco.
+
+## Resultado
+- Placa ausente ou inválida → rastreador criado com status `estoque`, sem vínculo
+- Placa válida encontrada → vínculo automático, status `instalado`
+- Placa válida não encontrada → aviso, sem vínculo, status `estoque`
 
