@@ -1,33 +1,31 @@
 
 
-# Plano: Remover status de comunicação e trocar drawer por modal
+# Plano: Atribuir rastreador a veículo manualmente (somente diretor)
+
+## Resumo
+
+No modal de detalhes de um rastreador com status diferente de "instalado" (estoque, manutenção, etc.), adicionar um botão "Vincular a Veículo" visível apenas para diretores. Ao clicar, abre um campo de busca por placa. Ao selecionar o veículo, o rastreador é vinculado (status → `instalado`, `veiculo_id` preenchido).
 
 ## Alterações
 
-### 1. RastreadorMetrics.tsx — Esconder cards de comunicação
-Manter apenas os cards **Total** e **Estoque**. Remover os cards **Online**, **Atenção** e **Offline** do array `metrics`. Atualizar o grid de `lg:grid-cols-5` para `lg:grid-cols-2`.
+### 1. `RastreadorDetailDrawer.tsx` — Adicionar seção de vinculação manual
 
-### 2. RastreadorTableView.tsx — Remover coluna "Comunicação"
-- Remover o `<TableHead>Comunicação</TableHead>` (linha 123)
-- Remover o `<TableCell>` de comunicação (linhas 276-309)
-- Remover a lógica de `offline` e highlight vermelho na row (`bg-red-500/5`)
-- Remover imports não usados: `Wifi`, `WifiOff`, `isRastreadorOnline`
-- Tornar a row inteira clicável para abrir detalhes (`onClick={() => onOpenDetails(rastreador.id)}` no `<TableRow>`)
+Na aba "info", quando `!isInstalled && !rastreador.veiculos && isDiretor`:
+- Mostrar seção "Vincular a Veículo" com input de busca por placa
+- Usar `Combobox`/input com debounce que busca veículos pela placa digitada
+- Ao selecionar, chamar `useUpdateRastreadorStatus` com `{ id, status: 'instalado', veiculo_id }` (já suporta esse parâmetro)
+- Mostrar confirmação antes de vincular
 
-### 3. RastreadorCard.tsx — Remover indicadores de comunicação
-Remover badges/ícones de Online/Offline e referências a `isRastreadorOnline` dos cards.
+Componente interno (ou extraído): `VincularVeiculoSection`
+- State: `buscaPlaca`, `veiculoSelecionado`, `confirmando`
+- Query: busca veículos por placa com `ilike` (debounced 300ms)
+- Resultado: lista de veículos (placa, marca, modelo, associado)
+- Ação: botão "Vincular" → chama `updateStatus.mutateAsync({ id, status: 'instalado', veiculo_id })`
 
-### 4. RastreadorDetailDrawer.tsx — Converter Sheet para Dialog (modal)
-- Substituir `Sheet`/`SheetContent`/`SheetHeader`/`SheetTitle` por `Dialog`/`DialogContent`/`DialogHeader`/`DialogTitle`
-- Usar `max-w-2xl` para o modal, com `max-h-[90vh] overflow-y-auto`
-- Todo o conteúdo interno permanece igual
+### 2. Nenhuma alteração no backend
 
-### 5. Rastreadores.tsx — Atualizar uso do drawer para modal
-- Trocar `<RastreadorDetailDrawer>` por novo componente modal (mesma interface)
+O hook `useUpdateRastreadorStatus` já aceita `veiculo_id` e muda o status para `instalado` com vinculação. Não é necessário criar migration nem edge function.
 
 ## Arquivos alterados
-- `src/components/rastreadores/RastreadorMetrics.tsx`
-- `src/components/rastreadores/RastreadorTableView.tsx`
-- `src/components/rastreadores/RastreadorCard.tsx`
-- `src/components/rastreadores/RastreadorDetailDrawer.tsx`
+- `src/components/rastreadores/RastreadorDetailDrawer.tsx` — adicionar seção de vinculação com busca por placa (protegida por `isDiretor`)
 
