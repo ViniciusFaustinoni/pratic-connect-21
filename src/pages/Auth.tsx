@@ -248,11 +248,16 @@ export default function Auth() {
             src="/logos/logo-full-light.png" 
             alt="PRATIC Car" 
             className="h-20 mx-auto mb-4 dark:hidden"
+            width={337}
+            height={80}
+            fetchPriority="high"
           />
           <img 
             src="/logos/logo-full-dark.png" 
             alt="PRATIC Car" 
             className="h-20 mx-auto mb-4 hidden dark:block"
+            width={337}
+            height={80}
           />
           
           <p className="text-muted-foreground mt-1">Sistema de Gestão de Associados</p>
