@@ -159,11 +159,37 @@ async function getPosicaoSoftruckComRetry(
 
       const data = await response.json();
 
-      if (!data.data?.attributes) {
+      const gpsData = data.data || data;
+      if (!gpsData) {
         throw new Error('Resposta Softruck inválida');
       }
 
-      const attrs = data.data.attributes;
+      const attrs = gpsData.attributes || gpsData || {};
+
+      // Extract coordinates - multiple possible locations
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+
+      if (gpsData.geometry?.coordinates) {
+        longitude = parseFloat(gpsData.geometry.coordinates[0]);
+        latitude = parseFloat(gpsData.geometry.coordinates[1]);
+      } else if (attrs.geometry?.coordinates) {
+        longitude = parseFloat(attrs.geometry.coordinates[0]);
+        latitude = parseFloat(attrs.geometry.coordinates[1]);
+      } else if (attrs.latitude && attrs.longitude) {
+        latitude = parseFloat(attrs.latitude);
+        longitude = parseFloat(attrs.longitude);
+      }
+
+      if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
+        throw new Error('Coordenadas não encontradas na resposta Softruck');
+      }
+
+      // Convert Unix timestamp to ISO if needed
+      const actTimestamp = attrs.act;
+      const dataPosicao = actTimestamp
+        ? new Date(actTimestamp * 1000).toISOString()
+        : (attrs.timestamp || new Date().toISOString());
 
       return {
         latitude: attrs.latitude,
