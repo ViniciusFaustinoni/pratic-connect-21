@@ -120,6 +120,21 @@ serve(async (req) => {
 
     console.log("[processar-encaixes-automaticos] Iniciando processamento de encaixes FUTUROS...");
 
+    // Verificar se atribuição manual está ativa
+    const { data: configManual } = await supabase
+      .from('configuracoes')
+      .select('valor')
+      .eq('chave', 'atribuicao_manual_rotas')
+      .maybeSingle();
+
+    if (configManual?.valor === 'true') {
+      console.log("[processar-encaixes-automaticos] Atribuição MANUAL ativa — encaixes automáticos desligados");
+      return new Response(
+        JSON.stringify({ sucesso: true, mensagem: 'Atribuição manual ativa — encaixes automáticos desligados', processados: 0 }),
+        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+      );
+    }
+
     // 1. Buscar configuração de raio máximo
     const { data: configRaio } = await supabase
       .from('configuracoes')
