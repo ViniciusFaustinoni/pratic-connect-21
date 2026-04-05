@@ -64,7 +64,7 @@ export function PlataformasConfigPanel() {
   const [editingPlataforma, setEditingPlataforma] = useState<PlataformaCompleta | null>(null);
   const [deletingId, setDeletingId] = useState<string | null>(null);
   const [testingId, setTestingId] = useState<string | null>(null);
-  const [syncingId, setSyncingId] = useState<string | null>(null);
+  const [syncingId, _setSyncingId] = useState<string | null>(null);
 
   const { data: plataformas, isLoading } = usePlataformasCompletas();
   const { data: contagem } = useRastreadoresPorPlataforma();
