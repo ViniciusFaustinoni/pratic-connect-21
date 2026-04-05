@@ -164,7 +164,7 @@ export function useVeiculoCompleto(veiculoId: string | undefined) {
       let rastreador = null;
       const { data: rast } = await supabase
         .from('rastreadores')
-        .select('id, codigo, numero_serie, plataforma, status, ultimo_sinal, imei')
+        .select('id, codigo, numero_serie, plataforma, status, ultima_comunicacao, imei')
         .eq('veiculo_id', veiculoId)
         .maybeSingle();
       rastreador = rast;
