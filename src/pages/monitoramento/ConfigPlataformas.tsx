@@ -3,7 +3,6 @@ import {
   Settings, 
   Wifi, 
   WifiOff, 
-  RefreshCw, 
   CheckCircle, 
   XCircle,
   Loader2,
@@ -24,17 +23,14 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Separator } from '@/components/ui/separator';
 import { usePlataformasConfig, useUpdatePlataformaConfig, usePlataformasEstatisticas } from '@/hooks/usePlataformasConfig';
 import { useTestarConexaoPlataforma } from '@/hooks/useRastreadorAuth';
-import { useSyncRastreadores } from '@/hooks/useRastreadorPosicao';
 
 export default function ConfigPlataformas() {
   const { data: plataformas, isLoading } = usePlataformasConfig();
   const { data: estatisticas } = usePlataformasEstatisticas();
   const updateConfig = useUpdatePlataformaConfig();
   const testarConexao = useTestarConexaoPlataforma();
-  const syncRastreadores = useSyncRastreadores();
   
   const [testingPlatform, setTestingPlatform] = useState<string | null>(null);
-  const [syncingPlatform, setSyncingPlatform] = useState<string | null>(null);
 
   const handleTestarConexao = async (codigo: string) => {
     setTestingPlatform(codigo);
@@ -42,15 +38,6 @@ export default function ConfigPlataformas() {
       await testarConexao.mutateAsync(codigo as 'softruck' | 'rede_veiculos');
     } finally {
       setTestingPlatform(null);
-    }
-  };
-
-  const handleSincronizar = async (codigo: string) => {
-    setSyncingPlatform(codigo);
-    try {
-      await syncRastreadores.mutateAsync(codigo as 'softruck' | 'rede_veiculos');
-    } finally {
-      setSyncingPlatform(null);
     }
   };
 
