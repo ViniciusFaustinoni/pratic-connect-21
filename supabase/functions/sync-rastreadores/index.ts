@@ -52,10 +52,12 @@ interface Rastreador {
   id_plataforma: string;
   plataforma_device_id?: string;
   plataforma_veiculo_id?: string;
-  // Dados do veículo e associado (para Rede Veículos)
+  veiculo_id?: string;
   veiculo?: {
+    id?: string;
     placa?: string;
     chassi?: string;
+    softruck_vehicle_id?: string;
     associado?: {
       cpf?: string;
     };
