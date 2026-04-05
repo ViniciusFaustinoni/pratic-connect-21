@@ -1,41 +1,32 @@
 
 
-# Validar formato de placa antes de vincular veículo
+# Paginação na Lista de Rastreadores (Visão Geral)
 
 ## Problema
-Se a planilha contiver um valor na coluna "Placa" que não é uma placa válida (texto aleatório, número solto, etc.), o sistema tenta buscar no banco e gera um aviso desnecessário. O correto é: se não for reconhecido como placa brasileira, ignorar silenciosamente e criar o rastreador sem vínculo.
+A query `useRastreadores` no hook `src/hooks/useRastreadores.ts` não usa `.range()` nem `.limit()`. O Supabase retorna no máximo 1.000 registros por padrão, então a lista mostra "(1000)" mesmo havendo 6.208+ cadastrados.
 
-## Alteração
+## Solução: Paginação server-side
 
-### Arquivo: `src/components/monitoramento/estoque/ImportarRastreadoresDialog.tsx`
+### 1. Hook `useRastreadores` (`src/hooks/useRastreadores.ts`)
+- Adicionar parâmetro `page` e `pageSize` (default 50) aos filtros
+- Usar `{ count: 'exact' }` no `.select()` para obter o total real
+- Aplicar `.range()` para paginação server-side
+- Retornar `{ items, total, totalPages }` em vez de array direto
 
-Na função `validarDados`, adicionar validação de formato de placa brasileira (antiga `ABC-1234` e Mercosul `ABC1D23`) **antes** de tentar resolver o veículo:
+### 2. Página `Rastreadores.tsx` (`src/pages/monitoramento/Rastreadores.tsx`)
+- Adicionar estado `page` ao componente
+- Passar `page` nos filtros para `useRastreadores`
+- Resetar página ao mudar filtros
 
-```typescript
-// Regex para placa brasileira (antiga e Mercosul)
-const placaRegex = /^[A-Z]{3}[0-9][A-Z0-9][0-9]{2}$/;
+### 3. Header `RastreadorListHeader` (`src/components/rastreadores/RastreadorListHeader.tsx`)
+- Alterar `totalCount` para usar o `total` retornado pela query (count real do banco), não `rastreadores.length`
 
-if (row.placa) {
-  const placaNorm = row.placa.toUpperCase().replace(/[^A-Z0-9]/g, '');
-  if (!placaRegex.test(placaNorm)) {
-    // Não é uma placa válida — ignorar, criar sem vínculo
-    row.placa = undefined;
-  } else {
-    const vid = veiculosMap.get(placaNorm);
-    if (vid) {
-      veiculo_id = vid;
-      veiculo_encontrado = true;
-    } else {
-      avisos.push('Placa não encontrada no sistema');
-    }
-  }
-}
-```
+### 4. Grid/Table Views
+- Adicionar componente de paginação (botões Anterior/Próximo + indicador de página) abaixo da lista
+- Receber `page`, `totalPages`, `onPageChange` como props
 
-Também ajustar o filtro de placas únicas (linha 89) para só incluir placas com formato válido, evitando buscas desnecessárias no banco.
-
-## Resultado
-- Placa ausente ou inválida → rastreador criado com status `estoque`, sem vínculo
-- Placa válida encontrada → vínculo automático, status `instalado`
-- Placa válida não encontrada → aviso, sem vínculo, status `estoque`
+### Resultado
+- Total real exibido no header (ex: 6.208)
+- Navegação por páginas com 50 itens por vez
+- Performance melhorada (não carrega 1000+ de uma vez)
 
