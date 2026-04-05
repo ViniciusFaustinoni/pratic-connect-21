@@ -489,7 +489,7 @@ serve(async (req) => {
 
     // Resolve vehicle/device IDs with fallback chain
     let vehicleId = rastreador.plataforma_veiculo_id || rastreador.veiculo?.softruck_vehicle_id || rastreador.id_plataforma;
-    const deviceId = rastreador.plataforma_device_id || rastreador.id_plataforma;
+    let deviceId = rastreador.plataforma_device_id || rastreador.id_plataforma;
 
     // If resolved from vehicle cache, persist on rastreador
     if (!rastreador.plataforma_veiculo_id && rastreador.veiculo?.softruck_vehicle_id) {
@@ -508,6 +508,24 @@ serve(async (req) => {
 
     // Roteamento por plataforma
     if (plataformaCodigo === 'softruck') {
+      // Se os IDs parecem ser IMEIs brutos, resolver via API
+      if (isRawImei(deviceId || '') || isRawImei(vehicleId || '')) {
+        const imei = rastreador.imei || deviceId || '';
+        console.log(`[Softruck] IDs parecem ser IMEI bruto (device=${deviceId}). Resolvendo...`);
+        
+        const resolved = await resolverSoftruckDeviceId(
+          supabase, supabaseUrl, supabaseKey,
+          imei, rastreador_id, baseUrl
+        );
+        
+        if (resolved) {
+          deviceId = resolved.deviceId;
+          vehicleId = resolved.vehicleId;
+        } else {
+          throw new Error('Não foi possível resolver o device ID na Softruck para o IMEI ' + imei);
+        }
+      }
+      
       if (!vehicleId || !deviceId) {
         throw new Error('Rastreador não configurado com IDs da plataforma');
       }
