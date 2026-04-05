@@ -43,7 +43,6 @@ function identificarParadas(pontos: TrajetoPonto[]): PontoParada[] {
       const duracao = (new Date(pontoFim.data_posicao).getTime() - 
                        new Date(pontoInicio.data_posicao).getTime()) / 60000;
       
-      // Só considera paradas maiores que 5 minutos
       if (duracao >= 5) {
         paradas.push({
           latitude: pontoInicio.latitude,
@@ -58,7 +57,6 @@ function identificarParadas(pontos: TrajetoPonto[]): PontoParada[] {
     }
   }
   
-  // Verificar se terminou em uma parada
   if (inicioParada !== null && pontos.length > 0) {
     const pontoInicio = pontos[inicioParada];
     const pontoFim = pontos[pontos.length - 1];
@@ -129,7 +127,7 @@ async function buscarTrajetoSoftruckComRetry(
       
       const queryParams = [
         `filters[acc][btw]=${encodeURIComponent(inicio)},${encodeURIComponent(fim)}`,
-        `limit=100`,
+        `limit=5000`,
       ].join('&');
 
       const url = `${baseUrl}/vehicles/${vehicleId}/trajectories/?${queryParams}`;
@@ -145,7 +143,6 @@ async function buscarTrajetoSoftruckComRetry(
         }
       });
 
-      // Erro 401 - tentar renovar token
       if (response.status === 401) {
         console.warn(`[Softruck] Erro 401 na tentativa ${tentativa}/${maxRetries}`);
         
@@ -177,6 +174,20 @@ async function buscarTrajetoSoftruckComRetry(
   }
   
   return [];
+}
+
+/**
+ * Transforma posições locais em formato padrão
+ */
+function transformarPosicaoLocal(posicoes: any[]): TrajetoPonto[] {
+  return posicoes.map((p: any) => ({
+    latitude: Number(p.latitude),
+    longitude: Number(p.longitude),
+    velocidade: p.velocidade || 0,
+    ignicao: p.ignicao || false,
+    data_posicao: p.data_posicao,
+    endereco: p.endereco,
+  }));
 }
 
 serve(async (req) => {
@@ -217,7 +228,6 @@ serve(async (req) => {
 
     // Verificar suporte a histórico
     if (!plataforma?.suporta_historico_trajeto) {
-      // Buscar do banco local
       let query = supabase
         .from('rastreador_posicoes')
         .select('*')
@@ -231,20 +241,47 @@ serve(async (req) => {
         query = query.lte('data_posicao', data_fim);
       }
 
-      const { data: historico } = await query.limit(1000);
+      const { data: historico } = await query.limit(2000);
 
-      // Transformar dados locais para formato padrão
-      const trajeto: TrajetoPonto[] = (historico || []).map((p: any) => ({
-        latitude: Number(p.latitude),
-        longitude: Number(p.longitude),
-        velocidade: p.velocidade || 0,
-        ignicao: p.ignicao || false,
-        data_posicao: p.data_posicao,
-        endereco: p.endereco,
-      }));
-
-      // Identificar paradas mesmo em dados locais
+      const trajeto = transformarPosicaoLocal(historico || []);
       const paradas = identificarParadas(trajeto);
+
+      // Se vazio, tentar busca expandida (24h para trás)
+      if (trajeto.length === 0 && data_inicio) {
+        const expandedStart = new Date(new Date(data_inicio).getTime() - 20 * 3600000).toISOString();
+        const expandedFim = data_fim || new Date().toISOString();
+        
+        const { data: expandedData } = await supabase
+          .from('rastreador_posicoes')
+          .select('*')
+          .eq('rastreador_id', rastreador_id)
+          .gte('data_posicao', expandedStart)
+          .lte('data_posicao', expandedFim)
+          .order('data_posicao', { ascending: true })
+          .limit(2000);
+
+        if (expandedData && expandedData.length > 0) {
+          const trajetoExp = transformarPosicaoLocal(expandedData);
+          const paradasExp = identificarParadas(trajetoExp);
+          const lastPoint = trajetoExp[trajetoExp.length - 1];
+          const horasAntes = ((new Date(data_fim || expandedFim).getTime() - new Date(lastPoint.data_posicao).getTime()) / 3600000).toFixed(1);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              fonte: 'local',
+              periodo_expandido: true,
+              mensagem: `Sem dados no período original. Exibindo trajeto expandido — última posição ${horasAntes}h antes do sinistro.`,
+              trajeto: trajetoExp,
+              paradas: paradasExp,
+              periodo: { inicio: expandedStart, fim: expandedFim },
+              total: trajetoExp.length,
+              total_paradas: paradasExp.length,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+      }
 
       return new Response(
         JSON.stringify({
@@ -266,11 +303,9 @@ serve(async (req) => {
       ? plataforma.api_url_producao 
       : plataforma.api_url_sandbox;
 
-    // Definir período (últimas 24h se não informado)
     const inicio = data_inicio || new Date(Date.now() - 24 * 60 * 60 * 1000).toISOString();
     const fim = data_fim || new Date().toISOString();
 
-    // Buscar histórico Softruck com retry - usar fallback para id_plataforma
     const vehicleId = rastreador.plataforma_veiculo_id || rastreador.plataforma_device_id || rastreador.id_plataforma;
     
     if (!vehicleId) {
@@ -286,7 +321,6 @@ serve(async (req) => {
       fim
     );
 
-    // Transformar dados
     const trajeto: TrajetoPonto[] = dadosTrajeto.map((item: any) => ({
       latitude: item.attributes?.latitude || item.latitude,
       longitude: item.attributes?.longitude || item.longitude,
@@ -296,7 +330,6 @@ serve(async (req) => {
       endereco: item.attributes?.address || item.address,
     }));
 
-    // Identificar paradas
     const paradas = identificarParadas(trajeto);
 
     console.log(`Trajeto Softruck: ${trajeto.length} pontos, ${paradas.length} paradas`);
@@ -318,18 +351,10 @@ serve(async (req) => {
         query = query.lte('data_posicao', data_fim);
       }
 
-      const { data: historico } = await query.limit(1000);
+      const { data: historico } = await query.limit(2000);
 
       if (historico && historico.length > 0) {
-        const trajetoLocal: TrajetoPonto[] = historico.map((p: any) => ({
-          latitude: Number(p.latitude),
-          longitude: Number(p.longitude),
-          velocidade: p.velocidade || 0,
-          ignicao: p.ignicao || false,
-          data_posicao: p.data_posicao,
-          endereco: p.endereco,
-        }));
-
+        const trajetoLocal = transformarPosicaoLocal(historico);
         const paradasLocal = identificarParadas(trajetoLocal);
 
         console.log(`[rastreador-historico] Fallback local: ${trajetoLocal.length} pontos, ${paradasLocal.length} paradas`);
@@ -349,7 +374,47 @@ serve(async (req) => {
         );
       }
 
-      console.log('[rastreador-historico] Fallback local também vazio');
+      // Both API and local empty — try expanded search (24h backward)
+      console.log('[rastreador-historico] Fallback local também vazio, tentando busca expandida...');
+      
+      if (data_inicio) {
+        const expandedStart = new Date(new Date(data_inicio).getTime() - 20 * 3600000).toISOString();
+        
+        const { data: expandedData } = await supabase
+          .from('rastreador_posicoes')
+          .select('*')
+          .eq('rastreador_id', rastreador_id)
+          .gte('data_posicao', expandedStart)
+          .lte('data_posicao', fim)
+          .order('data_posicao', { ascending: true })
+          .limit(2000);
+
+        if (expandedData && expandedData.length > 0) {
+          const trajetoExp = transformarPosicaoLocal(expandedData);
+          const paradasExp = identificarParadas(trajetoExp);
+          const lastPoint = trajetoExp[trajetoExp.length - 1];
+          const horasAntes = ((new Date(fim).getTime() - new Date(lastPoint.data_posicao).getTime()) / 3600000).toFixed(1);
+
+          console.log(`[rastreador-historico] Busca expandida: ${trajetoExp.length} pontos encontrados, última posição ${horasAntes}h antes`);
+
+          return new Response(
+            JSON.stringify({
+              success: true,
+              fonte: 'local',
+              periodo_expandido: true,
+              mensagem: `Sem dados no período original. Exibindo trajeto expandido — última posição ${horasAntes}h antes do sinistro.`,
+              trajeto: trajetoExp,
+              paradas: paradasExp,
+              periodo: { inicio: expandedStart, fim },
+              total: trajetoExp.length,
+              total_paradas: paradasExp.length,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+
+        console.log('[rastreador-historico] Busca expandida também vazia');
+      }
     }
 
     return new Response(
