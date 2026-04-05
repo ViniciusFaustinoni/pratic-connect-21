@@ -36,7 +36,12 @@ import {
   Unlock,
   RefreshCw,
   Camera,
+  Search,
+  Link2,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { Input } from '@/components/ui/input';
 import {
   useRastreador,
   useUpdateRastreadorStatus,
