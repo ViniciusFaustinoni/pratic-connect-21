@@ -19,6 +19,19 @@ interface CredenciaisRedeVeiculos {
   bearer_token: string;
 }
 
+function normalizarSecret(value: string | null | undefined): string | null {
+  if (!value) return null;
+
+  const semAspas = value.trim().replace(/^['"]|['"]$/g, '');
+  if (!semAspas) return null;
+
+  if (/^bearer\s+/i.test(semAspas)) {
+    return semAspas.replace(/^bearer\s+/i, '').trim();
+  }
+
+  return semAspas;
+}
+
 /**
  * Deriva chave usando PBKDF2 (mesmo método do integracoes-credenciais)
  */
@@ -141,7 +154,6 @@ export async function getCredenciaisRedeVeiculos(supabase: any): Promise<Credenc
   const encryptionKey = Deno.env.get('INTEGRACOES_ENCRYPTION_KEY') || Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
   
   try {
-    // 1. Tentar buscar do banco de dados (incluindo campo iv)
     const { data: credencial, error } = await supabase
       .from('integracoes_credenciais')
       .select('credenciais_encrypted, iv, configurado')
@@ -157,10 +169,10 @@ export async function getCredenciaisRedeVeiculos(supabase: any): Promise<Credenc
         encryptionKey
       );
       
-      // Validar campo obrigatório
-      if (decrypted.bearer_token) {
+      const tokenNormalizado = normalizarSecret(decrypted.bearer_token);
+      if (tokenNormalizado) {
         return {
-          bearer_token: decrypted.bearer_token,
+          bearer_token: tokenNormalizado,
         };
       }
       console.warn('[Credenciais] Rede Veículos: credenciais do banco incompletas, tentando ENV...');
@@ -169,8 +181,7 @@ export async function getCredenciaisRedeVeiculos(supabase: any): Promise<Credenc
     console.warn('[Credenciais] Rede Veículos: erro ao buscar do banco:', dbError);
   }
 
-  // 2. Fallback para ENV
-  const token = Deno.env.get('REDE_VEICULOS_TOKEN');
+  const token = normalizarSecret(Deno.env.get('REDE_VEICULOS_TOKEN'));
 
   if (token) {
     console.log('[Credenciais] Rede Veículos: usando credenciais do ENV');

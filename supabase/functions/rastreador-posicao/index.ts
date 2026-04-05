@@ -209,6 +209,19 @@ async function getPosicaoSoftruckComRetry(
 }
 
 /**
+ * Sanitiza mensagens externas para não expor tokens/secrets em logs e respostas
+ */
+function sanitizeRedeVeiculosErrorMessage(message: unknown): string {
+  const text = typeof message === 'string' ? message : 'Erro na API';
+
+  if (/token incorreto/i.test(text)) {
+    return 'Token incorreto';
+  }
+
+  return text;
+}
+
+/**
  * Busca posição do rastreador na Rede Veículos
  * Usa o endpoint POST /obterUltimaPosicaoValida/ conforme documentação
  */
@@ -250,12 +263,10 @@ async function getPosicaoRedeVeiculos(
   
   console.log(`[Rede Veículos] Resposta:`, JSON.stringify(data).slice(0, 500));
   
-  // Verificar se a API retornou erro
   if (data.error === 'true' || data.error === true) {
-    throw new Error(`Rede Veículos: ${data.message || 'Erro na API'}`);
+    throw new Error(`Rede Veículos: ${sanitizeRedeVeiculosErrorMessage(data.message)}`);
   }
   
-  // A API retorna coordenadas no campo "latlon" formato "-22.902362|-43.57716"
   let latitude: number | null = null;
   let longitude: number | null = null;
   
@@ -264,7 +275,6 @@ async function getPosicaoRedeVeiculos(
     latitude = parseFloat(parts[0]);
     longitude = parseFloat(parts[1]);
   } else if (data.latitude && data.longitude) {
-    // Fallback caso a API mude para campos separados
     latitude = parseFloat(data.latitude);
     longitude = parseFloat(data.longitude);
   }
@@ -407,14 +417,12 @@ serve(async (req) => {
         baseUrl
       );
     } else if (plataformaCodigo === 'rede_veiculos') {
-      // Buscar credenciais híbridas
       const credenciais = await getCredenciaisRedeVeiculos(supabase);
       
       if (!credenciais) {
         throw new Error('Token Rede Veículos não configurado');
       }
       
-      // Obter dados necessários para a API (associados só tem CPF)
       const imei = rastreador.imei || rastreador.codigo || '';
       const placa = rastreador.veiculo?.placa || '';
       const cpfCnpj = rastreador.veiculo?.associado?.cpf || '';
@@ -429,7 +437,31 @@ serve(async (req) => {
       
       console.log(`[Rede Veículos] Usando imei=${imei}, placa=${placa}`);
       
-      posicao = await getPosicaoRedeVeiculos(credenciais.bearer_token, imei, placa, cpfCnpj, baseUrl);
+      try {
+        posicao = await getPosicaoRedeVeiculos(credenciais.bearer_token, imei, placa, cpfCnpj, baseUrl);
+      } catch (error) {
+        const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+        if (errorMessage.includes('Token incorreto') && rastreador.ultima_posicao_lat && rastreador.ultima_posicao_lng) {
+          return new Response(
+            JSON.stringify({
+              success: true,
+              tempo_real: false,
+              mensagem: 'Token da Rede Veículos inválido. Exibindo última posição conhecida.',
+              posicao: {
+                latitude: rastreador.ultima_posicao_lat,
+                longitude: rastreador.ultima_posicao_lng,
+                velocidade: rastreador.ultima_velocidade || 0,
+                ignicao: rastreador.ultima_ignicao || false,
+                data_posicao: rastreador.ultima_comunicacao,
+                endereco: null,
+              },
+              veiculo: rastreador.veiculo,
+            }),
+            { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          );
+        }
+        throw error;
+      }
     } else {
       throw new Error(`Plataforma ${plataformaCodigo} não suportada`);
     }
