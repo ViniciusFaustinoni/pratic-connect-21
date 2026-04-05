@@ -15,23 +15,17 @@ async function getAuthToken(forceRefresh = false): Promise<string> {
   if (!forceRefresh && cachedToken && tokenExpiresAt && Date.now() < tokenExpiresAt) {
     return cachedToken;
   }
-
   const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY');
   const username = Deno.env.get('SOFTRUCK_USERNAME');
   const password = Deno.env.get('SOFTRUCK_PASSWORD');
-
-  if (!publicKey || !username || !password) {
-    throw new Error('Credenciais Softruck não configuradas');
-  }
+  if (!publicKey || !username || !password) throw new Error('Credenciais Softruck não configuradas');
 
   const response = await fetch(`${BASE_URL}/v2/auth/login`, {
     method: 'POST',
     headers: { 'Content-Type': 'application/json', 'public-key': publicKey },
     body: JSON.stringify({ username, password }),
   });
-
   if (!response.ok) throw new Error(`Login Softruck falhou: ${response.status}`);
-
   const data = await response.json();
   cachedToken = data.token || data.access_token || data.data?.token;
   if (!cachedToken) throw new Error('Token Softruck não retornado');
@@ -42,39 +36,31 @@ async function getAuthToken(forceRefresh = false): Promise<string> {
 async function softruckGet(endpoint: string, token: string, retry = 0): Promise<any> {
   const publicKey = Deno.env.get('SOFTRUCK_PUBLIC_KEY') || '';
   const response = await fetch(`${BASE_URL}${endpoint}`, {
-    headers: {
-      'Authorization': `Bearer ${token}`,
-      'public-key': publicKey,
-      'Content-Type': 'application/json',
-    },
+    headers: { 'Authorization': `Bearer ${token}`, 'public-key': publicKey, 'Content-Type': 'application/json' },
   });
-
   if (response.status === 401 && retry < 1) {
     const newToken = await getAuthToken(true);
     return softruckGet(endpoint, newToken, retry + 1);
   }
-
   if (!response.ok) {
     const text = await response.text();
     throw new Error(`Softruck ${response.status}: ${text}`);
   }
-
   return response.json();
 }
 
 function extractVehicleId(device: any): string | null {
-  // Tentar vários formatos possíveis de relationship
   const rel = device?.relationships?.vehicle;
   if (!rel) return null;
-  
-  // Formato { id: "xxx" }
   if (rel.id) return rel.id;
-  // Formato { data: { id: "xxx" } }
   if (rel.data?.id) return rel.data.id;
-  // Formato { type: "vehicles", id: "xxx" }
   if (typeof rel === 'object' && rel.type === 'vehicles' && rel.id) return rel.id;
-  
   return null;
+}
+
+function isImei(value: string): boolean {
+  const digits = value.replace(/\D/g, '');
+  return digits.length >= 10 && digits === value;
 }
 
 serve(async (req) => {
@@ -90,9 +76,8 @@ serve(async (req) => {
     const body = await req.json().catch(() => ({}));
     const batchSize = body.batch_size || 30;
     const offset = body.offset || 0;
-    const mode = body.mode || 'populate'; // 'populate' | 'debug'
+    const mode = body.mode || 'populate';
 
-    // Buscar rastreadores sem plataforma_veiculo_id
     const { data: rastreadores, error } = await supabase
       .from('rastreadores')
       .select('id, codigo, plataforma_device_id, plataforma_veiculo_id')
@@ -102,7 +87,6 @@ serve(async (req) => {
       .range(offset, offset + batchSize - 1);
 
     if (error) throw error;
-
     if (!rastreadores || rastreadores.length === 0) {
       return new Response(
         JSON.stringify({ sucesso: true, mensagem: 'Nenhum rastreador para processar', processados: 0, offset }),
@@ -111,7 +95,6 @@ serve(async (req) => {
     }
 
     console.log(`[popular-ids] Processando ${rastreadores.length} rastreadores (offset ${offset})`);
-
     const token = await getAuthToken();
     let atualizados = 0;
     let falhas = 0;
@@ -121,84 +104,55 @@ serve(async (req) => {
 
     for (const rast of rastreadores) {
       try {
-        const imei = rast.plataforma_device_id;
-        const cleanImei = imei.replace(/\D/g, '');
-        
-        // Buscar device por IMEI com includes de vehicle
-        const deviceResult = await softruckGet(
-          `/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(cleanImei)}&includes[vehicle][]=plate&includes[vehicle][]=vin`,
-          token
-        );
+        const deviceIdOrImei = rast.plataforma_device_id;
 
-        const devices = deviceResult?.data;
-        
-        if (mode === 'debug') {
-          debugData.push({ codigo: rast.codigo, imei, response: deviceResult });
-        }
+        let softruckDeviceId: string | null = null;
+        let vehicleId: string | null = null;
 
-        if (!devices || devices.length === 0) {
-          falhas++;
-          erros.push(`${rast.codigo}: device não encontrado (IMEI: ${cleanImei})`);
-          continue;
-        }
+        if (isImei(deviceIdOrImei)) {
+          // É IMEI — buscar por filtro de IMEI
+          const result = await softruckGet(
+            `/v2/devices?filters[devices.imei][eq]=${encodeURIComponent(deviceIdOrImei)}&includes[vehicle][]=plate`,
+            token
+          );
+          if (mode === 'debug') debugData.push({ codigo: rast.codigo, type: 'imei', response: result });
 
-        const device = devices[0];
-        const softruckDeviceId = device.id;
-        const vehicleId = extractVehicleId(device);
-
-        // Mesmo sem vehicleId, atualizar o device_id se for diferente
-        const updateData: Record<string, string> = {};
-        if (softruckDeviceId && softruckDeviceId !== imei) {
-          updateData.plataforma_device_id = softruckDeviceId;
-        }
-        if (vehicleId) {
-          updateData.plataforma_veiculo_id = vehicleId;
-        }
-
-        if (vehicleId) {
-          if (Object.keys(updateData).length > 0) {
-            await supabase.from('rastreadores').update(updateData).eq('id', rast.id);
+          if (result?.data?.length > 0) {
+            softruckDeviceId = result.data[0].id;
+            vehicleId = extractVehicleId(result.data[0]);
           }
-          atualizados++;
-          console.log(`[popular-ids] ✓ ${rast.codigo}: device=${softruckDeviceId}, vehicle=${vehicleId}`);
         } else {
-          // Device existe mas sem vehicle — tentar buscar device by ID com includes
-          try {
-            const detailResult = await softruckGet(
-              `/v2/devices/${softruckDeviceId}?includes[vehicle][]=plate`,
-              token
-            );
-            const detailDevice = detailResult?.data;
-            const actualDevice = Array.isArray(detailDevice) ? detailDevice[0] : detailDevice;
-            const detailVehicleId = extractVehicleId(actualDevice);
+          // Já é ID alfanumérico da Softruck — buscar by ID
+          const result = await softruckGet(
+            `/v2/devices/${deviceIdOrImei}?includes[vehicle][]=plate`,
+            token
+          );
+          if (mode === 'debug') debugData.push({ codigo: rast.codigo, type: 'id', response: result });
 
-            if (mode === 'debug') {
-              debugData.push({ codigo: rast.codigo, detail: detailResult });
-            }
-
-            if (detailVehicleId) {
-              const upd: Record<string, string> = { plataforma_veiculo_id: detailVehicleId };
-              if (softruckDeviceId && softruckDeviceId !== imei) {
-                upd.plataforma_device_id = softruckDeviceId;
-              }
-              await supabase.from('rastreadores').update(upd).eq('id', rast.id);
-              atualizados++;
-              console.log(`[popular-ids] ✓ ${rast.codigo}: vehicle=${detailVehicleId} (via detail)`);
-            } else {
-              // Atualizar pelo menos o device_id correto
-              if (softruckDeviceId && softruckDeviceId !== imei) {
-                await supabase.from('rastreadores').update({ plataforma_device_id: softruckDeviceId }).eq('id', rast.id);
-              }
-              semVeiculo++;
-              erros.push(`${rast.codigo}: device ${softruckDeviceId} sem vehicle associado`);
-            }
-          } catch (detailErr) {
-            semVeiculo++;
-            erros.push(`${rast.codigo}: erro no detail: ${detailErr.message}`);
+          const device = Array.isArray(result?.data) ? result.data[0] : result?.data;
+          if (device) {
+            softruckDeviceId = device.id || deviceIdOrImei;
+            vehicleId = extractVehicleId(device);
           }
         }
 
-        // Rate limiting
+        if (vehicleId) {
+          const upd: Record<string, string> = { plataforma_veiculo_id: vehicleId };
+          if (softruckDeviceId && softruckDeviceId !== deviceIdOrImei) {
+            upd.plataforma_device_id = softruckDeviceId;
+          }
+          await supabase.from('rastreadores').update(upd).eq('id', rast.id);
+          atualizados++;
+          console.log(`[popular-ids] ✓ ${rast.codigo}: vehicle=${vehicleId}`);
+        } else if (softruckDeviceId) {
+          // Device existe mas sem vehicle
+          semVeiculo++;
+          erros.push(`${rast.codigo}: device ${softruckDeviceId} sem vehicle`);
+        } else {
+          falhas++;
+          erros.push(`${rast.codigo}: device não encontrado`);
+        }
+
         await new Promise(r => setTimeout(r, 150));
       } catch (err) {
         falhas++;
@@ -219,7 +173,7 @@ serve(async (req) => {
       ...(mode === 'debug' ? { debug: debugData } : {}),
     };
 
-    console.log(`[popular-ids] Resultado: ${atualizados} ok, ${semVeiculo} sem veículo, ${falhas} falhas`);
+    console.log(`[popular-ids] ${atualizados} ok, ${semVeiculo} sem veículo, ${falhas} falhas`);
 
     return new Response(
       JSON.stringify(resultado),
