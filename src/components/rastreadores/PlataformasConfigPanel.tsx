@@ -149,7 +149,7 @@ export function PlataformasConfigPanel() {
       {plataformas && plataformas.length > 0 ? (
         <div className="grid gap-4 md:grid-cols-2">
           {plataformas.map((plataforma) => {
-            const stats = contagem?.[plataforma.plataforma] || { total: 0, ativos: 0, online: 0 };
+            const stats = contagem?.[plataforma.plataforma] || { total: 0, ativos: 0 };
             const icone = ICONE_MAP[plataforma.icone || 'server'] || ICONE_MAP.server;
 
             return (
@@ -259,7 +259,7 @@ export function PlataformasConfigPanel() {
                   </div>
 
                   {/* Estatísticas */}
-                  <div className="grid grid-cols-1 sm:grid-cols-3 gap-2 rounded-lg bg-muted/50 p-3">
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 rounded-lg bg-muted/50 p-3">
                     <div className="text-center">
                       <p className="text-2xl font-bold">{stats.total}</p>
                       <p className="text-xs text-muted-foreground">Total</p>
@@ -267,10 +267,6 @@ export function PlataformasConfigPanel() {
                     <div className="text-center">
                       <p className="text-2xl font-bold text-green-600">{stats.ativos}</p>
                       <p className="text-xs text-muted-foreground">Instalados</p>
-                    </div>
-                    <div className="text-center">
-                      <p className="text-2xl font-bold text-blue-600">{stats.online}</p>
-                      <p className="text-xs text-muted-foreground">Online</p>
                     </div>
                   </div>
                 </CardContent>

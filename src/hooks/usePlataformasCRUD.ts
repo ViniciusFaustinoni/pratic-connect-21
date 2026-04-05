@@ -260,28 +260,42 @@ export function useDeletePlataforma() {
   });
 }
 
-// Hook para contar rastreadores por plataforma
+// Hook para contar rastreadores por plataforma (contagem exata via head:true)
 export function useRastreadoresPorPlataforma() {
   return useQuery({
     queryKey: ['rastreadores-por-plataforma'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('rastreadores')
-        .select('plataforma, status');
+      // Buscar todas as plataformas distintas
+      const { data: plataformas, error: platError } = await supabase
+        .from('rastreadores_config_plataformas')
+        .select('plataforma');
 
-      if (error) throw error;
+      if (platError) throw platError;
 
-      const contagem: Record<string, { total: number; ativos: number; online: number }> = {};
+      const codigos = (plataformas || []).map(p => p.plataforma);
+      const contagem: Record<string, { total: number; ativos: number }> = {};
 
-      (data || []).forEach(r => {
-        if (!contagem[r.plataforma]) {
-          contagem[r.plataforma] = { total: 0, ativos: 0, online: 0 };
-        }
-        contagem[r.plataforma].total++;
-        if (r.status === 'instalado') {
-          contagem[r.plataforma].ativos++;
-        }
-      });
+      // Para cada plataforma, buscar total e instalados em paralelo
+      await Promise.all(
+        codigos.map(async (codigo) => {
+          const [totalRes, ativosRes] = await Promise.all([
+            supabase
+              .from('rastreadores')
+              .select('*', { count: 'exact', head: true })
+              .eq('plataforma', codigo),
+            supabase
+              .from('rastreadores')
+              .select('*', { count: 'exact', head: true })
+              .eq('plataforma', codigo)
+              .eq('status', 'instalado'),
+          ]);
+
+          contagem[codigo] = {
+            total: totalRes.count ?? 0,
+            ativos: ativosRes.count ?? 0,
+          };
+        })
+      );
 
       return contagem;
     },
