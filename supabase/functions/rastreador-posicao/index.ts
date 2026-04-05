@@ -248,32 +248,46 @@ async function getPosicaoRedeVeiculos(
 
   const data = await response.json();
   
-  console.log(`[Rede Veículos] Resposta:`, JSON.stringify(data).slice(0, 300));
+  console.log(`[Rede Veículos] Resposta:`, JSON.stringify(data).slice(0, 500));
   
   // Verificar se a API retornou erro
   if (data.error === 'true' || data.error === true) {
     throw new Error(`Rede Veículos: ${data.message || 'Erro na API'}`);
   }
   
-  // Verificar se tem coordenadas válidas
-  if (!data.latitude || !data.longitude) {
-    throw new Error('Rede Veículos: coordenadas ausentes na resposta');
+  // A API retorna coordenadas no campo "latlon" formato "-22.902362|-43.57716"
+  let latitude: number | null = null;
+  let longitude: number | null = null;
+  
+  if (data.latlon && typeof data.latlon === 'string' && data.latlon.includes('|')) {
+    const parts = data.latlon.split('|');
+    latitude = parseFloat(parts[0]);
+    longitude = parseFloat(parts[1]);
+  } else if (data.latitude && data.longitude) {
+    // Fallback caso a API mude para campos separados
+    latitude = parseFloat(data.latitude);
+    longitude = parseFloat(data.longitude);
+  }
+  
+  if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
+    throw new Error(`Rede Veículos: coordenadas ausentes na resposta. Campos: ${Object.keys(data).join(', ')}`);
   }
 
   return {
-    latitude: parseFloat(data.latitude),
-    longitude: parseFloat(data.longitude),
+    latitude,
+    longitude,
     velocidade: parseInt(data.velocidade || '0', 10),
-    direcao: data.direcao ? parseInt(data.direcao, 10) : undefined,
+    direcao: undefined,
     ignicao: data.ignicaoLigada === 'S',
     data_posicao: data.dataGPRS || data.dataGPS || new Date().toISOString(),
-    endereco: data.endereco,
+    endereco: undefined,
     dados_extras: {
       voltagemBateria: data.voltagemBateria,
       movimento: data.movimento,
       bloqueado: data.bloqueado,
       statusGPRS: data.statusGPRS,
       statusGPS: data.statusGPS,
+      satelites: data.satelites,
       imei: data.imei,
       placa: data.placa,
       chassi: data.chassi,

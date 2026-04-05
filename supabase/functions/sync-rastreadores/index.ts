@@ -445,27 +445,46 @@ async function syncRedeVeiculos(
       }
 
       const data = await response.json();
+      
+      console.log(`[Rede Veículos] ${rast.codigo}: Resposta:`, JSON.stringify(data).slice(0, 300));
 
-      // Mapear resposta da API conforme documentação
-      if (data.latitude && data.longitude) {
+      // Verificar se a API retornou erro
+      if (data.error === 'true' || data.error === true) {
+        throw new Error(data.message || 'Erro na API');
+      }
+
+      // A API retorna coordenadas no campo "latlon" formato "-22.902362|-43.57716"
+      let lat: number | null = null;
+      let lng: number | null = null;
+      
+      if (data.latlon && typeof data.latlon === 'string' && data.latlon.includes('|')) {
+        const parts = data.latlon.split('|');
+        lat = parseFloat(parts[0]);
+        lng = parseFloat(parts[1]);
+      } else if (data.latitude && data.longitude) {
+        lat = parseFloat(data.latitude);
+        lng = parseFloat(data.longitude);
+      }
+
+      if (lat && lng && !isNaN(lat) && !isNaN(lng)) {
         posicoes.push({
           rastreador_id: rast.id,
-          latitude: parseFloat(data.latitude),
-          longitude: parseFloat(data.longitude),
+          latitude: lat,
+          longitude: lng,
           velocidade: parseInt(data.velocidade || '0', 10),
           ignicao: data.ignicaoLigada === 'S',
           data_posicao: data.dataGPRS || data.dataGPS || new Date().toISOString(),
           odometro: undefined,
-          direcao: data.direcao ? parseInt(data.direcao, 10) : undefined,
+          direcao: undefined,
           bateria_nivel: data.voltagemBateria ? parseFloat(data.voltagemBateria) : undefined,
           sinal_gsm: undefined,
         });
         result.sucesso++;
-        console.log(`[Rede Veículos] ${rast.codigo}: lat=${data.latitude}, lng=${data.longitude}`);
+        console.log(`[Rede Veículos] ${rast.codigo}: lat=${lat}, lng=${lng}`);
       } else {
         result.falhas++;
-        result.erros.push(`${rast.codigo}: Sem dados de posição na resposta`);
-        console.warn(`[Rede Veículos] ${rast.codigo}: Resposta sem lat/lng:`, JSON.stringify(data).slice(0, 200));
+        result.erros.push(`${rast.codigo}: Sem dados de posição. Campos: ${Object.keys(data).join(', ')}`);
+        console.warn(`[Rede Veículos] ${rast.codigo}: Resposta sem latlon:`, JSON.stringify(data).slice(0, 300));
       }
     } catch (error: unknown) {
       result.falhas++;
