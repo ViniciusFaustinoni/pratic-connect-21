@@ -344,7 +344,7 @@ export function EtapaAssinaturaContrato({
     const interval = setInterval(verificarAssinatura, pollingInterval);
 
     return () => clearInterval(interval);
-  }, [etapaInterna, contrato?.id, cotacaoId, onContratoAssinado]);
+  }, [etapaInterna, contrato?.id, contrato?.linkAssinatura, cotacaoId, onContratoAssinado]);
 
   // Verificar manualmente
   const verificarManualmente = async () => {
