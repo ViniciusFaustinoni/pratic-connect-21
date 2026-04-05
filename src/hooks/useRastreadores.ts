@@ -19,7 +19,7 @@ export interface RastreadorFilters {
   status?: StatusRastreador[];
   plataforma?: string;
   search?: string;
-  comunicacao?: 'online' | 'offline' | 'todos';
+  comunicacao?: 'online' | 'offline' | 'atencao' | 'todos';
 }
 
 export interface RastreadoresMetricas {
