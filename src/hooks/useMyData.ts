@@ -321,7 +321,7 @@ export function useVeiculoPosicao(veiculoId?: string) {
     veiculo: query.data?.veiculo ?? null,
     rastreador: query.data?.rastreador ?? null,
     tempoReal: query.data?.tempo_real ?? false,
-    offline: query.data?.offline ?? true,
+    offline: query.isLoading ? false : (query.data?.offline ?? true),
     plataforma: query.data?.plataforma,
     mensagem: query.data?.mensagem,
     isLoading: query.isLoading,
