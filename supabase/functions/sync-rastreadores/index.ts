@@ -446,7 +446,7 @@ serve(async (req) => {
     // Para outras: precisa de id_plataforma
     const rastreadoresValidos = (rastreadores || []).filter((r) => {
       if (r.plataforma === 'softruck') {
-        return !!r.plataforma_device_id;
+        return !!r.plataforma_device_id && !!r.plataforma_veiculo_id;
       }
       return r.id_plataforma && r.id_plataforma.trim() !== "";
     });
