@@ -209,6 +209,90 @@ async function getPosicaoSoftruckComRetry(
 }
 
 /**
+ * Verifica se um valor parece ser um IMEI bruto (só dígitos, 15+ chars)
+ */
+function isRawImei(value: string): boolean {
+  return /^\d{15,}$/.test(value);
+}
+
+/**
+ * Resolve o hash device ID e vehicle ID da Softruck a partir do IMEI
+ * usando GET /v2/devices/?filters[devices.imei][eq]={IMEI}&includes[vehicle][]=plate
+ */
+// deno-lint-ignore no-explicit-any
+async function resolverSoftruckDeviceId(
+  supabase: any,
+  supabaseUrl: string,
+  supabaseKey: string,
+  imei: string,
+  rastreadorId: string,
+  baseUrl: string
+): Promise<{ deviceId: string; vehicleId: string } | null> {
+  console.log(`[Softruck] Resolvendo device ID para IMEI ${imei}...`);
+
+  try {
+    const { token, publicKey } = await getSoftruckTokenComRetry(
+      supabase, supabaseUrl, supabaseKey, false
+    );
+
+    const url = `${baseUrl}/devices/?filters[devices.imei][eq]=${imei}&includes[vehicle][]=plate`;
+    
+    const response = await fetch(url, {
+      method: 'GET',
+      headers: {
+        'Authorization': `Bearer ${token}`,
+        'public-key': publicKey,
+        'Content-Type': 'application/json',
+      }
+    });
+
+    if (!response.ok) {
+      const errText = await response.text();
+      console.error(`[Softruck] Erro ao resolver device ID: ${response.status} ${errText}`);
+      return null;
+    }
+
+    const data = await response.json();
+    const devices = data.data;
+
+    if (!devices || !Array.isArray(devices) || devices.length === 0) {
+      console.warn(`[Softruck] Nenhum device encontrado para IMEI ${imei}`);
+      return null;
+    }
+
+    const device = devices[0];
+    const deviceHashId = device.id;
+    const vehicleHashId = device.relationships?.vehicle?.id || null;
+
+    console.log(`[Softruck] IMEI ${imei} → deviceId=${deviceHashId}, vehicleId=${vehicleHashId}`);
+
+    // Persistir no banco para não precisar resolver novamente
+    const updateData: Record<string, string> = {
+      plataforma_device_id: deviceHashId,
+      id_plataforma: deviceHashId,
+    };
+    if (vehicleHashId) {
+      updateData.plataforma_veiculo_id = vehicleHashId;
+    }
+
+    await supabase
+      .from('rastreadores')
+      .update(updateData)
+      .eq('id', rastreadorId);
+
+    console.log(`[Softruck] IDs persistidos no banco para rastreador ${rastreadorId}`);
+
+    return {
+      deviceId: deviceHashId,
+      vehicleId: vehicleHashId || deviceHashId,
+    };
+  } catch (error) {
+    console.error(`[Softruck] Exceção ao resolver device ID:`, error);
+    return null;
+  }
+}
+
+/**
  * Sanitiza mensagens externas para não expor tokens/secrets em logs e respostas
  */
 function sanitizeRedeVeiculosErrorMessage(message: unknown): string {
