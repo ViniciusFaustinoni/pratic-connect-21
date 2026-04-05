@@ -1,91 +1,63 @@
 
 
-# Plano: Corrigir sync para todos os rastreadores comunicarem
+# Plano: Remover sync em massa e buscar posição apenas sob demanda
 
-## Resumo
+## Contexto
 
-Existem 3 correções a implementar no `sync-rastreadores`:
+Atualmente o `sync-rastreadores` roda a cada 10 minutos via cron, buscando posições de ~8.000 rastreadores em lotes de 200. Isso gera milhares de chamadas de API desnecessárias. O mapa (`/monitoramento/mapa`) já usa a edge function `rastreador-posicao` para buscar posição individual sob demanda.
 
-1. **Rede Veículos**: Ler URL do banco em vez de ENV (corrige 2.853 rastreadores)
-2. **Softruck**: Resolver IMEIs brutos para hash IDs via API (corrige 4.996 rastreadores)
-3. **Softruck**: Ler URL do banco em vez de ENV
+## O que será removido
 
----
+1. **Cron job** `sync-rastreadores-10min` — nova migration para desagendar
+2. **Busca em massa de posições** — remover de `sync-rastreadores/index.ts` toda a lógica de fetch de tracking (Softruck e Rede Veículos) em loop
+3. **Hook `useTodasPosicoesAtuais`** — remover o polling automático de 60s (não é usado em nenhuma página)
+4. **Hook `useSyncRastreadores`** — remover invocação manual do sync em massa (usado em ConfigPlataformas e PlataformasConfigPanel)
+5. **Amostragem de status "offline"** — remover o `refetchInterval` dos hooks de alertas em `useRastreadorPosicao.ts`
 
-## Correção 1: Ler ambiente do banco (ambas plataformas)
+## O que será mantido
 
-**Arquivo**: `supabase/functions/sync-rastreadores/index.ts`
+- **Edge function `rastreador-posicao`** — já busca posição individual sob demanda (usada no mapa ao clicar em um veículo)
+- **Edge function `sync-rastreadores`** — será simplificada para manter APENAS a resolução de IMEIs brutos (Correção 2) sem buscar posições. Pode ser invocada manualmente quando necessário
+- **`view_rastreadores_posicao`** — a view do banco que mostra dados já salvos (usada na busca do mapa)
+- **Tabela `rastreador_posicoes`** — mantida para histórico de trajetos
 
-Substituir `getPlataformasConfig()` (linhas 24-41) que lê de ENV vars inexistentes por uma função assíncrona que busca `rastreadores_config_plataformas` do banco e usa `ambiente_atual` + `api_url_producao`/`api_url_sandbox`. As credenciais vêm do `credenciais-hibridas.ts` (já usado no `rastreador-posicao`).
+## Alterações
 
-Isso corrige imediatamente a Rede Veículos (URL sandbox → produção) e garante que a Softruck também use a URL correta.
-
-## Correção 2: Resolver device IDs Softruck automaticamente durante sync
-
-**Arquivo**: `supabase/functions/sync-rastreadores/index.ts` — dentro de `syncSoftruck()`
-
-Antes de buscar tracking, verificar se `plataforma_device_id` é um IMEI bruto (regex `^\d{10,}$`). Se for:
-
-1. Chamar `GET /v2/devices/?filters[devices.imei][eq]={IMEI}&includes[vehicle][]=plate` com token Softruck
-2. Se retornar resultado: extrair `device.id` (hash) e `relationships.vehicle.id`
-3. Atualizar `rastreadores.plataforma_device_id` com o hash e `plataforma_veiculo_id` com o vehicle ID
-4. Continuar com o tracking usando os IDs corretos
-5. Se não encontrar: pular (marcar como falha)
-
-Isso elimina a necessidade de rodar `popular-ids-softruck` separadamente — o sync se auto-corrige.
-
-## Correção 3: Usar credenciais híbridas no sync
-
-**Arquivo**: `supabase/functions/sync-rastreadores/index.ts`
-
-Importar `getCredenciaisRedeVeiculos` e `getCredenciaisSoftruck` de `credenciais-hibridas.ts` (já usado no `rastreador-posicao`). Usar o token do banco em vez do ENV `REDE_VEICULOS_TOKEN`.
-
----
-
-## Detalhes técnicos
-
-### Alterações em `sync-rastreadores/index.ts`
-
-1. **Importar** `getCredenciaisRedeVeiculos`, `getCredenciaisSoftruck` de `credenciais-hibridas.ts`
-2. **Substituir** `getPlataformasConfig()` por função assíncrona que:
-   - Busca `rastreadores_config_plataformas` do banco
-   - Monta `baseUrl` com base em `ambiente_atual`
-   - Busca credenciais via `credenciais-hibridas`
-3. **Em `syncSoftruck()`** (linhas 268-278): antes do `if (!deviceId)`, adicionar bloco de resolução de IMEI:
-   ```
-   if (deviceId && /^\d{10,}$/.test(deviceId)) {
-     // IMEI bruto → resolver via API
-     const resolved = await resolveImeiToDeviceId(token, publicKey, baseUrl, deviceId);
-     if (resolved) {
-       // Atualizar DB e usar IDs corretos
-       deviceId = resolved.deviceHashId;
-       vehicleId = resolved.vehicleId;
-     } else {
-       // Pular — device não encontrado na Softruck
-       continue;
-     }
-   }
-   ```
-4. **Em `syncRedeVeiculos()`** (linha 435): usar token do `credenciais-hibridas` em vez de `config.apiKey`
-5. **Passar `supabase`** como parâmetro para `syncRedeVeiculos` (atualmente não recebe)
-
-### Nova função auxiliar `resolveImeiToDeviceId`
-
-```typescript
-async function resolveImeiToDeviceId(
-  token: string, publicKey: string, baseUrl: string, imei: string
-): Promise<{ deviceHashId: string; vehicleId: string | null } | null>
+### 1. Nova migration: Desagendar cron
+Criar migration SQL:
+```sql
+SELECT cron.unschedule('sync-rastreadores-10min');
 ```
 
-Faz `GET /v2/devices/?filters[devices.imei][eq]={imei}&includes[vehicle][]=plate` e retorna o hash ID + vehicle ID.
+### 2. Simplificar `sync-rastreadores/index.ts`
+Remover:
+- `syncSoftruck()` — toda a busca de tracking (linhas 325-514)
+- `syncRedeVeiculos()` — toda a busca de posição (linhas 516-634)
+- `atualizarUltimaComunicacao()` — atualização em massa (linhas 640-675)
+- Round-robin de posições e inserção de posições no handler principal
+- Limpeza de posições antigas
 
-### Arquivos alterados
+Manter apenas:
+- `resolveImeiToDeviceId()` — resolução de IMEIs brutos
+- `getPlataformasConfigFromDB()` — config do banco
+- Handler simplificado que aceita chamadas manuais para resolver IMEIs pendentes (sem buscar posições)
 
-- `supabase/functions/sync-rastreadores/index.ts` — todas as 3 correções
+### 3. Limpar hooks em `src/hooks/useRastreadorPosicao.ts`
+- Remover `useTodasPosicoesAtuais` (sem uso em páginas)
+- Remover `useSyncRastreadores` (sync em massa não existe mais)
+- Remover `refetchInterval: 30000` de `useAlertasContagem` e `useRastreadorAlertas`
 
-### Resultado esperado
+### 4. Atualizar páginas que usam `useSyncRastreadores`
+- `src/pages/monitoramento/ConfigPlataformas.tsx` — remover botão de sync manual
+- `src/components/rastreadores/PlataformasConfigPanel.tsx` — remover botão de sync manual
 
-- **Rede Veículos**: 2.853 rastreadores passam a sincronizar imediatamente (URL de produção)
-- **Softruck**: A cada ciclo de sync (10 min), ~200 IMEIs são resolvidos automaticamente. Em ~4h, todos os ~5.000 terão device hash ID correto e começarão a reportar posição
-- **Métricas**: O número de "comunicando" sobe de 63 para potencialmente milhares
+### 5. O mapa continua funcionando como está
+O `Mapa.tsx` já busca posição sob demanda via `rastreador-posicao` quando o usuário clica "Atualizar" em um veículo. A busca por placa consulta `view_rastreadores_posicao` (dados locais do banco).
+
+## Arquivos alterados
+- `supabase/functions/sync-rastreadores/index.ts` — simplificar (só resolução de IDs)
+- `src/hooks/useRastreadorPosicao.ts` — remover hooks de sync/polling
+- `src/pages/monitoramento/ConfigPlataformas.tsx` — remover botão sync
+- `src/components/rastreadores/PlataformasConfigPanel.tsx` — remover botão sync
+- Nova migration SQL — desagendar cron
 
