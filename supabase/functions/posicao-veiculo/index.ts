@@ -159,24 +159,50 @@ async function getPosicaoSoftruckComRetry(
 
       const data = await response.json();
 
-      if (!data.data?.attributes) {
+      const gpsData = data.data || data;
+      if (!gpsData) {
         throw new Error('Resposta Softruck inválida');
       }
 
-      const attrs = data.data.attributes;
+      const attrs = gpsData.attributes || gpsData || {};
+
+      // Extract coordinates - multiple possible locations
+      let latitude: number | null = null;
+      let longitude: number | null = null;
+
+      if (gpsData.geometry?.coordinates) {
+        longitude = parseFloat(gpsData.geometry.coordinates[0]);
+        latitude = parseFloat(gpsData.geometry.coordinates[1]);
+      } else if (attrs.geometry?.coordinates) {
+        longitude = parseFloat(attrs.geometry.coordinates[0]);
+        latitude = parseFloat(attrs.geometry.coordinates[1]);
+      } else if (attrs.latitude && attrs.longitude) {
+        latitude = parseFloat(attrs.latitude);
+        longitude = parseFloat(attrs.longitude);
+      }
+
+      if (!latitude || !longitude || isNaN(latitude) || isNaN(longitude)) {
+        throw new Error('Coordenadas não encontradas na resposta Softruck');
+      }
+
+      // Convert Unix timestamp to ISO if needed
+      const actTimestamp = attrs.act;
+      const dataPosicao = actTimestamp
+        ? new Date(actTimestamp * 1000).toISOString()
+        : (attrs.timestamp || new Date().toISOString());
 
       return {
-        latitude: attrs.latitude,
-        longitude: attrs.longitude,
-        velocidade: attrs.speed || 0,
-        direcao: attrs.course,
-        ignicao: attrs.ignition || false,
-        data_posicao: attrs.timestamp || new Date().toISOString(),
+        latitude,
+        longitude,
+        velocidade: parseInt(attrs.spd || attrs.speed || '0', 10),
+        direcao: attrs.dir || attrs.course,
+        ignicao: Boolean(attrs.ign || attrs.ignition),
+        data_posicao: dataPosicao,
         dados_extras: {
           altitude: attrs.altitude,
           satellites: attrs.satellites,
           odometer: attrs.odometer,
-          battery: attrs.battery,
+          battery: attrs.bl || attrs.battery,
         }
       };
 
@@ -457,10 +483,29 @@ serve(async (req) => {
           cpfAssociado
         );
       } else {
-        // Softruck (padrão) - com retry automático em erro 401
-        // Fallback: usa id_plataforma se campos específicos estiverem vazios
-        const vehicleId = rastreador.plataforma_veiculo_id || rastreador.id_plataforma;
+        // Softruck (padrão) - with fallback ID resolution
+        let vehicleId = rastreador.plataforma_veiculo_id || rastreador.id_plataforma;
         const deviceId = rastreador.plataforma_device_id || rastreador.id_plataforma;
+
+        // Try softruck_vehicle_id from veiculos table if not on rastreador
+        if (!rastreador.plataforma_veiculo_id) {
+          // Query vehicle for softruck_vehicle_id
+          const { data: veicData } = await supabaseAdmin
+            .from('veiculos')
+            .select('softruck_vehicle_id')
+            .eq('id', veiculo_id)
+            .single();
+          
+          if (veicData?.softruck_vehicle_id) {
+            vehicleId = veicData.softruck_vehicle_id;
+            // Persist on rastreador for future calls
+            await supabaseAdmin
+              .from('rastreadores')
+              .update({ plataforma_veiculo_id: vehicleId })
+              .eq('id', rastreador.id);
+            console.log(`[posicao-veiculo] Resolvido vehicleId ${vehicleId} do cache veículo`);
+          }
+        }
 
         if (!vehicleId || !deviceId) {
           throw new Error('Rastreador não configurado com IDs da plataforma');

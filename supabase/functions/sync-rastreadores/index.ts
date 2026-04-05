@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { resolveSoftruckIds, getSoftruckAuthToken } from "../_shared/softruck-id-resolver.ts";
 
 // =====================================================
 // CONFIGURAÇÃO
@@ -51,10 +52,12 @@ interface Rastreador {
   id_plataforma: string;
   plataforma_device_id?: string;
   plataforma_veiculo_id?: string;
-  // Dados do veículo e associado (para Rede Veículos)
+  veiculo_id?: string;
   veiculo?: {
+    id?: string;
     placa?: string;
     chassi?: string;
+    softruck_vehicle_id?: string;
     associado?: {
       cpf?: string;
     };
@@ -186,13 +189,34 @@ async function syncSoftruck(
   // Para cada rastreador, buscar posição via softruck-api
   for (const rast of rastreadores) {
     try {
-      // Usar IDs corretos da plataforma (endpoint v2 requer ambos)
+      // Resolve vehicle ID using shared resolver with fallback chain
+      let vehicleId = rast.plataforma_veiculo_id;
       const deviceId = rast.plataforma_device_id;
-      const vehicleId = rast.plataforma_veiculo_id;
-      
-      if (!deviceId || !vehicleId) {
+
+      if (!deviceId) {
         result.falhas++;
-        result.erros.push(`${rast.codigo}: device/vehicle ID não configurados`);
+        result.erros.push(`${rast.codigo}: device ID não configurado`);
+        continue;
+      }
+
+      // If no vehicleId, try to resolve it
+      if (!vehicleId) {
+        // Quick check: cached on vehicle table
+        vehicleId = rast.veiculo?.softruck_vehicle_id || null;
+        
+        if (vehicleId) {
+          // Persist on rastreador for future syncs
+          await supabase
+            .from('rastreadores')
+            .update({ plataforma_veiculo_id: vehicleId })
+            .eq('id', rast.id);
+          console.log(`[Softruck] ${rast.codigo}: vehicleId resolvido via cache veículo: ${vehicleId}`);
+        }
+      }
+
+      if (!vehicleId) {
+        result.falhas++;
+        result.erros.push(`${rast.codigo}: vehicle ID não resolvido`);
         continue;
       }
       
@@ -423,9 +447,9 @@ serve(async (req) => {
     let query = supabase
       .from("rastreadores")
       .select(`
-        id, codigo, imei, plataforma, id_plataforma, plataforma_device_id, plataforma_veiculo_id,
+        id, codigo, imei, plataforma, id_plataforma, plataforma_device_id, plataforma_veiculo_id, veiculo_id,
         veiculo:veiculos(
-          placa, chassi,
+          id, placa, chassi, softruck_vehicle_id,
           associado:associados(cpf)
         )
       `)
@@ -442,11 +466,16 @@ serve(async (req) => {
     }
 
     // Filtrar rastreadores que possuem IDs de plataforma válidos
-    // Para Softruck: precisa de plataforma_device_id E plataforma_veiculo_id
+    // Para Softruck: precisa de plataforma_device_id (vehicleId pode ser resolvido via fallback)
     // Para outras: precisa de id_plataforma
     const rastreadoresValidos = (rastreadores || []).filter((r) => {
       if (r.plataforma === 'softruck') {
-        return !!r.plataforma_device_id && !!r.plataforma_veiculo_id;
+        // Accept if has device_id AND (has vehicle_id OR has vehicle with softruck_vehicle_id OR has vehicle with plate)
+        if (!r.plataforma_device_id) return false;
+        if (r.plataforma_veiculo_id) return true;
+        if (r.veiculo?.softruck_vehicle_id) return true;
+        if (r.veiculo?.placa) return true;
+        return false;
       }
       return r.id_plataforma && r.id_plataforma.trim() !== "";
     });
