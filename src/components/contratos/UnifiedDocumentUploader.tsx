@@ -203,7 +203,7 @@ export function UnifiedDocumentUploader({
           tipo: ocrResult.tipo_detectado || 'outro',
           arquivo_url: arquivoUrl,
           arquivo_nome: originalFileName, // Keep original name for reference
-          status: ocrResult.sugestao === 'aprovar' ? 'aprovado' : 'pendente',
+          status: ocrResult.sugestao === 'aprovar' ? 'em_analise' : 'pendente',
           ocr_resultado: ocrResult as any,
         })
         .select()
