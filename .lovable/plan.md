@@ -1,67 +1,63 @@
 
+Corrigir o fluxo Softruck para usar o vínculo local do veículo como base de reconciliação e preencher os IDs da plataforma que faltam.
 
-# Fix: Rastreadores Offline — `plataforma_veiculo_id` Não Populado
+1. Diagnóstico confirmado
+- O sistema mostra rastreador + plataforma + veículo porque o vínculo local existe em `rastreadores.veiculo_id`.
+- Isso não basta para a API da Softruck: o endpoint de tracking exige o par real da plataforma `deviceId + vehicleId`.
+- Hoje há `5072` rastreadores Softruck instalados com `plataforma_device_id` e `veiculo_id`, mas só `73` com `rastreadores.plataforma_veiculo_id`.
+- Portanto, a tela lista corretamente os itens, mas o sync não consegue consultar posição para a grande maioria.
+- Não vou repetir o fallback errado `deviceId => vehicleId`; ele já gerou 404/429. A correção precisa popular o `vehicleId` correto.
 
-## Problema
+2. O que implementar
+- Reaproveitar o vínculo local do veículo para reconciliar a Softruck:
+  - usar `rastreadores.veiculo_id`
+  - ler `veiculos.placa` e `veiculos.softruck_vehicle_id`
+  - localizar ou criar o veículo na Softruck por placa
+  - associar o device existente ao vehicle correto
+  - persistir os IDs em:
+    - `rastreadores.plataforma_veiculo_id`
+    - `veiculos.softruck_vehicle_id`
+    - opcionalmente normalizar `rastreadores.plataforma_device_id` se vier IMEI em vez do ID Softruck
 
-Todos os 5.072 rastreadores Softruck estão offline porque `plataforma_veiculo_id` é NULL em todos. O `sync-rastreadores` exige ambos `plataforma_device_id` E `plataforma_veiculo_id` para sincronizar, então zero rastreadores passam o filtro.
+3. Arquivos a ajustar
+- `supabase/functions/popular-ids-softruck/index.ts`
+  - transformar a função em reconciliador real, não apenas “ler relationship do device”.
+  - para cada rastreador instalado:
+    - buscar veículo local vinculado
+    - resolver `vehicleId` por esta ordem:
+      1. `rastreadores.plataforma_veiculo_id`
+      2. `veiculos.softruck_vehicle_id`
+      3. `softruck-api -> buscar-veiculo-placa`
+      4. `softruck-api -> criar-veiculo`
+    - resolver `deviceId` válido do rastreador
+    - garantir associação `device <-> vehicle` via `associar-device-veiculo` com fallback `vincular-device-veiculo`
+    - salvar os IDs encontrados/criados no banco
+- `supabase/functions/sync-rastreadores/index.ts`
+  - parar de depender só de `rastreadores.plataforma_veiculo_id`.
+  - incluir no select os dados do veículo local (`id`, `placa`, `softruck_vehicle_id`).
+  - usar `vehicleId = rast.plataforma_veiculo_id || rast.veiculo?.softruck_vehicle_id`.
+  - se encontrar `softruck_vehicle_id` no veículo e faltar no rastreador, persistir no rastreador.
+  - manter tracking apenas com IDs corretos da plataforma.
+- `supabase/functions/rastreador-posicao/index.ts`
+  - aplicar a mesma lógica de resolução/persistência para o mapa individual e atualização manual.
+  - assim um rastreador corrigido manualmente já volta a pontuar sem esperar o cron.
+- `supabase/functions/posicao-veiculo/index.ts`
+  - alinhar com a implementação que já funciona em `rastreador-posicao`.
+  - corrigir divergência de parser/resposta Softruck e base URL, para não existir um fluxo “bom” e outro “quebrado”.
 
-## Causa Raiz
+4. Decisão de arquitetura
+- Centralizar a resolução dos IDs Softruck em um helper compartilhado em `supabase/functions/_shared/...`.
+- Isso evita repetir lógica em 3 funções diferentes e reduz novos desencontros.
 
-O fluxo de instalação/cadastro nunca popula `plataforma_veiculo_id`. O campo `plataforma_device_id` está preenchido (com o IMEI), mas o ID do veículo na plataforma Softruck não é salvo.
+5. Resultado esperado
+- O batch de reconciliação preencherá os `vehicleId` faltantes usando o veículo já vinculado localmente.
+- O cron `sync-rastreadores` voltará a inserir posições no `rastreador_posicoes`.
+- O trigger já existente atualizará `ultima_comunicacao`, `ultima_posicao_lat` e `ultima_posicao_lng`.
+- A UI de rastreadores passará a marcar online/offline com base em comunicação real, não por falta de ID.
+- Depois disso, os que continuarem offline estarão realmente sem comunicação recente na Softruck.
 
-## Solução em 2 Partes
-
-### Parte 1: Flexibilizar o filtro do sync (correção imediata)
-
-Alterar `sync-rastreadores` para aceitar rastreadores Softruck que tenham **apenas** `plataforma_device_id` (sem exigir `plataforma_veiculo_id`). A API Softruck pode ser consultada usando apenas o device ID — o `plataforma_veiculo_id` pode ser obtido via lookup e salvo automaticamente.
-
-**Arquivo**: `supabase/functions/sync-rastreadores/index.ts`
-
-- Linha 447-449: Alterar filtro para aceitar Softruck com apenas `plataforma_device_id`
-- Linha 188-197: Antes de pular por falta de `vehicleId`, fazer lookup automático via `softruck-api` (operação `getVehicleByDevice`) e salvar o `plataforma_veiculo_id` no banco
-- Se a API não suportar lookup por device, usar o `plataforma_device_id` como `vehicleId` no tracking (muitas APIs Softruck aceitam o IMEI como identificador)
-
-### Parte 2: Fallback — usar device ID como vehicle ID
-
-Se a Softruck aceitar o device ID no endpoint de tracking (o que é comum), a correção mais simples é:
-
-**Arquivo**: `supabase/functions/sync-rastreadores/index.ts`
-
-- Linha 190: `const vehicleId = rast.plataforma_veiculo_id || rast.plataforma_device_id;`
-- Linha 448-449: `return !!r.plataforma_device_id;` (remover exigência de `plataforma_veiculo_id`)
-
-Isso desbloquearia imediatamente todos os 5.072 rastreadores para sincronização.
-
-## Arquivos Alterados
-
-| Arquivo | Ação |
-|---------|------|
-| `supabase/functions/sync-rastreadores/index.ts` | Flexibilizar filtro e fallback de vehicle ID |
-
-## Detalhes Técnicos
-
-### Filtro (linha ~447-452)
-```typescript
-// Antes:
-if (r.plataforma === 'softruck') {
-  return r.plataforma_device_id && r.plataforma_veiculo_id;
-}
-
-// Depois:
-if (r.plataforma === 'softruck') {
-  return !!r.plataforma_device_id;
-}
-```
-
-### Sync function (linha ~190)
-```typescript
-// Antes:
-const vehicleId = rast.plataforma_veiculo_id;
-
-// Depois:
-const vehicleId = rast.plataforma_veiculo_id || rast.plataforma_device_id;
-```
-
-Após deploy, o cron de sincronização (a cada ~7 min) começará a buscar posições de todos os rastreadores. Se a API Softruck rejeitar o device ID como vehicle ID, será necessário investigar o endpoint correto da Softruck e criar um passo de auto-discovery do vehicle ID.
-
+6. Validação após implementar
+- Confirmar aumento de `rastreadores.plataforma_veiculo_id` e `veiculos.softruck_vehicle_id`.
+- Rodar o reconciliador em lote.
+- Executar `sync-rastreadores` para Softruck e verificar inserção de posições.
+- Validar na tela `/monitoramento/rastreadores` e no mapa que os rastreadores corrigidos aparecem online e com posição.
