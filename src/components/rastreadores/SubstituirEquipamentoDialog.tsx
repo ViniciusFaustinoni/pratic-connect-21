@@ -49,7 +49,7 @@ export function SubstituirEquipamentoDialog({
   const substituirEquipamento = useSubstituirEquipamento();
 
   // Filtrar rastreadores da mesma plataforma
-  const rastreadoresCompativeis = rastreadoresDisponiveis?.filter(
+  const rastreadoresCompativeis = rastreadoresDisponiveis?.items?.filter(
     (r) => r.plataforma === rastreadorAtual?.plataforma
   ) || [];
 

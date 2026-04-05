@@ -63,7 +63,7 @@ export default function Rastreadores() {
   const [showForm, setShowForm] = useState(false);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const [editingId, setEditingId] = useState<string | null>(null);
-  const [filters, setFilters] = useState<Filters>({});
+  const [filters, setFilters] = useState<Filters>({ page: 1, pageSize: 50 });
   const [activeMetricFilter, setActiveMetricFilter] = useState('');
   const [activeTab, setActiveTab] = useState('visao-geral');
   const [viewMode, setViewMode] = useState<ViewMode>(() => {
@@ -79,7 +79,11 @@ export default function Rastreadores() {
   const [mapaModalOpen, setMapaModalOpen] = useState(false);
   const [rastreadorMapaId, setRastreadorMapaId] = useState<string | null>(null);
 
-  const { data: rastreadores, isLoading } = useRastreadores(filters);
+  const { data: paginatedResult, isLoading } = useRastreadores(filters);
+  const rastreadores = paginatedResult?.items;
+  const totalCount = paginatedResult?.total ?? 0;
+  const totalPages = paginatedResult?.totalPages ?? 1;
+  const currentPage = filters.page ?? 1;
   const { data: metricas, isLoading: isLoadingMetricas } = useRastreadoresMetricas();
   const { data: plataformasLabels } = usePlataformasLabels();
   const { isDiretor, isDesenvolvedor, canManageEquipeEstoque } = usePermissions();
