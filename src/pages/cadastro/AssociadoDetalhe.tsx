@@ -201,15 +201,12 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
     if (!id) return;
     setIsSavingContatos(true);
     try {
-      const { error } = await supabase
-        .from('associados')
-        .update({
-          telefone: editTelefone,
-          telefone_secundario: editTelefoneSecundario || null,
-          email: editEmail,
-          updated_at: new Date().toISOString(),
-        })
-        .eq('id', id);
+      const { error } = await supabase.rpc('update_associado_contatos', {
+        _associado_id: id,
+        _telefone: editTelefone,
+        _telefone_secundario: editTelefoneSecundario || null,
+        _email: editEmail,
+      });
       if (error) throw error;
       toast.success('Contatos atualizados com sucesso');
       setEditingContatos(false);
