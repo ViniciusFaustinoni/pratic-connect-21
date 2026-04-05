@@ -286,6 +286,8 @@ interface RastreadoresContentProps {
   isDiretor: boolean;
   canManageEquipe: boolean;
   onViewMap: (rastreadorId: string) => void;
+  activeMetricFilter: string;
+  onMetricFilterClick: (filter: Partial<Filters>, filterKey: string) => void;
 }
 
 function RastreadoresContent({
