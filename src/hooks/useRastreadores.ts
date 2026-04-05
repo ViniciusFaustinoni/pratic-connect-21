@@ -20,6 +20,14 @@ export interface RastreadorFilters {
   plataforma?: string;
   search?: string;
   comunicacao?: 'online' | 'offline' | 'atencao' | 'todos';
+  page?: number;
+  pageSize?: number;
+}
+
+export interface RastreadoresPaginatedResult {
+  items: RastreadorWithRelations[];
+  total: number;
+  totalPages: number;
 }
 
 export interface RastreadoresMetricas {
