@@ -1,33 +1,42 @@
 
 
-# Corrigir Documentos Chegando como "Aprovado" em vez de "Em Análise"
+# Corrigir Rastreador Não Aparecendo no Veículo Após Instalação
 
 ## Problema
-Em `src/components/contratos/UnifiedDocumentUploader.tsx` (linha 206), quando o OCR/IA sugere aprovação (`ocrResult.sugestao === 'aprovar'`), o documento é inserido com `status: 'aprovado'` diretamente. Isso pula a etapa de análise manual pelo analista de cadastro.
+Quando a instalação é concluída via `InstalacaoDetalhe.tsx` (tela do monitoramento), o hook `useInstalacoes.ts` → `concluirInstalacao` atualiza o rastreador para `status: 'instalado'` mas **não define `veiculo_id`** no rastreador. Sem `veiculo_id`, a query do `VeiculoDetalhesModal` (que busca `rastreadores WHERE veiculo_id = X`) não encontra nenhum rastreador.
 
-O analista deveria receber todos os documentos como "em_analise" para poder revisar e aprovar individualmente.
+O fluxo alternativo via `useAprovarVeiculoServico` (linha 978 de `useServicos.ts`) faz isso corretamente — o bug está apenas em `useInstalacoes.ts`.
 
 ## Solução
 
-### `src/components/contratos/UnifiedDocumentUploader.tsx`
+### `src/hooks/useInstalacoes.ts` — `concluirInstalacao` (linhas 560-596)
 
-Alterar a linha 206 para usar `'em_analise'` quando o OCR sugere aprovação, em vez de `'aprovado'`:
+1. Adicionar `veiculo_id` como parâmetro opcional na mutation
+2. Se não fornecido, buscar da própria instalação (`instalacoes.veiculo_id`)
+3. Incluir `veiculo_id` no update do rastreador
 
 ```typescript
-// Antes:
-status: ocrResult.sugestao === 'aprovar' ? 'aprovado' : 'pendente',
+// Antes (linha 583-586):
+.update({ status: 'instalado' })
 
 // Depois:
-status: ocrResult.sugestao === 'aprovar' ? 'em_analise' : 'pendente',
-```
+// Buscar veiculo_id da instalação
+const { data: instData } = await supabase
+  .from('instalacoes')
+  .select('veiculo_id')
+  .eq('id', instalacao_id)
+  .single();
 
-Dessa forma:
-- Documentos que passam na validação OCR chegam como **"Em Análise"** (prontos para o analista revisar)
-- Documentos que falham na validação OCR continuam como **"Pendente"**
-- O analista mantém o poder de aprovar/reprovar cada documento individualmente
+.update({ 
+  status: 'instalado', 
+  veiculo_id: instData?.veiculo_id || null,
+  portador_id: null,
+  updated_at: new Date().toISOString(),
+})
+```
 
 ## Arquivo alterado
 | Arquivo | Ação |
 |---------|------|
-| `src/components/contratos/UnifiedDocumentUploader.tsx` | Alterar status de `'aprovado'` para `'em_analise'` (1 linha) |
+| `src/hooks/useInstalacoes.ts` | Adicionar `veiculo_id` ao update do rastreador na conclusão |
 
