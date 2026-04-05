@@ -567,6 +567,13 @@ export function useInstalacaoActions() {
       rastreador_id: string;
       observacoes?: string;
     }) => {
+      // Buscar veiculo_id da instalação para vincular ao rastreador
+      const { data: instData } = await supabase
+        .from('instalacoes')
+        .select('veiculo_id')
+        .eq('id', instalacao_id)
+        .single();
+
       const updateData: InstalacaoUpdate = { 
         status: 'concluida',
         concluida_em: new Date().toISOString()
@@ -582,7 +589,11 @@ export function useInstalacaoActions() {
 
       const { error: errRast } = await supabase
         .from('rastreadores')
-        .update({ status: 'instalado' })
+        .update({ 
+          status: 'instalado',
+          veiculo_id: instData?.veiculo_id || null,
+          updated_at: new Date().toISOString(),
+        })
         .eq('id', rastreador_id);
 
       if (errRast) throw errRast;
