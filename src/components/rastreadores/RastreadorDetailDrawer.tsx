@@ -97,6 +97,35 @@ export function RastreadorDetailDrawer({
 
   const [substituirDialogOpen, setSubstituirDialogOpen] = useState(false);
   const [fotoViewerOpen, setFotoViewerOpen] = useState(false);
+  const [buscaPlaca, setBuscaPlaca] = useState('');
+  const [veiculoSelecionado, setVeiculoSelecionado] = useState<any>(null);
+  const debouncedPlaca = useDebounce(buscaPlaca, 300);
+
+  const { data: veiculosBusca, isLoading: buscandoVeiculos } = useQuery({
+    queryKey: ['busca-veiculo-vincular', debouncedPlaca],
+    queryFn: async () => {
+      const cleaned = debouncedPlaca.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      const { data, error } = await supabase
+        .from('veiculos')
+        .select('id, placa, marca, modelo, ano_modelo, associado_id, associados(id, nome)')
+        .ilike('placa', `%${cleaned}%`)
+        .limit(5);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: debouncedPlaca.length >= 3,
+  });
+
+  const handleVincular = async () => {
+    if (!rastreadorId || !veiculoSelecionado) return;
+    await updateStatus.mutateAsync({
+      id: rastreadorId,
+      status: 'instalado',
+      veiculo_id: veiculoSelecionado.id,
+    });
+    setVeiculoSelecionado(null);
+    setBuscaPlaca('');
+  };
 
   const handleStatusChange = async (status: StatusRastreador) => {
     if (!rastreadorId) return;
