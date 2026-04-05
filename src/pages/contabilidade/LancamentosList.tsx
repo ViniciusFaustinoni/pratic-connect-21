@@ -126,12 +126,12 @@ export default function LancamentosList() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Origem</label>
-              <Select value={filtros.origem} onValueChange={(v) => setFiltros({ ...filtros, origem: v })}>
+              <Select value={filtros.origem || 'todos'} onValueChange={(v) => setFiltros({ ...filtros, origem: v === 'todos' ? '' : v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Todas" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todas</SelectItem>
+                  <SelectItem value="todos">Todas</SelectItem>
                   <SelectItem value="manual">Manual</SelectItem>
                   <SelectItem value="cobranca">Cobrança</SelectItem>
                   <SelectItem value="pagamento">Pagamento</SelectItem>
@@ -143,12 +143,12 @@ export default function LancamentosList() {
             </div>
             <div>
               <label className="text-sm font-medium mb-1.5 block">Status</label>
-              <Select value={filtros.status} onValueChange={(v) => setFiltros({ ...filtros, status: v })}>
+              <Select value={filtros.status || 'todos'} onValueChange={(v) => setFiltros({ ...filtros, status: v === 'todos' ? '' : v })}>
                 <SelectTrigger>
                   <SelectValue placeholder="Todos" />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="">Todos</SelectItem>
+                  <SelectItem value="todos">Todos</SelectItem>
                   <SelectItem value="ativo">Ativo</SelectItem>
                   <SelectItem value="rascunho">Rascunho</SelectItem>
                   <SelectItem value="estornado">Estornado</SelectItem>

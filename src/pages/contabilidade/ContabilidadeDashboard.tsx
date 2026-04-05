@@ -150,7 +150,7 @@ export default function ContabilidadeDashboard() {
             <Plus className="h-4 w-4 mr-2" />
             Novo Lançamento
           </Button>
-          <Button variant="outline" onClick={() => navigate('/contabilidade/fechamentos')}>
+          <Button variant="outline" onClick={() => navigate('/contabilidade/fechamento')}>
             <Calendar className="h-4 w-4 mr-2" />
             Fechamentos
           </Button>
