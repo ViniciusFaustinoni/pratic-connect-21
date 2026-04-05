@@ -195,17 +195,6 @@ export function PlataformasConfigPanel() {
                             )}
                             Testar Conexão
                           </DropdownMenuItem>
-                          <DropdownMenuItem
-                            onClick={() => handleSync(plataforma)}
-                            disabled={syncingId === plataforma.id}
-                          >
-                            {syncingId === plataforma.id ? (
-                              <Loader2 className="mr-2 h-4 w-4 animate-spin" />
-                            ) : (
-                              <RefreshCw className="mr-2 h-4 w-4" />
-                            )}
-                            Sincronizar
-                          </DropdownMenuItem>
                           <DropdownMenuSeparator />
                           <DropdownMenuItem
                             className="text-destructive focus:text-destructive"
