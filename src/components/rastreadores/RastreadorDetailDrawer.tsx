@@ -1,4 +1,5 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
+import { useDebounce } from '@/hooks/useDebounce';
 import { usePermissions } from '@/hooks/usePermissions';
 import {
   Tooltip,
@@ -35,7 +36,12 @@ import {
   Unlock,
   RefreshCw,
   Camera,
+  Search,
+  Link2,
 } from 'lucide-react';
+import { supabase } from '@/integrations/supabase/client';
+import { useQuery } from '@tanstack/react-query';
+import { Input } from '@/components/ui/input';
 import {
   useRastreador,
   useUpdateRastreadorStatus,
@@ -91,6 +97,35 @@ export function RastreadorDetailDrawer({
 
   const [substituirDialogOpen, setSubstituirDialogOpen] = useState(false);
   const [fotoViewerOpen, setFotoViewerOpen] = useState(false);
+  const [buscaPlaca, setBuscaPlaca] = useState('');
+  const [veiculoSelecionado, setVeiculoSelecionado] = useState<any>(null);
+  const debouncedPlaca = useDebounce(buscaPlaca, 300);
+
+  const { data: veiculosBusca, isLoading: buscandoVeiculos } = useQuery({
+    queryKey: ['busca-veiculo-vincular', debouncedPlaca],
+    queryFn: async () => {
+      const cleaned = debouncedPlaca.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
+      const { data, error } = await supabase
+        .from('veiculos')
+        .select('id, placa, marca, modelo, ano_modelo, associado_id, associados(id, nome)')
+        .ilike('placa', `%${cleaned}%`)
+        .limit(5);
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: debouncedPlaca.length >= 3,
+  });
+
+  const handleVincular = async () => {
+    if (!rastreadorId || !veiculoSelecionado) return;
+    await updateStatus.mutateAsync({
+      id: rastreadorId,
+      status: 'instalado',
+      veiculo_id: veiculoSelecionado.id,
+    });
+    setVeiculoSelecionado(null);
+    setBuscaPlaca('');
+  };
 
   const handleStatusChange = async (status: StatusRastreador) => {
     if (!rastreadorId) return;
@@ -379,6 +414,114 @@ export function RastreadorDetailDrawer({
                               <MessageCircle className="mr-2 h-4 w-4" />
                               WhatsApp
                             </Button>
+                          )}
+                        </div>
+                      )}
+                    </div>
+                    <Separator />
+                  </>
+                )}
+
+                {/* Vincular a Veículo (somente diretor, rastreador não instalado) */}
+                {isDiretor && !rastreador.veiculos && rastreador.status !== 'instalado' && (
+                  <>
+                    <div className="space-y-3">
+                      <h3 className="text-sm font-semibold text-muted-foreground flex items-center gap-2">
+                        <Link2 className="h-4 w-4" />
+                        Vincular a Veículo
+                      </h3>
+
+                      {veiculoSelecionado ? (
+                        <div className="p-3 rounded-lg border border-primary/30 bg-primary/5 space-y-2">
+                          <div className="flex items-center justify-between">
+                            <div>
+                              <p className="font-semibold">{veiculoSelecionado.placa}</p>
+                              <p className="text-sm text-muted-foreground">
+                                {veiculoSelecionado.marca} {veiculoSelecionado.modelo} {veiculoSelecionado.ano_modelo}
+                              </p>
+                              {veiculoSelecionado.associados?.nome && (
+                                <p className="text-xs text-muted-foreground mt-1">
+                                  <User className="h-3 w-3 inline mr-1" />
+                                  {veiculoSelecionado.associados.nome}
+                                </p>
+                              )}
+                            </div>
+                            <Button variant="ghost" size="sm" onClick={() => setVeiculoSelecionado(null)}>
+                              <XCircle className="h-4 w-4" />
+                            </Button>
+                          </div>
+                          <AlertDialog>
+                            <AlertDialogTrigger asChild>
+                              <Button size="sm" className="w-full" disabled={updateStatus.isPending}>
+                                {updateStatus.isPending ? (
+                                  <Loader2 className="mr-2 h-4 w-4 animate-spin" />
+                                ) : (
+                                  <Link2 className="mr-2 h-4 w-4" />
+                                )}
+                                Confirmar Vinculação
+                              </Button>
+                            </AlertDialogTrigger>
+                            <AlertDialogContent>
+                              <AlertDialogHeader>
+                                <AlertDialogTitle>Confirmar vinculação?</AlertDialogTitle>
+                                <AlertDialogDescription>
+                                  O rastreador <strong>{rastreador.codigo}</strong> será vinculado ao veículo{' '}
+                                  <strong>{veiculoSelecionado.placa}</strong> e o status mudará para "Instalado".
+                                </AlertDialogDescription>
+                              </AlertDialogHeader>
+                              <AlertDialogFooter>
+                                <AlertDialogCancel>Cancelar</AlertDialogCancel>
+                                <AlertDialogAction onClick={handleVincular}>
+                                  Vincular
+                                </AlertDialogAction>
+                              </AlertDialogFooter>
+                            </AlertDialogContent>
+                          </AlertDialog>
+                        </div>
+                      ) : (
+                        <div className="space-y-2">
+                          <div className="relative">
+                            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+                            <Input
+                              placeholder="Buscar por placa..."
+                              value={buscaPlaca}
+                              onChange={(e) => setBuscaPlaca(e.target.value)}
+                              className="pl-9"
+                            />
+                          </div>
+                          {buscandoVeiculos && (
+                            <div className="flex items-center justify-center py-3">
+                              <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                            </div>
+                          )}
+                          {veiculosBusca && veiculosBusca.length > 0 && (
+                            <div className="border rounded-lg divide-y max-h-48 overflow-y-auto">
+                              {veiculosBusca.map((v: any) => (
+                                <button
+                                  key={v.id}
+                                  className="w-full text-left px-3 py-2 hover:bg-muted/50 transition-colors text-sm"
+                                  onClick={() => {
+                                    setVeiculoSelecionado(v);
+                                    setBuscaPlaca('');
+                                  }}
+                                >
+                                  <span className="font-semibold">{v.placa}</span>
+                                  <span className="text-muted-foreground ml-2">
+                                    {v.marca} {v.modelo}
+                                  </span>
+                                  {v.associados?.nome && (
+                                    <span className="text-xs text-muted-foreground block">
+                                      {v.associados.nome}
+                                    </span>
+                                  )}
+                                </button>
+                              ))}
+                            </div>
+                          )}
+                          {veiculosBusca && veiculosBusca.length === 0 && debouncedPlaca.length >= 3 && (
+                            <p className="text-sm text-muted-foreground text-center py-2">
+                              Nenhum veículo encontrado
+                            </p>
                           )}
                         </div>
                       )}
