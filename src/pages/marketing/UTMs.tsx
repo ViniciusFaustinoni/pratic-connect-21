@@ -199,12 +199,12 @@ export default function UTMs() {
               {/* Vincular a Campanha */}
               <div className="space-y-2">
                 <Label>Vincular a Campanha (opcional)</Label>
-                <Select value={campanhaId} onValueChange={setCampanhaId}>
+                <Select value={campanhaId || 'nenhuma'} onValueChange={(v) => setCampanhaId(v === 'nenhuma' ? '' : v)}>
                   <SelectTrigger>
                     <SelectValue placeholder="Selecione uma campanha" />
                   </SelectTrigger>
                   <SelectContent>
-                    <SelectItem value="">Nenhuma</SelectItem>
+                    <SelectItem value="nenhuma">Nenhuma</SelectItem>
                     {campanhas?.map(c => (
                       <SelectItem key={c.id} value={c.id}>{c.nome}</SelectItem>
                     ))}
