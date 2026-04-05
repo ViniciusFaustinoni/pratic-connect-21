@@ -148,12 +148,17 @@ export function ImportarRastreadoresDialog({
       let veiculo_encontrado = false;
       if (row.placa) {
         const placaNorm = row.placa.toUpperCase().replace(/[^A-Z0-9]/g, '');
-        const vid = veiculosMap.get(placaNorm);
-        if (vid) {
-          veiculo_id = vid;
-          veiculo_encontrado = true;
+        if (!placaRegex.test(placaNorm)) {
+          // Not a valid Brazilian plate format — ignore silently
+          row.placa = undefined;
         } else {
-          avisos.push('Placa não encontrada no sistema');
+          const vid = veiculosMap.get(placaNorm);
+          if (vid) {
+            veiculo_id = vid;
+            veiculo_encontrado = true;
+          } else {
+            avisos.push('Placa não encontrada no sistema');
+          }
         }
       }
 
