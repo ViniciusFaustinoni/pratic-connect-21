@@ -151,10 +151,10 @@ export function RastreadorDetailDrawer({
             <DialogHeader>
               <div className="flex items-start justify-between">
                 <div className="space-y-1">
-                  <SheetTitle className="flex items-center gap-2">
+                  <DialogTitle className="flex items-center gap-2">
                     <Radio className="h-5 w-5" />
                     {rastreador.codigo}
-                  </SheetTitle>
+                  </DialogTitle>
                   <div className="flex items-center gap-2">
                     <Badge className={STATUS_RASTREADOR_COLORS[rastreador.status]}>
                       {STATUS_RASTREADOR_LABELS[rastreador.status]}
