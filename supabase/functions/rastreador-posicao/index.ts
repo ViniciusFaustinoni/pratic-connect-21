@@ -250,9 +250,14 @@ async function getPosicaoRedeVeiculos(
   
   console.log(`[Rede Veículos] Resposta:`, JSON.stringify(data).slice(0, 300));
   
+  // Verificar se a API retornou erro
+  if (data.error === 'true' || data.error === true) {
+    throw new Error(`Rede Veículos: ${data.message || 'Erro na API'}`);
+  }
+  
   // Verificar se tem coordenadas válidas
   if (!data.latitude || !data.longitude) {
-    throw new Error('Resposta Rede Veículos inválida - coordenadas ausentes');
+    throw new Error('Rede Veículos: coordenadas ausentes na resposta');
   }
 
   return {
