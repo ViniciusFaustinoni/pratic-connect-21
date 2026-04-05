@@ -171,7 +171,7 @@ export default function Rastreadores() {
             isLoading={isLoading}
             isLoadingMetricas={isLoadingMetricas}
             filters={filters}
-            onFiltersChange={setFilters}
+            onFiltersChange={(f) => { setFilters(f); setActiveMetricFilter(''); }}
             onOpenDetails={handleOpenDetails}
             onEdit={handleEdit}
             onNewRastreador={handleNewRastreador}
@@ -181,6 +181,8 @@ export default function Rastreadores() {
             isDiretor={isDiretor}
             canManageEquipe={canManageEquipeEstoque}
             onViewMap={handleViewMap}
+            activeMetricFilter={activeMetricFilter}
+            onMetricFilterClick={(f, key) => { setFilters(f); setActiveMetricFilter(key); }}
           />
         </TabsContent>
 
