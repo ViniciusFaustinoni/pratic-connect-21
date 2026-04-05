@@ -63,8 +63,8 @@ export function RastreadorCard({
         )}
         onClick={onViewDetails}
       >
-        {/* Barra de status de comunicação */}
-        <div className={cn("h-1.5", getStatusBarColor())} />
+        {/* Barra de status */}
+        <div className="h-1.5 bg-gradient-to-r from-muted to-muted/50" />
 
         <CardContent className="p-4 space-y-4">
           {/* Header: Código + Badges + Checkbox */}
