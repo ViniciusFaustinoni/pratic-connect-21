@@ -175,50 +175,6 @@ export function useRastreadorHistorico(
   });
 }
 
-// Hook para buscar todas as posições atuais (para mapa)
-export function useTodasPosicoesAtuais() {
-  return useQuery({
-    queryKey: ['rastreadores-posicoes-atuais'],
-    queryFn: async () => {
-      const { data, error } = await supabase.rpc('get_ultimas_posicoes');
-
-      if (error) throw error;
-      return data as PosicaoAtual[];
-    },
-    refetchInterval: 60000,
-  });
-}
-
-// Hook para disparar sincronização manual
-export function useSyncRastreadores() {
-  const queryClient = useQueryClient();
-
-  return useMutation({
-    mutationFn: async (plataforma?: 'softruck' | 'rede_veiculos') => {
-      const { data, error } = await supabase.functions.invoke('sync-rastreadores', {
-        body: plataforma ? { plataforma } : {},
-      });
-
-      if (error) throw error;
-      return data;
-    },
-    onSuccess: (data) => {
-      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
-      queryClient.invalidateQueries({ queryKey: ['rastreadores-posicoes-atuais'] });
-
-      const total = data?.results?.reduce(
-        (acc: number, r: { posicoes_atualizadas: number }) => acc + (r.posicoes_atualizadas || 0),
-        0
-      ) || 0;
-
-      toast.success(`Sincronização concluída: ${total} posições atualizadas`);
-    },
-    onError: (error: Error) => {
-      toast.error(`Erro na sincronização: ${error.message}`);
-    },
-  });
-}
-
 // Hook para buscar alertas de rastreadores
 export function useRastreadorAlertas(rastreadorId?: string) {
   return useQuery({
@@ -246,7 +202,6 @@ export function useRastreadorAlertas(rastreadorId?: string) {
       if (error) throw error;
       return data;
     },
-    refetchInterval: 30000,
   });
 }
 
@@ -268,6 +223,5 @@ export function useAlertasContagem() {
         total: number;
       } | null;
     },
-    refetchInterval: 30000,
   });
 }
