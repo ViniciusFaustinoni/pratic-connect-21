@@ -45,7 +45,7 @@ import {
   useRastreadoresPorPlataforma,
   type PlataformaCompleta,
 } from '@/hooks/usePlataformasCRUD';
-import { useTestarConexaoPlataforma, useSyncRastreadores } from '@/hooks/usePlataformasConfig';
+import { useTestarConexaoPlataforma } from '@/hooks/usePlataformasConfig';
 import { PlataformaFormDialog } from './PlataformaFormDialog';
 import { Skeleton } from '@/components/ui/skeleton';
 
