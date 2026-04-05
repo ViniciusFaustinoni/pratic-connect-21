@@ -166,7 +166,7 @@ const OrdemServicoDetalhePage = lazy(() => import("./pages/oficina/OrdemServicoD
 const PlanosAdmin = lazy(() => import("./pages/admin/PlanosAdmin"));
 
 // Configurações
-const { ConfiguracoesLayout } = await import("./pages/configuracoes/ConfiguracoesLayout").catch(() => ({ ConfiguracoesLayout: lazy(() => import("./pages/configuracoes/ConfiguracoesLayout").then(m => ({ default: m.ConfiguracoesLayout }))) }));
+// ConfiguracoesLayout handled via LazyConfiguracoesLayout below
 const MeuPerfil = lazy(() => import("./pages/configuracoes/MeuPerfil"));
 const Seguranca = lazy(() => import("./pages/configuracoes/Seguranca"));
 const NotificacoesConfig = lazy(() => import("./pages/configuracoes/Notificacoes"));
