@@ -1,31 +1,30 @@
 
 
-# Plano: Atribuição manual de rastreador no modal de veículo (Base Antiga)
+# Plano: Corrigir erro ao criar/salvar plano na Gestão Comercial
 
-## O que muda para o usuário
-Na aba "Rastreador" do modal de detalhes de veículo, quando o veículo não possui rastreador, diretores verão um formulário para vincular manualmente um rastreador disponível (em estoque).
+## Diagnóstico
 
-## Implementação
+O erro ocorre no componente `PlanoFormSheet.tsx` (usado na rota Diretoria > Gestão Comercial). A tabela `planos` tem **duas constraints UNIQUE** em `codigo` e `slug`. O código atual gera ambos de forma idêntica a partir do nome do plano (line 161):
 
-### 1. Criar componente `VincularRastreadorForm` inline na aba Rastreador
-- Renderizado quando `!rastreador` e o usuário `isDiretor`.
-- Contém um campo de busca com debounce para encontrar rastreadores com `status = 'estoque'` (busca por código, IMEI ou número de série).
-- Exibe lista de resultados com código, IMEI, plataforma.
-- Botão "Vincular" com confirmação.
+```
+const codigo = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
+```
 
-### 2. Hook de busca de rastreadores disponíveis
-- Criar (ou reutilizar) uma query em `useRastreadores.ts` que busca rastreadores com `status = 'estoque'` filtrados por texto (código/IMEI).
-- Query leve, limitada a 10 resultados.
+Se já existir um plano com o mesmo `codigo` ou `slug`, o INSERT falha com erro de constraint violation, exibindo apenas "Erro ao salvar plano" sem detalhes.
 
-### 3. Ação de vinculação
-- Reutilizar `useUpdateRastreadorStatus` já existente, passando `{ id: rastreadorSelecionado, status: 'instalado', veiculo_id: veiculoId }`.
-- Após sucesso, invalidar queries do modal para recarregar os dados do rastreador.
+## Solução
 
-### 4. Alterações em `VeiculoDetalhesModal.tsx`
-- Importar `usePermissions` e o novo componente/lógica.
-- Na aba "rastreador", quando `!rastreador`: se `isDiretor`, mostrar o formulário de vinculação; caso contrário, manter o empty state atual.
+### 1. Gerar `codigo` único com sufixo incremental (`PlanoFormSheet.tsx`)
+- Antes do insert, verificar se o `codigo` gerado já existe na tabela `planos`.
+- Se existir, adicionar sufixo numérico incrementando (`-2`, `-3`, etc.) até encontrar um valor disponível.
+- Usar o mesmo valor para `slug`.
 
-## Arquivos modificados
-- `src/components/cadastro/VeiculoDetalhesModal.tsx` — adicionar formulário de vinculação na aba rastreador
-- `src/hooks/useRastreadores.ts` — adicionar hook de busca de rastreadores em estoque
+### 2. Melhorar mensagem de erro
+- No `onError` da mutation, exibir a mensagem real do erro (`e.message`) em vez do genérico "Erro ao salvar plano", para facilitar diagnóstico de outros problemas futuros.
+
+### 3. Validação de nome vazio
+- Já existe `disabled={!nome.trim()}` no botão, mas adicionar validação explícita no início da mutation para segurança.
+
+## Arquivo modificado
+- `src/components/gestao-comercial/PlanoFormSheet.tsx` — gerar codigo/slug único + melhorar mensagem de erro
 
