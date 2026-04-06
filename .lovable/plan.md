@@ -1,23 +1,32 @@
 
 
-# Plano: Substituição de veículo com contexto de vendas
+# Plano: Corrigir TrocaTitularidadeDialog que não abre
 
 ## Problema
-O `SubstituicaoVeiculoPage` tem breadcrumbs e links hardcoded para `/cadastro/associados`. Quando acessado via `/vendas/substituicao/:associadoId`, os breadcrumbs ainda apontam para cadastro. Além disso, o usuário está acessando a rota antiga `/cadastro/associados/:id/substituicao` -- é necessário garantir que vendedores usem apenas a rota de vendas.
+Em `OutrasEntradasMenu.tsx`, ao selecionar um associado para troca de titularidade (linha 226), `onOpenChange(false)` fecha o dialog principal. Isso dispara o `useEffect` da linha 182-190, que reseta `selectedAssociadoId` para `null`. Como o `TrocaTitularidadeDialog` só renderiza quando `selectedAssociadoId` é truthy (linha 557), ele nunca aparece.
 
-## Alterações
+## Solução
+Não resetar `selectedAssociadoId` e `selectedAssociadoNome` no `useEffect` de close se `showTrocaTitularidade` estiver `true`. Isso garante que o dialog de troca receba o ID corretamente.
 
-### 1. Detectar contexto de rota no `SubstituicaoVeiculoPage`
-- Usar `useLocation()` para verificar se o path começa com `/vendas/`.
-- Ajustar breadcrumbs dinamicamente:
-  - Contexto vendas: `Home > Vendas > Substituição de Veículo`
-  - Contexto cadastro: `Home > Associados > [Nome] > Substituição de Veículo` (atual)
-- Botão "Voltar" usa `navigate(-1)` (já funciona corretamente).
+## Alteração
 
-### 2. Garantir navegação correta na Cotacao
-- Verificar que `Cotacao.tsx` linha 363 já navega para `/vendas/substituicao/` (feito na edição anterior).
-- Verificar se há outros pontos que redirecionam vendedores para a rota de cadastro.
+### `src/components/vendas/OutrasEntradasMenu.tsx`
+- Linhas 182-190: condicionar o reset de `selectedAssociadoId` e `selectedAssociadoNome` a `!showTrocaTitularidade && !showMigracao`:
+
+```typescript
+useEffect(() => {
+  if (!open) {
+    setSelectedTipo(null);
+    setSearchTerm('');
+    setMigracaoCpf('');
+    if (!showTrocaTitularidade && !showMigracao) {
+      setSelectedAssociadoId(null);
+      setSelectedAssociadoNome('');
+    }
+  }
+}, [open]);
+```
 
 ## Arquivo modificado
-- `src/pages/cadastro/SubstituicaoVeiculoPage.tsx` -- breadcrumbs dinâmicos baseados no contexto de rota
+- `src/components/vendas/OutrasEntradasMenu.tsx`
 
