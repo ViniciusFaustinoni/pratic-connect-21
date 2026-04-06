@@ -44,7 +44,7 @@ export function useModuleVisibility() {
  */
 export const MODULE_ROUTES: Record<string, string[]> = {
   dashboard: ['/dashboard'],
-  vendas: ['/vendas'],
+  vendas: ['/vendas', '/vendas/substituicao'],
   cadastro: ['/cadastro'],
   monitoramento: ['/monitoramento'],
   eventos: ['/eventos'],
