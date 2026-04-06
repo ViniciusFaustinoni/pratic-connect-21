@@ -349,9 +349,13 @@ export default function CotacaoPage() {
     <div className="h-full flex flex-col space-y-6 p-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Cotação</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          {isInclusaoVeiculo ? 'Inclusão de Veículo' : 'Cotação'}
+        </h1>
         <p className="text-muted-foreground">
-          Calcule o valor da proteção veicular em 4 passos simples
+          {isInclusaoVeiculo 
+            ? `Adicionando novo veículo para ${inclusaoAssociadoNome || 'associado'}`
+            : 'Calcule o valor da proteção veicular em 4 passos simples'}
         </p>
       </div>
 
