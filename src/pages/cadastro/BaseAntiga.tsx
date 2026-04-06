@@ -188,7 +188,7 @@ export default function BaseAntiga() {
               className="gap-1.5 whitespace-nowrap"
               onClick={() => { setSemRastreador(prev => !prev); setVPage(1); }}
             >
-              <RadioOff className="h-4 w-4" />
+              <WifiOff className="h-4 w-4" />
               Sem Rastreador
             </Button>
           </div>
