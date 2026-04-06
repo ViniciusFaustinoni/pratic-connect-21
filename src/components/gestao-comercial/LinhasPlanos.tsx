@@ -137,6 +137,22 @@ function useMovePlanToLine() {
   });
 }
 
+function useReorderPlans() {
+  const qc = useQueryClient();
+  return useMutation({
+    mutationFn: async (orderedPlanIds: string[]) => {
+      const updates = orderedPlanIds.map((id, index) =>
+        supabase.from('planos').update({ ordem: index }).eq('id', id)
+      );
+      const results = await Promise.all(updates);
+      const failed = results.find(r => r.error);
+      if (failed?.error) throw failed.error;
+    },
+    onSuccess: () => { qc.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] }); },
+    onError: () => toast.error('Erro ao reordenar planos'),
+  });
+}
+
 function useDeletePlano() {
   const qc = useQueryClient();
   return useMutation({
