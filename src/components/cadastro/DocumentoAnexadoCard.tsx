@@ -44,6 +44,7 @@ const tipoLabels: Record<TipoDocumentoAnexo, string> = {
   selfie_documento: 'Selfie com Documento',
   contrato_assinado: 'Contrato Assinado',
   laudo_vistoria: 'Laudo de Vistoria',
+  nota_fiscal_veiculo: 'Nota Fiscal do Veículo',
   foto_veiculo_frente: 'Foto Frente',
   foto_veiculo_traseira: 'Foto Traseira',
   foto_veiculo_lateral_esquerda: 'Foto Lateral Esq.',
