@@ -1,31 +1,31 @@
 
 
-# Plano: Filtro "Sem Rastreador" na Base Antiga - Veículos
+# Plano: Atribuição manual de rastreador no modal de veículo (Base Antiga)
 
 ## O que muda para o usuário
-Um botão de filtro ao lado da barra de busca permitirá mostrar apenas veículos que **não possuem rastreador vinculado**. Ao ativar, a lista e a contagem se atualizam automaticamente.
+Na aba "Rastreador" do modal de detalhes de veículo, quando o veículo não possui rastreador, diretores verão um formulário para vincular manualmente um rastreador disponível (em estoque).
 
 ## Implementação
 
-### 1. Expandir interface de filtros (`src/hooks/useBaseAntiga.ts`)
-- Adicionar `semRastreador?: boolean` ao `BaseAntigaFilters`.
-- Quando `semRastreador` estiver ativo, a estratégia muda: buscar IDs de veículos que **possuem** rastreador na tabela `rastreadores`, e usar `.not('id', 'in', (...))` ou, mais eficientemente, fazer um LEFT JOIN e filtrar onde `rastreador` é nulo **no lado do cliente** após o fetch (já que o PostgREST não suporta `IS NULL` em joins facilmente).
-- Abordagem mais simples e performática: filtrar client-side os resultados paginados onde `v.rastreador === null`. Porém isso quebra a paginação.
-- **Abordagem correta**: Usar uma query separada quando o filtro está ativo — buscar `veiculo_id` da tabela `rastreadores`, e aplicar `.not('id', 'in', (...ids))` na query de veículos. Limitação: se houver muitos rastreadores, a lista de IDs pode ser grande. Alternativa: criar uma view ou RPC no banco.
-- **Abordagem mais limpa**: Criar uma RPC `veiculos_sem_rastreador` que faz um `LEFT JOIN` eficiente no banco e retorna os IDs, ou simplesmente usar a lógica inversa — buscar todos os `veiculo_id` da tabela `rastreadores` (são poucos, ~centenas) e excluí-los.
+### 1. Criar componente `VincularRastreadorForm` inline na aba Rastreador
+- Renderizado quando `!rastreador` e o usuário `isDiretor`.
+- Contém um campo de busca com debounce para encontrar rastreadores com `status = 'estoque'` (busca por código, IMEI ou número de série).
+- Exibe lista de resultados com código, IMEI, plataforma.
+- Botão "Vincular" com confirmação.
 
-### 2. Lógica no hook (`src/hooks/useBaseAntiga.ts`)
-- Quando `semRastreador = true`:
-  - Buscar todos os `veiculo_id` distintos da tabela `rastreadores` (query leve, poucos registros).
-  - Aplicar `.not('id', 'in', '(id1,id2,...)')` nas queries de contagem e dados.
+### 2. Hook de busca de rastreadores disponíveis
+- Criar (ou reutilizar) uma query em `useRastreadores.ts` que busca rastreadores com `status = 'estoque'` filtrados por texto (código/IMEI).
+- Query leve, limitada a 10 resultados.
 
-### 3. UI — Botão de filtro (`src/pages/cadastro/BaseAntiga.tsx`)
-- Adicionar estado `semRastreador` (boolean, default `false`).
-- Renderizar um botão toggle ao lado do input de busca (ex: `<Button variant={semRastreador ? 'default' : 'outline'}>Sem Rastreador</Button>`).
-- Passar `{ search: vDebouncedSearch, semRastreador }` para o hook.
-- Resetar página ao alternar filtro.
+### 3. Ação de vinculação
+- Reutilizar `useUpdateRastreadorStatus` já existente, passando `{ id: rastreadorSelecionado, status: 'instalado', veiculo_id: veiculoId }`.
+- Após sucesso, invalidar queries do modal para recarregar os dados do rastreador.
+
+### 4. Alterações em `VeiculoDetalhesModal.tsx`
+- Importar `usePermissions` e o novo componente/lógica.
+- Na aba "rastreador", quando `!rastreador`: se `isDiretor`, mostrar o formulário de vinculação; caso contrário, manter o empty state atual.
 
 ## Arquivos modificados
-- `src/hooks/useBaseAntiga.ts` — expandir filtros e lógica de query
-- `src/pages/cadastro/BaseAntiga.tsx` — adicionar botão toggle de filtro
+- `src/components/cadastro/VeiculoDetalhesModal.tsx` — adicionar formulário de vinculação na aba rastreador
+- `src/hooks/useRastreadores.ts` — adicionar hook de busca de rastreadores em estoque
 
