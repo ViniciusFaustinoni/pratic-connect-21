@@ -1,5 +1,5 @@
 import { useState, useMemo } from 'react';
-import { useParams, useNavigate, Link } from 'react-router-dom';
+import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { Loader2, ArrowLeft, Home, ChevronRight, UserCheck, UserX } from 'lucide-react';
@@ -23,6 +23,8 @@ import type { DadosNovoVeiculo } from '@/types/substituicao';
 export default function SubstituicaoVeiculoPage() {
   const { associadoId } = useParams<{ associadoId: string }>();
   const navigate = useNavigate();
+  const location = useLocation();
+  const isVendasContext = location.pathname.startsWith('/vendas/');
   const { profile, isVendedor } = useAuth();
 
   const consultorId = isVendedor() ? profile?.id ?? null : null;
@@ -196,10 +198,19 @@ export default function SubstituicaoVeiculoPage() {
       <nav className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap">
         <Link to="/dashboard" className="hover:text-foreground"><Home className="h-4 w-4" /></Link>
         <ChevronRight className="h-3 w-3" />
-        <Link to="/cadastro/associados" className="hover:text-foreground">Associados</Link>
-        <ChevronRight className="h-3 w-3" />
-        <Link to={`/cadastro/associados/${associadoId}`} className="hover:text-foreground">{associado.nome}</Link>
-        <ChevronRight className="h-3 w-3" />
+        {isVendasContext ? (
+          <>
+            <Link to="/vendas" className="hover:text-foreground">Vendas</Link>
+            <ChevronRight className="h-3 w-3" />
+          </>
+        ) : (
+          <>
+            <Link to="/cadastro/associados" className="hover:text-foreground">Associados</Link>
+            <ChevronRight className="h-3 w-3" />
+            <Link to={`/cadastro/associados/${associadoId}`} className="hover:text-foreground">{associado.nome}</Link>
+            <ChevronRight className="h-3 w-3" />
+          </>
+        )}
         <span className="text-foreground font-medium">Substituição de Veículo</span>
       </nav>
 
