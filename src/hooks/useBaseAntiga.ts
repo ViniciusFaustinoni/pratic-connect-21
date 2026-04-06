@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface BaseAntigaFilters {
   search?: string;
+  semRastreador?: boolean;
 }
 
 export function useBaseAntigaAssociados(filters?: BaseAntigaFilters, pagination?: { page: number; pageSize: number }) {
