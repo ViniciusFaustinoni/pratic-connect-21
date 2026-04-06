@@ -274,12 +274,18 @@ export function LinhasPlanos() {
                   }
                 }
               }}
-              onDragLeave={() => setDragOverLineId(null)}
+              onDragLeave={(e) => {
+                if (!e.currentTarget.contains(e.relatedTarget as Node)) {
+                  setDragOverLineId(null);
+                  setDragOverPlanId(null);
+                }
+              }}
               onDrop={() => {
                 if (draggedPlan && draggedPlan.fromLineId !== linha.id) {
                   movePlan.mutate({ planId: draggedPlan.id, newLineId: linha.id });
                 }
                 setDragOverLineId(null);
+                setDragOverPlanId(null);
                 setDraggedPlan(null);
               }}
             >
