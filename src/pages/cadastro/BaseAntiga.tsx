@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt, Trash2, RadioOff } from 'lucide-react';
+import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt, Trash2, WifiOff } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
 
