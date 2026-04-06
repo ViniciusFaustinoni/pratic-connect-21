@@ -266,7 +266,31 @@ export function EtapaAssinaturaContrato({
     }
   }, [inicializado, verificarOuGerarContrato]);
 
-  // 4. Polling para verificar status da assinatura
+  // 4. Polling leve dedicado para capturar o link de assinatura rapidamente
+  useEffect(() => {
+    if (etapaInterna !== 'aguardando_assinatura' || !contrato?.id || contrato?.linkAssinatura) return;
+
+    const buscarLink = async () => {
+      try {
+        const { data } = await publicSupabase
+          .from('contratos')
+          .select('autentique_url')
+          .eq('id', contrato.id)
+          .maybeSingle();
+        if (data?.autentique_url) {
+          setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
+        }
+      } catch (e) {
+        console.error('[EtapaAssinatura] Erro ao buscar link:', e);
+      }
+    };
+
+    buscarLink(); // imediato
+    const interval = setInterval(buscarLink, 3000);
+    return () => clearInterval(interval);
+  }, [etapaInterna, contrato?.id, contrato?.linkAssinatura]);
+
+  // 5. Polling para verificar status da assinatura (após link disponível)
   useEffect(() => {
     if (etapaInterna !== 'aguardando_assinatura' || !contrato?.id) return;
 
