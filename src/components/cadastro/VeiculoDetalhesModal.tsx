@@ -36,6 +36,7 @@ import {
 import { useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
+import { VincularRastreadorForm } from '@/components/cadastro/VincularRastreadorForm';
 import { cn } from '@/lib/utils';
 
 // ============================================
