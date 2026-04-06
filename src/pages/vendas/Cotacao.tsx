@@ -68,6 +68,25 @@ export default function CotacaoPage() {
   const [indicadorId, setIndicadorId] = useState('');
   const [indicadorNome, setIndicadorNome] = useState('');
 
+  // Buscar dados do associado quando for inclusão de veículo
+  useEffect(() => {
+    if (!isInclusaoVeiculo || !associadoIdParam) return;
+    const fetchAssociado = async () => {
+      const { data } = await supabase
+        .from('associados')
+        .select('nome, email, telefone, whatsapp')
+        .eq('id', associadoIdParam)
+        .single();
+      if (data) {
+        setNomeAssociado(data.nome || '');
+        setEmailAssociado(data.email || '');
+        setTelefone1(data.telefone || '');
+        setTelefone2(data.whatsapp || '');
+        setInclusaoAssociadoNome(data.nome || '');
+      }
+    };
+    fetchAssociado();
+  }, [isInclusaoVeiculo, associadoIdParam]);
   // ============================================
   // ETAPA 2 - IDENTIFICAÇÃO DO VEÍCULO
   // ============================================
