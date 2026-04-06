@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, ArrowLeft, Home, ChevronRight, UserCheck, UserX } from 'lucide-react';
+import { Loader2, ArrowLeft, Home, ChevronRight, UserCheck, UserX, Car, RefreshCw, CreditCard } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -111,7 +111,6 @@ export default function SubstituicaoVeiculoPage() {
     return result.id;
   };
 
-  // Step 1 → 2 or 3
   const handleElegibilidadeNext = (hasEventoProprio: boolean, evento?: { id: string; tipo: string }) => {
     completeStep(1);
     if (hasEventoProprio && evento) {
@@ -124,47 +123,21 @@ export default function SubstituicaoVeiculoPage() {
     }
   };
 
-  // Step 2 → 3
-  const handleEventoNext = () => {
-    completeStep(2);
-    setCurrentStep(3);
-  };
-
-  // Step 3 → 4
-  const handleRastreadorNext = () => {
-    completeStep(3);
-    setCurrentStep(4);
-  };
-
-  // Step 4 → 5 (Novo Veículo → Vistoria)
+  const handleEventoNext = () => { completeStep(2); setCurrentStep(3); };
+  const handleRastreadorNext = () => { completeStep(3); setCurrentStep(4); };
   const handleNovoVeiculoNext = (novoVeiculoId?: string) => {
     if (novoVeiculoId) setVeiculoNovoId(novoVeiculoId);
     completeStep(4);
     setCurrentStep(5);
   };
-
-  // Step 5 → 6 (Vistoria → Benefícios)
-  const handleVistoriaNext = () => {
-    completeStep(5);
-    setCurrentStep(6);
-  };
-
-  // Step 6 → 7 (Benefícios → Financeiro)
-  const handleBeneficiosNext = () => {
-    completeStep(6);
-    setCurrentStep(7);
-  };
-
-  // Step 7 → 8 (Financeiro → Conclusão)
+  const handleVistoriaNext = () => { completeStep(5); setCurrentStep(6); };
+  const handleBeneficiosNext = () => { completeStep(6); setCurrentStep(7); };
   const handleFinanceiroConfirmar = () => {
     completeStep(7);
     setCurrentStep(8);
     toast.success('Substituição enviada para aprovação!');
   };
-
-  const handleRetry = () => {
-    setCurrentStep(7);
-  };
+  const handleRetry = () => { setCurrentStep(7); };
 
   if (loadingAssociado || loadingVeiculo) {
     return (
@@ -192,57 +165,92 @@ export default function SubstituicaoVeiculoPage() {
     );
   }
 
+  const fipeFormatted = veiculoAtivo.valor_fipe
+    ? `R$ ${Number(veiculoAtivo.valor_fipe).toLocaleString('pt-BR')}`
+    : '—';
+
   return (
-    <div className="p-4 md:p-6 space-y-6 max-w-5xl mx-auto">
+    <div className="p-4 md:p-6 space-y-5 max-w-6xl mx-auto">
       {/* Breadcrumb */}
-      <nav className="flex items-center gap-1 text-sm text-muted-foreground flex-wrap">
-        <Link to="/dashboard" className="hover:text-foreground"><Home className="h-4 w-4" /></Link>
+      <nav className="flex items-center gap-1.5 text-xs text-muted-foreground flex-wrap">
+        <Link to="/dashboard" className="hover:text-foreground transition-colors"><Home className="h-3.5 w-3.5" /></Link>
         <ChevronRight className="h-3 w-3" />
         {isVendasContext ? (
           <>
-            <Link to="/vendas" className="hover:text-foreground">Vendas</Link>
+            <Link to="/vendas" className="hover:text-foreground transition-colors">Vendas</Link>
             <ChevronRight className="h-3 w-3" />
           </>
         ) : (
           <>
-            <Link to="/cadastro/associados" className="hover:text-foreground">Associados</Link>
+            <Link to="/cadastro/associados" className="hover:text-foreground transition-colors">Associados</Link>
             <ChevronRight className="h-3 w-3" />
-            <Link to={`/cadastro/associados/${associadoId}`} className="hover:text-foreground">{associado.nome}</Link>
+            <Link to={`/cadastro/associados/${associadoId}`} className="hover:text-foreground transition-colors truncate max-w-[180px]">
+              {associado.nome}
+            </Link>
             <ChevronRight className="h-3 w-3" />
           </>
         )}
-        <span className="text-foreground font-medium">Substituição de Veículo</span>
+        <span className="text-foreground font-medium">Substituição</span>
       </nav>
 
-      {/* Header */}
-      <div className="flex items-center gap-3">
-        <Button variant="ghost" size="icon" onClick={() => navigate(-1)}>
-          <ArrowLeft className="h-5 w-5" />
-        </Button>
-        <div>
-          <h1 className="text-xl font-bold">Substituição de Veículo</h1>
-          <p className="text-sm text-muted-foreground">
-            Associado: {associado.nome} — Veículo atual: {veiculoAtivo.marca} {veiculoAtivo.modelo} ({veiculoAtivo.placa})
-          </p>
-          <div className="mt-1">
-            {consultorNome ? (
-              <Badge className="bg-emerald-500/20 text-emerald-400 border-emerald-500/30 gap-1">
-                <UserCheck className="h-3 w-3" />
-                Consultor: {consultorNome}
+      {/* Header Card */}
+      <Card className="border-primary/20 bg-gradient-to-r from-primary/5 to-transparent">
+        <CardContent className="py-4">
+          <div className="flex flex-col md:flex-row md:items-center gap-4">
+            <Button variant="ghost" size="icon" onClick={() => navigate(-1)} className="shrink-0 self-start">
+              <ArrowLeft className="h-5 w-5" />
+            </Button>
+
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-2 mb-1">
+                <RefreshCw className="h-5 w-5 text-primary shrink-0" />
+                <h1 className="text-lg font-bold text-foreground truncate">Substituição de Veículo</h1>
+              </div>
+              <p className="text-sm text-muted-foreground truncate">
+                {associado.nome} · CPF: {associado.cpf}
+              </p>
+            </div>
+
+            {/* Info pills */}
+            <div className="flex flex-wrap items-center gap-2 shrink-0">
+              <Badge variant="outline" className="gap-1.5 py-1 px-2.5 text-xs font-normal border-border">
+                <Car className="h-3 w-3 text-muted-foreground" />
+                <span className="text-muted-foreground">{veiculoAtivo.placa}</span>
               </Badge>
-            ) : (
-              <Badge variant="secondary" className="gap-1">
-                <UserX className="h-3 w-3" />
-                Sem consultor vinculado
+              <Badge variant="outline" className="gap-1.5 py-1 px-2.5 text-xs font-normal border-border">
+                <CreditCard className="h-3 w-3 text-muted-foreground" />
+                <span className="text-muted-foreground">FIPE: {fipeFormatted}</span>
               </Badge>
-            )}
+              {consultorNome ? (
+                <Badge className="bg-emerald-500/15 text-emerald-400 border-emerald-500/30 gap-1 text-xs">
+                  <UserCheck className="h-3 w-3" />
+                  {consultorNome}
+                </Badge>
+              ) : (
+                <Badge variant="secondary" className="gap-1 text-xs">
+                  <UserX className="h-3 w-3" />
+                  Sem consultor
+                </Badge>
+              )}
+            </div>
           </div>
-        </div>
-      </div>
+
+          {/* Vehicle info summary */}
+          <div className="mt-3 ml-0 md:ml-12 p-2.5 rounded-lg bg-muted/50 border border-border/50">
+            <p className="text-xs text-muted-foreground">
+              <span className="font-medium text-foreground">Veículo atual:</span>{' '}
+              {veiculoAtivo.marca} {veiculoAtivo.modelo}
+              {veiculoAtivo.ano_modelo ? ` ${veiculoAtivo.ano_modelo}` : ''}
+              {' · '}
+              <span className="font-mono">{veiculoAtivo.placa}</span>
+            </p>
+          </div>
+        </CardContent>
+      </Card>
 
       {/* Stepper */}
       <Card>
-        <CardContent className="py-4">
+        <CardContent className="py-4 px-4 md:px-6">
           <SubstituicaoStepper
             currentStep={currentStep}
             completedSteps={completedSteps}
@@ -258,10 +266,7 @@ export default function SubstituicaoVeiculoPage() {
 
       {/* Steps */}
       {currentStep === 1 && (
-        <StepElegibilidade
-          associadoId={associadoId!}
-          onNext={handleElegibilidadeNext}
-        />
+        <StepElegibilidade associadoId={associadoId!} onNext={handleElegibilidadeNext} />
       )}
 
       {currentStep === 2 && eventoAtivo && (
@@ -282,13 +287,7 @@ export default function SubstituicaoVeiculoPage() {
           veiculoAntigoId={veiculoAtivo.id}
           substituicaoId={substituicaoId}
           onNext={handleRastreadorNext}
-          onBack={() => {
-            if (skippedSteps.includes(2)) {
-              setCurrentStep(1);
-            } else {
-              setCurrentStep(2);
-            }
-          }}
+          onBack={() => skippedSteps.includes(2) ? setCurrentStep(1) : setCurrentStep(2)}
           onIniciarSubstituicao={handleIniciarSubstituicao}
         />
       )}
