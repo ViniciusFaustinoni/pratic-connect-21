@@ -10,7 +10,7 @@ import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/u
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt, Trash2 } from 'lucide-react';
+import { Search, Database, ChevronLeft, ChevronRight, User, Car, Radio, Receipt, Trash2, WifiOff } from 'lucide-react';
 import { Skeleton } from '@/components/ui/skeleton';
 import { VeiculoDetalhesModal } from '@/components/cadastro/VeiculoDetalhesModal';
 
@@ -39,6 +39,7 @@ export default function BaseAntiga() {
   const [vPage, setVPage] = useState(1);
   const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
   const [vTimer, setVTimer] = useState<ReturnType<typeof setTimeout>>();
+  const [semRastreador, setSemRastreador] = useState(false);
 
   const handleSearch = (value: string) => {
     setSearch(value);
@@ -56,7 +57,7 @@ export default function BaseAntiga() {
 
   const { data, isLoading } = useBaseAntigaAssociados({ search: debouncedSearch }, { page, pageSize: 20 });
   const { data: detalhe, isLoading: loadingDetalhe } = useBaseAntigaDetalhe(selectedId ?? undefined);
-  const { data: vData, isLoading: vLoading } = useBaseAntigaVeiculos({ search: vDebouncedSearch }, { page: vPage, pageSize: 20 });
+  const { data: vData, isLoading: vLoading } = useBaseAntigaVeiculos({ search: vDebouncedSearch, semRastreador }, { page: vPage, pageSize: 20 });
   const { isDiretor, isAdminMaster, isDesenvolvedor } = usePermissions();
   const canDelete = isDiretor || isAdminMaster || isDesenvolvedor;
   const deleteAssociado = useDeleteBaseAntiga('associado');
@@ -176,9 +177,20 @@ export default function BaseAntiga() {
 
         {/* ====== ABA VEÍCULOS ====== */}
         <TabsContent value="veiculos" className="space-y-4 mt-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por placa, chassi, marca ou modelo..." value={vSearch} onChange={e => handleVSearch(e.target.value)} className="pl-10" />
+          <div className="flex items-center gap-2 max-w-2xl">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar por placa, chassi, marca ou modelo..." value={vSearch} onChange={e => handleVSearch(e.target.value)} className="pl-10" />
+            </div>
+            <Button
+              variant={semRastreador ? 'default' : 'outline'}
+              size="sm"
+              className="gap-1.5 whitespace-nowrap"
+              onClick={() => { setSemRastreador(prev => !prev); setVPage(1); }}
+            >
+              <WifiOff className="h-4 w-4" />
+              Sem Rastreador
+            </Button>
           </div>
 
           <Card>

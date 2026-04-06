@@ -3,6 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 
 export interface BaseAntigaFilters {
   search?: string;
+  semRastreador?: boolean;
 }
 
 export function useBaseAntigaAssociados(filters?: BaseAntigaFilters, pagination?: { page: number; pageSize: number }) {
@@ -89,6 +90,18 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
   return useQuery({
     queryKey: ['base-antiga-veiculos', filters, pagination],
     queryFn: async () => {
+      // If filtering vehicles without tracker, fetch all veiculo_ids that HAVE a tracker
+      let excludeIds: string[] = [];
+      if (filters?.semRastreador) {
+        const { data: comRastreador } = await supabase
+          .from('rastreadores')
+          .select('veiculo_id')
+          .not('veiculo_id', 'is', null);
+        if (comRastreador?.length) {
+          excludeIds = comRastreador.map(r => r.veiculo_id).filter(Boolean) as string[];
+        }
+      }
+
       // 1) Lightweight count query (head-only, no joins with rastreadores)
       let countQuery = (supabase
         .from('veiculos')
@@ -101,6 +114,10 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
         countQuery = countQuery.or(`placa.ilike.%${upper}%,chassi.ilike.%${upper}%,marca.ilike.%${term}%,modelo.ilike.%${term}%`);
       }
 
+      if (excludeIds.length > 0) {
+        countQuery = countQuery.not('id', 'in', `(${excludeIds.join(',')})`);
+      }
+
       // 2) Data query (no count)
       let dataQuery = (supabase
         .from('veiculos')
@@ -111,6 +128,10 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
         const term = filters.search.trim();
         const upper = term.toUpperCase();
         dataQuery = dataQuery.or(`placa.ilike.%${upper}%,chassi.ilike.%${upper}%,marca.ilike.%${term}%,modelo.ilike.%${term}%`);
+      }
+
+      if (excludeIds.length > 0) {
+        dataQuery = dataQuery.not('id', 'in', `(${excludeIds.join(',')})`);
       }
 
       dataQuery = dataQuery
