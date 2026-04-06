@@ -28876,6 +28876,10 @@ export type Database = {
         }
         Returns: undefined
       }
+      veiculos_base_antiga_sem_rastreador: {
+        Args: { p_limit?: number; p_offset?: number; p_search?: string }
+        Returns: Json
+      }
       verificar_acordos_quebrados: { Args: never; Returns: number }
     }
     Enums: {
