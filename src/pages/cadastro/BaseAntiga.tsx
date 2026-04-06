@@ -39,6 +39,7 @@ export default function BaseAntiga() {
   const [vPage, setVPage] = useState(1);
   const [selectedVeiculoId, setSelectedVeiculoId] = useState<string | null>(null);
   const [vTimer, setVTimer] = useState<ReturnType<typeof setTimeout>>();
+  const [semRastreador, setSemRastreador] = useState(false);
 
   const handleSearch = (value: string) => {
     setSearch(value);
