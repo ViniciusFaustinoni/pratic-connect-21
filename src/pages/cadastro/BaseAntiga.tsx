@@ -177,9 +177,20 @@ export default function BaseAntiga() {
 
         {/* ====== ABA VEÍCULOS ====== */}
         <TabsContent value="veiculos" className="space-y-4 mt-4">
-          <div className="relative max-w-md">
-            <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-            <Input placeholder="Buscar por placa, chassi, marca ou modelo..." value={vSearch} onChange={e => handleVSearch(e.target.value)} className="pl-10" />
+          <div className="flex items-center gap-2 max-w-2xl">
+            <div className="relative flex-1">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar por placa, chassi, marca ou modelo..." value={vSearch} onChange={e => handleVSearch(e.target.value)} className="pl-10" />
+            </div>
+            <Button
+              variant={semRastreador ? 'default' : 'outline'}
+              size="sm"
+              className="gap-1.5 whitespace-nowrap"
+              onClick={() => { setSemRastreador(prev => !prev); setVPage(1); }}
+            >
+              <RadioOff className="h-4 w-4" />
+              Sem Rastreador
+            </Button>
           </div>
 
           <Card>
