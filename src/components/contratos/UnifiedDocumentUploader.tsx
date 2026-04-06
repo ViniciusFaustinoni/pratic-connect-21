@@ -221,7 +221,7 @@ export function UnifiedDocumentUploader({
         .single();
 
       if (result1.error) {
-        console.warn('INSERT tentativa 1 falhou, retentando...', result1.error);
+        console.warn('INSERT tentativa 1 falhou, retentando...', { code: result1.error.code, message: result1.error.message, details: result1.error.details, hint: result1.error.hint });
         // Retry após 1s
         await new Promise(r => setTimeout(r, 1000));
         const result2 = await supabaseClient
