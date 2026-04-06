@@ -1,7 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { CotacaoStepper } from '@/components/cotacao/CotacaoStepper';
 import { EtapaDadosAssociado } from '@/components/cotacao/EtapaDadosAssociado';
 import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
@@ -39,11 +40,18 @@ import { estimarValorFipe } from '@/utils/fipe';
 
 export default function CotacaoPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isVendedorExterno } = usePermissions();
   
+  // Detectar contexto de inclusão de veículo
+  const associadoIdParam = searchParams.get('associado_id');
+  const tipoEntrada = searchParams.get('tipo_entrada');
+  const isInclusaoVeiculo = tipoEntrada === 'inclusao' && !!associadoIdParam;
+  
   // Estado da etapa atual
-  const [etapaAtual, setEtapaAtual] = useState(1);
-  const [etapasCompletas, setEtapasCompletas] = useState<number[]>([]);
+  const [etapaAtual, setEtapaAtual] = useState(isInclusaoVeiculo ? 2 : 1);
+  const [etapasCompletas, setEtapasCompletas] = useState<number[]>(isInclusaoVeiculo ? [1] : []);
+  const [inclusaoAssociadoNome, setInclusaoAssociadoNome] = useState('');
 
   // ============================================
   // ETAPA 1 - DADOS DO ASSOCIADO/SOLICITANTE
@@ -60,6 +68,25 @@ export default function CotacaoPage() {
   const [indicadorId, setIndicadorId] = useState('');
   const [indicadorNome, setIndicadorNome] = useState('');
 
+  // Buscar dados do associado quando for inclusão de veículo
+  useEffect(() => {
+    if (!isInclusaoVeiculo || !associadoIdParam) return;
+    const fetchAssociado = async () => {
+      const { data } = await supabase
+        .from('associados')
+        .select('nome, email, telefone, whatsapp')
+        .eq('id', associadoIdParam)
+        .single();
+      if (data) {
+        setNomeAssociado(data.nome || '');
+        setEmailAssociado(data.email || '');
+        setTelefone1(data.telefone || '');
+        setTelefone2(data.whatsapp || '');
+        setInclusaoAssociadoNome(data.nome || '');
+      }
+    };
+    fetchAssociado();
+  }, [isInclusaoVeiculo, associadoIdParam]);
   // ============================================
   // ETAPA 2 - IDENTIFICAÇÃO DO VEÍCULO
   // ============================================
@@ -275,6 +302,7 @@ export default function CotacaoPage() {
     // Dados da cotação para pré-preencher o contrato
     const dadosCotacao = {
       associado: {
+        id: isInclusaoVeiculo ? associadoIdParam : undefined,
         nome: nomeAssociado,
         email: emailAssociado,
         telefone: telefone1,
@@ -297,6 +325,7 @@ export default function CotacaoPage() {
       consultor_id: consultorId,
       regiao: regiao,
       modalidade: modalidade,
+      tipo_entrada: isInclusaoVeiculo ? 'inclusao' : undefined,
       indicacao: isIndicacao ? {
         indicador_id: indicadorId,
         indicador_nome: indicadorNome,
@@ -305,7 +334,7 @@ export default function CotacaoPage() {
     
     toast.success('Redirecionando para cadastro de contrato...');
     navigate('/vendas/contratos', { state: { fromCotacao: true, dadosCotacao } });
-  }, [planosSelecionados, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, nomeAssociado, emailAssociado, telefone1, telefone2, leadId, consultorId, regiao, modalidade, valorAdesaoCustomizado, isIndicacao, indicadorId, indicadorNome]);
+  }, [planosSelecionados, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, nomeAssociado, emailAssociado, telefone1, telefone2, leadId, consultorId, regiao, modalidade, valorAdesaoCustomizado, isIndicacao, indicadorId, indicadorNome, isInclusaoVeiculo, associadoIdParam]);
 
   // Click no stepper
   const handleStepClick = useCallback((step: number) => {
@@ -322,9 +351,13 @@ export default function CotacaoPage() {
     <div className="h-full flex flex-col space-y-6 p-6">
       {/* Header */}
       <div>
-        <h1 className="text-2xl font-bold text-foreground">Cotação</h1>
+        <h1 className="text-2xl font-bold text-foreground">
+          {isInclusaoVeiculo ? 'Inclusão de Veículo' : 'Cotação'}
+        </h1>
         <p className="text-muted-foreground">
-          Calcule o valor da proteção veicular em 4 passos simples
+          {isInclusaoVeiculo 
+            ? `Adicionando novo veículo para ${inclusaoAssociadoNome || 'associado'}`
+            : 'Calcule o valor da proteção veicular em 4 passos simples'}
         </p>
       </div>
 
@@ -384,15 +417,17 @@ export default function CotacaoPage() {
               onNext={handleEtapa2Next}
               onManualEntry={handleEntradaManual}
             />
-            {/* Botão Voltar */}
-            <div className="flex justify-start">
-              <button
-                onClick={handleEtapa2Back}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                ← Voltar para Dados do Solicitante
-              </button>
-            </div>
+            {/* Botão Voltar - só mostra se não for inclusão */}
+            {!isInclusaoVeiculo && (
+              <div className="flex justify-start">
+                <button
+                  onClick={handleEtapa2Back}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  ← Voltar para Dados do Solicitante
+                </button>
+              </div>
+            )}
           </div>
         )}
 
