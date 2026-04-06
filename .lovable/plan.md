@@ -1,27 +1,23 @@
 
 
-# Plano: Substituição de placa acessível para vendedores
+# Plano: Substituição de veículo com contexto de vendas
 
 ## Problema
-Ao clicar em "Substituição de Placa" na cotação, o sistema navega para `/cadastro/associados/:id/substituicao`. O vendedor não tem acesso ao módulo `cadastro`, então o `useRouteGuard` redireciona-o para outra página.
-
-## Solução
-Criar uma rota espelho sob `/vendas/substituicao/:associadoId` que renderiza o mesmo componente `SubstituicaoVeiculoPage`, e atualizar a navegação da cotação para usar essa rota.
+O `SubstituicaoVeiculoPage` tem breadcrumbs e links hardcoded para `/cadastro/associados`. Quando acessado via `/vendas/substituicao/:associadoId`, os breadcrumbs ainda apontam para cadastro. Além disso, o usuário está acessando a rota antiga `/cadastro/associados/:id/substituicao` -- é necessário garantir que vendedores usem apenas a rota de vendas.
 
 ## Alterações
 
-### 1. Adicionar rota em `src/App.tsx`
-- Dentro do grupo de rotas `/vendas`, adicionar:
-  `<Route path="/vendas/substituicao/:associadoId" element={<SubstituicaoVeiculoPage />} />`
+### 1. Detectar contexto de rota no `SubstituicaoVeiculoPage`
+- Usar `useLocation()` para verificar se o path começa com `/vendas/`.
+- Ajustar breadcrumbs dinamicamente:
+  - Contexto vendas: `Home > Vendas > Substituição de Veículo`
+  - Contexto cadastro: `Home > Associados > [Nome] > Substituição de Veículo` (atual)
+- Botão "Voltar" usa `navigate(-1)` (já funciona corretamente).
 
-### 2. Atualizar navegação em `src/pages/vendas/Cotacao.tsx`
-- Linha 363: trocar `navigate('/cadastro/associados/${associadoId}/substituicao')` para `navigate('/vendas/substituicao/${associadoId}')`.
+### 2. Garantir navegação correta na Cotacao
+- Verificar que `Cotacao.tsx` linha 363 já navega para `/vendas/substituicao/` (feito na edição anterior).
+- Verificar se há outros pontos que redirecionam vendedores para a rota de cadastro.
 
-### 3. Registrar prefixo no `MODULE_ROUTES` (`src/hooks/useModuleVisibility.ts`)
-- Adicionar `'/vendas/substituicao'` ao array do módulo `vendas` para que o route guard permita acesso.
-
-## Arquivos modificados
-- `src/App.tsx`
-- `src/pages/vendas/Cotacao.tsx`
-- `src/hooks/useModuleVisibility.ts`
+## Arquivo modificado
+- `src/pages/cadastro/SubstituicaoVeiculoPage.tsx` -- breadcrumbs dinâmicos baseados no contexto de rota
 
