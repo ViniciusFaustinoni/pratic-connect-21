@@ -250,19 +250,7 @@ export function EtapaAssinaturaContrato({
 
       setEtapaInterna('aguardando_assinatura');
 
-      // Fallback: se link não veio na resposta, buscar do banco após 3s
-      if (!linkAssinatura) {
-        setTimeout(async () => {
-          const { data: retry } = await publicSupabase
-            .from('contratos')
-            .select('autentique_url')
-            .eq('id', contratoId)
-            .maybeSingle();
-          if (retry?.autentique_url) {
-            setContrato(prev => prev ? { ...prev, linkAssinatura: retry.autentique_url } : prev);
-          }
-        }, 3000);
-      }
+      // O polling leve dedicado (useEffect abaixo) cuidará de buscar o link do banco
     } catch (error: any) {
       console.error('[EtapaAssinatura] Erro no Autentique:', error);
       setErro(error.message || 'Erro ao enviar para assinatura digital');
