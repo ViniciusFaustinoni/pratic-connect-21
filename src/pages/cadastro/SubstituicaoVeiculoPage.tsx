@@ -25,6 +25,7 @@ export default function SubstituicaoVeiculoPage() {
   const navigate = useNavigate();
   const location = useLocation();
   const isVendasContext = location.pathname.startsWith('/vendas/');
+  const { profile, isVendedor } = useAuth();
 
   const consultorId = isVendedor() ? profile?.id ?? null : null;
   const consultorNome = isVendedor() ? profile?.nome ?? null : null;
