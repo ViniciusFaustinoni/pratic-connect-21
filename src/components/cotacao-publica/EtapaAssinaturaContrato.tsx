@@ -250,19 +250,7 @@ export function EtapaAssinaturaContrato({
 
       setEtapaInterna('aguardando_assinatura');
 
-      // Fallback: se link não veio na resposta, buscar do banco após 3s
-      if (!linkAssinatura) {
-        setTimeout(async () => {
-          const { data: retry } = await publicSupabase
-            .from('contratos')
-            .select('autentique_url')
-            .eq('id', contratoId)
-            .maybeSingle();
-          if (retry?.autentique_url) {
-            setContrato(prev => prev ? { ...prev, linkAssinatura: retry.autentique_url } : prev);
-          }
-        }, 3000);
-      }
+      // O polling leve dedicado (useEffect abaixo) cuidará de buscar o link do banco
     } catch (error: any) {
       console.error('[EtapaAssinatura] Erro no Autentique:', error);
       setErro(error.message || 'Erro ao enviar para assinatura digital');
@@ -278,7 +266,31 @@ export function EtapaAssinaturaContrato({
     }
   }, [inicializado, verificarOuGerarContrato]);
 
-  // 4. Polling para verificar status da assinatura
+  // 4. Polling leve dedicado para capturar o link de assinatura rapidamente
+  useEffect(() => {
+    if (etapaInterna !== 'aguardando_assinatura' || !contrato?.id || contrato?.linkAssinatura) return;
+
+    const buscarLink = async () => {
+      try {
+        const { data } = await publicSupabase
+          .from('contratos')
+          .select('autentique_url')
+          .eq('id', contrato.id)
+          .maybeSingle();
+        if (data?.autentique_url) {
+          setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
+        }
+      } catch (e) {
+        console.error('[EtapaAssinatura] Erro ao buscar link:', e);
+      }
+    };
+
+    buscarLink(); // imediato
+    const interval = setInterval(buscarLink, 3000);
+    return () => clearInterval(interval);
+  }, [etapaInterna, contrato?.id, contrato?.linkAssinatura]);
+
+  // 5. Polling para verificar status da assinatura (após link disponível)
   useEffect(() => {
     if (etapaInterna !== 'aguardando_assinatura' || !contrato?.id) return;
 
@@ -316,11 +328,6 @@ export function EtapaAssinaturaContrato({
 
         if (error || !data) return;
 
-        // Atualizar linkAssinatura se disponível e não setado
-        if (data.autentique_url && !contrato?.linkAssinatura) {
-          setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
-        }
-
         if (data?.status === 'assinado' || data?.status === 'ativo') {
           console.log('[EtapaAssinatura] Contrato assinado detectado via banco!');
           toast.success('Contrato assinado com sucesso!');
@@ -340,8 +347,7 @@ export function EtapaAssinaturaContrato({
 
     // Verificar imediatamente e depois a cada 15 segundos
     verificarAssinatura();
-    const pollingInterval = contrato?.linkAssinatura ? 15000 : 5000;
-    const interval = setInterval(verificarAssinatura, pollingInterval);
+    const interval = setInterval(verificarAssinatura, 15000);
 
     return () => clearInterval(interval);
   }, [etapaInterna, contrato?.id, contrato?.linkAssinatura, cotacaoId, onContratoAssinado]);
