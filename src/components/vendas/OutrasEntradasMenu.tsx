@@ -183,9 +183,11 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     if (!open) {
       setSelectedTipo(null);
       setSearchTerm('');
-      setSelectedAssociadoId(null);
-      setSelectedAssociadoNome('');
       setMigracaoCpf('');
+      if (!showTrocaTitularidade && !showMigracao) {
+        setSelectedAssociadoId(null);
+        setSelectedAssociadoNome('');
+      }
     }
   }, [open]);
 
