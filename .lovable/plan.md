@@ -1,49 +1,30 @@
 
 
-# Plano: Link de assinatura aparece sem reload
+# Plano: Reordenar planos dentro da mesma linha via drag-and-drop
 
-## Problema
-Quando `autentique-create` não retorna o `signatureLink` na resposta (Autentique ainda processando), o fallback é um único retry após 3s. O polling de 5s existe mas chama `autentique-sync-contrato` (edge function pesada) antes de checar o banco — e o link pode já estar salvo no banco pelo próprio `autentique-create` que terminou de processar.
+## Situação atual
+O drag-and-drop existente **só move planos entre linhas**. Não é possível reordenar planos dentro da mesma linha. A coluna `ordem` já existe na tabela `planos` e a query já ordena por ela (`.order('ordem')`), mas nenhuma lógica atualiza esse campo.
 
-## Solução
+## O que muda para o usuário
+Ao arrastar um plano dentro da mesma linha, ele será reposicionado visualmente e a nova ordem será salva no banco. A ordem definida reflete em todas as interfaces que listam planos.
 
-### 1. Adicionar polling leve dedicado ao link (`EtapaAssinaturaContrato.tsx`)
-Quando `etapaInterna === 'aguardando_assinatura'` e `!contrato?.linkAssinatura`, criar um **useEffect separado** com polling rápido (2-3s) que apenas faz um SELECT leve no banco (`contratos.autentique_url`) — sem chamar edge functions. Assim que encontrar o link, atualiza o state e o polling para.
+## Implementação
 
-### 2. Remover o setTimeout fallback isolado (linhas 254-264)
-O setTimeout de 3s com retry único se torna desnecessário com o polling dedicado.
+### 1. Novo hook `useReorderPlans` em `LinhasPlanos.tsx`
+- Recebe `{ lineId, orderedPlanIds: string[] }`.
+- Faz um batch update: para cada `planId` na lista, atualiza `ordem = index`.
+- Invalida a query `linhas_com_planos_clean`.
 
-### 3. Manter o polling existente para status de assinatura
-O polling de 15s com `autentique-sync-contrato` continua responsável por detectar quando o contrato foi **assinado**, mas não precisa mais se preocupar com o link.
+### 2. Expandir lógica de drag-and-drop em `LinhasPlanos.tsx`
+- Adicionar estado `dragOverPlanId` para rastrear sobre qual plano o cursor está.
+- Nos itens de plano, adicionar handlers `onDragOver` e `onDrop`:
+  - Se o plano arrastado pertence à **mesma linha**, reordenar localmente (mover o item na posição do alvo) e chamar `useReorderPlans`.
+  - Se pertence a **outra linha**, manter o comportamento atual (`movePlan`).
+- Mostrar indicador visual (linha separadora) na posição de inserção durante o drag.
 
-## Detalhes técnicos
+### 3. Garantir `ordem` consistente
+- Ao criar um novo plano, definir `ordem` como `MAX(ordem) + 1` da linha (já tratado no `PlanoFormSheet` — verificar e ajustar se necessário).
 
-Novo useEffect em `EtapaAssinaturaContrato.tsx`:
-```typescript
-// Polling rápido para capturar o link quando ainda não disponível
-useEffect(() => {
-  if (etapaInterna !== 'aguardando_assinatura' || !contrato?.id || contrato?.linkAssinatura) return;
-
-  const buscarLink = async () => {
-    const { data } = await publicSupabase
-      .from('contratos')
-      .select('autentique_url')
-      .eq('id', contrato.id)
-      .maybeSingle();
-    if (data?.autentique_url) {
-      setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
-    }
-  };
-
-  const interval = setInterval(buscarLink, 3000);
-  buscarLink(); // imediato
-  return () => clearInterval(interval);
-}, [etapaInterna, contrato?.id, contrato?.linkAssinatura]);
-```
-
-- Remove o `setTimeout` de 3s nas linhas 254-264
-- O polling existente (linhas 282-347) mantém o intervalo de 5s/15s para checar assinatura, mas a lógica de `data.autentique_url && !contrato?.linkAssinatura` nas linhas 320-322 se torna redundante (pode ser removida para simplificar)
-
-## Arquivo modificado
-- `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`
+## Arquivos modificados
+- `src/components/gestao-comercial/LinhasPlanos.tsx` — hook de reorder + lógica de drag within same line
 
