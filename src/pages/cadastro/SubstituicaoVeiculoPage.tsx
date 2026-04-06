@@ -23,7 +23,8 @@ import type { DadosNovoVeiculo } from '@/types/substituicao';
 export default function SubstituicaoVeiculoPage() {
   const { associadoId } = useParams<{ associadoId: string }>();
   const navigate = useNavigate();
-  const { profile, isVendedor } = useAuth();
+  const location = useLocation();
+  const isVendasContext = location.pathname.startsWith('/vendas/');
 
   const consultorId = isVendedor() ? profile?.id ?? null : null;
   const consultorNome = isVendedor() ? profile?.nome ?? null : null;
