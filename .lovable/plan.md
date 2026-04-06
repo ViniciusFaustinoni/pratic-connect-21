@@ -1,19 +1,29 @@
 
 
-# Plano: Corrigir layout das tabs de planos no Cotador
+# Plano: Inclusão de veículo deve usar fluxo etapa-por-etapa
 
 ## Problema
-As tabs de planos no card "Resultado da Cotação" usam `flex-1` em um `div flex`, fazendo com que todos os planos se espremam horizontalmente quando há muitos planos. Isso causa o overflow visível na screenshot.
+Ao iniciar uma "Inclusão de Veículo", o sistema navega para `/vendas/cotador` (Cotador Rápido), que é uma página plana com todos os campos visíveis de uma vez. Os outros tipos de entrada (troca de titularidade, migração) abrem dialogs/menus com etapas. A cotação normal usa `/vendas/cotacao` com stepper de 4 etapas. A inclusão deveria seguir esse mesmo padrão de etapas, não o cotador rápido.
 
 ## Solução
-Tornar o container das tabs scrollável horizontalmente com `overflow-x-auto` e dar tamanho mínimo fixo a cada tab (`min-w-fit`, `whitespace-nowrap`), removendo `flex-1`.
+Redirecionar a inclusão de veículo para `/vendas/cotacao` (CotacaoPage com stepper) em vez de `/vendas/cotador`, passando `associado_id` e `tipo_entrada=inclusao` como query params. O CotacaoPage já tem o fluxo de 4 etapas (Dados do Associado → Veículo → Critérios → Resultado).
 
-## Alteração
+## Alterações
 
-### `src/pages/vendas/Cotador.tsx`
-- Linha 1730: trocar `<div className="flex border-b">` por `<div className="flex border-b overflow-x-auto">`
-- Linha 1736: trocar `"flex-1 py-3 px-4 text-sm font-medium..."` por `"shrink-0 py-3 px-4 text-sm font-medium whitespace-nowrap..."` (remover `flex-1`, adicionar `shrink-0 whitespace-nowrap`)
+### 1. `src/components/vendas/OutrasEntradasMenu.tsx`
+- Linha 247: trocar navegação de `/vendas/cotador?associado_id=...&tipo_entrada=inclusao` para `/vendas/cotacao?associado_id=...&tipo_entrada=inclusao`
 
-## Arquivo modificado
-- `src/pages/vendas/Cotador.tsx`
+### 2. `src/pages/vendas/Cotacao.tsx` (CotacaoPage)
+- Ler `associado_id` e `tipo_entrada` dos query params via `useSearchParams`
+- Quando `tipo_entrada=inclusao`, pré-preencher os dados do associado (buscar nome, email, telefone do banco) e pular a etapa 1, indo direto para a etapa 2 (Veículo)
+- Exibir banner contextual "Inclusão de segundo veículo para [Nome]"
+- Após salvar cotação na etapa 4, redirecionar automaticamente para `/vendas/contratos/novo?cotacao=${id}` (como já faz o Cotador)
+
+### 3. `src/App.tsx`
+- Remover ou ajustar a rota especial que renderiza `<Cotador />` em `/vendas/cotador` para inclusão, já que não será mais necessária
+
+## Arquivos modificados
+- `src/components/vendas/OutrasEntradasMenu.tsx`
+- `src/pages/vendas/Cotacao.tsx`
+- `src/App.tsx` (limpeza)
 
