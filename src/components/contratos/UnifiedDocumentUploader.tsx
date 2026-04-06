@@ -194,23 +194,49 @@ export function UnifiedDocumentUploader({
 
       const ocrResult = ocrData as OcrResultadoUnificado;
 
-      // 4. Inserir no banco com tipo detectado (usar cliente apropriado)
-      const { data: docData, error: insertError } = await supabaseClient
+      // 4. Inserir no banco com tipo detectado (usar cliente apropriado) — com retry
+      const insertPayload = {
+        contrato_id: contratoId || null,
+        cotacao_id: cotacaoId || null,
+        tipo: ocrResult.tipo_detectado || 'outro',
+        arquivo_url: arquivoUrl,
+        arquivo_nome: originalFileName,
+        status: ocrResult.sugestao === 'aprovar' ? 'em_analise' : 'pendente',
+        ocr_resultado: ocrResult as any,
+      };
+
+      let docData: any = null;
+      let insertError: any = null;
+
+      // Primeira tentativa
+      const result1 = await supabaseClient
         .from('contratos_documentos')
-        .insert({
-          contrato_id: contratoId || null,
-          cotacao_id: cotacaoId || null,
-          tipo: ocrResult.tipo_detectado || 'outro',
-          arquivo_url: arquivoUrl,
-          arquivo_nome: originalFileName, // Keep original name for reference
-          status: ocrResult.sugestao === 'aprovar' ? 'em_analise' : 'pendente',
-          ocr_resultado: ocrResult as any,
-        })
+        .insert(insertPayload)
         .select()
         .single();
 
+      if (result1.error) {
+        console.warn('INSERT tentativa 1 falhou, retentando...', result1.error);
+        // Retry após 1s
+        await new Promise(r => setTimeout(r, 1000));
+        const result2 = await supabaseClient
+          .from('contratos_documentos')
+          .insert(insertPayload)
+          .select()
+          .single();
+        docData = result2.data;
+        insertError = result2.error;
+      } else {
+        docData = result1.data;
+        insertError = null;
+      }
+
       if (insertError) {
-        console.error('Database insert error:', insertError);
+        console.error('Database insert error (após retry):', insertError);
+        toast.error('Documento enviado mas não foi salvo. Tente novamente.', {
+          description: 'O arquivo foi enviado ao storage, mas houve erro ao registrar no banco de dados.',
+        });
+        throw new Error('Erro ao salvar documento no banco de dados. Tente reenviar.');
       }
 
       // 5. Sync CNH data to associado if detected
