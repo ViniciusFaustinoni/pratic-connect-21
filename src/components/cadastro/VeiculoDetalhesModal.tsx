@@ -310,6 +310,8 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                         <MapaRastreador rastreadorId={rastreador.id} altura="400px" />
                       </div>
                     </>
+                  ) : isDiretor ? (
+                    <VincularRastreadorForm veiculoId={veiculoId} veiculoPlaca={veiculo.placa} />
                   ) : (
                     <EmptyState icon={WifiOff} text="Nenhum rastreador instalado neste veículo" />
                   )}
