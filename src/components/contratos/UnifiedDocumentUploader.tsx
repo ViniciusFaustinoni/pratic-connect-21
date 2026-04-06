@@ -237,7 +237,7 @@ export function UnifiedDocumentUploader({
       }
 
       if (insertError) {
-        console.error('Database insert error (após retry):', insertError);
+        console.error('Database insert error (após retry):', { code: insertError.code, message: insertError.message, details: insertError.details, hint: insertError.hint });
         toast.error('Documento enviado mas não foi salvo. Tente novamente.', {
           description: 'O arquivo foi enviado ao storage, mas houve erro ao registrar no banco de dados.',
         });
