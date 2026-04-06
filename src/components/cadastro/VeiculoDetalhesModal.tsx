@@ -1,5 +1,6 @@
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
+import { usePermissions } from '@/hooks/usePermissions';
 import {
   Car, Image, FileText, X, ChevronDown, ChevronRight,
   CheckCircle, Clock, XCircle, ExternalLink, Camera,
@@ -35,6 +36,7 @@ import {
 import { useCobrancasAssociado } from '@/hooks/useDocumentosCotacao';
 import { useAssociadoHistoricoCompleto } from '@/hooks/useAssociadoHistoricoCompleto';
 import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
+import { VincularRastreadorForm } from '@/components/cadastro/VincularRastreadorForm';
 import { cn } from '@/lib/utils';
 
 // ============================================
@@ -85,6 +87,7 @@ const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
 // ============================================
 export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalhesModalProps) {
   const navigate = useNavigate();
+  const { isDiretor } = usePermissions();
   const [activeTab, setActiveTab] = useState('resumo');
   const [fotoPreview, setFotoPreview] = useState<{ url: string; tipo: string } | null>(null);
   
@@ -307,6 +310,8 @@ export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalh
                         <MapaRastreador rastreadorId={rastreador.id} altura="400px" />
                       </div>
                     </>
+                  ) : isDiretor ? (
+                    <VincularRastreadorForm veiculoId={veiculoId} veiculoPlaca={veiculo.placa} />
                   ) : (
                     <EmptyState icon={WifiOff} text="Nenhum rastreador instalado neste veículo" />
                   )}
