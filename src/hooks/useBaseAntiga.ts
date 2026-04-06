@@ -90,19 +90,21 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
   return useQuery({
     queryKey: ['base-antiga-veiculos', filters, pagination],
     queryFn: async () => {
-      // If filtering vehicles without tracker, fetch all veiculo_ids that HAVE a tracker
-      let excludeIds: string[] = [];
+      // If filtering vehicles without tracker, get IDs via RPC
+      let allowedIds: string[] | null = null;
       if (filters?.semRastreador) {
-        const { data: comRastreador } = await supabase
-          .from('rastreadores')
-          .select('veiculo_id')
-          .not('veiculo_id', 'is', null);
-        if (comRastreador?.length) {
-          excludeIds = comRastreador.map(r => r.veiculo_id).filter(Boolean) as string[];
+        const { data: ids } = await supabase.rpc('veiculos_sem_rastreador_ids');
+        if (ids?.length) {
+          allowedIds = ids as string[];
+        } else {
+          return {
+            veiculos: [],
+            pagination: { page, pageSize, total: 0, totalPages: 0 },
+          };
         }
       }
 
-      // 1) Lightweight count query (head-only, no joins with rastreadores)
+      // 1) Lightweight count query
       let countQuery = (supabase
         .from('veiculos')
         .select('id, associado:associados!inner(id, origem_cadastro)', { count: 'exact', head: true }) as any)
@@ -114,11 +116,11 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
         countQuery = countQuery.or(`placa.ilike.%${upper}%,chassi.ilike.%${upper}%,marca.ilike.%${term}%,modelo.ilike.%${term}%`);
       }
 
-      if (excludeIds.length > 0) {
-        countQuery = countQuery.not('id', 'in', `(${excludeIds.join(',')})`);
+      if (allowedIds) {
+        countQuery = countQuery.in('id', allowedIds);
       }
 
-      // 2) Data query (no count)
+      // 2) Data query
       let dataQuery = (supabase
         .from('veiculos')
         .select('id, placa, marca, modelo, ano_fabricacao, ano_modelo, cor, chassi, status, associado_id, associado:associados!inner(id, nome, cpf, origem_cadastro), rastreador:rastreadores!rastreadores_veiculo_id_fkey(id, codigo, status, plataforma)') as any)
@@ -130,8 +132,8 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
         dataQuery = dataQuery.or(`placa.ilike.%${upper}%,chassi.ilike.%${upper}%,marca.ilike.%${term}%,modelo.ilike.%${term}%`);
       }
 
-      if (excludeIds.length > 0) {
-        dataQuery = dataQuery.not('id', 'in', `(${excludeIds.join(',')})`);
+      if (allowedIds) {
+        dataQuery = dataQuery.in('id', allowedIds);
       }
 
       dataQuery = dataQuery
