@@ -415,15 +415,17 @@ export default function CotacaoPage() {
               onNext={handleEtapa2Next}
               onManualEntry={handleEntradaManual}
             />
-            {/* Botão Voltar */}
-            <div className="flex justify-start">
-              <button
-                onClick={handleEtapa2Back}
-                className="text-sm text-muted-foreground hover:text-foreground transition-colors"
-              >
-                ← Voltar para Dados do Solicitante
-              </button>
-            </div>
+            {/* Botão Voltar - só mostra se não for inclusão */}
+            {!isInclusaoVeiculo && (
+              <div className="flex justify-start">
+                <button
+                  onClick={handleEtapa2Back}
+                  className="text-sm text-muted-foreground hover:text-foreground transition-colors"
+                >
+                  ← Voltar para Dados do Solicitante
+                </button>
+              </div>
+            )}
           </div>
         )}
 
