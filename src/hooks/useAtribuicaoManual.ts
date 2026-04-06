@@ -133,7 +133,6 @@ export function useAtribuirServicoManual() {
         .update({
           profissional_id: profissionalId,
           status: 'agendada',
-          atribuido_em: new Date().toISOString(),
         })
         .eq('id', servicoId);
 
