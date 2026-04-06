@@ -95,7 +95,33 @@ export function useRastreadores(filters?: RastreadorFilters) {
       }
 
       if (filters?.search) {
-        query = query.or(`codigo.ilike.%${filters.search}%,numero_serie.ilike.%${filters.search}%,imei.ilike.%${filters.search}%`);
+        const searchTerm = filters.search.trim();
+        
+        // Search in related tables (veiculos by placa, associados by nome/cpf)
+        const { data: veiculoIds } = await supabase
+          .from('veiculos')
+          .select('id')
+          .ilike('placa', `%${searchTerm}%`);
+        
+        const { data: associadoVeiculos } = await supabase
+          .from('veiculos')
+          .select('id, associados!inner(nome, cpf)')
+          .or(`nome.ilike.%${searchTerm}%,cpf.ilike.%${searchTerm.replace(/\D/g, '')}%`, { referencedTable: 'associados' });
+
+        // Collect all matching veiculo_ids
+        const matchingVeiculoIds = new Set<string>();
+        veiculoIds?.forEach(v => matchingVeiculoIds.add(v.id));
+        associadoVeiculos?.forEach(v => matchingVeiculoIds.add(v.id));
+
+        // Build OR filter combining direct fields + veiculo_id matches
+        const directFilter = `codigo.ilike.%${searchTerm}%,numero_serie.ilike.%${searchTerm}%,imei.ilike.%${searchTerm}%`;
+        
+        if (matchingVeiculoIds.size > 0) {
+          const ids = Array.from(matchingVeiculoIds);
+          query = query.or(`${directFilter},veiculo_id.in.(${ids.join(',')})`);
+        } else {
+          query = query.or(directFilter);
+        }
       }
 
       query = query.range(from, to);
