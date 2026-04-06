@@ -195,13 +195,18 @@ export function UnifiedDocumentUploader({
       const ocrResult = ocrData as OcrResultadoUnificado;
 
       // 4. Inserir no banco com tipo detectado (usar cliente apropriado) — com retry
+      // Mapear tipo detectado para valores aceitos pelo CHECK do banco
+      const tipoDetectado = ocrResult.tipo_detectado || 'outro';
+      const tiposValidos = ['cnh', 'rg', 'crlv', 'comprovante_residencia', 'laudo_vistoria', 'nota_fiscal_veiculo'];
+      const tipoParaBanco = tiposValidos.includes(tipoDetectado) ? tipoDetectado : 'outro';
+
       const insertPayload = {
         contrato_id: contratoId || null,
         cotacao_id: cotacaoId || null,
-        tipo: ocrResult.tipo_detectado || 'outro',
+        tipo: tipoParaBanco,
         arquivo_url: arquivoUrl,
         arquivo_nome: originalFileName,
-        status: ocrResult.sugestao === 'aprovar' ? 'em_analise' : 'pendente',
+        status: 'pendente' as const,
         ocr_resultado: ocrResult as any,
       };
 
