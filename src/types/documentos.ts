@@ -191,6 +191,7 @@ export type TipoDocumentoAnexo =
   | 'selfie_documento'
   | 'contrato_assinado'
   | 'laudo_vistoria'
+  | 'nota_fiscal_veiculo'
   | 'foto_veiculo_frente'
   | 'foto_veiculo_traseira'
   | 'foto_veiculo_lateral_esquerda'
