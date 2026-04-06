@@ -87,6 +87,7 @@ const TIPO_DOCUMENTO_LABELS: Record<string, string> = {
 // ============================================
 export function VeiculoDetalhesModal({ open, onClose, veiculoId }: VeiculoDetalhesModalProps) {
   const navigate = useNavigate();
+  const { isDiretor } = usePermissions();
   const [activeTab, setActiveTab] = useState('resumo');
   const [fotoPreview, setFotoPreview] = useState<{ url: string; tipo: string } | null>(null);
   
