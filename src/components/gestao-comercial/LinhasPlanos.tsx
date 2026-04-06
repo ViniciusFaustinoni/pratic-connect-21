@@ -315,44 +315,73 @@ export function LinhasPlanos() {
 
               <CollapsibleContent>
                 <div className="border-t px-4 py-2 space-y-1 bg-muted/20">
-                  {linha.plans.map((plano: any) => (
-                    <div
-                      key={plano.id}
-                      className={cn('flex items-center gap-1', draggedPlan?.id === plano.id && 'opacity-40')}
-                      draggable
-                      onDragStart={(e) => {
-                        setDraggedPlan({ id: plano.id, fromLineId: linha.id });
-                        e.dataTransfer.effectAllowed = 'move';
-                      }}
-                      onDragEnd={() => { setDraggedPlan(null); setDragOverLineId(null); }}
-                    >
-                      <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
-                      <button
-                        onClick={() => setPlanoSheet({ open: true, planoId: plano.id, linhaId: linha.id })}
-                        className="flex-1 flex items-center gap-3 px-3 py-2 rounded-md hover:bg-background transition-colors text-left"
-                      >
-                        <div className="flex-1 min-w-0">
-                          <p className="text-sm font-medium">{plano.nome}</p>
-                        </div>
-                        <span className="text-sm font-semibold text-primary">
-                          R$ {plano.valor_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-                        </span>
-                        <Switch checked={plano.ativo} className="shrink-0 pointer-events-none" />
-                      </button>
-                      <Button
-                        variant="ghost" size="icon" className="h-7 w-7 shrink-0"
-                        onClick={() => duplicatePlan.mutate(plano.id)} title="Duplicar"
-                      >
-                        <Copy className="h-3.5 w-3.5" />
-                      </Button>
-                      {canDelete && (
-                        <Button
-                          variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
-                          onClick={() => setDeleteConfirm({ type: 'plano', id: plano.id, name: plano.nome })}
-                        >
-                          <Trash2 className="h-3.5 w-3.5" />
-                        </Button>
+                  {linha.plans.map((plano: any, index: number) => (
+                    <div key={plano.id}>
+                      {/* Drop indicator above this plan */}
+                      {draggedPlan && draggedPlan.fromLineId === linha.id && dragOverPlanId === plano.id && draggedPlan.id !== plano.id && (
+                        <div className="h-0.5 bg-primary rounded-full mx-2 my-0.5" />
                       )}
+                      <div
+                        className={cn('flex items-center gap-1', draggedPlan?.id === plano.id && 'opacity-40')}
+                        draggable
+                        onDragStart={(e) => {
+                          setDraggedPlan({ id: plano.id, fromLineId: linha.id });
+                          e.dataTransfer.effectAllowed = 'move';
+                        }}
+                        onDragEnd={() => { setDraggedPlan(null); setDragOverLineId(null); setDragOverPlanId(null); }}
+                        onDragOver={(e) => {
+                          e.preventDefault();
+                          e.stopPropagation();
+                          if (draggedPlan && draggedPlan.fromLineId === linha.id && draggedPlan.id !== plano.id) {
+                            setDragOverPlanId(plano.id);
+                          }
+                        }}
+                        onDrop={(e) => {
+                          e.stopPropagation();
+                          if (draggedPlan && draggedPlan.fromLineId === linha.id && draggedPlan.id !== plano.id) {
+                            // Reorder within same line
+                            const currentIds = linha.plans.map((p: any) => p.id);
+                            const fromIndex = currentIds.indexOf(draggedPlan.id);
+                            const toIndex = currentIds.indexOf(plano.id);
+                            if (fromIndex !== -1 && toIndex !== -1) {
+                              const newIds = [...currentIds];
+                              newIds.splice(fromIndex, 1);
+                              newIds.splice(toIndex, 0, draggedPlan.id);
+                              reorderPlans.mutate(newIds);
+                            }
+                          }
+                          setDragOverPlanId(null);
+                          setDraggedPlan(null);
+                        }}
+                      >
+                        <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
+                        <button
+                          onClick={() => setPlanoSheet({ open: true, planoId: plano.id, linhaId: linha.id })}
+                          className="flex-1 flex items-center gap-3 px-3 py-2 rounded-md hover:bg-background transition-colors text-left"
+                        >
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium">{plano.nome}</p>
+                          </div>
+                          <span className="text-sm font-semibold text-primary">
+                            R$ {plano.valor_mensal.toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+                          </span>
+                          <Switch checked={plano.ativo} className="shrink-0 pointer-events-none" />
+                        </button>
+                        <Button
+                          variant="ghost" size="icon" className="h-7 w-7 shrink-0"
+                          onClick={() => duplicatePlan.mutate(plano.id)} title="Duplicar"
+                        >
+                          <Copy className="h-3.5 w-3.5" />
+                        </Button>
+                        {canDelete && (
+                          <Button
+                            variant="ghost" size="icon" className="h-7 w-7 text-destructive hover:text-destructive shrink-0"
+                            onClick={() => setDeleteConfirm({ type: 'plano', id: plano.id, name: plano.nome })}
+                          >
+                            <Trash2 className="h-3.5 w-3.5" />
+                          </Button>
+                        )}
+                      </div>
                     </div>
                   ))}
                   <Button variant="ghost" size="sm" className="w-full mt-1 text-muted-foreground" onClick={() => setPlanoSheet({ open: true, linhaId: linha.id })}>
