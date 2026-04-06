@@ -518,6 +518,7 @@ const App = () => (
               <Route path="/vendas/configuracoes" element={<VendasConfig />} />
               <Route path="/vendas/aprovacoes-fipe" element={<AprovacoesFipeMenor />} />
               <Route path="/vendas/relatorios" element={<RelatoriosVendas />} />
+              <Route path="/vendas/substituicao/:associadoId" element={<SubstituicaoVeiculoPage />} />
               <Route path="/aprovacoes-elegibilidade" element={<AprovacoesFipeMenor />} />
               
               {/* Auditoria */}
