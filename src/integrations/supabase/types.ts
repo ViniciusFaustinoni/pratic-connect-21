@@ -28876,6 +28876,7 @@ export type Database = {
         }
         Returns: undefined
       }
+      veiculos_sem_rastreador_ids: { Args: never; Returns: string[] }
       verificar_acordos_quebrados: { Args: never; Returns: number }
     }
     Enums: {
