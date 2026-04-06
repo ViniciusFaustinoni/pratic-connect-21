@@ -833,6 +833,14 @@ export default function CotadorPage() {
 
       setCotacaoSalva(cotacaoData);
 
+      // Se for inclusão de veículo, navegar automaticamente para contratação
+      if (isInclusaoVeiculo && cotacaoData?.id) {
+        toast.success('Cotação salva! Redirecionando para contratação...');
+        setSalvandoCotacao(false);
+        navigate(`/vendas/contratos/novo?cotacao=${cotacaoData.id}`);
+        return;
+      }
+
       // Atualizar etapa do lead e salvar plano escolhido
       if (leadSelecionado?.id) {
         await atualizarLead.mutateAsync({
