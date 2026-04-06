@@ -57,7 +57,7 @@ export default function BaseAntiga() {
 
   const { data, isLoading } = useBaseAntigaAssociados({ search: debouncedSearch }, { page, pageSize: 20 });
   const { data: detalhe, isLoading: loadingDetalhe } = useBaseAntigaDetalhe(selectedId ?? undefined);
-  const { data: vData, isLoading: vLoading } = useBaseAntigaVeiculos({ search: vDebouncedSearch }, { page: vPage, pageSize: 20 });
+  const { data: vData, isLoading: vLoading } = useBaseAntigaVeiculos({ search: vDebouncedSearch, semRastreador }, { page: vPage, pageSize: 20 });
   const { isDiretor, isAdminMaster, isDesenvolvedor } = usePermissions();
   const canDelete = isDiretor || isAdminMaster || isDesenvolvedor;
   const deleteAssociado = useDeleteBaseAntiga('associado');
