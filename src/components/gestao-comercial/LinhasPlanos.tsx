@@ -221,9 +221,11 @@ export function LinhasPlanos() {
   const duplicateLine = useDuplicateProductLine();
   const duplicatePlan = useDuplicatePlan();
   const movePlan = useMovePlanToLine();
+  const reorderPlans = useReorderPlans();
 
   const [draggedPlan, setDraggedPlan] = useState<{ id: string; fromLineId: string } | null>(null);
   const [dragOverLineId, setDragOverLineId] = useState<string | null>(null);
+  const [dragOverPlanId, setDragOverPlanId] = useState<string | null>(null);
 
   const toggleLine = (id: string) => {
     setOpenLines(prev => {
