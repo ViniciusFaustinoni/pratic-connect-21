@@ -181,15 +181,16 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   // Reset on close
   useEffect(() => {
     if (!open) {
-      setSelectedTipo(null);
       setSearchTerm('');
       setMigracaoCpf('');
+
       if (!showTrocaTitularidade && !showMigracao) {
+        setSelectedTipo(null);
         setSelectedAssociadoId(null);
         setSelectedAssociadoNome('');
       }
     }
-  }, [open]);
+  }, [open, showTrocaTitularidade, showMigracao]);
 
   // Reset search when changing tipo
   useEffect(() => {
