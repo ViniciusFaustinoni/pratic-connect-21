@@ -1,30 +1,28 @@
 
 
-# Plano: Reordenar planos dentro da mesma linha via drag-and-drop
+# Plano: Corrigir perda silenciosa de documentos (CNH/CRLV)
 
-## Situação atual
-O drag-and-drop existente **só move planos entre linhas**. Não é possível reordenar planos dentro da mesma linha. A coluna `ordem` já existe na tabela `planos` e a query já ordena por ela (`.order('ordem')`), mas nenhuma lógica atualiza esse campo.
+## Diagnóstico
 
-## O que muda para o usuário
-Ao arrastar um plano dentro da mesma linha, ele será reposicionado visualmente e a nova ordem será salva no banco. A ordem definida reflete em todas as interfaces que listam planos.
+O problema está em `UnifiedDocumentUploader.tsx` (linhas 212-214). Quando o upload para o Storage e o OCR funcionam mas o **INSERT na tabela `contratos_documentos` falha**, o erro é apenas logado no console. O documento aparece como "sucesso" (checkmark verde) na interface, mas nunca é salvo no banco. Ao navegar para outra etapa ou recarregar, o documento desaparece.
 
-## Implementação
+Isso explica por que o usuário viu os documentos como enviados com sucesso durante o fluxo de cotação, mas eles não aparecem na tela de proposta.
 
-### 1. Novo hook `useReorderPlans` em `LinhasPlanos.tsx`
-- Recebe `{ lineId, orderedPlanIds: string[] }`.
-- Faz um batch update: para cada `planId` na lista, atualiza `ordem = index`.
-- Invalida a query `linhas_com_planos_clean`.
+## Solução
 
-### 2. Expandir lógica de drag-and-drop em `LinhasPlanos.tsx`
-- Adicionar estado `dragOverPlanId` para rastrear sobre qual plano o cursor está.
-- Nos itens de plano, adicionar handlers `onDragOver` e `onDrop`:
-  - Se o plano arrastado pertence à **mesma linha**, reordenar localmente (mover o item na posição do alvo) e chamar `useReorderPlans`.
-  - Se pertence a **outra linha**, manter o comportamento atual (`movePlan`).
-- Mostrar indicador visual (linha separadora) na posição de inserção durante o drag.
+### 1. Tornar o erro de INSERT visível e tentar novamente (`UnifiedDocumentUploader.tsx`)
+- Quando `insertError` ocorrer, **não ignorar silenciosamente**.
+- Implementar retry automático (1 tentativa extra) antes de marcar como erro.
+- Se falhar no retry, marcar o documento como `error` no estado local (com mensagem clara) em vez de `success`.
+- Mostrar toast de erro informando que o documento precisa ser reenviado.
 
-### 3. Garantir `ordem` consistente
-- Ao criar um novo plano, definir `ordem` como `MAX(ordem) + 1` da linha (já tratado no `PlanoFormSheet` — verificar e ajustar se necessário).
+### 2. Adicionar fallback de recuperação
+- Se o upload no Storage funcionou mas o INSERT falhou, tentar recuperar na próxima vez que o componente carregar, verificando arquivos no storage sem registro no banco.
 
-## Arquivos modificados
-- `src/components/gestao-comercial/LinhasPlanos.tsx` — hook de reorder + lógica de drag within same line
+### 3. Melhorar feedback visual
+- Documentos com falha de persistência devem mostrar ícone de alerta amarelo (não checkmark verde).
+- Adicionar botão "Tentar novamente" no card do documento com erro.
+
+## Arquivo modificado
+- `src/components/contratos/UnifiedDocumentUploader.tsx` -- tratar erro de INSERT + retry + feedback visual
 
