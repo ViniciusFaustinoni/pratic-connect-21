@@ -328,11 +328,6 @@ export function EtapaAssinaturaContrato({
 
         if (error || !data) return;
 
-        // Atualizar linkAssinatura se disponível e não setado
-        if (data.autentique_url && !contrato?.linkAssinatura) {
-          setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
-        }
-
         if (data?.status === 'assinado' || data?.status === 'ativo') {
           console.log('[EtapaAssinatura] Contrato assinado detectado via banco!');
           toast.success('Contrato assinado com sucesso!');
@@ -352,8 +347,7 @@ export function EtapaAssinaturaContrato({
 
     // Verificar imediatamente e depois a cada 15 segundos
     verificarAssinatura();
-    const pollingInterval = contrato?.linkAssinatura ? 15000 : 5000;
-    const interval = setInterval(verificarAssinatura, pollingInterval);
+    const interval = setInterval(verificarAssinatura, 15000);
 
     return () => clearInterval(interval);
   }, [etapaInterna, contrato?.id, contrato?.linkAssinatura, cotacaoId, onContratoAssinado]);
