@@ -90,18 +90,31 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
   return useQuery({
     queryKey: ['base-antiga-veiculos', filters, pagination],
     queryFn: async () => {
-      // If filtering vehicles without tracker, get IDs via RPC
-      let allowedIds: string[] | null = null;
+      // Use RPC for "sem rastreador" filter (avoids URL length issues)
       if (filters?.semRastreador) {
-        const { data: ids } = await supabase.rpc('veiculos_sem_rastreador_ids');
-        if (ids?.length) {
-          allowedIds = ids as string[];
-        } else {
-          return {
-            veiculos: [],
-            pagination: { page, pageSize, total: 0, totalPages: 0 },
-          };
-        }
+        const searchTerm = (filters.search && filters.search.length >= 2) ? filters.search.trim() : null;
+        const { data: result, error } = await supabase.rpc('veiculos_base_antiga_sem_rastreador' as any, {
+          p_search: searchTerm,
+          p_offset: (page - 1) * pageSize,
+          p_limit: pageSize,
+        });
+        if (error) throw error;
+        const parsed = result as any;
+        const total = parsed?.total || 0;
+        const veiculos = (parsed?.data || []).map((v: any) => ({
+          ...v,
+          associado: v.associado || null,
+          rastreador: null, // These vehicles have no tracker by definition
+        }));
+        return {
+          veiculos,
+          pagination: {
+            page,
+            pageSize,
+            total,
+            totalPages: Math.ceil(total / pageSize),
+          },
+        };
       }
 
       // 1) Lightweight count query
@@ -116,10 +129,6 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
         countQuery = countQuery.or(`placa.ilike.%${upper}%,chassi.ilike.%${upper}%,marca.ilike.%${term}%,modelo.ilike.%${term}%`);
       }
 
-      if (allowedIds) {
-        countQuery = countQuery.in('id', allowedIds);
-      }
-
       // 2) Data query
       let dataQuery = (supabase
         .from('veiculos')
@@ -130,10 +139,6 @@ export function useBaseAntigaVeiculos(filters?: BaseAntigaFilters, pagination?: 
         const term = filters.search.trim();
         const upper = term.toUpperCase();
         dataQuery = dataQuery.or(`placa.ilike.%${upper}%,chassi.ilike.%${upper}%,marca.ilike.%${term}%,modelo.ilike.%${term}%`);
-      }
-
-      if (allowedIds) {
-        dataQuery = dataQuery.in('id', allowedIds);
       }
 
       dataQuery = dataQuery
