@@ -1,0 +1,2 @@
+ALTER TABLE public.contratos_documentos DROP CONSTRAINT IF EXISTS contratos_documentos_tipo_check;
+ALTER TABLE public.contratos_documentos ADD CONSTRAINT contratos_documentos_tipo_check CHECK (tipo IN ('crlv', 'cnh', 'rg', 'comprovante_residencia', 'laudo_vistoria', 'nota_fiscal_veiculo', 'outro'));

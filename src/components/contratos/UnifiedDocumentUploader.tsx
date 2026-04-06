@@ -195,13 +195,18 @@ export function UnifiedDocumentUploader({
       const ocrResult = ocrData as OcrResultadoUnificado;
 
       // 4. Inserir no banco com tipo detectado (usar cliente apropriado) — com retry
+      // Mapear tipo detectado para valores aceitos pelo CHECK do banco
+      const tipoDetectado = ocrResult.tipo_detectado || 'outro';
+      const tiposValidos = ['cnh', 'rg', 'crlv', 'comprovante_residencia', 'laudo_vistoria', 'nota_fiscal_veiculo'];
+      const tipoParaBanco = tiposValidos.includes(tipoDetectado) ? tipoDetectado : 'outro';
+
       const insertPayload = {
         contrato_id: contratoId || null,
         cotacao_id: cotacaoId || null,
-        tipo: ocrResult.tipo_detectado || 'outro',
+        tipo: tipoParaBanco,
         arquivo_url: arquivoUrl,
         arquivo_nome: originalFileName,
-        status: ocrResult.sugestao === 'aprovar' ? 'em_analise' : 'pendente',
+        status: 'pendente' as const,
         ocr_resultado: ocrResult as any,
       };
 
@@ -216,7 +221,7 @@ export function UnifiedDocumentUploader({
         .single();
 
       if (result1.error) {
-        console.warn('INSERT tentativa 1 falhou, retentando...', result1.error);
+        console.warn('INSERT tentativa 1 falhou, retentando...', { code: result1.error.code, message: result1.error.message, details: result1.error.details, hint: result1.error.hint });
         // Retry após 1s
         await new Promise(r => setTimeout(r, 1000));
         const result2 = await supabaseClient
@@ -232,7 +237,7 @@ export function UnifiedDocumentUploader({
       }
 
       if (insertError) {
-        console.error('Database insert error (após retry):', insertError);
+        console.error('Database insert error (após retry):', { code: insertError.code, message: insertError.message, details: insertError.details, hint: insertError.hint });
         toast.error('Documento enviado mas não foi salvo. Tente novamente.', {
           description: 'O arquivo foi enviado ao storage, mas houve erro ao registrar no banco de dados.',
         });

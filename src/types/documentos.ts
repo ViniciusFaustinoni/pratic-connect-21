@@ -191,6 +191,7 @@ export type TipoDocumentoAnexo =
   | 'selfie_documento'
   | 'contrato_assinado'
   | 'laudo_vistoria'
+  | 'nota_fiscal_veiculo'
   | 'foto_veiculo_frente'
   | 'foto_veiculo_traseira'
   | 'foto_veiculo_lateral_esquerda'
@@ -228,6 +229,7 @@ export const TIPO_DOCUMENTO_ANEXO_LABELS: Record<TipoDocumentoAnexo, string> = {
   selfie_documento: 'Selfie com Documento',
   contrato_assinado: 'Contrato Assinado',
   laudo_vistoria: 'Laudo de Vistoria',
+  nota_fiscal_veiculo: 'Nota Fiscal do Veículo',
   foto_veiculo_frente: 'Foto Frente',
   foto_veiculo_traseira: 'Foto Traseira',
   foto_veiculo_lateral_esquerda: 'Foto Lateral Esquerda',
