@@ -1,19 +1,27 @@
 
-# Plano: Corrigir erro "atribuido_em column not found" na atribuição manual
+
+# Plano: Substituição de placa acessível para vendedores
 
 ## Problema
-O hook `useAtribuirServicoManual` (linha ~133 de `useAtribuicaoManual.ts`) tenta fazer `update({ atribuido_em: new Date().toISOString() })` na tabela `servicos`, mas essa coluna não existe, gerando 400.
+Ao clicar em "Substituição de Placa" na cotação, o sistema navega para `/cadastro/associados/:id/substituicao`. O vendedor não tem acesso ao módulo `cadastro`, então o `useRouteGuard` redireciona-o para outra página.
 
 ## Solução
+Criar uma rota espelho sob `/vendas/substituicao/:associadoId` que renderiza o mesmo componente `SubstituicaoVeiculoPage`, e atualizar a navegação da cotação para usar essa rota.
 
-### 1. Remover `atribuido_em` do update em `useAtribuicaoManual.ts`
-- Na mutation, remover o campo `atribuido_em` do objeto de update do serviço.
-- Manter apenas `profissional_id` e `status: 'agendada'`.
+## Alterações
 
-### 2. (Opcional) Criar a coluna se desejado
-- Alternativa: criar migration adicionando `atribuido_em TIMESTAMPTZ` à tabela `servicos`. Porém, como o log de atribuições já registra o timestamp em `servicos_atribuicoes_log`, a coluna é redundante.
+### 1. Adicionar rota em `src/App.tsx`
+- Dentro do grupo de rotas `/vendas`, adicionar:
+  `<Route path="/vendas/substituicao/:associadoId" element={<SubstituicaoVeiculoPage />} />`
 
-**Abordagem recomendada**: remover do update (opção 1), pois o timestamp já fica registrado no log.
+### 2. Atualizar navegação em `src/pages/vendas/Cotacao.tsx`
+- Linha 363: trocar `navigate('/cadastro/associados/${associadoId}/substituicao')` para `navigate('/vendas/substituicao/${associadoId}')`.
 
-## Arquivo modificado
-- `src/hooks/useAtribuicaoManual.ts` -- remover `atribuido_em` do update
+### 3. Registrar prefixo no `MODULE_ROUTES` (`src/hooks/useModuleVisibility.ts`)
+- Adicionar `'/vendas/substituicao'` ao array do módulo `vendas` para que o route guard permita acesso.
+
+## Arquivos modificados
+- `src/App.tsx`
+- `src/pages/vendas/Cotacao.tsx`
+- `src/hooks/useModuleVisibility.ts`
+
