@@ -302,6 +302,7 @@ export default function CotacaoPage() {
     // Dados da cotação para pré-preencher o contrato
     const dadosCotacao = {
       associado: {
+        id: isInclusaoVeiculo ? associadoIdParam : undefined,
         nome: nomeAssociado,
         email: emailAssociado,
         telefone: telefone1,
@@ -324,6 +325,7 @@ export default function CotacaoPage() {
       consultor_id: consultorId,
       regiao: regiao,
       modalidade: modalidade,
+      tipo_entrada: isInclusaoVeiculo ? 'inclusao' : undefined,
       indicacao: isIndicacao ? {
         indicador_id: indicadorId,
         indicador_nome: indicadorNome,
@@ -332,7 +334,7 @@ export default function CotacaoPage() {
     
     toast.success('Redirecionando para cadastro de contrato...');
     navigate('/vendas/contratos', { state: { fromCotacao: true, dadosCotacao } });
-  }, [planosSelecionados, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, nomeAssociado, emailAssociado, telefone1, telefone2, leadId, consultorId, regiao, modalidade, valorAdesaoCustomizado, isIndicacao, indicadorId, indicadorNome]);
+  }, [planosSelecionados, navigate, veiculoEncontrado, placa, marca, modelo, ano, valorFipe, nomeAssociado, emailAssociado, telefone1, telefone2, leadId, consultorId, regiao, modalidade, valorAdesaoCustomizado, isIndicacao, indicadorId, indicadorNome, isInclusaoVeiculo, associadoIdParam]);
 
   // Click no stepper
   const handleStepClick = useCallback((step: number) => {
