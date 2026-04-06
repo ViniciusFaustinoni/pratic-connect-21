@@ -244,7 +244,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
       navigate(`/cadastro/associados/${selectedAssociadoId}/substituicao`);
     } else if (selectedTipo === 'inclusao') {
       onOpenChange(false);
-      navigate(`/vendas/cotador?associado_id=${selectedAssociadoId}&tipo_entrada=inclusao`);
+      navigate(`/vendas/cotacao?associado_id=${selectedAssociadoId}&tipo_entrada=inclusao`);
     }
   };
 

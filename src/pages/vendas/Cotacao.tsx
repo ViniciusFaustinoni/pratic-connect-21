@@ -1,7 +1,8 @@
-import { useState, useCallback, useMemo } from 'react';
+import { useState, useCallback, useMemo, useEffect } from 'react';
 import { usePermissions } from '@/hooks/usePermissions';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { toast } from 'sonner';
+import { supabase } from '@/integrations/supabase/client';
 import { CotacaoStepper } from '@/components/cotacao/CotacaoStepper';
 import { EtapaDadosAssociado } from '@/components/cotacao/EtapaDadosAssociado';
 import { EtapaConsultaFipe } from '@/components/cotacao/EtapaConsultaFipe';
