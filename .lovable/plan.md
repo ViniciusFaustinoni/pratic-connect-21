@@ -1,19 +1,18 @@
 
 
-# Plano: Fluxo de inclusão de veículo deve avançar automaticamente para contrato
+# Plano: Corrigir layout das tabs de planos no Cotador
 
 ## Problema
-Após preencher os dados do veículo, selecionar plano e salvar a cotação no contexto de **inclusão de veículo**, o sistema fica parado no Cotador Rápido mostrando os botões genéricos (WhatsApp, Gerar Contrato, Email). O vendedor precisa clicar manualmente em "Gerar Contrato" para prosseguir. O fluxo de inclusão deveria avançar automaticamente para a próxima etapa.
+As tabs de planos no card "Resultado da Cotação" usam `flex-1` em um `div flex`, fazendo com que todos os planos se espremam horizontalmente quando há muitos planos. Isso causa o overflow visível na screenshot.
 
 ## Solução
-No `handleSalvarEEnviarWhatsApp`, quando `isInclusaoVeiculo` for `true` e a cotação for salva com sucesso, navegar automaticamente para a tela de contratação (`/vendas/contratos/novo?cotacao=${cotacaoSalva.id}`) em vez de ficar parado no cotador.
+Tornar o container das tabs scrollável horizontalmente com `overflow-x-auto` e dar tamanho mínimo fixo a cada tab (`min-w-fit`, `whitespace-nowrap`), removendo `flex-1`.
 
 ## Alteração
 
 ### `src/pages/vendas/Cotador.tsx`
-- Após a linha ~901 (`toast.success`), adicionar condição:
-  - Se `isInclusaoVeiculo && cotacaoData?.id`, navegar para `/vendas/contratos/novo?cotacao=${cotacaoData.id}` automaticamente
-  - Caso contrário, manter comportamento atual (ficar no cotador com botões de ação)
+- Linha 1730: trocar `<div className="flex border-b">` por `<div className="flex border-b overflow-x-auto">`
+- Linha 1736: trocar `"flex-1 py-3 px-4 text-sm font-medium..."` por `"shrink-0 py-3 px-4 text-sm font-medium whitespace-nowrap..."` (remover `flex-1`, adicionar `shrink-0 whitespace-nowrap`)
 
 ## Arquivo modificado
 - `src/pages/vendas/Cotador.tsx`
