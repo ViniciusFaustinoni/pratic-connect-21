@@ -451,6 +451,28 @@ export function useRastreadoresDisponiveis() {
   return useRastreadores({ status: ['estoque'], pageSize: 1000 });
 }
 
+// Busca rastreadores em estoque por código/IMEI/série (para vinculação manual)
+export function useRastreadoresEmEstoqueBusca(search: string) {
+  return useQuery({
+    queryKey: ['rastreadores-estoque-busca', search],
+    queryFn: async () => {
+      if (!search || search.length < 2) return [];
+
+      const { data, error } = await supabase
+        .from('rastreadores')
+        .select('id, codigo, imei, numero_serie, plataforma')
+        .eq('status', 'estoque')
+        .is('veiculo_id', null)
+        .or(`codigo.ilike.%${search}%,imei.ilike.%${search}%,numero_serie.ilike.%${search}%`)
+        .limit(10);
+
+      if (error) throw error;
+      return data;
+    },
+    enabled: search.length >= 2,
+  });
+}
+
 // Contagem de rastreadores (alias para useRastreadoresMetricas)
 export function useRastreadoresContagem() {
   return useRastreadoresMetricas();
