@@ -1727,13 +1727,13 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
             ) : (
               <div className="space-y-4">
                 {/* Tabs de planos */}
-                <div className="flex border-b">
+                <div className="flex border-b overflow-x-auto">
                   {planos.map((plano) => (
                     <button
                       key={plano.id}
                       onClick={() => setPlanoSelecionadoTab(plano.id)}
                       className={cn(
-                        "flex-1 py-3 px-4 text-sm font-medium border-b-2 transition-colors relative",
+                        "shrink-0 py-3 px-4 text-sm font-medium whitespace-nowrap border-b-2 transition-colors relative",
                         planoSelecionadoTab === plano.id
                           ? "border-primary text-primary bg-primary/5"
                           : "border-transparent text-muted-foreground hover:text-foreground"
