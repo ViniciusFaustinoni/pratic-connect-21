@@ -158,7 +158,26 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
           );
         }
       } else {
-        const codigo = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').slice(0, 30);
+        if (!nome.trim()) throw new Error('Nome do plano é obrigatório');
+        
+        // Generate unique codigo/slug
+        let baseCodigo = nome.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/-+$/, '').slice(0, 30);
+        let codigo = baseCodigo;
+        let suffix = 2;
+        
+        // Check for existing codigo and increment suffix until unique
+        while (true) {
+          const { data: existing } = await supabase
+            .from('planos')
+            .select('id')
+            .eq('codigo', codigo)
+            .maybeSingle();
+          if (!existing) break;
+          codigo = `${baseCodigo.slice(0, 27)}-${suffix}`;
+          suffix++;
+          if (suffix > 100) throw new Error('Não foi possível gerar um código único para o plano');
+        }
+        
         const { data: plan, error } = await supabase.from('planos').insert({
           nome, descricao, ativo, codigo, slug: codigo,
           product_line_id: targetLineId,
@@ -188,7 +207,7 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
       toast.success('Plano salvo');
       onClose();
     },
-    onError: (e) => { console.error(e); toast.error('Erro ao salvar plano'); },
+    onError: (e: any) => { console.error(e); toast.error(e?.message || 'Erro ao salvar plano'); },
   });
 
   if (planoId && loadingPlan) {
