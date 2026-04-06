@@ -1,32 +1,20 @@
 
 
-# Plano: Corrigir TrocaTitularidadeDialog que não abre
+# Plano: Fluxo de inclusão de veículo deve avançar automaticamente para contrato
 
 ## Problema
-Em `OutrasEntradasMenu.tsx`, ao selecionar um associado para troca de titularidade (linha 226), `onOpenChange(false)` fecha o dialog principal. Isso dispara o `useEffect` da linha 182-190, que reseta `selectedAssociadoId` para `null`. Como o `TrocaTitularidadeDialog` só renderiza quando `selectedAssociadoId` é truthy (linha 557), ele nunca aparece.
+Após preencher os dados do veículo, selecionar plano e salvar a cotação no contexto de **inclusão de veículo**, o sistema fica parado no Cotador Rápido mostrando os botões genéricos (WhatsApp, Gerar Contrato, Email). O vendedor precisa clicar manualmente em "Gerar Contrato" para prosseguir. O fluxo de inclusão deveria avançar automaticamente para a próxima etapa.
 
 ## Solução
-Não resetar `selectedAssociadoId` e `selectedAssociadoNome` no `useEffect` de close se `showTrocaTitularidade` estiver `true`. Isso garante que o dialog de troca receba o ID corretamente.
+No `handleSalvarEEnviarWhatsApp`, quando `isInclusaoVeiculo` for `true` e a cotação for salva com sucesso, navegar automaticamente para a tela de contratação (`/vendas/contratos/novo?cotacao=${cotacaoSalva.id}`) em vez de ficar parado no cotador.
 
 ## Alteração
 
-### `src/components/vendas/OutrasEntradasMenu.tsx`
-- Linhas 182-190: condicionar o reset de `selectedAssociadoId` e `selectedAssociadoNome` a `!showTrocaTitularidade && !showMigracao`:
-
-```typescript
-useEffect(() => {
-  if (!open) {
-    setSelectedTipo(null);
-    setSearchTerm('');
-    setMigracaoCpf('');
-    if (!showTrocaTitularidade && !showMigracao) {
-      setSelectedAssociadoId(null);
-      setSelectedAssociadoNome('');
-    }
-  }
-}, [open]);
-```
+### `src/pages/vendas/Cotador.tsx`
+- Após a linha ~901 (`toast.success`), adicionar condição:
+  - Se `isInclusaoVeiculo && cotacaoData?.id`, navegar para `/vendas/contratos/novo?cotacao=${cotacaoData.id}` automaticamente
+  - Caso contrário, manter comportamento atual (ficar no cotador com botões de ação)
 
 ## Arquivo modificado
-- `src/components/vendas/OutrasEntradasMenu.tsx`
+- `src/pages/vendas/Cotador.tsx`
 
