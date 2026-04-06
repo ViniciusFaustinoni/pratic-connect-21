@@ -40,11 +40,18 @@ import { estimarValorFipe } from '@/utils/fipe';
 
 export default function CotacaoPage() {
   const navigate = useNavigate();
+  const [searchParams] = useSearchParams();
   const { isVendedorExterno } = usePermissions();
   
+  // Detectar contexto de inclusão de veículo
+  const associadoIdParam = searchParams.get('associado_id');
+  const tipoEntrada = searchParams.get('tipo_entrada');
+  const isInclusaoVeiculo = tipoEntrada === 'inclusao' && !!associadoIdParam;
+  
   // Estado da etapa atual
-  const [etapaAtual, setEtapaAtual] = useState(1);
-  const [etapasCompletas, setEtapasCompletas] = useState<number[]>([]);
+  const [etapaAtual, setEtapaAtual] = useState(isInclusaoVeiculo ? 2 : 1);
+  const [etapasCompletas, setEtapasCompletas] = useState<number[]>(isInclusaoVeiculo ? [1] : []);
+  const [inclusaoAssociadoNome, setInclusaoAssociadoNome] = useState('');
 
   // ============================================
   // ETAPA 1 - DADOS DO ASSOCIADO/SOLICITANTE
