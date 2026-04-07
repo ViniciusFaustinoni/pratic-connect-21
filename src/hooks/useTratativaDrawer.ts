@@ -172,7 +172,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
           tratativa_id: tratativaId!,
           etapa: 'decisao',
           acao: 'falha_confirmada_agendar',
-          dados: { confirmado_em: new Date().toISOString() },
+          dados: { confirmado_em: new Date().toISOString() } as unknown as Json,
           criado_por: userId,
         });
       if (logErr) throw logErr;
