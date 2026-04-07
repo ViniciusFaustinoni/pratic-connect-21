@@ -287,6 +287,10 @@ export function RegrasVendaContent() {
   const [savingTaxas, setSavingTaxas] = useState(false);
   const [savingAutorizacoes, setSavingAutorizacoes] = useState(false);
   const [savingIndicacao, setSavingIndicacao] = useState(false);
+  const [savingCancelamento, setSavingCancelamento] = useState(false);
+  const [prazoDevolucao, setPrazoDevolucao] = useState('7');
+  const [baseProrata, setBaseProrata] = useState('pos_vencimento');
+  const [cancelamentoInitialized, setCancelamentoInitialized] = useState(false);
 
   useEffect(() => {
     if (taxasDB && !taxasInitialized) {
