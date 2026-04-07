@@ -100,7 +100,8 @@ export default function ManutencaoRastreadoresTab() {
             <SelectItem value="aguardando_contato">Contatado</SelectItem>
             <SelectItem value="em_tratativa">Em tratativa</SelectItem>
             <SelectItem value="agendado">Agendado</SelectItem>
-            <SelectItem value="visita_realizada">Visita realizada</SelectItem>
+            <SelectItem value="visita_realizada">Concluído</SelectItem>
+            <SelectItem value="acompanhamento">Acompanhamento</SelectItem>
             <SelectItem value="resolvido_sem_visita">Resolvido s/ visita</SelectItem>
           </SelectContent>
         </Select>
