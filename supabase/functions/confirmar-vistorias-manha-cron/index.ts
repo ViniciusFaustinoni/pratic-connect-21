@@ -86,7 +86,8 @@ serve(async (req) => {
     if (isVespera) {
       query = query.is('confirmacao_whatsapp', null);
     } else {
-      query = query.eq('confirmacao_whatsapp', 'aguardando_confirmacao_vespera');
+      // Manhã: pegar quem não confirmou na véspera + agendamentos novos (encaixes noturnos, última hora)
+      query = query.or('confirmacao_whatsapp.eq.aguardando_confirmacao_vespera,confirmacao_whatsapp.is.null');
     }
 
     const { data: servicos, error: servicosError } = await query;

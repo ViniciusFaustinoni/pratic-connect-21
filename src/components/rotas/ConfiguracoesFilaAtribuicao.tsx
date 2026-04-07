@@ -1,5 +1,5 @@
 import { useState, useEffect } from 'react';
-import { Save, Workflow, Info } from 'lucide-react';
+import { Save, Workflow, Info, AlertTriangle } from 'lucide-react';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Label } from '@/components/ui/label';
 import { Input } from '@/components/ui/input';
@@ -7,6 +7,7 @@ import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Alert, AlertDescription } from '@/components/ui/alert';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { useAuth } from '@/contexts/AuthContext';
@@ -49,14 +50,14 @@ function useConfiguracoesFilaAtribuicao() {
       const { data, error } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', [...CONFIG_KEYS, 'fila_atribuicao_ativa']);
+        .in('chave', [...CONFIG_KEYS, 'fila_atribuicao_ativa', 'atribuicao_manual_rotas']);
 
       if (error) {
         console.warn('[useConfiguracoesFilaAtribuicao] Erro:', error);
-        return { ...DEFAULTS, ativo: true };
+        return { ...DEFAULTS, ativo: true, manualAtivo: false };
       }
 
-      const config: FilaConfig & { ativo: boolean } = { ...DEFAULTS, ativo: true };
+      const config: FilaConfig & { ativo: boolean; manualAtivo: boolean } = { ...DEFAULTS, ativo: true, manualAtivo: false };
       const map: Record<string, keyof FilaConfig> = {
         fila_raio_proximidade_metros: 'raioProximidade',
         fila_raio_quase_disponivel_metros: 'raioQuaseDisponivel',
@@ -70,6 +71,8 @@ function useConfiguracoesFilaAtribuicao() {
       data?.forEach((item) => {
         if (item.chave === 'fila_atribuicao_ativa') {
           config.ativo = item.valor !== 'false';
+        } else if (item.chave === 'atribuicao_manual_rotas') {
+          config.manualAtivo = item.valor === 'true';
         } else {
           const key = map[item.chave];
           if (key && item.valor) config[key] = item.valor;
@@ -248,6 +251,15 @@ export function ConfiguracoesFilaAtribuicao() {
         </div>
       </CardHeader>
       <CardContent className={`space-y-6 transition-opacity ${!ativo ? 'opacity-50 pointer-events-none' : ''}`}>
+        {config?.manualAtivo && (
+          <Alert className="border-yellow-600/50 bg-muted">
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
+            <AlertDescription className="text-sm">
+              O <strong>modo manual de rotas</strong> está ativo nas configurações de instalação, mas isso <strong>não bloqueia</strong> o motor automático. 
+              O motor é controlado exclusivamente pelo switch acima.
+            </AlertDescription>
+          </Alert>
+        )}
         {FIELDS.map((field) => (
           <div key={field.key} className="space-y-2">
             <div className="flex items-center gap-2">

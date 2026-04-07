@@ -107,20 +107,10 @@ serve(async (req) => {
       );
     }
 
-    // Verificar se atribuição manual está ativa
-    const { data: configManual } = await supabase
-      .from('configuracoes')
-      .select('valor')
-      .eq('chave', 'atribuicao_manual_rotas')
-      .maybeSingle();
-
-    if (configManual?.valor === 'true') {
-      console.log("[cron-atribuir-tarefas] Atribuição MANUAL ativa — motor automático desligado");
-      return new Response(
-        JSON.stringify({ resultado: 'manual_ativo', mensagem: 'Atribuição manual ativa — motor automático desligado' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // NOTA: A flag 'atribuicao_manual_rotas' NÃO bloqueia mais o motor automático.
+    // O motor é controlado exclusivamente por 'fila_atribuicao_ativa'.
+    // A flag manual agora só controla a UI de rotas manuais.
+    console.log("[cron-atribuir-tarefas] Motor automático controlado apenas por fila_atribuicao_ativa");
 
     // Ler configurações dinâmicas
     const raioProximidadeKm = (await getConfiguracaoNumero(supabase, 'fila_raio_proximidade_metros', 500)) / 1000;
@@ -341,8 +331,8 @@ serve(async (req) => {
         .lte('data_agendada', amanha)
         .not('latitude', 'is', null)
         .not('longitude', 'is', null)
-        // FILTRO DE CONFIRMAÇÃO: Só atribuir serviços confirmados ou sem fluxo de confirmação
-        .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada');
+        // FILTRO DE CONFIRMAÇÃO: Só atribuir serviços CONFIRMADOS (obrigatório passar pela confirmação)
+        .eq('confirmacao_whatsapp', 'confirmada');
 
       if (servicosNormaisError) {
         console.error('[cron-atribuir-tarefas] Erro ao buscar serviços normais:', servicosNormaisError);
@@ -378,8 +368,8 @@ serve(async (req) => {
         .eq('permite_encaixe', true)  // APENAS os que aceitam encaixe
         .not('latitude', 'is', null)
         .not('longitude', 'is', null)
-        // FILTRO DE CONFIRMAÇÃO: Encaixes também precisam de confirmação se entraram no fluxo
-        .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada');
+        // FILTRO DE CONFIRMAÇÃO: Encaixes também precisam de confirmação
+        .eq('confirmacao_whatsapp', 'confirmada');
 
       if (servicosEncaixeError) {
         console.error('[cron-atribuir-tarefas] Erro ao buscar serviços encaixe:', servicosEncaixeError);
@@ -402,7 +392,7 @@ serve(async (req) => {
         .or('local_vistoria.is.null,local_vistoria.eq.cliente')
         .is('latitude', null)
         .not('logradouro', 'is', null)
-        .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada');
+        .eq('confirmacao_whatsapp', 'confirmada');
 
       // Geocodificar on-the-fly os serviços sem coordenadas
       const servicosGeocodificados: any[] = [];
@@ -494,17 +484,34 @@ serve(async (req) => {
 
       // NOVO: Filtrar serviços que ainda não podem ser atribuídos (horário futuro)
       const agoraFiltro = new Date();
-      const servicosFiltrados = todosServicos.filter((s: any) => 
+      const agoraBrasilia = new Date(agoraFiltro.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+      const horaAtualBrasilia = agoraBrasilia.getHours();
+      const periodoAtual = horaAtualBrasilia < 12 ? 'manha' : 'tarde';
+      
+      let servicosFiltrados = todosServicos.filter((s: any) => 
         podeSerAtribuido(s, agoraFiltro, hoje)
       );
+
+      // FILTRO DE PERÍODO: só atribuir serviços cujo período corresponda ao horário atual
+      const antesFiltroPeriodo = servicosFiltrados.length;
+      servicosFiltrados = servicosFiltrados.filter((s: any) => {
+        if (!s.periodo) return true; // sem período definido = pode ser atribuído
+        if (s.permite_encaixe) return true; // encaixes não têm restrição de período
+        return s.periodo === periodoAtual;
+      });
       
-      const bloqueadosPorHorario = todosServicos.length - servicosFiltrados.length;
+      const bloqueadosPorPeriodo = antesFiltroPeriodo - servicosFiltrados.length;
+      if (bloqueadosPorPeriodo > 0) {
+        console.log(`[cron-atribuir-tarefas] ${bloqueadosPorPeriodo} serviço(s) bloqueados por período (atual: ${periodoAtual})`);
+      }
+      
+      const bloqueadosPorHorario = todosServicos.length - antesFiltroPeriodo;
       if (bloqueadosPorHorario > 0) {
         console.log(`[cron-atribuir-tarefas] ${servicosFiltrados.length} serviços após filtro de horário (${bloqueadosPorHorario} bloqueados por horário futuro)`);
       }
       
       if (servicosFiltrados.length === 0) {
-        console.log(`[cron-atribuir-tarefas] Nenhum serviço disponível no horário atual para profissional ${prof.vistoriador_id}`);
+        console.log(`[cron-atribuir-tarefas] Nenhum serviço disponível no período ${periodoAtual} para profissional ${prof.vistoriador_id}`);
         continue;
       }
 
