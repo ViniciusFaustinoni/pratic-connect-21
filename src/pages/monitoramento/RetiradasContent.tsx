@@ -348,6 +348,17 @@ export default function RetiradasContent() {
                         {integridade && integridade !== 'integro' && (
                           <Badge className={cn('text-xs', INTEGRIDADE_APARELHO_COLORS[integridade])}>{INTEGRIDADE_APARELHO_LABELS[integridade]}</Badge>
                         )}
+                        {/* Deadline badges for cancelamento_voluntario */}
+                        {retirada.motivo_retirada === 'cancelamento_voluntario' && retirada._data_limite_devolucao && retirada.status !== 'concluida' && (() => {
+                          const deadline = new Date(retirada._data_limite_devolucao!);
+                          const hoursLeft = differenceInHours(deadline, new Date());
+                          if (isPast(deadline)) {
+                            return <Badge variant="destructive" className="text-xs">Prazo vencido</Badge>;
+                          } else if (hoursLeft <= 48) {
+                            return <Badge variant="destructive" className="text-xs">Prazo próximo</Badge>;
+                          }
+                          return null;
+                        })()}
                       </div>
                     </TableCell>
                     <TableCell>
