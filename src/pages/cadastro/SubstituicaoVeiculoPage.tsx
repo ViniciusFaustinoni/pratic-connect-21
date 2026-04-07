@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, ArrowLeft, Home, ChevronRight, UserCheck, UserX, Car, RefreshCw, CreditCard } from 'lucide-react';
+import { Loader2, ArrowLeft, Home, ChevronRight, UserCheck, UserX, Car, RefreshCw, CreditCard, Copy, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
@@ -34,6 +34,7 @@ export default function SubstituicaoVeiculoPage() {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [skippedSteps, setSkippedSteps] = useState<number[]>([]);
   const [substituicaoId, setSubstituicaoId] = useState<string | null>(null);
+  const [tokenPublico, setTokenPublico] = useState<string | null>(null);
   const [veiculoNovoId, setVeiculoNovoId] = useState<string | null>(null);
 
   const [eventoAtivo, setEventoAtivo] = useState<{ id: string; tipo: string } | null>(null);
@@ -108,6 +109,7 @@ export default function SubstituicaoVeiculoPage() {
     });
 
     setSubstituicaoId(result.id);
+    setTokenPublico((result as any).token_publico || null);
     return result.id;
   };
 
@@ -343,13 +345,52 @@ export default function SubstituicaoVeiculoPage() {
       )}
 
       {currentStep >= 8 && substituicaoId && (
-        <StepConclusao
-          substituicaoId={substituicaoId}
-          associadoId={associadoId!}
-          associadoNome={associado.nome}
-          veiculoAntigoPlaca={veiculoAntigoResumo.placa}
-          onRetry={handleRetry}
-        />
+        <>
+          {tokenPublico && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="py-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">Link do associado</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {window.location.origin}/substituicao/{tokenPublico}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/substituicao/${tokenPublico}`);
+                        toast.success('Link copiado!');
+                      }}
+                      className="gap-1.5"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copiar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(`/substituicao/${tokenPublico}`, '_blank')}
+                      className="gap-1.5"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Abrir
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <StepConclusao
+            substituicaoId={substituicaoId}
+            associadoId={associadoId!}
+            associadoNome={associado.nome}
+            veiculoAntigoPlaca={veiculoAntigoResumo.placa}
+            onRetry={handleRetry}
+          />
+        </>
       )}
 
       {currentStep >= 8 && !substituicaoId && (

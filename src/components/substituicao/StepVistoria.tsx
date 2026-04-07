@@ -88,6 +88,7 @@ export function StepVistoria({
     },
     enabled: !!veiculoNovoId,
     refetchInterval: (query) => {
+      if (!veiculoNovoId) return false;
       const status = query.state.data?.status as VistoriaStatus | undefined;
       if (!status || status === 'aprovada' || status === 'reprovada') return false;
       return 10_000;
@@ -97,8 +98,9 @@ export function StepVistoria({
   // Create vistoria (autovistoria)
   const criarVistoriaAutovistoria = useMutation({
     mutationFn: async () => {
-      const subId = substituicaoId || await onIniciarSubstituicao();
       if (!veiculoNovoId) throw new Error('Veículo novo não encontrado');
+      if (vistoriaExistente) throw new Error('Vistoria já existe para este veículo');
+      const subId = substituicaoId || await onIniciarSubstituicao();
 
       const { data, error } = await supabase
         .from('vistorias')

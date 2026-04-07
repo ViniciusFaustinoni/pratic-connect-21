@@ -25391,6 +25391,7 @@ export type Database = {
           termo_desistencia_evento_url: string | null
           tipo_atendimento: string | null
           tipo_evento_bloqueante: string | null
+          token_publico: string | null
           updated_at: string | null
           valor_prorata: number | null
           valor_repasse: number | null
@@ -25440,6 +25441,7 @@ export type Database = {
           termo_desistencia_evento_url?: string | null
           tipo_atendimento?: string | null
           tipo_evento_bloqueante?: string | null
+          token_publico?: string | null
           updated_at?: string | null
           valor_prorata?: number | null
           valor_repasse?: number | null
@@ -25489,6 +25491,7 @@ export type Database = {
           termo_desistencia_evento_url?: string | null
           tipo_atendimento?: string | null
           tipo_evento_bloqueante?: string | null
+          token_publico?: string | null
           updated_at?: string | null
           valor_prorata?: number | null
           valor_repasse?: number | null
