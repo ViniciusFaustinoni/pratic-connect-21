@@ -50,7 +50,7 @@ function useConfiguracoesFilaAtribuicao() {
       const { data, error } = await supabase
         .from('configuracoes')
         .select('chave, valor')
-        .in('chave', [...CONFIG_KEYS, 'fila_atribuicao_ativa']);
+        .in('chave', [...CONFIG_KEYS, 'fila_atribuicao_ativa', 'atribuicao_manual_rotas']);
 
       if (error) {
         console.warn('[useConfiguracoesFilaAtribuicao] Erro:', error);
