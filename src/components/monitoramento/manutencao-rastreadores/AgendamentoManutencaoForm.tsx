@@ -3,12 +3,10 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent } from '@/components/ui/card';
-import { Checkbox } from '@/components/ui/checkbox';
-import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Calendar } from '@/components/ui/calendar';
 import { Popover, PopoverContent, PopoverTrigger } from '@/components/ui/popover';
-import { Home, Building2, MapPin, CalendarIcon, AlertTriangle, Loader2 } from 'lucide-react';
+import { Home, Building2, MapPin, CalendarIcon, Loader2 } from 'lucide-react';
 import { format, addDays } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { cn } from '@/lib/utils';
@@ -16,17 +14,14 @@ import { useInstaladores } from '@/hooks/useInstaladores';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery } from '@tanstack/react-query';
 
-interface AgendamentoFormData {
+export interface AgendamentoFormData {
   enderecoTipo: string;
   enderecoTexto: string;
   enderecoReferencia: string;
   dataAgendamento: Date;
   periodo: string;
   tecnicoId: string | null;
-  tiposOcorrencia: string[];
   observacoesTecnico: string;
-  taxaVisitaAplicar: boolean;
-  taxaVisitaObservacao: string;
 }
 
 interface AgendamentoManutencaoFormProps {
@@ -35,14 +30,6 @@ interface AgendamentoManutencaoFormProps {
   isPending: boolean;
   initialData?: Partial<AgendamentoFormData>;
 }
-
-const TIPOS_OCORRENCIA = [
-  { value: 'troca_rastreador', label: 'Troca de rastreador' },
-  { value: 'reparacao_fiacao', label: 'Reparação de fiação' },
-  { value: 'problema_chip_sinal', label: 'Problema de chip / sinal' },
-  { value: 'violacao_terceiros', label: 'Violação por terceiros' },
-  { value: 'diagnostico', label: 'Diagnóstico (a identificar no local)' },
-];
 
 const PERIODOS = [
   { value: 'manha', label: 'Manhã', desc: '08h–12h' },
@@ -56,15 +43,11 @@ export default function AgendamentoManutencaoForm({ associadoId, onConfirmar, is
   const [enderecoReferencia, setEnderecoReferencia] = useState(initialData?.enderecoReferencia || '');
   const [dataAgendamento, setDataAgendamento] = useState<Date | undefined>(initialData?.dataAgendamento);
   const [periodo, setPeriodo] = useState(initialData?.periodo || '');
-  const [tecnicoId, setTecnicoId] = useState<string>(initialData?.tecnicoId || 'a_definir');
-  const [tiposOcorrencia, setTiposOcorrencia] = useState<string[]>(initialData?.tiposOcorrencia || []);
+  const [tecnicoId, setTecnicoId] = useState<string>(initialData?.tecnicoId || 'automatico');
   const [observacoesTecnico, setObservacoesTecnico] = useState(initialData?.observacoesTecnico || '');
-  const [taxaVisitaAplicar, setTaxaVisitaAplicar] = useState(initialData?.taxaVisitaAplicar || false);
-  const [taxaVisitaObservacao, setTaxaVisitaObservacao] = useState(initialData?.taxaVisitaObservacao || '');
 
   const { data: instaladores } = useInstaladores();
 
-  // Fetch associado address
   const { data: associado } = useQuery({
     queryKey: ['associado-endereco', associadoId],
     queryFn: async () => {
@@ -82,12 +65,8 @@ export default function AgendamentoManutencaoForm({ associadoId, onConfirmar, is
     ? [associado.logradouro, associado.numero, associado.bairro, associado.cidade, associado.uf].filter(Boolean).join(', ')
     : '';
 
-  const toggleOcorrencia = (val: string) => {
-    setTiposOcorrencia(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
-  };
-
   const minDate = addDays(new Date(), 1);
-  const canSubmit = enderecoTipo && dataAgendamento && periodo && tiposOcorrencia.length > 0;
+  const canSubmit = enderecoTipo && dataAgendamento && periodo;
 
   const handleSubmit = () => {
     if (!canSubmit || !dataAgendamento) return;
@@ -97,11 +76,8 @@ export default function AgendamentoManutencaoForm({ associadoId, onConfirmar, is
       enderecoReferencia,
       dataAgendamento,
       periodo,
-      tecnicoId: tecnicoId === 'a_definir' ? null : tecnicoId,
-      tiposOcorrencia,
+      tecnicoId: tecnicoId === 'automatico' ? null : tecnicoId,
       observacoesTecnico,
-      taxaVisitaAplicar,
-      taxaVisitaObservacao,
     });
   };
 
@@ -195,55 +171,13 @@ export default function AgendamentoManutencaoForm({ associadoId, onConfirmar, is
             <SelectValue placeholder="Selecione o técnico" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="a_definir">A definir</SelectItem>
+            <SelectItem value="automatico">Atribuição automática</SelectItem>
             {(instaladores || []).map((inst: any) => (
               <SelectItem key={inst.id} value={inst.id}>{inst.nome}</SelectItem>
             ))}
           </SelectContent>
         </Select>
       </div>
-
-      {/* Tipos de ocorrência */}
-      <div className="space-y-2">
-        <label className="text-xs font-semibold text-muted-foreground uppercase tracking-wide">O que será verificado?</label>
-        <div className="space-y-2">
-          {TIPOS_OCORRENCIA.map(tipo => (
-            <label key={tipo.value} className="flex items-center gap-2 text-sm cursor-pointer">
-              <Checkbox
-                checked={tiposOcorrencia.includes(tipo.value)}
-                onCheckedChange={() => toggleOcorrencia(tipo.value)}
-              />
-              {tipo.label}
-            </label>
-          ))}
-        </div>
-      </div>
-
-      {/* Taxa de visita */}
-      <Card className="border-yellow-300 bg-yellow-50">
-        <CardContent className="p-3 space-y-2">
-          <div className="flex items-start gap-2">
-            <AlertTriangle className="h-4 w-4 text-yellow-600 mt-0.5 shrink-0" />
-            <p className="text-xs text-yellow-800">
-              Se comprovado no local que o problema não é no rastreador, será cobrada taxa de visita técnica de <strong>R$ 50,00</strong> conforme regulamento.
-            </p>
-          </div>
-          <div className="flex items-center gap-2">
-            <Switch checked={taxaVisitaAplicar} onCheckedChange={setTaxaVisitaAplicar} />
-            <span className="text-xs font-medium">Aplicar taxa caso não seja problema no rastreador</span>
-          </div>
-          {taxaVisitaAplicar && (
-            <div className="space-y-1">
-              <Input
-                placeholder="Observação sobre a cobrança"
-                value={taxaVisitaObservacao}
-                onChange={e => setTaxaVisitaObservacao(e.target.value)}
-              />
-              <p className="text-[10px] text-yellow-700">O setor financeiro será notificado para emissão da cobrança</p>
-            </div>
-          )}
-        </CardContent>
-      </Card>
 
       {/* Observações */}
       <div className="space-y-2">

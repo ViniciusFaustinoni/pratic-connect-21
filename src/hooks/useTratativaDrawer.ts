@@ -178,10 +178,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
       dataAgendamento: Date;
       periodo: string;
       tecnicoId: string | null;
-      tiposOcorrencia: string[];
       observacoesTecnico: string;
-      taxaVisitaAplicar: boolean;
-      taxaVisitaObservacao: string;
     }) => {
       if (!tratativa) throw new Error('Tratativa não encontrada');
       const userId = await getSafeCriadoPor();

@@ -4,9 +4,10 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
+import { Checkbox } from '@/components/ui/checkbox';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
-import { AlertTriangle, CheckCircle2, XCircle, Clock, Loader2 } from 'lucide-react';
+import { AlertTriangle, CheckCircle2, XCircle, Clock, Loader2, Info } from 'lucide-react';
 import { useInstaladores } from '@/hooks/useRotas';
 import { format } from 'date-fns';
 
@@ -17,6 +18,14 @@ const RESULTADOS = [
   { value: 'violacao_corrigida', label: 'Violação corrigida (causada por terceiros)' },
   { value: 'sem_problema_rastreador', label: 'Sem problema no rastreador — falha não relacionada à instalação' },
   { value: 'resolvido_remotamente', label: 'Problema resolvido remotamente (sem intervenção física)' },
+];
+
+const TIPOS_OCORRENCIA = [
+  { value: 'troca_rastreador', label: 'Troca de rastreador' },
+  { value: 'reparacao_fiacao', label: 'Reparação de fiação' },
+  { value: 'problema_chip_sinal', label: 'Problema de chip / sinal' },
+  { value: 'violacao_terceiros', label: 'Violação por terceiros' },
+  { value: 'diagnostico', label: 'Diagnóstico (a identificar no local)' },
 ];
 
 interface ResultadoVisitaFormProps {
@@ -32,6 +41,7 @@ interface ResultadoVisitaFormProps {
     taxaVisitaAplicar: boolean;
     taxaVisitaObservacao: string;
     voltouPontuar: string;
+    tiposVerificados: string[];
   }) => void;
   isPending: boolean;
 }
@@ -39,23 +49,30 @@ interface ResultadoVisitaFormProps {
 export default function ResultadoVisitaForm({ tecnicoAgendadoId, onSubmit, isPending }: ResultadoVisitaFormProps) {
   const [dataHora, setDataHora] = useState(format(new Date(), "yyyy-MM-dd'T'HH:mm"));
   const [tecnicoId, setTecnicoId] = useState(tecnicoAgendadoId || 'nao_identificado');
+  const [tiposVerificados, setTiposVerificados] = useState<string[]>([]);
   const [resultado, setResultado] = useState('');
   const [descricao, setDescricao] = useState('');
   const [rastreadorTrocado, setRastreadorTrocado] = useState(false);
   const [imeiNovo, setImeiNovo] = useState('');
   const [imeiRetirado, setImeiRetirado] = useState('');
-  const [taxaAplicar, setTaxaAplicar] = useState(false);
   const [taxaObs, setTaxaObs] = useState('');
   const [voltouPontuar, setVoltouPontuar] = useState<string>('');
 
   const { data: instaladores } = useInstaladores();
 
+  const isSemProblemaRastreador = resultado === 'sem_problema_rastreador';
+
+  const toggleVerificado = (val: string) => {
+    setTiposVerificados(prev => prev.includes(val) ? prev.filter(v => v !== val) : [...prev, val]);
+  };
+
   const canSubmit =
     resultado &&
     descricao.trim().length > 0 &&
     voltouPontuar &&
+    tiposVerificados.length > 0 &&
     (!rastreadorTrocado || (imeiNovo.trim() && imeiRetirado.trim())) &&
-    (!taxaAplicar || taxaObs.trim().length > 0);
+    (!isSemProblemaRastreador || taxaObs.trim().length > 0);
 
   const handleSubmit = () => {
     onSubmit({
@@ -66,9 +83,10 @@ export default function ResultadoVisitaForm({ tecnicoAgendadoId, onSubmit, isPen
       rastreadorTrocado,
       imeiNovo,
       imeiRetirado,
-      taxaVisitaAplicar: taxaAplicar,
-      taxaVisitaObservacao: taxaObs,
+      taxaVisitaAplicar: isSemProblemaRastreador,
+      taxaVisitaObservacao: isSemProblemaRastreador ? taxaObs : '',
       voltouPontuar,
+      tiposVerificados,
     });
   };
 
@@ -94,6 +112,22 @@ export default function ResultadoVisitaForm({ tecnicoAgendadoId, onSubmit, isPen
             ))}
           </SelectContent>
         </Select>
+      </div>
+
+      {/* O que foi verificado? (checklist) */}
+      <div className="space-y-2">
+        <Label className="text-xs font-semibold">O que foi verificado? <span className="text-destructive">*</span></Label>
+        <div className="space-y-2">
+          {TIPOS_OCORRENCIA.map(tipo => (
+            <label key={tipo.value} className="flex items-center gap-2 text-sm cursor-pointer">
+              <Checkbox
+                checked={tiposVerificados.includes(tipo.value)}
+                onCheckedChange={() => toggleVerificado(tipo.value)}
+              />
+              {tipo.label}
+            </label>
+          ))}
+        </div>
       </div>
 
       {/* Resultado */}
@@ -140,35 +174,28 @@ export default function ResultadoVisitaForm({ tecnicoAgendadoId, onSubmit, isPen
         )}
       </div>
 
-      {/* Taxa de visita */}
-      <Card className="border-yellow-300 bg-yellow-50">
-        <CardContent className="p-3 space-y-2">
-          <div className="flex gap-2 items-start">
-            <AlertTriangle className="h-4 w-4 text-yellow-600 shrink-0 mt-0.5" />
-            <p className="text-xs text-yellow-800">
-              A taxa de visita técnica de R$ 50,00 pode ser aplicada quando o problema não for relacionado ao rastreador. Defina abaixo se deve ser cobrada.
-            </p>
-          </div>
-          <div className="flex items-center justify-between">
-            <Label className="text-xs font-medium">Cobrar taxa de visita de R$ 50,00?</Label>
-            <Switch checked={taxaAplicar} onCheckedChange={setTaxaAplicar} />
-          </div>
-          {taxaAplicar && (
+      {/* Taxa automática — exibida apenas quando sem_problema_rastreador */}
+      {isSemProblemaRastreador && (
+        <Card className="border-amber-300 bg-amber-50">
+          <CardContent className="p-3 space-y-2">
+            <div className="flex gap-2 items-start">
+              <Info className="h-4 w-4 text-amber-600 shrink-0 mt-0.5" />
+              <p className="text-xs text-amber-800">
+                O problema identificado não está relacionado ao rastreador. A taxa de visita técnica será aplicada conforme regulamento.
+              </p>
+            </div>
             <div className="space-y-1">
-              <Label className="text-xs">Motivo da cobrança <span className="text-destructive">*</span></Label>
+              <Label className="text-xs">Observação do técnico <span className="text-destructive">*</span></Label>
               <Textarea
                 value={taxaObs}
                 onChange={e => setTaxaObs(e.target.value)}
-                placeholder="Descreva o motivo da cobrança..."
+                placeholder="Descreva o motivo pelo qual o problema não é do rastreador..."
                 rows={2}
               />
-              <p className="text-[10px] text-muted-foreground">
-                Uma notificação será registrada para o setor financeiro emitir a cobrança.
-              </p>
             </div>
-          )}
-        </CardContent>
-      </Card>
+          </CardContent>
+        </Card>
+      )}
 
       {/* Voltou a pontuar */}
       <div className="space-y-2">
