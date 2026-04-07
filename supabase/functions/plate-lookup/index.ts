@@ -100,13 +100,22 @@ serve(async (req) => {
       console.error(`[plate-lookup] Erro HTTP: ${response.status} (fallback: ${usedFallback})`);
       
       if (response.status === 403) {
-        throw new Error("Chave de API inválida ou sem créditos. Verifique sua conta no fipeapi.com.br");
+        return new Response(
+          JSON.stringify({ success: false, error: "Chave de API sem créditos. Preencha os dados manualmente.", rateLimited: true }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
       if (response.status === 429 || response.status === 439) {
-        throw new Error("Limite de consultas excedido. Tente novamente em alguns minutos.");
+        return new Response(
+          JSON.stringify({ success: false, error: "Limite de consultas excedido. Preencha os dados manualmente.", rateLimited: true }),
+          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
       if (response.status === 404) {
-        throw new Error("Veículo não encontrado na base de dados.");
+        return new Response(
+          JSON.stringify({ success: false, error: "Veículo não encontrado na base de dados." }),
+          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+        );
       }
       
       let errorBody = '';
