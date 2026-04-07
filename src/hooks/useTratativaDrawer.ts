@@ -178,10 +178,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
       dataAgendamento: Date;
       periodo: string;
       tecnicoId: string | null;
-      tiposOcorrencia: string[];
       observacoesTecnico: string;
-      taxaVisitaAplicar: boolean;
-      taxaVisitaObservacao: string;
     }) => {
       if (!tratativa) throw new Error('Tratativa não encontrada');
       const userId = await getSafeCriadoPor();
@@ -208,6 +205,8 @@ export function useTratativaDrawer(tratativaId: string | null) {
         bairro = '';
       }
 
+      const observacoes = params.observacoesTecnico || null;
+
       // Create servico
       const { data: servico, error: sErr } = await supabase
         .from('servicos')
@@ -226,8 +225,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
           uf,
           cep,
           complemento: params.enderecoReferencia || null,
-          observacoes: params.observacoesTecnico || null,
-          motivo_manutencao: params.tiposOcorrencia.join(', '),
+          observacoes,
           local_tipo_manutencao: params.enderecoTipo,
           rastreador_id: tratativa.rastreador_id,
         } as any)
@@ -245,10 +243,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
           data_agendamento: new Date(dataStr).toISOString(),
           periodo_agendamento: params.periodo,
           tecnico_id: params.tecnicoId,
-          tipos_ocorrencia: params.tiposOcorrencia,
           observacoes_tecnico: params.observacoesTecnico || null,
-          taxa_visita_aplicar: params.taxaVisitaAplicar,
-          taxa_visita_observacao: params.taxaVisitaObservacao || null,
           servico_id: servico.id,
           updated_at: new Date().toISOString(),
         } as any)
@@ -267,8 +262,6 @@ export function useTratativaDrawer(tratativaId: string | null) {
             periodo: params.periodo,
             tecnico_id: params.tecnicoId,
             endereco_tipo: params.enderecoTipo,
-            tipos_ocorrencia: params.tiposOcorrencia,
-            taxa_visita: params.taxaVisitaAplicar,
           } as unknown as Json,
           criado_por: userId,
         });
@@ -291,6 +284,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
       taxaVisitaAplicar: boolean;
       taxaVisitaObservacao: string;
       voltouPontuar: string;
+      tiposVerificados: string[];
     }) => {
       if (!tratativa) throw new Error('Tratativa não encontrada');
       const userId = await getSafeCriadoPor();

@@ -218,11 +218,8 @@ function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose
             enderecoReferencia: tAny.endereco_referencia || '',
             dataAgendamento: tAny.data_agendamento ? new Date(tAny.data_agendamento) : undefined,
             periodo: tAny.periodo_agendamento || '',
-            tecnicoId: tAny.tecnico_id || 'a_definir',
-            tiposOcorrencia: tAny.tipos_ocorrencia || [],
+            tecnicoId: tAny.tecnico_id || 'automatico',
             observacoesTecnico: tAny.observacoes_tecnico || '',
-            taxaVisitaAplicar: tAny.taxa_visita_aplicar || false,
-            taxaVisitaObservacao: tAny.taxa_visita_observacao || '',
           }}
         />
       )}
