@@ -368,8 +368,8 @@ serve(async (req) => {
         .eq('permite_encaixe', true)  // APENAS os que aceitam encaixe
         .not('latitude', 'is', null)
         .not('longitude', 'is', null)
-        // FILTRO DE CONFIRMAÇÃO: Encaixes também precisam de confirmação se entraram no fluxo
-        .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada');
+        // FILTRO DE CONFIRMAÇÃO: Encaixes também precisam de confirmação
+        .eq('confirmacao_whatsapp', 'confirmada');
 
       if (servicosEncaixeError) {
         console.error('[cron-atribuir-tarefas] Erro ao buscar serviços encaixe:', servicosEncaixeError);
