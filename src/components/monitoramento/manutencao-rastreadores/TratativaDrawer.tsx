@@ -92,11 +92,27 @@ function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose
   const etapaIndex = getEtapaIndex(etapaAtual);
   const tAny = tratativa as any;
   const isAgendado = tAny?.status === 'agendado';
+  const isVisitaRealizada = tAny?.status === 'visita_realizada';
+  const isAcompanhamento = tAny?.status === 'acompanhamento';
+  const isFinalStatus = isVisitaRealizada || isAcompanhamento;
   const temServico = !!tAny?.servico_id;
+  const temResultadoVisita = !!tAny?.visita_resultado;
 
   const enderecoResumido = tAny?.endereco_tipo === 'cadastro'
     ? [associadoInfo?.logradouro, associadoInfo?.numero, associadoInfo?.bairro, associadoInfo?.cidade].filter(Boolean).join(', ')
     : tAny?.endereco_texto || '—';
+
+  // Fetch visit technician name
+  const visitaTecnicoId = tAny?.visita_tecnico_id;
+  const { data: visitaTecnicoInfo } = useQuery({
+    queryKey: ['tecnico-visita-nome', visitaTecnicoId],
+    queryFn: async () => {
+      if (!visitaTecnicoId) return null;
+      const { data } = await supabase.from('profiles').select('nome').eq('id', visitaTecnicoId).single();
+      return data;
+    },
+    enabled: !!visitaTecnicoId,
+  });
 
   return (
     <div className="flex flex-col gap-4 mt-4">
