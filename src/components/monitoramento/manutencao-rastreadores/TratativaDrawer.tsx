@@ -474,6 +474,8 @@ function formatAcao(acao: string, dados: Record<string, unknown>): string {
       return '🔧 Falha confirmada — visita técnica agendada';
     case 'agendamento_confirmado':
       return `📅 Agendamento confirmado — ${(dados.data as string) || ''} (${dados.periodo || ''})`;
+    case 'visita_realizada':
+      return `🔧 Visita realizada — ${dados.resultado || ''} (${dados.voltou_pontuar === 'sim' ? 'voltou a pontuar' : dados.voltou_pontuar === 'nao' ? 'não pontuou' : 'aguardando'})`;
     default:
       return acao.replace(/_/g, ' ');
   }
