@@ -1,64 +1,76 @@
 
 
-# Plano: Drawer de Tratativa — Fluxo em 3 Etapas
+# Plano: Formulário de Agendamento no Drawer de Tratativa
 
-## Alterações
+## Resumo
 
-### 1. Banco de dados — nova tabela `manutencao_tratativa_logs`
+Substituir o placeholder pós "Confirmar falha" por um formulário completo de agendamento dentro do drawer, com card de confirmação pós-salvamento e integração com o calendário de Serviços de Campo.
 
-Registra cada interação/etapa da tratativa:
+## Alterações no banco de dados
 
-```sql
-CREATE TABLE manutencao_tratativa_logs (
-  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  tratativa_id uuid NOT NULL REFERENCES manutencao_tratativas(id) ON DELETE CASCADE,
-  etapa text NOT NULL, -- 'contato', 'validacao', 'decisao'
-  acao text NOT NULL,  -- ex: 'contato_registrado', 'situacao_veiculo_parado', 'resolvido_sem_visita'
-  dados jsonb DEFAULT '{}', -- canal, resposta, observacoes, etc.
-  criado_por uuid REFERENCES profiles(id),
-  created_at timestamptz DEFAULT now()
-);
-```
+### 1. Novo valor no enum `tipo_servico`
+Adicionar `manutencao_rastreador` ao enum para distinguir visualmente no calendário.
 
-+ Adicionar coluna `etapa_atual` (text, default 'contato') na tabela `manutencao_tratativas` para rastrear em qual etapa o operador está.
+### 2. Colunas extras em `manutencao_tratativas`
+Adicionar campos para persistir o agendamento diretamente na tratativa:
+- `endereco_tipo` (text) — 'cadastro', 'trabalho', 'outro'
+- `endereco_texto` (text) — endereço digitado quando tipo = outro/trabalho sem cadastro
+- `endereco_referencia` (text) — referência/complemento
+- `periodo_agendamento` (text) — 'manha', 'tarde', 'integral'
+- `tecnico_id` (uuid, FK profiles)
+- `tipos_ocorrencia` (text[]) — array de checkboxes selecionados
+- `observacoes_tecnico` (text)
+- `taxa_visita_aplicar` (boolean, default false)
+- `taxa_visita_observacao` (text)
+- `servico_id` (uuid, FK servicos) — referência ao serviço criado no calendário
 
-### 2. Hook `useTratativaDrawer.ts`
+## Componentes
 
-- Recebe `tratativaId` e `veiculoId`
-- Query: dados da tratativa + logs ordenados por `created_at`
-- Mutations:
-  - `registrarContato(canal, dataHora, resposta)` → insere log etapa 'contato', atualiza tratativa para `etapa_atual = 'validacao'` e `status = 'em_tratativa'`
-  - `registrarValidacao(situacao, dados)` → insere log etapa 'validacao', atualiza `etapa_atual = 'decisao'`
-  - `resolverSemVisita()` → insere log etapa 'decisao', atualiza `status = 'resolvido_sem_visita'`
-  - `confirmarFalha()` → insere log etapa 'decisao', atualiza `status = 'agendado'` (agendamento vem no próximo prompt)
+### 3. `AgendamentoManutencaoForm.tsx` (novo)
 
-### 3. Componente `TratativaDrawer.tsx`
+Formulário completo com as seções:
+- **Local da visita**: 3 cards (Cadastro / Trabalho / Outro) + campo referência
+- **Data e período**: DatePicker (min amanhã) + 3 botões (Manhã/Tarde/Integral — Integral mapeado como 'manha' na tabela servicos)
+- **Técnico**: Select usando `useInstaladores()` do `useRotas.ts` + opção "A definir"
+- **Tipo de ocorrência**: 5 checkboxes (Troca rastreador, Reparação fiação, Problema chip/sinal, Violação terceiros, Diagnóstico)
+- **Taxa de visita**: Card amarelo com toggle + campo observação condicional
+- **Observações para o técnico**: Textarea
+- **Botão Confirmar**: desabilitado até local + data + período + ≥1 ocorrência
 
-Drawer (Sheet side="right", largura ~480px) com:
+### 4. `CardConfirmacaoAgendamento.tsx` (novo)
 
-**Cabeçalho fixo:**
-- Nome do associado, placa, último ponto, dias sem pontuar
+Card azul claro pós-agendamento com:
+- Resumo (data, período, técnico, endereço, ocorrências, observações)
+- Botão "Notificar via WhatsApp" → `abrirWhatsAppWeb` com mensagem template
+- Botão "Reagendar" → volta ao formulário pré-preenchido
 
-**Indicador de progresso:** 3 steps (Contato → Validação → Decisão) com visual de step indicator
+### 5. Integração no `TratativaDrawer.tsx`
 
-**Conteúdo por etapa:**
+No bloco `etapaAtual === 'concluido'`:
+- Se `tratativa.status === 'agendado'` e `!tratativa.servico_id` → mostrar `AgendamentoManutencaoForm`
+- Se `tratativa.status === 'agendado'` e `tratativa.servico_id` → mostrar `CardConfirmacaoAgendamento`
+- Se `tratativa.status === 'resolvido_sem_visita'` → manter card de conclusão atual
 
-- **Etapa 1 (Contato):** Select canal (WhatsApp/Ligação/SMS), DateTimePicker, Textarea "Resposta do associado" (obrigatório), Botão "Avançar para validação"
-- **Etapa 2 (Validação):** 2 cards clicáveis (Veículo parado / Uso diário). Veículo parado → pergunta "pode movimentar?" com sub-fluxo. Uso diário → campos de segunda validação.
-- **Etapa 3 (Decisão):** Botão verde "Resolvido sem visita" + Botão laranja "Confirmar falha — agendar visita técnica" (apenas marca status, agendamento no próximo prompt)
+### 6. Hook `useTratativaDrawer.ts` — nova mutation `confirmarAgendamento`
 
-**Histórico (parte inferior):** Timeline dos logs com data, operador e ação.
+Ao confirmar:
+1. Buscar dados do associado (endereço, telefone)
+2. Inserir registro na tabela `servicos` com `tipo = 'manutencao_rastreador'`, dados de endereço, data, período, técnico
+3. Atualizar `manutencao_tratativas` com todos os campos do agendamento + `servico_id`
+4. Inserir log com ação `agendamento_confirmado` e dados resumidos
+5. Invalidar queries
 
-### 4. Integração no `ManutencaoRastreadoresTab.tsx`
+### 7. Calendário de Serviços de Campo
 
-- State `selectedVeiculo` para controlar abertura do drawer
-- Botão "Iniciar tratativa" abre o drawer (após criar o registro, ou abre direto se já existe tratativa)
-- Linhas com status != `sem_tratativa` ganham botão "Continuar tratativa" que abre o drawer na etapa atual
+Identificar onde o calendário renderiza serviços e adicionar lógica para:
+- Cor laranja quando `tipo = 'manutencao_rastreador'`
+- Título: "Manutenção — [PLACA]"
 
-## Arquivos
+## Arquivos criados/modificados
 
-- **Criado**: migration SQL (tabela logs + coluna etapa_atual)
-- **Criado**: `src/hooks/useTratativaDrawer.ts`
-- **Criado**: `src/components/monitoramento/manutencao-rastreadores/TratativaDrawer.tsx`
-- **Modificado**: `src/components/monitoramento/manutencao-rastreadores/ManutencaoRastreadoresTab.tsx`
+- **Criado**: migration SQL (enum + colunas)
+- **Criado**: `src/components/monitoramento/manutencao-rastreadores/AgendamentoManutencaoForm.tsx`
+- **Criado**: `src/components/monitoramento/manutencao-rastreadores/CardConfirmacaoAgendamento.tsx`
+- **Modificado**: `src/components/monitoramento/manutencao-rastreadores/TratativaDrawer.tsx`
+- **Modificado**: `src/hooks/useTratativaDrawer.ts`
 
