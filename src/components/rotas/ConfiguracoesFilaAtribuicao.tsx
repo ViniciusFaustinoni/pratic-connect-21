@@ -252,8 +252,8 @@ export function ConfiguracoesFilaAtribuicao() {
       </CardHeader>
       <CardContent className={`space-y-6 transition-opacity ${!ativo ? 'opacity-50 pointer-events-none' : ''}`}>
         {config?.manualAtivo && (
-          <Alert className="border-amber-500/50 bg-amber-500/10">
-            <AlertTriangle className="h-4 w-4 text-amber-500" />
+          <Alert className="border-yellow-600/50 bg-muted">
+            <AlertTriangle className="h-4 w-4 text-yellow-600" />
             <AlertDescription className="text-sm">
               O <strong>modo manual de rotas</strong> está ativo nas configurações de instalação, mas isso <strong>não bloqueia</strong> o motor automático. 
               O motor é controlado exclusivamente pelo switch acima.
