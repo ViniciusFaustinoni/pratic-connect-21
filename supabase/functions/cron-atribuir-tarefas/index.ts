@@ -107,20 +107,10 @@ serve(async (req) => {
       );
     }
 
-    // Verificar se atribuição manual está ativa
-    const { data: configManual } = await supabase
-      .from('configuracoes')
-      .select('valor')
-      .eq('chave', 'atribuicao_manual_rotas')
-      .maybeSingle();
-
-    if (configManual?.valor === 'true') {
-      console.log("[cron-atribuir-tarefas] Atribuição MANUAL ativa — motor automático desligado");
-      return new Response(
-        JSON.stringify({ resultado: 'manual_ativo', mensagem: 'Atribuição manual ativa — motor automático desligado' }),
-        { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
+    // NOTA: A flag 'atribuicao_manual_rotas' NÃO bloqueia mais o motor automático.
+    // O motor é controlado exclusivamente por 'fila_atribuicao_ativa'.
+    // A flag manual agora só controla a UI de rotas manuais.
+    console.log("[cron-atribuir-tarefas] Motor automático controlado apenas por fila_atribuicao_ativa");
 
     // Ler configurações dinâmicas
     const raioProximidadeKm = (await getConfiguracaoNumero(supabase, 'fila_raio_proximidade_metros', 500)) / 1000;
