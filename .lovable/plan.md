@@ -1,64 +1,57 @@
 
 
-# Plano: Atribuição Automática — Manter duplo disparo (18h + 7h) + Fila por proximidade
+# Plano: Clonar 18 planos Select para linha Lançamento
 
-## Fluxo Completo
+## Situação Atual
+
+**Linha SELECT** (18 planos): Basic, Premium, Exclusive — cada um com variantes Deságio 70%, Deságio 75%, Diesel, Diesel Deságio 70%, Diesel Deságio 75%.
+
+**Linha LANÇAMENTO** (3 planos): Basic, Exclusive, Premium — sem variantes Deságio ou Diesel.
+
+## O que será feito
+
+Criar **15 novos planos** na linha Lançamento (os 3 base já existem), clonando a estrutura da Select com as seguintes diferenças:
+
+| Configuração | Select | Lançamento |
+|---|---|---|
+| `product_line_id` | `66f8d697...` (SELECT) | `4ed27b6d...` (LANÇAMENTO) |
+| `fipe_minima` | `0.00` | `50000.00` |
+| Nome | "Select X" | "Lançamento X" |
+| Coberturas | Select (9 variantes) | Lançamento (9 coberturas fixas) |
+| Benefícios | Por tier | Mesmo do tier correspondente |
+
+### 15 planos novos
 
 ```text
-VÉSPERA 18h ──► Dispara confirmação WhatsApp para agendamentos do DIA SEGUINTE
-                (template confirmacao_vespera_v1)
-                Marca: 'aguardando_confirmacao_vespera'
-                │
-                ▼
-        Se confirmar → marca 'confirmada' → NÃO recebe msg de manhã
-        Se não responder → continua 'aguardando_confirmacao_vespera'
-                │
-                ▼
-MANHÃ 7h ──► Dispara confirmação para quem NÃO confirmou na véspera
-             + Todos os agendamentos novos (encaixes noturnos, etc.)
-             (template confirmacao_manha_v1)
-             Marca: 'aguardando_confirmacao_manha'
-                │
-                ▼
-        Aguarda resposta "SIM"
-                │
-     ┌──────────┴──────────┐
-  "SIM"               Sem resposta
-     │                     │
-     ▼                     ▼
-  'confirmada'        Expira (cron existente)
-     │
-     ▼
-  Motor de atribuição (cron 5min)
-  Pega serviços 'confirmada' do dia
-  Atribui ao vistoriador ATIVO mais próximo
-  Respeitando PERÍODO (manhã/tarde)
+Lançamento Basic - Deságio 75%
+Lançamento Basic - Deságio 70%
+Lançamento Basic Diesel
+Lançamento Basic Diesel - Deságio 75%
+Lançamento Basic Diesel - Deságio 70%
+Lançamento Premium - Deságio 75%
+Lançamento Premium - Deságio 70%
+Lançamento Premium Diesel
+Lançamento Premium Diesel - Deságio 75%
+Lançamento Premium Diesel - Deságio 70%
+Lançamento Exclusive - Deságio 70%
+Lançamento Exclusive - Deságio 75%
+Lançamento Exclusive Diesel
+Lançamento Exclusive Diesel - Deságio 75%
+Lançamento Exclusive Diesel - Deságio 70%
 ```
 
-## Alterações
+### Para cada plano novo, serão inseridos:
 
-### 1. `supabase/functions/confirmar-vistorias-manha-cron/index.ts`
-- **Manter** lógica dupla véspera/manhã como está
-- **Ampliar** o filtro da manhã: além de `aguardando_confirmacao_vespera`, incluir também serviços com `confirmacao_whatsapp IS NULL` (encaixes criados após as 18h da véspera, agendamentos de última hora)
-- Alterar horário do cron da manhã de 11h UTC (8h BRT) para **10h UTC (7h BRT)**
+1. **`planos`** — clone de todas as colunas do plano Select correspondente, com `nome`, `codigo`, `product_line_id` e `fipe_minima` ajustados
+2. **`planos_coberturas`** — as 9 coberturas Lançamento (Roubo, Colisão, Furto, Incêndio, Perda Total, Alagamento, Chuva de Granizo, 100% FIPE Deságio, Taxa Administrativa)
+3. **`planos_beneficios`** — mesmos benefícios do plano Select de referência (Rastreador, Assistência, Danos a Terceiros, etc. conforme o tier)
+4. **`planos_regioes`** — mesmas regiões do plano Select de referência (quando aplicável)
 
-### 2. `supabase/functions/cron-atribuir-tarefas/index.ts`
-- **Remover** o bloqueio por `atribuicao_manual_rotas` (linhas 110-123) — o motor automático não deve ser impedido por essa flag
-- Manter apenas `fila_atribuicao_ativa` como liga/desliga geral
-- **Adicionar filtro**: na busca de serviços, exigir `confirmacao_whatsapp = 'confirmada'` para serviços do dia — só confirmados entram na fila
-- **Adicionar filtro de período**: ao selecionar serviço, verificar se o período do agendamento (manhã/tarde) é compatível com o horário atual (manhã = antes das 12h, tarde = após 12h)
+### Atualização dos 3 planos existentes
 
-### 3. `src/components/rotas/ConfiguracoesFilaAtribuicao.tsx`
-- Exibir alerta quando `atribuicao_manual_rotas = true` informando que essa flag **não bloqueia mais** o motor automático (apenas controla UI de rotas manuais)
-- Mostrar status efetivo do motor baseado apenas em `fila_atribuicao_ativa`
+Os 3 planos Lançamento existentes (Basic, Exclusive, Premium) já têm coberturas e benefícios corretos. Será verificado se `fipe_minima = 50000` (já está correto).
 
-### 4. Banco de dados
-- Atualizar pg_cron do disparo manhã para `0 10 * * 1-6` (7h Brasília, seg-sáb)
-- Manter pg_cron do disparo véspera em `0 21 * * 1-6` (18h Brasília, seg-sáb)
-- Setar `atribuicao_manual_rotas = false`
+## Execução
 
-## Arquivos modificados
-- `supabase/functions/confirmar-vistorias-manha-cron/index.ts`
-- `supabase/functions/cron-atribuir-tarefas/index.ts`
-- `src/components/rotas/ConfiguracoesFilaAtribuicao.tsx`
+Tudo via SQL (INSERT) usando o insert tool — operação puramente de dados, sem alteração de código.
 
