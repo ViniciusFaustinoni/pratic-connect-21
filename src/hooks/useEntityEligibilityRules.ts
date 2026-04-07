@@ -177,9 +177,18 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
     }
     case 'marca_modelo': {
       const marcaMatch = !cfg.marca || (ctx.marca || '').toUpperCase().includes(cfg.marca.toUpperCase());
-      const modeloMatch = !cfg.modelo || (ctx.modelo || '').toUpperCase().includes(cfg.modelo.toUpperCase());
+      // Support both single modelo (legacy) and modelos array (new)
+      const modelos: string[] = cfg.modelos || [];
+      let modeloMatch: boolean;
+      if (modelos.length > 0) {
+        modeloMatch = modelos.some(m => (ctx.modelo || '').toUpperCase().includes(m.toUpperCase()));
+      } else {
+        modeloMatch = !cfg.modelo || (ctx.modelo || '').toUpperCase().includes(cfg.modelo.toUpperCase());
+      }
       const versaoMatch = !cfg.versao || (ctx.versao || '').toUpperCase().includes(cfg.versao.toUpperCase());
-      const match = marcaMatch && modeloMatch && versaoMatch;
+      // For exclusion with modelos array: match = marca matches AND at least one modelo matches
+      // For exclusion without modelos: match = marca matches (entire brand excluded)
+      const match = marcaMatch && (modelos.length > 0 ? modeloMatch : (modeloMatch && versaoMatch));
       return isInclude ? match : !match;
     }
     case 'tipo_uso': {
