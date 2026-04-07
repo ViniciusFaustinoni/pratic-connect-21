@@ -200,9 +200,16 @@ export default function ManutencaoRastreadoresTab() {
                           </Tooltip>
                         </TooltipProvider>
                       ) : hasActiveTratativa ? (
-                        <Button size="sm" variant="outline" onClick={() => handleContinuarTratativa(v)}>
-                          Continuar tratativa
-                        </Button>
+                        <div className="flex gap-1 justify-end">
+                          {isAgendadoComServico && (
+                            <Button size="sm" variant="default" className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => handleContinuarTratativa(v)}>
+                              Registrar visita
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => handleContinuarTratativa(v)}>
+                            Continuar tratativa
+                          </Button>
+                        </div>
                       ) : (
                         <Button size="sm" variant="ghost" onClick={() => handleContinuarTratativa(v)}>
                           Ver detalhes
