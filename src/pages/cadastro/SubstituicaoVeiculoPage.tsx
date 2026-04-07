@@ -34,6 +34,7 @@ export default function SubstituicaoVeiculoPage() {
   const [completedSteps, setCompletedSteps] = useState<number[]>([]);
   const [skippedSteps, setSkippedSteps] = useState<number[]>([]);
   const [substituicaoId, setSubstituicaoId] = useState<string | null>(null);
+  const [tokenPublico, setTokenPublico] = useState<string | null>(null);
   const [veiculoNovoId, setVeiculoNovoId] = useState<string | null>(null);
 
   const [eventoAtivo, setEventoAtivo] = useState<{ id: string; tipo: string } | null>(null);
