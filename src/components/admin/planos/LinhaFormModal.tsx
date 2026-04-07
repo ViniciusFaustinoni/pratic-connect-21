@@ -241,8 +241,9 @@ export function LinhaFormModal({
 
           {/* Regras de Elegibilidade */}
           {isEditing && productLine && (
-            <div className="border-t pt-4">
+            <div className="border-t pt-4 space-y-4">
               <EligibilityRulesEditor entityType="linha" entityId={productLine.id} />
+              <MarcaModeloExclusionEditor entityType="linha" entityId={productLine.id} />
             </div>
           )}
 

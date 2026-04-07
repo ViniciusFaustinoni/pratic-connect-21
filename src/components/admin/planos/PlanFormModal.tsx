@@ -785,7 +785,10 @@ export function PlanFormModal({
 
                   <TabsContent value="regras" className="space-y-4">
                     {plan?.id ? (
-                      <EligibilityRulesEditor entityType="plano" entityId={plan.id} />
+                      <>
+                        <EligibilityRulesEditor entityType="plano" entityId={plan.id} />
+                        <MarcaModeloExclusionEditor entityType="plano" entityId={plan.id} />
+                      </>
                     ) : (
                       <p className="text-sm text-muted-foreground py-4">Salve o plano primeiro para configurar regras.</p>
                     )}
