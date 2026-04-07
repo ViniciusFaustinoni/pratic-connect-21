@@ -43,6 +43,7 @@ const UploadDocumentosSinistro = lazy(() => import("./pages/public/UploadDocumen
 const EventoColisao = lazy(() => import("./pages/public/EventoColisao"));
 const EventoPosAprovacao = lazy(() => import("./pages/public/EventoPosAprovacao"));
 const RetiradaVeiculo = lazy(() => import("./pages/public/RetiradaVeiculo"));
+const SubstituicaoPublica = lazy(() => import("./pages/public/SubstituicaoPublica"));
 const AcompanhamentoReboquePublico = lazy(() => import("./pages/public/AcompanhamentoReboquePublico"));
 const PortalTerceiro = lazy(() => import("./pages/public/PortalTerceiro"));
 
