@@ -1,5 +1,5 @@
-import { useState, useEffect, useCallback } from 'react';
-import { Loader2, AlertTriangle, CheckCircle2, XCircle, Ban, DollarSign, FileText, Bell } from 'lucide-react';
+import { useState, useEffect, useCallback, useMemo } from 'react';
+import { Loader2, AlertTriangle, CheckCircle2, XCircle, Ban, DollarSign, FileText, Bell, Info } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Input } from '@/components/ui/input';
@@ -24,6 +24,8 @@ import {
 } from '@/components/ui/select';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
+import { useConfiguracaoNumero, useConfiguracaoTexto } from '@/hooks/useConteudosSistema';
+import { format, differenceInDays, addDays, startOfMonth, getDaysInMonth } from 'date-fns';
 
 interface CancelarAssociadoDialogProps {
   open: boolean;
@@ -68,10 +70,16 @@ export function CancelarAssociadoDialog({ open, onClose, associado, onSuccess }:
   const [proRata, setProRata] = useState(0);
   const [cobrancasAbertas, setCobrancasAbertas] = useState<any[]>([]);
   const [loadingFinanceiro, setLoadingFinanceiro] = useState(false);
+  const [ultimaCobrancaValor, setUltimaCobrancaValor] = useState(0);
+  const [ultimaCobrancaVencimento, setUltimaCobrancaVencimento] = useState<Date | null>(null);
 
   // Processing state
   const [isProcessing, setIsProcessing] = useState(false);
   const [steps, setSteps] = useState<ProcessStep[]>([]);
+
+  // Configs from database
+  const { data: prazoDevolucao = 7 } = useConfiguracaoNumero('prazo_devolucao_rastreador_cancelamento', 7);
+  const { data: baseProrata = 'pos_vencimento' } = useConfiguracaoTexto('base_calculo_prorata_cancelamento', 'pos_vencimento');
 
   // Reset on close
   const handleClose = useCallback(() => {
@@ -85,14 +93,50 @@ export function CancelarAssociadoDialog({ open, onClose, associado, onSuccess }:
     onClose();
   }, [isProcessing, onClose]);
 
-  // Load financial data when dialog opens
+  // Calculate pro-rata based on config
+  const proRataCalc = useMemo(() => {
+    if (!ultimaCobrancaValor || ultimaCobrancaValor <= 0) return null;
+
+    const hoje = new Date();
+    const diasNoMes = getDaysInMonth(hoje);
+    const valorDiario = ultimaCobrancaValor / diasNoMes;
+
+    let dataInicio: Date;
+    let baseLabel: string;
+
+    if (baseProrata === 'inicio_mes') {
+      dataInicio = startOfMonth(hoje);
+      baseLabel = 'Do dia 1 do mês corrente até a data do cancelamento';
+    } else {
+      // pos_vencimento
+      if (ultimaCobrancaVencimento) {
+        dataInicio = addDays(ultimaCobrancaVencimento, 1);
+      } else {
+        dataInicio = startOfMonth(hoje);
+      }
+      baseLabel = 'Do dia seguinte ao último vencimento até a data do cancelamento';
+    }
+
+    const dias = Math.max(0, differenceInDays(hoje, dataInicio) + 1);
+    const valor = Math.round(valorDiario * dias * 100) / 100;
+
+    return {
+      baseLabel,
+      dataInicio,
+      dataFim: hoje,
+      dias,
+      valor,
+    };
+  }, [ultimaCobrancaValor, ultimaCobrancaVencimento, baseProrata]);
+
+  // Load financial data when dialog opens — no cache
   useEffect(() => {
     if (!open || !associado.id) return;
     
     const loadFinanceiro = async () => {
       setLoadingFinanceiro(true);
       try {
-        // Fetch open charges
+        // Fetch open charges — fresh query, no cache
         const { data: cobrancas } = await supabase
           .from('asaas_cobrancas')
           .select('*')
@@ -104,10 +148,10 @@ export function CancelarAssociadoDialog({ open, onClose, associado, onSuccess }:
         const soma = abertos.reduce((acc: number, c: any) => acc + (c.valor || 0), 0);
         setTotalAberto(soma);
 
-        // Calculate pro-rata using the latest mensalidade charge value
+        // Get latest mensalidade for pro-rata
         const { data: ultimaCobranca } = await supabase
           .from('asaas_cobrancas')
-          .select('valor')
+          .select('valor, data_vencimento')
           .eq('associado_id', associado.id)
           .eq('tipo', 'mensalidade')
           .in('status', ['RECEIVED', 'CONFIRMED', 'PENDING'])
@@ -116,11 +160,10 @@ export function CancelarAssociadoDialog({ open, onClose, associado, onSuccess }:
           .maybeSingle();
 
         if (ultimaCobranca?.valor) {
-          const hoje = new Date();
-          const ultimoDia = new Date(hoje.getFullYear(), hoje.getMonth() + 1, 0).getDate();
-          const diasRestantes = ultimoDia - hoje.getDate();
-          const valorDiario = ultimaCobranca.valor / ultimoDia;
-          setProRata(Math.round(valorDiario * diasRestantes * 100) / 100);
+          setUltimaCobrancaValor(ultimaCobranca.valor);
+          if (ultimaCobranca.data_vencimento) {
+            setUltimaCobrancaVencimento(new Date(ultimaCobranca.data_vencimento));
+          }
         }
       } catch (err) {
         console.error('[CancelarDialog] Erro ao carregar financeiro:', err);
@@ -132,9 +175,17 @@ export function CancelarAssociadoDialog({ open, onClose, associado, onSuccess }:
     loadFinanceiro();
   }, [open, associado.id]);
 
-  // Validation
+  // Update proRata when calc changes
+  useEffect(() => {
+    if (proRataCalc) {
+      setProRata(proRataCalc.valor);
+    }
+  }, [proRataCalc]);
+
+  // Validation — block when debts exist
+  const temDebitos = cobrancasAbertas.length > 0;
   const motivoCompleto = motivo === 'outro' ? motivoOutro.trim() : motivo;
-  const canSubmit = !isProcessing && motivoCompleto && confirmaCancelamento && confirmaTermo && !associado.pendencia_rastreador;
+  const canSubmit = !isProcessing && motivoCompleto && confirmaCancelamento && confirmaTermo && !associado.pendencia_rastreador && !temDebitos && !loadingFinanceiro;
 
   // Update a step
   const updateStep = (id: string, status: StepStatus, errorMsg?: string) => {
@@ -174,6 +225,14 @@ export function CancelarAssociadoDialog({ open, onClose, associado, onSuccess }:
         return;
       }
       updateStep('processar', 'done');
+
+      // Save tracker return deadline if tracker pending
+      if (associado.pendencia_rastreador || true) {
+        const dataLimite = addDays(new Date(), prazoDevolucao);
+        await supabase.from('associados').update({
+          data_limite_devolucao_rastreador: dataLimite.toISOString(),
+        } as any).eq('id', associado.id);
+      }
 
       // === STEP 2: Cancel future ASAAS charges ===
       updateStep('asaas', 'running');
@@ -281,7 +340,6 @@ export function CancelarAssociadoDialog({ open, onClose, associado, onSuccess }:
       }
 
       // === STEP 6: Done ===
-      // Save motivo and observacoes
       const motivoLabel = MOTIVOS.find(m => m.value === motivo)?.label || motivoOutro;
       await supabase.from('associados').update({
         motivo_cancelamento: observacoes ? `${motivoLabel}: ${observacoes}` : motivoLabel,
@@ -290,7 +348,6 @@ export function CancelarAssociadoDialog({ open, onClose, associado, onSuccess }:
       updateStep('concluido', 'done');
       toast.success('Cancelamento processado com sucesso');
       
-      // Wait a moment so user sees the completed steps
       setTimeout(() => {
         onSuccess();
       }, 1500);
@@ -360,8 +417,10 @@ export function CancelarAssociadoDialog({ open, onClose, associado, onSuccess }:
                 <div className="flex items-center gap-2 text-sm">
                   {loadingFinanceiro ? (
                     <Loader2 className="h-4 w-4 animate-spin" />
-                  ) : (
+                  ) : !temDebitos ? (
                     <CheckCircle2 className="h-4 w-4 text-green-600" />
+                  ) : (
+                    <XCircle className="h-4 w-4 text-destructive" />
                   )}
                   <span>Situação financeira verificada</span>
                 </div>
@@ -448,6 +507,46 @@ export function CancelarAssociadoDialog({ open, onClose, associado, onSuccess }:
                     )}
                   </CardContent>
                 </Card>
+
+                {/* CORREÇÃO 1 — Bloqueio por débitos em aberto */}
+                {!loadingFinanceiro && temDebitos && (
+                  <Alert variant="destructive">
+                    <AlertTriangle className="h-4 w-4" />
+                    <AlertDescription className="space-y-2">
+                      <p className="font-medium">
+                        Não é possível cancelar enquanto houver débitos em aberto. Boletos pendentes: {formatCurrency(totalAberto)}. Quite os boletos para liberar o cancelamento.
+                      </p>
+                      <div className="space-y-1 mt-2">
+                        {cobrancasAbertas.map((c: any, i: number) => (
+                          <div key={i} className="flex justify-between text-xs bg-destructive/10 rounded px-2 py-1">
+                            <span className="font-mono">{c.boleto_nosso_numero || c.asaas_id || `Boleto ${i + 1}`}</span>
+                            <span>{formatCurrency(c.valor || 0)}</span>
+                            <span>{c.data_vencimento ? format(new Date(c.data_vencimento), 'dd/MM/yyyy') : '-'}</span>
+                          </div>
+                        ))}
+                      </div>
+                    </AlertDescription>
+                  </Alert>
+                )}
+
+                {/* CORREÇÃO 3 — Resumo do cálculo pró-rata */}
+                {!loadingFinanceiro && proRataCalc && proRataCalc.valor > 0 && (
+                  <Card className="border-blue-200 bg-blue-50/50 dark:bg-blue-950/20 dark:border-blue-800">
+                    <CardContent className="pt-4 space-y-1.5">
+                      <div className="flex items-center gap-2 mb-1">
+                        <Info className="h-4 w-4 text-blue-600" />
+                        <span className="text-sm font-semibold text-blue-900 dark:text-blue-300">Cálculo do Pró-rata</span>
+                      </div>
+                      <div className="text-xs text-blue-800 dark:text-blue-300 space-y-1">
+                        <p><span className="font-medium">Base:</span> {proRataCalc.baseLabel}</p>
+                        <p>
+                          <span className="font-medium">Período:</span> De {format(proRataCalc.dataInicio, 'dd/MM/yyyy')} até {format(proRataCalc.dataFim, 'dd/MM/yyyy')} ({proRataCalc.dias} dias)
+                        </p>
+                        <p><span className="font-medium">Valor pró-rata:</span> {formatCurrency(proRataCalc.valor)}</p>
+                      </div>
+                    </CardContent>
+                  </Card>
+                )}
 
                 {/* Checkboxes */}
                 <div className="space-y-3">
