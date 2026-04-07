@@ -20,6 +20,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import AgendamentoManutencaoForm from './AgendamentoManutencaoForm';
 import CardConfirmacaoAgendamento from './CardConfirmacaoAgendamento';
+import ResultadoVisitaForm from './ResultadoVisitaForm';
+import CardEncerramentoVisita from './CardEncerramentoVisita';
 
 interface TratativaDrawerProps {
   open: boolean;
