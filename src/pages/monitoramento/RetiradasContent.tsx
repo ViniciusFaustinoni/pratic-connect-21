@@ -60,6 +60,7 @@ interface RetiradaData extends Servico {
     imei?: string;
     plataforma?: string;
   };
+  _data_limite_devolucao?: string | null;
 }
 
 export default function RetiradasContent() {
