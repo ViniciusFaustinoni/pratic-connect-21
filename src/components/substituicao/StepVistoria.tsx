@@ -429,6 +429,7 @@ export function StepVistoria({
                   <AgendamentoCotacao
                     cotacaoId={substituicaoId || ''}
                     onConfirmar={handleAgendamentoConfirmado}
+                    skipMutation
                   />
                 </motion.div>
               )}
