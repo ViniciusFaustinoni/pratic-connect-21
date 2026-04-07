@@ -14909,12 +14909,72 @@ export type Database = {
         }
         Relationships: []
       }
+      manutencao_tratativa_logs: {
+        Row: {
+          acao: string
+          created_at: string | null
+          criado_por: string | null
+          dados: Json | null
+          etapa: string
+          id: string
+          tratativa_id: string
+        }
+        Insert: {
+          acao: string
+          created_at?: string | null
+          criado_por?: string | null
+          dados?: Json | null
+          etapa: string
+          id?: string
+          tratativa_id: string
+        }
+        Update: {
+          acao?: string
+          created_at?: string | null
+          criado_por?: string | null
+          dados?: Json | null
+          etapa?: string
+          id?: string
+          tratativa_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manutencao_tratativa_logs_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativa_logs_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativa_logs_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativa_logs_tratativa_id_fkey"
+            columns: ["tratativa_id"]
+            isOneToOne: false
+            referencedRelation: "manutencao_tratativas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       manutencao_tratativas: {
         Row: {
           associado_id: string
           created_at: string | null
           criado_por: string | null
           data_agendamento: string | null
+          etapa_atual: string
           id: string
           observacoes: string | null
           rastreador_id: string | null
@@ -14927,6 +14987,7 @@ export type Database = {
           created_at?: string | null
           criado_por?: string | null
           data_agendamento?: string | null
+          etapa_atual?: string
           id?: string
           observacoes?: string | null
           rastreador_id?: string | null
@@ -14939,6 +15000,7 @@ export type Database = {
           created_at?: string | null
           criado_por?: string | null
           data_agendamento?: string | null
+          etapa_atual?: string
           id?: string
           observacoes?: string | null
           rastreador_id?: string | null

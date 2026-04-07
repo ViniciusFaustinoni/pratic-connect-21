@@ -1,3 +1,4 @@
+import { useState } from 'react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
@@ -6,9 +7,10 @@ import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Search, AlertTriangle, Clock, CalendarCheck, CheckCircle2, PhoneCall, Loader2 } from 'lucide-react';
-import { useManutencaoRastreadores, type StatusTratativa, type FiltroPeriodo } from '@/hooks/useManutencaoRastreadores';
+import { useManutencaoRastreadores, type VeiculoManutencao } from '@/hooks/useManutencaoRastreadores';
 import { formatDistanceToNow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import TratativaDrawer from './TratativaDrawer';
 
 const statusConfig: Record<string, { label: string; variant: string; className: string }> = {
   sem_tratativa: { label: 'Aguardando contato', variant: 'secondary', className: 'bg-muted text-muted-foreground' },
@@ -30,6 +32,22 @@ export default function ManutencaoRastreadoresTab() {
     setFiltroStatus,
     iniciarTratativa,
   } = useManutencaoRastreadores();
+
+  const [selectedVeiculo, setSelectedVeiculo] = useState<VeiculoManutencao | null>(null);
+  const [drawerOpen, setDrawerOpen] = useState(false);
+
+  const handleIniciarTratativa = async (v: VeiculoManutencao) => {
+    await iniciarTratativa.mutateAsync(v);
+    // After creating, we need the tratativaId — refetch will update it
+    // For now open the drawer; the hook will pick up the new record
+    setSelectedVeiculo({ ...v, status: 'aguardando_contato' });
+    setDrawerOpen(true);
+  };
+
+  const handleContinuarTratativa = (v: VeiculoManutencao) => {
+    setSelectedVeiculo(v);
+    setDrawerOpen(true);
+  };
 
   const cards = [
     { label: 'Aguardando contato', value: metricas.aguardandoContato, icon: PhoneCall, color: 'text-muted-foreground' },
@@ -117,6 +135,7 @@ export default function ManutencaoRastreadoresTab() {
               {veiculos.map((v) => {
                 const cfg = statusConfig[v.status] || statusConfig.sem_tratativa;
                 const canInitiate = !v.temEventoAberto && !v.inadimplente && (v.status === 'sem_tratativa');
+                const hasActiveTratativa = v.status !== 'sem_tratativa' && v.status !== 'resolvido_sem_visita' && v.status !== 'visita_realizada';
                 const disabledReason = v.temEventoAberto
                   ? 'Veículo com evento em aberto'
                   : v.inadimplente
@@ -166,7 +185,7 @@ export default function ManutencaoRastreadoresTab() {
                                 <Button
                                   size="sm"
                                   disabled={!canInitiate || iniciarTratativa.isPending}
-                                  onClick={() => iniciarTratativa.mutate(v)}
+                                  onClick={() => handleIniciarTratativa(v)}
                                 >
                                   Iniciar tratativa
                                 </Button>
@@ -177,8 +196,14 @@ export default function ManutencaoRastreadoresTab() {
                             )}
                           </Tooltip>
                         </TooltipProvider>
+                      ) : hasActiveTratativa ? (
+                        <Button size="sm" variant="outline" onClick={() => handleContinuarTratativa(v)}>
+                          Continuar tratativa
+                        </Button>
                       ) : (
-                        <span className="text-xs text-muted-foreground">Em andamento</span>
+                        <Button size="sm" variant="ghost" onClick={() => handleContinuarTratativa(v)}>
+                          Ver detalhes
+                        </Button>
                       )}
                     </TableCell>
                   </TableRow>
@@ -188,6 +213,13 @@ export default function ManutencaoRastreadoresTab() {
           </Table>
         </div>
       )}
+
+      {/* Tratativa Drawer */}
+      <TratativaDrawer
+        open={drawerOpen}
+        onOpenChange={setDrawerOpen}
+        veiculo={selectedVeiculo}
+      />
     </div>
   );
 }
