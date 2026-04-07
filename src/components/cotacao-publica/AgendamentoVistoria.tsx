@@ -45,6 +45,9 @@ export interface AgendamentoVistoriaProps {
 
   // Endereço pré-preenchido (coletado pela IA no comprovante de residência)
   enderecoInicial?: Partial<EnderecoForm>;
+
+  // Quando true, não chama edge function — apenas coleta dados e chama onConfirmar
+  skipMutation?: boolean;
 }
 
 export function AgendamentoVistoria({ 
@@ -52,7 +55,8 @@ export function AgendamentoVistoria({
   onConfirmar, 
   contexto,
   tipoVistoria,
-  enderecoInicial
+  enderecoInicial,
+  skipMutation = false
 }: AgendamentoVistoriaProps) {
   // Estados
   const [dataSelecionada, setDataSelecionada] = useState<Date | null>(null);
@@ -225,6 +229,12 @@ export function AgendamentoVistoria({
     };
 
     try {
+      if (skipMutation) {
+        // Substituição: apenas retorna dados sem chamar edge function
+        onConfirmar(dataFormatadaFinal, periodoSelecionado);
+        return;
+      }
+
       if (contexto === 'presencial-direto') {
         await finalizarMutation.mutateAsync({
           ...dadosAgendamento,

@@ -13,15 +13,17 @@ interface AgendamentoCotacaoProps {
     cidade?: string;
     estado?: string;
   };
+  skipMutation?: boolean;
 }
 
-export function AgendamentoCotacao({ cotacaoId, onConfirmar, enderecoInicial }: AgendamentoCotacaoProps) {
+export function AgendamentoCotacao({ cotacaoId, onConfirmar, enderecoInicial, skipMutation }: AgendamentoCotacaoProps) {
   return (
     <AgendamentoVistoria
       cotacaoId={cotacaoId}
       onConfirmar={onConfirmar}
       contexto="presencial-direto"
       enderecoInicial={enderecoInicial}
+      skipMutation={skipMutation}
     />
   );
 }
