@@ -82,7 +82,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
           tratativa_id: tratativaId!,
           etapa: 'contato',
           acao: 'contato_registrado',
-          dados: { canal: params.canal, data_hora: params.dataHora, resposta: params.resposta },
+          dados: { canal: params.canal, data_hora: params.dataHora, resposta: params.resposta } as unknown as Json,
           criado_por: userId,
         });
       if (logErr) throw logErr;
