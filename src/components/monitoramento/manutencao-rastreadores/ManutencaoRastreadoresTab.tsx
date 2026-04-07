@@ -137,7 +137,8 @@ export default function ManutencaoRastreadoresTab() {
               {veiculos.map((v) => {
                 const cfg = statusConfig[v.status] || statusConfig.sem_tratativa;
                 const canInitiate = !v.temEventoAberto && !v.inadimplente && (v.status === 'sem_tratativa');
-                const hasActiveTratativa = v.status !== 'sem_tratativa' && v.status !== 'resolvido_sem_visita' && v.status !== 'visita_realizada';
+                const hasActiveTratativa = v.status !== 'sem_tratativa' && v.status !== 'resolvido_sem_visita' && v.status !== 'visita_realizada' && v.status !== 'acompanhamento';
+                const isAgendadoComServico = v.status === 'agendado' && v.tratativaId;
                 const disabledReason = v.temEventoAberto
                   ? 'Veículo com evento em aberto'
                   : v.inadimplente
