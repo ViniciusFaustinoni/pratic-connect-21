@@ -98,8 +98,9 @@ export function StepVistoria({
   // Create vistoria (autovistoria)
   const criarVistoriaAutovistoria = useMutation({
     mutationFn: async () => {
-      const subId = substituicaoId || await onIniciarSubstituicao();
       if (!veiculoNovoId) throw new Error('Veículo novo não encontrado');
+      if (vistoriaExistente) throw new Error('Vistoria já existe para este veículo');
+      const subId = substituicaoId || await onIniciarSubstituicao();
 
       const { data, error } = await supabase
         .from('vistorias')
