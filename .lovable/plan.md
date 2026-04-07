@@ -1,74 +1,176 @@
 
 
-# Plano: Registro de Resultado da Visita Técnica (MAN-4)
+# Auditoria: Mapeamento do que existe para o Fluxo de Retirada de Rastreador
 
-## Banco de dados
+---
 
-Adicionar colunas em `manutencao_tratativas` para persistir o resultado:
+## 1. CANCELAMENTO
 
-- `visita_data_hora` (timestamptz) — data/hora real da visita
-- `visita_tecnico_id` (uuid, FK profiles) — técnico que compareceu
-- `visita_resultado` (text) — enum: rastreador_trocado, fiacao_reparada, chip_substituido, violacao_corrigida, sem_problema_rastreador, resolvido_remotamente
-- `visita_descricao` (text) — descrição técnica
-- `rastreador_trocado` (boolean, default false) — toggle troca
-- `imei_novo` (text) — IMEI do novo equipamento
-- `imei_retirado` (text) — IMEI do retirado
-- `voltou_pontuar` (text) — 'sim', 'nao', 'aguardando'
+**✅ Existe — Tela de cancelamento completa**
+- `src/components/cadastro/CancelarAssociadoDialog.tsx` (500 linhas) — Modal acessado na tela de detalhe do associado (`AssociadoDetalhe.tsx`). Coleta motivo (select com 8 opções), observações, exibe financeiro pendente e executa o cancelamento.
+- Motivos incluem: solicitação do associado, insatisfação, concorrente, **venda do veículo**, dificuldade financeira, mudança de cidade, falecimento, outro.
 
-Atualizar CHECK constraint de `status` para incluir `visita_realizada` e `acompanhamento`.
+**✅ Existe — Enum `status_associado`** inclui: `cancelado`, `suspenso`, `inadimplente`, `bloqueado`
 
-## Hook `useTratativaDrawer.ts`
+**✅ Existe — Colunas no associado**: `data_cancelamento`, `motivo_cancelamento`, `tipo_saida` (ex: `inadimplencia`), `pode_reativar`, `data_bloqueio`
 
-Nova mutation `registrarVisita`:
-1. Atualiza `manutencao_tratativas` com todos os campos da visita
-2. Atualiza `servicos` correspondente (via `servico_id`) para `status = 'concluido'`
-3. Insere log com ação `visita_realizada` e dados resumidos
-4. Define status: `voltou_pontuar === 'sim'` → `visita_realizada`, senão → `acompanhamento`
+**✅ Existe — Exclusão por diretoria**: `src/components/cadastro/ExcluirAssociadoDialog.tsx` — chama `processar-pos-retirada` com motivo específico
 
-Nova mutation `abrirNovaTratativa`:
-1. Cria nova tratativa para o mesmo veículo/associado com status `aguardando_contato`
-2. Toast + invalidar queries
+**✅ Existe — Cancelamento via chatbot**: O assistente IA (`assistente-chat/index.ts`) aceita pedidos de cancelamento do associado e cria solicitação em `chat_solicitacoes_ia` com `tipo = 'cancelamento'`
 
-## Componente `ResultadoVisitaForm.tsx` (novo)
+---
 
-Formulário com:
-- DateTimePicker (data/hora da visita, default agora)
-- Select técnico (pré-preenchido do agendado, editável, + "Não identificado")
-- Select resultado (6 opções)
-- Textarea descrição técnica (obrigatório)
-- Toggle troca de rastreador → campos IMEI novo/retirado
-- Card amarelo taxa R$ 50,00 com toggle + campo motivo condicional
-- 3 botões exclusivos "Voltou a pontuar?" (Sim/Não/Aguardando)
-- Botão "Encerrar manutenção" — desabilitado até obrigatórios preenchidos
+## 2. RETIRADA DE RASTREADOR
 
-## Componente `CardEncerramentoVisita.tsx` (novo)
+**✅ Existe — Fluxo completo implementado**
 
-Card pós-registro:
-- Fundo verde se `voltou_pontuar = sim`, laranja se não/aguardando
-- Resumo: data, técnico, resultado, descrição (120 chars), IMEI se trocou, taxa se aplicada
-- Botão "Abrir nova tratativa" no card laranja
+| Artefato | Descrição |
+|---|---|
+| Enum `tipo_servico` valor `vistoria_retirada` | Migration `20260206120322` |
+| Enum `status_rastreador` valor `retirada_pendente` | Migration `20260209022628` |
+| Colunas em `servicos` | `motivo_retirada`, `sub_tipo_retirada`, `cancelamento_bloqueado_ate_devolucao`, `solicitado_por_modulo`, `tem_debitos_pendentes`, `integridade_aparelho`, `obs_integridade`, `multa_aplicada`, `multa_valor`, `checklist_retirada` |
+| `src/types/retirada.ts` | Tipos: `MotivoRetirada` (5 valores), `SubTipoRetirada`, `IntegridadeAparelho`, `FormaCobrancaMulta`, `MotivoMulta`, `ChecklistRetirada` |
+| `src/hooks/useRetiradaRastreador.ts` (330 linhas) | Mutations: criar solicitação, agendar retirada, listar retiradas |
+| `src/hooks/useCriarRetirada.ts` | Criar serviço de retirada a partir do rastreador |
+| `src/hooks/useMultaRetirada.ts` | Gestão de multa R$ 400 por não devolução |
+| `src/pages/monitoramento/RetiradasPage.tsx` | Tela completa de gestão de retiradas (filtros, tabela, ações) |
+| `src/pages/monitoramento/RetiradasContent.tsx` | Versão embutível como aba |
+| `src/pages/instalador/ExecutarRetirada.tsx` | Tela do técnico para executar a retirada em campo |
+| `src/components/monitoramento/retirada/AgendarRetiradaModal.tsx` | Modal de agendamento |
+| `src/components/monitoramento/retirada/TratarAusenciaRetiradaModal.tsx` | Modal para não comparecimento |
+| `src/components/monitoramento/retirada/AplicarMultaModal.tsx` | Modal de multa |
 
-## Integração no `TratativaDrawer.tsx`
+**✅ Existe — Aba "Retiradas" em Serviços de Campo**
+- A página `VistoriasInstalacoesMon.tsx` já contém aba de Retiradas usando `RetiradasContent`
 
-Lógica condicional após o card de confirmação do agendamento:
-- Se `status === 'agendado'` e `temServico` e `!visita_resultado` → mostrar `ResultadoVisitaForm`
-- Se `status in ('visita_realizada', 'acompanhamento')` → mostrar `CardEncerramentoVisita`
+**✅ Existe — Edge Functions**
 
-Modo leitura: quando status é final, todo o drawer fica read-only (etapas colapsadas em timeline, sem formulários editáveis).
+| Function | Descrição |
+|---|---|
+| `concluir-retirada` (459 linhas) | Conclui serviço, desvincula rastreador, atualiza status, chama pós-retirada |
+| `processar-pos-retirada` (370 linhas) | Cancela associado, inativa veículos, integra Rede Veículos |
+| `gerar-link-retirada` | Gera link para associado confirmar retirada |
+| `confirmar-retirada` | Confirma retirada via link do associado (OS em oficina) |
+| `notificar-retirada-whatsapp` | Envia WhatsApp de agendamento de retirada |
 
-## Integração no `ManutencaoRastreadoresTab.tsx`
+---
 
-- Botão "Registrar visita" ao lado de "Continuar tratativa" para status `agendado` com `servico_id`
-- Novos status no `statusConfig`: `acompanhamento` (laranja) e atualizar `visita_realizada` (verde "Concluído")
-- Novos filtros no Select: "Concluído" e "Acompanhamento"
-- Ao clicar "Registrar visita": abre drawer e rola até a seção resultado
+## 3. INADIMPLENCIA E COMUNICACAO AUTOMATICA
 
-## Arquivos
+**✅ Existe — Automações de inadimplência**
 
-- **Criado**: migration SQL (colunas + CHECK)
-- **Criado**: `src/components/monitoramento/manutencao-rastreadores/ResultadoVisitaForm.tsx`
-- **Criado**: `src/components/monitoramento/manutencao-rastreadores/CardEncerramentoVisita.tsx`
-- **Modificado**: `src/hooks/useTratativaDrawer.ts`
-- **Modificado**: `src/components/monitoramento/manutencao-rastreadores/TratativaDrawer.tsx`
-- **Modificado**: `src/components/monitoramento/manutencao-rastreadores/ManutencaoRastreadoresTab.tsx`
+| Artefato | Descrição |
+|---|---|
+| `cron-suspender-inadimplentes` (269 linhas) | Suspende associados com cobranças vencidas (carência configurável). Integra com Rede Veículos para informar inadimplência |
+| `cron-excluir-inadimplentes-120` (131 linhas) | Cancela associados suspensos há 120+ dias. Seta `tipo_saida = 'inadimplencia'`, `motivo_cancelamento` automático |
+| `gerar-fila-cobranca` (edge function) | Verifica inadimplentes sem contato recente (15+ dias) |
+| `executar-regua-cobranca` | Executa régua de cobrança |
+
+**✅ Existe — Logs de comunicação**
+- `sinistro_contatos_agendados` — agendamentos de mensagens automáticas (usado em `gerar-link-retirada` para lembretes)
+- Integração WhatsApp completa: `whatsapp-send-text`, `whatsapp-send-media`, etc.
+- `chatwoot-webhook` para registro de conversas
+
+**✅ Existe — Contagem de inadimplência**
+- `InadimplenciaIdadeChart` no dashboard financeiro
+- `AssociadoSituacaoCard` com `STATUS_INADIMPLENCIA_CONFIG` (adimplente, regularização simples, etc.)
+- Lógica de cobertura suspensa por veículo inadimplente (`veiculosInadimplentes`)
+
+**⚠️ Existe parcialmente — "dias_inadimplente"**
+- Não existe coluna específica `dias_inadimplente` persistida. A contagem é calculada em runtime a partir de `data_bloqueio` e datas de cobranças vencidas (`asaas_cobrancas`).
+
+---
+
+## 4. AGENDAMENTO E ENCAIXE
+
+**✅ Existe — Enum `tipo_servico` completo**
+
+Valores: `instalacao`, `vistoria_entrada`, `vistoria_saida`, `vistoria_sinistro`, `vistoria_periodica`, `vistoria_manutencao`, `vistoria_retirada`
+
+**✅ Existe — Fluxo de encaixe**
+- Edge function `processar-encaixes-automaticos`
+- Edge function `solicitar-encaixe`
+- Tabela `servicos` com campos: `permite_encaixe`, `encaixe_id`, `data_agendada`, `periodo`, `profissional_id`, `rota_id`
+- Enum `status_servico`: pendente, agendada, em_rota, em_andamento, concluida, reagendada, cancelada, etc.
+
+**✅ Existe — Coluna de origem**: `solicitado_por_modulo` na tabela `servicos` (valores: 'cadastro', etc.)
+**✅ Existe — Coluna de motivo**: `motivo_retirada` na tabela `servicos` distingue: cancelamento_voluntario, inadimplencia, exclusao_diretoria, substituicao_veiculo, busca_apreensao
+
+---
+
+## 5. SUBSTITUICAO DE VEICULO
+
+**✅ Existe — Fluxo completo**
+- Tabela `substituicoes_veiculo` com campos: `associado_id`, `veiculo_antigo_id`, `veiculo_novo_id`, `veiculo_antigo_placa`, `veiculo_novo_placa`, `taxa_substituicao`, `status`, etc.
+- Status da substituição: `aguardando_aprovacao`, `aprovada`, `aguardando_retirada`, `aguardando_vistoria`, `efetivada`, `rejeitada`
+- `src/hooks/useSubstituicaoVeiculo.ts` — CRUD completo
+- `src/components/substituicao/StepRastreador.tsx` — verifica existência de retirada e cria serviço `vistoria_retirada` vinculado
+- `supabase/functions/efetivar-substituicao/index.ts` — efetiva a troca após conclusão de todas as etapas
+- O `concluir-retirada` verifica se o motivo é `substituicao_veiculo` e avança a substituição para `aguardando_vistoria`
+
+**✅ Existe — Verificação de rastreador no veículo sendo substituído**: `StepRastreador.tsx` consulta rastreador instalado e cria retirada se necessário
+
+**✅ Existe — Status `aguardando_retirada`**: A substituição fica nesse status até a retirada ser concluída
+
+---
+
+## 6. VENDA DE VEICULO (CANCELAMENTO POR VENDA)
+
+**✅ Existe** — O `CancelarAssociadoDialog` inclui motivo `venda_veiculo` com label "Venda do veículo (sem substituição)"
+
+**❌ Não existe** — Fluxo diferenciado para cancelamento por venda. Usa o mesmo fluxo genérico de cancelamento.
+
+---
+
+## TABELAS E COLUNAS RELEVANTES PARA RETIRADA
+
+```text
+servicos
+├── id (uuid, PK)
+├── tipo (enum tipo_servico) — 'vistoria_retirada'
+├── status (enum status_servico)
+├── protocolo (text, gerado automaticamente — prefixo RET)
+├── associado_id (uuid, FK)
+├── veiculo_id (uuid, FK)
+├── rastreador_id (uuid, FK)
+├── profissional_id (uuid, FK)
+├── data_agendada (date)
+├── periodo (enum periodo_servico)
+├── rota_id (uuid, FK)
+├── motivo_retirada (text) — cancelamento_voluntario|inadimplencia|exclusao_diretoria|substituicao_veiculo|busca_apreensao
+├── sub_tipo_retirada (text) — somente_retirada|retirada_com_nova_instalacao
+├── solicitado_por_modulo (text) — cadastro|monitoramento|financeiro|diretoria
+├── cancelamento_bloqueado_ate_devolucao (boolean)
+├── tem_debitos_pendentes (boolean)
+├── integridade_aparelho (text) — integro|danificado|violado|molhado
+├── obs_integridade (text)
+├── multa_aplicada (boolean)
+├── multa_valor (numeric)
+├── checklist_retirada (jsonb)
+└── permite_encaixe (boolean)
+
+rastreadores
+├── status (enum status_rastreador) — inclui 'retirada_pendente'
+├── veiculo_id (uuid, FK)
+└── codigo / imei (text)
+
+associados
+├── status (enum status_associado) — cancelado|suspenso|inadimplente
+├── pendencia_rastreador (boolean)
+├── data_cancelamento (timestamptz)
+├── motivo_cancelamento (text)
+├── tipo_saida (text) — inadimplencia|etc
+├── pode_reativar (boolean)
+└── data_bloqueio (timestamptz)
+
+substituicoes_veiculo
+├── status (text) — aguardando_retirada|aguardando_vistoria|efetivada|...
+├── veiculo_antigo_id (uuid)
+├── veiculo_novo_id (uuid)
+└── associado_id (uuid)
+```
+
+## CONCLUSAO
+
+O fluxo de Retirada de Rastreador esta **amplamente implementado** — possui tipos, hooks, telas, edge functions de conclusão, pós-processamento e integração com substituição de veículo. A automação de inadimplência (suspensão e exclusão por cron) também já existe. O que **não existe** é um fluxo diferenciado para venda de veículo (usa o cancelamento genérico).
 
