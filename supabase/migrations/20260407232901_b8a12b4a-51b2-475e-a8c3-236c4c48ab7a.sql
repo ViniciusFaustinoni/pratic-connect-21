@@ -1,0 +1,1 @@
+ALTER TABLE marcas_modelos ADD CONSTRAINT marcas_modelos_marca_modelo_key UNIQUE (marca, modelo);
