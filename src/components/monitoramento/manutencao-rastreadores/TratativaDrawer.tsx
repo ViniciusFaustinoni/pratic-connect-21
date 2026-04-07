@@ -177,15 +177,33 @@ function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose
         />
       )}
       {etapaAtual === 'concluido' && isAgendado && temServico && !reagendar && (
-        <CardConfirmacaoAgendamento
-          tratativa={tAny}
-          tecnicoNome={tecnicoInfo?.nome || 'A definir'}
-          associadoNome={associadoInfo?.nome || veiculo.associadoNome}
-          associadoTelefone={associadoInfo?.telefone || ''}
-          placa={veiculo.placa}
-          enderecoResumido={enderecoResumido}
-          onReagendar={() => setReagendar(true)}
-        />
+        <>
+          <CardConfirmacaoAgendamento
+            tratativa={tAny}
+            tecnicoNome={tecnicoInfo?.nome || 'A definir'}
+            associadoNome={associadoInfo?.nome || veiculo.associadoNome}
+            associadoTelefone={associadoInfo?.telefone || ''}
+            placa={veiculo.placa}
+            enderecoResumido={enderecoResumido}
+            onReagendar={() => setReagendar(true)}
+          />
+          {/* Result form if visit not yet registered */}
+          {!temResultadoVisita && (
+            <ResultadoVisitaForm
+              tecnicoAgendadoId={tAny.tecnico_id}
+              onSubmit={(data) => registrarVisita.mutate(data)}
+              isPending={registrarVisita.isPending}
+            />
+          )}
+          {/* Encerramento card if visit was registered */}
+          {temResultadoVisita && (
+            <CardEncerramentoVisita
+              tratativa={tAny}
+              tecnicoNome={visitaTecnicoInfo?.nome || tecnicoInfo?.nome || 'Não identificado'}
+              onAbrirNovaTratativa={() => abrirNovaTratativa.mutate()}
+            />
+          )}
+        </>
       )}
       {etapaAtual === 'concluido' && isAgendado && temServico && reagendar && (
         <AgendamentoManutencaoForm
@@ -208,7 +226,15 @@ function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose
           }}
         />
       )}
-      {etapaAtual === 'concluido' && !isAgendado && (
+      {/* Final statuses: visita_realizada or acompanhamento */}
+      {etapaAtual === 'concluido' && isFinalStatus && (
+        <CardEncerramentoVisita
+          tratativa={tAny}
+          tecnicoNome={visitaTecnicoInfo?.nome || tecnicoInfo?.nome || 'Não identificado'}
+          onAbrirNovaTratativa={isAcompanhamento ? () => abrirNovaTratativa.mutate() : undefined}
+        />
+      )}
+      {etapaAtual === 'concluido' && !isAgendado && !isFinalStatus && (
         <div className="text-center py-6 space-y-2">
           <CheckCircle2 className="h-10 w-10 mx-auto text-green-500" />
           <p className="font-semibold">Tratativa concluída</p>
