@@ -19,6 +19,7 @@ import {
 import { useCreateProductLine, useUpdateProductLine } from '@/hooks/usePlansAdmin';
 import type { ProductLine } from '@/types/plans';
 import { EligibilityRulesEditor } from './EligibilityRulesEditor';
+import { MarcaModeloExclusionEditor } from './MarcaModeloExclusionEditor';
 
 interface LinhaFormModalProps {
   open: boolean;
