@@ -262,8 +262,6 @@ export function useTratativaDrawer(tratativaId: string | null) {
             periodo: params.periodo,
             tecnico_id: params.tecnicoId,
             endereco_tipo: params.enderecoTipo,
-            tipos_ocorrencia: params.tiposOcorrencia,
-            taxa_visita: params.taxaVisitaAplicar,
           } as unknown as Json,
           criado_por: userId,
         });
