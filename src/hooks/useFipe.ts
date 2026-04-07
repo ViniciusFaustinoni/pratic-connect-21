@@ -236,11 +236,15 @@ export function useFipe() {
       
       if (fnError) {
         console.error('plate-lookup function error:', fnError);
+        // Check if the response body has rateLimited flag
+        if (data?.rateLimited) {
+          return { success: false, error: data.error || 'Limite de consultas excedido. Preencha os dados manualmente.' };
+        }
         throw fnError;
       }
       
-      if (!data.success) {
-        throw new Error(data.error || 'Veículo não encontrado');
+      if (!data?.success) {
+        return { success: false, error: data?.error || 'Veículo não encontrado. Preencha os dados manualmente.' };
       }
       
       return data as PlateResult;
