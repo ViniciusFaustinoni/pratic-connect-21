@@ -251,6 +251,15 @@ export function ConfiguracoesFilaAtribuicao() {
         </div>
       </CardHeader>
       <CardContent className={`space-y-6 transition-opacity ${!ativo ? 'opacity-50 pointer-events-none' : ''}`}>
+        {config?.manualAtivo && (
+          <Alert className="border-amber-500/50 bg-amber-500/10">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <AlertDescription className="text-sm">
+              O <strong>modo manual de rotas</strong> está ativo nas configurações de instalação, mas isso <strong>não bloqueia</strong> o motor automático. 
+              O motor é controlado exclusivamente pelo switch acima.
+            </AlertDescription>
+          </Alert>
+        )}
         {FIELDS.map((field) => (
           <div key={field.key} className="space-y-2">
             <div className="flex items-center gap-2">
