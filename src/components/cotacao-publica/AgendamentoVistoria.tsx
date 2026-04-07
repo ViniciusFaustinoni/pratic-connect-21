@@ -229,6 +229,12 @@ export function AgendamentoVistoria({
     };
 
     try {
+      if (skipMutation) {
+        // Substituição: apenas retorna dados sem chamar edge function
+        onConfirmar(dataFormatadaFinal, periodoSelecionado);
+        return;
+      }
+
       if (contexto === 'presencial-direto') {
         await finalizarMutation.mutateAsync({
           ...dadosAgendamento,
