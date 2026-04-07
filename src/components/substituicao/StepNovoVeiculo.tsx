@@ -105,9 +105,11 @@ export function StepNovoVeiculo({
         });
         if (vd.chassi) setChassi(vd.chassi);
         if (vd.renavam) setRenavam(vd.renavam);
+      } else if (!result.success) {
+        toast.warning(result.error || 'Não foi possível consultar a placa. Preencha os dados manualmente.');
       }
     } catch {
-      // error handled by useFipe
+      toast.warning('Erro ao consultar placa. Preencha os dados manualmente.');
     } finally {
       setConsultandoFipe(false);
     }
