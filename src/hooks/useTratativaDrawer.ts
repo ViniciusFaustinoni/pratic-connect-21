@@ -284,6 +284,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
       taxaVisitaAplicar: boolean;
       taxaVisitaObservacao: string;
       voltouPontuar: string;
+      tiposVerificados: string[];
     }) => {
       if (!tratativa) throw new Error('Tratativa não encontrada');
       const userId = await getSafeCriadoPor();
