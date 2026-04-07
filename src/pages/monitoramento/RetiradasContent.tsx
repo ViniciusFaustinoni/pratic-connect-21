@@ -80,6 +80,8 @@ export default function RetiradasContent() {
     tipo: 'vistoria_retirada',
   });
 
+  const [deadlinesMap, setDeadlinesMap] = useState<Record<string, string | null>>({});
+
   const retiradas: RetiradaData[] = useMemo(() => {
     if (!servicosRaw) return [];
     return servicosRaw.map(s => ({
@@ -90,7 +92,35 @@ export default function RetiradasContent() {
       multa_aplicada: (s as any).multa_aplicada,
       integridade_aparelho: (s as any).integridade_aparelho,
       rastreador: (s as any).rastreador,
+      _data_limite_devolucao: deadlinesMap[(s as any).associado_id] || null,
     }));
+  }, [servicosRaw, deadlinesMap]);
+
+  // Fetch deadline data for cancelamento_voluntario retiradas
+  useEffect(() => {
+    if (!servicosRaw?.length) return;
+    const cancelAssocIds = [...new Set(
+      servicosRaw
+        .filter(s => (s as any).motivo_retirada === 'cancelamento_voluntario' && s.status !== 'concluida')
+        .map(s => (s as any).associado_id)
+        .filter(Boolean)
+    )];
+    if (!cancelAssocIds.length) return;
+
+    const fetchDeadlines = async () => {
+      const { data } = await supabase
+        .from('associados')
+        .select('id, data_limite_devolucao_rastreador')
+        .in('id', cancelAssocIds as string[]);
+      if (data) {
+        const map: Record<string, string | null> = {};
+        for (const a of data) {
+          map[a.id] = (a as any).data_limite_devolucao_rastreador || null;
+        }
+        setDeadlinesMap(map);
+      }
+    };
+    fetchDeadlines();
   }, [servicosRaw]);
 
   const metricas = useMemo(() => ({
