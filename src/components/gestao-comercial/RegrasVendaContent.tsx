@@ -313,6 +313,25 @@ export function RegrasVendaContent() {
     }
   }, [indicacaoDB, indicacaoInitialized]);
 
+  // Load cancelamento configs
+  useEffect(() => {
+    if (cancelamentoInitialized) return;
+    const loadCancelamento = async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['prazo_devolucao_rastreador_cancelamento', 'base_calculo_prorata_cancelamento']);
+      if (data) {
+        for (const row of data) {
+          if (row.chave === 'prazo_devolucao_rastreador_cancelamento') setPrazoDevolucao(row.valor || '7');
+          if (row.chave === 'base_calculo_prorata_cancelamento') setBaseProrata(row.valor || 'pos_vencimento');
+        }
+        setCancelamentoInitialized(true);
+      }
+    };
+    loadCancelamento();
+  }, [cancelamentoInitialized]);
+
   useEffect(() => {
     if (!parametros.length || initialized) return;
     const nextPontuacao = { ...PONTUACAO_DEFAULTS };
