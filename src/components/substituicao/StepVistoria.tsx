@@ -88,6 +88,7 @@ export function StepVistoria({
     },
     enabled: !!veiculoNovoId,
     refetchInterval: (query) => {
+      if (!veiculoNovoId) return false;
       const status = query.state.data?.status as VistoriaStatus | undefined;
       if (!status || status === 'aprovada' || status === 'reprovada') return false;
       return 10_000;
