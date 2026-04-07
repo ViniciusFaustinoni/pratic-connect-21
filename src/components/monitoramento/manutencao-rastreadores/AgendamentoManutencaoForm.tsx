@@ -70,7 +70,7 @@ export default function AgendamentoManutencaoForm({ associadoId, onConfirmar, is
     queryFn: async () => {
       const { data } = await supabase
         .from('associados')
-        .select('logradouro, numero, bairro, cidade, estado, cep, complemento, nome, telefone')
+        .select('logradouro, numero, bairro, cidade, uf, cep, complemento, nome, telefone')
         .eq('id', associadoId)
         .single();
       return data;
@@ -79,7 +79,7 @@ export default function AgendamentoManutencaoForm({ associadoId, onConfirmar, is
   });
 
   const enderecoCadastro = associado
-    ? [associado.logradouro, associado.numero, associado.bairro, associado.cidade, associado.estado].filter(Boolean).join(', ')
+    ? [associado.logradouro, associado.numero, associado.bairro, associado.cidade, associado.uf].filter(Boolean).join(', ')
     : '';
 
   const toggleOcorrencia = (val: string) => {

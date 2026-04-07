@@ -185,19 +185,18 @@ export function useTratativaDrawer(tratativaId: string | null) {
       // Fetch associado for address
       const { data: assoc } = await supabase
         .from('associados')
-        .select('logradouro, numero, bairro, cidade, estado, cep, nome, telefone')
+        .select('logradouro, numero, bairro, cidade, uf, cep, nome, telefone')
         .eq('id', tratativa.associado_id)
         .single();
 
       const dataStr = format(params.dataAgendamento, 'yyyy-MM-dd');
       const periodoServico = params.periodo === 'integral' ? 'manha' : params.periodo;
 
-      // Build address fields for servicos
       let logradouro = assoc?.logradouro || '';
       let numero = assoc?.numero || '';
       let bairro = assoc?.bairro || '';
       let cidade = assoc?.cidade || '';
-      let uf = assoc?.estado || '';
+      let uf = assoc?.uf || '';
       let cep = assoc?.cep || '';
       if (params.enderecoTipo !== 'cadastro' && params.enderecoTexto) {
         logradouro = params.enderecoTexto;
