@@ -142,7 +142,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
           tratativa_id: tratativaId!,
           etapa: 'decisao',
           acao: 'resolvido_sem_visita',
-          dados: { encerrado_em: new Date().toISOString() },
+          dados: { encerrado_em: new Date().toISOString() } as unknown as Json,
           criado_por: userId,
         });
       if (logErr) throw logErr;
