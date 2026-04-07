@@ -2039,6 +2039,7 @@ export type Database = {
           data_cadastro_sga: string | null
           data_cancelamento: string | null
           data_efetiva_saida: string | null
+          data_limite_devolucao_rastreador: string | null
           data_nascimento: string | null
           data_primeiro_boleto_pago: string | null
           dia_vencimento: number | null
@@ -2101,6 +2102,7 @@ export type Database = {
           data_cadastro_sga?: string | null
           data_cancelamento?: string | null
           data_efetiva_saida?: string | null
+          data_limite_devolucao_rastreador?: string | null
           data_nascimento?: string | null
           data_primeiro_boleto_pago?: string | null
           dia_vencimento?: number | null
@@ -2163,6 +2165,7 @@ export type Database = {
           data_cadastro_sga?: string | null
           data_cancelamento?: string | null
           data_efetiva_saida?: string | null
+          data_limite_devolucao_rastreador?: string | null
           data_nascimento?: string | null
           data_primeiro_boleto_pago?: string | null
           dia_vencimento?: number | null

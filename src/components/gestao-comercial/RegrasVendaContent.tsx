@@ -8,7 +8,8 @@ import { Button } from '@/components/ui/button';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { Table, TableBody, TableCell, TableHead, TableHeader, TableRow } from '@/components/ui/table';
-import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle, DollarSign, ShieldCheck, UserPlus } from 'lucide-react';
+import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
+import { Award, Save, Loader2, Scale, Info, ArrowRightLeft, AlertTriangle, DollarSign, ShieldCheck, UserPlus, Ban } from 'lucide-react';
 import { useComissoesFaixas } from '@/hooks/useComissoesFaixas';
 import { supabase } from '@/integrations/supabase/client';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
@@ -286,6 +287,10 @@ export function RegrasVendaContent() {
   const [savingTaxas, setSavingTaxas] = useState(false);
   const [savingAutorizacoes, setSavingAutorizacoes] = useState(false);
   const [savingIndicacao, setSavingIndicacao] = useState(false);
+  const [savingCancelamento, setSavingCancelamento] = useState(false);
+  const [prazoDevolucao, setPrazoDevolucao] = useState('7');
+  const [baseProrata, setBaseProrata] = useState('pos_vencimento');
+  const [cancelamentoInitialized, setCancelamentoInitialized] = useState(false);
 
   useEffect(() => {
     if (taxasDB && !taxasInitialized) {
@@ -307,6 +312,25 @@ export function RegrasVendaContent() {
       setIndicacaoInitialized(true);
     }
   }, [indicacaoDB, indicacaoInitialized]);
+
+  // Load cancelamento configs
+  useEffect(() => {
+    if (cancelamentoInitialized) return;
+    const loadCancelamento = async () => {
+      const { data } = await supabase
+        .from('configuracoes')
+        .select('chave, valor')
+        .in('chave', ['prazo_devolucao_rastreador_cancelamento', 'base_calculo_prorata_cancelamento']);
+      if (data) {
+        for (const row of data) {
+          if (row.chave === 'prazo_devolucao_rastreador_cancelamento') setPrazoDevolucao(row.valor || '7');
+          if (row.chave === 'base_calculo_prorata_cancelamento') setBaseProrata(row.valor || 'pos_vencimento');
+        }
+        setCancelamentoInitialized(true);
+      }
+    };
+    loadCancelamento();
+  }, [cancelamentoInitialized]);
 
   useEffect(() => {
     if (!parametros.length || initialized) return;
@@ -486,6 +510,28 @@ export function RegrasVendaContent() {
     }
   };
 
+  const handleSaveCancelamento = async () => {
+    setSavingCancelamento(true);
+    try {
+      const updates = [
+        { chave: 'prazo_devolucao_rastreador_cancelamento', valor: prazoDevolucao },
+        { chave: 'base_calculo_prorata_cancelamento', valor: baseProrata },
+      ];
+      for (const u of updates) {
+        await supabase
+          .from('configuracoes')
+          .update({ valor: u.valor, updated_at: new Date().toISOString() })
+          .eq('chave', u.chave);
+      }
+      queryClient.invalidateQueries({ queryKey: ['configuracao'] });
+      toast.success('Configurações de cancelamento salvas com sucesso!');
+    } catch {
+      toast.error('Erro ao salvar configurações de cancelamento');
+    } finally {
+      setSavingCancelamento(false);
+    }
+  };
+
   if (isLoading || isLoadingTaxas || isLoadingAutorizacoes || isLoadingIndicacao) {
     return (
       <div className="flex items-center justify-center py-20">
@@ -520,6 +566,10 @@ export function RegrasVendaContent() {
         <TabsTrigger value="indicacao" className="gap-2">
           <UserPlus className="h-4 w-4" />
           Indicação
+        </TabsTrigger>
+        <TabsTrigger value="cancelamento" className="gap-2">
+          <Ban className="h-4 w-4" />
+          Cancelamento
         </TabsTrigger>
       </TabsList>
 
@@ -1586,6 +1636,72 @@ export function RegrasVendaContent() {
         <div className="flex justify-end">
           <Button onClick={handleSaveIndicacao} disabled={savingIndicacao} className="gap-2">
             {savingIndicacao ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Salvar configurações
+          </Button>
+        </div>
+      </TabsContent>
+
+      {/* ═══════════ ABA CANCELAMENTO ═══════════ */}
+      <TabsContent value="cancelamento" className="space-y-6 mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Prazo de Devolução do Rastreador</CardTitle>
+            <CardDescription>
+              Define o prazo em dias que o associado tem para devolver o rastreador após o cancelamento.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="prazo-devolucao" className="flex-1 text-sm">
+                Prazo para devolução do rastreador após cancelamento (dias)
+              </Label>
+              <Input
+                id="prazo-devolucao"
+                type="number"
+                min="1"
+                max="90"
+                className="w-24 text-right"
+                value={prazoDevolucao}
+                onChange={(e) => setPrazoDevolucao(e.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Base de Cálculo do Pró-rata</CardTitle>
+            <CardDescription>
+              Define como é calculado o valor proporcional no cancelamento.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <RadioGroup value={baseProrata} onValueChange={setBaseProrata}>
+              <div className="flex items-start gap-3 p-3 rounded-lg border">
+                <RadioGroupItem value="pos_vencimento" id="prorata-pos" className="mt-0.5" />
+                <Label htmlFor="prorata-pos" className="cursor-pointer flex-1">
+                  <span className="font-medium">Do dia seguinte ao último vencimento até a data do cancelamento</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Calcula o pró-rata a partir do dia seguinte ao último vencimento da mensalidade paga.
+                  </p>
+                </Label>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg border">
+                <RadioGroupItem value="inicio_mes" id="prorata-inicio" className="mt-0.5" />
+                <Label htmlFor="prorata-inicio" className="cursor-pointer flex-1">
+                  <span className="font-medium">Do dia 1 do mês corrente até a data do cancelamento</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Calcula o pró-rata proporcional ao número de dias usados no mês corrente.
+                  </p>
+                </Label>
+              </div>
+            </RadioGroup>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button onClick={handleSaveCancelamento} disabled={savingCancelamento} className="gap-2">
+            {savingCancelamento ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Salvar configurações
           </Button>
         </div>

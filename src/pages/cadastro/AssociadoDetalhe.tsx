@@ -393,6 +393,11 @@ export default function AssociadoDetalhe({ associadoId: propId, isModal, onClose
           <AlertTriangle className="h-4 w-4" />
           <AlertDescription>
             <strong>Pendência de rastreador:</strong> Cancelamento pendente até devolução do equipamento ou pagamento da multa.
+            {(associado as any).data_limite_devolucao_rastreador && (
+              <span className="ml-1 font-medium">
+                Prazo: {new Date((associado as any).data_limite_devolucao_rastreador).toLocaleDateString('pt-BR')}
+              </span>
+            )}
           </AlertDescription>
         </Alert>
       )}

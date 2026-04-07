@@ -1,0 +1,1 @@
+ALTER TABLE public.associados ADD COLUMN IF NOT EXISTS data_limite_devolucao_rastreador timestamptz;

@@ -1,9 +1,10 @@
 // Re-exports RetiradasPage content for embedding as a tab
 // The full page has its own header; when embedded we skip it
-import { useState, useMemo } from 'react';
-import { format } from 'date-fns';
+import { useState, useMemo, useEffect } from 'react';
+import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Search, MoreHorizontal, Calendar, User, Car, MapPin,
   Clock, CheckCircle, XCircle, RefreshCw, AlertTriangle,
@@ -59,6 +60,7 @@ interface RetiradaData extends Servico {
     imei?: string;
     plataforma?: string;
   };
+  _data_limite_devolucao?: string | null;
 }
 
 export default function RetiradasContent() {
@@ -78,6 +80,8 @@ export default function RetiradasContent() {
     tipo: 'vistoria_retirada',
   });
 
+  const [deadlinesMap, setDeadlinesMap] = useState<Record<string, string | null>>({});
+
   const retiradas: RetiradaData[] = useMemo(() => {
     if (!servicosRaw) return [];
     return servicosRaw.map(s => ({
@@ -88,7 +92,35 @@ export default function RetiradasContent() {
       multa_aplicada: (s as any).multa_aplicada,
       integridade_aparelho: (s as any).integridade_aparelho,
       rastreador: (s as any).rastreador,
+      _data_limite_devolucao: deadlinesMap[(s as any).associado_id] || null,
     }));
+  }, [servicosRaw, deadlinesMap]);
+
+  // Fetch deadline data for cancelamento_voluntario retiradas
+  useEffect(() => {
+    if (!servicosRaw?.length) return;
+    const cancelAssocIds = [...new Set(
+      servicosRaw
+        .filter(s => (s as any).motivo_retirada === 'cancelamento_voluntario' && s.status !== 'concluida')
+        .map(s => (s as any).associado_id)
+        .filter(Boolean)
+    )];
+    if (!cancelAssocIds.length) return;
+
+    const fetchDeadlines = async () => {
+      const { data } = await supabase
+        .from('associados')
+        .select('id, data_limite_devolucao_rastreador')
+        .in('id', cancelAssocIds as string[]);
+      if (data) {
+        const map: Record<string, string | null> = {};
+        for (const a of data) {
+          map[a.id] = (a as any).data_limite_devolucao_rastreador || null;
+        }
+        setDeadlinesMap(map);
+      }
+    };
+    fetchDeadlines();
   }, [servicosRaw]);
 
   const metricas = useMemo(() => ({
@@ -316,6 +348,17 @@ export default function RetiradasContent() {
                         {integridade && integridade !== 'integro' && (
                           <Badge className={cn('text-xs', INTEGRIDADE_APARELHO_COLORS[integridade])}>{INTEGRIDADE_APARELHO_LABELS[integridade]}</Badge>
                         )}
+                        {/* Deadline badges for cancelamento_voluntario */}
+                        {retirada.motivo_retirada === 'cancelamento_voluntario' && retirada._data_limite_devolucao && retirada.status !== 'concluida' && (() => {
+                          const deadline = new Date(retirada._data_limite_devolucao!);
+                          const hoursLeft = differenceInHours(deadline, new Date());
+                          if (isPast(deadline)) {
+                            return <Badge variant="destructive" className="text-xs">Prazo vencido</Badge>;
+                          } else if (hoursLeft <= 48) {
+                            return <Badge variant="destructive" className="text-xs">Prazo próximo</Badge>;
+                          }
+                          return null;
+                        })()}
                       </div>
                     </TableCell>
                     <TableCell>
