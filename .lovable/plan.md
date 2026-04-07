@@ -1,72 +1,64 @@
 
 
-# Plano: Aba "Manutenção" dentro de Serviços de Campo
+# Plano: Drawer de Tratativa — Fluxo em 3 Etapas
 
-## Contexto
+## Alterações
 
-A pagina "Serviços de Campo" (`VistoriasInstalacoesMon.tsx`) ja agrupa abas de Instalacoes, Vistorias, Retiradas, Encaixes, Viagens e Historico. A nova funcionalidade sera uma **aba adicional** nessa mesma pagina, sem criar rotas ou paginas novas.
+### 1. Banco de dados — nova tabela `manutencao_tratativa_logs`
 
-A view `view_rastreadores_posicao` ja possui `horas_sem_comunicacao`, `associado_id`, `veiculo_id`, `associado_nome`, `placa`, `modelo`, `marca` — tudo necessario para a listagem.
-
-## Alteracoes
-
-### 1. Banco de dados — tabela `manutencao_tratativas`
-
-Nova tabela para persistir o status de cada tratativa:
+Registra cada interação/etapa da tratativa:
 
 ```sql
-CREATE TABLE manutencao_tratativas (
+CREATE TABLE manutencao_tratativa_logs (
   id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
-  veiculo_id uuid NOT NULL REFERENCES veiculos(id),
-  associado_id uuid NOT NULL REFERENCES associados(id),
-  rastreador_id uuid REFERENCES rastreadores(id),
-  status text NOT NULL DEFAULT 'aguardando_contato'
-    CHECK (status IN ('aguardando_contato','em_tratativa','agendado','visita_realizada','resolvido_sem_visita')),
+  tratativa_id uuid NOT NULL REFERENCES manutencao_tratativas(id) ON DELETE CASCADE,
+  etapa text NOT NULL, -- 'contato', 'validacao', 'decisao'
+  acao text NOT NULL,  -- ex: 'contato_registrado', 'situacao_veiculo_parado', 'resolvido_sem_visita'
+  dados jsonb DEFAULT '{}', -- canal, resposta, observacoes, etc.
   criado_por uuid REFERENCES profiles(id),
-  observacoes text,
-  data_agendamento timestamptz,
-  created_at timestamptz DEFAULT now(),
-  updated_at timestamptz DEFAULT now()
+  created_at timestamptz DEFAULT now()
 );
 ```
 
-+ RLS para authenticated (select/insert/update)
++ Adicionar coluna `etapa_atual` (text, default 'contato') na tabela `manutencao_tratativas` para rastrear em qual etapa o operador está.
 
-### 2. Hook `useManutencaoRastreadores.ts`
+### 2. Hook `useTratativaDrawer.ts`
 
-- Query 1: `view_rastreadores_posicao` com filtro `horas_sem_comunicacao >= 72` e `status = 'instalado'`
-- Query 2: `manutencao_tratativas` do periodo selecionado
-- Query 3: `sinistros` com `veiculo_id` in lista, status NOT IN (`cancelado`, `encerrado`, `negado`) — flag `temEventoAberto`
-- Query 4: `view_inadimplentes` com `associado_id` in lista — flag `inadimplente`
-- Merge client-side e calcula metricas dos 4 cards
-- Filtros: busca (nome/placa), status, periodo
+- Recebe `tratativaId` e `veiculoId`
+- Query: dados da tratativa + logs ordenados por `created_at`
+- Mutations:
+  - `registrarContato(canal, dataHora, resposta)` → insere log etapa 'contato', atualiza tratativa para `etapa_atual = 'validacao'` e `status = 'em_tratativa'`
+  - `registrarValidacao(situacao, dados)` → insere log etapa 'validacao', atualiza `etapa_atual = 'decisao'`
+  - `resolverSemVisita()` → insere log etapa 'decisao', atualiza `status = 'resolvido_sem_visita'`
+  - `confirmarFalha()` → insere log etapa 'decisao', atualiza `status = 'agendado'` (agendamento vem no próximo prompt)
 
-### 3. Componente `ManutencaoRastreadoresTab.tsx`
+### 3. Componente `TratativaDrawer.tsx`
 
-Componente lazy-loaded com:
-- **4 cards**: Aguardando contato (cinza), Em tratativa (amarelo), Agendados (azul), Concluidos hoje (verde)
-- **Filtros**: Input busca + Select status (6 opcoes) + Select periodo (4 opcoes)
-- **Tabela**: Associado | Placa | Modelo | Ultimo ponto | Dias sem pontuar | Status (badge colorido) | Acoes
-- Botao "Iniciar tratativa":
-  - Desabilitado + tooltip "Veiculo com evento em aberto" se `temEventoAberto`
-  - Desabilitado + tooltip "Associado inadimplente" se `inadimplente`
-  - Azul ativo se elegivel
-- Ao clicar, insere registro em `manutencao_tratativas` com status `aguardando_contato` (fluxo completo vem no proximo prompt)
+Drawer (Sheet side="right", largura ~480px) com:
 
-### 4. `VistoriasInstalacoesMon.tsx`
+**Cabeçalho fixo:**
+- Nome do associado, placa, último ponto, dias sem pontuar
 
-- Importar `ManutencaoRastreadoresTab` via lazy
-- Adicionar TabsTrigger "Manutencao" com icone `Settings` apos "Viagens"
-- Adicionar TabsContent correspondente
+**Indicador de progresso:** 3 steps (Contato → Validação → Decisão) com visual de step indicator
 
-### 5. Sem alteracao no sidebar
+**Conteúdo por etapa:**
 
-A aba fica acessivel dentro de Servicos de Campo — sem novo item de menu.
+- **Etapa 1 (Contato):** Select canal (WhatsApp/Ligação/SMS), DateTimePicker, Textarea "Resposta do associado" (obrigatório), Botão "Avançar para validação"
+- **Etapa 2 (Validação):** 2 cards clicáveis (Veículo parado / Uso diário). Veículo parado → pergunta "pode movimentar?" com sub-fluxo. Uso diário → campos de segunda validação.
+- **Etapa 3 (Decisão):** Botão verde "Resolvido sem visita" + Botão laranja "Confirmar falha — agendar visita técnica" (apenas marca status, agendamento no próximo prompt)
+
+**Histórico (parte inferior):** Timeline dos logs com data, operador e ação.
+
+### 4. Integração no `ManutencaoRastreadoresTab.tsx`
+
+- State `selectedVeiculo` para controlar abertura do drawer
+- Botão "Iniciar tratativa" abre o drawer (após criar o registro, ou abre direto se já existe tratativa)
+- Linhas com status != `sem_tratativa` ganham botão "Continuar tratativa" que abre o drawer na etapa atual
 
 ## Arquivos
 
-- **Criado**: migration SQL
-- **Criado**: `src/hooks/useManutencaoRastreadores.ts`
-- **Criado**: `src/components/monitoramento/manutencao-rastreadores/ManutencaoRastreadoresTab.tsx`
-- **Modificado**: `src/pages/monitoramento/VistoriasInstalacoesMon.tsx`
+- **Criado**: migration SQL (tabela logs + coluna etapa_atual)
+- **Criado**: `src/hooks/useTratativaDrawer.ts`
+- **Criado**: `src/components/monitoramento/manutencao-rastreadores/TratativaDrawer.tsx`
+- **Modificado**: `src/components/monitoramento/manutencao-rastreadores/ManutencaoRastreadoresTab.tsx`
 
