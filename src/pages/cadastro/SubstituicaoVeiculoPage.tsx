@@ -109,6 +109,7 @@ export default function SubstituicaoVeiculoPage() {
     });
 
     setSubstituicaoId(result.id);
+    setTokenPublico((result as any).token_publico || null);
     return result.id;
   };
 
