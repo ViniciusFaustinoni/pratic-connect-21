@@ -331,8 +331,8 @@ serve(async (req) => {
         .lte('data_agendada', amanha)
         .not('latitude', 'is', null)
         .not('longitude', 'is', null)
-        // FILTRO DE CONFIRMAÇÃO: Só atribuir serviços confirmados ou sem fluxo de confirmação
-        .or('confirmacao_whatsapp.is.null,confirmacao_whatsapp.eq.confirmada');
+        // FILTRO DE CONFIRMAÇÃO: Só atribuir serviços CONFIRMADOS (obrigatório passar pela confirmação)
+        .eq('confirmacao_whatsapp', 'confirmada');
 
       if (servicosNormaisError) {
         console.error('[cron-atribuir-tarefas] Erro ao buscar serviços normais:', servicosNormaisError);
