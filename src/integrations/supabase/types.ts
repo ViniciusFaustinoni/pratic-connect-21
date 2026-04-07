@@ -14974,11 +14974,21 @@ export type Database = {
           created_at: string | null
           criado_por: string | null
           data_agendamento: string | null
+          endereco_referencia: string | null
+          endereco_texto: string | null
+          endereco_tipo: string | null
           etapa_atual: string
           id: string
           observacoes: string | null
+          observacoes_tecnico: string | null
+          periodo_agendamento: string | null
           rastreador_id: string | null
+          servico_id: string | null
           status: string
+          taxa_visita_aplicar: boolean | null
+          taxa_visita_observacao: string | null
+          tecnico_id: string | null
+          tipos_ocorrencia: string[] | null
           updated_at: string | null
           veiculo_id: string
         }
@@ -14987,11 +14997,21 @@ export type Database = {
           created_at?: string | null
           criado_por?: string | null
           data_agendamento?: string | null
+          endereco_referencia?: string | null
+          endereco_texto?: string | null
+          endereco_tipo?: string | null
           etapa_atual?: string
           id?: string
           observacoes?: string | null
+          observacoes_tecnico?: string | null
+          periodo_agendamento?: string | null
           rastreador_id?: string | null
+          servico_id?: string | null
           status?: string
+          taxa_visita_aplicar?: boolean | null
+          taxa_visita_observacao?: string | null
+          tecnico_id?: string | null
+          tipos_ocorrencia?: string[] | null
           updated_at?: string | null
           veiculo_id: string
         }
@@ -15000,11 +15020,21 @@ export type Database = {
           created_at?: string | null
           criado_por?: string | null
           data_agendamento?: string | null
+          endereco_referencia?: string | null
+          endereco_texto?: string | null
+          endereco_tipo?: string | null
           etapa_atual?: string
           id?: string
           observacoes?: string | null
+          observacoes_tecnico?: string | null
+          periodo_agendamento?: string | null
           rastreador_id?: string | null
+          servico_id?: string | null
           status?: string
+          taxa_visita_aplicar?: boolean | null
+          taxa_visita_observacao?: string | null
+          tecnico_id?: string | null
+          tipos_ocorrencia?: string[] | null
           updated_at?: string | null
           veiculo_id?: string
         }
@@ -15092,6 +15122,34 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "view_rastreadores_posicao"
             referencedColumns: ["rastreador_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_servico_id_fkey"
+            columns: ["servico_id"]
+            isOneToOne: false
+            referencedRelation: "servicos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_tecnico_id_fkey"
+            columns: ["tecnico_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_tecnico_id_fkey"
+            columns: ["tecnico_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_tecnico_id_fkey"
+            columns: ["tecnico_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
           },
           {
             foreignKeyName: "manutencao_tratativas_veiculo_id_fkey"
