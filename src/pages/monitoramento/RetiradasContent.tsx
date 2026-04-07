@@ -1,9 +1,10 @@
 // Re-exports RetiradasPage content for embedding as a tab
 // The full page has its own header; when embedded we skip it
-import { useState, useMemo } from 'react';
-import { format } from 'date-fns';
+import { useState, useMemo, useEffect } from 'react';
+import { format, differenceInHours, isPast } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { useQueryClient } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
 import {
   Search, MoreHorizontal, Calendar, User, Car, MapPin,
   Clock, CheckCircle, XCircle, RefreshCw, AlertTriangle,
