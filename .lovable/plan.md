@@ -1,57 +1,72 @@
 
 
-# Plano: Clonar 18 planos Select para linha Lançamento
+# Plano: Aba "Manutenção" dentro de Serviços de Campo
 
-## Situação Atual
+## Contexto
 
-**Linha SELECT** (18 planos): Basic, Premium, Exclusive — cada um com variantes Deságio 70%, Deságio 75%, Diesel, Diesel Deságio 70%, Diesel Deságio 75%.
+A pagina "Serviços de Campo" (`VistoriasInstalacoesMon.tsx`) ja agrupa abas de Instalacoes, Vistorias, Retiradas, Encaixes, Viagens e Historico. A nova funcionalidade sera uma **aba adicional** nessa mesma pagina, sem criar rotas ou paginas novas.
 
-**Linha LANÇAMENTO** (3 planos): Basic, Exclusive, Premium — sem variantes Deságio ou Diesel.
+A view `view_rastreadores_posicao` ja possui `horas_sem_comunicacao`, `associado_id`, `veiculo_id`, `associado_nome`, `placa`, `modelo`, `marca` — tudo necessario para a listagem.
 
-## O que será feito
+## Alteracoes
 
-Criar **15 novos planos** na linha Lançamento (os 3 base já existem), clonando a estrutura da Select com as seguintes diferenças:
+### 1. Banco de dados — tabela `manutencao_tratativas`
 
-| Configuração | Select | Lançamento |
-|---|---|---|
-| `product_line_id` | `66f8d697...` (SELECT) | `4ed27b6d...` (LANÇAMENTO) |
-| `fipe_minima` | `0.00` | `50000.00` |
-| Nome | "Select X" | "Lançamento X" |
-| Coberturas | Select (9 variantes) | Lançamento (9 coberturas fixas) |
-| Benefícios | Por tier | Mesmo do tier correspondente |
+Nova tabela para persistir o status de cada tratativa:
 
-### 15 planos novos
-
-```text
-Lançamento Basic - Deságio 75%
-Lançamento Basic - Deságio 70%
-Lançamento Basic Diesel
-Lançamento Basic Diesel - Deságio 75%
-Lançamento Basic Diesel - Deságio 70%
-Lançamento Premium - Deságio 75%
-Lançamento Premium - Deságio 70%
-Lançamento Premium Diesel
-Lançamento Premium Diesel - Deságio 75%
-Lançamento Premium Diesel - Deságio 70%
-Lançamento Exclusive - Deságio 70%
-Lançamento Exclusive - Deságio 75%
-Lançamento Exclusive Diesel
-Lançamento Exclusive Diesel - Deságio 75%
-Lançamento Exclusive Diesel - Deságio 70%
+```sql
+CREATE TABLE manutencao_tratativas (
+  id uuid PRIMARY KEY DEFAULT gen_random_uuid(),
+  veiculo_id uuid NOT NULL REFERENCES veiculos(id),
+  associado_id uuid NOT NULL REFERENCES associados(id),
+  rastreador_id uuid REFERENCES rastreadores(id),
+  status text NOT NULL DEFAULT 'aguardando_contato'
+    CHECK (status IN ('aguardando_contato','em_tratativa','agendado','visita_realizada','resolvido_sem_visita')),
+  criado_por uuid REFERENCES profiles(id),
+  observacoes text,
+  data_agendamento timestamptz,
+  created_at timestamptz DEFAULT now(),
+  updated_at timestamptz DEFAULT now()
+);
 ```
 
-### Para cada plano novo, serão inseridos:
++ RLS para authenticated (select/insert/update)
 
-1. **`planos`** — clone de todas as colunas do plano Select correspondente, com `nome`, `codigo`, `product_line_id` e `fipe_minima` ajustados
-2. **`planos_coberturas`** — as 9 coberturas Lançamento (Roubo, Colisão, Furto, Incêndio, Perda Total, Alagamento, Chuva de Granizo, 100% FIPE Deságio, Taxa Administrativa)
-3. **`planos_beneficios`** — mesmos benefícios do plano Select de referência (Rastreador, Assistência, Danos a Terceiros, etc. conforme o tier)
-4. **`planos_regioes`** — mesmas regiões do plano Select de referência (quando aplicável)
+### 2. Hook `useManutencaoRastreadores.ts`
 
-### Atualização dos 3 planos existentes
+- Query 1: `view_rastreadores_posicao` com filtro `horas_sem_comunicacao >= 72` e `status = 'instalado'`
+- Query 2: `manutencao_tratativas` do periodo selecionado
+- Query 3: `sinistros` com `veiculo_id` in lista, status NOT IN (`cancelado`, `encerrado`, `negado`) — flag `temEventoAberto`
+- Query 4: `view_inadimplentes` com `associado_id` in lista — flag `inadimplente`
+- Merge client-side e calcula metricas dos 4 cards
+- Filtros: busca (nome/placa), status, periodo
 
-Os 3 planos Lançamento existentes (Basic, Exclusive, Premium) já têm coberturas e benefícios corretos. Será verificado se `fipe_minima = 50000` (já está correto).
+### 3. Componente `ManutencaoRastreadoresTab.tsx`
 
-## Execução
+Componente lazy-loaded com:
+- **4 cards**: Aguardando contato (cinza), Em tratativa (amarelo), Agendados (azul), Concluidos hoje (verde)
+- **Filtros**: Input busca + Select status (6 opcoes) + Select periodo (4 opcoes)
+- **Tabela**: Associado | Placa | Modelo | Ultimo ponto | Dias sem pontuar | Status (badge colorido) | Acoes
+- Botao "Iniciar tratativa":
+  - Desabilitado + tooltip "Veiculo com evento em aberto" se `temEventoAberto`
+  - Desabilitado + tooltip "Associado inadimplente" se `inadimplente`
+  - Azul ativo se elegivel
+- Ao clicar, insere registro em `manutencao_tratativas` com status `aguardando_contato` (fluxo completo vem no proximo prompt)
 
-Tudo via SQL (INSERT) usando o insert tool — operação puramente de dados, sem alteração de código.
+### 4. `VistoriasInstalacoesMon.tsx`
+
+- Importar `ManutencaoRastreadoresTab` via lazy
+- Adicionar TabsTrigger "Manutencao" com icone `Settings` apos "Viagens"
+- Adicionar TabsContent correspondente
+
+### 5. Sem alteracao no sidebar
+
+A aba fica acessivel dentro de Servicos de Campo — sem novo item de menu.
+
+## Arquivos
+
+- **Criado**: migration SQL
+- **Criado**: `src/hooks/useManutencaoRastreadores.ts`
+- **Criado**: `src/components/monitoramento/manutencao-rastreadores/ManutencaoRastreadoresTab.tsx`
+- **Modificado**: `src/pages/monitoramento/VistoriasInstalacoesMon.tsx`
 
