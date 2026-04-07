@@ -74,11 +74,12 @@ serve(async (req) => {
       console.error(`[plate-lookup] Erro de conexão:`, fetchError);
       return new Response(
         JSON.stringify({ 
-          success: false, 
+          success: false,
+          rateLimited: false,
           error: 'Serviço de consulta de placas indisponível. Preencha os dados manualmente.' 
         }),
         { 
-          status: 503, 
+          status: 200,
           headers: { ...corsHeaders, 'Content-Type': 'application/json' } 
         }
       );
@@ -102,19 +103,19 @@ serve(async (req) => {
       if (response.status === 403) {
         return new Response(
           JSON.stringify({ success: false, error: "Chave de API sem créditos. Preencha os dados manualmente.", rateLimited: true }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       if (response.status === 429 || response.status === 439) {
         return new Response(
           JSON.stringify({ success: false, error: "Limite de consultas excedido. Preencha os dados manualmente.", rateLimited: true }),
-          { status: 429, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       if (response.status === 404) {
         return new Response(
-          JSON.stringify({ success: false, error: "Veículo não encontrado na base de dados." }),
-          { status: 404, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+          JSON.stringify({ success: false, error: "Veículo não encontrado na base de dados.", rateLimited: false }),
+          { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
         );
       }
       
@@ -122,7 +123,10 @@ serve(async (req) => {
       try { errorBody = await response.text(); } catch (_) {}
       console.error(`[plate-lookup] Corpo do erro: ${errorBody}`);
       
-      throw new Error(`Erro na consulta de placa (código ${response.status}). Tente novamente em instantes.`);
+      return new Response(
+        JSON.stringify({ success: false, error: `Erro na consulta de placa (código ${response.status}). Tente novamente em instantes.`, rateLimited: false }),
+        { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
     }
 
     const apiData = await response.json();
