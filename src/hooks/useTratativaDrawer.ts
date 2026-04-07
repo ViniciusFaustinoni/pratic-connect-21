@@ -243,10 +243,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
           data_agendamento: new Date(dataStr).toISOString(),
           periodo_agendamento: params.periodo,
           tecnico_id: params.tecnicoId,
-          tipos_ocorrencia: params.tiposOcorrencia,
           observacoes_tecnico: params.observacoesTecnico || null,
-          taxa_visita_aplicar: params.taxaVisitaAplicar,
-          taxa_visita_observacao: params.taxaVisitaObservacao || null,
           servico_id: servico.id,
           updated_at: new Date().toISOString(),
         } as any)
