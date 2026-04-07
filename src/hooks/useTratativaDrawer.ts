@@ -6,7 +6,8 @@ import { format } from 'date-fns';
 
 // Helper: get user ID only if it exists in profiles (avoids FK errors)
 async function getSafeCriadoPor(): Promise<string | null> {
-  const userId = await getSafeCriadoPor();
+  const { data: user } = await supabase.auth.getUser();
+  const userId = user.user?.id || null;
   if (!userId) return null;
   const { data: profile } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
   return profile ? userId : null;
