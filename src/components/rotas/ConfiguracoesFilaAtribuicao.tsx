@@ -54,7 +54,7 @@ function useConfiguracoesFilaAtribuicao() {
 
       if (error) {
         console.warn('[useConfiguracoesFilaAtribuicao] Erro:', error);
-        return { ...DEFAULTS, ativo: true };
+        return { ...DEFAULTS, ativo: true, manualAtivo: false };
       }
 
       const config: FilaConfig & { ativo: boolean; manualAtivo: boolean } = { ...DEFAULTS, ativo: true, manualAtivo: false };
