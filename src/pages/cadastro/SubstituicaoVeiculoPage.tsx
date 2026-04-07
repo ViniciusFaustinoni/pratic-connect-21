@@ -2,7 +2,7 @@ import { useState, useMemo } from 'react';
 import { useParams, useNavigate, Link, useLocation } from 'react-router-dom';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
-import { Loader2, ArrowLeft, Home, ChevronRight, UserCheck, UserX, Car, RefreshCw, CreditCard } from 'lucide-react';
+import { Loader2, ArrowLeft, Home, ChevronRight, UserCheck, UserX, Car, RefreshCw, CreditCard, Copy, ExternalLink } from 'lucide-react';
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
