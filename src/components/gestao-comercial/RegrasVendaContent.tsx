@@ -522,6 +522,10 @@ export function RegrasVendaContent() {
           <UserPlus className="h-4 w-4" />
           Indicação
         </TabsTrigger>
+        <TabsTrigger value="cancelamento" className="gap-2">
+          <Ban className="h-4 w-4" />
+          Cancelamento
+        </TabsTrigger>
       </TabsList>
 
       {/* ═══════════ ABA PONTUAÇÃO ═══════════ */}
