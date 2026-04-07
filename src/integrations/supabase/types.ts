@@ -14979,10 +14979,13 @@ export type Database = {
           endereco_tipo: string | null
           etapa_atual: string
           id: string
+          imei_novo: string | null
+          imei_retirado: string | null
           observacoes: string | null
           observacoes_tecnico: string | null
           periodo_agendamento: string | null
           rastreador_id: string | null
+          rastreador_trocado: boolean | null
           servico_id: string | null
           status: string
           taxa_visita_aplicar: boolean | null
@@ -14991,6 +14994,11 @@ export type Database = {
           tipos_ocorrencia: string[] | null
           updated_at: string | null
           veiculo_id: string
+          visita_data_hora: string | null
+          visita_descricao: string | null
+          visita_resultado: string | null
+          visita_tecnico_id: string | null
+          voltou_pontuar: string | null
         }
         Insert: {
           associado_id: string
@@ -15002,10 +15010,13 @@ export type Database = {
           endereco_tipo?: string | null
           etapa_atual?: string
           id?: string
+          imei_novo?: string | null
+          imei_retirado?: string | null
           observacoes?: string | null
           observacoes_tecnico?: string | null
           periodo_agendamento?: string | null
           rastreador_id?: string | null
+          rastreador_trocado?: boolean | null
           servico_id?: string | null
           status?: string
           taxa_visita_aplicar?: boolean | null
@@ -15014,6 +15025,11 @@ export type Database = {
           tipos_ocorrencia?: string[] | null
           updated_at?: string | null
           veiculo_id: string
+          visita_data_hora?: string | null
+          visita_descricao?: string | null
+          visita_resultado?: string | null
+          visita_tecnico_id?: string | null
+          voltou_pontuar?: string | null
         }
         Update: {
           associado_id?: string
@@ -15025,10 +15041,13 @@ export type Database = {
           endereco_tipo?: string | null
           etapa_atual?: string
           id?: string
+          imei_novo?: string | null
+          imei_retirado?: string | null
           observacoes?: string | null
           observacoes_tecnico?: string | null
           periodo_agendamento?: string | null
           rastreador_id?: string | null
+          rastreador_trocado?: boolean | null
           servico_id?: string | null
           status?: string
           taxa_visita_aplicar?: boolean | null
@@ -15037,6 +15056,11 @@ export type Database = {
           tipos_ocorrencia?: string[] | null
           updated_at?: string | null
           veiculo_id?: string
+          visita_data_hora?: string | null
+          visita_descricao?: string | null
+          visita_resultado?: string | null
+          visita_tecnico_id?: string | null
+          voltou_pontuar?: string | null
         }
         Relationships: [
           {
@@ -15185,6 +15209,27 @@ export type Database = {
             isOneToOne: false
             referencedRelation: "vw_veiculos_com_cotas"
             referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_visita_tecnico_id_fkey"
+            columns: ["visita_tecnico_id"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_visita_tecnico_id_fkey"
+            columns: ["visita_tecnico_id"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_visita_tecnico_id_fkey"
+            columns: ["visita_tecnico_id"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
           },
         ]
       }

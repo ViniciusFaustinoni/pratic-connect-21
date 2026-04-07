@@ -17,7 +17,8 @@ const statusConfig: Record<string, { label: string; variant: string; className: 
   aguardando_contato: { label: 'Aguardando contato', variant: 'secondary', className: 'bg-muted text-muted-foreground' },
   em_tratativa: { label: 'Em tratativa', variant: 'outline', className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
   agendado: { label: 'Agendado', variant: 'outline', className: 'bg-blue-100 text-blue-800 border-blue-300' },
-  visita_realizada: { label: 'Visita realizada', variant: 'outline', className: 'bg-purple-100 text-purple-800 border-purple-300' },
+  visita_realizada: { label: 'Concluído ✅', variant: 'outline', className: 'bg-green-100 text-green-800 border-green-300' },
+  acompanhamento: { label: 'Acompanhamento 🔄', variant: 'outline', className: 'bg-orange-100 text-orange-800 border-orange-300' },
   resolvido_sem_visita: { label: 'Resolvido s/ visita', variant: 'outline', className: 'bg-green-100 text-green-800 border-green-300' },
 };
 
@@ -99,7 +100,8 @@ export default function ManutencaoRastreadoresTab() {
             <SelectItem value="aguardando_contato">Contatado</SelectItem>
             <SelectItem value="em_tratativa">Em tratativa</SelectItem>
             <SelectItem value="agendado">Agendado</SelectItem>
-            <SelectItem value="visita_realizada">Visita realizada</SelectItem>
+            <SelectItem value="visita_realizada">Concluído</SelectItem>
+            <SelectItem value="acompanhamento">Acompanhamento</SelectItem>
             <SelectItem value="resolvido_sem_visita">Resolvido s/ visita</SelectItem>
           </SelectContent>
         </Select>
@@ -135,7 +137,8 @@ export default function ManutencaoRastreadoresTab() {
               {veiculos.map((v) => {
                 const cfg = statusConfig[v.status] || statusConfig.sem_tratativa;
                 const canInitiate = !v.temEventoAberto && !v.inadimplente && (v.status === 'sem_tratativa');
-                const hasActiveTratativa = v.status !== 'sem_tratativa' && v.status !== 'resolvido_sem_visita' && v.status !== 'visita_realizada';
+                const hasActiveTratativa = v.status !== 'sem_tratativa' && v.status !== 'resolvido_sem_visita' && v.status !== 'visita_realizada' && v.status !== 'acompanhamento';
+                const isAgendadoComServico = v.status === 'agendado' && v.tratativaId;
                 const disabledReason = v.temEventoAberto
                   ? 'Veículo com evento em aberto'
                   : v.inadimplente
@@ -197,9 +200,16 @@ export default function ManutencaoRastreadoresTab() {
                           </Tooltip>
                         </TooltipProvider>
                       ) : hasActiveTratativa ? (
-                        <Button size="sm" variant="outline" onClick={() => handleContinuarTratativa(v)}>
-                          Continuar tratativa
-                        </Button>
+                        <div className="flex gap-1 justify-end">
+                          {isAgendadoComServico && (
+                            <Button size="sm" variant="default" className="bg-orange-500 hover:bg-orange-600 text-white" onClick={() => handleContinuarTratativa(v)}>
+                              Registrar visita
+                            </Button>
+                          )}
+                          <Button size="sm" variant="outline" onClick={() => handleContinuarTratativa(v)}>
+                            Continuar tratativa
+                          </Button>
+                        </div>
                       ) : (
                         <Button size="sm" variant="ghost" onClick={() => handleContinuarTratativa(v)}>
                           Ver detalhes

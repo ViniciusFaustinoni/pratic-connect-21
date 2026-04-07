@@ -274,6 +274,99 @@ export function useTratativaDrawer(tratativaId: string | null) {
     onError: (err: Error) => toast.error('Erro: ' + err.message),
   });
 
+  // New: registrar resultado da visita
+  const registrarVisita = useMutation({
+    mutationFn: async (params: {
+      visitaDataHora: string;
+      visitaTecnicoId: string | null;
+      visitaResultado: string;
+      visitaDescricao: string;
+      rastreadorTrocado: boolean;
+      imeiNovo: string;
+      imeiRetirado: string;
+      taxaVisitaAplicar: boolean;
+      taxaVisitaObservacao: string;
+      voltouPontuar: string;
+    }) => {
+      if (!tratativa) throw new Error('Tratativa não encontrada');
+      const { data: user } = await supabase.auth.getUser();
+      const userId = user.user?.id || null;
+
+      const novoStatus = params.voltouPontuar === 'sim' ? 'visita_realizada' : 'acompanhamento';
+
+      // Update tratativa
+      const { error: tErr } = await supabase
+        .from('manutencao_tratativas')
+        .update({
+          visita_data_hora: new Date(params.visitaDataHora).toISOString(),
+          visita_tecnico_id: params.visitaTecnicoId,
+          visita_resultado: params.visitaResultado,
+          visita_descricao: params.visitaDescricao,
+          rastreador_trocado: params.rastreadorTrocado,
+          imei_novo: params.imeiNovo || null,
+          imei_retirado: params.imeiRetirado || null,
+          taxa_visita_aplicar: params.taxaVisitaAplicar,
+          taxa_visita_observacao: params.taxaVisitaObservacao || null,
+          voltou_pontuar: params.voltouPontuar,
+          status: novoStatus,
+          updated_at: new Date().toISOString(),
+        } as any)
+        .eq('id', tratativaId!);
+      if (tErr) throw tErr;
+
+      // Update servico to concluido
+      const tAny = tratativa as any;
+      if (tAny.servico_id) {
+        await supabase
+          .from('servicos')
+          .update({ status: 'concluido' as any, updated_at: new Date().toISOString() } as any)
+          .eq('id', tAny.servico_id);
+      }
+
+      // Log
+      const { error: logErr } = await supabase
+        .from('manutencao_tratativa_logs')
+        .insert({
+          tratativa_id: tratativaId!,
+          etapa: 'visita',
+          acao: 'visita_realizada',
+          dados: {
+            resultado: params.visitaResultado,
+            descricao: params.visitaDescricao.slice(0, 120),
+            rastreador_trocado: params.rastreadorTrocado,
+            voltou_pontuar: params.voltouPontuar,
+            taxa_aplicada: params.taxaVisitaAplicar,
+          } as unknown as Json,
+          criado_por: userId,
+        });
+      if (logErr) throw logErr;
+    },
+    onSuccess: () => { toast.success('Manutenção encerrada com sucesso'); invalidate(); },
+    onError: (err: Error) => toast.error('Erro: ' + err.message),
+  });
+
+  // New: abrir nova tratativa
+  const abrirNovaTratativa = useMutation({
+    mutationFn: async () => {
+      if (!tratativa) throw new Error('Tratativa não encontrada');
+      const { data: user } = await supabase.auth.getUser();
+      const userId = user.user?.id || null;
+      const { error } = await supabase
+        .from('manutencao_tratativas')
+        .insert({
+          veiculo_id: tratativa.veiculo_id,
+          associado_id: tratativa.associado_id,
+          rastreador_id: tratativa.rastreador_id,
+          status: 'aguardando_contato',
+          etapa_atual: 'contato',
+          criado_por: userId,
+        } as any);
+      if (error) throw error;
+    },
+    onSuccess: () => { toast.success('Nova tratativa criada'); invalidate(); },
+    onError: (err: Error) => toast.error('Erro: ' + err.message),
+  });
+
   const etapaAtual = (tratativa as any)?.etapa_atual || 'contato';
 
   return {
@@ -285,5 +378,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
     resolverSemVisita,
     confirmarFalha,
     confirmarAgendamento,
+    registrarVisita,
+    abrirNovaTratativa,
   };
 }

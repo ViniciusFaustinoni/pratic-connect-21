@@ -20,6 +20,8 @@ import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import AgendamentoManutencaoForm from './AgendamentoManutencaoForm';
 import CardConfirmacaoAgendamento from './CardConfirmacaoAgendamento';
+import ResultadoVisitaForm from './ResultadoVisitaForm';
+import CardEncerramentoVisita from './CardEncerramentoVisita';
 
 interface TratativaDrawerProps {
   open: boolean;
@@ -55,7 +57,7 @@ export default function TratativaDrawer({ open, onOpenChange, veiculo }: Tratati
 }
 
 function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose: () => void }) {
-  const { tratativa, logs, etapaAtual, registrarContato, registrarValidacao, resolverSemVisita, confirmarFalha, confirmarAgendamento } =
+  const { tratativa, logs, etapaAtual, registrarContato, registrarValidacao, resolverSemVisita, confirmarFalha, confirmarAgendamento, registrarVisita, abrirNovaTratativa } =
     useTratativaDrawer(veiculo.tratativaId);
 
   const [reagendar, setReagendar] = useState(false);
@@ -90,11 +92,27 @@ function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose
   const etapaIndex = getEtapaIndex(etapaAtual);
   const tAny = tratativa as any;
   const isAgendado = tAny?.status === 'agendado';
+  const isVisitaRealizada = tAny?.status === 'visita_realizada';
+  const isAcompanhamento = tAny?.status === 'acompanhamento';
+  const isFinalStatus = isVisitaRealizada || isAcompanhamento;
   const temServico = !!tAny?.servico_id;
+  const temResultadoVisita = !!tAny?.visita_resultado;
 
   const enderecoResumido = tAny?.endereco_tipo === 'cadastro'
     ? [associadoInfo?.logradouro, associadoInfo?.numero, associadoInfo?.bairro, associadoInfo?.cidade].filter(Boolean).join(', ')
     : tAny?.endereco_texto || '—';
+
+  // Fetch visit technician name
+  const visitaTecnicoId = tAny?.visita_tecnico_id;
+  const { data: visitaTecnicoInfo } = useQuery({
+    queryKey: ['tecnico-visita-nome', visitaTecnicoId],
+    queryFn: async () => {
+      if (!visitaTecnicoId) return null;
+      const { data } = await supabase.from('profiles').select('nome').eq('id', visitaTecnicoId).single();
+      return data;
+    },
+    enabled: !!visitaTecnicoId,
+  });
 
   return (
     <div className="flex flex-col gap-4 mt-4">
@@ -159,15 +177,33 @@ function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose
         />
       )}
       {etapaAtual === 'concluido' && isAgendado && temServico && !reagendar && (
-        <CardConfirmacaoAgendamento
-          tratativa={tAny}
-          tecnicoNome={tecnicoInfo?.nome || 'A definir'}
-          associadoNome={associadoInfo?.nome || veiculo.associadoNome}
-          associadoTelefone={associadoInfo?.telefone || ''}
-          placa={veiculo.placa}
-          enderecoResumido={enderecoResumido}
-          onReagendar={() => setReagendar(true)}
-        />
+        <>
+          <CardConfirmacaoAgendamento
+            tratativa={tAny}
+            tecnicoNome={tecnicoInfo?.nome || 'A definir'}
+            associadoNome={associadoInfo?.nome || veiculo.associadoNome}
+            associadoTelefone={associadoInfo?.telefone || ''}
+            placa={veiculo.placa}
+            enderecoResumido={enderecoResumido}
+            onReagendar={() => setReagendar(true)}
+          />
+          {/* Result form if visit not yet registered */}
+          {!temResultadoVisita && (
+            <ResultadoVisitaForm
+              tecnicoAgendadoId={tAny.tecnico_id}
+              onSubmit={(data) => registrarVisita.mutate(data)}
+              isPending={registrarVisita.isPending}
+            />
+          )}
+          {/* Encerramento card if visit was registered */}
+          {temResultadoVisita && (
+            <CardEncerramentoVisita
+              tratativa={tAny}
+              tecnicoNome={visitaTecnicoInfo?.nome || tecnicoInfo?.nome || 'Não identificado'}
+              onAbrirNovaTratativa={() => abrirNovaTratativa.mutate()}
+            />
+          )}
+        </>
       )}
       {etapaAtual === 'concluido' && isAgendado && temServico && reagendar && (
         <AgendamentoManutencaoForm
@@ -190,7 +226,15 @@ function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose
           }}
         />
       )}
-      {etapaAtual === 'concluido' && !isAgendado && (
+      {/* Final statuses: visita_realizada or acompanhamento */}
+      {etapaAtual === 'concluido' && isFinalStatus && (
+        <CardEncerramentoVisita
+          tratativa={tAny}
+          tecnicoNome={visitaTecnicoInfo?.nome || tecnicoInfo?.nome || 'Não identificado'}
+          onAbrirNovaTratativa={isAcompanhamento ? () => abrirNovaTratativa.mutate() : undefined}
+        />
+      )}
+      {etapaAtual === 'concluido' && !isAgendado && !isFinalStatus && (
         <div className="text-center py-6 space-y-2">
           <CheckCircle2 className="h-10 w-10 mx-auto text-green-500" />
           <p className="font-semibold">Tratativa concluída</p>
@@ -430,6 +474,8 @@ function formatAcao(acao: string, dados: Record<string, unknown>): string {
       return '🔧 Falha confirmada — visita técnica agendada';
     case 'agendamento_confirmado':
       return `📅 Agendamento confirmado — ${(dados.data as string) || ''} (${dados.periodo || ''})`;
+    case 'visita_realizada':
+      return `🔧 Visita realizada — ${dados.resultado || ''} (${dados.voltou_pontuar === 'sim' ? 'voltou a pontuar' : dados.voltou_pontuar === 'nao' ? 'não pontuou' : 'aguardando'})`;
     default:
       return acao.replace(/_/g, ' ');
   }

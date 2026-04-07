@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { useMemo, useState } from 'react';
 import { toast } from 'sonner';
 
-export type StatusTratativa = 'aguardando_contato' | 'em_tratativa' | 'agendado' | 'visita_realizada' | 'resolvido_sem_visita';
+export type StatusTratativa = 'aguardando_contato' | 'em_tratativa' | 'agendado' | 'visita_realizada' | 'acompanhamento' | 'resolvido_sem_visita';
 export type FiltroPeriodo = 'hoje' | '3dias' | 'semana' | 'mes';
 
 export interface VeiculoManutencao {
