@@ -57,7 +57,7 @@ export default function TratativaDrawer({ open, onOpenChange, veiculo }: Tratati
 }
 
 function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose: () => void }) {
-  const { tratativa, logs, etapaAtual, registrarContato, registrarValidacao, resolverSemVisita, confirmarFalha, confirmarAgendamento } =
+  const { tratativa, logs, etapaAtual, registrarContato, registrarValidacao, resolverSemVisita, confirmarFalha, confirmarAgendamento, registrarVisita, abrirNovaTratativa } =
     useTratativaDrawer(veiculo.tratativaId);
 
   const [reagendar, setReagendar] = useState(false);
