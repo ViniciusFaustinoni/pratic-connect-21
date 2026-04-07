@@ -27,7 +27,7 @@ export function useConfiguracaoNumero(chave: string, fallback: number) {
   return useConfiguracao(chave, (v) => parseFloat(v) || fallback, fallback);
 }
 
-function useConfiguracaoTexto(chave: string, fallback: string) {
+export function useConfiguracaoTexto(chave: string, fallback: string) {
   return useConfiguracao(chave, (v) => v, fallback);
 }
 
