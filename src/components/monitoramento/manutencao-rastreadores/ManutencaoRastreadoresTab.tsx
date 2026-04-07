@@ -17,7 +17,8 @@ const statusConfig: Record<string, { label: string; variant: string; className: 
   aguardando_contato: { label: 'Aguardando contato', variant: 'secondary', className: 'bg-muted text-muted-foreground' },
   em_tratativa: { label: 'Em tratativa', variant: 'outline', className: 'bg-yellow-100 text-yellow-800 border-yellow-300' },
   agendado: { label: 'Agendado', variant: 'outline', className: 'bg-blue-100 text-blue-800 border-blue-300' },
-  visita_realizada: { label: 'Visita realizada', variant: 'outline', className: 'bg-purple-100 text-purple-800 border-purple-300' },
+  visita_realizada: { label: 'Concluído ✅', variant: 'outline', className: 'bg-green-100 text-green-800 border-green-300' },
+  acompanhamento: { label: 'Acompanhamento 🔄', variant: 'outline', className: 'bg-orange-100 text-orange-800 border-orange-300' },
   resolvido_sem_visita: { label: 'Resolvido s/ visita', variant: 'outline', className: 'bg-green-100 text-green-800 border-green-300' },
 };
 
