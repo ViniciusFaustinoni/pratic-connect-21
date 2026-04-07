@@ -205,6 +205,15 @@ export function useManutencaoRastreadores() {
   const iniciarTratativa = useMutation({
     mutationFn: async (veiculo: VeiculoManutencao) => {
       const { data: user } = await supabase.auth.getUser();
+      const userId = user.user?.id || null;
+      
+      // Verify user exists in profiles before setting criado_por
+      let criadoPor: string | null = null;
+      if (userId) {
+        const { data: profile } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
+        if (profile) criadoPor = userId;
+      }
+      
       const { error } = await supabase
         .from('manutencao_tratativas')
         .insert({
@@ -212,7 +221,7 @@ export function useManutencaoRastreadores() {
           associado_id: veiculo.associadoId,
           rastreador_id: veiculo.rastreadorId,
           status: 'aguardando_contato',
-          criado_por: user.user?.id || null,
+          criado_por: criadoPor,
         });
       if (error) throw error;
     },

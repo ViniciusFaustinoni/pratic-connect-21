@@ -4,6 +4,15 @@ import { toast } from 'sonner';
 import type { Json } from '@/integrations/supabase/types';
 import { format } from 'date-fns';
 
+// Helper: get user ID only if it exists in profiles (avoids FK errors)
+async function getSafeCriadoPor(): Promise<string | null> {
+  const { data: user } = await supabase.auth.getUser();
+  const userId = user.user?.id || null;
+  if (!userId) return null;
+  const { data: profile } = await supabase.from('profiles').select('id').eq('id', userId).maybeSingle();
+  return profile ? userId : null;
+}
+
 export interface TratativaLog {
   id: string;
   etapa: string;
@@ -70,8 +79,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
 
   const registrarContato = useMutation({
     mutationFn: async (params: { canal: string; dataHora: string; resposta: string }) => {
-      const { data: user } = await supabase.auth.getUser();
-      const userId = user.user?.id || null;
+      const userId = await getSafeCriadoPor();
       const { error: logErr } = await supabase
         .from('manutencao_tratativa_logs')
         .insert({
@@ -94,8 +102,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
 
   const registrarValidacao = useMutation({
     mutationFn: async (params: { situacao: string; dados: Record<string, unknown> }) => {
-      const { data: user } = await supabase.auth.getUser();
-      const userId = user.user?.id || null;
+      const userId = await getSafeCriadoPor();
       const { error: logErr } = await supabase
         .from('manutencao_tratativa_logs')
         .insert({
@@ -118,8 +125,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
 
   const resolverSemVisita = useMutation({
     mutationFn: async () => {
-      const { data: user } = await supabase.auth.getUser();
-      const userId = user.user?.id || null;
+      const userId = await getSafeCriadoPor();
       const { error: logErr } = await supabase
         .from('manutencao_tratativa_logs')
         .insert({
@@ -142,8 +148,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
 
   const confirmarFalha = useMutation({
     mutationFn: async () => {
-      const { data: user } = await supabase.auth.getUser();
-      const userId = user.user?.id || null;
+      const userId = await getSafeCriadoPor();
       const { error: logErr } = await supabase
         .from('manutencao_tratativa_logs')
         .insert({
@@ -179,8 +184,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
       taxaVisitaObservacao: string;
     }) => {
       if (!tratativa) throw new Error('Tratativa não encontrada');
-      const { data: user } = await supabase.auth.getUser();
-      const userId = user.user?.id || null;
+      const userId = await getSafeCriadoPor();
 
       // Fetch associado for address
       const { data: assoc } = await supabase
@@ -289,8 +293,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
       voltouPontuar: string;
     }) => {
       if (!tratativa) throw new Error('Tratativa não encontrada');
-      const { data: user } = await supabase.auth.getUser();
-      const userId = user.user?.id || null;
+      const userId = await getSafeCriadoPor();
 
       const novoStatus = params.voltouPontuar === 'sim' ? 'visita_realizada' : 'acompanhamento';
 
@@ -349,8 +352,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
   const abrirNovaTratativa = useMutation({
     mutationFn: async () => {
       if (!tratativa) throw new Error('Tratativa não encontrada');
-      const { data: user } = await supabase.auth.getUser();
-      const userId = user.user?.id || null;
+      const userId = await getSafeCriadoPor();
       const { error } = await supabase
         .from('manutencao_tratativas')
         .insert({
