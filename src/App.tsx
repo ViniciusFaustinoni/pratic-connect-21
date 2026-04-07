@@ -441,6 +441,9 @@ const App = () => (
             {/* Public Proposal Tracking Page */}
             <Route path="/acompanhar/:token" element={<AcompanhamentoProposta />} />
             
+            {/* Public Substitution Page */}
+            <Route path="/substituicao/:token" element={<SubstituicaoPublica />} />
+            
             {/* Public Associate Vistoria Page */}
             <Route path="/associado/:token" element={<AssociadoVistoria />} />
             
