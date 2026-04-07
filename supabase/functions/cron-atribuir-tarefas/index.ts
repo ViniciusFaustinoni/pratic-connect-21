@@ -484,17 +484,34 @@ serve(async (req) => {
 
       // NOVO: Filtrar serviços que ainda não podem ser atribuídos (horário futuro)
       const agoraFiltro = new Date();
-      const servicosFiltrados = todosServicos.filter((s: any) => 
+      const agoraBrasilia = new Date(agoraFiltro.toLocaleString("en-US", { timeZone: "America/Sao_Paulo" }));
+      const horaAtualBrasilia = agoraBrasilia.getHours();
+      const periodoAtual = horaAtualBrasilia < 12 ? 'manha' : 'tarde';
+      
+      let servicosFiltrados = todosServicos.filter((s: any) => 
         podeSerAtribuido(s, agoraFiltro, hoje)
       );
+
+      // FILTRO DE PERÍODO: só atribuir serviços cujo período corresponda ao horário atual
+      const antesFiltroPeriodo = servicosFiltrados.length;
+      servicosFiltrados = servicosFiltrados.filter((s: any) => {
+        if (!s.periodo) return true; // sem período definido = pode ser atribuído
+        if (s.permite_encaixe) return true; // encaixes não têm restrição de período
+        return s.periodo === periodoAtual;
+      });
       
-      const bloqueadosPorHorario = todosServicos.length - servicosFiltrados.length;
+      const bloqueadosPorPeriodo = antesFiltroPeriodo - servicosFiltrados.length;
+      if (bloqueadosPorPeriodo > 0) {
+        console.log(`[cron-atribuir-tarefas] ${bloqueadosPorPeriodo} serviço(s) bloqueados por período (atual: ${periodoAtual})`);
+      }
+      
+      const bloqueadosPorHorario = todosServicos.length - antesFiltroPeriodo;
       if (bloqueadosPorHorario > 0) {
         console.log(`[cron-atribuir-tarefas] ${servicosFiltrados.length} serviços após filtro de horário (${bloqueadosPorHorario} bloqueados por horário futuro)`);
       }
       
       if (servicosFiltrados.length === 0) {
-        console.log(`[cron-atribuir-tarefas] Nenhum serviço disponível no horário atual para profissional ${prof.vistoriador_id}`);
+        console.log(`[cron-atribuir-tarefas] Nenhum serviço disponível no período ${periodoAtual} para profissional ${prof.vistoriador_id}`);
         continue;
       }
 
