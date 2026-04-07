@@ -240,7 +240,9 @@ export function useFipe() {
         if (data?.rateLimited) {
           return { success: false, error: data.error || 'Limite de consultas excedido. Preencha os dados manualmente.' };
         }
-        throw fnError;
+        // For non-2xx responses, the SDK may set fnError but data still has the body
+        // Return gracefully instead of throwing so the UI can handle it
+        return { success: false, error: data?.error || 'Erro ao consultar placa. Preencha os dados manualmente.' };
       }
       
       if (!data?.success) {
