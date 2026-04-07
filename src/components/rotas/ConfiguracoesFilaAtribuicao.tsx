@@ -57,7 +57,7 @@ function useConfiguracoesFilaAtribuicao() {
         return { ...DEFAULTS, ativo: true };
       }
 
-      const config: FilaConfig & { ativo: boolean } = { ...DEFAULTS, ativo: true };
+      const config: FilaConfig & { ativo: boolean; manualAtivo: boolean } = { ...DEFAULTS, ativo: true, manualAtivo: false };
       const map: Record<string, keyof FilaConfig> = {
         fila_raio_proximidade_metros: 'raioProximidade',
         fila_raio_quase_disponivel_metros: 'raioQuaseDisponivel',
