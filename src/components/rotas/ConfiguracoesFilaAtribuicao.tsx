@@ -71,6 +71,8 @@ function useConfiguracoesFilaAtribuicao() {
       data?.forEach((item) => {
         if (item.chave === 'fila_atribuicao_ativa') {
           config.ativo = item.valor !== 'false';
+        } else if (item.chave === 'atribuicao_manual_rotas') {
+          config.manualAtivo = item.valor === 'true';
         } else {
           const key = map[item.chave];
           if (key && item.valor) config[key] = item.valor;
