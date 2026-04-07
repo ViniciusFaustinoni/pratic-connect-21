@@ -1,5 +1,5 @@
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
-import { Wrench, ClipboardCheck, Puzzle, Truck, PackageX, Hand, History } from 'lucide-react';
+import { Wrench, ClipboardCheck, Puzzle, Truck, PackageX, Hand, History, Settings } from 'lucide-react';
 import Instalacoes from './Instalacoes';
 import Vistorias from './Vistorias';
 import MonitoramentoEncaixes from './Encaixes';
@@ -11,6 +11,7 @@ import { Loader2 } from 'lucide-react';
 
 const AtribuicaoManualTab = lazy(() => import('@/components/monitoramento/AtribuicaoManualTab'));
 const HistoricoAtribuicoesTab = lazy(() => import('@/components/monitoramento/HistoricoAtribuicoesTab'));
+const ManutencaoRastreadoresTab = lazy(() => import('@/components/monitoramento/manutencao-rastreadores/ManutencaoRastreadoresTab'));
 
 export default function VistoriasInstalacoesMon() {
   const { data: manualAtiva } = useConfigAtribuicaoManual();
@@ -52,6 +53,10 @@ export default function VistoriasInstalacoesMon() {
             <Truck className="h-4 w-4" />
             Viagens
           </TabsTrigger>
+          <TabsTrigger value="manutencao" className="gap-2">
+            <Settings className="h-4 w-4" />
+            Manutenção
+          </TabsTrigger>
           <TabsTrigger value="historico" className="gap-2">
             <History className="h-4 w-4" />
             Histórico
@@ -84,6 +89,12 @@ export default function VistoriasInstalacoesMon() {
 
         <TabsContent value="viagens">
           <ViagensTab />
+        </TabsContent>
+
+        <TabsContent value="manutencao">
+          <Suspense fallback={<div className="flex justify-center py-12"><Loader2 className="h-6 w-6 animate-spin" /></div>}>
+            <ManutencaoRastreadoresTab />
+          </Suspense>
         </TabsContent>
 
         <TabsContent value="historico">
