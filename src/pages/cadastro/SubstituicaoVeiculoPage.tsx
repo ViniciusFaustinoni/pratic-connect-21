@@ -345,13 +345,52 @@ export default function SubstituicaoVeiculoPage() {
       )}
 
       {currentStep >= 8 && substituicaoId && (
-        <StepConclusao
-          substituicaoId={substituicaoId}
-          associadoId={associadoId!}
-          associadoNome={associado.nome}
-          veiculoAntigoPlaca={veiculoAntigoResumo.placa}
-          onRetry={handleRetry}
-        />
+        <>
+          {tokenPublico && (
+            <Card className="border-primary/20 bg-primary/5">
+              <CardContent className="py-4">
+                <div className="flex flex-col sm:flex-row items-start sm:items-center gap-3">
+                  <div className="flex-1 min-w-0">
+                    <p className="text-sm font-medium text-foreground">Link do associado</p>
+                    <p className="text-xs text-muted-foreground truncate">
+                      {window.location.origin}/substituicao/{tokenPublico}
+                    </p>
+                  </div>
+                  <div className="flex gap-2 shrink-0">
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => {
+                        navigator.clipboard.writeText(`${window.location.origin}/substituicao/${tokenPublico}`);
+                        toast.success('Link copiado!');
+                      }}
+                      className="gap-1.5"
+                    >
+                      <Copy className="h-3.5 w-3.5" />
+                      Copiar
+                    </Button>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      onClick={() => window.open(`/substituicao/${tokenPublico}`, '_blank')}
+                      className="gap-1.5"
+                    >
+                      <ExternalLink className="h-3.5 w-3.5" />
+                      Abrir
+                    </Button>
+                  </div>
+                </div>
+              </CardContent>
+            </Card>
+          )}
+          <StepConclusao
+            substituicaoId={substituicaoId}
+            associadoId={associadoId!}
+            associadoNome={associado.nome}
+            veiculoAntigoPlaca={veiculoAntigoResumo.placa}
+            onRetry={handleRetry}
+          />
+        </>
       )}
 
       {currentStep >= 8 && !substituicaoId && (
