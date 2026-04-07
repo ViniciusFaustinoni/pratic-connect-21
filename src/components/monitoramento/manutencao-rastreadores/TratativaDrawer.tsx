@@ -14,8 +14,12 @@ import {
 import { CheckCircle2, AlertTriangle, Phone, MessageSquare, Mail, Car, Wrench, Clock, ChevronRight } from 'lucide-react';
 import { useTratativaDrawer } from '@/hooks/useTratativaDrawer';
 import { type VeiculoManutencao } from '@/hooks/useManutencaoRastreadores';
-import { format, formatDistanceToNow } from 'date-fns';
+import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { useQuery } from '@tanstack/react-query';
+import { supabase } from '@/integrations/supabase/client';
+import AgendamentoManutencaoForm from './AgendamentoManutencaoForm';
+import CardConfirmacaoAgendamento from './CardConfirmacaoAgendamento';
 
 interface TratativaDrawerProps {
   open: boolean;
@@ -51,10 +55,46 @@ export default function TratativaDrawer({ open, onOpenChange, veiculo }: Tratati
 }
 
 function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose: () => void }) {
-  const { tratativa, logs, etapaAtual, registrarContato, registrarValidacao, resolverSemVisita, confirmarFalha } =
+  const { tratativa, logs, etapaAtual, registrarContato, registrarValidacao, resolverSemVisita, confirmarFalha, confirmarAgendamento } =
     useTratativaDrawer(veiculo.tratativaId);
 
+  const [reagendar, setReagendar] = useState(false);
+
+  // Fetch associado info for confirmation card
+  const { data: associadoInfo } = useQuery({
+    queryKey: ['associado-info-drawer', tratativa?.associado_id],
+    queryFn: async () => {
+      if (!tratativa?.associado_id) return null;
+      const { data } = await supabase
+        .from('associados')
+        .select('nome, telefone, logradouro, numero, bairro, cidade, uf')
+        .eq('id', tratativa.associado_id)
+        .single();
+      return data;
+    },
+    enabled: !!tratativa?.associado_id,
+  });
+
+  // Fetch tecnico name
+  const tecnicoId = (tratativa as any)?.tecnico_id;
+  const { data: tecnicoInfo } = useQuery({
+    queryKey: ['tecnico-nome', tecnicoId],
+    queryFn: async () => {
+      if (!tecnicoId) return null;
+      const { data } = await supabase.from('profiles').select('nome').eq('id', tecnicoId).single();
+      return data;
+    },
+    enabled: !!tecnicoId,
+  });
+
   const etapaIndex = getEtapaIndex(etapaAtual);
+  const tAny = tratativa as any;
+  const isAgendado = tAny?.status === 'agendado';
+  const temServico = !!tAny?.servico_id;
+
+  const enderecoResumido = tAny?.endereco_tipo === 'cadastro'
+    ? [associadoInfo?.logradouro, associadoInfo?.numero, associadoInfo?.bairro, associadoInfo?.cidade].filter(Boolean).join(', ')
+    : tAny?.endereco_texto || '—';
 
   return (
     <div className="flex flex-col gap-4 mt-4">
@@ -111,7 +151,46 @@ function DrawerInner({ veiculo, onClose }: { veiculo: VeiculoManutencao; onClose
           isPending={resolverSemVisita.isPending || confirmarFalha.isPending}
         />
       )}
-      {etapaAtual === 'concluido' && (
+      {etapaAtual === 'concluido' && isAgendado && !temServico && (
+        <AgendamentoManutencaoForm
+          associadoId={tratativa!.associado_id}
+          onConfirmar={(data) => confirmarAgendamento.mutate(data)}
+          isPending={confirmarAgendamento.isPending}
+        />
+      )}
+      {etapaAtual === 'concluido' && isAgendado && temServico && !reagendar && (
+        <CardConfirmacaoAgendamento
+          tratativa={tAny}
+          tecnicoNome={tecnicoInfo?.nome || 'A definir'}
+          associadoNome={associadoInfo?.nome || veiculo.associadoNome}
+          associadoTelefone={associadoInfo?.telefone || ''}
+          placa={veiculo.placa}
+          enderecoResumido={enderecoResumido}
+          onReagendar={() => setReagendar(true)}
+        />
+      )}
+      {etapaAtual === 'concluido' && isAgendado && temServico && reagendar && (
+        <AgendamentoManutencaoForm
+          associadoId={tratativa!.associado_id}
+          onConfirmar={(data) => {
+            confirmarAgendamento.mutate(data, { onSuccess: () => setReagendar(false) });
+          }}
+          isPending={confirmarAgendamento.isPending}
+          initialData={{
+            enderecoTipo: tAny.endereco_tipo || '',
+            enderecoTexto: tAny.endereco_texto || '',
+            enderecoReferencia: tAny.endereco_referencia || '',
+            dataAgendamento: tAny.data_agendamento ? new Date(tAny.data_agendamento) : undefined,
+            periodo: tAny.periodo_agendamento || '',
+            tecnicoId: tAny.tecnico_id || 'a_definir',
+            tiposOcorrencia: tAny.tipos_ocorrencia || [],
+            observacoesTecnico: tAny.observacoes_tecnico || '',
+            taxaVisitaAplicar: tAny.taxa_visita_aplicar || false,
+            taxaVisitaObservacao: tAny.taxa_visita_observacao || '',
+          }}
+        />
+      )}
+      {etapaAtual === 'concluido' && !isAgendado && (
         <div className="text-center py-6 space-y-2">
           <CheckCircle2 className="h-10 w-10 mx-auto text-green-500" />
           <p className="font-semibold">Tratativa concluída</p>
@@ -349,6 +428,8 @@ function formatAcao(acao: string, dados: Record<string, unknown>): string {
       return '✅ Encerrado — resolvido sem visita';
     case 'falha_confirmada_agendar':
       return '🔧 Falha confirmada — visita técnica agendada';
+    case 'agendamento_confirmado':
+      return `📅 Agendamento confirmado — ${(dados.data as string) || ''} (${dados.periodo || ''})`;
     default:
       return acao.replace(/_/g, ' ');
   }
