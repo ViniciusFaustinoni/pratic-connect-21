@@ -510,6 +510,28 @@ export function RegrasVendaContent() {
     }
   };
 
+  const handleSaveCancelamento = async () => {
+    setSavingCancelamento(true);
+    try {
+      const updates = [
+        { chave: 'prazo_devolucao_rastreador_cancelamento', valor: prazoDevolucao },
+        { chave: 'base_calculo_prorata_cancelamento', valor: baseProrata },
+      ];
+      for (const u of updates) {
+        await supabase
+          .from('configuracoes')
+          .update({ valor: u.valor, updated_at: new Date().toISOString() })
+          .eq('chave', u.chave);
+      }
+      queryClient.invalidateQueries({ queryKey: ['configuracao'] });
+      toast.success('Configurações de cancelamento salvas com sucesso!');
+    } catch {
+      toast.error('Erro ao salvar configurações de cancelamento');
+    } finally {
+      setSavingCancelamento(false);
+    }
+  };
+
   if (isLoading || isLoadingTaxas || isLoadingAutorizacoes || isLoadingIndicacao) {
     return (
       <div className="flex items-center justify-center py-20">
