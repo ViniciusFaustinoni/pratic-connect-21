@@ -1640,6 +1640,72 @@ export function RegrasVendaContent() {
           </Button>
         </div>
       </TabsContent>
+
+      {/* ═══════════ ABA CANCELAMENTO ═══════════ */}
+      <TabsContent value="cancelamento" className="space-y-6 mt-4">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Prazo de Devolução do Rastreador</CardTitle>
+            <CardDescription>
+              Define o prazo em dias que o associado tem para devolver o rastreador após o cancelamento.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <Label htmlFor="prazo-devolucao" className="flex-1 text-sm">
+                Prazo para devolução do rastreador após cancelamento (dias)
+              </Label>
+              <Input
+                id="prazo-devolucao"
+                type="number"
+                min="1"
+                max="90"
+                className="w-24 text-right"
+                value={prazoDevolucao}
+                onChange={(e) => setPrazoDevolucao(e.target.value)}
+              />
+            </div>
+          </CardContent>
+        </Card>
+
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg">Base de Cálculo do Pró-rata</CardTitle>
+            <CardDescription>
+              Define como é calculado o valor proporcional no cancelamento.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <RadioGroup value={baseProrata} onValueChange={setBaseProrata}>
+              <div className="flex items-start gap-3 p-3 rounded-lg border">
+                <RadioGroupItem value="pos_vencimento" id="prorata-pos" className="mt-0.5" />
+                <Label htmlFor="prorata-pos" className="cursor-pointer flex-1">
+                  <span className="font-medium">Do dia seguinte ao último vencimento até a data do cancelamento</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Calcula o pró-rata a partir do dia seguinte ao último vencimento da mensalidade paga.
+                  </p>
+                </Label>
+              </div>
+              <div className="flex items-start gap-3 p-3 rounded-lg border">
+                <RadioGroupItem value="inicio_mes" id="prorata-inicio" className="mt-0.5" />
+                <Label htmlFor="prorata-inicio" className="cursor-pointer flex-1">
+                  <span className="font-medium">Do dia 1 do mês corrente até a data do cancelamento</span>
+                  <p className="text-xs text-muted-foreground mt-0.5">
+                    Calcula o pró-rata proporcional ao número de dias usados no mês corrente.
+                  </p>
+                </Label>
+              </div>
+            </RadioGroup>
+          </CardContent>
+        </Card>
+
+        <div className="flex justify-end">
+          <Button onClick={handleSaveCancelamento} disabled={savingCancelamento} className="gap-2">
+            {savingCancelamento ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
+            Salvar configurações
+          </Button>
+        </div>
+      </TabsContent>
     </Tabs>
   );
 }
