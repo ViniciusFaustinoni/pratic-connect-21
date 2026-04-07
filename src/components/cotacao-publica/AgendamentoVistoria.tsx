@@ -45,6 +45,9 @@ export interface AgendamentoVistoriaProps {
 
   // Endereço pré-preenchido (coletado pela IA no comprovante de residência)
   enderecoInicial?: Partial<EnderecoForm>;
+
+  // Quando true, não chama edge function — apenas coleta dados e chama onConfirmar
+  skipMutation?: boolean;
 }
 
 export function AgendamentoVistoria({ 
