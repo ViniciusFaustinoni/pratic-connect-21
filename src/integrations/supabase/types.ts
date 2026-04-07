@@ -14909,6 +14909,165 @@ export type Database = {
         }
         Relationships: []
       }
+      manutencao_tratativas: {
+        Row: {
+          associado_id: string
+          created_at: string | null
+          criado_por: string | null
+          data_agendamento: string | null
+          id: string
+          observacoes: string | null
+          rastreador_id: string | null
+          status: string
+          updated_at: string | null
+          veiculo_id: string
+        }
+        Insert: {
+          associado_id: string
+          created_at?: string | null
+          criado_por?: string | null
+          data_agendamento?: string | null
+          id?: string
+          observacoes?: string | null
+          rastreador_id?: string | null
+          status?: string
+          updated_at?: string | null
+          veiculo_id: string
+        }
+        Update: {
+          associado_id?: string
+          created_at?: string | null
+          criado_por?: string | null
+          data_agendamento?: string | null
+          id?: string
+          observacoes?: string | null
+          rastreador_id?: string | null
+          status?: string
+          updated_at?: string | null
+          veiculo_id?: string
+        }
+        Relationships: [
+          {
+            foreignKeyName: "manutencao_tratativas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "associados"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associado_financeiro"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_associados_publico"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_inadimplentes"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_associado_id_fkey"
+            columns: ["associado_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["associado_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "profiles"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_metricas_vendedores"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_criado_por_fkey"
+            columns: ["criado_por"]
+            isOneToOne: false
+            referencedRelation: "vw_vendedores_conflito"
+            referencedColumns: ["vendedor_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "rastreadores"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_rastreador_id_fkey"
+            columns: ["rastreador_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["rastreador_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "veiculos"
+            referencedColumns: ["id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_acompanhamento"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_alertas_ativos"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "view_rastreadores_posicao"
+            referencedColumns: ["veiculo_id"]
+          },
+          {
+            foreignKeyName: "manutencao_tratativas_veiculo_id_fkey"
+            columns: ["veiculo_id"]
+            isOneToOne: false
+            referencedRelation: "vw_veiculos_com_cotas"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       marcas_modelos: {
         Row: {
           ativo: boolean | null
