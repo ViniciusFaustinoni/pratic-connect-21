@@ -205,6 +205,8 @@ export function useTratativaDrawer(tratativaId: string | null) {
         bairro = '';
       }
 
+      const observacoes = params.observacoesTecnico || null;
+
       // Create servico
       const { data: servico, error: sErr } = await supabase
         .from('servicos')
@@ -223,8 +225,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
           uf,
           cep,
           complemento: params.enderecoReferencia || null,
-          observacoes: params.observacoesTecnico || null,
-          motivo_manutencao: params.tiposOcorrencia.join(', '),
+          observacoes,
           local_tipo_manutencao: params.enderecoTipo,
           rastreador_id: tratativa.rastreador_id,
         } as any)
