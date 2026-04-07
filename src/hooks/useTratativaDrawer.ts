@@ -112,7 +112,7 @@ export function useTratativaDrawer(tratativaId: string | null) {
           tratativa_id: tratativaId!,
           etapa: 'validacao',
           acao: `situacao_${params.situacao}`,
-          dados: params.dados,
+          dados: params.dados as unknown as Json,
           criado_por: userId,
         });
       if (logErr) throw logErr;
