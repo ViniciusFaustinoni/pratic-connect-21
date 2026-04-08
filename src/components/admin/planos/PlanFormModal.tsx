@@ -306,6 +306,9 @@ export function PlanFormModal({
       desconto_percentual: formData.desconto_percentual
         ? parseFloat(formData.desconto_percentual)
         : null,
+      cota_participacao: formData.cota_participacao
+        ? parseFloat(formData.cota_participacao)
+        : null,
       restriction_alert: formData.restriction_alert || null,
       footer_note: formData.footer_note || null,
       display_order: parseInt(formData.display_order) || 0,
