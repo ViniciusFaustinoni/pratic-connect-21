@@ -10,6 +10,7 @@ import {
   FileCheck,
   Settings,
   ChevronDown,
+  ChevronRight,
   Shield,
   Wrench,
   MapPin,
@@ -73,6 +74,7 @@ import {
   Settings2,
   GraduationCap,
   UserSearch,
+  ShoppingCart,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -122,7 +124,6 @@ const MENU_COLORS: Record<string, string> = {
   juridico: '#1e40af',       // Azul escuro
   rh: '#22c55e',             // Verde claro
   marketing: '#d946ef',      // Magenta
-  ouvidoria: '#38bdf8',      // Azul claro
   diretoria: '#fbbf24',      // Dourado
   relatorios: '#6366f1',     // Índigo
   configuracoes: '#94a3b8',  // Cinza
@@ -379,17 +380,6 @@ const menuConfig: {
       ],
     },
     {
-      id: 'ouvidoria',
-      label: 'Ouvidoria',
-      icon: MessageCircle,
-      permission: 'canManageOuvidoria',
-      color: MENU_COLORS.ouvidoria,
-      items: [
-        { title: 'Dashboard', url: '/ouvidoria', icon: BarChart3 },
-        { title: 'Fila', url: '/ouvidoria/fila', icon: ClipboardList },
-      ],
-    },
-    {
       id: 'diretoria',
       label: 'Diretoria',
       icon: Building2,
@@ -444,6 +434,39 @@ const configItems: MenuItem[] = [
     icon: Settings,
     permission: 'canViewDashboard',
     color: MENU_COLORS.configuracoes,
+  },
+];
+
+// Super-grupos para diretores
+interface SuperGroup {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  color: string;
+  moduleIds: string[];
+}
+
+const SUPER_GROUPS: SuperGroup[] = [
+  {
+    id: 'comercial',
+    label: 'Comercial',
+    icon: ShoppingCart,
+    color: '#10b981',
+    moduleIds: ['vendas', 'cadastro', 'monitoramento'],
+  },
+  {
+    id: 'relacionamento',
+    label: 'Relacionamento',
+    icon: Users,
+    color: '#ef4444',
+    moduleIds: ['eventos', 'assistencia', 'oficinas', 'cobranca'],
+  },
+  {
+    id: 'administrativo',
+    label: 'Administrativo',
+    icon: Building2,
+    color: '#fbbf24',
+    moduleIds: ['financeiro', 'contabilidade', 'juridico', 'rh', 'marketing', 'diretoria', 'documentos', 'relatorios'],
   },
 ];
 
@@ -629,6 +652,15 @@ export function AppSidebar() {
     visibleGroups.filter(g => isGroupActive(g.items)).map(g => g.id)
   );
 
+  // Super-group state for directors
+  const [openSuperGroups, setOpenSuperGroups] = useState<string[]>(() => {
+    if (!permissions.isDiretor) return [];
+    const activeGroup = visibleGroups.find(g => isGroupActive(g.items));
+    if (!activeGroup) return [];
+    const sg = SUPER_GROUPS.find(s => s.moduleIds.includes(activeGroup.id));
+    return sg ? [sg.id] : [];
+  });
+
   const toggleGroup = (groupId: string) => {
     setOpenGroups(prev => 
       prev.includes(groupId)
@@ -637,10 +669,25 @@ export function AppSidebar() {
     );
   };
 
+  const toggleSuperGroup = (sgId: string) => {
+    setOpenSuperGroups(prev =>
+      prev.includes(sgId)
+        ? prev.filter(id => id !== sgId)
+        : [...prev, sgId]
+    );
+  };
+
   useEffect(() => {
     const activeGroup = visibleGroups.find(g => isGroupActive(g.items));
     if (activeGroup && !openGroups.includes(activeGroup.id)) {
       setOpenGroups(prev => [...prev, activeGroup.id]);
+    }
+    // Auto-open super-group for directors
+    if (permissions.isDiretor && activeGroup) {
+      const sg = SUPER_GROUPS.find(s => s.moduleIds.includes(activeGroup.id));
+      if (sg && !openSuperGroups.includes(sg.id)) {
+        setOpenSuperGroups(prev => [...prev, sg.id]);
+      }
     }
   }, [location.pathname]);
 
@@ -656,6 +703,17 @@ export function AppSidebar() {
       });
     }
   }, [isDataLoading, visibleGroups.length]);
+
+  // Build super-groups with their visible sub-groups
+  const directorSuperGroups = useMemo(() => {
+    if (!permissions.isDiretor) return [];
+    return SUPER_GROUPS.map(sg => ({
+      ...sg,
+      subGroups: sg.moduleIds
+        .map(mid => visibleGroups.find(g => g.id === mid))
+        .filter(Boolean) as MenuGroup[],
+    })).filter(sg => sg.subGroups.length > 0);
+  }, [permissions.isDiretor, visibleGroups]);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border bg-sidebar">
@@ -700,68 +758,133 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               ))}
 
-              {visibleGroups.map((group) => (
-                <SidebarMenuItem key={group.id}>
-                  <Popover>
-                    <PopoverTrigger asChild>
-                      <SidebarMenuButton
-                        isActive={isGroupActive(group.items)}
-                        className={cn(
-                          "cursor-pointer transition-all duration-200",
-                          isGroupActive(group.items) 
-                            ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_0_10px_hsl(351,84%,49%,0.3)]" 
-                            : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50"
-                        )}
-                        tooltip={group.label}
-                      >
-                        <group.icon 
-                          className="h-4 w-4" 
-                          style={{ color: isGroupActive(group.items) ? 'inherit' : group.color }}
-                        />
-                      </SidebarMenuButton>
-                    </PopoverTrigger>
-                    <PopoverContent 
-                      side="right" 
-                      sideOffset={8}
-                      align="start"
-                      className="w-52 p-2 bg-card border-border"
-                    >
-                      <div className="mb-2 flex items-center gap-2 px-2 text-sm font-semibold text-foreground">
-                        <group.icon 
-                          className="h-4 w-4" 
-                          style={{ color: group.color }}
-                        />
-                        {group.label}
-                      </div>
-                      <div className="space-y-0.5">
-                        {group.items.map((item) => (
-                          <NavLink 
-                            key={item.url} 
-                            to={item.url}
-                            onClick={handleNavigation}
+              {permissions.isDiretor && directorSuperGroups.length > 0 ? (
+                directorSuperGroups.map((sg) => {
+                  const sgActive = sg.subGroups.some(g => isGroupActive(g.items));
+                  return (
+                    <SidebarMenuItem key={sg.id}>
+                      <Popover>
+                        <PopoverTrigger asChild>
+                          <SidebarMenuButton
+                            isActive={sgActive}
                             className={cn(
-                              "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
-                              "hover:bg-sidebar-accent/50 hover:text-foreground",
-                              isActive(item.url) && "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
+                              "cursor-pointer transition-all duration-200",
+                              sgActive
+                                ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_0_10px_hsl(351,84%,49%,0.3)]"
+                                : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50"
                             )}
+                            tooltip={sg.label}
                           >
-                            <item.icon 
-                              className="h-4 w-4" 
-                              style={{ color: isActive(item.url) ? 'inherit' : group.color }}
+                            <sg.icon
+                              className="h-4 w-4"
+                              style={{ color: sgActive ? 'inherit' : sg.color }}
                             />
-                            {item.title}
-                            {item.badge && (
-                              <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                {item.badge}
-                              </span>
-                            )}
-                          </NavLink>
-                        ))}
-                      </div>
-                    </PopoverContent>
-                  </Popover>
-                </SidebarMenuItem>
-              ))}
+                          </SidebarMenuButton>
+                        </PopoverTrigger>
+                        <PopoverContent
+                          side="right"
+                          sideOffset={8}
+                          align="start"
+                          className="w-56 p-2 bg-card border-border max-h-[70vh] overflow-y-auto"
+                        >
+                          <div className="mb-2 flex items-center gap-2 px-2 text-sm font-semibold text-foreground">
+                            <sg.icon className="h-4 w-4" style={{ color: sg.color }} />
+                            {sg.label}
+                          </div>
+                          {sg.subGroups.map((group) => (
+                            <div key={group.id} className="mb-1">
+                              <div className="flex items-center gap-2 px-2 py-1 text-xs font-medium text-muted-foreground uppercase tracking-wider">
+                                <group.icon className="h-3 w-3" style={{ color: group.color }} />
+                                {group.label}
+                              </div>
+                              <div className="space-y-0.5 pl-1">
+                                {group.items.map((item) => (
+                                  <NavLink
+                                    key={item.url}
+                                    to={item.url}
+                                    onClick={handleNavigation}
+                                    className={cn(
+                                      "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+                                      "hover:bg-sidebar-accent/50 hover:text-foreground",
+                                      isActive(item.url) && "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
+                                    )}
+                                  >
+                                    <item.icon
+                                      className="h-3.5 w-3.5"
+                                      style={{ color: isActive(item.url) ? 'inherit' : group.color }}
+                                    />
+                                    {item.title}
+                                  </NavLink>
+                                ))}
+                              </div>
+                            </div>
+                          ))}
+                        </PopoverContent>
+                      </Popover>
+                    </SidebarMenuItem>
+                  );
+                })
+              ) : (
+                visibleGroups.map((group) => (
+                  <SidebarMenuItem key={group.id}>
+                    <Popover>
+                      <PopoverTrigger asChild>
+                        <SidebarMenuButton
+                          isActive={isGroupActive(group.items)}
+                          className={cn(
+                            "cursor-pointer transition-all duration-200",
+                            isGroupActive(group.items)
+                              ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_0_10px_hsl(351,84%,49%,0.3)]"
+                              : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50"
+                          )}
+                          tooltip={group.label}
+                        >
+                          <group.icon
+                            className="h-4 w-4"
+                            style={{ color: isGroupActive(group.items) ? 'inherit' : group.color }}
+                          />
+                        </SidebarMenuButton>
+                      </PopoverTrigger>
+                      <PopoverContent
+                        side="right"
+                        sideOffset={8}
+                        align="start"
+                        className="w-52 p-2 bg-card border-border"
+                      >
+                        <div className="mb-2 flex items-center gap-2 px-2 text-sm font-semibold text-foreground">
+                          <group.icon className="h-4 w-4" style={{ color: group.color }} />
+                          {group.label}
+                        </div>
+                        <div className="space-y-0.5">
+                          {group.items.map((item) => (
+                            <NavLink
+                              key={item.url}
+                              to={item.url}
+                              onClick={handleNavigation}
+                              className={cn(
+                                "flex items-center gap-2 rounded-md px-2 py-1.5 text-sm transition-colors",
+                                "hover:bg-sidebar-accent/50 hover:text-foreground",
+                                isActive(item.url) && "bg-sidebar-primary text-sidebar-primary-foreground font-medium"
+                              )}
+                            >
+                              <item.icon
+                                className="h-4 w-4"
+                                style={{ color: isActive(item.url) ? 'inherit' : group.color }}
+                              />
+                              {item.title}
+                              {item.badge && (
+                                <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                  {item.badge}
+                                </span>
+                              )}
+                            </NavLink>
+                          ))}
+                        </div>
+                      </PopoverContent>
+                    </Popover>
+                  </SidebarMenuItem>
+                ))
+              )}
 
               {visibleConfigItems.map((item) => (
                 <SidebarMenuItem key={item.url}>
@@ -822,64 +945,157 @@ export function AppSidebar() {
               </SidebarGroup>
             )}
 
-            {visibleGroups.map((group) => (
-              <Collapsible 
-                key={group.id}
-                open={openGroups.includes(group.id)}
-                onOpenChange={() => toggleGroup(group.id)}
-                className="group/collapsible"
-              >
-                <SidebarGroup>
-                  <SidebarGroupLabel 
-                    asChild 
-                    className="cursor-pointer hover:bg-sidebar-accent/50 transition-colors text-muted-foreground hover:text-foreground"
-                  >
-                    <CollapsibleTrigger className="flex w-full items-center gap-2">
-                      <group.icon 
-                        className="h-4 w-4" 
-                        style={{ color: group.color }}
-                      />
-                      <span className="flex-1 text-left">{group.label}</span>
-                      <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
-                    </CollapsibleTrigger>
-                  </SidebarGroupLabel>
-                  <CollapsibleContent>
-                    <SidebarGroupContent>
-                      <SidebarMenu>
-                        {group.items.map((item) => (
-                          <SidebarMenuItem key={item.url}>
-                            <SidebarMenuButton
+            {permissions.isDiretor && directorSuperGroups.length > 0 ? (
+              /* SUPER-GRUPOS PARA DIRETORES */
+              directorSuperGroups.map((sg) => (
+                <Collapsible
+                  key={sg.id}
+                  open={openSuperGroups.includes(sg.id)}
+                  onOpenChange={() => toggleSuperGroup(sg.id)}
+                  className="group/super"
+                >
+                  <SidebarGroup className="pb-0">
+                    <SidebarGroupLabel
+                      asChild
+                      className="cursor-pointer hover:bg-sidebar-accent/50 transition-colors text-foreground hover:text-foreground font-semibold text-xs uppercase tracking-wider"
+                    >
+                      <CollapsibleTrigger className="flex w-full items-center gap-2">
+                        <sg.icon
+                          className="h-4 w-4"
+                          style={{ color: sg.color }}
+                        />
+                        <span className="flex-1 text-left">{sg.label}</span>
+                        {openSuperGroups.includes(sg.id) ? (
+                          <ChevronDown className="h-4 w-4 transition-transform duration-200" />
+                        ) : (
+                          <ChevronRight className="h-4 w-4 transition-transform duration-200" />
+                        )}
+                      </CollapsibleTrigger>
+                    </SidebarGroupLabel>
+                    <CollapsibleContent>
+                      {sg.subGroups.map((group) => (
+                        <Collapsible
+                          key={group.id}
+                          open={openGroups.includes(group.id)}
+                          onOpenChange={() => toggleGroup(group.id)}
+                          className="group/collapsible"
+                        >
+                          <div className="pl-2">
+                            <SidebarGroupLabel
                               asChild
-                              isActive={isActive(item.url)}
-                              tooltip={item.title}
-                              className={cn(
-                                "transition-all duration-200",
-                                isActive(item.url) 
-                                  ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_0_10px_hsl(351,84%,49%,0.3)]" 
-                                  : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50"
-                              )}
+                              className="cursor-pointer hover:bg-sidebar-accent/50 transition-colors text-muted-foreground hover:text-foreground"
                             >
-                              <NavLink to={item.url} onClick={handleNavigation}>
-                                <item.icon 
-                                  className="h-4 w-4" 
-                                  style={{ color: isActive(item.url) ? 'inherit' : group.color }}
+                              <CollapsibleTrigger className="flex w-full items-center gap-2">
+                                <group.icon
+                                  className="h-3.5 w-3.5"
+                                  style={{ color: group.color }}
                                 />
-                                <span>{item.title}</span>
-                                {item.badge && (
-                                  <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
-                                    {item.badge}
-                                  </span>
+                                <span className="flex-1 text-left">{group.label}</span>
+                                <ChevronDown className="h-3.5 w-3.5 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                              </CollapsibleTrigger>
+                            </SidebarGroupLabel>
+                            <CollapsibleContent>
+                              <SidebarGroupContent>
+                                <SidebarMenu>
+                                  {group.items.map((item) => (
+                                    <SidebarMenuItem key={item.url}>
+                                      <SidebarMenuButton
+                                        asChild
+                                        isActive={isActive(item.url)}
+                                        tooltip={item.title}
+                                        className={cn(
+                                          "transition-all duration-200 pl-4",
+                                          isActive(item.url)
+                                            ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_0_10px_hsl(351,84%,49%,0.3)]"
+                                            : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50"
+                                        )}
+                                      >
+                                        <NavLink to={item.url} onClick={handleNavigation}>
+                                          <item.icon
+                                            className="h-4 w-4"
+                                            style={{ color: isActive(item.url) ? 'inherit' : group.color }}
+                                          />
+                                          <span>{item.title}</span>
+                                          {item.badge && (
+                                            <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                              {item.badge}
+                                            </span>
+                                          )}
+                                        </NavLink>
+                                      </SidebarMenuButton>
+                                    </SidebarMenuItem>
+                                  ))}
+                                </SidebarMenu>
+                              </SidebarGroupContent>
+                            </CollapsibleContent>
+                          </div>
+                        </Collapsible>
+                      ))}
+                    </CollapsibleContent>
+                  </SidebarGroup>
+                </Collapsible>
+              ))
+            ) : (
+              /* GRUPOS NORMAIS PARA NÃO-DIRETORES */
+              visibleGroups.map((group) => (
+                <Collapsible 
+                  key={group.id}
+                  open={openGroups.includes(group.id)}
+                  onOpenChange={() => toggleGroup(group.id)}
+                  className="group/collapsible"
+                >
+                  <SidebarGroup>
+                    <SidebarGroupLabel 
+                      asChild 
+                      className="cursor-pointer hover:bg-sidebar-accent/50 transition-colors text-muted-foreground hover:text-foreground"
+                    >
+                      <CollapsibleTrigger className="flex w-full items-center gap-2">
+                        <group.icon 
+                          className="h-4 w-4" 
+                          style={{ color: group.color }}
+                        />
+                        <span className="flex-1 text-left">{group.label}</span>
+                        <ChevronDown className="h-4 w-4 transition-transform duration-200 group-data-[state=open]/collapsible:rotate-180" />
+                      </CollapsibleTrigger>
+                    </SidebarGroupLabel>
+                    <CollapsibleContent>
+                      <SidebarGroupContent>
+                        <SidebarMenu>
+                          {group.items.map((item) => (
+                            <SidebarMenuItem key={item.url}>
+                              <SidebarMenuButton
+                                asChild
+                                isActive={isActive(item.url)}
+                                tooltip={item.title}
+                                className={cn(
+                                  "transition-all duration-200",
+                                  isActive(item.url) 
+                                    ? "bg-sidebar-primary text-sidebar-primary-foreground shadow-[0_0_10px_hsl(351,84%,49%,0.3)]" 
+                                    : "text-muted-foreground hover:text-foreground hover:bg-sidebar-accent/50"
                                 )}
-                              </NavLink>
-                            </SidebarMenuButton>
-                          </SidebarMenuItem>
-                        ))}
-                      </SidebarMenu>
-                    </SidebarGroupContent>
-                  </CollapsibleContent>
-                </SidebarGroup>
-              </Collapsible>
-            ))}
+                              >
+                                <NavLink to={item.url} onClick={handleNavigation}>
+                                  <item.icon 
+                                    className="h-4 w-4" 
+                                    style={{ color: isActive(item.url) ? 'inherit' : group.color }}
+                                  />
+                                  <span>{item.title}</span>
+                                  {item.badge && (
+                                    <span className="ml-auto text-[10px] font-medium px-1.5 py-0.5 rounded bg-amber-500/20 text-amber-400 border border-amber-500/30">
+                                      {item.badge}
+                                    </span>
+                                  )}
+                                </NavLink>
+                              </SidebarMenuButton>
+                            </SidebarMenuItem>
+                          ))}
+                        </SidebarMenu>
+                      </SidebarGroupContent>
+                    </CollapsibleContent>
+                  </SidebarGroup>
+                </Collapsible>
+              ))
+            )}
           </>
         )}
       </SidebarContent>

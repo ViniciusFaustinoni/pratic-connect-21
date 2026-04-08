@@ -356,11 +356,7 @@ const OuvidoriaNova = lazy(() => import("./pages/app/OuvidoriaNova"));
 const OuvidoriaLista = lazy(() => import("./pages/app/OuvidoriaLista"));
 const OuvidoriaDetalheApp = lazy(() => import("./pages/app/OuvidoriaDetalhe"));
 
-// ERP Ouvidoria
-const OuvidoriaDashboard = lazy(() => import("./pages/ouvidoria/OuvidoriaDashboard"));
-const OuvidoriaFila = lazy(() => import("./pages/ouvidoria/ManifestacoesList"));
-const OuvidoriaDetalhe = lazy(() => import("./pages/ouvidoria/ManifestacaoDetalhe"));
-const NovaManifestacao = lazy(() => import("./pages/ouvidoria/NovaManifestacao"));
+// Public Ouvidoria (kept)
 const CanalDenuncia = lazy(() => import("./pages/ouvidoria/CanalDenuncia"));
 const ConsultaProtocolo = lazy(() => import("./pages/ouvidoria/ConsultaProtocolo"));
 const PesquisaSatisfacao = lazy(() => import("./pages/ouvidoria/PesquisaSatisfacao"));
@@ -750,13 +746,6 @@ const App = () => (
               <Route path="/oficina/ordens-servico/:id" element={<OrdemServicoDetalhePage />} />
               <Route path="/ordens-servico" element={<OrdensServico />} />
               <Route path="/oficinas/ordens/:id" element={<OrdemServicoDetalhe />} />
-              
-              {/* Ouvidoria ERP */}
-              <Route path="/ouvidoria" element={<OuvidoriaDashboard />} />
-              <Route path="/ouvidoria/fila" element={<OuvidoriaFila />} />
-              <Route path="/ouvidoria/manifestacoes" element={<OuvidoriaFila />} />
-              <Route path="/ouvidoria/nova" element={<NovaManifestacao />} />
-              <Route path="/ouvidoria/:id" element={<OuvidoriaDetalhe />} />
               
               {/* Configurações */}
               <Route path="/configuracoes" element={<LazyConfiguracoesLayout />}>

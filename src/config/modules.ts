@@ -29,7 +29,6 @@ export const MODULES: ModuleConfig[] = [
   { id: 'juridico', label: 'Jurídico' },
   { id: 'rh', label: 'Recursos Humanos' },
   { id: 'marketing', label: 'Marketing' },
-  { id: 'ouvidoria', label: 'Ouvidoria' },
   { id: 'diretoria', label: 'Diretoria' },
   { id: 'relatorios', label: 'Relatórios' },
   { id: 'documentos', label: 'Documentos' },
@@ -138,10 +137,6 @@ export const MODULE_ITEMS: Record<string, ModuleItem[]> = {
     { id: 'utms', label: 'UTMs' },
     { id: 'distribuicao', label: 'Distribuição' },
     { id: 'relatorios', label: 'Relatórios' },
-  ],
-  ouvidoria: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'fila', label: 'Fila' },
   ],
   diretoria: [
     { id: 'dashboard', label: 'Dashboard' },
