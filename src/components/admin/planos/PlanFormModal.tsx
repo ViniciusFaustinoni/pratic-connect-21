@@ -255,7 +255,7 @@ export function PlanFormModal({
   const planId = plan?.id ?? null;
   const isEditing = !!planId;
 
-  const { data: productLines = [] } = useProductLines();
+  const { data: productLines = [], isLoading: loadingProductLines } = useProductLines();
   const { data: benefits = [] } = useBenefits();
   const { data: coberturasCatalogo = [] } = useCoberturas();
   const createPlan = useCreatePlan();
@@ -390,7 +390,37 @@ export function PlanFormModal({
     return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
   }, [filteredCoberturas]);
 
-  const selectedLine = productLines.find((line) => line.id === formData.product_line_id) || null;
+  const productLineOptions = useMemo(() => {
+    const currentLine = fullPlanData?.product_lines;
+
+    if (!currentLine?.id) return productLines;
+    if (productLines.some((line) => line.id === currentLine.id)) return productLines;
+
+    return [currentLine, ...productLines];
+  }, [productLines, fullPlanData?.product_lines]);
+
+  const safeProductLineValue = useMemo(() => {
+    if (!formData.product_line_id) return undefined;
+    return productLineOptions.some((line) => line.id === formData.product_line_id)
+      ? formData.product_line_id
+      : undefined;
+  }, [formData.product_line_id, productLineOptions]);
+
+  const safeBadgeColorValue = useMemo(() => {
+    if (!formData.badge_color) return NO_BADGE_COLOR;
+    return BADGE_COLORS.some((color) => color.value === formData.badge_color)
+      ? formData.badge_color
+      : NO_BADGE_COLOR;
+  }, [formData.badge_color]);
+
+  const canRenderEditingForm = !isEditing || (
+    !!fullPlanData &&
+    hydratedStateKeyRef.current === hydrationKey &&
+    !loadingProductLines &&
+    (!formData.product_line_id || !!safeProductLineValue)
+  );
+
+  const selectedLine = productLineOptions.find((line) => line.id === formData.product_line_id) || null;
   const selectedLineTone = LINE_TONES[selectedLine?.color || 'blue'] || LINE_TONES.blue;
   const selectedBadgeTone = formData.badge_color ? BADGE_TONES[formData.badge_color] : null;
 
@@ -486,13 +516,13 @@ export function PlanFormModal({
 
         <div className="grid h-[calc(92vh-77px)] min-h-0 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="relative min-h-0 border-b border-border/60 xl:border-b-0 xl:border-r xl:border-r-border/60">
-            {isEditing && !fullPlanData && (
+            {isEditing && (!fullPlanData || !canRenderEditingForm) && (
               <div className="absolute inset-0 z-20 flex items-center justify-center gap-3 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
                 <Loader2 className="h-4 w-4 animate-spin" />
                 Carregando dados do plano...
               </div>
             )}
-            {(!isEditing || (fullPlanData && hydratedStateKeyRef.current === hydrationKey)) && (
+            {canRenderEditingForm && (
               <form onSubmit={handleSubmit} className="flex h-full min-h-0 flex-col">
                 <ScrollArea className="min-h-0 flex-1 px-6">
                   <div className="space-y-6 pb-6 pt-6">
@@ -527,14 +557,14 @@ export function PlanFormModal({
                       <div className="space-y-2">
                         <Label htmlFor="plan-product-line">Linha de Produto</Label>
                         <Select
-                          value={formData.product_line_id || undefined}
+                          value={safeProductLineValue}
                           onValueChange={(value) => setFormData((previous) => ({ ...previous, product_line_id: value }))}
                         >
                           <SelectTrigger id="plan-product-line">
                             <SelectValue placeholder="Selecione uma linha" />
                           </SelectTrigger>
                           <SelectContent>
-                            {productLines.map((line) => (
+                            {productLineOptions.map((line) => (
                               <SelectItem key={line.id} value={line.id}>
                                 {line.icon ? `${line.icon} ` : ''}{line.name}
                               </SelectItem>
@@ -557,7 +587,7 @@ export function PlanFormModal({
                         <div className="space-y-2">
                           <Label htmlFor="plan-badge-color">Cor do Badge</Label>
                           <Select
-                            value={formData.badge_color || NO_BADGE_COLOR}
+                            value={safeBadgeColorValue}
                             onValueChange={(value) => setFormData((previous) => ({
                               ...previous,
                               badge_color: value === NO_BADGE_COLOR ? '' : value,
