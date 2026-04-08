@@ -429,6 +429,22 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
       if (!params.usoApp && tipoUsoPlano === 'aplicativo') continue;
 
+      // Filtro complementar: planos cujo NOME contém "Aplicativo" só aparecem em modo APP
+      // (cobre casos onde tipo_uso está incorretamente como 'passeio')
+      const nomeContainApp = (plano.nome || '').toLowerCase().includes('aplicativo');
+      if (!params.usoApp && nomeContainApp) continue;
+      if (params.usoApp && !nomeContainApp && tipoUsoPlano === 'passeio') {
+        // Em modo app, se há um plano irmão com "Aplicativo" no nome, ocultar o passeio
+        const temIrmaoApp = planosBanco.some(p2 =>
+          p2.id !== plano.id && p2.ativo &&
+          (p2.nome || '').toLowerCase().includes('aplicativo') &&
+          (plano.nome || '').split(' ').slice(0, 2).join(' ').toLowerCase() ===
+          (p2.nome || '').split(' ').slice(0, 2).join(' ').toLowerCase()
+        );
+        // Se tem irmão app, o passeio é oculto em modo app (o irmão aparece no lugar)
+        if (temIrmaoApp) continue;
+      }
+
       // Filtrar motos/carros/elétricos usando vehicle_type e linha_slug do banco
       const plSlug = plProductLine?.slug?.toLowerCase() || '';
       if (tipoVeiculo === 'moto' && vehicleType !== 'motorcycle') continue;
