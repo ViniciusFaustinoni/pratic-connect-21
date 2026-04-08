@@ -1,40 +1,58 @@
 
 
-## Plan: Change Cota Display from Calculated Value to Percentage Format
+## Plan: Reorganize Quotation Form Fields
 
-### What Changes
+### Current Order
+1. Dados do Associado (Nome, Telefone, Email, Indicação)
+2. Data de Vencimento
+3. Região
+4. Uso do Veículo
+5. Tipo de Placa
+6. Consultor Responsável
+7. Veículo (Placa, Tipo, Marca, Modelo, Ano)
+8. Valor FIPE
+9. Combustível
+10. Alerta categoria
+11. Cenário Vendedor Externo
+12. Taxa de Filiação + alertas
+13. Selecione o Plano
+14. Valor Adicional
+15. Resumo
 
-**1. `src/hooks/usePlanosCotacao.ts`**
-- Line 426-428: Change `cotaString` format from `"X% (mín R$ Y)"` to `"X% do FIPE (mín. R$ Y.YYY)"`
-- Line 444: Remove `valorCota` calculation (currently `Math.round(valorMensal * decCota * 100) / 100`)
-- Line 471: Set `valorCota` to `0` in the returned object (keep field for interface compat)
+### New Order
 
-New cotaString format:
-```typescript
-const cotaString = cotaMinimaFinal === 0
-  ? `${cotaPercentual}% do FIPE (sem mínimo)`
-  : `${cotaPercentual}% do FIPE (mín. R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
-```
+**Bloco 1 — Dados do associado** (stays in place)
+- Nome, Telefone, Email, Indicação
 
-**2. `src/components/cotacao/PlanoCardCotacao.tsx`** (line 111)
-- Already displays `plano.cota` which is the string — no change needed, it will automatically show the new format.
+**Bloco 2 — Veículo** (move up, merge Combustível and FIPE into this block)
+- Busca por placa
+- Tipo / Marca / Modelo / Ano (manual selection)
+- Combustível
+- Valor FIPE (with alerts)
 
-**3. `src/components/cotacoes/PlanoDetalhesModal.tsx`** (line 136-141)
-- Already displays `plano.cota` as string — no change needed.
+**Bloco 3 — Condições do veículo** (new grouping)
+- Região
+- Uso do Veículo
+- Tipo de Placa
+- Alerta de categoria
 
-**4. `src/components/planos/CalculadoraPreco.tsx`** (lines 1065-1070)
-- Currently shows `cotaPercentual%` with `cotaMinima` — update to match new format: `"X% do FIPE · mín. R$ Y.YYY"`
+**Bloco 4 — Plano** (regroup)
+- Selecione o Plano
+- Valor Adicional
+- Cenário Vendedor Externo (when applicable)
+- Taxa de Filiação + alertas
 
-**5. `src/components/cadastro/TermoFiliacaoTemplate.tsx`** (line 421)
-- Currently shows `formatCurrency(plano.cotaMinima || 3000)` — change to show percentage format: `"X% do FIPE (mín. R$ Y.YYY)"`
+**Bloco 5 — Dados comerciais** (move to end)
+- Consultor Responsável
+- Data de Vencimento
 
-### Files Modified
-- `src/hooks/usePlanosCotacao.ts` — cotaString format + remove valorCota calc
-- `src/components/planos/CalculadoraPreco.tsx` — display format
-- `src/components/cadastro/TermoFiliacaoTemplate.tsx` — display format
+**Resumo** (stays at end, before submit button)
 
-### Not Changed
-- All other motor logic (pricing, eligibility, filtering)
-- The `cotaPercentual` and `cotaMinima` fields still returned for downstream use
-- Interface/types unchanged
+### File Modified
+- `src/components/cotacoes/CotacaoFormDialog.tsx` — reorder JSX blocks only, no logic changes
+
+### What stays the same
+- All state, queries, hooks, calculations, and submit logic
+- All field components and their props
+- The conditional rendering rules (e.g., Consultor only for leadership, Combustível visibility)
 
