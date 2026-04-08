@@ -94,18 +94,17 @@ export async function calcularCarenciaResidual(
 
   // Benefícios
   (benNovas || []).forEach((item: any) => {
-    const key = `ben_${item.beneficio_id}`;
+    const key = `ben_${item.benefit_id}`;
     const nome = item.benefits?.titulo || 'Benefício';
 
     if (itensPlanoAnterior.has(key)) {
-      carenciasPorItem[item.beneficio_id] = {
+      carenciasPorItem[item.benefit_id] = {
         dias: diasRestantes,
         tipo: 'residual',
         nome,
       };
     } else {
-      // Benefícios geralmente têm carência 0, mas usar 0 como padrão
-      carenciasPorItem[item.beneficio_id] = {
+      carenciasPorItem[item.benefit_id] = {
         dias: 0,
         tipo: 'padrao',
         nome,
