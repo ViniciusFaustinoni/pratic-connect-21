@@ -462,6 +462,28 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         continue;
       }
 
+      // ── Filtro de variantes Diesel ──
+      // Planos com "diesel" no código/nome só aparecem para veículos diesel
+      const codigoLower = (plano.codigo || '').toLowerCase();
+      const nomeLower = (plano.nome || '').toLowerCase();
+      const isDieselPlan = codigoLower.includes('diesel') || nomeLower.includes('diesel');
+      const combustivelVeiculo = (combustivel || 'flex').toLowerCase();
+      const veiculoIsDiesel = combustivelVeiculo === 'diesel';
+      
+      if (isDieselPlan && !veiculoIsDiesel) continue;
+      if (!isDieselPlan && veiculoIsDiesel) continue;
+
+      // ── Filtro de variantes Deságio ──
+      // Planos com "deságio"/"desagio" no código/nome só aparecem quando há categoria de deságio selecionada
+      const isDesagioPlan = codigoLower.includes('desagio') || codigoLower.includes('des-gio')
+        || nomeLower.includes('deságio') || nomeLower.includes('desagio');
+      const isDesagioCategoria = !!categoria && categoria !== 'nenhuma'
+        && categoriasDesagio.includes(categoria);
+      
+      if (isDesagioPlan && !isDesagioCategoria) continue;
+      if (!isDesagioPlan && isDesagioCategoria) continue;
+
+
       // SELECT EXCLUSIVE: ocultar quando APP + categoria de deságio combinam
       const isAppComDesagio = params.usoApp && !!categoria && categoria !== 'nenhuma'
         && categoriasQueSobrepoeApp.includes(categoria);
