@@ -233,6 +233,7 @@ export function PlanFormModal({
         ano_fabricacao_maximo: '',
         additional_price: '',
         desconto_percentual: '',
+        cota_participacao: '',
         restriction_alert: '',
         footer_note: '',
         display_order: '0',
