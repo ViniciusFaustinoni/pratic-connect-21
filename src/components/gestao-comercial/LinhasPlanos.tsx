@@ -262,7 +262,7 @@ export function LinhasPlanos() {
                   <p className="text-xs text-muted-foreground">{linha.plans.length} plano{linha.plans.length !== 1 ? 's' : ''}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setLinhaSheet({ open: true, linha }); }}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setLinhaModal({ open: true, productLine: linha }); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); duplicateLine.mutate(linha.id); }} title="Duplicar">
