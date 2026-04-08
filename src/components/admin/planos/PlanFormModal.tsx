@@ -199,22 +199,17 @@ function SearchableSelectionSection({
                     return (
                       <div
                         key={item.id}
-                        role="button"
-                        tabIndex={0}
-                        onClick={() => onToggle(item.id)}
-                        onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(item.id); } }}
                         className={cn(
-                          'flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-all cursor-pointer',
+                          'flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-all',
                           selected
                             ? 'border-primary/40 bg-primary/10 shadow-sm'
-                            : 'border-border/60 bg-card/60 hover:border-primary/20 hover:bg-accent/40',
+                            : 'border-border/60 bg-card/60',
                         )}
                       >
                         <Checkbox
                           checked={selected}
                           onCheckedChange={() => onToggle(item.id)}
-                          onClick={(event) => event.stopPropagation()}
-                          className="mt-0.5"
+                          className="mt-0.5 cursor-pointer"
                         />
 
                         <div className="min-w-0 flex-1 space-y-1">
