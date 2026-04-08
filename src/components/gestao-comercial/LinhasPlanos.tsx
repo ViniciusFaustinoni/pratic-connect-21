@@ -322,7 +322,7 @@ export function LinhasPlanos() {
                       >
                         <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
                         <button
-                          onClick={() => setPlanoSheet({ open: true, planoId: plano.id, linhaId: linha.id })}
+                          onClick={() => setPlanoModal({ open: true, plan: plano as unknown as PlanWithDetails, defaultLineId: linha.id })}
                           className="flex-1 flex items-center gap-3 px-3 py-2 rounded-md hover:bg-background transition-colors text-left"
                         >
                           <div className="flex-1 min-w-0">
