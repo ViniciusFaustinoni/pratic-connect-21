@@ -124,7 +124,6 @@ const MENU_COLORS: Record<string, string> = {
   juridico: '#1e40af',       // Azul escuro
   rh: '#22c55e',             // Verde claro
   marketing: '#d946ef',      // Magenta
-  ouvidoria: '#38bdf8',      // Azul claro
   diretoria: '#fbbf24',      // Dourado
   relatorios: '#6366f1',     // Índigo
   configuracoes: '#94a3b8',  // Cinza
