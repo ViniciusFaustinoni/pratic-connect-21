@@ -85,6 +85,26 @@ export function PlanFormModal({
   const updatePlan = useUpdatePlan();
   const updateExclusions = useUpdateBenefitExclusions();
 
+  // Fetch full plan data from DB by ID (source of truth)
+  const { data: fullPlanData } = useQuery({
+    queryKey: ['plan-form-modal-full', plan?.id],
+    queryFn: async () => {
+      const { data, error } = await supabase
+        .from('planos')
+        .select(`
+          *,
+          product_lines(*),
+          planos_beneficios(*, benefits:benefit_id(*)),
+          planos_coberturas(*, coberturas:cobertura_id(*))
+        `)
+        .eq('id', plan!.id)
+        .single();
+      if (error) throw error;
+      return data as any;
+    },
+    enabled: !!plan?.id && open,
+  });
+
   // Fetch available linha_slugs from price tables
   const { data: availableLinhaSlugs } = useQuery({
     queryKey: ['available-linha-slugs'],
