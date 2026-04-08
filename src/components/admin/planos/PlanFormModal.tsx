@@ -30,7 +30,7 @@ import { useRegioes } from '@/hooks/useRegioes';
 import { useCategoriasVeiculoPlano } from '@/hooks/useConteudosSistema';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
-import { ElegibilidadeTab } from './ElegibilidadeTab';
+
 import { EligibilityRulesEditor } from './EligibilityRulesEditor';
 import { MarcaModeloExclusionEditor } from './MarcaModeloExclusionEditor';
 import { useQuery } from '@tanstack/react-query';
