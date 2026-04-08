@@ -29,7 +29,7 @@
     <link rel="apple-touch-icon" sizes="120x120" href="/pwa-192x192.png" />
     
     <!-- PWA Manifest - Dinâmico baseado na rota -->
-    <link rel="manifest" id="pwa-manifest" href="/manifest-associado.json" />
+    <link rel="alternate" id="pwa-manifest" />
     
     <!-- PWA iOS Meta Tags -->
     <meta name="apple-mobile-web-app-capable" content="yes" />
@@ -59,14 +59,23 @@
     <script>
       (function() {
         var path = window.location.pathname;
+        var hostname = window.location.hostname;
         var isInstalador = path.startsWith('/instalador');
+        var isPreviewHost = hostname.endsWith('.lovableproject.com') || hostname.startsWith('id-preview--');
+        var manifestHref = isInstalador
+          ? '/manifest-profissional.json'
+          : '/manifest-associado.json';
         
         // Atualizar manifest
         var manifestLink = document.getElementById('pwa-manifest');
         if (manifestLink) {
-          manifestLink.href = isInstalador 
-            ? '/manifest-profissional.json' 
-            : '/manifest-associado.json';
+          if (isPreviewHost) {
+            manifestLink.removeAttribute('href');
+            manifestLink.setAttribute('rel', 'alternate');
+          } else {
+            manifestLink.setAttribute('rel', 'manifest');
+            manifestLink.setAttribute('href', manifestHref);
+          }
         }
         
         // Atualizar título
