@@ -363,11 +363,11 @@ export function LinhasPlanos() {
         onOpenChange={(open) => { if (!open) setLinhaModal({ open: false }); }}
         productLine={linhaModal.productLine}
       />
-      <PlanFormModalWrapper
+      <PlanFormModal
         open={planoModal.open}
         onOpenChange={(open) => { if (!open) setPlanoModal({ open: false }); }}
-        planId={planoModal.planId}
-        defaultLineId={planoModal.defaultLineId}
+        plan={planoModal.planId ? { id: planoModal.planId } : null}
+        defaultProductLineId={planoModal.defaultLineId}
       />
       <ImportarLinhasModal open={importModal} onClose={() => setImportModal(false)} />
 

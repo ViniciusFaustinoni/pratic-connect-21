@@ -800,7 +800,7 @@ export function ProdutosPlanos() {
       <PlanFormModal
         open={modalOpen}
         onOpenChange={(open) => { if (!open) setModalOpen(false); }}
-        plan={produtoEdit as PlanWithDetails | null}
+        plan={produtoEdit ? { id: produtoEdit.id } : null}
       />
 
       <FaixaPrecoModal
