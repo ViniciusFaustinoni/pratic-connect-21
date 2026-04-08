@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback, useRef } from 'react';
+import { useEffect, useState, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { FieldHint } from './FieldHint';
 import { PLAN_FIELD_HINTS } from './planFieldHints';
@@ -13,7 +13,6 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -21,27 +20,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { useProductLines, useBenefits, useCoberturas } from '@/hooks/usePlans';
 import { useCreatePlan, useUpdatePlan, PlanBenefitInput } from '@/hooks/usePlansAdmin';
-import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
-import { useRegioes } from '@/hooks/useRegioes';
-import { useCategoriasVeiculoPlano } from '@/hooks/useConteudosSistema';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
 
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { PlanWithDetails } from '@/hooks/usePlans';
-
-interface CotaCategoria {
-  categoria_veiculo: string;
-  cota_percentual: string;
-  cota_minima_valor: string;
-}
-
-// Dynamic categories loaded from DB via useCategoriasVeiculoPlano()
 
 interface PlanFormModalProps {
   open: boolean;
@@ -77,13 +64,9 @@ export function PlanFormModal({
   const { data: productLines } = useProductLines();
   const { data: benefits } = useBenefits();
   const { data: coberturasCatalogo } = useCoberturas();
-  const { data: regioes } = useRegioes();
-  const { data: VEHICLE_CATEGORIES = [] } = useCategoriasVeiculoPlano();
   const createPlan = useCreatePlan();
   const updatePlan = useUpdatePlan();
-  const updateExclusions = useUpdateBenefitExclusions();
 
-  // Fetch full plan data from DB by ID (source of truth)
   const { data: fullPlanData } = useQuery({
     queryKey: ['plan-form-modal-full', plan?.id],
     queryFn: async () => {
@@ -103,99 +86,44 @@ export function PlanFormModal({
     enabled: !!plan?.id && open,
   });
 
-
-  // Fetch current region links for editing
-  const { data: currentRegioes } = useQuery({
-    queryKey: ['plano-regioes', plan?.id],
-    queryFn: async () => {
-      if (!plan?.id) return [];
-      const { data } = await supabase
-        .from('planos_regioes')
-        .select('regiao_id')
-        .eq('plano_id', plan.id);
-      return (data || []).map(r => r.regiao_id);
-    },
-    enabled: !!plan?.id && open,
-  });
-
-
-  // Fetch existing cotas por categoria for editing
-  const { data: existingCotasCat } = useQuery({
-    queryKey: ['plano-cotas-categoria', plan?.id],
-    queryFn: async () => {
-      if (!plan?.id) return [];
-      const { data } = await supabase
-        .from('planos_cotas_categoria' as any)
-        .select('categoria_veiculo, cota_percentual, cota_minima_valor')
-        .eq('plano_id', plan.id);
-      return ((data || []) as unknown) as { categoria_veiculo: string; cota_percentual: number; cota_minima_valor: number }[];
-    },
-    enabled: !!plan?.id && open,
-  });
-
   const isEditing = !!plan;
 
-  // Form state
   const [formData, setFormData] = useState({
     name: '',
     slug: '',
     product_line_id: defaultProductLineId || '',
-    // tipo_uso derivado automaticamente das categorias selecionadas
     badge_text: '',
     badge_color: '',
-    coverage_type: '',
-    additional_price: '',
-    desconto_percentual: '',
-    cota_participacao: '',
     restriction_alert: '',
     footer_note: '',
     display_order: '0',
     is_active: true,
-    categorias_veiculo: [] as string[],
   });
 
   const [selectedBenefits, setSelectedBenefits] = useState<PlanBenefitInput[]>([]);
   const [selectedCoberturas, setSelectedCoberturas] = useState<{ cobertura_id: string }[]>([]);
-  const [pendingExclusions, setPendingExclusions] = useState<Map<string, string[]>>(new Map());
-  const [cotasCategorias, setCotasCategorias] = useState<CotaCategoria[]>([]);
-  const [selectedRegioes, setSelectedRegioes] = useState<string[]>([]);
 
-  // Callback for exclusion changes from BenefitsSelector
-  const handleExclusionsChange = useCallback((exclusions: Map<string, string[]>) => {
-    setPendingExclusions(exclusions);
-  }, []);
-
-  // Track if form has been initialized from DB data
   const formInitializedRef = useRef(false);
 
-  // Reset initialization flag when plan changes or modal opens/closes
   useEffect(() => {
     formInitializedRef.current = false;
   }, [plan?.id, open]);
 
-  // Reset form when plan data loads from DB (runs once per plan)
   useEffect(() => {
     if (formInitializedRef.current) return;
     const p = fullPlanData;
     if (p) {
       formInitializedRef.current = true;
-      const categoria = p.categoria;
-      const categorias = categoria ? categoria.split(',').map((c: string) => c.trim()).filter(Boolean) : [];
       setFormData({
         name: p.nome || '',
         slug: p.slug || '',
         product_line_id: p.product_line_id || '',
         badge_text: p.badge_text || '',
         badge_color: p.badge_color || '',
-        coverage_type: p.tipo_cobertura || '',
-        additional_price: p.adicional_mensal?.toString() || '',
-        desconto_percentual: p.desconto_percentual?.toString() || '',
-        cota_participacao: p.cota_participacao?.toString() || '',
         restriction_alert: p.restriction_alert || '',
         footer_note: p.footer_note || '',
         display_order: (p.ordem || 0).toString(),
         is_active: p.ativo ?? true,
-        categorias_veiculo: categorias,
       });
       setSelectedBenefits(
         (p.planos_beneficios || []).map((pb: any) => ({
@@ -212,9 +140,6 @@ export function PlanFormModal({
           cobertura_id: pc.cobertura_id,
         }))
       );
-      if (currentRegioes) {
-        setSelectedRegioes(currentRegioes);
-      }
     } else if (!plan) {
       setFormData({
         name: '',
@@ -222,54 +147,16 @@ export function PlanFormModal({
         product_line_id: defaultProductLineId || '',
         badge_text: '',
         badge_color: '',
-        coverage_type: '',
-        additional_price: '',
-        desconto_percentual: '',
-        cota_participacao: '',
         restriction_alert: '',
         footer_note: '',
         display_order: '0',
         is_active: true,
-        categorias_veiculo: [],
       });
       setSelectedBenefits([]);
       setSelectedCoberturas([]);
-      setSelectedRegioes([]);
     }
-  }, [fullPlanData, plan, defaultProductLineId, currentRegioes]);
+  }, [fullPlanData, plan, defaultProductLineId]);
 
-
-  // Sync selectedRegioes from DB when editing (handles late async loading)
-  useEffect(() => {
-    if (currentRegioes) {
-      setSelectedRegioes(currentRegioes);
-    }
-  }, [currentRegioes]);
-
-  // Sync cotasCategorias from DB when editing
-  useEffect(() => {
-    if (existingCotasCat && existingCotasCat.length > 0) {
-      setCotasCategorias(existingCotasCat.map(c => ({
-        categoria_veiculo: c.categoria_veiculo,
-        cota_percentual: c.cota_percentual?.toString() || '6',
-        cota_minima_valor: c.cota_minima_valor?.toString() || '1200',
-      })));
-    }
-  }, [existingCotasCat]);
-
-  // Keep cotasCategorias in sync with selected categories
-  useEffect(() => {
-    setCotasCategorias(prev => {
-      const result: CotaCategoria[] = [];
-      for (const cat of formData.categorias_veiculo) {
-        const existing = prev.find(c => c.categoria_veiculo === cat);
-        result.push(existing || { categoria_veiculo: cat, cota_percentual: '6', cota_minima_valor: '1200' });
-      }
-      return result;
-    });
-  }, [formData.categorias_veiculo]);
-
-  // Auto-generate slug from name
   const handleNameChange = (name: string) => {
     setFormData((prev) => ({
       ...prev,
@@ -285,78 +172,32 @@ export function PlanFormModal({
       name: formData.name,
       slug: formData.slug,
       product_line_id: formData.product_line_id,
-      tipo_uso: formData.categorias_veiculo.includes('aplicativo') ? 'aplicativo' as const : 'passeio' as const,
       badge_text: formData.badge_text || null,
       badge_color: formData.badge_color || null,
-      coverage_type: formData.coverage_type || null,
-      additional_price: formData.additional_price
-        ? parseFloat(formData.additional_price)
-        : null,
-      desconto_percentual: formData.desconto_percentual
-        ? parseFloat(formData.desconto_percentual)
-        : null,
-      cota_participacao: formData.cota_participacao
-        ? parseFloat(formData.cota_participacao)
-        : null,
       restriction_alert: formData.restriction_alert || null,
       footer_note: formData.footer_note || null,
       display_order: parseInt(formData.display_order) || 0,
       is_active: formData.is_active,
       benefits: selectedBenefits,
       coberturas: selectedCoberturas,
-      categorias_veiculo: formData.categorias_veiculo.length > 0 ? formData.categorias_veiculo.join(',') : null,
-      regioes: selectedRegioes,
     };
 
     try {
-      let planId: string;
       if (isEditing && plan) {
         await updatePlan.mutateAsync({ id: plan.id, ...payload });
-        planId = plan.id;
       } else {
-        const created = await createPlan.mutateAsync(payload);
-        planId = (created as any)?.id || plan?.id || '';
+        await createPlan.mutateAsync(payload);
       }
-
-      // Save cotas por categoria
-      if (planId && cotasCategorias.length > 0) {
-        await supabase
-          .from('planos_cotas_categoria' as any)
-          .delete()
-          .eq('plano_id', planId);
-
-        const rows = cotasCategorias.map(c => ({
-          plano_id: planId,
-          categoria_veiculo: c.categoria_veiculo,
-          cota_percentual: parseFloat(c.cota_percentual) || 6,
-          cota_minima_valor: parseFloat(c.cota_minima_valor) || 1200,
-        }));
-
-        await supabase
-          .from('planos_cotas_categoria' as any)
-          .insert(rows);
-      }
-
-      // Save benefit exclusions
-      if (pendingExclusions.size > 0) {
-        for (const [benefitId, categorias] of pendingExclusions) {
-          await updateExclusions.mutateAsync({ benefitId, categorias });
-        }
-      }
-
       onOpenChange(false);
     } catch (error) {
       // Error is handled by mutation
     }
   };
 
-  // Build preview data
   const previewData = {
     ...formData,
     id: plan?.id || 'preview',
-    additional_price: formData.additional_price
-      ? parseFloat(formData.additional_price)
-      : null,
+    additional_price: null,
     display_order: parseInt(formData.display_order) || 0,
     product_lines: productLines?.find((l) => l.id === formData.product_line_id) || null,
     plan_benefits: selectedBenefits.map((sb, index) => ({
@@ -387,354 +228,156 @@ export function PlanFormModal({
           <div className="flex-1 overflow-hidden">
             <form onSubmit={handleSubmit} className="h-full flex flex-col">
               <ScrollArea className="flex-1 px-6">
-                <Tabs defaultValue="basico" className="pb-6">
-                  <TabsList className="mb-4 flex-wrap">
-                    <TabsTrigger value="basico">Básico</TabsTrigger>
-                    <TabsTrigger value="beneficios">Coberturas e Benefícios</TabsTrigger>
-                    
-                    
-                    <TabsTrigger value="outros">Outros</TabsTrigger>
-                  </TabsList>
-
-                  <TabsContent value="basico" className="space-y-4">
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="name">Nome *<FieldHint text={PLAN_FIELD_HINTS.name} /></Label>
-                        <Input
-                          id="name"
-                          value={formData.name}
-                          onChange={(e) => handleNameChange(e.target.value)}
-                          required
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="slug">Slug<FieldHint text={PLAN_FIELD_HINTS.slug} /></Label>
-                        <Input
-                          id="slug"
-                          value={formData.slug}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, slug: e.target.value }))
-                          }
-                          disabled={isEditing}
-                        />
-                      </div>
-                    </div>
-
+                <div className="space-y-6 pb-6">
+                  {/* Nome + Slug */}
+                  <div className="grid grid-cols-2 gap-4">
                     <div className="space-y-2">
-                      <Label htmlFor="product_line_id">Linha de Produto *<FieldHint text={PLAN_FIELD_HINTS.product_line_id} /></Label>
+                      <Label htmlFor="name">Nome *<FieldHint text={PLAN_FIELD_HINTS.name} /></Label>
+                      <Input
+                        id="name"
+                        value={formData.name}
+                        onChange={(e) => handleNameChange(e.target.value)}
+                        required
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="slug">Slug<FieldHint text={PLAN_FIELD_HINTS.slug} /></Label>
+                      <Input
+                        id="slug"
+                        value={formData.slug}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, slug: e.target.value }))
+                        }
+                        disabled={isEditing}
+                      />
+                    </div>
+                  </div>
+
+                  {/* Linha de Produto */}
+                  <div className="space-y-2">
+                    <Label htmlFor="product_line_id">Linha de Produto *<FieldHint text={PLAN_FIELD_HINTS.product_line_id} /></Label>
+                    <Select
+                      value={formData.product_line_id}
+                      onValueChange={(value) =>
+                        setFormData((prev) => ({ ...prev, product_line_id: value }))
+                      }
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione..." />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {productLines?.map((line) => (
+                          <SelectItem key={line.id} value={line.id}>
+                            {line.icon} {line.name}
+                          </SelectItem>
+                        ))}
+                      </SelectContent>
+                    </Select>
+                  </div>
+
+                  {/* Badge + Cor */}
+                  <div className="grid grid-cols-2 gap-4">
+                    <div className="space-y-2">
+                      <Label htmlFor="badge_text">Badge<FieldHint text={PLAN_FIELD_HINTS.badge_text} /></Label>
+                      <Input
+                        id="badge_text"
+                        value={formData.badge_text}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, badge_text: e.target.value }))
+                        }
+                        placeholder="Ex: Mais Vendido"
+                      />
+                    </div>
+                    <div className="space-y-2">
+                      <Label htmlFor="badge_color">Cor do Badge<FieldHint text={PLAN_FIELD_HINTS.badge_color} /></Label>
                       <Select
-                        value={formData.product_line_id}
+                        value={formData.badge_color}
                         onValueChange={(value) =>
-                          setFormData((prev) => ({ ...prev, product_line_id: value }))
+                          setFormData((prev) => ({ ...prev, badge_color: value }))
                         }
                       >
                         <SelectTrigger>
                           <SelectValue placeholder="Selecione..." />
                         </SelectTrigger>
                         <SelectContent>
-                          {productLines?.map((line) => (
-                            <SelectItem key={line.id} value={line.id}>
-                              {line.icon} {line.name}
+                          {BADGE_COLORS.map((color) => (
+                            <SelectItem key={color.value} value={color.value}>
+                              {color.label}
                             </SelectItem>
                           ))}
                         </SelectContent>
                       </Select>
                     </div>
+                  </div>
 
-                    {/* Tipo de Cliente removido — derivado automaticamente das Categorias de Veículo Aceitas */}
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="badge_text">Badge<FieldHint text={PLAN_FIELD_HINTS.badge_text} /></Label>
-                        <Input
-                          id="badge_text"
-                          value={formData.badge_text}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, badge_text: e.target.value }))
-                          }
-                          placeholder="Ex: Mais Vendido"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="badge_color">Cor do Badge<FieldHint text={PLAN_FIELD_HINTS.badge_color} /></Label>
-                        <Select
-                          value={formData.badge_color}
-                          onValueChange={(value) =>
-                            setFormData((prev) => ({ ...prev, badge_color: value }))
-                          }
-                        >
-                          <SelectTrigger>
-                            <SelectValue placeholder="Selecione..." />
-                          </SelectTrigger>
-                          <SelectContent>
-                            {BADGE_COLORS.map((color) => (
-                              <SelectItem key={color.value} value={color.value}>
-                                {color.label}
-                              </SelectItem>
-                            ))}
-                          </SelectContent>
-                        </Select>
-                      </div>
-                    </div>
-
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="coverage_type">Tipo de Cobertura<FieldHint text={PLAN_FIELD_HINTS.coverage_type} /></Label>
-                        <Input
-                          id="coverage_type"
-                          value={formData.coverage_type}
-                          onChange={(e) =>
-                            setFormData((prev) => ({ ...prev, coverage_type: e.target.value }))
-                          }
-                          placeholder="Ex: 100% FIPE"
-                        />
-                      </div>
-                    </div>
-
-                    {/* Cota de Participação */}
-                    <div className="space-y-2">
-                      <Label htmlFor="cota_participacao">Cota de Participação (% FIPE)<FieldHint text="Porcentagem da tabela FIPE cobrada do associado em eventos de colisão, roubo/furto parcial, etc. Ex: 6 = 6% da FIPE." /></Label>
-                      <Input
-                        id="cota_participacao"
-                        type="number"
-                        step="0.5"
-                        min="0"
-                        max="100"
-                        value={formData.cota_participacao}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            cota_participacao: e.target.value,
-                          }))
+                  {/* Ativo + Ordem */}
+                  <div className="flex items-center gap-6">
+                    <div className="flex items-center gap-2">
+                      <Switch
+                        id="is_active"
+                        checked={formData.is_active}
+                        onCheckedChange={(checked) =>
+                          setFormData((prev) => ({ ...prev, is_active: checked }))
                         }
-                        placeholder="Ex: 6"
                       />
-                      <p className="text-xs text-muted-foreground">Valor percentual sobre a FIPE cobrado do associado em sinistros de colisão.</p>
+                      <Label htmlFor="is_active">Ativo<FieldHint text={PLAN_FIELD_HINTS.is_active} /></Label>
                     </div>
-
-                    {/* Categorias de Veículo Aceitas */}
-                    <div className="space-y-2">
-                      <Label>Categorias de Veículo Aceitas<FieldHint text={PLAN_FIELD_HINTS.categorias_veiculo} /></Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {VEHICLE_CATEGORIES.map((cat) => (
-                          <div key={cat.value} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`cat-${cat.value}`}
-                              checked={formData.categorias_veiculo.includes(cat.value)}
-                              onCheckedChange={(checked) => {
-                                setFormData((prev) => ({
-                                  ...prev,
-                                  categorias_veiculo: checked
-                                    ? [...prev.categorias_veiculo, cat.value]
-                                    : prev.categorias_veiculo.filter((c) => c !== cat.value),
-                                }));
-                              }}
-                            />
-                            <Label htmlFor={`cat-${cat.value}`} className="text-sm font-normal cursor-pointer">
-                              {cat.label}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
+                    <div className="flex items-center gap-2">
+                      <Label htmlFor="display_order" className="whitespace-nowrap">Ordem<FieldHint text={PLAN_FIELD_HINTS.display_order} /></Label>
+                      <Input
+                        id="display_order"
+                        type="number"
+                        className="w-20"
+                        value={formData.display_order}
+                        onChange={(e) =>
+                          setFormData((prev) => ({ ...prev, display_order: e.target.value }))
+                        }
+                      />
                     </div>
+                  </div>
 
-                    {/* Regiões */}
-                    <div className="space-y-2">
-                      <Label>Regiões Disponíveis<FieldHint text={PLAN_FIELD_HINTS.regioes} /></Label>
-                      <div className="grid grid-cols-2 gap-2">
-                        {regioes?.filter(r => r.ativa).map((regiao) => (
-                          <div key={regiao.id} className="flex items-center gap-2">
-                            <Checkbox
-                              id={`regiao-${regiao.id}`}
-                              checked={selectedRegioes.includes(regiao.id)}
-                              onCheckedChange={(checked) => {
-                                setSelectedRegioes(prev =>
-                                  checked
-                                    ? [...prev, regiao.id]
-                                    : prev.filter(id => id !== regiao.id)
-                                );
-                              }}
-                            />
-                            <Label htmlFor={`regiao-${regiao.id}`} className="text-sm font-normal cursor-pointer">
-                              {regiao.nome}
-                            </Label>
-                          </div>
-                        ))}
-                      </div>
-                      <p className="text-xs text-muted-foreground">
-                        Selecione em quais regiões este plano está disponível
-                      </p>
-                    </div>
-
-                    <div className="flex items-center gap-4">
-                      <div className="flex items-center gap-2">
-                        <Switch
-                          id="is_active"
-                          checked={formData.is_active}
-                          onCheckedChange={(checked) =>
-                            setFormData((prev) => ({ ...prev, is_active: checked }))
-                          }
-                        />
-                        <Label htmlFor="is_active">Ativo<FieldHint text={PLAN_FIELD_HINTS.is_active} /></Label>
-                      </div>
-                    </div>
-
-                    {/* Preço Adicional e Desconto */}
-                    <div className="grid grid-cols-2 gap-4">
-                      <div className="space-y-2">
-                        <Label htmlFor="additional_price">Preço Adicional (R$)<FieldHint text={PLAN_FIELD_HINTS.additional_price} /></Label>
-                        <Input
-                          id="additional_price"
-                          type="number"
-                          step="0.01"
-                          value={formData.additional_price}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              additional_price: e.target.value,
-                            }))
-                          }
-                          placeholder="0.00"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="desconto_percentual">Desconto Promocional (%)<FieldHint text={PLAN_FIELD_HINTS.desconto_percentual} /></Label>
-                        <Input
-                          id="desconto_percentual"
-                          type="number"
-                          step="0.1"
-                          value={formData.desconto_percentual}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              desconto_percentual: e.target.value,
-                            }))
-                          }
-                          placeholder="0"
-                        />
-                        <p className="text-xs text-muted-foreground">
-                          Percentual de desconto sobre o valor mensal (ex: 5 = 5% OFF). Deixe 0 para sem desconto.
-                        </p>
-                      </div>
-                    </div>
-
-                    {/* Cotas por Categoria */}
-                    <div className="space-y-3">
-                      <Label className="text-sm font-semibold">Cota de Participação por Categoria<FieldHint text={PLAN_FIELD_HINTS.cotas_categoria} /></Label>
-                      {formData.categorias_veiculo.length === 0 ? (
-                        <p className="text-xs text-muted-foreground italic">
-                          Selecione categorias de veículo acima para configurar cotas.
-                        </p>
-                      ) : (
-                        cotasCategorias.map((cota) => {
-                          const catLabel = VEHICLE_CATEGORIES.find(c => c.value === cota.categoria_veiculo)?.label || cota.categoria_veiculo;
-                          return (
-                            <div key={cota.categoria_veiculo} className="rounded-lg border p-3 space-y-2">
-                              <p className="text-sm font-medium">{catLabel}</p>
-                              <div className="grid grid-cols-2 gap-3">
-                                <div className="space-y-1">
-                                  <Label className="text-xs">Cota (%)<FieldHint text={PLAN_FIELD_HINTS.cota_percentual} /></Label>
-                                  <Input
-                                    type="number"
-                                    step="0.1"
-                                    value={cota.cota_percentual}
-                                    onChange={(e) => {
-                                      setCotasCategorias(prev => prev.map(c =>
-                                        c.categoria_veiculo === cota.categoria_veiculo
-                                          ? { ...c, cota_percentual: e.target.value }
-                                          : c
-                                      ));
-                                    }}
-                                    placeholder="6.0"
-                                  />
-                                </div>
-                                <div className="space-y-1">
-                                  <Label className="text-xs">Mínimo (R$)<FieldHint text={PLAN_FIELD_HINTS.cota_minima_valor} /></Label>
-                                  <Input
-                                    type="number"
-                                    step="0.01"
-                                    value={cota.cota_minima_valor}
-                                    onChange={(e) => {
-                                      setCotasCategorias(prev => prev.map(c =>
-                                        c.categoria_veiculo === cota.categoria_veiculo
-                                          ? { ...c, cota_minima_valor: e.target.value }
-                                          : c
-                                      ));
-                                    }}
-                                    placeholder="1200.00"
-                                  />
-                                </div>
-                              </div>
-                            </div>
-                          );
-                        })
-                      )}
-                    </div>
-                  </TabsContent>
-
-                  <TabsContent value="beneficios">
+                  {/* Separator: Coberturas e Benefícios */}
+                  <div className="border-t pt-4">
+                    <h3 className="text-sm font-semibold text-foreground mb-3">Coberturas e Benefícios</h3>
                     <BenefitsSelector
                       benefits={benefits || []}
                       selectedBenefits={selectedBenefits}
                       onChange={setSelectedBenefits}
-                      onExclusionsChange={handleExclusionsChange}
                       coberturas={coberturasCatalogo || []}
                       selectedCoberturas={selectedCoberturas}
                       onCoberturasChange={setSelectedCoberturas}
                     />
-                  </TabsContent>
+                  </div>
 
-
-
-                  <TabsContent value="outros" className="space-y-4">
+                  {/* Separator: Observações */}
+                  <div className="border-t pt-4 space-y-4">
+                    <h3 className="text-sm font-semibold text-foreground">Observações</h3>
                     <div className="space-y-2">
                       <Label htmlFor="restriction_alert">Alerta de Restrição<FieldHint text={PLAN_FIELD_HINTS.restriction_alert} /></Label>
                       <Textarea
                         id="restriction_alert"
                         value={formData.restriction_alert}
                         onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            restriction_alert: e.target.value,
-                          }))
+                          setFormData((prev) => ({ ...prev, restriction_alert: e.target.value }))
                         }
                         placeholder="Mensagem de alerta exibida no card"
                         rows={3}
                       />
                     </div>
-
                     <div className="space-y-2">
                       <Label htmlFor="footer_note">Nota de Rodapé<FieldHint text={PLAN_FIELD_HINTS.footer_note} /></Label>
                       <Textarea
                         id="footer_note"
                         value={formData.footer_note}
                         onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            footer_note: e.target.value,
-                          }))
+                          setFormData((prev) => ({ ...prev, footer_note: e.target.value }))
                         }
                         placeholder="Texto pequeno no rodapé do card"
                         rows={2}
                       />
                     </div>
-
-                    <div className="space-y-2">
-                      <Label htmlFor="display_order">Ordem de Exibição<FieldHint text={PLAN_FIELD_HINTS.display_order} /></Label>
-                      <Input
-                        id="display_order"
-                        type="number"
-                        value={formData.display_order}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            display_order: e.target.value,
-                          }))
-                        }
-                      />
-                    </div>
-                  </TabsContent>
-                </Tabs>
+                  </div>
+                </div>
               </ScrollArea>
 
               <div className="p-6 border-t flex justify-end gap-2">
@@ -765,9 +408,9 @@ export function PlanFormModal({
           {/* Preview Side */}
           <div className="w-80 border-l bg-muted/30 p-4 overflow-auto">
             <p className="text-sm font-medium mb-3">Preview</p>
-            <PlanPreview 
-              plan={previewData} 
-              pendingExclusions={pendingExclusions}
+            <PlanPreview
+              plan={previewData}
+              pendingExclusions={new Map()}
               benefits={benefits}
             />
           </div>
