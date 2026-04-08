@@ -372,6 +372,7 @@ export function PlanFormModal({
       display_order: parseInt(formData.display_order) || 0,
       is_active: formData.is_active,
       benefits: selectedBenefits,
+      coberturas: selectedCoberturas,
       linha_slug: formData.linha_slug || null,
       categorias_veiculo: formData.categorias_veiculo.length > 0 ? formData.categorias_veiculo.join(',') : null,
       regioes: selectedRegioes,
