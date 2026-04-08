@@ -61,6 +61,7 @@ export function useCreatePlan() {
         ano_fabricacao_maximo: planData.ano_fabricacao_maximo ?? null,
         adicional_mensal: planData.additional_price || 0,
         desconto_percentual: planData.desconto_percentual ?? 0,
+        cota_participacao: planData.cota_participacao ?? null,
         restriction_alert: planData.restriction_alert,
         footer_note: planData.footer_note,
         ordem: planData.display_order || 0,
