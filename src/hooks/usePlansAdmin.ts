@@ -38,6 +38,7 @@ export interface PlanInput {
   display_order?: number;
   is_active?: boolean;
   benefits?: PlanBenefitInput[];
+  coberturas?: { cobertura_id: string }[];
   linha_slug?: string | null;
   categorias_veiculo?: string | null;
   regioes?: string[];
@@ -50,7 +51,7 @@ export function useCreatePlan() {
 
   return useMutation({
     mutationFn: async (input: PlanInput) => {
-      const { benefits, linha_slug, categorias_veiculo, regioes, ...planData } = input;
+      const { benefits, coberturas, linha_slug, categorias_veiculo, regioes, ...planData } = input;
 
       // Mapear para campos da tabela planos
       const planoData = {
@@ -123,6 +124,17 @@ export function useCreatePlan() {
         if (benefitsError) throw benefitsError;
       }
 
+      // Create planos_coberturas if provided
+      if (coberturas && coberturas.length > 0) {
+        const { error: cobError } = await supabase
+          .from('planos_coberturas')
+          .insert(coberturas.map(c => ({
+            plano_id: plan.id,
+            cobertura_id: c.cobertura_id,
+          })));
+        if (cobError) throw cobError;
+      }
+
       // Create region links
       if (regioes && regioes.length > 0) {
         const { error: regioesError } = await supabase
@@ -152,7 +164,7 @@ export function useUpdatePlan() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: PlanInput & { id: string }) => {
-      const { benefits, linha_slug, categorias_veiculo, regioes, ...planData } = input;
+      const { benefits, coberturas, linha_slug, categorias_veiculo, regioes, ...planData } = input;
 
       // Mapear para campos da tabela planos
       const planoData = {
@@ -234,6 +246,20 @@ export function useUpdatePlan() {
             .insert(planBenefits);
 
           if (insertError) throw insertError;
+        }
+      }
+
+      // Update planos_coberturas - delete old and insert new
+      if (coberturas !== undefined) {
+        await supabase.from('planos_coberturas').delete().eq('plano_id', id);
+        if (coberturas.length > 0) {
+          const { error: cobError } = await supabase
+            .from('planos_coberturas')
+            .insert(coberturas.map(c => ({
+              plano_id: id,
+              cobertura_id: c.cobertura_id,
+            })));
+          if (cobError) throw cobError;
         }
       }
 

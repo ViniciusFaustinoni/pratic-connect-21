@@ -23,8 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useProductLines } from '@/hooks/usePlans';
-import { useBenefits } from '@/hooks/usePlans';
+import { useProductLines, useBenefits, useCoberturas } from '@/hooks/usePlans';
 import { useCreatePlan, useUpdatePlan, PlanBenefitInput } from '@/hooks/usePlansAdmin';
 import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
 import { useRegioes } from '@/hooks/useRegioes';
@@ -79,6 +78,7 @@ export function PlanFormModal({
 }: PlanFormModalProps) {
   const { data: productLines } = useProductLines();
   const { data: benefits } = useBenefits();
+  const { data: coberturasCatalogo } = useCoberturas();
   const { data: regioes } = useRegioes();
   const { data: VEHICLE_CATEGORIES = [] } = useCategoriasVeiculoPlano();
   const createPlan = useCreatePlan();
@@ -193,6 +193,7 @@ export function PlanFormModal({
   });
 
   const [selectedBenefits, setSelectedBenefits] = useState<PlanBenefitInput[]>([]);
+  const [selectedCoberturas, setSelectedCoberturas] = useState<{ cobertura_id: string }[]>([]);
   const [pendingExclusions, setPendingExclusions] = useState<Map<string, string[]>>(new Map());
   const [cotasCategorias, setCotasCategorias] = useState<CotaCategoria[]>([]);
   const [selectedRegioes, setSelectedRegioes] = useState<string[]>([]);
@@ -242,6 +243,11 @@ export function PlanFormModal({
           display_order: pb.display_order ?? 0,
         }))
       );
+      setSelectedCoberturas(
+        (p.planos_coberturas || []).map((pc: any) => ({
+          cobertura_id: pc.cobertura_id,
+        }))
+      );
       if (currentRegioes) {
         setSelectedRegioes(currentRegioes);
       }
@@ -250,7 +256,6 @@ export function PlanFormModal({
         name: '',
         slug: '',
         product_line_id: defaultProductLineId || '',
-        // tipo_uso derivado das categorias
         badge_text: '',
         badge_color: '',
         coverage_type: '',
@@ -272,6 +277,7 @@ export function PlanFormModal({
         categorias_veiculo: [],
       });
       setSelectedBenefits([]);
+      setSelectedCoberturas([]);
       setSelectedRegioes([]);
     }
   }, [fullPlanData, plan, defaultProductLineId, currentPrecoMap, currentRegioes]);
@@ -366,6 +372,7 @@ export function PlanFormModal({
       display_order: parseInt(formData.display_order) || 0,
       is_active: formData.is_active,
       benefits: selectedBenefits,
+      coberturas: selectedCoberturas,
       linha_slug: formData.linha_slug || null,
       categorias_veiculo: formData.categorias_veiculo.length > 0 ? formData.categorias_veiculo.join(',') : null,
       regioes: selectedRegioes,
@@ -472,7 +479,7 @@ export function PlanFormModal({
                   <TabsList className="mb-4 flex-wrap">
                     <TabsTrigger value="basico">Básico</TabsTrigger>
                     <TabsTrigger value="cotas">Cotas</TabsTrigger>
-                    <TabsTrigger value="beneficios">Benefícios</TabsTrigger>
+                    <TabsTrigger value="beneficios">Coberturas e Benefícios</TabsTrigger>
                     <TabsTrigger value="elegibilidade" disabled={!isEditing}>Elegibilidade</TabsTrigger>
                     <TabsTrigger value="regras" disabled={!isEditing}>Regras</TabsTrigger>
                     <TabsTrigger value="outros">Outros</TabsTrigger>
@@ -794,6 +801,9 @@ export function PlanFormModal({
                       selectedBenefits={selectedBenefits}
                       onChange={setSelectedBenefits}
                       onExclusionsChange={handleExclusionsChange}
+                      coberturas={coberturasCatalogo || []}
+                      selectedCoberturas={selectedCoberturas}
+                      onCoberturasChange={setSelectedCoberturas}
                     />
                   </TabsContent>
 
