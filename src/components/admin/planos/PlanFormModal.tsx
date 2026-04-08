@@ -202,50 +202,50 @@ export function PlanFormModal({
     setPendingExclusions(exclusions);
   }, []);
 
-  // Reset form when plan changes
+  // Reset form when plan data loads from DB
   useEffect(() => {
-    if (plan) {
-      const categoria = (plan as any).categoria;
+    const p = fullPlanData;
+    if (p) {
+      const categoria = p.categoria;
       const categorias = categoria ? categoria.split(',').map((c: string) => c.trim()).filter(Boolean) : [];
       setFormData({
-        name: plan.name || '',
-        slug: plan.slug || '',
-        product_line_id: plan.product_line_id || '',
-        // tipo_uso derivado das categorias
-        badge_text: plan.badge_text || '',
-        badge_color: plan.badge_color || '',
-        coverage_type: plan.coverage_type || '',
-        min_vehicle_year: plan.min_vehicle_year || '',
-        ano_fabricacao_maximo: (plan as any).ano_fabricacao_maximo?.toString() || '',
-        additional_price: plan.additional_price?.toString() || '',
-        desconto_percentual: (plan as any).desconto_percentual?.toString() || '',
-        cota_passeio_percent: plan.cota_passeio_percent?.toString() || '',
-        cota_passeio_min: plan.cota_passeio_min?.toString() || '',
-        cota_desagio_percent: plan.cota_desagio_percent?.toString() || '',
-        cota_desagio_min: plan.cota_desagio_min?.toString() || '',
-        cota_app_percent: plan.cota_app_percent?.toString() || '',
-        cota_app_min: plan.cota_app_min?.toString() || '',
-        restriction_alert: plan.restriction_alert || '',
-        footer_note: plan.footer_note || '',
-        display_order: plan.display_order?.toString() || '0',
-        is_active: plan.is_active ?? true,
+        name: p.nome || '',
+        slug: p.slug || '',
+        product_line_id: p.product_line_id || '',
+        badge_text: p.badge_text || '',
+        badge_color: p.badge_color || '',
+        coverage_type: p.tipo_cobertura || '',
+        min_vehicle_year: p.ano_minimo?.toString() || '',
+        ano_fabricacao_maximo: p.ano_fabricacao_maximo?.toString() || '',
+        additional_price: p.adicional_mensal?.toString() || '',
+        desconto_percentual: p.desconto_percentual?.toString() || '',
+        cota_passeio_percent: p.cota_passeio_percent?.toString() || '',
+        cota_passeio_min: p.cota_passeio_min?.toString() || '',
+        cota_desagio_percent: p.cota_desagio_percent?.toString() || '',
+        cota_desagio_min: p.cota_desagio_min?.toString() || '',
+        cota_app_percent: p.cota_app_percent?.toString() || '',
+        cota_app_min: p.cota_app_min?.toString() || '',
+        restriction_alert: p.restriction_alert || '',
+        footer_note: p.footer_note || '',
+        display_order: (p.ordem || 0).toString(),
+        is_active: p.ativo ?? true,
         linha_slug: currentPrecoMap?.linha_slug || '',
         categorias_veiculo: categorias,
       });
       setSelectedBenefits(
-        plan.plan_benefits?.map((pb) => ({
+        (p.planos_beneficios || []).map((pb: any) => ({
           benefit_id: pb.benefit_id,
           custom_text: pb.custom_text,
           custom_value: pb.custom_value,
           additional_info: pb.additional_info,
           is_highlighted: pb.is_highlighted ?? false,
           display_order: pb.display_order ?? 0,
-        })) || []
+        }))
       );
       if (currentRegioes) {
         setSelectedRegioes(currentRegioes);
       }
-    } else {
+    } else if (!plan) {
       setFormData({
         name: '',
         slug: '',
