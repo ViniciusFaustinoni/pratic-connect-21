@@ -29,7 +29,6 @@ export const MODULES: ModuleConfig[] = [
   { id: 'juridico', label: 'Jurídico' },
   { id: 'rh', label: 'Recursos Humanos' },
   { id: 'marketing', label: 'Marketing' },
-  { id: 'ouvidoria', label: 'Ouvidoria' },
   { id: 'diretoria', label: 'Diretoria' },
   { id: 'relatorios', label: 'Relatórios' },
   { id: 'documentos', label: 'Documentos' },
