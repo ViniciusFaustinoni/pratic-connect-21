@@ -1,59 +1,63 @@
 
 
-# Plano: Aba "Coberturas e Benefícios" no modal de edição de plano
+# Plano: Corrigir rolagem e multi-seleção colapsável de Marcas/Modelos
 
-## Problema
+## Problemas identificados
 
-A aba "Benefícios" do `PlanFormModal` exibe apenas benefícios da tabela `benefits`. As coberturas da tabela `coberturas` não aparecem como opções selecionáveis, e o sistema não salva/carrega vínculos de `planos_coberturas` pelo modal.
+1. **Rolagem quebrada**: O `SearchableSelect` usa `Popover` com `modal={false}`, que dentro de um `Dialog` + `ScrollArea` causa problemas de sobreposição e scroll
+2. **Seleção única**: Atualmente so permite selecionar uma marca por vez (adiciona uma, depois outra)
+3. **Modelos nao aparecem colapsáveis**: Marcas devem ser colapsáveis mostrando modelos dentro
 
 ## Alterações
 
-### 1. `PlanFormModal.tsx` — Renomear aba e adicionar estado de coberturas
+### 1. `MarcaModeloExclusionEditor.tsx` — Substituir SearchableSelect por lista colapsável multi-seleção
 
-- Renomear tab trigger de "Benefícios" para "Coberturas e Benefícios"
-- Importar `useCoberturas` de `@/hooks/usePlans`
-- Adicionar estado `selectedCoberturas` como array de `{ cobertura_id: string }`
-- No `useEffect` que carrega `fullPlanData`, popular `selectedCoberturas` a partir de `planos_coberturas`
-- No `handleSubmit`, incluir lógica de delete+insert para `planos_coberturas` (mesmo padrão usado para `planos_beneficios`)
-- Passar coberturas disponíveis e selecionadas para o `BenefitsSelector` (ou novo componente combinado)
+Remover o padrão atual de "selecionar marca + botão adicionar" e substituir por:
 
-### 2. `BenefitsSelector.tsx` — Aceitar coberturas como props
+- Um campo de busca (input text simples) no topo para filtrar marcas
+- Lista de marcas como itens colapsáveis (usando `Collapsible`) com checkbox
+- Ao expandir uma marca, mostra os modelos daquela marca com checkboxes individuais
+- Marcar a marca inteira = todos modelos incluídos/excluídos
+- Marcar modelos individuais = regra específica por modelo
+- Múltiplas marcas e modelos podem ser selecionados simultaneamente
+- A lista inteira fica dentro de um `ScrollArea` com altura fixa (max-h-64) para resolver o problema de scroll
+- Ao marcar/desmarcar, salva a regra automaticamente (sem botão "Adicionar")
 
-- Adicionar props: `coberturas` (lista do catálogo) e `selectedCoberturas` / `onCoberturasChange`
-- Renderizar uma seção "Coberturas" acima dos benefícios com checkboxes para cada cobertura (nome, código, tipo)
-- Coberturas são simples checkboxes (sem custom_text/valor estruturado como benefícios)
-- Agrupar coberturas por `tipo` (ex: "cobertura", "assistencia")
+### 2. `SearchableSelect` (Popover) — Corrigir modal para uso dentro de Dialog
 
-### 3. `usePlansAdmin.ts` — Salvar coberturas no create/update
+- Alterar `modal={false}` para `modal={true}` no Popover para evitar conflitos de scroll dentro de Dialogs
 
-- Em `useCreatePlan`: após inserir benefícios, inserir `planos_coberturas` com `plano_id` e `cobertura_id`
-- Em `useUpdatePlan`: após atualizar benefícios, delete+insert `planos_coberturas`
-- Adicionar `coberturas?: { cobertura_id: string }[]` ao `PlanInput`
-
-## Estrutura visual da aba
+### Estrutura visual
 
 ```text
-┌─ Coberturas e Benefícios ─────────────────────┐
+┌─ Inclusão por Marca / Modelo ─────────────────┐
+│ [Blacklist ▪] [Whitelist]                      │
 │                                                │
-│ COBERTURAS                                     │
-│ ☑ Roubo/Furto (COB-RF)                        │
-│ ☑ Colisão (COB-COL)                           │
-│ ☐ Incêndio (COB-INC)                          │
-│ ☑ Danos a Terceiros (COB-TER)                 │
+│ 🔍 Filtrar marcas...                           │
+│ ┌────────────────────────── max-h-64 scroll ─┐ │
+│ │ ▼ ☑ CHEVROLET                              │ │
+│ │     ☑ ONIX                                 │ │
+│ │     ☑ TRACKER                              │ │
+│ │     ☐ CRUZE                                │ │
+│ │ ▶ ☐ FIAT                                   │ │
+│ │ ▼ ☑ TOYOTA                                 │ │
+│ │     ☑ (todos modelos)                      │ │
+│ │ ▶ ☐ VOLKSWAGEN                             │ │
+│ └────────────────────────────────────────────┘ │
 │                                                │
-│ ─────────────────────────────────              │
-│                                                │
-│ BENEFÍCIOS                                     │
-│ geral                                          │
-│ ☑ Assistência 24h - 400km                     │
-│ ☐ Kit Gás - R$ 2.200                          │
-│ ...                                            │
+│ 3 marcas selecionadas, 5 modelos               │
 └────────────────────────────────────────────────┘
 ```
 
+### Lógica de seleção
+
+- Checkbox na marca sem expandir = marca inteira (modelos vazio = aplica a todos)
+- Expandir marca e selecionar modelos individuais = regra com array de modelos
+- Desmarcar todos modelos de uma marca = remove a regra daquela marca
+- Busca filtra tanto marcas quanto modelos
+
 ## Arquivos modificados
 
-- `src/components/admin/planos/PlanFormModal.tsx` — Renomear aba, estado de coberturas, submit com coberturas
-- `src/components/admin/planos/BenefitsSelector.tsx` — Seção de coberturas com checkboxes
-- `src/hooks/usePlansAdmin.ts` — `PlanInput.coberturas`, create/update salvam `planos_coberturas`
+- `src/components/admin/planos/MarcaModeloExclusionEditor.tsx` — Reescrever UI para lista colapsável multi-seleção
+- `src/components/ui/searchable-select.tsx` — Corrigir `modal={true}` no Popover (fix geral)
 
