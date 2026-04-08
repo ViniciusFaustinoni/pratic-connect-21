@@ -1,4 +1,4 @@
-import { useEffect, useState, useCallback } from 'react';
+import { useEffect, useState, useCallback, useRef } from 'react';
 import { Loader2 } from 'lucide-react';
 import { FieldHint } from './FieldHint';
 import { PLAN_FIELD_HINTS } from './planFieldHints';
@@ -203,10 +203,20 @@ export function PlanFormModal({
     setPendingExclusions(exclusions);
   }, []);
 
-  // Reset form when plan data loads from DB
+  // Track if form has been initialized from DB data
+  const formInitializedRef = useRef(false);
+
+  // Reset initialization flag when plan changes or modal opens/closes
   useEffect(() => {
+    formInitializedRef.current = false;
+  }, [plan?.id, open]);
+
+  // Reset form when plan data loads from DB (runs once per plan)
+  useEffect(() => {
+    if (formInitializedRef.current) return;
     const p = fullPlanData;
     if (p) {
+      formInitializedRef.current = true;
       const categoria = p.categoria;
       const categorias = categoria ? categoria.split(',').map((c: string) => c.trim()).filter(Boolean) : [];
       setFormData({

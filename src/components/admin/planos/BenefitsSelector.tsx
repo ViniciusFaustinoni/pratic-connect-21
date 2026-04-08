@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { Checkbox } from '@/components/ui/checkbox';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
@@ -159,12 +159,15 @@ export function BenefitsSelector({
     }
   }, [allExclusions, initialized]);
 
-  // Notify parent of exclusion changes
+  // Notify parent of exclusion changes - use ref to avoid loops
+  const onExclusionsChangeRef = useRef(onExclusionsChange);
+  onExclusionsChangeRef.current = onExclusionsChange;
+  
   useEffect(() => {
-    if (initialized && onExclusionsChange) {
-      onExclusionsChange(pendingExclusions);
+    if (initialized && onExclusionsChangeRef.current) {
+      onExclusionsChangeRef.current(pendingExclusions);
     }
-  }, [pendingExclusions, initialized, onExclusionsChange]);
+  }, [pendingExclusions, initialized]);
 
   const isSelected = (benefitId: string) =>
     selectedBenefits.some((b) => b.benefit_id === benefitId);
@@ -369,13 +372,11 @@ export function BenefitsSelector({
                         <Checkbox
                           checked={isCoberturaSelected(cob.id)}
                           onCheckedChange={() => toggleCobertura(cob.id)}
+                          onClick={(e) => e.stopPropagation()}
                         />
                         <span className="text-lg">{cob.icon || '🛡️'}</span>
                         <div className="flex-1">
                           <span className="font-medium text-sm">{cob.nome}</span>
-                          {cob.codigo && (
-                            <span className="ml-2 text-xs text-muted-foreground">({cob.codigo})</span>
-                          )}
                           {cob.subtitle && (
                             <p className="text-xs text-muted-foreground">{cob.subtitle}</p>
                           )}
