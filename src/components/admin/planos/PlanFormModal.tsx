@@ -231,7 +231,7 @@ function SearchableSelectionSection({
                             <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">{item.meta}</p>
                           ) : null}
                         </div>
-                      </button>
+                      </div>
                     );
                   })}
                 </div>
