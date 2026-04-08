@@ -478,7 +478,6 @@ export function PlanFormModal({
                 <Tabs defaultValue="basico" className="pb-6">
                   <TabsList className="mb-4 flex-wrap">
                     <TabsTrigger value="basico">Básico</TabsTrigger>
-                    <TabsTrigger value="cotas">Cotas</TabsTrigger>
                     <TabsTrigger value="beneficios">Coberturas e Benefícios</TabsTrigger>
                     <TabsTrigger value="elegibilidade" disabled={!isEditing}>Elegibilidade</TabsTrigger>
                     <TabsTrigger value="regras" disabled={!isEditing}>Regras</TabsTrigger>
@@ -701,52 +700,52 @@ export function PlanFormModal({
                         <Label htmlFor="is_active">Ativo<FieldHint text={PLAN_FIELD_HINTS.is_active} /></Label>
                       </div>
                     </div>
-                  </TabsContent>
 
-                  <TabsContent value="cotas" className="space-y-4">
-                    <div className="space-y-2">
-                      <Label htmlFor="additional_price">Preço Adicional (R$)<FieldHint text={PLAN_FIELD_HINTS.additional_price} /></Label>
-                      <Input
-                        id="additional_price"
-                        type="number"
-                        step="0.01"
-                        value={formData.additional_price}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            additional_price: e.target.value,
-                          }))
-                        }
-                        placeholder="0.00"
-                      />
+                    {/* Preço Adicional e Desconto */}
+                    <div className="grid grid-cols-2 gap-4">
+                      <div className="space-y-2">
+                        <Label htmlFor="additional_price">Preço Adicional (R$)<FieldHint text={PLAN_FIELD_HINTS.additional_price} /></Label>
+                        <Input
+                          id="additional_price"
+                          type="number"
+                          step="0.01"
+                          value={formData.additional_price}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              additional_price: e.target.value,
+                            }))
+                          }
+                          placeholder="0.00"
+                        />
+                      </div>
+                      <div className="space-y-2">
+                        <Label htmlFor="desconto_percentual">Desconto Promocional (%)<FieldHint text={PLAN_FIELD_HINTS.desconto_percentual} /></Label>
+                        <Input
+                          id="desconto_percentual"
+                          type="number"
+                          step="0.1"
+                          value={formData.desconto_percentual}
+                          onChange={(e) =>
+                            setFormData((prev) => ({
+                              ...prev,
+                              desconto_percentual: e.target.value,
+                            }))
+                          }
+                          placeholder="0"
+                        />
+                        <p className="text-xs text-muted-foreground">
+                          Percentual de desconto sobre o valor mensal (ex: 5 = 5% OFF). Deixe 0 para sem desconto.
+                        </p>
+                      </div>
                     </div>
 
-                    <div className="space-y-2">
-                      <Label htmlFor="desconto_percentual">Desconto Promocional (%)<FieldHint text={PLAN_FIELD_HINTS.desconto_percentual} /></Label>
-                      <Input
-                        id="desconto_percentual"
-                        type="number"
-                        step="0.1"
-                        value={formData.desconto_percentual}
-                        onChange={(e) =>
-                          setFormData((prev) => ({
-                            ...prev,
-                            desconto_percentual: e.target.value,
-                          }))
-                        }
-                        placeholder="0"
-                      />
-                      <p className="text-xs text-muted-foreground">
-                        Percentual de desconto sobre o valor mensal (ex: 5 = 5% OFF). Deixe 0 para sem desconto.
-                      </p>
-                    </div>
-
-                    {/* Dynamic cotas per selected category */}
+                    {/* Cotas por Categoria */}
                     <div className="space-y-3">
                       <Label className="text-sm font-semibold">Cota de Participação por Categoria<FieldHint text={PLAN_FIELD_HINTS.cotas_categoria} /></Label>
                       {formData.categorias_veiculo.length === 0 ? (
                         <p className="text-xs text-muted-foreground italic">
-                          Selecione categorias de veículo na aba "Básico" para configurar cotas.
+                          Selecione categorias de veículo acima para configurar cotas.
                         </p>
                       ) : (
                         cotasCategorias.map((cota) => {
