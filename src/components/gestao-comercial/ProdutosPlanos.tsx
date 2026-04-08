@@ -33,7 +33,7 @@ import { VincularCoberturaModal, EditarCoberturaVinculadaModal, FaixaPrecoModal,
 import { VincularBeneficioModal } from '@/components/gestao-comercial/VincularBeneficioModal';
 import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
 import { TabelaPrecosTab } from '@/components/gestao-comercial/TabelaPrecosTab';
-import type { PlanWithDetails } from '@/hooks/usePlans';
+
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);
@@ -800,7 +800,7 @@ export function ProdutosPlanos() {
       <PlanFormModal
         open={modalOpen}
         onOpenChange={(open) => { if (!open) setModalOpen(false); }}
-        plan={produtoEdit as PlanWithDetails | null}
+        plan={produtoEdit ? { id: produtoEdit.id } : null}
       />
 
       <FaixaPrecoModal

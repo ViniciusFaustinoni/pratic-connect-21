@@ -16,7 +16,7 @@ import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDuplicateProductLine, useDuplicatePlan } from '@/hooks/usePlansAdmin';
 import { ImportarLinhasModal } from './ImportarLinhasModal';
-import type { PlanWithDetails } from '@/hooks/usePlans';
+
 
 // ── Data hooks ──
 
@@ -164,78 +164,6 @@ function useDeletePlano() {
     },
     onSuccess: () => { qc.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] }); toast.success('Plano excluído'); },
     onError: (e: Error) => toast.error(`Erro ao excluir plano: ${e.message}`),
-  });
-}
-
-// LinhaSheet removed - now using LinhaFormModal from admin
-
-// Wrapper to fetch full plan data for PlanFormModal
-function PlanFormModalWrapper({ open, onOpenChange, planId, defaultLineId }: { 
-  open: boolean; 
-  onOpenChange: (open: boolean) => void; 
-  planId?: string; 
-  defaultLineId?: string; 
-}) {
-  const { data: allPlans } = usePlansForModal(planId);
-  const plan = planId ? (allPlans?.find(p => p.id === planId) || null) : null;
-  
-  return (
-    <PlanFormModal
-      open={open}
-      onOpenChange={onOpenChange}
-      plan={plan}
-      defaultProductLineId={defaultLineId}
-    />
-  );
-}
-
-function usePlansForModal(planId?: string) {
-  return useQuery({
-    queryKey: ['plan-for-modal', planId],
-    queryFn: async () => {
-      if (!planId) return [];
-      const { data, error } = await supabase
-        .from('planos')
-        .select(`
-          *,
-          product_lines(*),
-          planos_beneficios(*, benefits:benefit_id(*)),
-          planos_coberturas(*, coberturas:cobertura_id(*))
-        `)
-        .eq('id', planId)
-        .single();
-      if (error) throw error;
-      
-      // Transform to PlanWithDetails format
-      const plan = data as any;
-      return [{
-        ...plan,
-        name: plan.nome,
-        slug: plan.slug || null,
-        display_order: plan.ordem || 0,
-        is_active: plan.ativo,
-        additional_price: plan.adicional_mensal,
-        min_vehicle_year: plan.ano_minimo?.toString() || '',
-        coverage_type: plan.tipo_cobertura || '',
-        badge_text: plan.badge_text || '',
-        badge_color: plan.badge_color || '',
-        restriction_alert: plan.restriction_alert || '',
-        footer_note: plan.footer_note || '',
-        cota_passeio_percent: plan.cota_passeio_percent,
-        cota_passeio_min: plan.cota_passeio_min,
-        cota_desagio_percent: plan.cota_desagio_percent,
-        cota_desagio_min: plan.cota_desagio_min,
-        cota_app_percent: plan.cota_app_percent,
-        cota_app_min: plan.cota_app_min,
-        plan_benefits: (plan.planos_beneficios || []).map((pb: any) => ({
-          ...pb,
-          plan_id: pb.plano_id,
-        })),
-        plan_coverages: plan.planos_coberturas || [],
-        product_line: plan.product_lines,
-      }] as PlanWithDetails[];
-    },
-    enabled: !!planId,
   });
 }
 
@@ -435,11 +363,11 @@ export function LinhasPlanos() {
         onOpenChange={(open) => { if (!open) setLinhaModal({ open: false }); }}
         productLine={linhaModal.productLine}
       />
-      <PlanFormModalWrapper
+      <PlanFormModal
         open={planoModal.open}
         onOpenChange={(open) => { if (!open) setPlanoModal({ open: false }); }}
-        planId={planoModal.planId}
-        defaultLineId={planoModal.defaultLineId}
+        plan={planoModal.planId ? { id: planoModal.planId } : null}
+        defaultProductLineId={planoModal.defaultLineId}
       />
       <ImportarLinhasModal open={importModal} onClose={() => setImportModal(false)} />
 
