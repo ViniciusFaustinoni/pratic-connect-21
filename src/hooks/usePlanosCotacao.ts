@@ -424,8 +424,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
 
       const cotaString = cotaMinimaFinal === 0
-        ? `${cotaPercentual}% (sem mínimo)`
-        : `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
+        ? `${cotaPercentual}% do FIPE (sem mínimo)`
+        : `${cotaPercentual}% do FIPE (mín. R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
+
 
       // Montar lista de itens incluídos: coberturas + benefícios
       const coberturasNomes = coberturasDoPlano
@@ -441,7 +442,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const tag: string | undefined = plano.badge_text || undefined;
 
       // Valores detalhados (decomposição dinâmica sobre valorMensal)
-      const valorCota = Math.round(valorMensal * decCota * 100) / 100;
+      const valorCota = 0;
       const taxaAdministrativa = Math.round(valorMensal * decAdmin * 100) / 100;
       const valorRastreamento = Math.round(valorMensal * decRastreamento * 100) / 100;
       const valorAssistencia = Math.round(valorMensal * decAssistencia * 100) / 100;

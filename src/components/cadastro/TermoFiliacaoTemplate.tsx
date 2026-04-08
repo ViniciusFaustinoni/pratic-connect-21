@@ -407,18 +407,10 @@ export function TermoFiliacaoTemplate({
             </tr>
             <tr>
               <td style={{ padding: '8pt 10pt', border: '1px solid #d1d5db', backgroundColor: '#f9fafb' }}>
-                Cota de Participação ({plano.cotaParticipacao || 10}%):
+                Cota de Participação:
               </td>
               <td style={{ padding: '8pt 10pt', border: '1px solid #d1d5db', textAlign: 'right', fontWeight: 'bold' }}>
-                {formatCurrency(cotaParticipacao)}
-              </td>
-            </tr>
-            <tr>
-              <td style={{ padding: '8pt 10pt', border: '1px solid #d1d5db', backgroundColor: '#f9fafb' }}>
-                Cota Mínima:
-              </td>
-              <td style={{ padding: '8pt 10pt', border: '1px solid #d1d5db', textAlign: 'right', fontWeight: 'bold' }}>
-                {formatCurrency(plano.cotaMinima || 3000)}
+                {plano.cotaParticipacao || 10}% do FIPE (mín. {formatCurrency(plano.cotaMinima || 3000)})
               </td>
             </tr>
             <tr>

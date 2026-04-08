@@ -1063,9 +1063,9 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                       <div className="bg-background rounded p-1.5">
                         <span className="text-muted-foreground block">Cota</span>
                         <span className="font-semibold">
-                          {plano.cotaPercentual}%
+                          {plano.cotaPercentual}% FIPE
                           {plano.cotaMinima > 0 && (
-                            <span className="text-muted-foreground font-normal"> mín {formatarMoeda(plano.cotaMinima)}</span>
+                            <span className="text-muted-foreground font-normal"> · mín. {formatarMoeda(plano.cotaMinima)}</span>
                           )}
                         </span>
                       </div>
