@@ -555,6 +555,7 @@ export function PlanFormModal({
                         <Label htmlFor="min_vehicle_year">Ano Mínimo<FieldHint text={PLAN_FIELD_HINTS.min_vehicle_year} /></Label>
                         <Input
                           id="min_vehicle_year"
+                          type="number"
                           value={formData.min_vehicle_year}
                           onChange={(e) =>
                             setFormData((prev) => ({
@@ -562,7 +563,7 @@ export function PlanFormModal({
                               min_vehicle_year: e.target.value,
                             }))
                           }
-                          placeholder="Ex: 2015+"
+                          placeholder="Ex: 2005"
                         />
                       </div>
                       <div className="space-y-2">
