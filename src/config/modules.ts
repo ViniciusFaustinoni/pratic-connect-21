@@ -138,10 +138,6 @@ export const MODULE_ITEMS: Record<string, ModuleItem[]> = {
     { id: 'distribuicao', label: 'Distribuição' },
     { id: 'relatorios', label: 'Relatórios' },
   ],
-  ouvidoria: [
-    { id: 'dashboard', label: 'Dashboard' },
-    { id: 'fila', label: 'Fila' },
-  ],
   diretoria: [
     { id: 'dashboard', label: 'Dashboard' },
     { id: 'produtos', label: 'Produtos' },

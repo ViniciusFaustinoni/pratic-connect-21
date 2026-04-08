@@ -747,13 +747,6 @@ const App = () => (
               <Route path="/ordens-servico" element={<OrdensServico />} />
               <Route path="/oficinas/ordens/:id" element={<OrdemServicoDetalhe />} />
               
-              {/* Ouvidoria ERP */}
-              <Route path="/ouvidoria" element={<OuvidoriaDashboard />} />
-              <Route path="/ouvidoria/fila" element={<OuvidoriaFila />} />
-              <Route path="/ouvidoria/manifestacoes" element={<OuvidoriaFila />} />
-              <Route path="/ouvidoria/nova" element={<NovaManifestacao />} />
-              <Route path="/ouvidoria/:id" element={<OuvidoriaDetalhe />} />
-              
               {/* Configurações */}
               <Route path="/configuracoes" element={<LazyConfiguracoesLayout />}>
                 <Route index element={<Navigate to="meu-perfil" replace />} />
