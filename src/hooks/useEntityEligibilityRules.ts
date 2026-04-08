@@ -122,6 +122,48 @@ export function useDeleteRule() {
 // Motor de verificação de regras para cotação
 // ============================================
 
+export interface ModelEligibilityResult {
+  status: 'aceito' | 'limitado' | 'negado';
+  coberturaFipe: number;
+}
+
+/**
+ * Finds the eligibility status for a specific vehicle against a marca_modelo rule
+ * that uses the new modelos array format (with per-item status).
+ * Returns null if no matching entry is found.
+ */
+export function findModelEligibility(
+  rule: Pick<EligibilityRule, 'rule_config'>,
+  ctx: VehicleContext
+): ModelEligibilityResult | null {
+  const modelos = (rule.rule_config as any)?.modelos || [];
+  if (!Array.isArray(modelos) || modelos.length === 0) return null;
+
+  for (const entry of modelos) {
+    if (typeof entry !== 'object' || !entry.status) continue;
+
+    const marcaOk = (ctx.marca || '').toUpperCase().includes(entry.marca?.toUpperCase() || '');
+    const modeloOk = (ctx.modelo || '').toUpperCase().includes(entry.modelo?.toUpperCase() || '');
+    if (!marcaOk || !modeloOk) continue;
+
+    // Check year range if defined
+    if (entry.ano_min != null && ctx.anoVeiculo < entry.ano_min) continue;
+    if (entry.ano_max != null && ctx.anoVeiculo > entry.ano_max) continue;
+
+    // Check combustivel if not 'qualquer'
+    if (entry.combustivel && entry.combustivel !== 'qualquer') {
+      if ((ctx.combustivel || '').toLowerCase() !== entry.combustivel.toLowerCase()) continue;
+    }
+
+    return {
+      status: entry.status as 'aceito' | 'limitado' | 'negado',
+      coberturaFipe: entry.cobertura_fipe ?? 100,
+    };
+  }
+
+  return null;
+}
+
 export interface VehicleContext {
   valorFipe: number;
   anoVeiculo: number;
