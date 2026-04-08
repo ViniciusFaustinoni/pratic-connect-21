@@ -380,6 +380,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       modelo: p.modelo,
       tipoUso: p.usoApp ? 'aplicativo' : 'particular',
       combustivel: p.combustivel,
+      tipoPlaca: p.categoria,
     };
   };
 
