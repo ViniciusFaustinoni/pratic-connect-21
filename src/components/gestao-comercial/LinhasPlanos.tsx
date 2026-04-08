@@ -167,40 +167,7 @@ function useDeletePlano() {
   });
 }
 
-// ── Linha Sheet ──
-
-function LinhaSheet({ open, onClose, linha }: { open: boolean; onClose: () => void; linha?: any }) {
-  const [nome, setNome] = useState(linha?.name || '');
-  const createMut = useCreateLinha();
-  const updateMut = useUpdateLinha();
-
-  const handleSave = () => {
-    if (linha?.id) {
-      updateMut.mutate({ id: linha.id, name: nome }, { onSuccess: onClose });
-    } else {
-      createMut.mutate(nome, { onSuccess: onClose });
-    }
-  };
-
-  const isPending = createMut.isPending || updateMut.isPending;
-
-  return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="sm:max-w-sm">
-        <SheetHeader><SheetTitle>{linha ? 'Editar' : 'Nova'} Linha</SheetTitle></SheetHeader>
-        <div className="space-y-4 mt-6">
-          <div><Label>Nome da Linha</Label><Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Select" autoFocus /></div>
-          <div className="flex gap-2 pt-4">
-            <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
-            <Button className="flex-1" onClick={handleSave} disabled={!nome.trim() || isPending}>
-              {isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Salvar
-            </Button>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
-  );
-}
+// LinhaSheet removed - now using LinhaFormModal from admin
 
 // ── Main Component ──
 
