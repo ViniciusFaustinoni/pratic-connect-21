@@ -58,6 +58,7 @@ export function LinhaFormModal({
   const createLine = useCreateProductLine();
   const updateLine = useUpdateProductLine();
   const saveRule = useSaveRule();
+  const updateRule = useUpdateRule();
   const deleteRule = useDeleteRule();
 
   const isEditing = !!productLine;
