@@ -5,11 +5,8 @@ import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { useConfigDecomposicao, useTaxaFallbackCarro, useTaxaFallbackMoto, useCotaParticipacaoDefault, useCotaMinimaDefault, useCotaDesagioDefault, useCotaMinimaDesagioDefault, useConfiguracaoNumero } from '@/hooks/useConteudosSistema';
 import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
-import { 
-  getCoberturasRemovidasDinamico, 
-  gerarMensagemAlertaCategoria,
-  type BenefitExclusionData
-} from '@/data/restricoesCategorias';
+
+
 import { useAllEligibilityRules, checkAllRules, type VehicleContext, type EligibilityRule } from '@/hooks/useEntityEligibilityRules';
 
 const CATEGORIAS_DESAGIO_FALLBACK = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
