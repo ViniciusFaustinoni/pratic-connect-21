@@ -27,19 +27,12 @@ export interface PlanInput {
   ano_fabricacao_maximo?: number | null;
   additional_price?: number | null;
   desconto_percentual?: number | null;
-  cota_passeio_percent?: number | null;
-  cota_passeio_min?: number | null;
-  cota_desagio_percent?: number | null;
-  cota_desagio_min?: number | null;
-  cota_app_percent?: number | null;
-  cota_app_min?: number | null;
   restriction_alert?: string | null;
   footer_note?: string | null;
   display_order?: number;
   is_active?: boolean;
   benefits?: PlanBenefitInput[];
   coberturas?: { cobertura_id: string }[];
-  linha_slug?: string | null;
   categorias_veiculo?: string | null;
   regioes?: string[];
 }
@@ -51,7 +44,7 @@ export function useCreatePlan() {
 
   return useMutation({
     mutationFn: async (input: PlanInput) => {
-      const { benefits, coberturas, linha_slug, categorias_veiculo, regioes, ...planData } = input;
+      const { benefits, coberturas, categorias_veiculo, regioes, ...planData } = input;
 
       // Mapear para campos da tabela planos
       const planoData = {
@@ -67,12 +60,6 @@ export function useCreatePlan() {
         ano_fabricacao_maximo: planData.ano_fabricacao_maximo ?? null,
         adicional_mensal: planData.additional_price || 0,
         desconto_percentual: planData.desconto_percentual ?? 0,
-        cota_participacao: planData.cota_passeio_percent,
-        cota_minima: planData.cota_passeio_min,
-        cota_desagio: planData.cota_desagio_percent,
-        cota_minima_desagio: planData.cota_desagio_min,
-        cota_app_percent: planData.cota_app_percent,
-        cota_app_min: planData.cota_app_min,
         restriction_alert: planData.restriction_alert,
         footer_note: planData.footer_note,
         ordem: planData.display_order || 0,
@@ -90,18 +77,6 @@ export function useCreatePlan() {
 
       if (planError) throw planError;
 
-      // Upsert plano_preco_map if linha_slug provided
-      if (linha_slug) {
-        // Delete existing and insert new
-        await supabase
-          .from('plano_preco_map')
-          .delete()
-          .eq('plano_id', plan.id);
-        
-        await supabase
-          .from('plano_preco_map')
-          .insert({ plano_id: plan.id, linha_slug, tipo_uso: planData.tipo_uso || 'particular' });
-      }
 
       // Create planos_beneficios if provided
       if (benefits && benefits.length > 0) {
@@ -164,7 +139,7 @@ export function useUpdatePlan() {
 
   return useMutation({
     mutationFn: async ({ id, ...input }: PlanInput & { id: string }) => {
-      const { benefits, coberturas, linha_slug, categorias_veiculo, regioes, ...planData } = input;
+      const { benefits, coberturas, categorias_veiculo, regioes, ...planData } = input;
 
       // Mapear para campos da tabela planos
       const planoData = {
@@ -180,12 +155,6 @@ export function useUpdatePlan() {
         ano_fabricacao_maximo: planData.ano_fabricacao_maximo ?? null,
         adicional_mensal: planData.additional_price || 0,
         desconto_percentual: planData.desconto_percentual ?? 0,
-        cota_participacao: planData.cota_passeio_percent,
-        cota_minima: planData.cota_passeio_min,
-        cota_desagio: planData.cota_desagio_percent,
-        cota_minima_desagio: planData.cota_desagio_min,
-        cota_app_percent: planData.cota_app_percent,
-        cota_app_min: planData.cota_app_min,
         restriction_alert: planData.restriction_alert,
         footer_note: planData.footer_note,
         ordem: planData.display_order || 0,
@@ -203,19 +172,6 @@ export function useUpdatePlan() {
 
       if (planError) throw planError;
 
-      // Update plano_preco_map if linha_slug provided
-      if (linha_slug !== undefined) {
-        await supabase
-          .from('plano_preco_map')
-          .delete()
-          .eq('plano_id', id);
-        
-        if (linha_slug) {
-          await supabase
-            .from('plano_preco_map')
-            .insert({ plano_id: id, linha_slug, tipo_uso: planData.tipo_uso || 'particular' });
-        }
-      }
 
       // Update planos_beneficios - delete old and insert new
       if (benefits !== undefined) {

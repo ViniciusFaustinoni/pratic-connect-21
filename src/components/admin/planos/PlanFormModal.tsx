@@ -105,20 +105,6 @@ export function PlanFormModal({
     enabled: !!plan?.id && open,
   });
 
-  // Fetch available linha_slugs from price tables
-  const { data: availableLinhaSlugs } = useQuery({
-    queryKey: ['available-linha-slugs'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('tabelas_preco_mensalidade')
-        .select('linha_slug')
-        .eq('is_active', true);
-      const slugs = new Set<string>();
-      data?.forEach(d => { if (d.linha_slug) slugs.add(d.linha_slug); });
-      return Array.from(slugs).sort();
-    },
-    enabled: open,
-  });
 
   // Fetch current region links for editing
   const { data: currentRegioes } = useQuery({
@@ -134,20 +120,6 @@ export function PlanFormModal({
     enabled: !!plan?.id && open,
   });
 
-  // Fetch current plano_preco_map for editing
-  const { data: currentPrecoMap } = useQuery({
-    queryKey: ['plano-preco-map', plan?.id],
-    queryFn: async () => {
-      if (!plan?.id) return null;
-      const { data } = await supabase
-        .from('plano_preco_map')
-        .select('linha_slug')
-        .eq('plano_id', plan.id)
-        .single();
-      return data;
-    },
-    enabled: !!plan?.id && open,
-  });
 
   // Fetch existing cotas por categoria for editing
   const { data: existingCotasCat } = useQuery({
@@ -178,17 +150,10 @@ export function PlanFormModal({
     ano_fabricacao_maximo: '',
     additional_price: '',
     desconto_percentual: '',
-    cota_passeio_percent: '',
-    cota_passeio_min: '',
-    cota_desagio_percent: '',
-    cota_desagio_min: '',
-    cota_app_percent: '',
-    cota_app_min: '',
     restriction_alert: '',
     footer_note: '',
     display_order: '0',
     is_active: true,
-    linha_slug: '',
     categorias_veiculo: [] as string[],
   });
 
@@ -230,17 +195,10 @@ export function PlanFormModal({
         ano_fabricacao_maximo: p.ano_fabricacao_maximo?.toString() || '',
         additional_price: p.adicional_mensal?.toString() || '',
         desconto_percentual: p.desconto_percentual?.toString() || '',
-        cota_passeio_percent: p.cota_passeio_percent?.toString() || '',
-        cota_passeio_min: p.cota_passeio_min?.toString() || '',
-        cota_desagio_percent: p.cota_desagio_percent?.toString() || '',
-        cota_desagio_min: p.cota_desagio_min?.toString() || '',
-        cota_app_percent: p.cota_app_percent?.toString() || '',
-        cota_app_min: p.cota_app_min?.toString() || '',
         restriction_alert: p.restriction_alert || '',
         footer_note: p.footer_note || '',
         display_order: (p.ordem || 0).toString(),
         is_active: p.ativo ?? true,
-        linha_slug: currentPrecoMap?.linha_slug || '',
         categorias_veiculo: categorias,
       });
       setSelectedBenefits(
@@ -273,31 +231,18 @@ export function PlanFormModal({
         ano_fabricacao_maximo: '',
         additional_price: '',
         desconto_percentual: '',
-        cota_passeio_percent: '',
-        cota_passeio_min: '',
-        cota_desagio_percent: '',
-        cota_desagio_min: '',
-        cota_app_percent: '',
-        cota_app_min: '',
         restriction_alert: '',
         footer_note: '',
         display_order: '0',
         is_active: true,
-        linha_slug: '',
         categorias_veiculo: [],
       });
       setSelectedBenefits([]);
       setSelectedCoberturas([]);
       setSelectedRegioes([]);
     }
-  }, [fullPlanData, plan, defaultProductLineId, currentPrecoMap, currentRegioes]);
+  }, [fullPlanData, plan, defaultProductLineId, currentRegioes]);
 
-  // Sync linha_slug from currentPrecoMap (handles late async loading)
-  useEffect(() => {
-    if (currentPrecoMap?.linha_slug) {
-      setFormData(prev => ({ ...prev, linha_slug: currentPrecoMap.linha_slug }));
-    }
-  }, [currentPrecoMap]);
 
   // Sync selectedRegioes from DB when editing (handles late async loading)
   useEffect(() => {
@@ -359,31 +304,12 @@ export function PlanFormModal({
       desconto_percentual: formData.desconto_percentual
         ? parseFloat(formData.desconto_percentual)
         : null,
-      cota_passeio_percent: formData.cota_passeio_percent
-        ? parseFloat(formData.cota_passeio_percent)
-        : null,
-      cota_passeio_min: formData.cota_passeio_min
-        ? parseFloat(formData.cota_passeio_min)
-        : null,
-      cota_desagio_percent: formData.cota_desagio_percent
-        ? parseFloat(formData.cota_desagio_percent)
-        : null,
-      cota_desagio_min: formData.cota_desagio_min
-        ? parseFloat(formData.cota_desagio_min)
-        : null,
-      cota_app_percent: formData.cota_app_percent
-        ? parseFloat(formData.cota_app_percent)
-        : null,
-      cota_app_min: formData.cota_app_min
-        ? parseFloat(formData.cota_app_min)
-        : null,
       restriction_alert: formData.restriction_alert || null,
       footer_note: formData.footer_note || null,
       display_order: parseInt(formData.display_order) || 0,
       is_active: formData.is_active,
       benefits: selectedBenefits,
       coberturas: selectedCoberturas,
-      linha_slug: formData.linha_slug || null,
       categorias_veiculo: formData.categorias_veiculo.length > 0 ? formData.categorias_veiculo.join(',') : null,
       regioes: selectedRegioes,
     };
@@ -436,24 +362,6 @@ export function PlanFormModal({
     id: plan?.id || 'preview',
     additional_price: formData.additional_price
       ? parseFloat(formData.additional_price)
-      : null,
-    cota_passeio_percent: formData.cota_passeio_percent
-      ? parseFloat(formData.cota_passeio_percent)
-      : null,
-    cota_passeio_min: formData.cota_passeio_min
-      ? parseFloat(formData.cota_passeio_min)
-      : null,
-    cota_desagio_percent: formData.cota_desagio_percent
-      ? parseFloat(formData.cota_desagio_percent)
-      : null,
-    cota_desagio_min: formData.cota_desagio_min
-      ? parseFloat(formData.cota_desagio_min)
-      : null,
-    cota_app_percent: formData.cota_app_percent
-      ? parseFloat(formData.cota_app_percent)
-      : null,
-    cota_app_min: formData.cota_app_min
-      ? parseFloat(formData.cota_app_min)
       : null,
     display_order: parseInt(formData.display_order) || 0,
     product_lines: productLines?.find((l) => l.id === formData.product_line_id) || null,
@@ -619,30 +527,6 @@ export function PlanFormModal({
                       </div>
                     </div>
 
-                    {/* Tabela de Preços (linha_slug) */}
-                    <div className="space-y-2">
-                      <Label>Tabela de Preços (Linha)<FieldHint text={PLAN_FIELD_HINTS.linha_slug} /></Label>
-                      <Select
-                        value={formData.linha_slug}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({ ...prev, linha_slug: value }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Vincular tabela de preços..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableLinhaSlugs?.map((slug) => (
-                            <SelectItem key={slug} value={slug}>
-                              {slug}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Define qual tabela de preços mensais será usada para este plano
-                      </p>
-                    </div>
 
                     {/* Categorias de Veículo Aceitas */}
                     <div className="space-y-2">
