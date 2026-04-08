@@ -84,8 +84,10 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const [migracaoCpfParaDialog, setMigracaoCpfParaDialog] = useState('');
 
   // Search hooks (only for non-migracao types)
+  // Substituição usa busca por placa primária; outros tipos buscam por associado
+  const isSubstituicao = selectedTipo === 'substituicao';
   const { data: associadoResults, isLoading: loadingAssociados } = useAssociadoSearch(
-    selectedTipo && selectedTipo !== 'migracao' ? searchTerm : ''
+    selectedTipo && selectedTipo !== 'migracao' && !isSubstituicao ? searchTerm : ''
   );
   const { data: placaResults, isLoading: loadingPlacas } = useBuscaPlaca(
     selectedTipo && selectedTipo !== 'migracao' ? searchTerm : ''
