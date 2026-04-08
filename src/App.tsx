@@ -701,8 +701,6 @@ const App = () => (
               <Route path="/marketing/redes-sociais" element={<RedesSociais />} />
               <Route path="/marketing/origens" element={<OrigensLead />} />
               
-              {/* Admin */}
-              <Route path="/admin/planos" element={<PlanosAdmin />} />
               
               {/* Documentos */}
               <Route path="/documentos" element={<Navigate to="/documentos/gerar" replace />} />
