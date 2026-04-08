@@ -364,7 +364,7 @@ export function LinhaFormModal({
                 <div className="flex items-center justify-between">
                   <div>
                     <Label className="text-sm font-medium">Restringir por Marca / Modelo</Label>
-                    <p className="text-xs text-muted-foreground">Exclui marcas ou modelos específicos desta linha</p>
+                    <p className="text-xs text-muted-foreground">Configura marcas e modelos aceitos ou bloqueados nesta linha</p>
                   </div>
                   <Switch
                     checked={marcaModeloEnabled}
