@@ -23,8 +23,7 @@ import {
 } from '@/components/ui/select';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
-import { useProductLines } from '@/hooks/usePlans';
-import { useBenefits } from '@/hooks/usePlans';
+import { useProductLines, useBenefits, useCoberturas } from '@/hooks/usePlans';
 import { useCreatePlan, useUpdatePlan, PlanBenefitInput } from '@/hooks/usePlansAdmin';
 import { useUpdateBenefitExclusions } from '@/hooks/useBenefitExclusions';
 import { useRegioes } from '@/hooks/useRegioes';

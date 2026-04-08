@@ -38,6 +38,7 @@ export interface PlanInput {
   display_order?: number;
   is_active?: boolean;
   benefits?: PlanBenefitInput[];
+  coberturas?: { cobertura_id: string }[];
   linha_slug?: string | null;
   categorias_veiculo?: string | null;
   regioes?: string[];
