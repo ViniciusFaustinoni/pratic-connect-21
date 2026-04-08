@@ -294,6 +294,25 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Bloqueado por regra da linha' });
           continue;
         }
+
+        // Check marca_modelo rule at linha level for per-model status
+        let linhaElegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined;
+        let coberturaFipeOverride: number | undefined;
+        const linhaMarcaModeloRule = allEligibilityRules.find(
+          r => r.entity_type === 'linha' && r.entity_id === productLineId
+            && r.rule_type === 'marca_modelo' && r.is_active
+        );
+        if (linhaMarcaModeloRule) {
+          const modelMatch = findModelEligibility(linhaMarcaModeloRule, vehicleCtx);
+          if (modelMatch) {
+            if (modelMatch.status === 'negado') {
+              negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Modelo negado na linha' });
+              continue;
+            }
+            linhaElegibilidadeStatus = modelMatch.status;
+            coberturaFipeOverride = modelMatch.coberturaFipe;
+          }
+        }
       }
       // Verificar regras do PLANO
       if (planoRules.length > 0 && !checkAllRules(planoRules, vehicleCtx)) {
