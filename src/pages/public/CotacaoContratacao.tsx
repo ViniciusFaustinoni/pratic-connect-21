@@ -15,6 +15,7 @@ import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamen
 import { AgendamentoVistoriaCompleta } from '@/components/cotacao-publica/AgendamentoVistoriaCompleta';
 import { DocumentosPendentesPublico } from '@/components/cotacao-publica/DocumentosPendentesPublico';
 import { AgendamentoBaseResumo } from '@/components/cotacao-publica/AgendamentoBaseResumo';
+import { AgendamentoSubstituicao } from '@/components/cotacao-publica/AgendamentoSubstituicao';
 import { NavegacaoEtapas } from '@/components/cotacao-publica/NavegacaoEtapas';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect, useMemo, useCallback } from 'react';
