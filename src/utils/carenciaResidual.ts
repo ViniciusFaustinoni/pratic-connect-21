@@ -53,7 +53,7 @@ export async function calcularCarenciaResidual(
       .eq('plano_id', planoNovoId),
     supabase
       .from('planos_beneficios')
-      .select('beneficio_id, benefits(id, titulo)')
+      .select('benefit_id, benefits(id, titulo)')
       .eq('plano_id', planoNovoId),
   ]);
 
