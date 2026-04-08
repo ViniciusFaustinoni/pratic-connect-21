@@ -259,7 +259,14 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     if (!selectedAssociadoId) return;
     if (selectedTipo === 'substituicao') {
       onOpenChange(false);
-      navigate(`/vendas/substituicao/${selectedAssociadoId}`);
+      const params = new URLSearchParams({
+        associado_id: selectedAssociadoId,
+        tipo_entrada: 'substituicao',
+        veiculo_antigo_id: veiculoAntigoId || '',
+        veiculo_antigo_placa: veiculoAntigoPlaca,
+        veiculo_antigo_modelo: veiculoAntigoModelo,
+      });
+      navigate(`/vendas/cotacao?${params.toString()}`);
     } else if (selectedTipo === 'inclusao') {
       onOpenChange(false);
       navigate(`/vendas/cotacao?associado_id=${selectedAssociadoId}&tipo_entrada=inclusao`);
