@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { AlertTriangle, Eye, FileText, Loader2, Search, Shield, Sparkles } from 'lucide-react';
+import { Eye, Loader2, Search, Shield, Sparkles } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import {
