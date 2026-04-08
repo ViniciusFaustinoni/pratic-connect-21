@@ -241,7 +241,7 @@ export function PlanFormModal({
       setSelectedCoberturas([]);
       setSelectedRegioes([]);
     }
-  }, [fullPlanData, plan, defaultProductLineId, currentPrecoMap, currentRegioes]);
+  }, [fullPlanData, plan, defaultProductLineId, currentRegioes]);
 
   // Sync linha_slug from currentPrecoMap (handles late async loading)
   useEffect(() => {
