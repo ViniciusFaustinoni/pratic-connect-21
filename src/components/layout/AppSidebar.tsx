@@ -437,6 +437,39 @@ const configItems: MenuItem[] = [
   },
 ];
 
+// Super-grupos para diretores
+interface SuperGroup {
+  id: string;
+  label: string;
+  icon: LucideIcon;
+  color: string;
+  moduleIds: string[];
+}
+
+const SUPER_GROUPS: SuperGroup[] = [
+  {
+    id: 'comercial',
+    label: 'Comercial',
+    icon: ShoppingCart,
+    color: '#10b981',
+    moduleIds: ['vendas', 'cadastro', 'monitoramento'],
+  },
+  {
+    id: 'relacionamento',
+    label: 'Relacionamento',
+    icon: Users,
+    color: '#ef4444',
+    moduleIds: ['eventos', 'assistencia', 'oficinas', 'cobranca'],
+  },
+  {
+    id: 'administrativo',
+    label: 'Administrativo',
+    icon: Building2,
+    color: '#fbbf24',
+    moduleIds: ['financeiro', 'contabilidade', 'juridico', 'rh', 'marketing', 'diretoria', 'documentos', 'relatorios'],
+  },
+];
+
 import React from 'react';
 
 // Logo Component
