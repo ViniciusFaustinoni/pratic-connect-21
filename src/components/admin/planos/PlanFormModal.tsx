@@ -188,8 +188,6 @@ export function PlanFormModal({
         badge_text: p.badge_text || '',
         badge_color: p.badge_color || '',
         coverage_type: p.tipo_cobertura || '',
-        min_vehicle_year: p.ano_minimo?.toString() || '',
-        ano_fabricacao_maximo: p.ano_fabricacao_maximo?.toString() || '',
         additional_price: p.adicional_mensal?.toString() || '',
         desconto_percentual: p.desconto_percentual?.toString() || '',
         cota_participacao: p.cota_participacao?.toString() || '',
