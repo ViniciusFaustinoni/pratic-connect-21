@@ -840,8 +840,8 @@ export default function CotadorPage() {
 
       setCotacaoSalva(cotacaoData);
 
-      // Se for inclusão de veículo, navegar automaticamente para contratação
-      if (isInclusaoVeiculo && cotacaoData?.id) {
+      // Se for inclusão ou substituição, navegar automaticamente para contratação
+      if ((isInclusaoVeiculo || isSubstituicao) && cotacaoData?.id) {
         toast.success('Cotação salva! Redirecionando para contratação...');
         setSalvandoCotacao(false);
         navigate(`/vendas/contratos/novo?cotacao=${cotacaoData.id}`);
