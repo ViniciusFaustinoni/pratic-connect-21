@@ -150,6 +150,7 @@ export function PlanFormModal({
     ano_fabricacao_maximo: '',
     additional_price: '',
     desconto_percentual: '',
+    cota_participacao: '',
     restriction_alert: '',
     footer_note: '',
     display_order: '0',
@@ -195,6 +196,7 @@ export function PlanFormModal({
         ano_fabricacao_maximo: p.ano_fabricacao_maximo?.toString() || '',
         additional_price: p.adicional_mensal?.toString() || '',
         desconto_percentual: p.desconto_percentual?.toString() || '',
+        cota_participacao: p.cota_participacao?.toString() || '',
         restriction_alert: p.restriction_alert || '',
         footer_note: p.footer_note || '',
         display_order: (p.ordem || 0).toString(),
@@ -231,6 +233,7 @@ export function PlanFormModal({
         ano_fabricacao_maximo: '',
         additional_price: '',
         desconto_percentual: '',
+        cota_participacao: '',
         restriction_alert: '',
         footer_note: '',
         display_order: '0',
@@ -303,6 +306,9 @@ export function PlanFormModal({
         : null,
       desconto_percentual: formData.desconto_percentual
         ? parseFloat(formData.desconto_percentual)
+        : null,
+      cota_participacao: formData.cota_participacao
+        ? parseFloat(formData.cota_participacao)
         : null,
       restriction_alert: formData.restriction_alert || null,
       footer_note: formData.footer_note || null,
@@ -527,6 +533,26 @@ export function PlanFormModal({
                       </div>
                     </div>
 
+                    {/* Cota de Participação */}
+                    <div className="space-y-2">
+                      <Label htmlFor="cota_participacao">Cota de Participação (% FIPE)<FieldHint text="Porcentagem da tabela FIPE cobrada do associado em eventos de colisão, roubo/furto parcial, etc. Ex: 6 = 6% da FIPE." /></Label>
+                      <Input
+                        id="cota_participacao"
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="100"
+                        value={formData.cota_participacao}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            cota_participacao: e.target.value,
+                          }))
+                        }
+                        placeholder="Ex: 6"
+                      />
+                      <p className="text-xs text-muted-foreground">Valor percentual sobre a FIPE cobrado do associado em sinistros de colisão.</p>
+                    </div>
 
                     {/* Categorias de Veículo Aceitas */}
                     <div className="space-y-2">
