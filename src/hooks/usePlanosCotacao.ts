@@ -492,7 +492,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         taxaAdministrativa,
         valorRastreamento,
         valorAssistencia,
-        coberturasRemovidas: [],
+        coberturasRemovidas,
         categoriaVeiculo: categoria,
         cotaDesagio: Number(plano.cota_desagio) || undefined,
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
