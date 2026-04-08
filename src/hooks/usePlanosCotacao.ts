@@ -309,7 +309,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
               negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Modelo negado na linha' });
               continue;
             }
-            linhaElegibilidadeStatus = modelMatch.status;
+            linhaElegibilidadeStatus = modelMatch.status === 'aceito' ? 'aprovado' : modelMatch.status;
             coberturaFipeOverride = modelMatch.coberturaFipe;
           }
         }
