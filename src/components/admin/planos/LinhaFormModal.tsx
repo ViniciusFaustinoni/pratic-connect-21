@@ -18,8 +18,7 @@ import {
 } from '@/components/ui/select';
 import { useCreateProductLine, useUpdateProductLine } from '@/hooks/usePlansAdmin';
 import type { ProductLine } from '@/types/plans';
-import { MarcaModeloExclusionEditor } from './MarcaModeloExclusionEditor';
-import { useRulesForEntity, useSaveRule, useUpdateRule, useDeleteRule } from '@/hooks/useEntityEligibilityRules';
+import { VeiculosAceitosEditor } from './VeiculosAceitosEditor';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface LinhaFormModalProps {
@@ -57,16 +56,8 @@ export function LinhaFormModal({
 }: LinhaFormModalProps) {
   const createLine = useCreateProductLine();
   const updateLine = useUpdateProductLine();
-  const saveRule = useSaveRule();
-  const updateRule = useUpdateRule();
-  const deleteRule = useDeleteRule();
 
   const isEditing = !!productLine;
-
-  const { data: existingRules } = useRulesForEntity('linha', productLine?.id);
-
-  // Derive ano_range rule from existing rules
-  const anoRule = existingRules?.find((r) => r.rule_type === 'ano_range');
 
   const [formData, setFormData] = useState({
     name: '',
@@ -77,11 +68,6 @@ export function LinhaFormModal({
     display_order: '0',
     is_active: true,
   });
-
-  const [anoEnabled, setAnoEnabled] = useState(false);
-  const [anoMin, setAnoMin] = useState('');
-  const [anoMax, setAnoMax] = useState('');
-  const [marcaModeloEnabled, setMarcaModeloEnabled] = useState(false);
 
   useEffect(() => {
     if (productLine) {
@@ -104,31 +90,8 @@ export function LinhaFormModal({
         display_order: '0',
         is_active: true,
       });
-      setAnoEnabled(false);
-      setAnoMin('');
-      setAnoMax('');
-      setMarcaModeloEnabled(false);
     }
   }, [productLine]);
-
-  // Sync ano rule state when rules load
-  useEffect(() => {
-    if (anoRule) {
-      setAnoEnabled(true);
-      setAnoMin(anoRule.rule_config?.ano_min?.toString() || '');
-      setAnoMax(anoRule.rule_config?.ano_max?.toString() || '');
-    } else {
-      setAnoEnabled(false);
-      setAnoMin('');
-      setAnoMax('');
-    }
-  }, [anoRule]);
-
-  // Sync marca/modelo toggle from existing rules
-  useEffect(() => {
-    const hasMarcaRule = existingRules?.some((r) => r.rule_type === 'marca_modelo');
-    setMarcaModeloEnabled(!!hasMarcaRule);
-  }, [existingRules]);
 
   const handleNameChange = (name: string) => {
     setFormData((prev) => ({
@@ -136,29 +99,6 @@ export function LinhaFormModal({
       name,
       slug: isEditing ? prev.slug : generateSlug(name),
     }));
-  };
-
-  const handleSaveAnoRule = async (entityId: string) => {
-    const config = {
-      ano_min: anoMin ? parseInt(anoMin) : null,
-      ano_max: anoMax ? parseInt(anoMax) : null,
-    };
-    if (anoEnabled && (anoMin || anoMax)) {
-      if (anoRule) {
-        await updateRule.mutateAsync({ id: anoRule.id, rule_config: config });
-      } else {
-        await saveRule.mutateAsync({
-          entity_type: 'linha',
-          entity_id: entityId,
-          rule_type: 'ano_range',
-          rule_mode: 'include',
-          rule_config: config,
-          is_active: true,
-        });
-      }
-    } else if (!anoEnabled && anoRule) {
-      await deleteRule.mutateAsync(anoRule.id);
-    }
   };
 
   const handleSubmit = async (e: React.FormEvent) => {
@@ -177,13 +117,8 @@ export function LinhaFormModal({
     try {
       if (isEditing && productLine) {
         await updateLine.mutateAsync({ id: productLine.id, ...payload });
-        await handleSaveAnoRule(productLine.id);
       } else {
-        const result = await createLine.mutateAsync(payload);
-        // After creating, save ano rule if enabled
-        if (result?.id) {
-          await handleSaveAnoRule(result.id);
-        }
+        await createLine.mutateAsync(payload);
       }
       onOpenChange(false);
     } catch (error) {
@@ -305,81 +240,24 @@ export function LinhaFormModal({
               </div>
             </div>
 
-            {/* Regras de Elegibilidade */}
-            <div className="border-t pt-4 space-y-4">
-              <h3 className="text-sm font-semibold text-foreground">Regras de Elegibilidade</h3>
-
-              {/* Regra de Ano */}
-              <div className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-sm font-medium">Restringir por Ano de Fabricação</Label>
-                    <p className="text-xs text-muted-foreground">Define a faixa de ano aceita nesta linha</p>
-                  </div>
-                  <Switch
-                    checked={anoEnabled}
-                    onCheckedChange={(checked) => {
-                      setAnoEnabled(checked);
-                      if (!checked) {
-                        setAnoMin('');
-                        setAnoMax('');
-                      }
-                    }}
-                    disabled={!isEditing}
-                  />
-                </div>
-                {anoEnabled && (
-                  <div className="grid grid-cols-2 gap-4">
-                    <div className="space-y-1">
-                      <Label htmlFor="ano_min" className="text-xs">Ano Mínimo</Label>
-                      <Input
-                        id="ano_min"
-                        type="number"
-                        value={anoMin}
-                        onChange={(e) => setAnoMin(e.target.value)}
-                        placeholder="Ex: 2005"
-                        disabled={!isEditing}
-                      />
-                    </div>
-                    <div className="space-y-1">
-                      <Label htmlFor="ano_max" className="text-xs">Ano Máximo</Label>
-                      <Input
-                        id="ano_max"
-                        type="number"
-                        value={anoMax}
-                        onChange={(e) => setAnoMax(e.target.value)}
-                        placeholder="Ex: 2025"
-                        disabled={!isEditing}
-                      />
-                    </div>
-                  </div>
-                )}
-                {!isEditing && (
-                  <p className="text-xs text-muted-foreground italic">Salve a linha primeiro para configurar regras</p>
-                )}
+            {/* Veículos Aceitos — only when editing */}
+            {isEditing && productLine && (
+              <div className="border-t pt-4 space-y-3">
+                <h3 className="text-sm font-semibold text-foreground">Veículos Aceitos</h3>
+                <p className="text-xs text-muted-foreground">
+                  Configure quais marcas e modelos são aceitos, limitados ou negados nesta linha.
+                </p>
+                <VeiculosAceitosEditor entityId={productLine.id} />
               </div>
+            )}
 
-              {/* Regra de Marca/Modelo */}
-              <div className="rounded-lg border p-4 space-y-3">
-                <div className="flex items-center justify-between">
-                  <div>
-                    <Label className="text-sm font-medium">Restringir por Marca / Modelo</Label>
-                    <p className="text-xs text-muted-foreground">Configura marcas e modelos aceitos ou bloqueados nesta linha</p>
-                  </div>
-                  <Switch
-                    checked={marcaModeloEnabled}
-                    onCheckedChange={setMarcaModeloEnabled}
-                    disabled={!isEditing}
-                  />
-                </div>
-                {marcaModeloEnabled && isEditing && productLine && (
-                  <MarcaModeloExclusionEditor entityType="linha" entityId={productLine.id} />
-                )}
-                {!isEditing && (
-                  <p className="text-xs text-muted-foreground italic">Salve a linha primeiro para configurar regras</p>
-                )}
+            {!isEditing && (
+              <div className="border-t pt-4">
+                <p className="text-xs text-muted-foreground italic">
+                  Salve a linha primeiro para configurar veículos aceitos.
+                </p>
               </div>
-            </div>
+            )}
 
             <div className="flex justify-end gap-2 pt-4">
               <Button

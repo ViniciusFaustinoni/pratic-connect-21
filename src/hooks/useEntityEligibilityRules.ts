@@ -122,6 +122,48 @@ export function useDeleteRule() {
 // Motor de verificação de regras para cotação
 // ============================================
 
+export interface ModelEligibilityResult {
+  status: 'aceito' | 'limitado' | 'negado';
+  coberturaFipe: number;
+}
+
+/**
+ * Finds the eligibility status for a specific vehicle against a marca_modelo rule
+ * that uses the new modelos array format (with per-item status).
+ * Returns null if no matching entry is found.
+ */
+export function findModelEligibility(
+  rule: Pick<EligibilityRule, 'rule_config'>,
+  ctx: VehicleContext
+): ModelEligibilityResult | null {
+  const modelos = (rule.rule_config as any)?.modelos || [];
+  if (!Array.isArray(modelos) || modelos.length === 0) return null;
+
+  for (const entry of modelos) {
+    if (typeof entry !== 'object' || !entry.status) continue;
+
+    const marcaOk = (ctx.marca || '').toUpperCase().includes(entry.marca?.toUpperCase() || '');
+    const modeloOk = (ctx.modelo || '').toUpperCase().includes(entry.modelo?.toUpperCase() || '');
+    if (!marcaOk || !modeloOk) continue;
+
+    // Check year range if defined
+    if (entry.ano_min != null && ctx.anoVeiculo < entry.ano_min) continue;
+    if (entry.ano_max != null && ctx.anoVeiculo > entry.ano_max) continue;
+
+    // Check combustivel if not 'qualquer'
+    if (entry.combustivel && entry.combustivel !== 'qualquer') {
+      if ((ctx.combustivel || '').toLowerCase() !== entry.combustivel.toLowerCase()) continue;
+    }
+
+    return {
+      status: entry.status as 'aceito' | 'limitado' | 'negado',
+      coberturaFipe: entry.cobertura_fipe ?? 100,
+    };
+  }
+
+  return null;
+}
+
 export interface VehicleContext {
   valorFipe: number;
   anoVeiculo: number;
@@ -176,20 +218,31 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       return isInclude ? match : !match;
     }
     case 'marca_modelo': {
+      // New format: rule_config.modelos is array of objects with .status
+      const modelosArr = cfg.modelos || [];
+      if (modelosArr.length > 0 && typeof modelosArr[0] === 'object' && 'status' in modelosArr[0]) {
+        const match = findModelEligibility({ rule_config: cfg } as any, ctx);
+        if (!match) {
+          // No matching entry found — whitelist: block, blacklist: allow
+          return !isInclude;
+        }
+        // If negado → block
+        if (match.status === 'negado') return false;
+        // aceito or limitado → allow
+        return true;
+      }
+      // Legacy format: modelos as string array or single marca/modelo
       const marcaMatch = !cfg.marca || (ctx.marca || '').toUpperCase().includes(cfg.marca.toUpperCase());
-      // Support both single modelo (legacy) and modelos array (new)
-      const modelos: string[] = cfg.modelos || [];
+      const legacyModelos: string[] = modelosArr;
       let modeloMatch: boolean;
-      if (modelos.length > 0) {
-        modeloMatch = modelos.some(m => (ctx.modelo || '').toUpperCase().includes(m.toUpperCase()));
+      if (legacyModelos.length > 0) {
+        modeloMatch = legacyModelos.some((m: string) => (ctx.modelo || '').toUpperCase().includes(m.toUpperCase()));
       } else {
         modeloMatch = !cfg.modelo || (ctx.modelo || '').toUpperCase().includes(cfg.modelo.toUpperCase());
       }
       const versaoMatch = !cfg.versao || (ctx.versao || '').toUpperCase().includes(cfg.versao.toUpperCase());
-      // For exclusion with modelos array: match = marca matches AND at least one modelo matches
-      // For exclusion without modelos: match = marca matches (entire brand excluded)
-      const match = marcaMatch && (modelos.length > 0 ? modeloMatch : (modeloMatch && versaoMatch));
-      return isInclude ? match : !match;
+      const match2 = marcaMatch && (legacyModelos.length > 0 ? modeloMatch : (modeloMatch && versaoMatch));
+      return isInclude ? match2 : !match2;
     }
     case 'tipo_uso': {
       const tipos: string[] = cfg.tipos || cfg.values || [];

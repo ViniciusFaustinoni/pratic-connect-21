@@ -7,7 +7,7 @@ import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 
 
-import { useAllEligibilityRules, checkAllRules, type VehicleContext, type EligibilityRule } from '@/hooks/useEntityEligibilityRules';
+import { useAllEligibilityRules, checkAllRules, findModelEligibility, type VehicleContext, type EligibilityRule } from '@/hooks/useEntityEligibilityRules';
 
 const CATEGORIAS_DESAGIO_FALLBACK = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
 const LINHAS_COM_DESAGIO_FALLBACK = ['select', 'lancamento'];
@@ -281,6 +281,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const planoHasMarcaModeloRules = planoRules.some(r => r.rule_type === 'marca_modelo');
       const planoHasAnoRangeRules = planoRules.some(r => r.rule_type === 'ano_range');
 
+      // Per-model eligibility status from linha rules
+      let linhaElegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined;
+      let coberturaFipeOverride: number | undefined;
+
       // Verificar regras da LINHA (excluindo marca_modelo/ano_range se o plano já define as suas)
       if (productLineId) {
         let linhaRules = allEligibilityRules.filter(r => r.entity_type === 'linha' && r.entity_id === productLineId);
@@ -293,6 +297,25 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         if (linhaRules.length > 0 && !checkAllRules(linhaRules, vehicleCtx)) {
           negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Bloqueado por regra da linha' });
           continue;
+        }
+
+        // Check marca_modelo rule at linha level for per-model status
+        if (!planoHasMarcaModeloRules) {
+          const linhaMarcaModeloRule = allEligibilityRules.find(
+            r => r.entity_type === 'linha' && r.entity_id === productLineId
+              && r.rule_type === 'marca_modelo' && r.is_active
+          );
+          if (linhaMarcaModeloRule) {
+            const modelMatch = findModelEligibility(linhaMarcaModeloRule, vehicleCtx);
+            if (modelMatch) {
+              if (modelMatch.status === 'negado') {
+                negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Modelo negado na linha' });
+                continue;
+              }
+              linhaElegibilidadeStatus = modelMatch.status === 'aceito' ? 'aprovado' : modelMatch.status;
+              coberturaFipeOverride = modelMatch.coberturaFipe;
+            }
+          }
         }
       }
       // Verificar regras do PLANO
@@ -458,7 +481,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         nivel,
         coberturas: coberturas as string[],
         naoInclui,
-        coberturaFipe: plano.cobertura_fipe || 100,
+        coberturaFipe: coberturaFipeOverride ?? plano.cobertura_fipe ?? 100,
         cota: cotaString,
         cotaPercentual,
         cotaMinima: cotaMinimaFinal,
@@ -478,7 +501,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaDesagio: Number(plano.cota_desagio) || undefined,
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
         anoMinimo: undefined,
-        elegibilidadeStatus: undefined,
+        elegibilidadeStatus: linhaElegibilidadeStatus || undefined,
         precoDesagioAplicado: false,
       });
     }
