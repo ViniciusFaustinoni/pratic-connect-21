@@ -3,10 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -14,10 +11,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Plus, ChevronRight, Loader2, Pencil, Trash2, Copy, Upload, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PlanoFormSheet } from './PlanoFormSheet';
+import { LinhaFormModal } from '@/components/admin/planos/LinhaFormModal';
+import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDuplicateProductLine, useDuplicatePlan } from '@/hooks/usePlansAdmin';
 import { ImportarLinhasModal } from './ImportarLinhasModal';
+import type { PlanWithDetails } from '@/hooks/usePlans';
 
 // ── Data hooks ──
 
@@ -168,39 +167,76 @@ function useDeletePlano() {
   });
 }
 
-// ── Linha Sheet ──
+// LinhaSheet removed - now using LinhaFormModal from admin
 
-function LinhaSheet({ open, onClose, linha }: { open: boolean; onClose: () => void; linha?: any }) {
-  const [nome, setNome] = useState(linha?.name || '');
-  const createMut = useCreateLinha();
-  const updateMut = useUpdateLinha();
-
-  const handleSave = () => {
-    if (linha?.id) {
-      updateMut.mutate({ id: linha.id, name: nome }, { onSuccess: onClose });
-    } else {
-      createMut.mutate(nome, { onSuccess: onClose });
-    }
-  };
-
-  const isPending = createMut.isPending || updateMut.isPending;
-
+// Wrapper to fetch full plan data for PlanFormModal
+function PlanFormModalWrapper({ open, onOpenChange, planId, defaultLineId }: { 
+  open: boolean; 
+  onOpenChange: (open: boolean) => void; 
+  planId?: string; 
+  defaultLineId?: string; 
+}) {
+  const { data: allPlans } = usePlansForModal(planId);
+  const plan = planId ? (allPlans?.find(p => p.id === planId) || null) : null;
+  
   return (
-    <Sheet open={open} onOpenChange={(v) => !v && onClose()}>
-      <SheetContent className="sm:max-w-sm">
-        <SheetHeader><SheetTitle>{linha ? 'Editar' : 'Nova'} Linha</SheetTitle></SheetHeader>
-        <div className="space-y-4 mt-6">
-          <div><Label>Nome da Linha</Label><Input value={nome} onChange={e => setNome(e.target.value)} placeholder="Ex: Select" autoFocus /></div>
-          <div className="flex gap-2 pt-4">
-            <Button variant="outline" className="flex-1" onClick={onClose}>Cancelar</Button>
-            <Button className="flex-1" onClick={handleSave} disabled={!nome.trim() || isPending}>
-              {isPending && <Loader2 className="h-4 w-4 mr-1 animate-spin" />}Salvar
-            </Button>
-          </div>
-        </div>
-      </SheetContent>
-    </Sheet>
+    <PlanFormModal
+      open={open}
+      onOpenChange={onOpenChange}
+      plan={plan}
+      defaultProductLineId={defaultLineId}
+    />
   );
+}
+
+function usePlansForModal(planId?: string) {
+  return useQuery({
+    queryKey: ['plan-for-modal', planId],
+    queryFn: async () => {
+      if (!planId) return [];
+      const { data, error } = await supabase
+        .from('planos')
+        .select(`
+          *,
+          product_lines(*),
+          planos_beneficios(*, benefits:benefit_id(*)),
+          planos_coberturas(*, coberturas:cobertura_id(*))
+        `)
+        .eq('id', planId)
+        .single();
+      if (error) throw error;
+      
+      // Transform to PlanWithDetails format
+      const plan = data as any;
+      return [{
+        ...plan,
+        name: plan.nome,
+        slug: plan.slug || null,
+        display_order: plan.ordem || 0,
+        is_active: plan.ativo,
+        additional_price: plan.adicional_mensal,
+        min_vehicle_year: plan.ano_minimo?.toString() || '',
+        coverage_type: plan.tipo_cobertura || '',
+        badge_text: plan.badge_text || '',
+        badge_color: plan.badge_color || '',
+        restriction_alert: plan.restriction_alert || '',
+        footer_note: plan.footer_note || '',
+        cota_passeio_percent: plan.cota_passeio_percent,
+        cota_passeio_min: plan.cota_passeio_min,
+        cota_desagio_percent: plan.cota_desagio_percent,
+        cota_desagio_min: plan.cota_desagio_min,
+        cota_app_percent: plan.cota_app_percent,
+        cota_app_min: plan.cota_app_min,
+        plan_benefits: (plan.planos_beneficios || []).map((pb: any) => ({
+          ...pb,
+          plan_id: pb.plano_id,
+        })),
+        plan_coverages: plan.planos_coberturas || [],
+        product_line: plan.product_lines,
+      }] as PlanWithDetails[];
+    },
+    enabled: !!planId,
+  });
 }
 
 // ── Main Component ──
@@ -208,8 +244,8 @@ function LinhaSheet({ open, onClose, linha }: { open: boolean; onClose: () => vo
 export function LinhasPlanos() {
   const { data: linhas = [], isLoading } = useLinhasComPlanos();
   const [openLines, setOpenLines] = useState<Set<string>>(new Set());
-  const [linhaSheet, setLinhaSheet] = useState<{ open: boolean; linha?: any }>({ open: false });
-  const [planoSheet, setPlanoSheet] = useState<{ open: boolean; planoId?: string; linhaId?: string }>({ open: false });
+  const [linhaModal, setLinhaModal] = useState<{ open: boolean; productLine?: any }>({ open: false });
+  const [planoModal, setPlanoModal] = useState<{ open: boolean; planId?: string; defaultLineId?: string }>({ open: false });
   const [importModal, setImportModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
 
@@ -256,7 +292,7 @@ export function LinhasPlanos() {
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setImportModal(true)}><Upload className="h-4 w-4 mr-1" />Importar</Button>
-          <Button size="sm" onClick={() => setLinhaSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Linha</Button>
+          <Button size="sm" onClick={() => setLinhaModal({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Linha</Button>
         </div>
       </div>
 
@@ -296,7 +332,7 @@ export function LinhasPlanos() {
                   <p className="text-xs text-muted-foreground">{linha.plans.length} plano{linha.plans.length !== 1 ? 's' : ''}</p>
                 </div>
                 <div className="flex items-center gap-1 shrink-0">
-                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setLinhaSheet({ open: true, linha }); }}>
+                  <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); setLinhaModal({ open: true, productLine: linha }); }}>
                     <Pencil className="h-3.5 w-3.5" />
                   </Button>
                   <Button variant="ghost" size="icon" className="h-7 w-7" onClick={(e) => { e.stopPropagation(); duplicateLine.mutate(linha.id); }} title="Duplicar">
@@ -356,7 +392,7 @@ export function LinhasPlanos() {
                       >
                         <GripVertical className="h-4 w-4 text-muted-foreground cursor-grab shrink-0" />
                         <button
-                          onClick={() => setPlanoSheet({ open: true, planoId: plano.id, linhaId: linha.id })}
+                          onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
                           className="flex-1 flex items-center gap-3 px-3 py-2 rounded-md hover:bg-background transition-colors text-left"
                         >
                           <div className="flex-1 min-w-0">
@@ -384,7 +420,7 @@ export function LinhasPlanos() {
                       </div>
                     </div>
                   ))}
-                  <Button variant="ghost" size="sm" className="w-full mt-1 text-muted-foreground" onClick={() => setPlanoSheet({ open: true, linhaId: linha.id })}>
+                  <Button variant="ghost" size="sm" className="w-full mt-1 text-muted-foreground" onClick={() => setPlanoModal({ open: true, defaultLineId: linha.id })}>
                     <Plus className="h-3.5 w-3.5 mr-1" />Novo Plano
                   </Button>
                 </div>
@@ -394,8 +430,17 @@ export function LinhasPlanos() {
         ))}
       </div>
 
-      {linhaSheet.open && <LinhaSheet open linha={linhaSheet.linha} onClose={() => setLinhaSheet({ open: false })} />}
-      {planoSheet.open && <PlanoFormSheet open planoId={planoSheet.planoId} linhaId={planoSheet.linhaId} onClose={() => setPlanoSheet({ open: false })} />}
+      <LinhaFormModal
+        open={linhaModal.open}
+        onOpenChange={(open) => { if (!open) setLinhaModal({ open: false }); }}
+        productLine={linhaModal.productLine}
+      />
+      <PlanFormModalWrapper
+        open={planoModal.open}
+        onOpenChange={(open) => { if (!open) setPlanoModal({ open: false }); }}
+        planId={planoModal.planId}
+        defaultLineId={planoModal.defaultLineId}
+      />
       <ImportarLinhasModal open={importModal} onClose={() => setImportModal(false)} />
 
       {/* Delete confirmation */}
