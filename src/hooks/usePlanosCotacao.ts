@@ -754,7 +754,18 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
       }
 
-      
+      // ── Ocultar plano se TODOS os itens estão indisponíveis ──
+      const todosItensNomes = [...coberturas];
+      const itensDisponiveis = todosItensNomes.filter(item => !coberturasRemovidas.includes(item));
+      if (todosItensNomes.length > 0 && itensDisponiveis.length === 0) {
+        negados.push({
+          planoId: plano.id,
+          planoNome: plano.nome,
+          linha,
+          motivo: 'Todos os itens indisponíveis para este veículo',
+        });
+        continue;
+      }
 
       const alertaDesagio = gerarMensagemAlertaCategoria(categoria, benefitExclusions || []) || undefined;
 
