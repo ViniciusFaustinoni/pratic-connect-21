@@ -801,6 +801,9 @@ export function PlanFormModal({
                       selectedBenefits={selectedBenefits}
                       onChange={setSelectedBenefits}
                       onExclusionsChange={handleExclusionsChange}
+                      coberturas={coberturasCatalogo || []}
+                      selectedCoberturas={selectedCoberturas}
+                      onCoberturasChange={setSelectedCoberturas}
                     />
                   </TabsContent>
 
