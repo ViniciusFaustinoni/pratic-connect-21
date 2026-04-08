@@ -77,18 +77,6 @@ export function useCreatePlan() {
 
       if (planError) throw planError;
 
-      // Upsert plano_preco_map if linha_slug provided
-      if (linha_slug) {
-        // Delete existing and insert new
-        await supabase
-          .from('plano_preco_map')
-          .delete()
-          .eq('plano_id', plan.id);
-        
-        await supabase
-          .from('plano_preco_map')
-          .insert({ plano_id: plan.id, linha_slug, tipo_uso: planData.tipo_uso || 'particular' });
-      }
 
       // Create planos_beneficios if provided
       if (benefits && benefits.length > 0) {
