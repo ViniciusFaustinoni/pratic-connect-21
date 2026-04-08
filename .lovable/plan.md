@@ -1,45 +1,55 @@
 
 
-## Plan: Remove Hardcoded Plan Filtering — Use Only `checkAllRules` Engine
+## Plan: Fix Eligibility Logic — Any Failed Item Discards Entire Plan
 
 ### Problem
-The quotation engine in `usePlanosCotacao.ts` has multiple redundant filtering layers that bypass the unified eligibility rules engine (`entity_eligibility_rules`). These hardcoded filters prevent correctly-configured rules from working.
+Currently, when a coverage or benefit fails eligibility rules, it's added to `coberturasRemovidas` and the plan only gets discarded if ALL items fail. The correct behavior is: if ANY item fails, discard the entire plan immediately.
 
-### What to Remove
+### Changes
 
-**1. `verificarElegibilidadeModelo` function (lines 268-334) and its usage (lines 450-498)**
-This entire whitelist system (`plano_elegibilidade_modelos` table) duplicates what `entity_eligibility_rules` with `marca_modelo` rule type already handles. Remove the function, the query (lines 213-224), and all usage in the main loop.
+**File: `src/hooks/usePlanosCotacao.ts`**
 
-**2. `configApp` / `supports_app` eligibility logic (lines 337-347)**
-Remove the `supports_app` field from being used to determine plan visibility. The APP eligibility should come from `entity_eligibility_rules` on coverages/benefits.
+1. **Remove imports** (lines 8-12): Delete `getCoberturasRemovidasDinamico`, `gerarMensagemAlertaCategoria`, and `BenefitExclusionData` imports from `restricoesCategorias`
 
-**3. `blocked_categories` from product_lines query (line 168)**
-Already fetched but appears unused in filtering. Clean it from the query to avoid confusion.
+2. **Remove `benefit_category_exclusions` query** (lines 211-232): Delete the entire `benefitExclusions` query block
 
-**4. Vehicle type filter (lines 420-421)**
-Currently filters moto/carro by `product_lines.vehicle_type`. This should also be handled by eligibility rules. Remove these hardcoded `continue` statements.
+3. **Remove `benefitExclusionsLoading` from loading check** (line 238): Remove from `dependenciasCriticasLoading`
 
-### What to Keep
-- `ativo = true` and `visivel_gestao = true` filters on the query (line 173)
-- Entity eligibility rules checks for **linha** (lines 431-443) and **plano** (lines 445-448)
-- Individual **cobertura/benefício** eligibility checks (lines 620-673) — the core engine
-- "Hide plan if ALL items unavailable" logic (lines 662-673)
-- All pricing logic (unchanged)
-- All cota/deságio logic (unchanged)
+4. **Move eligibility checks BEFORE pricing** — restructure the main loop so that individual item eligibility is checked before price calculation:
 
-### What to Clean Up
-- Remove `elegibilidadeData` query and related variables
-- Remove `MARCA_ALIASES`, `normalizarMarcaElegibilidade` helper
-- Remove `elegibilidadeStatus` / `elegibilidadeCoberturaFipe` variables from the loop
-- Remove `elegibilidadeLoading` / `elegibilidadeError` from dependency checks
-- Simplify `dependenciasCriticasLoading` accordingly
+   - **Lines 438**: Remove `coberturasRemovidas = getCoberturasRemovidasDinamico(...)` 
+   - **Lines 444-477**: Rewrite both eligibility loops (benefits and coverages) to use `continue planLoop` when ANY item fails instead of pushing to `coberturasRemovidas`
+   - **Lines 479-490**: Remove the `itensDisponiveis` / "all items unavailable" check entirely
+   - Move these eligibility checks to RIGHT AFTER the plan-level rules check (line 327), BEFORE pricing starts (line 332)
 
-### Files Changed
-- `src/hooks/usePlanosCotacao.ts` — only file modified
+5. **Remove `alertaDesagio`** (line 492): Delete the call to `gerarMensagemAlertaCategoria`
 
-### Testing
-After changes, navigate to quotation form and test:
-1. Carro flex, passeio, RJ, FIPE R$72.000
-2. Carro diesel, passeio, RJ, FIPE R$72.000
-3. Carro flex, aplicativo, RJ, FIPE R$72.000
+6. **Clean up the returned object** (lines 502-533):
+   - Remove `coberturasRemovidas` field (set to `[]` for interface compat)
+   - Remove `alertaDesagio` field
+   - Remove `elegibilidadeStatus` field
+
+7. **Clean `useMemo` dependency array** (line 547): Remove `benefitExclusions`
+
+### Interface Changes (`PlanoCotacao`)
+
+- `coberturasRemovidas` — keep as `string[]` but always `[]` (avoids breaking consumers)
+- `alertaDesagio` — keep as optional, always `undefined`
+
+No changes needed in consuming components — they already handle empty arrays and undefined gracefully.
+
+### Resulting Flow
+
+```text
+For each plano:
+  1. Check linha rules → fail = skip
+  2. Check plano rules → fail = skip
+  3. Check EACH benefit eligibility → ANY fail = skip entire plano
+  4. Check EACH cobertura eligibility → ANY fail = skip entire plano
+  5. Calculate price (only reached if all items passed)
+  6. Build and push result
+```
+
+### Files Modified
+- `src/hooks/usePlanosCotacao.ts` — only file
 
