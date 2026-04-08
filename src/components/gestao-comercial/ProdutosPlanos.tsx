@@ -33,7 +33,7 @@ import { VincularCoberturaModal, EditarCoberturaVinculadaModal, FaixaPrecoModal,
 import { VincularBeneficioModal } from '@/components/gestao-comercial/VincularBeneficioModal';
 import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
 import { TabelaPrecosTab } from '@/components/gestao-comercial/TabelaPrecosTab';
-import type { PlanWithDetails } from '@/hooks/usePlans';
+
 
 function formatCurrency(value: number) {
   return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(value);

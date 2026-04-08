@@ -16,7 +16,7 @@ import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDuplicateProductLine, useDuplicatePlan } from '@/hooks/usePlansAdmin';
 import { ImportarLinhasModal } from './ImportarLinhasModal';
-import type { PlanWithDetails } from '@/hooks/usePlans';
+
 
 // ── Data hooks ──
 
