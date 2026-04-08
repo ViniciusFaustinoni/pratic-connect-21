@@ -71,6 +71,9 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAssociadoId, setSelectedAssociadoId] = useState<string | null>(null);
   const [selectedAssociadoNome, setSelectedAssociadoNome] = useState('');
+  const [veiculoAntigoId, setVeiculoAntigoId] = useState<string | null>(null);
+  const [veiculoAntigoPlaca, setVeiculoAntigoPlaca] = useState('');
+  const [veiculoAntigoModelo, setVeiculoAntigoModelo] = useState('');
 
   // Migração CPF
   const [migracaoCpf, setMigracaoCpf] = useState('');
