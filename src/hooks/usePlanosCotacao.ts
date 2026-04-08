@@ -447,15 +447,15 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         : `${cotaPercentual}% do FIPE (mín. R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
 
 
-      // Montar lista de itens incluídos: coberturas + benefícios
+      // Montar lista de itens incluídos: apenas coberturas e benefícios elegíveis
       const coberturasNomes = coberturasDoPlano
-        .map((pc: any) => (pc as any).coberturas?.nome)
+        .map((pc: any) => pc.coberturas?.nome)
         .filter(Boolean) as string[];
-      const beneficiosNomes = (plano.planos_beneficios || [])
+      const beneficiosNomes = beneficiosDoPlano
         .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
         .map((pb: any) => pb.custom_text || pb.benefits?.name || 'Benefício');
       const coberturas = [...coberturasNomes, ...beneficiosNomes];
-      const naoInclui: string[] = [];
+      const naoInclui: string[] = coberturasRemovidas;
 
       const isDestaque = !!plano.destaque;
       const tag: string | undefined = plano.badge_text || undefined;
