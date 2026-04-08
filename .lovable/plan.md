@@ -1,19 +1,43 @@
 
 
-# Plano: Remover campos "Ano Mínimo" e "Ano Máximo" do modal de plano
+# Plano: Corrigir erro "Maximum update depth" nos modais de Cobertura e Beneficio
 
-## Contexto
+## Causa raiz
 
-A configuração de faixa de ano de fabricação deve existir apenas na Linha de Produto, não no Plano individual. O modal de plano possui campos "Ano Mínimo" e "Ano Máximo" que devem ser removidos.
+O componente `SelectContent` em `src/components/ui/select.tsx` usa `<SelectPrimitive.Portal>` que, quando renderizado dentro de um `<Dialog>` (Radix), causa um loop infinito de refs (`setRef` chama `setState` recursivamente). Isso afeta todos os modais que usam `Select` dentro de `Dialog`: `CoberturaUnificadaFormModal`, `BeneficioFormModal`, e o `AddRuleDialog` do `EligibilityRulesEditor`.
 
-## Alterações em `PlanFormModal.tsx`
+## Correção
 
-1. **Remover do `formData` inicial**: campos `min_vehicle_year` e `ano_fabricacao_maximo` (linhas 147-148, 230-231)
-2. **Remover do init** quando plan existe (linhas 193-194)
-3. **Remover do payload** no `handleSubmit` (linhas 298-301)
-4. **Remover os dois blocos UI** — "Ano Mínimo" (linhas 502-515) e "Ano Máximo" (linhas 517-530)
+### `src/components/ui/select.tsx`
 
-## Arquivo modificado
+Tornar o Portal condicional via prop `container`. Quando `container` for `null`, renderizar sem Portal (necessario dentro de Dialogs):
 
-- `src/components/admin/planos/PlanFormModal.tsx`
+```tsx
+const SelectContent = React.forwardRef<...>(
+  ({ className, children, position = "popper", container, ...props }, ref) => {
+    const content = (
+      <SelectPrimitive.Content ref={ref} ...>
+        ...
+      </SelectPrimitive.Content>
+    );
+    
+    if (container === null) return content;
+    return <SelectPrimitive.Portal container={container}>{content}</SelectPrimitive.Portal>;
+  }
+);
+```
+
+Isso permite que os Selects dentro de Dialogs usem `<SelectContent container={null}>` para evitar o conflito de Portal, sem afetar os demais Selects do sistema.
+
+### Arquivos que usam Select dentro de Dialog (adicionar `container={null}`)
+
+- `src/components/admin/planos/CarenciaConfigSection.tsx` (1 Select)
+- `src/components/admin/planos/BeneficioFormModal.tsx` (1 Select)
+- `src/components/admin/planos/EligibilityRulesEditor.tsx` (1 Select no AddRuleDialog)
+
+Alternativa mais simples: remover o `<SelectPrimitive.Portal>` inteiramente do `SelectContent`, ja que o z-index alto (`z-[1200]`) garante visibilidade sem Portal.
+
+## Arquivos modificados
+
+- `src/components/ui/select.tsx`
 
