@@ -7,7 +7,7 @@ import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 
 
-import { useAllEligibilityRules, checkAllRules, type VehicleContext, type EligibilityRule } from '@/hooks/useEntityEligibilityRules';
+import { useAllEligibilityRules, checkAllRules, findModelEligibility, type VehicleContext, type EligibilityRule } from '@/hooks/useEntityEligibilityRules';
 
 const CATEGORIAS_DESAGIO_FALLBACK = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
 const LINHAS_COM_DESAGIO_FALLBACK = ['select', 'lancamento'];
