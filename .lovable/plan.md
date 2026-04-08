@@ -1,63 +1,32 @@
 
 
-# Plano: Garantir que o modal de editar plano exiba todos os dados configurados
+# Plano: Adicionar seletor Blacklist/Whitelist ao editor de Marca/Modelo
 
-## Problema
+## Contexto
 
-O `PlanFormModal` depende do objeto `plan` fornecido pelo componente pai, mas cada caller fornece dados em formato diferente:
-
-1. **PlanosTab** (Admin): usa `usePlans()` que retorna `min_vehicle_year` com sufixo `+` (ex: `"2005+"`) e nao inclui `planos_coberturas`
-2. **ProdutosPlanos** (Gestao Comercial): passa `selectedPlan` do `usePlans()` diretamente — mesmos problemas
-3. **LinhasPlanos** (Gestao Comercial): usa `usePlansForModal()` com query separada — mapeamento melhor mas duplicado
-
-Resultado: ao abrir o modal de edicao, campos como Ano Minimo mostram `"2005+"`, `coverage_type` pode vir vazio, e coberturas vinculadas nao aparecem.
-
-## Solucao
-
-Fazer o `PlanFormModal` buscar internamente os dados completos do plano pelo ID, em vez de depender do caller. O prop `plan` passa a servir apenas para fornecer o `id` — os dados reais sao buscados dentro do modal.
+O `MarcaModeloExclusionEditor` atualmente so suporta modo **exclusao** (blacklist). O motor de elegibilidade (`useEntityEligibilityRules`) ja suporta `rule_mode: 'include' | 'exclude'`, entao basta atualizar o componente de UI.
 
 ## Alteracoes
 
-### 1. `PlanFormModal.tsx` — Fetch interno por ID
+### 1. `MarcaModeloExclusionEditor.tsx` — Adicionar seletor de modo
 
-Adicionar uma query interna no modal:
+- Adicionar um **toggle ou segmented control** no topo do editor com duas opcoes:
+  - **Blacklist (Exclusiva)**: "Aceitar todos EXCETO as marcas/modelos listados"
+  - **Whitelist (Inclusiva)**: "Aceitar APENAS as marcas/modelos listados"
+- O estado do modo sera derivado das regras existentes: se existem regras `include`, modo = whitelist; se existem regras `exclude` ou nenhuma, modo = blacklist
+- Ao trocar o modo, as regras existentes serao removidas (com confirmacao) e novas regras usarao o novo `rule_mode`
+- Atualizar labels dinamicamente:
+  - Blacklist: "Adicionar marca a exclusao", "Marca inteira excluida", "Nenhuma marca excluida"
+  - Whitelist: "Adicionar marca permitida", "Marca inteira permitida", "Nenhuma marca configurada — todos bloqueados"
+- Ajustar o filtro `useMemo` para ler regras com `rule_mode` igual ao modo ativo (nao mais hardcoded `'exclude'`)
+- Ao salvar regras, usar o `rule_mode` selecionado
 
-```typescript
-const { data: fullPlan } = useQuery({
-  queryKey: ['plan-form-modal-data', plan?.id],
-  queryFn: async () => {
-    const { data, error } = await supabase
-      .from('planos')
-      .select(`*, product_lines(*), planos_beneficios(*, benefits:benefit_id(*)), planos_coberturas(*, coberturas:cobertura_id(*))`)
-      .eq('id', plan!.id)
-      .single();
-    if (error) throw error;
-    return data;
-  },
-  enabled: !!plan?.id && open,
-});
-```
+### 2. `LinhaFormModal.tsx` — Atualizar descricao do toggle
 
-Atualizar o `useEffect` de reset do form para usar `fullPlan` (dados crus do banco) em vez de `plan` (dados transformados com aliases inconsistentes). Isso garante:
+- Mudar o texto "Exclui marcas ou modelos especificos desta linha" para "Configura marcas e modelos aceitos ou bloqueados nesta linha"
 
-- `ano_minimo` lido diretamente como numero (sem sufixo `+`)
-- `ano_fabricacao_maximo` lido diretamente
-- `tipo_cobertura` mapeado corretamente para `coverage_type`
-- `categoria` lido diretamente
-- `planos_beneficios` e `planos_coberturas` sempre disponiveis
-- `desconto_percentual`, `adicional_mensal` lidos diretamente
+### Arquivos modificados
 
-### 2. `LinhasPlanos.tsx` — Remover `usePlansForModal`
-
-O wrapper `PlanFormModalWrapper` e a funcao `usePlansForModal` ficam desnecessarios. Simplificar para passar apenas `{ id: planId }` como prop `plan`.
-
-### 3. `ProdutosPlanos.tsx` — Simplificar passagem do plan
-
-Em vez de `plan={produtoEdit as PlanWithDetails | null}`, passar apenas `plan={produtoEdit ? { id: produtoEdit.id } : null}`. O modal buscara os dados completos internamente.
-
-## Arquivos modificados
-
-- `src/components/admin/planos/PlanFormModal.tsx` — Adicionar fetch interno, ajustar useEffect para usar dados crus
-- `src/components/gestao-comercial/LinhasPlanos.tsx` — Remover `usePlansForModal` e `PlanFormModalWrapper`
-- `src/components/gestao-comercial/ProdutosPlanos.tsx` — Simplificar prop plan
+- `src/components/admin/planos/MarcaModeloExclusionEditor.tsx`
+- `src/components/admin/planos/LinhaFormModal.tsx`
 
