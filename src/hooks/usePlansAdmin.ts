@@ -124,6 +124,17 @@ export function useCreatePlan() {
         if (benefitsError) throw benefitsError;
       }
 
+      // Create planos_coberturas if provided
+      if (coberturas && coberturas.length > 0) {
+        const { error: cobError } = await supabase
+          .from('planos_coberturas')
+          .insert(coberturas.map(c => ({
+            plano_id: plan.id,
+            cobertura_id: c.cobertura_id,
+          })));
+        if (cobError) throw cobError;
+      }
+
       // Create region links
       if (regioes && regioes.length > 0) {
         const { error: regioesError } = await supabase
