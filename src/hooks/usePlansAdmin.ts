@@ -24,6 +24,7 @@ export interface PlanInput {
   badge_color?: string | null;
   coverage_type?: string | null;
   min_vehicle_year?: string | null;
+  ano_fabricacao_maximo?: number | null;
   additional_price?: number | null;
   desconto_percentual?: number | null;
   cota_passeio_percent?: number | null;
@@ -61,7 +62,8 @@ export function useCreatePlan() {
         badge_text: planData.badge_text,
         badge_color: planData.badge_color,
         coverage_type: planData.coverage_type,
-        ano_minimo: planData.min_vehicle_year ? parseInt(planData.min_vehicle_year.replace(/\D/g, '')) : null,
+        ano_minimo: planData.min_vehicle_year ? parseInt(planData.min_vehicle_year) : null,
+        ano_fabricacao_maximo: planData.ano_fabricacao_maximo ?? null,
         adicional_mensal: planData.additional_price || 0,
         desconto_percentual: planData.desconto_percentual ?? 0,
         cota_participacao: planData.cota_passeio_percent,
@@ -162,7 +164,8 @@ export function useUpdatePlan() {
         badge_text: planData.badge_text,
         badge_color: planData.badge_color,
         coverage_type: planData.coverage_type,
-        ano_minimo: planData.min_vehicle_year ? parseInt(planData.min_vehicle_year.replace(/\D/g, '')) : null,
+        ano_minimo: planData.min_vehicle_year ? parseInt(planData.min_vehicle_year) : null,
+        ano_fabricacao_maximo: planData.ano_fabricacao_maximo ?? null,
         adicional_mensal: planData.additional_price || 0,
         desconto_percentual: planData.desconto_percentual ?? 0,
         cota_participacao: planData.cota_passeio_percent,
