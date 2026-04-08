@@ -1,32 +1,32 @@
 
 
-# Plano: Adicionar seletor Blacklist/Whitelist ao editor de Marca/Modelo
+# Plano: Remover pagina admin/planos
 
 ## Contexto
 
-O `MarcaModeloExclusionEditor` atualmente so suporta modo **exclusao** (blacklist). O motor de elegibilidade (`useEntityEligibilityRules`) ja suporta `rule_mode: 'include' | 'exclude'`, entao basta atualizar o componente de UI.
+A gestao de planos, linhas, coberturas e beneficios ja esta completamente disponivel em **Diretoria > Gestao Comercial**. A rota `/admin/planos` e redundante e deve ser removida. Nao ha link no sidebar apontando para ela.
+
+Os componentes em `src/components/admin/planos/` (PlanFormModal, LinhaFormModal, etc.) continuam sendo usados por Gestao Comercial e outras paginas — nao serao removidos.
 
 ## Alteracoes
 
-### 1. `MarcaModeloExclusionEditor.tsx` — Adicionar seletor de modo
+### 1. `src/App.tsx`
+- Remover o import lazy de `PlanosAdmin`
+- Remover a rota `<Route path="/admin/planos" ...>`
 
-- Adicionar um **toggle ou segmented control** no topo do editor com duas opcoes:
-  - **Blacklist (Exclusiva)**: "Aceitar todos EXCETO as marcas/modelos listados"
-  - **Whitelist (Inclusiva)**: "Aceitar APENAS as marcas/modelos listados"
-- O estado do modo sera derivado das regras existentes: se existem regras `include`, modo = whitelist; se existem regras `exclude` ou nenhuma, modo = blacklist
-- Ao trocar o modo, as regras existentes serao removidas (com confirmacao) e novas regras usarao o novo `rule_mode`
-- Atualizar labels dinamicamente:
-  - Blacklist: "Adicionar marca a exclusao", "Marca inteira excluida", "Nenhuma marca excluida"
-  - Whitelist: "Adicionar marca permitida", "Marca inteira permitida", "Nenhuma marca configurada — todos bloqueados"
-- Ajustar o filtro `useMemo` para ler regras com `rule_mode` igual ao modo ativo (nao mais hardcoded `'exclude'`)
-- Ao salvar regras, usar o `rule_mode` selecionado
+### 2. `src/pages/admin/PlanosAdmin.tsx`
+- Deletar o arquivo
 
-### 2. `LinhaFormModal.tsx` — Atualizar descricao do toggle
+### 3. Tabs exclusivas da pagina admin (opcionais para limpeza)
+Os arquivos abaixo so eram usados por `PlanosAdmin.tsx` e podem ser removidos:
+- `src/components/admin/planos/PlanosTab.tsx`
+- `src/components/admin/planos/BeneficiosTab.tsx`
+- `src/components/admin/planos/CoberturasTab.tsx`
+- `src/components/admin/planos/LinhasTab.tsx`
 
-- Mudar o texto "Exclui marcas ou modelos especificos desta linha" para "Configura marcas e modelos aceitos ou bloqueados nesta linha"
+Antes de deletar, confirmarei que nenhum outro arquivo os importa.
 
-### Arquivos modificados
+## Resultado
 
-- `src/components/admin/planos/MarcaModeloExclusionEditor.tsx`
-- `src/components/admin/planos/LinhaFormModal.tsx`
+A unica forma de gerenciar planos, linhas, coberturas e beneficios passa a ser por **Diretoria > Gestao Comercial**. Acessar `/admin/planos` redirecionara para 404 (comportamento padrao do router).
 
