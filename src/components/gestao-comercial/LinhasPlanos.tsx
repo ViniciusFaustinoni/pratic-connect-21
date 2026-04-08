@@ -360,8 +360,17 @@ export function LinhasPlanos() {
         ))}
       </div>
 
-      {linhaSheet.open && <LinhaSheet open linha={linhaSheet.linha} onClose={() => setLinhaSheet({ open: false })} />}
-      {planoSheet.open && <PlanoFormSheet open planoId={planoSheet.planoId} linhaId={planoSheet.linhaId} onClose={() => setPlanoSheet({ open: false })} />}
+      <LinhaFormModal
+        open={linhaModal.open}
+        onOpenChange={(open) => { if (!open) setLinhaModal({ open: false }); }}
+        productLine={linhaModal.productLine}
+      />
+      <PlanFormModal
+        open={planoModal.open}
+        onOpenChange={(open) => { if (!open) setPlanoModal({ open: false, plan: null }); }}
+        plan={planoModal.plan}
+        defaultProductLineId={planoModal.defaultLineId}
+      />
       <ImportarLinhasModal open={importModal} onClose={() => setImportModal(false)} />
 
       {/* Delete confirmation */}
