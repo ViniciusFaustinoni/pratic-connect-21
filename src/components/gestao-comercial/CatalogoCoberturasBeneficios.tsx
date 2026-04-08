@@ -383,6 +383,30 @@ export function CatalogoCoberturasBeneficios() {
   const [cobSheet, setCobSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [benSheet, setBenSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item?: any; type?: 'cobertura' | 'beneficio' }>({ open: false });
+  const [cobSearch, setCobSearch] = useState('');
+  const [benSearch, setBenSearch] = useState('');
+  const [cobSort, setCobSort] = useState<'default' | 'az' | 'za'>('default');
+  const [benSort, setBenSort] = useState<'default' | 'az' | 'za'>('default');
+
+  const filterAndSort = (items: any[], search: string, sort: 'default' | 'az' | 'za', type: 'cobertura' | 'beneficio') => {
+    let filtered = items;
+    if (search.trim()) {
+      const term = search.toLowerCase();
+      filtered = items.filter(item => {
+        const nome = (type === 'cobertura' ? item.nome : item.name) || '';
+        const desc = (type === 'cobertura' ? item.descricao : item.description) || '';
+        return nome.toLowerCase().includes(term) || desc.toLowerCase().includes(term);
+      });
+    }
+    if (sort !== 'default') {
+      const getName = (item: any) => (type === 'cobertura' ? item.nome : item.name) || '';
+      filtered = [...filtered].sort((a, b) => {
+        const cmp = getName(a).localeCompare(getName(b), 'pt-BR');
+        return sort === 'az' ? cmp : -cmp;
+      });
+    }
+    return filtered;
+  };
 
   const handleDelete = (justificativa: string) => {
     if (!deleteDialog.item || !deleteDialog.type) return;
