@@ -176,20 +176,31 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       return isInclude ? match : !match;
     }
     case 'marca_modelo': {
+      // New format: rule_config.modelos is array of objects with .status
+      const modelosArr = cfg.modelos || [];
+      if (modelosArr.length > 0 && typeof modelosArr[0] === 'object' && 'status' in modelosArr[0]) {
+        const match = findModelEligibility({ rule_config: cfg } as any, ctx);
+        if (!match) {
+          // No matching entry found — whitelist: block, blacklist: allow
+          return !isInclude;
+        }
+        // If negado → block
+        if (match.status === 'negado') return false;
+        // aceito or limitado → allow
+        return true;
+      }
+      // Legacy format: modelos as string array or single marca/modelo
       const marcaMatch = !cfg.marca || (ctx.marca || '').toUpperCase().includes(cfg.marca.toUpperCase());
-      // Support both single modelo (legacy) and modelos array (new)
-      const modelos: string[] = cfg.modelos || [];
+      const legacyModelos: string[] = modelosArr;
       let modeloMatch: boolean;
-      if (modelos.length > 0) {
-        modeloMatch = modelos.some(m => (ctx.modelo || '').toUpperCase().includes(m.toUpperCase()));
+      if (legacyModelos.length > 0) {
+        modeloMatch = legacyModelos.some((m: string) => (ctx.modelo || '').toUpperCase().includes(m.toUpperCase()));
       } else {
         modeloMatch = !cfg.modelo || (ctx.modelo || '').toUpperCase().includes(cfg.modelo.toUpperCase());
       }
       const versaoMatch = !cfg.versao || (ctx.versao || '').toUpperCase().includes(cfg.versao.toUpperCase());
-      // For exclusion with modelos array: match = marca matches AND at least one modelo matches
-      // For exclusion without modelos: match = marca matches (entire brand excluded)
-      const match = marcaMatch && (modelos.length > 0 ? modeloMatch : (modeloMatch && versaoMatch));
-      return isInclude ? match : !match;
+      const match2 = marcaMatch && (legacyModelos.length > 0 ? modeloMatch : (modeloMatch && versaoMatch));
+      return isInclude ? match2 : !match2;
     }
     case 'tipo_uso': {
       const tipos: string[] = cfg.tipos || cfg.values || [];
