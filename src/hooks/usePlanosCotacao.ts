@@ -369,8 +369,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         return acc + Number(valor);
       }, 0);
 
-      // Soma dos valores dos benefícios vinculados
-      const somaBeneficios = (plano.planos_beneficios || []).reduce((acc: number, pb: any) => {
+      // Soma dos valores dos benefícios vinculados (apenas os elegíveis)
+      const somaBeneficios = beneficiosDoPlano.reduce((acc: number, pb: any) => {
         const fipeRule = allEligibilityRules.find(
           r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id
             && r.rule_type === 'fipe_range' && r.is_active
