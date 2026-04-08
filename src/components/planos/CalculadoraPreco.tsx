@@ -8,22 +8,15 @@ import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { Badge } from '@/components/ui/badge';
 import { Calculator, Check, Car, Briefcase, Search, Loader2, Bike, Fuel, ArrowRight, Shield, CalendarCheck, AlertTriangle, Ban } from 'lucide-react';
 import { Alert, AlertDescription } from '@/components/ui/alert';
-import { useTabelasPreco } from '@/hooks/usePlanos';
 import { formatarMoeda } from '@/utils/format';
-import { resolverTipoUsoQuery, resolverPrecoApp } from '@/utils/precoApp';
-import type { ConfigAdicionalApp } from '@/utils/precoApp';
 import { normalizarCombustivelParaPricing } from '@/utils/regiaoMapping';
 import { detectarTipoVeiculo } from '@/data/vistoriaConfigCompleta';
-import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { supabase } from '@/integrations/supabase/client';
-import { useQuery } from '@tanstack/react-query';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { maskPlaca } from '@/lib/validations';
 import { calcularOpcoesVencimento } from '@/utils/vencimento';
-
-const CATEGORIAS_DESAGIO_FALLBACK = ['chassi_remarcado', 'placa_vermelha', 'ex_taxi', 'taxi', 'leilao', 'ressarcimento_integral'];
-const LINHAS_COM_DESAGIO_FALLBACK = ['select', 'lancamento'];
+import { usePlanosCotacao, type PlanoCotacao } from '@/hooks/usePlanosCotacao';
 
 const CATEGORIAS_VEICULO_CALC = [
   { value: 'nenhuma', label: 'Nenhuma' },
@@ -34,42 +27,6 @@ const CATEGORIAS_VEICULO_CALC = [
   { value: 'placa_vermelha', label: 'Placa Vermelha' },
   { value: 'ressarcimento_integral', label: 'Ressarcimento Integral' },
 ] as const;
-
-interface ResultadoPlano {
-  key: string;
-  planoNome: string;
-  valorMensal: number;
-  valorDesagio: number | null;
-  adicionalMensal: number;
-  descontoPercentual: number;
-  sortPriority: number;
-  // New fields
-  valorAdesao: number;
-  cotaPercentual: number;
-  cotaMinima: number;
-  coberturaFipe: number;
-  coberturas: string[];
-  precoDesagioAplicado?: boolean;
-}
-
-interface ResultadoCalc {
-  planos: ResultadoPlano[];
-  faixaFipe: string;
-  valorFipeInformado: number;
-  regiaoLabel: string;
-  tipoUsoLabel: string;
-  tipoVeiculoLabel: string;
-  categoriaLabel: string | null;
-}
-
-interface VeiculoPlaca {
-  marca: string;
-  modelo: string;
-  ano: string;
-  cor: string;
-  combustivel: string;
-  placa: string;
-}
 
 export interface DadosParaCotacao {
   valorFipe: number;
@@ -89,169 +46,18 @@ const TIPO_VEICULO_LABELS: Record<TipoVeiculo, string> = {
   moto: 'Moto',
 };
 
-function useAdicionalApp() {
-  return useQuery({
-    queryKey: ['configuracoes', 'adicional_app'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'adicional_app')
-        .single();
-      return parseFloat(data?.valor || '35.90') || 35.90;
-    },
-  });
+interface VeiculoPlaca {
+  marca: string;
+  modelo: string;
+  ano: string;
+  cor: string;
+  combustivel: string;
+  placa: string;
 }
 
-function useConfigAdicionalAppCalc(tabelas: any[] | undefined) {
-  const { data: regioesRaw } = useQuery({
-    queryKey: ['configuracoes', 'regioes_com_adicional_app'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('configuracoes')
-        .select('valor')
-        .eq('chave', 'regioes_com_adicional_app')
-        .maybeSingle();
-      try { return JSON.parse(data?.valor || '[]') as string[]; }
-      catch { return [] as string[]; }
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-
-  const { data: productLinesData } = useQuery({
-    queryKey: ['product_lines_supports_app'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('product_lines')
-        .select('slug, supports_app');
-      if (error) throw error;
-      return data || [];
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-
-  return useMemo<ConfigAdicionalApp>(() => ({
-    regioesComAdicional: (regioesRaw || []).map(r => r.toLowerCase()),
-    linhasSupportsApp: (productLinesData || [])
-      .filter(pl => pl.supports_app === true)
-      .map(pl => (pl.slug || '').toLowerCase()),
-    linhasComColunaApp: [...new Set(
-      (tabelas || [])
-        .filter((t: any) => t.tipo_uso === 'aplicativo')
-        .map((t: any) => (t.linha_slug || '').toLowerCase())
-        .filter(Boolean)
-    )],
-  }), [regioesRaw, productLinesData, tabelas]);
-}
-
-/** Fetch planos + plano_preco_map + product_lines for calculator — includes extra fields */
-function usePlanosComPrecoMap() {
-  return useQuery({
-    queryKey: ['calculadora-planos-preco-map-v3'],
-    queryFn: async () => {
-      const [planosRes, mapRes, plRes] = await Promise.all([
-        supabase
-          .from('planos')
-          .select(`id, nome, slug, codigo, adicional_mensal, desconto_percentual, visivel_gestao, ativo, categoria, fipe_minima, fipe_maxima, tipo_uso, ano_minimo, ano_minimo_veiculo, ano_fabricacao_minimo, valor_adesao, cota_participacao, cota_minima, cota_desagio, cota_minima_desagio, cobertura_fipe, linha, planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name))`)
-          .eq('ativo', true)
-          .eq('visivel_gestao', true)
-          .order('ordem', { ascending: true }),
-        supabase
-          .from('plano_preco_map')
-          .select('plano_id, linha_slug, tipo_uso'),
-        supabase
-          .from('product_lines')
-          .select('slug, vehicle_type, requires_recent_year, blocked_categories, supports_app, sort_priority'),
-      ]);
-      return {
-        planos: planosRes.data || [],
-        mappings: mapRes.data || [],
-        productLines: plRes.data || [],
-      };
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-}
-
-/** Detect vehicle type from plate-lookup response (sync fallback only — hook is used in component) */
 function detectarTipoFromPlaca(dados: VeiculoPlaca): TipoVeiculo {
   const tipoDetectado = detectarTipoVeiculo(undefined, dados.modelo, dados.marca);
   return tipoDetectado === 'moto' ? 'moto' : 'carro';
-}
-
-// Defaults for cota
-function useCotaDefaults() {
-  const { data: cotaDefault = 6 } = useQuery({
-    queryKey: ['configuracoes', 'cota_participacao_default'],
-    queryFn: async () => {
-      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_participacao_default').maybeSingle();
-      return parseFloat(data?.valor || '6') || 6;
-    },
-    staleTime: 1000 * 60 * 10,
-  });
-  const { data: cotaMinimaDefault = 1200 } = useQuery({
-    queryKey: ['configuracoes', 'cota_minima_default'],
-    queryFn: async () => {
-      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_minima_default').maybeSingle();
-      return parseFloat(data?.valor || '1200') || 1200;
-    },
-    staleTime: 1000 * 60 * 10,
-  });
-  return { cotaDefault, cotaMinimaDefault };
-}
-
-// Deságio config queries (reuse same queryKeys as cotador)
-function useDesagioConfig() {
-  const { data: categoriasDesagio = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
-    queryKey: ['configuracoes', 'categorias_desagio'],
-    queryFn: async () => {
-      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'categorias_desagio').maybeSingle();
-      try { return JSON.parse(data?.valor || '[]') as string[]; } catch { return CATEGORIAS_DESAGIO_FALLBACK; }
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-  const { data: linhasComDesagio = LINHAS_COM_DESAGIO_FALLBACK } = useQuery({
-    queryKey: ['configuracoes', 'linhas_com_desagio'],
-    queryFn: async () => {
-      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'linhas_com_desagio').maybeSingle();
-      try { return JSON.parse(data?.valor || '[]') as string[]; } catch { return LINHAS_COM_DESAGIO_FALLBACK; }
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-  const { data: categoriasQueSobrepoeApp = CATEGORIAS_DESAGIO_FALLBACK } = useQuery({
-    queryKey: ['configuracoes', 'categorias_que_sobrepoe_app'],
-    queryFn: async () => {
-      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'categorias_que_sobrepoe_app').maybeSingle();
-      try { return JSON.parse(data?.valor || '[]') as string[]; } catch { return CATEGORIAS_DESAGIO_FALLBACK; }
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-  const { data: cotaDesagioDefault = 8 } = useQuery({
-    queryKey: ['configuracoes', 'cota_desagio_default'],
-    queryFn: async () => {
-      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_desagio_default').maybeSingle();
-      return parseFloat(data?.valor || '8') || 8;
-    },
-    staleTime: 1000 * 60 * 10,
-  });
-  const { data: cotaMinimaDesagioDefault = 2000 } = useQuery({
-    queryKey: ['configuracoes', 'cota_minima_desagio_default'],
-    queryFn: async () => {
-      const { data } = await supabase.from('configuracoes').select('valor').eq('chave', 'cota_minima_desagio_default').maybeSingle();
-      return parseFloat(data?.valor || '2000') || 2000;
-    },
-    staleTime: 1000 * 60 * 10,
-  });
-  const { data: cotasCategoriaData } = useQuery({
-    queryKey: ['planos_cotas_categoria'],
-    queryFn: async () => {
-      const { data, error } = await supabase.from('planos_cotas_categoria').select('plano_id, categoria_veiculo, cota_percentual, cota_minima_valor');
-      if (error) throw error;
-      return data;
-    },
-    staleTime: 1000 * 60 * 5,
-  });
-  return { categoriasDesagio, linhasComDesagio, categoriasQueSobrepoeApp, cotaDesagioDefault, cotaMinimaDesagioDefault, cotasCategoriaData };
 }
 
 interface CalculadoraPrecoProps {
@@ -268,7 +74,6 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const [combustivelManual, setCombustivelManual] = useState<'gasolina' | 'diesel'>('gasolina');
   const [anoVeiculo, setAnoVeiculo] = useState<string>('');
   const [categoria, setCategoria] = useState<string>('nenhuma');
-  const [resultado, setResultado] = useState<ResultadoCalc | null>(null);
   const [semResultado, setSemResultado] = useState(false);
   const jaCalculouRef = useRef(false);
 
@@ -278,60 +83,49 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   const [veiculoPlaca, setVeiculoPlaca] = useState<VeiculoPlaca | null>(null);
   const [combustivelDetectado, setCombustivelDetectado] = useState<string | null>(null);
 
-  const { data: tabelas } = useTabelasPreco();
-  const { data: adicionalApp = 35.90 } = useAdicionalApp();
-  const { data: planosData } = usePlanosComPrecoMap();
-  const configApp = useConfigAdicionalAppCalc(tabelas);
-  const { cotaDefault, cotaMinimaDefault } = useCotaDefaults();
-  const desagioConfig = useDesagioConfig();
   const { data: limites } = useConfigLimitesVeiculo();
   const { data: regioesDb } = useRegioesAtivas();
   const REGIOES = useMemo(() => (regioesDb || []).map(r => ({ value: r.codigo, label: r.nome })), [regioesDb]);
 
-  // Elegibilidade query (same as cotador)
-  const { data: elegibilidadeData } = useQuery({
-    queryKey: ['plano_elegibilidade_modelos'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('plano_elegibilidade_modelos')
-        .select('plano_id, marca, modelo, ano_min, ano_max, combustivel, status, observacao, cobertura_fipe')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data ?? [];
-    },
-    staleTime: 5 * 60 * 1000,
-  });
-
-  // State for FIPE-below-minimum alert
+  // FIPE-below-minimum alert
   const [fipeBloqueado, setFipeBloqueado] = useState(false);
   // Vencimento
   const [opcao1, opcao2] = calcularOpcoesVencimento(new Date().getDate());
 
-  // Build product_lines lookup maps
-  const plMaps = useMemo(() => {
-    const pls = planosData?.productLines || [];
-    const vehicleType: Record<string, string | null> = {};
-    const requiresRecent: Record<string, boolean> = {};
-    const blockedCats: Record<string, string[]> = {};
-    const supportsApp: Record<string, boolean> = {};
-    const sortPriority: Record<string, number> = {};
-    for (const pl of pls) {
-      if (!pl.slug) continue;
-      vehicleType[pl.slug] = pl.vehicle_type;
-      requiresRecent[pl.slug] = pl.requires_recent_year === true;
-      blockedCats[pl.slug] = Array.isArray(pl.blocked_categories) ? (pl.blocked_categories as string[]) : [];
-      supportsApp[pl.slug] = pl.supports_app === true;
-      sortPriority[pl.slug] = typeof pl.sort_priority === 'number' ? pl.sort_priority : 99;
-    }
-    return { vehicleType, requiresRecent, blockedCats, supportsApp, sortPriority };
-  }, [planosData?.productLines]);
+  // Derived values
+  const fipeNumerico = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
+  const temFipe = fipeNumerico > 0;
+  const temPlacaConsultada = modo === 'placa' && veiculoPlaca !== null;
+  const temDadosVeiculo = temPlacaConsultada || (modo === 'manual' && temFipe);
 
-  /** Check if a linha_slug matches the selected vehicle type */
-  const linhaMatchesTipo = (linhaSlug: string): boolean => {
-    const vt = plMaps.vehicleType[linhaSlug];
-    if (tipoVeiculo === 'moto') return vt === 'motorcycle';
-    return vt !== 'motorcycle';
-  };
+  const combustivelPricing = combustivelDetectado
+    ? normalizarCombustivelParaPricing(combustivelDetectado)
+    : combustivelManual;
+
+  const anoNum = anoVeiculo ? parseInt(anoVeiculo, 10) : undefined;
+  const categoriaAtiva = tipoVeiculo === 'carro' && categoria !== 'nenhuma' ? categoria : undefined;
+
+  // ── Motor Unificado: usePlanosCotacao ──
+  const { planos: planosCalculados, isLoading: planosLoading } = usePlanosCotacao({
+    valorFipe: temFipe && jaCalculouRef.current ? fipeNumerico : 0,
+    regiao,
+    combustivel: combustivelPricing,
+    categoria: categoriaAtiva,
+    anoVeiculo: anoNum,
+    tipoVeiculo,
+    usoApp: tipoUso === 'aplicativo',
+    marca: veiculoPlaca?.marca,
+    modelo: veiculoPlaca?.modelo,
+  });
+
+  // Check FIPE mínimo
+  useEffect(() => {
+    if (jaCalculouRef.current && temFipe) {
+      const fipeMinimo = limites?.fipeMinimo ?? 15000;
+      setFipeBloqueado(fipeNumerico < fipeMinimo);
+      setSemResultado(!fipeBloqueado && planosCalculados.length === 0);
+    }
+  }, [planosCalculados, fipeNumerico, temFipe, limites, fipeBloqueado]);
 
   const consultarPlaca = async () => {
     const cleaned = placa.replace(/[^A-Za-z0-9]/g, '').toUpperCase();
@@ -364,9 +158,9 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
       setTipoVeiculo(tipo);
 
       if (v.ano) {
-        const anoNum = parseInt(String(v.ano).replace(/\D.*$/, ''), 10);
-        if (anoNum > 1900 && anoNum < 2100) {
-          setAnoVeiculo(String(anoNum));
+        const anoNumParsed = parseInt(String(v.ano).replace(/\D.*$/, ''), 10);
+        if (anoNumParsed > 1900 && anoNumParsed < 2100) {
+          setAnoVeiculo(String(anoNumParsed));
         }
       }
 
@@ -383,298 +177,15 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     if (e.key === 'Enter') consultarPlaca();
   };
 
-  // Marca aliases (same as cotador)
-  const MARCA_ALIASES: Record<string, string> = {
-    'VW': 'VOLKSWAGEN', 'GM': 'CHEVROLET', 'MERCEDES': 'MERCEDES-BENZ',
-    'CHERY': 'CAOA CHERY', 'CITROËN': 'CITROEN',
-  };
-  const normalizarMarca = (m: string) => { const u = m.trim().toUpperCase(); return MARCA_ALIASES[u] || u; };
-
-  /** Verificar elegibilidade (whitelist) — replica lógica do cotador */
-  const verificarElegibilidade = (planoId: string, linha: string | null, marca: string, modelo: string, ano: number, combustivel: string) => {
-    const planosNaLinha = linha
-      ? (planosData?.planos || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
-      : [planoId];
-    const regras = elegibilidadeData?.filter(e => planosNaLinha.includes(e.plano_id)) ?? [];
-    if (regras.length === 0) return { status: 'aprovado' as const, coberturaFipe: 100 };
-
-    const marcaNorm = normalizarMarca(marca);
-    const modeloUp = modelo.trim().toUpperCase().replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-    const combustivelNorm = combustivel.trim().toLowerCase();
-
-    const regrasOrd = [...regras].sort((a, b) => b.modelo.length - a.modelo.length);
-    const regra = regrasOrd.find(r => {
-      const marcaBanco = normalizarMarca(r.marca);
-      const marcaMatch = marcaBanco === marcaNorm || r.marca.trim().toUpperCase() === marca.trim().toUpperCase();
-      const modeloBanco = r.modelo.trim().toUpperCase().replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-      let modeloMatch = false;
-      if (modeloBanco.startsWith('TODOS')) { modeloMatch = true; }
-      else {
-        const prefixMatch = modeloUp.startsWith(modeloBanco) || modeloBanco.startsWith(modeloUp);
-        const containsMatch = modeloUp.includes(modeloBanco) || modeloBanco.includes(modeloUp);
-        const palavras = modeloBanco.split(' ');
-        const baseMatch = palavras.length === 1 && palavras[0].length >= 2 && (modeloUp.startsWith(palavras[0] + ' ') || modeloUp === palavras[0]);
-        modeloMatch = prefixMatch || containsMatch || baseMatch;
-      }
-      const anoMatch = ano >= r.ano_min && (r.ano_max === null || ano <= r.ano_max);
-      const combMatch = r.combustivel === 'qualquer' || r.combustivel === combustivelNorm;
-      return marcaMatch && modeloMatch && anoMatch && combMatch;
-    });
-
-    if (!regra) return { status: 'negado' as const, coberturaFipe: 0 };
-    if (regra.status === 'negado') return { status: 'negado' as const, coberturaFipe: 0 };
-    const cobFipe = (regra as any).cobertura_fipe ?? 100;
-    if (regra.status === 'limitado') return { status: 'limitado' as const, coberturaFipe: cobFipe };
-    return { status: 'aprovado' as const, coberturaFipe: cobFipe };
-  };
-
-  // Auto-recalcular quando inputs mudam após primeiro cálculo
-  useEffect(() => {
-    if (jaCalculouRef.current) {
-      calcular();
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [tipoUso, tipoVeiculo, categoria, combustivelManual, anoVeiculo, valorFipe, veiculoPlaca, regiao]);
-
-  const calcular = () => {
-    const valor = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
-
-    if (!valor || !tabelas || tabelas.length === 0 || !planosData) {
-      setResultado(null);
-      setSemResultado(!!valor);
-      setFipeBloqueado(false);
-      return;
-    }
-
-    // ── Guard: FIPE mínimo global ──
+  const handleCalcular = () => {
+    jaCalculouRef.current = true;
     const fipeMinimo = limites?.fipeMinimo ?? 15000;
-    if (valor < fipeMinimo) {
-      setResultado(null);
-      setSemResultado(false);
+    if (fipeNumerico < fipeMinimo) {
       setFipeBloqueado(true);
+      setSemResultado(false);
       return;
     }
     setFipeBloqueado(false);
-
-    const { planos, mappings } = planosData;
-    const anoAtual = new Date().getFullYear();
-    const anoNum = anoVeiculo ? parseInt(anoVeiculo, 10) : null;
-
-    const combustivelPricing = combustivelDetectado
-      ? normalizarCombustivelParaPricing(combustivelDetectado)
-      : combustivelManual;
-
-    const resultadosPlano: ResultadoPlano[] = [];
-
-    const { categoriasDesagio, linhasComDesagio, categoriasQueSobrepoeApp, cotaDesagioDefault, cotaMinimaDesagioDefault, cotasCategoriaData } = desagioConfig;
-    const categoriaAtiva = tipoVeiculo === 'carro' && categoria !== 'nenhuma' ? categoria : null;
-    const isDesagio = !!categoriaAtiva && categoriasDesagio.includes(categoriaAtiva);
-    const isAppComDesagio = tipoUso === 'aplicativo' && isDesagio && categoriasQueSobrepoeApp.includes(categoriaAtiva || '');
-
-    for (const plano of planos) {
-      const catLower = (plano.categoria || '').toLowerCase();
-      const tipoUsoPlano = (plano.tipo_uso || '').toLowerCase();
-
-      const mapping = mappings.find(m => m.plano_id === plano.id);
-      if (!mapping?.linha_slug) continue;
-
-      const linhaSlug = mapping.linha_slug;
-      const plSlug = linhaSlug.toLowerCase();
-
-      if (!linhaMatchesTipo(linhaSlug)) continue;
-
-      // Filtro tipo_uso: APP + deságio permite planos 'passeio' da linha Select
-      if (tipoUso === 'aplicativo' && tipoUsoPlano !== 'aplicativo' && tipoUsoPlano !== 'ambos') {
-        const isLinhaSelect = plSlug.startsWith('select');
-        if (!(isAppComDesagio && tipoUsoPlano === 'passeio' && isLinhaSelect)) {
-          continue;
-        }
-      }
-      if (tipoUso !== 'aplicativo' && tipoUsoPlano === 'aplicativo') continue;
-
-      if (tipoUso === 'aplicativo' && !plMaps.supportsApp[linhaSlug]) continue;
-      if (plano.fipe_minima && valor < Number(plano.fipe_minima)) continue;
-      if (plano.fipe_maxima && valor > Number(plano.fipe_maxima)) continue;
-
-      if (anoNum) {
-        const anoMinPlano = Number(plano.ano_minimo || plano.ano_minimo_veiculo || plano.ano_fabricacao_minimo || 0);
-        if (anoMinPlano > 0 && anoNum < anoMinPlano) continue;
-      }
-
-      if (plMaps.requiresRecent[linhaSlug] && anoNum) {
-        if (anoNum < anoAtual - 1) continue;
-      }
-
-      // ── Whitelist eligibility check (hard gate policy) ──
-      const linhaPlano = (plano.linha || '').toLowerCase() || null;
-      const temRegras = elegibilidadeData?.some(e => {
-        const planosNaLinha = linhaPlano
-          ? (planosData?.planos || []).filter(p => (p.linha || '').toLowerCase() === linhaPlano).map(p => p.id)
-          : [plano.id];
-        return planosNaLinha.includes(e.plano_id);
-      });
-
-      if (temRegras) {
-        if (veiculoPlaca?.marca && veiculoPlaca?.modelo && anoNum) {
-          const combForElig = combustivelDetectado || combustivelManual;
-          const eleg = verificarElegibilidade(plano.id, linhaPlano, veiculoPlaca.marca, veiculoPlaca.modelo, anoNum, combForElig);
-          if (eleg.status === 'negado') continue;
-        } else {
-          // Hard gate: sem dados de marca/modelo → negar plano com whitelist
-          continue;
-        }
-      }
-
-      // Blocked categories (from product_line)
-      const blocked = plMaps.blockedCats[linhaSlug] || [];
-      if (blocked.length > 0 && categoriaAtiva && blocked.includes(categoriaAtiva)) continue;
-
-      // Categorias aceitas do plano (mesma lógica do cotador)
-      const categoriasAceitasPlano = (plano.categoria || '')
-        .split(',').map((c: string) => c.trim().toLowerCase()).filter(Boolean);
-      if (categoriasAceitasPlano.length > 0 && categoriaAtiva) {
-        if (!categoriasAceitasPlano.includes(categoriaAtiva) && !categoriasAceitasPlano.includes('todos')) {
-          continue;
-        }
-      }
-
-      // Select Exclusive: ocultar quando APP + deságio combinam
-      if (isAppComDesagio && (plSlug === 'select-exclusive' || (plano as any).codigo?.toLowerCase().includes('exclusive'))) {
-        continue;
-      }
-
-      const isMotoLine = mapping.tipo_uso !== 'particular' && mapping.tipo_uso !== 'aplicativo';
-      const tipoUsoPricing = isMotoLine
-        ? mapping.tipo_uso
-        : resolverTipoUsoQuery(linhaSlug, regiao, tipoUso, configApp);
-
-      if (!isMotoLine) {
-        const expectedTipoUso = resolverTipoUsoQuery(linhaSlug, regiao, tipoUso, configApp);
-        if (tipoUsoPricing !== expectedTipoUso) continue;
-      }
-
-      const faixa = tabelas.find(t => {
-        if (t.linha_slug !== linhaSlug) return false;
-        if (t.regiao !== regiao) return false;
-        if (t.tipo_uso !== tipoUsoPricing) return false;
-        if (valor < Number(t.fipe_min) || valor > Number(t.fipe_max)) return false;
-        if (combustivelPricing && t.combustivel_tipo && t.combustivel_tipo !== combustivelPricing) return false;
-        return true;
-      });
-
-      if (!faixa || Number(faixa.valor_mensal) <= 0) continue;
-
-      let valorMensal = Number(faixa.valor_mensal);
-      const valorDesagioFaixa = faixa.valor_desagio != null ? Number(faixa.valor_desagio) : null;
-      let precoDesagioAplicado = false;
-
-      // Aplicar deságio: usar valor_desagio se a categoria é deságio e a linha suporta
-      const temColunaAppDedicada = configApp.linhasComColunaApp.includes(linhaSlug);
-      if (isDesagio && valorDesagioFaixa != null && linhasComDesagio.includes(linhaSlug) && !temColunaAppDedicada) {
-        valorMensal = valorDesagioFaixa;
-        precoDesagioAplicado = true;
-      }
-
-      // Adicional APP: NÃO aplicar se a categoria anula (deságio sobrepõe APP)
-      const categoriaAnulaApp = isDesagio && categoriasQueSobrepoeApp.includes(categoriaAtiva || '');
-      if (!isMotoLine && tipoUso === 'aplicativo' && !categoriaAnulaApp) {
-        valorMensal = resolverPrecoApp(linhaSlug, regiao, tipoUso, valorMensal, adicionalApp, configApp);
-      }
-
-      const adicionalMensal = Number(plano.adicional_mensal || 0);
-      valorMensal += adicionalMensal;
-
-      const descontoPerc = Number(plano.desconto_percentual || 0);
-      if (descontoPerc > 0) {
-        valorMensal *= (1 - descontoPerc / 100);
-      }
-
-      // Cota — cascata: planos_cotas_categoria → plano fields → defaults
-      const cotaBase = plano.cota_participacao != null ? Number(plano.cota_participacao) : cotaDefault;
-      const cotaMinBase = plano.cota_minima != null ? Number(plano.cota_minima) : cotaMinimaDefault;
-      let cotaPercentual = cotaBase;
-      let cotaMinima = cotaMinBase;
-
-      let cotaCategoriaLookup = categoriaAtiva || 'passeio';
-      if (tipoUso === 'aplicativo') cotaCategoriaLookup = 'aplicativo';
-      if (isDesagio) cotaCategoriaLookup = 'desagio';
-
-      const cotaOverride = cotasCategoriaData?.find(
-        cc => cc.plano_id === plano.id && cc.categoria_veiculo === cotaCategoriaLookup
-      );
-
-      if (cotaOverride) {
-        cotaPercentual = cotaOverride.cota_percentual != null ? Number(cotaOverride.cota_percentual) : cotaBase;
-        cotaMinima = cotaOverride.cota_minima_valor != null ? Number(cotaOverride.cota_minima_valor) : cotaMinBase;
-      } else if (tipoUso === 'aplicativo' || isDesagio) {
-        cotaPercentual = (plano as any).cota_desagio != null ? Number((plano as any).cota_desagio) : cotaDesagioDefault;
-        cotaMinima = (plano as any).cota_minima_desagio != null ? Number((plano as any).cota_minima_desagio) : cotaMinimaDesagioDefault;
-      }
-
-      const valorAdesao = Number(plano.valor_adesao || 0);
-      const coberturaFipe = Number(plano.cobertura_fipe || 100);
-
-      // Extract coberturas from planos_beneficios
-      const beneficios = (plano as any).planos_beneficios || [];
-      const coberturas = beneficios
-        .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
-        .map((pb: any) => pb.custom_text || pb.benefits?.name || '')
-        .filter(Boolean)
-        .slice(0, 6);
-
-      resultadosPlano.push({
-        key: plano.id,
-        planoNome: plano.nome,
-        valorMensal: Math.round(valorMensal * 100) / 100,
-        valorDesagio: valorDesagioFaixa,
-        adicionalMensal,
-        descontoPercentual: descontoPerc,
-        sortPriority: plMaps.sortPriority[linhaSlug] ?? 99,
-        valorAdesao: Math.round(valorAdesao * 100) / 100,
-        cotaPercentual,
-        cotaMinima,
-        coberturaFipe,
-        coberturas,
-        precoDesagioAplicado,
-      });
-    }
-
-    if (resultadosPlano.length === 0) {
-      setResultado(null);
-      setSemResultado(true);
-      return;
-    }
-
-    resultadosPlano.sort((a, b) => {
-      if (a.sortPriority !== b.sortPriority) return a.sortPriority - b.sortPriority;
-      return a.valorMensal - b.valorMensal;
-    });
-
-    const primeiroMapping = mappings.find(m => m.plano_id === resultadosPlano[0].key);
-    const primeiraFaixa = primeiroMapping ? tabelas.find(t =>
-      t.linha_slug === primeiroMapping.linha_slug &&
-      t.regiao === regiao &&
-      valor >= Number(t.fipe_min) &&
-      valor <= Number(t.fipe_max)
-    ) : undefined;
-
-    const categoriaAtivaSel = tipoVeiculo === 'carro' && categoria !== 'nenhuma' ? categoria : null;
-    const catLabel = categoriaAtivaSel
-      ? CATEGORIAS_VEICULO_CALC.find(c => c.value === categoriaAtivaSel)?.label || null
-      : null;
-
-    setResultado({
-      planos: resultadosPlano,
-      faixaFipe: primeiraFaixa
-        ? `${formatarMoeda(Number(primeiraFaixa.fipe_min))} - ${formatarMoeda(Number(primeiraFaixa.fipe_max))}`
-        : '',
-      valorFipeInformado: valor,
-      regiaoLabel: REGIOES.find(r => r.value === regiao)?.label || regiao,
-      tipoUsoLabel: tipoUso === 'aplicativo' ? 'Aplicativo / Trabalho' : 'Particular',
-      tipoVeiculoLabel: TIPO_VEICULO_LABELS[tipoVeiculo],
-      categoriaLabel: catLabel,
-    });
-    setSemResultado(false);
   };
 
   const handleValorChange = (e: React.ChangeEvent<HTMLInputElement>) => {
@@ -692,7 +203,6 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setCombustivelManual('gasolina');
     setAnoVeiculo('');
     setCategoria('nenhuma');
-    setResultado(null);
     setSemResultado(false);
     setFipeBloqueado(false);
     setPlaca('');
@@ -702,10 +212,9 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
   };
 
   const handleIrParaCotacao = (planoId: string) => {
-    if (!resultado || !onIrParaCotacao) return;
-    const anoNum = anoVeiculo ? parseInt(anoVeiculo, 10) : undefined;
+    if (!onIrParaCotacao) return;
     onIrParaCotacao({
-      valorFipe: resultado.valorFipeInformado,
+      valorFipe: fipeNumerico,
       marca: veiculoPlaca?.marca,
       modelo: veiculoPlaca?.modelo,
       ano: anoNum,
@@ -716,11 +225,11 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
     setOpen(false);
   };
 
-  // Derived visibility flags for progressive disclosure
-  const fipeNumerico = parseFloat(valorFipe.replace(/\D/g, '')) / 100;
-  const temFipe = fipeNumerico > 0;
-  const temPlacaConsultada = modo === 'placa' && veiculoPlaca !== null;
-  const temDadosVeiculo = temPlacaConsultada || (modo === 'manual' && temFipe);
+  const showResults = jaCalculouRef.current && temFipe && !fipeBloqueado && planosCalculados.length > 0;
+
+  const catLabel = categoriaAtiva
+    ? CATEGORIAS_VEICULO_CALC.find(c => c.value === categoriaAtiva)?.label || null
+    : null;
 
   return (
     <Dialog open={open} onOpenChange={setOpen}>
@@ -843,7 +352,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
             </div>
           )}
 
-          {/* ═══ STEP 3: Tipo Veículo (manual only — placa auto-detecta) ═══ */}
+          {/* ═══ STEP 3: Tipo Veículo (manual only) ═══ */}
           {modo === 'manual' && temFipe && (
             <div className="space-y-2 animate-fade-in">
               <Label>Tipo de Veículo</Label>
@@ -865,7 +374,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
             </div>
           )}
 
-          {/* ═══ STEP 4: Ano (manual only — placa auto-preenche) ═══ */}
+          {/* ═══ STEP 4: Ano (manual only) ═══ */}
           {modo === 'manual' && temFipe && (
             <div className="space-y-2 animate-fade-in">
               <Label htmlFor="anoVeiculo">
@@ -970,7 +479,8 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
           {/* ═══ Botões ═══ */}
           {temDadosVeiculo && (
             <div className="flex gap-2 animate-fade-in">
-              <Button onClick={() => { calcular(); jaCalculouRef.current = true; }} className="flex-1">
+              <Button onClick={handleCalcular} className="flex-1" disabled={planosLoading}>
+                {planosLoading ? <Loader2 className="h-4 w-4 animate-spin mr-2" /> : null}
                 Calcular
               </Button>
               <Button variant="outline" onClick={limpar}>
@@ -980,31 +490,30 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
           )}
 
           {/* ═══ Resultado ═══ */}
-          {resultado && (
+          {showResults && (
             <div className="space-y-4 pt-4 border-t animate-fade-in">
               <div className="text-sm text-muted-foreground">
-                <p>Veículo {formatarMoeda(resultado.valorFipeInformado)}</p>
-                <p className="text-xs">Faixa: {resultado.faixaFipe}</p>
+                <p>Veículo {formatarMoeda(fipeNumerico)}</p>
               </div>
 
               {/* Critérios */}
               <div className="flex flex-wrap gap-2 text-xs">
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted">
                   <Check className="h-3 w-3 text-primary" />
-                  {resultado.tipoVeiculoLabel}
+                  {TIPO_VEICULO_LABELS[tipoVeiculo]}
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted">
                   <Check className="h-3 w-3 text-primary" />
-                  {resultado.regiaoLabel}
+                  {REGIOES.find(r => r.value === regiao)?.label || regiao}
                 </span>
                 <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-muted">
                   <Check className="h-3 w-3 text-primary" />
-                  {resultado.tipoUsoLabel}
+                  {tipoUso === 'aplicativo' ? 'Aplicativo / Trabalho' : 'Particular'}
                 </span>
-                {resultado.categoriaLabel && (
+                {catLabel && (
                   <span className="inline-flex items-center gap-1 px-2 py-1 rounded-full bg-destructive/10 text-destructive">
                     <AlertTriangle className="h-3 w-3" />
-                    {resultado.categoriaLabel}
+                    {catLabel}
                   </span>
                 )}
               </div>
@@ -1017,32 +526,20 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
 
               {/* Preços por plano */}
               <div className="space-y-3">
-                {resultado.planos.map((plano) => (
+                {planosCalculados.map((plano) => (
                   <div
-                    key={plano.key}
+                    key={plano.id}
                     className="rounded-lg bg-primary/5 border border-primary/10 overflow-hidden"
                   >
                     {/* Header: nome + preço */}
                     <div className="flex items-center justify-between p-3">
                       <div>
-                        <span className="text-sm font-semibold">{plano.planoNome}</span>
-                        {(plano.adicionalMensal > 0 || plano.descontoPercentual > 0 || plano.precoDesagioAplicado) && (
+                        <span className="text-sm font-semibold">{plano.nome}</span>
+                        {plano.precoDesagioAplicado && (
                           <div className="flex gap-1 mt-0.5">
-                            {plano.precoDesagioAplicado && (
-                              <Badge variant="outline" className="text-[10px] px-1 py-0 border-destructive/40 text-destructive">
-                                Deságio
-                              </Badge>
-                            )}
-                            {plano.adicionalMensal > 0 && (
-                              <Badge variant="outline" className="text-[10px] px-1 py-0">
-                                +{formatarMoeda(plano.adicionalMensal)}
-                              </Badge>
-                            )}
-                            {plano.descontoPercentual > 0 && (
-                              <Badge variant="secondary" className="text-[10px] px-1 py-0">
-                                -{plano.descontoPercentual}%
-                              </Badge>
-                            )}
+                            <Badge variant="outline" className="text-[10px] px-1 py-0 border-destructive/40 text-destructive">
+                              Deságio
+                            </Badge>
                           </div>
                         )}
                       </div>
@@ -1079,14 +576,23 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                     {plano.coberturas.length > 0 && (
                       <div className="px-3 pb-2">
                         <div className="flex flex-wrap gap-1">
-                          {plano.coberturas.map((cob, i) => (
+                          {plano.coberturas.slice(0, 6).map((cob, i) => (
                             <span key={i} className="inline-flex items-center gap-0.5 text-[10px] text-muted-foreground">
                               <Shield className="h-2.5 w-2.5 text-primary" />
                               {cob}
-                              {i < plano.coberturas.length - 1 && <span className="mx-0.5">·</span>}
+                              {i < Math.min(plano.coberturas.length, 6) - 1 && <span className="mx-0.5">·</span>}
                             </span>
                           ))}
                         </div>
+                      </div>
+                    )}
+
+                    {/* Coberturas removidas */}
+                    {plano.coberturasRemovidas.length > 0 && (
+                      <div className="px-3 pb-2">
+                        <p className="text-[10px] text-muted-foreground italic">
+                          Não inclui: {plano.coberturasRemovidas.join(', ')}
+                        </p>
                       </div>
                     )}
 
@@ -1097,7 +603,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
                           variant="ghost"
                           size="sm"
                           className="w-full text-xs gap-1.5 h-8"
-                          onClick={() => handleIrParaCotacao(plano.key)}
+                          onClick={() => handleIrParaCotacao(plano.id)}
                         >
                           Criar Cotação
                           <ArrowRight className="h-3 w-3" />
@@ -1126,7 +632,7 @@ export function CalculadoraPreco({ onIrParaCotacao }: CalculadoraPrecoProps) {
             </Alert>
           )}
 
-          {semResultado && !fipeBloqueado && (
+          {jaCalculouRef.current && temFipe && !fipeBloqueado && planosCalculados.length === 0 && !planosLoading && (
             <div className="text-center py-4 animate-fade-in">
               <p className="text-sm font-medium text-muted-foreground">
                 Consulte um consultor
