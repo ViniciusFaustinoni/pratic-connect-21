@@ -1,47 +1,78 @@
 
 
-# Plano: Corrigir campos Ano Minimo e Ano Maximo na edicao de planos
+# Plano: Adicionar regras de Marca/Modelo e Ano ao modal de Linha
 
 ## Problema
 
-Os campos "Ano Minimo" e "Ano Maximo" existem no formulario de edicao do plano (`PlanFormModal`), porem:
+O modal "Editar Linha" (`LinhaFormModal`) ja possui os componentes `EligibilityRulesEditor` e `MarcaModeloExclusionEditor`, mas:
 
-1. **`ano_fabricacao_maximo` nao e salvo** — o campo existe no form mas NAO e incluido no objeto `planoData` em `usePlansAdmin.ts` (nem no create, nem no update)
-2. **`min_vehicle_year` e um campo texto** ("2015+") convertido com regex — deveria ser numerico como o campo maximo
-3. O motor de cotacao (`usePlanosCotacao.ts`) ja consome ambos corretamente (`ano_minimo` e `ano_fabricacao_maximo`)
+1. So aparecem ao **editar** (nao ao criar) -- condicional `isEditing && productLine`
+2. O modal e `max-w-md` (estreito demais para os editores)
+3. As secoes de regras nao tem toggles visuais claros -- o usuario quer switches que mostrem/ocultem os campos
+
+O usuario quer uma UX com **toggles** para ativar/desativar cada tipo de regra, e ao ativar, os campos configuraveis aparecem inline.
 
 ## Alteracoes
 
-### 1. `src/hooks/usePlansAdmin.ts` — Salvar `ano_fabricacao_maximo`
+### 1. `LinhaFormModal.tsx` -- Ampliar modal e reorganizar UX
 
-Adicionar `ano_fabricacao_maximo` ao objeto `planoData` em ambas as funcoes (`useCreatePlan` e `useUpdatePlan`):
+- Mudar `max-w-md` para `max-w-2xl` para acomodar os editores
+- Adicionar scroll (`max-h-[80vh] overflow-y-auto`) ao conteudo
+- Mover os editores de regras para DENTRO do form com toggles visuais
+- Remover a condicao `isEditing && productLine` para que aparecam tambem na criacao (desabilitados com mensagem "salve primeiro")
 
-```typescript
-ano_fabricacao_maximo: planData.ano_fabricacao_maximo ?? null,
+### 2. Adicionar secao "Regra de Ano" com toggle
+
+Nova secao com Switch "Restringir por Ano de Fabricacao":
+- Desativado: nenhuma restricao de ano (aceita todos)
+- Ativado: exibe dois campos numericos lado a lado (Ano Minimo / Ano Maximo)
+- Ao salvar, cria/atualiza uma regra `ano_range` no `entity_eligibility_rules` com `rule_mode: 'include'`
+- Ao desativar, remove a regra `ano_range` existente
+
+Essa secao usara diretamente os hooks `useRulesForEntity`, `useSaveRule`, `useDeleteRule` para ler/gravar a regra de ano da linha.
+
+### 3. Adicionar secao "Regra de Marca/Modelo" com toggle
+
+Nova secao com Switch "Restringir por Marca / Modelo":
+- Desativado: aceita todas as marcas
+- Ativado: exibe o `MarcaModeloExclusionEditor` existente (ja funcional)
+
+Sera basicamente um wrapper com Switch que mostra/oculta o editor existente. O estado do toggle sera derivado de `exclusions.length > 0`.
+
+### 4. Remover EligibilityRulesEditor generico do modal de Linha
+
+O editor generico de regras (`EligibilityRulesEditor`) sera removido do modal de Linha. As regras de ano e marca/modelo terao seus proprios editores dedicados com toggles. Se no futuro outras regras forem necessarias na linha, podem ser adicionadas como secoes dedicadas.
+
+## Layout final do modal
+
+```text
+┌─────────────────────────────────────────┐
+│ Editar Linha de Produto                 │
+├─────────────────────────────────────────┤
+│ [Icone] [Nome *]                        │
+│ [Slug]                                  │
+│ [Tipo Veiculo]  [Cor]                   │
+│ [Ordem]         [x] Ativo              │
+│─────────────────────────────────────────│
+│ Regras de Elegibilidade                 │
+│                                         │
+│ [toggle] Restringir por Ano             │
+│   ┌─────────┐  ┌─────────┐             │
+│   │ Ano Min  │  │ Ano Max │             │
+│   └─────────┘  └─────────┘             │
+│                                         │
+│ [toggle] Restringir por Marca/Modelo    │
+│   [SearchableSelect marca...]           │
+│   [+ Adicionar]                         │
+│   TOYOTA - Marca inteira excluida       │
+│                                         │
+│              [Cancelar] [Salvar]        │
+└─────────────────────────────────────────┘
 ```
 
-Isso requer que `PlanInput` tambem inclua `ano_fabricacao_maximo?: number | null`.
+## Arquivos modificados
 
-### 2. `src/components/admin/planos/PlanFormModal.tsx` — Tornar `min_vehicle_year` numerico
+- `src/components/admin/planos/LinhaFormModal.tsx` -- Reorganizar layout, adicionar toggles de ano e marca/modelo, ampliar modal, remover EligibilityRulesEditor generico
 
-Mudar o campo "Ano Minimo" de texto livre ("2015+") para `type="number"`, igual ao campo "Ano Maximo". Ambos ficarao lado a lado como inputs numericos.
-
-No `handleSubmit`, o payload ja envia `min_vehicle_year` e `ano_fabricacao_maximo`. Garantir que ambos sejam parseados corretamente.
-
-### 3. `src/hooks/usePlansAdmin.ts` — Simplificar parsing do ano minimo
-
-Trocar:
-```typescript
-ano_minimo: planData.min_vehicle_year ? parseInt(planData.min_vehicle_year.replace(/\D/g, '')) : null,
-```
-Por:
-```typescript
-ano_minimo: planData.min_vehicle_year ? parseInt(planData.min_vehicle_year) : null,
-```
-
-(O campo agora sera numerico, sem necessidade de regex.)
-
-## Resultado
-
-Ao editar/criar um plano, os campos "Ano Minimo" e "Ano Maximo" serao salvos corretamente no banco. O motor de cotacao ja os utiliza para filtrar veiculos fora da faixa de ano.
+Nenhum arquivo novo. Os hooks existentes (`useEntityEligibilityRules`, `useMarcasModelos`) ja suportam tudo necessario.
 
