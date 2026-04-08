@@ -120,20 +120,6 @@ export function PlanFormModal({
     enabled: !!plan?.id && open,
   });
 
-  // Fetch current plano_preco_map for editing
-  const { data: currentPrecoMap } = useQuery({
-    queryKey: ['plano-preco-map', plan?.id],
-    queryFn: async () => {
-      if (!plan?.id) return null;
-      const { data } = await supabase
-        .from('plano_preco_map')
-        .select('linha_slug')
-        .eq('plano_id', plan.id)
-        .single();
-      return data;
-    },
-    enabled: !!plan?.id && open,
-  });
 
   // Fetch existing cotas por categoria for editing
   const { data: existingCotasCat } = useQuery({
