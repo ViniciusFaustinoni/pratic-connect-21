@@ -477,7 +477,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         nivel,
         coberturas: coberturas as string[],
         naoInclui,
-        coberturaFipe: plano.cobertura_fipe || 100,
+        coberturaFipe: coberturaFipeOverride ?? plano.cobertura_fipe ?? 100,
         cota: cotaString,
         cotaPercentual,
         cotaMinima: cotaMinimaFinal,
@@ -497,7 +497,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaDesagio: Number(plano.cota_desagio) || undefined,
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
         anoMinimo: undefined,
-        elegibilidadeStatus: undefined,
+        elegibilidadeStatus: linhaElegibilidadeStatus || undefined,
         precoDesagioAplicado: false,
       });
     }
