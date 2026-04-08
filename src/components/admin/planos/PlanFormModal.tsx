@@ -479,7 +479,7 @@ export function PlanFormModal({
                   <TabsList className="mb-4 flex-wrap">
                     <TabsTrigger value="basico">Básico</TabsTrigger>
                     <TabsTrigger value="beneficios">Coberturas e Benefícios</TabsTrigger>
-                    <TabsTrigger value="elegibilidade" disabled={!isEditing}>Elegibilidade</TabsTrigger>
+                    
                     <TabsTrigger value="regras" disabled={!isEditing}>Regras</TabsTrigger>
                     <TabsTrigger value="outros">Outros</TabsTrigger>
                   </TabsList>
