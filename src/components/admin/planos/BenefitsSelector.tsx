@@ -370,14 +370,14 @@ export function BenefitsSelector({
                           checked={isCoberturaSelected(cob.id)}
                           onCheckedChange={() => toggleCobertura(cob.id)}
                         />
-                        <span className="text-lg">{cob.icone || '🛡️'}</span>
+                        <span className="text-lg">{cob.icon || '🛡️'}</span>
                         <div className="flex-1">
                           <span className="font-medium text-sm">{cob.nome}</span>
                           {cob.codigo && (
                             <span className="ml-2 text-xs text-muted-foreground">({cob.codigo})</span>
                           )}
-                          {cob.subtitulo && (
-                            <p className="text-xs text-muted-foreground">{cob.subtitulo}</p>
+                          {cob.subtitle && (
+                            <p className="text-xs text-muted-foreground">{cob.subtitle}</p>
                           )}
                         </div>
                       </div>
