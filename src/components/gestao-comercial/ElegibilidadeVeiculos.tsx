@@ -1,3 +1,4 @@
+/** @deprecated Use VeiculosAceitosEditor on the Linha level instead */
 import { useState, useCallback } from 'react';
 import { useQuery, useQueryClient, useMutation } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';

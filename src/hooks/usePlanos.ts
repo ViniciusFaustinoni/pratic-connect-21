@@ -80,6 +80,7 @@ export function useTabelasPreco(planoId?: string, valorFipe?: number) {
   });
 }
 
+/** @deprecated Use usePlanosCotacao instead — tabelas_preco_mensalidade is legacy */
 export function useTabelaPrecoByFipe(valorFipe: number | undefined) {
   return useQuery({
     queryKey: ['tabelas_preco_mensalidade', 'by_fipe', valorFipe],
