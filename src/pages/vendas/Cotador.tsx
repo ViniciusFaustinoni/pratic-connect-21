@@ -833,6 +833,9 @@ export default function CotadorPage() {
         indicador_nome: indicadorNome || null,
         associado_id: inclusaoAssociadoId || null,
         tipo_entrada: isSubstituicao ? 'substituicao' : isInclusaoVeiculo ? 'inclusao' : null,
+        veiculo_antigo_id: isSubstituicao ? veiculoAntigoId : undefined,
+        veiculo_antigo_placa: isSubstituicao ? veiculoAntigoPlaca : undefined,
+        veiculo_antigo_modelo: isSubstituicao ? veiculoAntigoModelo : undefined,
       });
 
       setCotacaoSalva(cotacaoData);
