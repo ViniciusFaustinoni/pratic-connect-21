@@ -202,6 +202,9 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     setSearchTerm('');
     setSelectedAssociadoId(null);
     setSelectedAssociadoNome('');
+    setVeiculoAntigoId(null);
+    setVeiculoAntigoPlaca('');
+    setVeiculoAntigoModelo('');
     setMigracaoCpf('');
   }, [selectedTipo]);
 
