@@ -1,95 +1,59 @@
 
 
-# Plano: Consolidar menus do sidebar do diretor em grupos colapsaveis
+# Plano: Aba "Coberturas e Benefícios" no modal de edição de plano
 
-## Contexto
+## Problema
 
-Atualmente o sidebar exibe cada modulo como um grupo colapsavel individual (vendas, cadastro, monitoramento, eventos, etc.). O diretor ve todos eles, resultando em um menu muito longo. A proposta e agrupar em 3 categorias "mae" e remover ouvidoria do sidebar.
+A aba "Benefícios" do `PlanFormModal` exibe apenas benefícios da tabela `benefits`. As coberturas da tabela `coberturas` não aparecem como opções selecionáveis, e o sistema não salva/carrega vínculos de `planos_coberturas` pelo modal.
 
-## Alteracoes
+## Alterações
 
-### 1. `src/components/layout/AppSidebar.tsx` — Reestruturar grupos
+### 1. `PlanFormModal.tsx` — Renomear aba e adicionar estado de coberturas
 
-Adicionar logica que, **quando o usuario e diretor** (`permissions.isDiretor`), agrupa os `visibleGroups` em 3 super-grupos colapsaveis:
+- Renomear tab trigger de "Benefícios" para "Coberturas e Benefícios"
+- Importar `useCoberturas` de `@/hooks/usePlans`
+- Adicionar estado `selectedCoberturas` como array de `{ cobertura_id: string }`
+- No `useEffect` que carrega `fullPlanData`, popular `selectedCoberturas` a partir de `planos_coberturas`
+- No `handleSubmit`, incluir lógica de delete+insert para `planos_coberturas` (mesmo padrão usado para `planos_beneficios`)
+- Passar coberturas disponíveis e selecionadas para o `BenefitsSelector` (ou novo componente combinado)
 
-**Comercial** (icone: ShoppingCart)
-- Vendas
-- Cadastro
-- Monitoramento
+### 2. `BenefitsSelector.tsx` — Aceitar coberturas como props
 
-**Relacionamento** (icone: Users)
-- Eventos
-- Assistencia 24h
-- Oficinas
-- Relacionamento (cobranca)
+- Adicionar props: `coberturas` (lista do catálogo) e `selectedCoberturas` / `onCoberturasChange`
+- Renderizar uma seção "Coberturas" acima dos benefícios com checkboxes para cada cobertura (nome, código, tipo)
+- Coberturas são simples checkboxes (sem custom_text/valor estruturado como benefícios)
+- Agrupar coberturas por `tipo` (ex: "cobertura", "assistencia")
 
-**Administrativo** (icone: Building2)
-- Financeiro
-- Contabilidade
-- Juridico
-- Recursos Humanos
-- Marketing
-- Diretoria
-- Documentos
-- Relatorios
+### 3. `usePlansAdmin.ts` — Salvar coberturas no create/update
 
-Cada super-grupo sera um `Collapsible` que ao expandir mostra os sub-grupos originais (tambem colapsaveis), criando uma hierarquia de 2 niveis.
+- Em `useCreatePlan`: após inserir benefícios, inserir `planos_coberturas` com `plano_id` e `cobertura_id`
+- Em `useUpdatePlan`: após atualizar benefícios, delete+insert `planos_coberturas`
+- Adicionar `coberturas?: { cobertura_id: string }[]` ao `PlanInput`
 
-Para usuarios nao-diretores, o comportamento permanece identico ao atual.
-
-### 2. Remover Ouvidoria do sidebar e rotas ERP
-
-- Remover o grupo `ouvidoria` do `menuConfig.groups`
-- Remover a cor `ouvidoria` de `MENU_COLORS`
-- Remover as rotas ERP de ouvidoria em `App.tsx` (`/ouvidoria`, `/ouvidoria/fila`, `/ouvidoria/nova`, `/ouvidoria/:id`) e seus imports lazy
-- Manter as rotas publicas (`/ouvidoria/canal-denuncia`, `/ouvidoria/consulta-protocolo`, `/ouvidoria/pesquisa/:protocolo`) e as rotas do app (`/app/ouvidoria/*`) intactas
-
-### 3. `src/config/modules.ts` — Remover ouvidoria
-
-- Remover `{ id: 'ouvidoria', label: 'Ouvidoria' }` do array `MODULES`
-- Remover a entrada `ouvidoria` de `MODULE_ITEMS`
-
-## Estrutura visual (modo expandido, diretor)
+## Estrutura visual da aba
 
 ```text
-▼ Dashboard
-▼ Comercial
-  ▼ Vendas
-    Leads, Cotacao, ...
-  ▼ Cadastro
-    Propostas, Associados, ...
-  ▼ Monitoramento
-    Equipe, Servicos de Campo, ...
-▼ Relacionamento
-  ▼ Eventos
-    Dashboard, Sinistros, ...
-  ▼ Assistencia 24h
-    Dashboard, Chamados, ...
-  ▼ Oficinas
-    ...
-  ▼ Relacionamento
-    ...
-▼ Administrativo
-  ▼ Financeiro
-    ...
-  ▼ Contabilidade
-    ...
-  ▼ Juridico
-    ...
-  ... (demais)
-⚙ Configuracoes
+┌─ Coberturas e Benefícios ─────────────────────┐
+│                                                │
+│ COBERTURAS                                     │
+│ ☑ Roubo/Furto (COB-RF)                        │
+│ ☑ Colisão (COB-COL)                           │
+│ ☐ Incêndio (COB-INC)                          │
+│ ☑ Danos a Terceiros (COB-TER)                 │
+│                                                │
+│ ─────────────────────────────────              │
+│                                                │
+│ BENEFÍCIOS                                     │
+│ geral                                          │
+│ ☑ Assistência 24h - 400km                     │
+│ ☐ Kit Gás - R$ 2.200                          │
+│ ...                                            │
+└────────────────────────────────────────────────┘
 ```
-
-## Detalhes tecnicos
-
-- Os super-grupos terao seu proprio estado `openSuperGroups` separado de `openGroups`
-- No modo colapsado (icones), os super-grupos aparecem como icones com popover mostrando os sub-menus
-- O super-grupo que contem o grupo ativo abre automaticamente
-- Renderizacao condicional: `permissions.isDiretor ? renderSuperGroups() : renderFlatGroups()`
 
 ## Arquivos modificados
 
-- `src/components/layout/AppSidebar.tsx` — Logica de super-grupos + remover ouvidoria
-- `src/App.tsx` — Remover rotas ERP ouvidoria
-- `src/config/modules.ts` — Remover ouvidoria
+- `src/components/admin/planos/PlanFormModal.tsx` — Renomear aba, estado de coberturas, submit com coberturas
+- `src/components/admin/planos/BenefitsSelector.tsx` — Seção de coberturas com checkboxes
+- `src/hooks/usePlansAdmin.ts` — `PlanInput.coberturas`, create/update salvam `planos_coberturas`
 
