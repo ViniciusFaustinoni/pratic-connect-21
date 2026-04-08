@@ -243,6 +243,11 @@ export function PlanFormModal({
           display_order: pb.display_order ?? 0,
         }))
       );
+      setSelectedCoberturas(
+        (p.planos_coberturas || []).map((pc: any) => ({
+          cobertura_id: pc.cobertura_id,
+        }))
+      );
       if (currentRegioes) {
         setSelectedRegioes(currentRegioes);
       }
@@ -251,7 +256,6 @@ export function PlanFormModal({
         name: '',
         slug: '',
         product_line_id: defaultProductLineId || '',
-        // tipo_uso derivado das categorias
         badge_text: '',
         badge_color: '',
         coverage_type: '',
@@ -273,6 +277,7 @@ export function PlanFormModal({
         categorias_veiculo: [],
       });
       setSelectedBenefits([]);
+      setSelectedCoberturas([]);
       setSelectedRegioes([]);
     }
   }, [fullPlanData, plan, defaultProductLineId, currentPrecoMap, currentRegioes]);
