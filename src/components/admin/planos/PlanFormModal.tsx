@@ -49,7 +49,7 @@ interface CotaCategoria {
 interface PlanFormModalProps {
   open: boolean;
   onOpenChange: (open: boolean) => void;
-  plan: PlanWithDetails | null;
+  plan: PlanWithDetails | { id: string } | null;
   defaultProductLineId?: string;
 }
 
