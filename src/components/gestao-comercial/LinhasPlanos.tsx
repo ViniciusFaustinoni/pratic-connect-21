@@ -350,7 +350,7 @@ export function LinhasPlanos() {
                       </div>
                     </div>
                   ))}
-                  <Button variant="ghost" size="sm" className="w-full mt-1 text-muted-foreground" onClick={() => setPlanoSheet({ open: true, linhaId: linha.id })}>
+                  <Button variant="ghost" size="sm" className="w-full mt-1 text-muted-foreground" onClick={() => setPlanoModal({ open: true, plan: null, defaultLineId: linha.id })}>
                     <Plus className="h-3.5 w-3.5 mr-1" />Novo Plano
                   </Button>
                 </div>
