@@ -424,8 +424,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       }
 
       const cotaString = cotaMinimaFinal === 0
-        ? `${cotaPercentual}% (sem mínimo)`
-        : `${cotaPercentual}% (mín R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
+        ? `${cotaPercentual}% do FIPE (sem mínimo)`
+        : `${cotaPercentual}% do FIPE (mín. R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
+
 
       // Montar lista de itens incluídos: coberturas + benefícios
       const coberturasNomes = coberturasDoPlano
