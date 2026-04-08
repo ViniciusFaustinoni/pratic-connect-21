@@ -281,6 +281,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const planoHasMarcaModeloRules = planoRules.some(r => r.rule_type === 'marca_modelo');
       const planoHasAnoRangeRules = planoRules.some(r => r.rule_type === 'ano_range');
 
+      // Per-model eligibility status from linha rules
+      let linhaElegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined;
+      let coberturaFipeOverride: number | undefined;
+
       // Verificar regras da LINHA (excluindo marca_modelo/ano_range se o plano já define as suas)
       if (productLineId) {
         let linhaRules = allEligibilityRules.filter(r => r.entity_type === 'linha' && r.entity_id === productLineId);
@@ -296,21 +300,21 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         }
 
         // Check marca_modelo rule at linha level for per-model status
-        let linhaElegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined;
-        let coberturaFipeOverride: number | undefined;
-        const linhaMarcaModeloRule = allEligibilityRules.find(
-          r => r.entity_type === 'linha' && r.entity_id === productLineId
-            && r.rule_type === 'marca_modelo' && r.is_active
-        );
-        if (linhaMarcaModeloRule) {
-          const modelMatch = findModelEligibility(linhaMarcaModeloRule, vehicleCtx);
-          if (modelMatch) {
-            if (modelMatch.status === 'negado') {
-              negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Modelo negado na linha' });
-              continue;
+        if (!planoHasMarcaModeloRules) {
+          const linhaMarcaModeloRule = allEligibilityRules.find(
+            r => r.entity_type === 'linha' && r.entity_id === productLineId
+              && r.rule_type === 'marca_modelo' && r.is_active
+          );
+          if (linhaMarcaModeloRule) {
+            const modelMatch = findModelEligibility(linhaMarcaModeloRule, vehicleCtx);
+            if (modelMatch) {
+              if (modelMatch.status === 'negado') {
+                negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Modelo negado na linha' });
+                continue;
+              }
+              linhaElegibilidadeStatus = modelMatch.status === 'aceito' ? 'aprovado' : modelMatch.status;
+              coberturaFipeOverride = modelMatch.coberturaFipe;
             }
-            linhaElegibilidadeStatus = modelMatch.status === 'aceito' ? 'aprovado' : modelMatch.status;
-            coberturaFipeOverride = modelMatch.coberturaFipe;
           }
         }
       }
