@@ -440,62 +440,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const isDestaque = !!plano.destaque;
       const tag: string | undefined = plano.badge_text || undefined;
 
-      const coberturasRemovidas = getCoberturasRemovidasDinamico(categoria, benefitExclusions || []);
-
-      // Verificação de elegibilidade individual de benefícios e coberturas
-
-      // Verificar regras unificadas de benefícios individuais (excluindo fipe_range que é precificação)
-      const beneficiosDoPlano = plano.planos_beneficios || [];
-      for (const pb of beneficiosDoPlano) {
-        const benefitRules = allEligibilityRules
-          .filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id)
-          .filter(r => r.rule_type !== 'fipe_range');
-        const coberturaId = (pb as any).cobertura_id || (pb as any).benefits?.cobertura_id;
-        const coberturaRules = coberturaId
-          ? allEligibilityRules
-              .filter(r => r.entity_type === 'cobertura' && r.entity_id === coberturaId)
-              .filter(r => r.rule_type !== 'fipe_range')
-          : [];
-        const allItemRules = [...benefitRules, ...coberturaRules];
-        const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
-        if (allItemRules.length > 0) {
-          const passed = checkAllRules(allItemRules, vehicleCtx);
-          if (!passed && !coberturasRemovidas.includes(benefitName)) {
-            coberturasRemovidas.push(benefitName);
-          }
-        }
-      }
-
-      // Verificar regras de elegibilidade para coberturas individuais (excluindo fipe_range)
-      for (const pc of coberturasDoPlano) {
-        const cobId = (pc as any).cobertura_id;
-        const cobRules = allEligibilityRules
-          .filter(r => r.entity_type === 'cobertura' && r.entity_id === cobId)
-          .filter(r => r.rule_type !== 'fipe_range');
-        if (cobRules.length > 0) {
-          const passed = checkAllRules(cobRules, vehicleCtx);
-          const cobNome = (pc as any).coberturas?.nome;
-          if (!passed && cobNome && !coberturasRemovidas.includes(cobNome)) {
-            coberturasRemovidas.push(cobNome);
-          }
-        }
-      }
-
-      // ── Ocultar plano se TODOS os itens estão indisponíveis ──
-      const todosItensNomes = [...coberturas];
-      const itensDisponiveis = todosItensNomes.filter(item => !coberturasRemovidas.includes(item));
-      if (todosItensNomes.length > 0 && itensDisponiveis.length === 0) {
-        negados.push({
-          planoId: plano.id,
-          planoNome: plano.nome,
-          linha,
-          motivo: 'Todos os itens indisponíveis para este veículo',
-        });
-        continue;
-      }
-
-      const alertaDesagio = gerarMensagemAlertaCategoria(categoria, benefitExclusions || []) || undefined;
-
       // Valores detalhados (decomposição dinâmica sobre valorMensal)
       const valorCota = Math.round(valorMensal * decCota * 100) / 100;
       const taxaAdministrativa = Math.round(valorMensal * decAdmin * 100) / 100;
