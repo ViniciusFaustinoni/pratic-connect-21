@@ -17,10 +17,10 @@ import {
   CollapsibleContent,
   CollapsibleTrigger,
 } from '@/components/ui/collapsible';
-import { Star, AlertTriangle, ChevronDown, Check, Eye, Info } from 'lucide-react';
+import { Star, AlertTriangle, ChevronDown, Check, Eye, Info, Shield } from 'lucide-react';
 import { CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
 import { useBenefitExclusions } from '@/hooks/useBenefitExclusions';
-import type { Benefit } from '@/types/plans';
+import type { Benefit, Cobertura } from '@/types/plans';
 import type { PlanBenefitInput } from '@/hooks/usePlansAdmin';
 import { PLAN_FIELD_HINTS } from './planFieldHints';
 
