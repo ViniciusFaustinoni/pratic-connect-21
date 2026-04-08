@@ -532,6 +532,26 @@ export function PlanFormModal({
                       </div>
                     </div>
 
+                    {/* Cota de Participação */}
+                    <div className="space-y-2">
+                      <Label htmlFor="cota_participacao">Cota de Participação (% FIPE)<FieldHint text="Porcentagem da tabela FIPE cobrada do associado em eventos de colisão, roubo/furto parcial, etc. Ex: 6 = 6% da FIPE." /></Label>
+                      <Input
+                        id="cota_participacao"
+                        type="number"
+                        step="0.5"
+                        min="0"
+                        max="100"
+                        value={formData.cota_participacao}
+                        onChange={(e) =>
+                          setFormData((prev) => ({
+                            ...prev,
+                            cota_participacao: e.target.value,
+                          }))
+                        }
+                        placeholder="Ex: 6"
+                      />
+                      <p className="text-xs text-muted-foreground">Valor percentual sobre a FIPE cobrado do associado em sinistros de colisão.</p>
+                    </div>
 
                     {/* Categorias de Veículo Aceitas */}
                     <div className="space-y-2">
