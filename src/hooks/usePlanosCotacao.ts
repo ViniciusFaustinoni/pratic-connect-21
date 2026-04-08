@@ -318,45 +318,41 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           }
         }
       }
-      // Verificar regras do PLANO
-      if (planoRules.length > 0 && !checkAllRules(planoRules, vehicleCtx)) {
-        negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Bloqueado por regra do plano' });
-        continue;
-      }
+      // Planos NÃO têm restrições próprias — pulamos checkAllRules de plano
 
-      // ── Verificar elegibilidade de CADA benefício e cobertura ANTES do preço ──
-      const coberturasDoPlano = (planoCoberturasData || []).filter(pc => pc.plano_id === plano.id);
-      const beneficiosDoPlano = plano.planos_beneficios || [];
+      // ── Filtrar coberturas e benefícios individualmente ──
+      const coberturasDoPlanoRaw = (planoCoberturasData || []).filter(pc => pc.plano_id === plano.id);
+      const beneficiosDoPlanoRaw = plano.planos_beneficios || [];
+      const coberturasRemovidas: string[] = [];
 
-      // Check each benefit
-      let planoReprovado = false;
-      for (const pb of beneficiosDoPlano) {
+      // Filtrar benefícios: remove os inelegíveis, mantém o plano
+      const beneficiosDoPlano = beneficiosDoPlanoRaw.filter((pb: any) => {
         const benefitRules = allEligibilityRules
           .filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id)
           .filter(r => r.rule_type !== 'fipe_range');
         if (benefitRules.length > 0 && !checkAllRules(benefitRules, vehicleCtx)) {
-          const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
-          negados.push({ planoId: plano.id, planoNome: plano.nome, linha, motivo: `Benefício "${benefitName}" bloqueado por regra de elegibilidade` });
-          planoReprovado = true;
-          break;
+          const benefitName = pb.benefits?.name || pb.custom_text || 'Benefício';
+          coberturasRemovidas.push(benefitName);
+          console.log(`[ELEGIBILIDADE] ${plano.nome}: benefício "${benefitName}" removido por regra`);
+          return false;
         }
-      }
-      if (planoReprovado) continue;
+        return true;
+      });
 
-      // Check each coverage
-      for (const pc of coberturasDoPlano) {
-        const cobId = (pc as any).cobertura_id;
+      // Filtrar coberturas: remove as inelegíveis, mantém o plano
+      const coberturasDoPlano = coberturasDoPlanoRaw.filter((pc: any) => {
+        const cobId = pc.cobertura_id;
         const cobRules = allEligibilityRules
           .filter(r => r.entity_type === 'cobertura' && r.entity_id === cobId)
           .filter(r => r.rule_type !== 'fipe_range');
         if (cobRules.length > 0 && !checkAllRules(cobRules, vehicleCtx)) {
-          const cobNome = (pc as any).coberturas?.nome || 'Cobertura';
-          negados.push({ planoId: plano.id, planoNome: plano.nome, linha, motivo: `Cobertura "${cobNome}" bloqueada por regra de elegibilidade` });
-          planoReprovado = true;
-          break;
+          const cobNome = pc.coberturas?.nome || 'Cobertura';
+          coberturasRemovidas.push(cobNome);
+          console.log(`[ELEGIBILIDADE] ${plano.nome}: cobertura "${cobNome}" removida por regra`);
+          return false;
         }
-      }
-      if (planoReprovado) continue;
+        return true;
+      });
 
       // === NOVO MODELO: Preço = Σ coberturas + Σ benefícios + taxa administrativa ===
       const somaCoberturas = coberturasDoPlano.reduce((acc, pc) => {
@@ -373,8 +369,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         return acc + Number(valor);
       }, 0);
 
-      // Soma dos valores dos benefícios vinculados
-      const somaBeneficios = (plano.planos_beneficios || []).reduce((acc: number, pb: any) => {
+      // Soma dos valores dos benefícios vinculados (apenas os elegíveis)
+      const somaBeneficios = beneficiosDoPlano.reduce((acc: number, pb: any) => {
         const fipeRule = allEligibilityRules.find(
           r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id
             && r.rule_type === 'fipe_range' && r.is_active
@@ -451,15 +447,15 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         : `${cotaPercentual}% do FIPE (mín. R$ ${cotaMinimaFinal.toLocaleString('pt-BR')})`;
 
 
-      // Montar lista de itens incluídos: coberturas + benefícios
+      // Montar lista de itens incluídos: apenas coberturas e benefícios elegíveis
       const coberturasNomes = coberturasDoPlano
-        .map((pc: any) => (pc as any).coberturas?.nome)
+        .map((pc: any) => pc.coberturas?.nome)
         .filter(Boolean) as string[];
-      const beneficiosNomes = (plano.planos_beneficios || [])
+      const beneficiosNomes = beneficiosDoPlano
         .sort((a: any, b: any) => (a.display_order || 0) - (b.display_order || 0))
         .map((pb: any) => pb.custom_text || pb.benefits?.name || 'Benefício');
       const coberturas = [...coberturasNomes, ...beneficiosNomes];
-      const naoInclui: string[] = [];
+      const naoInclui: string[] = coberturasRemovidas;
 
       const isDestaque = !!plano.destaque;
       const tag: string | undefined = plano.badge_text || undefined;
@@ -496,7 +492,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         taxaAdministrativa,
         valorRastreamento,
         valorAssistencia,
-        coberturasRemovidas: [],
+        coberturasRemovidas,
         categoriaVeiculo: categoria,
         cotaDesagio: Number(plano.cota_desagio) || undefined,
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
