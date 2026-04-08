@@ -90,6 +90,11 @@ export default function CotacaoContratacao() {
 
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string | null>(null);
 
+  // Substituição: detectar se é substituição e controlar etapa de "mesmo local"
+  const dadosExtras = (cotacao as any)?.dados_extras as Record<string, any> | null;
+  const isSubstituicao = dadosExtras?.tipo_entrada === 'substituicao';
+  const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
+
   // Determinar etapa baseada no status para saber o que está concluído
   // IMPORTANTE: Se tipo_vistoria já está preenchido, considera vistoria como concluída (etapa 4+)
   const etapaDoStatus = useMemo(() => {
