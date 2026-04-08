@@ -242,6 +242,10 @@ export default function CotadorPage() {
   const inclusaoAssociadoId = searchParams.get('associado_id');
   const inclusaoTipoEntrada = searchParams.get('tipo_entrada');
   const isInclusaoVeiculo = inclusaoTipoEntrada === 'inclusao' && !!inclusaoAssociadoId;
+  const isSubstituicao = inclusaoTipoEntrada === 'substituicao' && !!inclusaoAssociadoId;
+  const veiculoAntigoId = searchParams.get('veiculo_antigo_id');
+  const veiculoAntigoPlaca = searchParams.get('veiculo_antigo_placa') || '';
+  const veiculoAntigoModelo = searchParams.get('veiculo_antigo_modelo') || '';
 
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
