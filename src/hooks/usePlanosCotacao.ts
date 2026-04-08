@@ -204,29 +204,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
   // Buscar regras de elegibilidade unificadas
   const { data: allEligibilityRules = [], isLoading: eligibilityRulesLoading } = useAllEligibilityRules();
 
-  // Buscar exclusões de benefícios por categoria
-  const { data: benefitExclusions, isLoading: benefitExclusionsLoading } = useQuery({
-    queryKey: ['benefit_exclusions_cotacao'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('benefit_category_exclusions')
-        .select(`
-          id,
-          benefit_id,
-          categoria_veiculo,
-          benefits:benefit_id (name)
-        `);
-      
-      if (error) throw error;
-      return (data || []).map((item: any) => ({
-        id: item.id,
-        benefit_id: item.benefit_id,
-        categoria_veiculo: item.categoria_veiculo,
-        benefit_name: item.benefits?.name || '',
-      })) as BenefitExclusionData[];
-    },
-    staleTime: 1000 * 60 * 5,
-  });
+
+
 
   const dependenciasCriticasLoading =
     planosBancoLoading ||
