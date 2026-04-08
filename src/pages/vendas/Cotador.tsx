@@ -832,7 +832,7 @@ export default function CotadorPage() {
         indicador_id: indicadorId || null,
         indicador_nome: indicadorNome || null,
         associado_id: inclusaoAssociadoId || null,
-        tipo_entrada: isInclusaoVeiculo ? 'inclusao' : null,
+        tipo_entrada: isSubstituicao ? 'substituicao' : isInclusaoVeiculo ? 'inclusao' : null,
       });
 
       setCotacaoSalva(cotacaoData);
