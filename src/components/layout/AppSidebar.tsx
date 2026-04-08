@@ -380,17 +380,6 @@ const menuConfig: {
       ],
     },
     {
-      id: 'ouvidoria',
-      label: 'Ouvidoria',
-      icon: MessageCircle,
-      permission: 'canManageOuvidoria',
-      color: MENU_COLORS.ouvidoria,
-      items: [
-        { title: 'Dashboard', url: '/ouvidoria', icon: BarChart3 },
-        { title: 'Fila', url: '/ouvidoria/fila', icon: ClipboardList },
-      ],
-    },
-    {
       id: 'diretoria',
       label: 'Diretoria',
       icon: Building2,
