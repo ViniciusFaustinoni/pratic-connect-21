@@ -116,6 +116,9 @@ interface BenefitsSelectorProps {
   selectedBenefits: PlanBenefitInput[];
   onChange: (benefits: PlanBenefitInput[]) => void;
   onExclusionsChange?: (exclusions: Map<string, string[]>) => void;
+  coberturas?: Cobertura[];
+  selectedCoberturas?: { cobertura_id: string }[];
+  onCoberturasChange?: (coberturas: { cobertura_id: string }[]) => void;
 }
 
 export function BenefitsSelector({
@@ -123,6 +126,9 @@ export function BenefitsSelector({
   selectedBenefits,
   onChange,
   onExclusionsChange,
+  coberturas = [],
+  selectedCoberturas = [],
+  onCoberturasChange,
 }: BenefitsSelectorProps) {
   // Fetch all exclusions from database
   const { data: allExclusions, isLoading: loadingExclusions } = useBenefitExclusions();
