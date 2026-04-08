@@ -493,8 +493,15 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {/* Estado intermediário: Vistoria Concluída, Aguardando Análise */}
-                  {cotacao?.vistoria_concluida_em ? (
+                  {/* Substituição: pergunta sobre localização dos veículos */}
+                  {isSubstituicao && substituicaoMesmoLocal === null && !cotacao?.vistoria_concluida_em && !cotacao?.tipo_vistoria ? (
+                    <AgendamentoSubstituicao
+                      veiculoAntigoPlaca={dadosExtras?.veiculo_antigo_placa || '???'}
+                      veiculoAntigoModelo={dadosExtras?.veiculo_antigo_modelo || ''}
+                      veiculoNovoDescricao={[cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.veiculo_ano].filter(Boolean).join(' ')}
+                      onConfirm={(mesmoLocal) => setSubstituicaoMesmoLocal(mesmoLocal)}
+                    />
+                  ) : cotacao?.vistoria_concluida_em ? (
                     <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
                       <CardContent className="py-12 text-center space-y-6">
                         <motion.div 
