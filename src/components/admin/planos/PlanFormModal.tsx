@@ -31,8 +31,6 @@ import { useCategoriasVeiculoPlano } from '@/hooks/useConteudosSistema';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
 
-import { EligibilityRulesEditor } from './EligibilityRulesEditor';
-import { MarcaModeloExclusionEditor } from './MarcaModeloExclusionEditor';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { PlanWithDetails } from '@/hooks/usePlans';
@@ -404,7 +402,7 @@ export function PlanFormModal({
                     <TabsTrigger value="basico">Básico</TabsTrigger>
                     <TabsTrigger value="beneficios">Coberturas e Benefícios</TabsTrigger>
                     
-                    <TabsTrigger value="regras" disabled={!isEditing}>Regras</TabsTrigger>
+                    
                     <TabsTrigger value="outros">Outros</TabsTrigger>
                   </TabsList>
 
@@ -727,16 +725,6 @@ export function PlanFormModal({
                   </TabsContent>
 
 
-                  <TabsContent value="regras" className="space-y-4">
-                    {plan?.id ? (
-                      <>
-                        <EligibilityRulesEditor entityType="plano" entityId={plan.id} />
-                        <MarcaModeloExclusionEditor entityType="plano" entityId={plan.id} />
-                      </>
-                    ) : (
-                      <p className="text-sm text-muted-foreground py-4">Salve o plano primeiro para configurar regras.</p>
-                    )}
-                  </TabsContent>
 
                   <TabsContent value="outros" className="space-y-4">
                     <div className="space-y-2">
