@@ -1,28 +1,18 @@
 
 
-# Plano: Adicionar campo "Cota de Participação (%)" no modal de plano
+# Plano: Remover aba "Regras" do modal de plano
 
 ## Contexto
 
-A coluna `cota_participacao` (numeric) ja existe na tabela `planos`. O motor de cotacao e o termo de afiliacao ja a utilizam. Porem o modal de criacao/edicao de plano nao expoe esse campo — ele so pode ser definido via banco direto.
+A elegibilidade (regras de marca/modelo e faixa de ano) deve ser configurada apenas na Linha de Produto, não no Plano. O modal de plano tem uma aba "Regras" com `EligibilityRulesEditor` e `MarcaModeloExclusionEditor` que deve ser removida.
 
-## Alteracoes
+## Alterações em `PlanFormModal.tsx`
 
-### 1. `PlanFormModal.tsx`
+1. Remover o `TabsTrigger value="regras"` (linha 407)
+2. Remover o `TabsContent value="regras"` inteiro (linhas 730-739)
+3. Remover os imports de `EligibilityRulesEditor` e `MarcaModeloExclusionEditor` (linhas 34-35)
 
-- Adicionar `cota_participacao: ''` ao `formData` inicial
-- No init (quando `plan` existe), carregar `p.cota_participacao?.toString() || ''`
-- Adicionar campo Input type="number" com label "Cota de Participação (% FIPE)" na aba Basico, proximo ao campo "Tipo de Cobertura" (apos ano maximo)
-- Placeholder: "Ex: 6" com hint explicando que e a porcentagem da FIPE cobrada do associado em eventos de colisao
-- No `handleSubmit`, incluir `cota_participacao` no payload
-
-### 2. `usePlansAdmin.ts` — `PlanInput`
-
-- Adicionar `cota_participacao?: number | null` ao `PlanInput`
-- No `planoData` do create e update, mapear: `cota_participacao: planData.cota_participacao ?? null`
-
-## Arquivos modificados
+## Arquivo modificado
 
 - `src/components/admin/planos/PlanFormModal.tsx`
-- `src/hooks/usePlansAdmin.ts`
 
