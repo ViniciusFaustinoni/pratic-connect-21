@@ -304,24 +304,6 @@ export function PlanFormModal({
       desconto_percentual: formData.desconto_percentual
         ? parseFloat(formData.desconto_percentual)
         : null,
-      cota_passeio_percent: formData.cota_passeio_percent
-        ? parseFloat(formData.cota_passeio_percent)
-        : null,
-      cota_passeio_min: formData.cota_passeio_min
-        ? parseFloat(formData.cota_passeio_min)
-        : null,
-      cota_desagio_percent: formData.cota_desagio_percent
-        ? parseFloat(formData.cota_desagio_percent)
-        : null,
-      cota_desagio_min: formData.cota_desagio_min
-        ? parseFloat(formData.cota_desagio_min)
-        : null,
-      cota_app_percent: formData.cota_app_percent
-        ? parseFloat(formData.cota_app_percent)
-        : null,
-      cota_app_min: formData.cota_app_min
-        ? parseFloat(formData.cota_app_min)
-        : null,
       restriction_alert: formData.restriction_alert || null,
       footer_note: formData.footer_note || null,
       display_order: parseInt(formData.display_order) || 0,
