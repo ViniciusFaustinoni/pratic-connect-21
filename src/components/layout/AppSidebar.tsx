@@ -652,6 +652,15 @@ export function AppSidebar() {
     visibleGroups.filter(g => isGroupActive(g.items)).map(g => g.id)
   );
 
+  // Super-group state for directors
+  const [openSuperGroups, setOpenSuperGroups] = useState<string[]>(() => {
+    if (!permissions.isDiretor) return [];
+    const activeGroup = visibleGroups.find(g => isGroupActive(g.items));
+    if (!activeGroup) return [];
+    const sg = SUPER_GROUPS.find(s => s.moduleIds.includes(activeGroup.id));
+    return sg ? [sg.id] : [];
+  });
+
   const toggleGroup = (groupId: string) => {
     setOpenGroups(prev => 
       prev.includes(groupId)
@@ -660,10 +669,25 @@ export function AppSidebar() {
     );
   };
 
+  const toggleSuperGroup = (sgId: string) => {
+    setOpenSuperGroups(prev =>
+      prev.includes(sgId)
+        ? prev.filter(id => id !== sgId)
+        : [...prev, sgId]
+    );
+  };
+
   useEffect(() => {
     const activeGroup = visibleGroups.find(g => isGroupActive(g.items));
     if (activeGroup && !openGroups.includes(activeGroup.id)) {
       setOpenGroups(prev => [...prev, activeGroup.id]);
+    }
+    // Auto-open super-group for directors
+    if (permissions.isDiretor && activeGroup) {
+      const sg = SUPER_GROUPS.find(s => s.moduleIds.includes(activeGroup.id));
+      if (sg && !openSuperGroups.includes(sg.id)) {
+        setOpenSuperGroups(prev => [...prev, sg.id]);
+      }
     }
   }, [location.pathname]);
 
@@ -679,6 +703,17 @@ export function AppSidebar() {
       });
     }
   }, [isDataLoading, visibleGroups.length]);
+
+  // Build super-groups with their visible sub-groups
+  const directorSuperGroups = useMemo(() => {
+    if (!permissions.isDiretor) return [];
+    return SUPER_GROUPS.map(sg => ({
+      ...sg,
+      subGroups: sg.moduleIds
+        .map(mid => visibleGroups.find(g => g.id === mid))
+        .filter(Boolean) as MenuGroup[],
+    })).filter(sg => sg.subGroups.length > 0);
+  }, [permissions.isDiretor, visibleGroups]);
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border bg-sidebar">
