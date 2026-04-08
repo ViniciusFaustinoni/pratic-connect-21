@@ -18,6 +18,8 @@ import {
 } from '@/components/ui/table';
 import { Plus, Trash2 } from 'lucide-react';
 import { useRulesForEntity, useSaveRule, useUpdateRule, useDeleteRule } from '@/hooks/useEntityEligibilityRules';
+import { SearchableSelect } from '@/components/ui/searchable-select';
+import { useMarcasDistintas, useModelosPorMarca } from '@/hooks/useMarcasModelos';
 
 interface ModeloEntry {
   marca: string;
@@ -53,19 +55,32 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
   const modelos: ModeloEntry[] = (marcaModeloRule?.rule_config as any)?.modelos || [];
 
   const [marca, setMarca] = useState('');
-  const [modelo, setModelo] = useState('');
+  const [modeloSelecionado, setModeloSelecionado] = useState('');
   const [anoMin, setAnoMin] = useState('');
   const [anoMax, setAnoMax] = useState('');
   const [status, setStatus] = useState<'aceito' | 'limitado' | 'negado'>('aceito');
 
+  const { data: marcasDistintas, isLoading: loadingMarcas } = useMarcasDistintas();
+  const { data: modelosPorMarca, isLoading: loadingModelos } = useModelosPorMarca(marca);
+
+  const marcaOptions = (marcasDistintas || []).map(m => ({ value: m, label: m }));
+  const modeloOptions = (modelosPorMarca || []).map(m => ({ value: m, label: m }));
+
   const isPending = saveRule.isPending || updateRule.isPending || deleteRule.isPending;
 
+  const handleMarcaChange = (value: string) => {
+    setMarca(value);
+    setModeloSelecionado('');
+  };
+
   const handleAdd = async () => {
-    if (!marca.trim() || !modelo.trim()) return;
+    if (!marca.trim() || !modeloSelecionado.trim()) return;
+
+    const modeloBase = modeloSelecionado.split(' ')[0].toUpperCase();
 
     const newEntry: ModeloEntry = {
       marca: marca.trim().toUpperCase(),
-      modelo: modelo.trim().toUpperCase(),
+      modelo: modeloBase,
       ano_min: anoMin ? parseInt(anoMin) : null,
       ano_max: anoMax ? parseInt(anoMax) : null,
       status,
@@ -90,7 +105,7 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
     }
 
     setMarca('');
-    setModelo('');
+    setModeloSelecionado('');
     setAnoMin('');
     setAnoMax('');
     setStatus('aceito');
@@ -163,19 +178,26 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
       <div className="grid grid-cols-6 gap-2 items-end">
         <div className="space-y-1">
           <label className="text-xs font-medium">Marca *</label>
-          <Input
+          <SearchableSelect
+            options={marcaOptions}
             value={marca}
-            onChange={(e) => setMarca(e.target.value.toUpperCase())}
-            placeholder="TOYOTA"
+            onValueChange={handleMarcaChange}
+            placeholder="Selecione..."
+            searchPlaceholder="Buscar marca..."
+            loading={loadingMarcas}
             className="h-8 text-xs"
           />
         </div>
         <div className="space-y-1">
           <label className="text-xs font-medium">Modelo *</label>
-          <Input
-            value={modelo}
-            onChange={(e) => setModelo(e.target.value.toUpperCase())}
-            placeholder="COROLLA"
+          <SearchableSelect
+            options={modeloOptions}
+            value={modeloSelecionado}
+            onValueChange={setModeloSelecionado}
+            placeholder="Selecione..."
+            searchPlaceholder="Buscar modelo..."
+            disabled={!marca}
+            loading={loadingModelos}
             className="h-8 text-xs"
           />
         </div>
@@ -218,7 +240,7 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
             size="icon"
             className="h-8 w-8"
             onClick={handleAdd}
-            disabled={!marca.trim() || !modelo.trim() || isPending}
+            disabled={!marca.trim() || !modeloSelecionado.trim() || isPending}
           >
             <Plus className="h-4 w-4" />
           </Button>
