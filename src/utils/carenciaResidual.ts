@@ -38,11 +38,11 @@ export async function calcularCarenciaResidual(
         .eq('plano_id', contratoAntigo.plano_id),
       supabase
         .from('planos_beneficios')
-        .select('beneficio_id')
+        .select('benefit_id')
         .eq('plano_id', contratoAntigo.plano_id),
     ]);
     (cobAntigas || []).forEach(c => itensPlanoAnterior.add(`cob_${c.cobertura_id}`));
-    (benAntigas || []).forEach(b => itensPlanoAnterior.add(`ben_${b.beneficio_id}`));
+    (benAntigas || []).forEach(b => itensPlanoAnterior.add(`ben_${b.benefit_id}`));
   }
 
   // 3. Buscar coberturas e benefícios do plano novo
