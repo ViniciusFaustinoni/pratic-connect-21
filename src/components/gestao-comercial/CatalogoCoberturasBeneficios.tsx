@@ -438,11 +438,25 @@ export function CatalogoCoberturasBeneficios() {
         </div>
 
         <TabsContent value="coberturas">
-          <div className="flex justify-end mb-3">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar cobertura..." value={cobSearch} onChange={e => setCobSearch(e.target.value)} className="pl-8 h-9" />
+            </div>
+            <Select value={cobSort} onValueChange={(v: any) => setCobSort(v)}>
+              <SelectTrigger className="w-[140px] h-9">
+                <SelectValue placeholder="Ordenar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Padrão</SelectItem>
+                <SelectItem value="az">A → Z</SelectItem>
+                <SelectItem value="za">Z → A</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="sm" onClick={() => setCobSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Cobertura</Button>
           </div>
           <ItemList
-            items={coberturas}
+            items={filterAndSort(coberturas, cobSearch, cobSort, 'cobertura')}
             type="cobertura"
             onEdit={(item) => setCobSheet({ open: true, item })}
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
