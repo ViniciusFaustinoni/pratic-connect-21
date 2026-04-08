@@ -172,19 +172,6 @@ export function useUpdatePlan() {
 
       if (planError) throw planError;
 
-      // Update plano_preco_map if linha_slug provided
-      if (linha_slug !== undefined) {
-        await supabase
-          .from('plano_preco_map')
-          .delete()
-          .eq('plano_id', id);
-        
-        if (linha_slug) {
-          await supabase
-            .from('plano_preco_map')
-            .insert({ plano_id: id, linha_slug, tipo_uso: planData.tipo_uso || 'particular' });
-        }
-      }
 
       // Update planos_beneficios - delete old and insert new
       if (benefits !== undefined) {
