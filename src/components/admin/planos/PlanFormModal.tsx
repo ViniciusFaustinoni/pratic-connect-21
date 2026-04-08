@@ -363,24 +363,6 @@ export function PlanFormModal({
     additional_price: formData.additional_price
       ? parseFloat(formData.additional_price)
       : null,
-    cota_passeio_percent: formData.cota_passeio_percent
-      ? parseFloat(formData.cota_passeio_percent)
-      : null,
-    cota_passeio_min: formData.cota_passeio_min
-      ? parseFloat(formData.cota_passeio_min)
-      : null,
-    cota_desagio_percent: formData.cota_desagio_percent
-      ? parseFloat(formData.cota_desagio_percent)
-      : null,
-    cota_desagio_min: formData.cota_desagio_min
-      ? parseFloat(formData.cota_desagio_min)
-      : null,
-    cota_app_percent: formData.cota_app_percent
-      ? parseFloat(formData.cota_app_percent)
-      : null,
-    cota_app_min: formData.cota_app_min
-      ? parseFloat(formData.cota_app_min)
-      : null,
     display_order: parseInt(formData.display_order) || 0,
     product_lines: productLines?.find((l) => l.id === formData.product_line_id) || null,
     plan_benefits: selectedBenefits.map((sb, index) => ({
