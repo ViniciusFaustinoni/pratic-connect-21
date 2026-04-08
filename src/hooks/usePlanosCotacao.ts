@@ -211,7 +211,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     planosBancoLoading ||
     planoCoberturasLoading ||
     cotasCategoriaLoading ||
-    benefitExclusionsLoading ||
     eligibilityRulesLoading ||
     decomposicaoLoading ||
     adicionalAppLoading ||
