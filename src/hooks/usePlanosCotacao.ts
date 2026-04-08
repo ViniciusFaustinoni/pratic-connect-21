@@ -165,7 +165,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         .from('planos')
         .select(`
           *,
-          product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class, blocked_categories, supports_app),
+          product_lines:product_line_id (slug, vehicle_type, sort_priority, requires_recent_year, gradient_class),
           planos_beneficios (id, plano_id, benefit_id, custom_text, display_order, benefits:benefit_id (id, name, category, preco_sugerido))
         `)
         .eq('ativo', true)
@@ -191,11 +191,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
-
-
-
-
-
   // Buscar overrides de cota por categoria (planos_cotas_categoria)
   const { data: cotasCategoriaData, isLoading: cotasCategoriaLoading } = useQuery({
     queryKey: ['planos_cotas_categoria'],
@@ -207,20 +202,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       return data;
     },
     staleTime: 1000 * 60 * 5,
-  });
-
-  // Buscar elegibilidade de modelos por plano
-  const { data: elegibilidadeData, isLoading: elegibilidadeLoading, isError: elegibilidadeError } = useQuery({
-    queryKey: ['plano_elegibilidade_modelos'],
-    queryFn: async () => {
-      const { data, error } = await supabase
-        .from('plano_elegibilidade_modelos')
-        .select('plano_id, marca, modelo, ano_min, ano_max, combustivel, status, observacao, cobertura_fipe')
-        .eq('is_active', true);
-      if (error) throw error;
-      return data ?? [];
-    },
-    staleTime: 5 * 60 * 1000,
   });
 
   // Buscar regras de elegibilidade unificadas
@@ -250,106 +231,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     staleTime: 1000 * 60 * 5,
   });
 
-  // ── Aliases de marca para double-check ──
-  const MARCA_ALIASES: Record<string, string> = {
-    'VW': 'VOLKSWAGEN',
-    'GM': 'CHEVROLET',
-    'MERCEDES': 'MERCEDES-BENZ',
-    'CHERY': 'CAOA CHERY',
-    'CITROËN': 'CITROEN',
-  };
-
-  function normalizarMarcaElegibilidade(marca: string): string {
-    const upper = marca.trim().toUpperCase();
-    return MARCA_ALIASES[upper] || upper;
-  }
-
-  // Função de verificação de elegibilidade por modelo
-  function verificarElegibilidadeModelo(
-    planoId: string,
-    linha: string | null,
-    veiculo: { marca: string; modelo: string; ano: number; combustivel: string },
-  ): { status: 'aprovado' | 'limitado' | 'negado'; coberturaFipe: number } {
-    // Buscar regras por linha (família) — variantes compartilham elegibilidade
-    const planosNaLinha = linha
-      ? (planosBanco || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
-      : [planoId];
-    const regrasDoPlano = elegibilidadeData?.filter(e => planosNaLinha.includes(e.plano_id)) ?? [];
-    // Sem configuração = aceita tudo
-    if (regrasDoPlano.length === 0) return { status: 'aprovado', coberturaFipe: 100 };
-
-    const marcaNormAPI = normalizarMarcaElegibilidade(veiculo.marca);
-    const modeloAPI = veiculo.modelo.trim().toUpperCase();
-    const combustivelNorm = veiculo.combustivel.trim().toLowerCase();
-
-    // Ordenar por comprimento de modelo desc → regra mais específica primeiro
-    const regrasOrdenadas = [...regrasDoPlano].sort(
-      (a, b) => b.modelo.length - a.modelo.length
-    );
-
-    const regra = regrasOrdenadas.find(r => {
-      // Double-check de marca: normaliza ambos os lados via aliases
-      const marcaNormBanco = normalizarMarcaElegibilidade(r.marca);
-      const marcaMatch = marcaNormBanco === marcaNormAPI
-        || r.marca.trim().toUpperCase() === veiculo.marca.trim().toUpperCase();
-      
-      // Normalizar modelo: remover qualificadores entre parênteses
-      const modeloBanco = r.modelo.trim().toUpperCase()
-        .replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-      const modeloAPIClean = modeloAPI
-        .replace(/\s*\(.*?\)\s*/g, ' ').replace(/\s+/g, ' ').trim();
-
-      // Wildcard: TODOS OS MODELOS aceita qualquer modelo
-      let modeloMatch = false;
-      if (modeloBanco.startsWith('TODOS')) {
-        modeloMatch = true;
-      } else {
-        // 3 níveis de matching
-        const prefixMatch = modeloAPIClean.startsWith(modeloBanco)
-          || modeloBanco.startsWith(modeloAPIClean);
-        const containsMatch = modeloAPIClean.includes(modeloBanco)
-          || modeloBanco.includes(modeloAPIClean);
-        const palavrasBanco = modeloBanco.split(' ');
-        const baseBanco = palavrasBanco[0];
-        const baseMatch = palavrasBanco.length === 1 && baseBanco.length >= 2 && (
-          modeloAPIClean.startsWith(baseBanco + ' ') || modeloAPIClean === baseBanco
-        );
-        modeloMatch = prefixMatch || containsMatch || baseMatch;
-      }
-      
-      const anoMatch = veiculo.ano >= r.ano_min &&
-                       (r.ano_max === null || veiculo.ano <= r.ano_max);
-      const combustivelMatch = r.combustivel === 'qualquer' ||
-                               r.combustivel === combustivelNorm;
-      return marcaMatch && modeloMatch && anoMatch && combustivelMatch;
-    });
-
-    // Whitelist: modelo não encontrado na lista = negado
-    if (!regra) return { status: 'negado', coberturaFipe: 0 };
-    if (regra.status === 'negado') return { status: 'negado', coberturaFipe: 0 };
-    
-    const cobFipe = (regra as any).cobertura_fipe ?? 100;
-    if (regra.status === 'limitado') return { status: 'limitado', coberturaFipe: cobFipe };
-    return { status: 'aprovado', coberturaFipe: cobFipe };
-  }
-
-  // Montar ConfigAdicionalApp dinamicamente (sem dependência de tabelasMensalidade)
-  const configApp = useMemo<ConfigAdicionalApp>(() => {
-    const linhasSupportsApp = (planosBanco || [])
-      .map((p: any) => p.product_lines?.slug?.toLowerCase())
-      .filter((slug: string | undefined): slug is string => !!slug && (planosBanco || []).some((p2: any) => p2.product_lines?.slug?.toLowerCase() === slug && p2.product_lines?.supports_app === true));
-
-    return {
-      regioesComAdicional: (regioesComAdicionalRaw || []).map(r => r.toLowerCase()),
-      linhasComColunaApp: [] as string[],
-      linhasSupportsApp: [...new Set(linhasSupportsApp)],
-    };
-  }, [planosBanco, regioesComAdicionalRaw]);
-
   const dependenciasCriticasLoading =
     planosBancoLoading ||
     planoCoberturasLoading ||
-    elegibilidadeLoading ||
     cotasCategoriaLoading ||
     benefitExclusionsLoading ||
     eligibilityRulesLoading ||
@@ -410,15 +294,10 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     for (const plano of planosBanco) {
       const linha = plano.linha?.toLowerCase() || null;
       
-      // Usar product_lines para regras dinâmicas
+      // Usar product_lines para sort_priority
       const plProductLine = (plano as any).product_lines;
-      const vehicleType = plProductLine?.vehicle_type || null;
       const sortPriority = plProductLine?.sort_priority || 100;
       const plSlug = plProductLine?.slug?.toLowerCase() || '';
-
-      // Filtrar motos/carros usando vehicle_type da product_line
-      if (tipoVeiculo === 'moto' && vehicleType !== 'motorcycle') continue;
-      if (tipoVeiculo === 'carro' && vehicleType === 'motorcycle') continue;
 
       // ── Regras unificadas de elegibilidade (entity_eligibility_rules) ──
       // Lógica de sobrescrita: regras marca_modelo do PLANO sobrescrevem as da LINHA
@@ -447,82 +326,27 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         continue;
       }
 
-      // Filtrar por elegibilidade de modelo (whitelist restritiva)
-      const combustivelOriginal = (combustivel || 'flex').toLowerCase();
-      let elegibilidadeStatus: 'aprovado' | 'limitado' | 'negado' | undefined = undefined;
-      let elegibilidadeCoberturaFipe = 100;
-
-      // Verificar se existem regras de elegibilidade para esta linha
-      const planosNaLinhaIds = linha
-        ? (planosBanco || []).filter(p => (p.linha || '').toLowerCase() === linha).map(p => p.id)
-        : [plano.id];
-      // Fail-safe: se dados de elegibilidade não carregaram (undefined/erro), assumir que há regras → negar
-      const temRegrasElegibilidade = (elegibilidadeData === undefined || elegibilidadeError)
-        ? true
-        : elegibilidadeData.some(e => planosNaLinhaIds.includes(e.plano_id));
-      
-      if (elegibilidadeData === undefined && !elegibilidadeLoading) {
-        console.warn('[usePlanosCotacao] elegibilidadeData undefined — fail-safe ativado, planos com regras serão negados');
-      }
-
-      if (temRegrasElegibilidade) {
-        if (params.marca && params.modelo && anoVeiculoNum) {
-          const resultado = verificarElegibilidadeModelo(
-            plano.id,
-            linha,
-            {
-              marca: params.marca,
-              modelo: params.modelo,
-              ano: anoVeiculoNum,
-              combustivel: combustivelOriginal,
-            },
-          );
-          elegibilidadeStatus = resultado.status;
-          elegibilidadeCoberturaFipe = resultado.coberturaFipe;
-          console.log(`[ELEGIBILIDADE] ${plano.nome} (linha=${linha}, região=${regiaoLower}): status=${resultado.status}, cobFipe=${resultado.coberturaFipe}, veículo=${params.marca} ${params.modelo} ${anoVeiculoNum} ${combustivelOriginal}`);
-        } else {
-          // Regras existem mas não temos dados do veículo para validar → negar
-          elegibilidadeStatus = 'negado';
-          console.log(`[ELEGIBILIDADE] ${plano.nome} (linha=${linha}, região=${regiaoLower}): NEGADO (sem dados veículo)`);
-        }
-
-        if (elegibilidadeStatus === 'negado') {
-          negados.push({
-            planoId: plano.id,
-            planoNome: plano.nome,
-            linha,
-            motivo: 'Modelo não elegível para este plano',
-          });
-          continue;
-        }
-      }
-
       // === NOVO MODELO: Preço = Σ coberturas + Σ benefícios + taxa administrativa ===
       
       // Soma dos valores das coberturas vinculadas ao plano
-      // Se a cobertura tem fipe_range, usa o valor segmentado pela FIPE do veículo
       const coberturasDoPlano = (planoCoberturasData || []).filter(pc => pc.plano_id === plano.id);
       const somaCoberturas = coberturasDoPlano.reduce((acc, pc) => {
         const cobId = (pc as any).cobertura_id;
-        // Procurar regra fipe_range para esta cobertura
         const fipeRangeRule = allEligibilityRules.find(
           r => r.entity_type === 'cobertura' && r.entity_id === cobId && r.rule_type === 'fipe_range' && r.is_active
         );
         if (fipeRangeRule) {
-          // Resolver preço pela faixa FIPE do veículo
           const faixas = (fipeRangeRule.rule_config as any)?.faixas || [];
           const faixa = faixas.find((f: any) => valorFipe >= f.de && valorFipe < f.ate);
           const valorFipe_resolved = faixa ? Number(faixa.valor) : 0;
           return acc + valorFipe_resolved;
         }
-        // Sem fipe_range: usar valor estático da cobertura
         const valor = (pc as any).coberturas?.valor || 0;
         return acc + Number(valor);
       }, 0);
 
-      // Soma dos valores dos benefícios vinculados (resolve FIPE variável quando disponível)
+      // Soma dos valores dos benefícios vinculados
       const somaBeneficios = (plano.planos_beneficios || []).reduce((acc: number, pb: any) => {
-        // Verificar se o benefício tem regra fipe_range para precificação segmentada
         const fipeRule = allEligibilityRules.find(
           r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id
             && r.rule_type === 'fipe_range' && r.is_active
@@ -532,11 +356,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           const faixa = faixas.find((f: any) => valorFipe >= f.de && valorFipe < f.ate);
           return acc + (faixa ? Number(faixa.valor) : 0);
         }
-        // Sem fipe_range: usar preco_sugerido estático
         const preco = pb.benefits?.preco_sugerido || 0;
         return acc + Number(preco);
       }, 0);
-
 
       let valorMensal = somaCoberturas + somaBeneficios;
       let valorDesagio: number | null = null;
@@ -549,12 +371,12 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         continue;
       }
 
-      // Aplicar adicional_mensal do plano (ex: Premium +30, Exclusive +60)
+      // Aplicar adicional_mensal do plano
       const adicionalMensal = Number(plano.adicional_mensal || 0);
       const valorBase = valorMensal;
       valorMensal += adicionalMensal;
 
-      // Aplicar desconto percentual do plano (ex: 5% OFF)
+      // Aplicar desconto percentual do plano
       const descontoPerc = Number(plano.desconto_percentual || 0);
       if (descontoPerc > 0) {
         valorMensal *= (1 - descontoPerc / 100);
@@ -577,7 +399,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Determinar categoria de lookup para planos_cotas_categoria
       let cotaCategoriaLookup = categoria || 'passeio';
       if (params.usoApp) cotaCategoriaLookup = 'aplicativo';
-      if (elegibilidadeStatus === 'limitado' || isDesagio) cotaCategoriaLookup = 'desagio';
+      if (isDesagio) cotaCategoriaLookup = 'desagio';
 
       // 1º: Tentar override da tabela planos_cotas_categoria
       const cotaCategoriaOverride = cotasCategoriaData?.find(
@@ -589,11 +411,9 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaMinimaFinal = cotaCategoriaOverride.cota_minima_valor != null ? Number(cotaCategoriaOverride.cota_minima_valor) : cotaMinima;
         console.log(`[COTA] ${plano.nome}: override categoria '${cotaCategoriaLookup}' → ${cotaPercentual}% mín R$${cotaMinimaFinal}`);
       } else if (params.usoApp) {
-        // 2º: Fallback para campos do plano (app)
         cotaPercentual = plano.cota_desagio != null ? Number(plano.cota_desagio) : cotaDesagioDefault;
         cotaMinimaFinal = plano.cota_minima_desagio != null ? Number(plano.cota_minima_desagio) : cotaMinimaDesagioDefault;
-      } else if (elegibilidadeStatus === 'limitado' || isDesagio) {
-        // 2º: Fallback para campos do plano (deságio)
+      } else if (isDesagio) {
         cotaPercentual = plano.cota_desagio != null ? Number(plano.cota_desagio) : cotaDesagioDefault;
         cotaMinimaFinal = plano.cota_minima_desagio != null ? Number(plano.cota_minima_desagio) : cotaMinimaDesagioDefault;
       }
@@ -622,7 +442,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       // Verificar regras unificadas de benefícios individuais (excluindo fipe_range que é precificação)
       const beneficiosDoPlano = plano.planos_beneficios || [];
       for (const pb of beneficiosDoPlano) {
-        // Filtrar fipe_range: é regra de precificação, não de elegibilidade
         const benefitRules = allEligibilityRules
           .filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id)
           .filter(r => r.rule_type !== 'fipe_range');
@@ -636,7 +455,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
         if (allItemRules.length > 0) {
           const passed = checkAllRules(allItemRules, vehicleCtx);
-          // benefício elegibilidade check
           if (!passed && !coberturasRemovidas.includes(benefitName)) {
             coberturasRemovidas.push(benefitName);
           }
@@ -652,7 +470,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         if (cobRules.length > 0) {
           const passed = checkAllRules(cobRules, vehicleCtx);
           const cobNome = (pc as any).coberturas?.nome;
-          // cobertura elegibilidade check
           if (!passed && cobNome && !coberturasRemovidas.includes(cobNome)) {
             coberturasRemovidas.push(cobNome);
           }
@@ -691,9 +508,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         nivel,
         coberturas: coberturas as string[],
         naoInclui,
-        coberturaFipe: elegibilidadeStatus === 'limitado' && elegibilidadeCoberturaFipe < 100
-          ? elegibilidadeCoberturaFipe
-          : (plano.cobertura_fipe || 100),
+        coberturaFipe: plano.cobertura_fipe || 100,
         cota: cotaString,
         cotaPercentual,
         cotaMinima: cotaMinimaFinal,
@@ -703,7 +518,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         destaque: isDestaque,
         tag,
         alertaDesagio,
-        adicionalMensal: 0, // Já incluído no valor_mensal da nova tabela
+        adicionalMensal: 0,
         valorCota,
         taxaAdministrativa,
         valorRastreamento,
@@ -713,7 +528,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         cotaDesagio: Number(plano.cota_desagio) || undefined,
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
         anoMinimo: undefined,
-        elegibilidadeStatus,
+        elegibilidadeStatus: undefined,
         precoDesagioAplicado: false,
       });
     }
@@ -729,7 +544,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
     });
 
     return { planos: sorted, planosNegados: negados };
-  }, [params, planosBanco, planoCoberturasData, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, elegibilidadeData, elegibilidadeError, elegibilidadeLoading, configApp, cotasCategoriaData, categoriasQueSobrepoeApp, dependenciasCriticasLoading, allEligibilityRules]);
+  }, [params, planosBanco, planoCoberturasData, benefitExclusions, regioes, decomposicao, taxaFallbackCarro, taxaFallbackMoto, cotaParticipacaoDefault, cotaMinimaDefault, cotaDesagioDefault, cotaMinimaDesagioDefault, adicionalApp, cotasCategoriaData, categoriasQueSobrepoeApp, dependenciasCriticasLoading, allEligibilityRules]);
 
   return {
     planos,
