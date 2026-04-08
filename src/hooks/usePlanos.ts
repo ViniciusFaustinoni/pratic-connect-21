@@ -40,6 +40,7 @@ export function usePlano(id: string | undefined) {
   });
 }
 
+/** @deprecated Use usePlanosCotacao instead — tabelas_preco_mensalidade is legacy */
 export function useTabelasPreco(planoId?: string, valorFipe?: number) {
   return useQuery({
     queryKey: ['tabelas_preco_mensalidade', planoId, valorFipe],

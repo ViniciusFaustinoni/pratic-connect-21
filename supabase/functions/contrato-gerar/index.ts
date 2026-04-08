@@ -81,19 +81,20 @@ async function detectarCategoriaVeiculo(
     }
   }
 
-  // Regra 2: Marca mista → consulta plano_elegibilidade_modelos
+  // Regra 2: Marca mista → consulta marcas_modelos (tabela unificada)
   if (marcaNorm && modeloNorm) {
+    const firstToken = modeloNorm.split(' ')[0];
     const { data } = await supabase
-      .from('plano_elegibilidade_modelos')
-      .select('linha_slug')
+      .from('marcas_modelos')
+      .select('modelo')
       .ilike('marca', marcaNorm)
-      .ilike('modelo', `%${modeloNorm}%`)
-      .eq('is_active', true)
+      .ilike('modelo', `%${firstToken}%`)
+      .eq('ativo', true)
       .limit(5);
 
-    if (data && data.length > 0) {
-      return data.some((r: any) => r.linha_slug === 'advanced') ? 'Motocicleta' : 'Automóvel';
-    }
+    // Se encontrou na marcas_modelos, é um veículo catalogado.
+    // A detecção de moto depende das marcas exclusivas (regra 1) e keywords (regra 3).
+    // Não é conclusivo aqui, segue para fallback.
   }
 
   // Regra 3: Fallback — keywords de modelo apenas
