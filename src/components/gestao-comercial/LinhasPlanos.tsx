@@ -3,10 +3,7 @@ import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { Button } from '@/components/ui/button';
-import { Input } from '@/components/ui/input';
-import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
-import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import {
   AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent,
@@ -14,10 +11,12 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Plus, ChevronRight, Loader2, Pencil, Trash2, Copy, Upload, GripVertical } from 'lucide-react';
 import { cn } from '@/lib/utils';
-import { PlanoFormSheet } from './PlanoFormSheet';
+import { LinhaFormModal } from '@/components/admin/planos/LinhaFormModal';
+import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDuplicateProductLine, useDuplicatePlan } from '@/hooks/usePlansAdmin';
 import { ImportarLinhasModal } from './ImportarLinhasModal';
+import type { PlanWithDetails } from '@/hooks/usePlans';
 
 // ── Data hooks ──
 
