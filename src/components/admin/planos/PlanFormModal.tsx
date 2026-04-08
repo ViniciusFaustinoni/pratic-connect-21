@@ -144,8 +144,6 @@ export function PlanFormModal({
     badge_text: '',
     badge_color: '',
     coverage_type: '',
-    min_vehicle_year: '',
-    ano_fabricacao_maximo: '',
     additional_price: '',
     desconto_percentual: '',
     cota_participacao: '',
@@ -190,8 +188,6 @@ export function PlanFormModal({
         badge_text: p.badge_text || '',
         badge_color: p.badge_color || '',
         coverage_type: p.tipo_cobertura || '',
-        min_vehicle_year: p.ano_minimo?.toString() || '',
-        ano_fabricacao_maximo: p.ano_fabricacao_maximo?.toString() || '',
         additional_price: p.adicional_mensal?.toString() || '',
         desconto_percentual: p.desconto_percentual?.toString() || '',
         cota_participacao: p.cota_participacao?.toString() || '',
@@ -227,8 +223,6 @@ export function PlanFormModal({
         badge_text: '',
         badge_color: '',
         coverage_type: '',
-        min_vehicle_year: '',
-        ano_fabricacao_maximo: '',
         additional_price: '',
         desconto_percentual: '',
         cota_participacao: '',
@@ -295,10 +289,6 @@ export function PlanFormModal({
       badge_text: formData.badge_text || null,
       badge_color: formData.badge_color || null,
       coverage_type: formData.coverage_type || null,
-      min_vehicle_year: formData.min_vehicle_year || null,
-      ano_fabricacao_maximo: formData.ano_fabricacao_maximo
-        ? parseInt(formData.ano_fabricacao_maximo)
-        : null,
       additional_price: formData.additional_price
         ? parseFloat(formData.additional_price)
         : null,
@@ -497,36 +487,6 @@ export function PlanFormModal({
                             setFormData((prev) => ({ ...prev, coverage_type: e.target.value }))
                           }
                           placeholder="Ex: 100% FIPE"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="min_vehicle_year">Ano Mínimo<FieldHint text={PLAN_FIELD_HINTS.min_vehicle_year} /></Label>
-                        <Input
-                          id="min_vehicle_year"
-                          type="number"
-                          value={formData.min_vehicle_year}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              min_vehicle_year: e.target.value,
-                            }))
-                          }
-                          placeholder="Ex: 2005"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="ano_fabricacao_maximo">Ano Máximo<FieldHint text={PLAN_FIELD_HINTS.ano_fabricacao_maximo || 'Ano máximo de fabricação aceito. Veículos acima deste ano NÃO verão este plano na Cotação e Calculadora.'} /></Label>
-                        <Input
-                          id="ano_fabricacao_maximo"
-                          type="number"
-                          value={formData.ano_fabricacao_maximo}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              ano_fabricacao_maximo: e.target.value,
-                            }))
-                          }
-                          placeholder="Ex: 2004"
                         />
                       </div>
                     </div>
