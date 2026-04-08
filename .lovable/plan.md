@@ -1,32 +1,28 @@
 
 
-# Plano: Remover pagina admin/planos
+# Plano: Submenus colapsaveis na navegacao lateral
 
-## Contexto
+## Alteracao
 
-A gestao de planos, linhas, coberturas e beneficios ja esta completamente disponivel em **Diretoria > Gestao Comercial**. A rota `/admin/planos` e redundante e deve ser removida. Nao ha link no sidebar apontando para ela.
+Arquivo: `src/components/gestao-comercial/TabNavigation.tsx`
 
-Os componentes em `src/components/admin/planos/` (PlanFormModal, LinhaFormModal, etc.) continuam sendo usados por Gestao Comercial e outras paginas — nao serao removidos.
+Tornar cada grupo (Produtos, Financeiro, Operacao, Cadastros) colapsavel com clique no cabecalho:
 
-## Alteracoes
+1. Adicionar estado `expandedGroups` como `Set<string>` — inicializado com o grupo que contem o item ativo
+2. O cabecalho de cada grupo vira um botao clicavel com icone chevron (ChevronDown/ChevronRight) que alterna a expansao
+3. O grupo que contem o item ativo fica sempre expandido automaticamente (ao trocar de tab, o grupo correspondente abre)
+4. Os itens filhos ficam dentro de um bloco com animacao de altura (Collapsible do Radix, ja disponivel no projeto)
+5. Manter a mesma aparencia visual, apenas adicionando o comportamento de colapso
 
-### 1. `src/App.tsx`
-- Remover o import lazy de `PlanosAdmin`
-- Remover a rota `<Route path="/admin/planos" ...>`
+### Comportamento
+- Ao clicar no cabecalho do grupo: toggle expand/collapse
+- Ao selecionar um item: o grupo pai abre automaticamente
+- Multiplos grupos podem ficar abertos simultaneamente
+- O badge de contagem e o chevron ficam no cabecalho
 
-### 2. `src/pages/admin/PlanosAdmin.tsx`
-- Deletar o arquivo
+### Componentes utilizados
+- `Collapsible`, `CollapsibleTrigger`, `CollapsibleContent` de `@/components/ui/collapsible` (ja existe)
 
-### 3. Tabs exclusivas da pagina admin (opcionais para limpeza)
-Os arquivos abaixo so eram usados por `PlanosAdmin.tsx` e podem ser removidos:
-- `src/components/admin/planos/PlanosTab.tsx`
-- `src/components/admin/planos/BeneficiosTab.tsx`
-- `src/components/admin/planos/CoberturasTab.tsx`
-- `src/components/admin/planos/LinhasTab.tsx`
-
-Antes de deletar, confirmarei que nenhum outro arquivo os importa.
-
-## Resultado
-
-A unica forma de gerenciar planos, linhas, coberturas e beneficios passa a ser por **Diretoria > Gestao Comercial**. Acessar `/admin/planos` redirecionara para 404 (comportamento padrao do router).
+## Arquivo modificado
+- `src/components/gestao-comercial/TabNavigation.tsx`
 
