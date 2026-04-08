@@ -1,9 +1,10 @@
 import { useState, useMemo, useCallback } from 'react';
-import { X, Plus, AlertTriangle, Car, ShieldCheck, ShieldX } from 'lucide-react';
+import { AlertTriangle, Car, ShieldCheck, ShieldX, ChevronRight, ChevronDown, Search } from 'lucide-react';
 import { Label } from '@/components/ui/label';
 import { Button } from '@/components/ui/button';
-import { Badge } from '@/components/ui/badge';
-import { SearchableSelect } from '@/components/ui/searchable-select';
+import { Input } from '@/components/ui/input';
+import { Checkbox } from '@/components/ui/checkbox';
+import { ScrollArea } from '@/components/ui/scroll-area';
 import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { useMarcasModelos } from '@/hooks/useMarcasModelos';
 import {
@@ -12,17 +13,10 @@ import {
   useDeleteRule,
   type EntityType,
 } from '@/hooks/useEntityEligibilityRules';
-import { toast } from 'sonner';
 
 interface MarcaModeloExclusionEditorProps {
   entityType: EntityType;
   entityId: string;
-}
-
-interface MarcaEntry {
-  ruleId: string | null;
-  marca: string;
-  modelos: string[];
 }
 
 type RuleMode = 'exclude' | 'include';
@@ -33,9 +27,8 @@ export function MarcaModeloExclusionEditor({ entityType, entityId }: MarcaModelo
   const saveRule = useSaveRule();
   const deleteRule = useDeleteRule();
 
-  const [selectedMarca, setSelectedMarca] = useState('');
-  const [selectedModelo, setSelectedModelo] = useState('');
-  const [addingModelosFor, setAddingModelosFor] = useState<string | null>(null);
+  const [search, setSearch] = useState('');
+  const [expandedBrands, setExpandedBrands] = useState<Set<string>>(new Set());
 
   // Derive mode from existing rules
   const derivedMode: RuleMode = useMemo(() => {
@@ -48,40 +41,124 @@ export function MarcaModeloExclusionEditor({ entityType, entityId }: MarcaModelo
   const [mode, setMode] = useState<RuleMode | null>(null);
   const activeMode: RuleMode = mode ?? derivedMode;
 
-  // Sync derived mode when rules load
-  const entries: MarcaEntry[] = useMemo(() => {
-    if (!rules) return [];
-    return rules
-      .filter(r => r.rule_type === 'marca_modelo' && r.rule_mode === activeMode)
-      .map(r => ({
-        ruleId: r.id,
-        marca: r.rule_config.marca || '',
-        modelos: r.rule_config.modelos || [],
-      }));
+  // Current rules as a map: marca -> { ruleId, modelos[] }
+  const rulesMap = useMemo(() => {
+    const map = new Map<string, { ruleId: string; modelos: string[] }>();
+    if (!rules) return map;
+    for (const r of rules) {
+      if (r.rule_type === 'marca_modelo' && r.rule_mode === activeMode) {
+        const marca = (r.rule_config.marca || '').toUpperCase();
+        map.set(marca, { ruleId: r.id, modelos: r.rule_config.modelos || [] });
+      }
+    }
+    return map;
   }, [rules, activeMode]);
 
-  const isActive = entries.length > 0;
-
-  const marcaOptions = useMemo(() => {
-    if (!marcasModelos) return [];
-    const unique = [...new Set(marcasModelos.filter(m => m.ativo).map(m => m.marca))].sort();
-    const usedBrands = new Set(entries.map(e => e.marca.toUpperCase()));
-    return unique
-      .filter(m => !usedBrands.has(m.toUpperCase()))
-      .map(m => ({ value: m, label: m }));
-  }, [marcasModelos, entries]);
-
-  const getModelosForMarca = useCallback((marca: string) => {
-    if (!marcasModelos) return [];
-    return marcasModelos
-      .filter(m => m.ativo && m.marca.toUpperCase() === marca.toUpperCase() && m.modelo)
-      .map(m => ({ value: m.modelo!, label: m.modelo! }))
-      .sort((a, b) => a.label.localeCompare(b.label));
+  // Build brand -> models catalog from marcasModelos
+  const brandCatalog = useMemo(() => {
+    if (!marcasModelos) return new Map<string, string[]>();
+    const map = new Map<string, string[]>();
+    for (const mm of marcasModelos) {
+      if (!mm.ativo) continue;
+      const brand = mm.marca.toUpperCase();
+      if (!map.has(brand)) map.set(brand, []);
+      if (mm.modelo) {
+        const models = map.get(brand)!;
+        if (!models.includes(mm.modelo)) models.push(mm.modelo);
+      }
+    }
+    // Sort models
+    for (const [, models] of map) models.sort();
+    return map;
   }, [marcasModelos]);
+
+  const sortedBrands = useMemo(() => {
+    return [...brandCatalog.keys()].sort();
+  }, [brandCatalog]);
+
+  // Filter by search
+  const filteredBrands = useMemo(() => {
+    if (!search.trim()) return sortedBrands;
+    const q = search.trim().toUpperCase();
+    return sortedBrands.filter(brand => {
+      if (brand.includes(q)) return true;
+      const models = brandCatalog.get(brand) || [];
+      return models.some(m => m.toUpperCase().includes(q));
+    });
+  }, [sortedBrands, search, brandCatalog]);
+
+  const isBusy = saveRule.isPending || deleteRule.isPending;
+
+  const toggleExpand = (brand: string) => {
+    setExpandedBrands(prev => {
+      const next = new Set(prev);
+      if (next.has(brand)) next.delete(brand);
+      else next.add(brand);
+      return next;
+    });
+  };
+
+  const handleToggleBrand = useCallback(async (brand: string) => {
+    const existing = rulesMap.get(brand);
+    if (existing) {
+      // Remove rule
+      try { await deleteRule.mutateAsync(existing.ruleId); } catch { /* handled */ }
+    } else {
+      // Add brand rule (all models)
+      try {
+        await saveRule.mutateAsync({
+          entity_type: entityType,
+          entity_id: entityId,
+          rule_type: 'marca_modelo',
+          rule_mode: activeMode,
+          rule_config: { marca: brand, modelos: [] },
+        });
+      } catch { /* handled */ }
+    }
+  }, [rulesMap, deleteRule, saveRule, entityType, entityId, activeMode]);
+
+  const handleToggleModel = useCallback(async (brand: string, model: string) => {
+    const existing = rulesMap.get(brand);
+    if (existing) {
+      const hasModel = existing.modelos.includes(model);
+      let newModelos: string[];
+      if (hasModel) {
+        newModelos = existing.modelos.filter(m => m !== model);
+        // If no models left and it was a model-specific rule, remove the rule entirely
+        if (newModelos.length === 0 && existing.modelos.length > 0) {
+          try { await deleteRule.mutateAsync(existing.ruleId); } catch { /* handled */ }
+          return;
+        }
+      } else {
+        // If brand was added with empty modelos (all models), switch to specific
+        newModelos = [...existing.modelos, model];
+      }
+      try {
+        await deleteRule.mutateAsync(existing.ruleId);
+        await saveRule.mutateAsync({
+          entity_type: entityType,
+          entity_id: entityId,
+          rule_type: 'marca_modelo',
+          rule_mode: activeMode,
+          rule_config: { marca: brand, modelos: newModelos },
+        });
+      } catch { /* handled */ }
+    } else {
+      // Brand not in rules yet, add with this specific model
+      try {
+        await saveRule.mutateAsync({
+          entity_type: entityType,
+          entity_id: entityId,
+          rule_type: 'marca_modelo',
+          rule_mode: activeMode,
+          rule_config: { marca: brand, modelos: [model] },
+        });
+      } catch { /* handled */ }
+    }
+  }, [rulesMap, deleteRule, saveRule, entityType, entityId, activeMode]);
 
   const handleModeChange = useCallback(async (newMode: string) => {
     if (!newMode || newMode === activeMode) return;
-    // If there are existing rules of opposite mode, delete them
     if (rules) {
       const oppositeRules = rules.filter(r => r.rule_type === 'marca_modelo' && r.rule_mode !== newMode);
       if (oppositeRules.length > 0) {
@@ -97,75 +174,18 @@ export function MarcaModeloExclusionEditor({ entityType, entityId }: MarcaModelo
     setMode(newMode as RuleMode);
   }, [activeMode, rules, deleteRule]);
 
-  const handleAddMarca = useCallback(async () => {
-    if (!selectedMarca) return;
-    try {
-      await saveRule.mutateAsync({
-        entity_type: entityType,
-        entity_id: entityId,
-        rule_type: 'marca_modelo',
-        rule_mode: activeMode,
-        rule_config: { marca: selectedMarca, modelos: [] },
-      });
-      setSelectedMarca('');
-    } catch { /* toast handled by hook */ }
-  }, [selectedMarca, entityType, entityId, saveRule, activeMode]);
-
-  const handleRemoveEntry = useCallback(async (ruleId: string | null) => {
-    if (!ruleId) return;
-    try { await deleteRule.mutateAsync(ruleId); } catch { /* toast handled by hook */ }
-  }, [deleteRule]);
-
-  const handleAddModelo = useCallback(async (entry: MarcaEntry) => {
-    if (!selectedModelo || !entry.ruleId) return;
-    if (entry.modelos.includes(selectedModelo)) {
-      toast.info('Modelo já adicionado');
-      return;
-    }
-    const newModelos = [...entry.modelos, selectedModelo];
-    try {
-      await deleteRule.mutateAsync(entry.ruleId);
-      await saveRule.mutateAsync({
-        entity_type: entityType,
-        entity_id: entityId,
-        rule_type: 'marca_modelo',
-        rule_mode: activeMode,
-        rule_config: { marca: entry.marca, modelos: newModelos },
-      });
-      setSelectedModelo('');
-    } catch { /* toast handled by hook */ }
-  }, [selectedModelo, entityType, entityId, saveRule, deleteRule, activeMode]);
-
-  const handleRemoveModelo = useCallback(async (entry: MarcaEntry, modelo: string) => {
-    if (!entry.ruleId) return;
-    const newModelos = entry.modelos.filter(m => m !== modelo);
-    try {
-      await deleteRule.mutateAsync(entry.ruleId);
-      await saveRule.mutateAsync({
-        entity_type: entityType,
-        entity_id: entityId,
-        rule_type: 'marca_modelo',
-        rule_mode: activeMode,
-        rule_config: { marca: entry.marca, modelos: newModelos },
-      });
-    } catch { /* toast handled by hook */ }
-  }, [entityType, entityId, saveRule, deleteRule, activeMode]);
-
   const handleClearAll = useCallback(async () => {
-    for (const exc of entries) {
-      if (exc.ruleId) {
-        try { await deleteRule.mutateAsync(exc.ruleId); } catch { /* continue */ }
-      }
+    for (const [, entry] of rulesMap) {
+      try { await deleteRule.mutateAsync(entry.ruleId); } catch { /* continue */ }
     }
-  }, [entries, deleteRule]);
-
-  const isBusy = saveRule.isPending || deleteRule.isPending;
+  }, [rulesMap, deleteRule]);
 
   const isBlacklist = activeMode === 'exclude';
+  const totalBrands = rulesMap.size;
+  const totalModels = [...rulesMap.values()].reduce((sum, e) => sum + e.modelos.length, 0);
+
   const labels = {
     title: isBlacklist ? 'Exclusão por Marca / Modelo' : 'Inclusão por Marca / Modelo',
-    addLabel: isBlacklist ? 'Adicionar marca à exclusão' : 'Adicionar marca permitida',
-    fullBrand: isBlacklist ? 'Marca inteira excluída' : 'Marca inteira permitida',
     empty: isBlacklist
       ? 'Nenhuma marca excluída. Todas as marcas e modelos são aceitos.'
       : 'Nenhuma marca configurada — todos os veículos serão bloqueados.',
@@ -178,7 +198,7 @@ export function MarcaModeloExclusionEditor({ entityType, entityId }: MarcaModelo
           <Car className="h-4 w-4 text-muted-foreground" />
           <Label className="text-sm font-medium">{labels.title}</Label>
         </div>
-        {isActive && (
+        {totalBrands > 0 && (
           <Button variant="ghost" size="sm" onClick={handleClearAll} disabled={isBusy}>
             Limpar todas
           </Button>
@@ -188,12 +208,7 @@ export function MarcaModeloExclusionEditor({ entityType, entityId }: MarcaModelo
       {/* Mode selector */}
       <div className="space-y-1.5">
         <Label className="text-xs text-muted-foreground">Tipo de regra</Label>
-        <ToggleGroup
-          type="single"
-          value={activeMode}
-          onValueChange={handleModeChange}
-          className="justify-start"
-        >
+        <ToggleGroup type="single" value={activeMode} onValueChange={handleModeChange} className="justify-start">
           <ToggleGroupItem value="exclude" className="gap-1.5 text-xs px-3 h-8 data-[state=on]:bg-destructive/10 data-[state=on]:text-destructive data-[state=on]:border-destructive/30">
             <ShieldX className="h-3.5 w-3.5" />
             Blacklist (Exclusiva)
@@ -217,124 +232,106 @@ export function MarcaModeloExclusionEditor({ entityType, entityId }: MarcaModelo
         </div>
       )}
 
-      {/* Add brand */}
-      <div className="flex items-end gap-2">
-        <div className="flex-1">
-          <Label className="text-xs text-muted-foreground mb-1 block">{labels.addLabel}</Label>
-          <SearchableSelect
-            options={marcaOptions}
-            value={selectedMarca}
-            onValueChange={setSelectedMarca}
-            placeholder="Buscar marca..."
-            searchPlaceholder="Digite para buscar..."
-            loading={loadingMarcas || loadingRules}
-            disabled={isBusy}
-          />
-        </div>
-        <Button
-          size="sm"
-          onClick={handleAddMarca}
-          disabled={!selectedMarca || isBusy}
-          className="h-9"
-        >
-          <Plus className="h-3.5 w-3.5 mr-1" />
-          Adicionar
-        </Button>
+      {/* Search */}
+      <div className="relative">
+        <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-muted-foreground" />
+        <Input
+          placeholder="Filtrar marcas e modelos..."
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+          className="pl-8 h-9 text-sm"
+        />
       </div>
 
-      {/* List of brands */}
-      {entries.length > 0 && (
-        <div className="space-y-3">
-          {entries.map((exc) => {
-            const modelosOptions = getModelosForMarca(exc.marca).filter(
-              m => !exc.modelos.includes(m.value)
-            );
-            const isAddingModelos = addingModelosFor === exc.marca;
+      {/* Collapsible brand list */}
+      {(loadingMarcas || loadingRules) ? (
+        <p className="text-xs text-muted-foreground">Carregando...</p>
+      ) : (
+        <ScrollArea className="max-h-64 overflow-auto rounded-md border">
+          <div className="p-1">
+            {filteredBrands.map(brand => {
+              const models = brandCatalog.get(brand) || [];
+              const isExpanded = expandedBrands.has(brand);
+              const rule = rulesMap.get(brand);
+              const isBrandChecked = !!rule;
+              const isAllModels = isBrandChecked && rule.modelos.length === 0;
 
-            return (
-              <div key={exc.ruleId || exc.marca} className="rounded-md border bg-muted/30 p-3 space-y-2">
-                <div className="flex items-center justify-between">
-                  <div className="flex items-center gap-2">
-                    <span className="text-sm font-medium">{exc.marca}</span>
-                    {exc.modelos.length === 0 && (
-                      <Badge
-                        variant={isBlacklist ? 'destructive' : 'default'}
-                        className="text-[10px]"
-                      >
-                        {labels.fullBrand}
-                      </Badge>
+              // Filter models by search
+              const q = search.trim().toUpperCase();
+              const filteredModels = q
+                ? models.filter(m => m.toUpperCase().includes(q) || brand.includes(q))
+                : models;
+
+              return (
+                <div key={brand}>
+                  <div className="flex items-center gap-1 py-1 px-1 hover:bg-muted/50 rounded-sm">
+                    <button
+                      type="button"
+                      className="p-0.5 text-muted-foreground hover:text-foreground"
+                      onClick={() => toggleExpand(brand)}
+                    >
+                      {isExpanded
+                        ? <ChevronDown className="h-3.5 w-3.5" />
+                        : <ChevronRight className="h-3.5 w-3.5" />
+                      }
+                    </button>
+                    <Checkbox
+                      checked={isBrandChecked}
+                      onCheckedChange={() => handleToggleBrand(brand)}
+                      disabled={isBusy}
+                      className="h-3.5 w-3.5"
+                    />
+                    <span
+                      className="text-xs font-medium cursor-pointer select-none flex-1"
+                      onClick={() => toggleExpand(brand)}
+                    >
+                      {brand}
+                    </span>
+                    {isBrandChecked && isAllModels && (
+                      <span className="text-[10px] text-muted-foreground mr-1">todos</span>
+                    )}
+                    {isBrandChecked && !isAllModels && rule.modelos.length > 0 && (
+                      <span className="text-[10px] text-muted-foreground mr-1">
+                        {rule.modelos.length} modelo(s)
+                      </span>
                     )}
                   </div>
-                  <div className="flex items-center gap-1">
-                    <Button
-                      variant="ghost"
-                      size="sm"
-                      className="h-7 text-xs"
-                      onClick={() => setAddingModelosFor(isAddingModelos ? null : exc.marca)}
-                      disabled={isBusy}
-                    >
-                      {isAddingModelos ? 'Fechar' : 'Modelos'}
-                    </Button>
-                    <Button
-                      variant="ghost"
-                      size="icon"
-                      className="h-7 w-7 text-destructive hover:text-destructive"
-                      onClick={() => handleRemoveEntry(exc.ruleId)}
-                      disabled={isBusy}
-                    >
-                      <X className="h-3.5 w-3.5" />
-                    </Button>
-                  </div>
-                </div>
-
-                {exc.modelos.length > 0 && (
-                  <div className="flex flex-wrap gap-1.5">
-                    {exc.modelos.map(modelo => (
-                      <Badge key={modelo} variant="secondary" className="text-xs gap-1 pr-1">
-                        {modelo}
-                        <button
-                          className="ml-0.5 rounded-full hover:bg-muted-foreground/20 p-0.5"
-                          onClick={() => handleRemoveModelo(exc, modelo)}
-                          disabled={isBusy}
-                        >
-                          <X className="h-2.5 w-2.5" />
-                        </button>
-                      </Badge>
-                    ))}
-                  </div>
-                )}
-
-                {isAddingModelos && (
-                  <div className="flex items-end gap-2 pt-1">
-                    <div className="flex-1">
-                      <SearchableSelect
-                        options={modelosOptions}
-                        value={selectedModelo}
-                        onValueChange={setSelectedModelo}
-                        placeholder="Buscar modelo..."
-                        searchPlaceholder="Digite para buscar..."
-                        disabled={isBusy}
-                      />
+                  {isExpanded && filteredModels.length > 0 && (
+                    <div className="ml-7 space-y-0.5 pb-1">
+                      {filteredModels.map(model => {
+                        const isModelChecked = isBrandChecked && (isAllModels || rule.modelos.includes(model));
+                        return (
+                          <div key={model} className="flex items-center gap-1.5 py-0.5 px-1 hover:bg-muted/30 rounded-sm">
+                            <Checkbox
+                              checked={isModelChecked}
+                              onCheckedChange={() => handleToggleModel(brand, model)}
+                              disabled={isBusy}
+                              className="h-3 w-3"
+                            />
+                            <span className="text-xs text-muted-foreground">{model}</span>
+                          </div>
+                        );
+                      })}
                     </div>
-                    <Button
-                      size="sm"
-                      variant="secondary"
-                      onClick={() => handleAddModelo(exc)}
-                      disabled={!selectedModelo || isBusy}
-                      className="h-9"
-                    >
-                      <Plus className="h-3.5 w-3.5 mr-1" />
-                      Adicionar
-                    </Button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
+                  )}
+                </div>
+              );
+            })}
+            {filteredBrands.length === 0 && (
+              <p className="text-xs text-muted-foreground text-center py-3">Nenhuma marca encontrada</p>
+            )}
+          </div>
+        </ScrollArea>
       )}
 
-      {entries.length === 0 && !loadingRules && (
+      {/* Summary */}
+      {totalBrands > 0 && (
+        <p className="text-xs text-muted-foreground">
+          {totalBrands} marca(s) selecionada(s)
+          {totalModels > 0 && `, ${totalModels} modelo(s) específico(s)`}
+        </p>
+      )}
+      {totalBrands === 0 && !loadingRules && (
         <p className="text-xs text-muted-foreground">{labels.empty}</p>
       )}
     </div>
