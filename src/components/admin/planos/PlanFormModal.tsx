@@ -78,6 +78,7 @@ export function PlanFormModal({
 }: PlanFormModalProps) {
   const { data: productLines } = useProductLines();
   const { data: benefits } = useBenefits();
+  const { data: coberturasCatalogo } = useCoberturas();
   const { data: regioes } = useRegioes();
   const { data: VEHICLE_CATEGORIES = [] } = useCategoriasVeiculoPlano();
   const createPlan = useCreatePlan();
