@@ -30,7 +30,7 @@ import { useRegioes } from '@/hooks/useRegioes';
 import { useCategoriasVeiculoPlano } from '@/hooks/useConteudosSistema';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
-import { ElegibilidadeTab } from './ElegibilidadeTab';
+
 import { EligibilityRulesEditor } from './EligibilityRulesEditor';
 import { MarcaModeloExclusionEditor } from './MarcaModeloExclusionEditor';
 import { useQuery } from '@tanstack/react-query';
@@ -479,7 +479,7 @@ export function PlanFormModal({
                   <TabsList className="mb-4 flex-wrap">
                     <TabsTrigger value="basico">Básico</TabsTrigger>
                     <TabsTrigger value="beneficios">Coberturas e Benefícios</TabsTrigger>
-                    <TabsTrigger value="elegibilidade" disabled={!isEditing}>Elegibilidade</TabsTrigger>
+                    
                     <TabsTrigger value="regras" disabled={!isEditing}>Regras</TabsTrigger>
                     <TabsTrigger value="outros">Outros</TabsTrigger>
                   </TabsList>
@@ -806,13 +806,6 @@ export function PlanFormModal({
                     />
                   </TabsContent>
 
-                  <TabsContent value="elegibilidade">
-                    {plan?.id ? (
-                      <ElegibilidadeTab planoId={plan.id} linhaSlug={formData.linha_slug || ''} />
-                    ) : (
-                      <p className="text-sm text-muted-foreground py-4">Salve o plano primeiro para configurar elegibilidade.</p>
-                    )}
-                  </TabsContent>
 
                   <TabsContent value="regras" className="space-y-4">
                     {plan?.id ? (
