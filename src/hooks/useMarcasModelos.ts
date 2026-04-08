@@ -48,6 +48,59 @@ export function useToggleMarcaModelo() {
   });
 }
 
+export function useMarcasDistintas() {
+  return useQuery({
+    queryKey: ['marcas_distintas'],
+    queryFn: async () => {
+      const all: string[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data, error } = await supabase
+          .from('marcas_modelos')
+          .select('marca')
+          .eq('ativo', true)
+          .order('marca')
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data.map(d => d.marca));
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return [...new Set(all)].sort();
+    },
+  });
+}
+
+export function useModelosPorMarca(marca: string) {
+  return useQuery({
+    queryKey: ['modelos_por_marca', marca],
+    enabled: !!marca,
+    queryFn: async () => {
+      const all: string[] = [];
+      let from = 0;
+      const pageSize = 1000;
+      while (true) {
+        const { data, error } = await supabase
+          .from('marcas_modelos')
+          .select('modelo')
+          .eq('marca', marca)
+          .eq('ativo', true)
+          .not('modelo', 'is', null)
+          .order('modelo')
+          .range(from, from + pageSize - 1);
+        if (error) throw error;
+        if (!data || data.length === 0) break;
+        all.push(...data.filter(d => d.modelo).map(d => d.modelo as string));
+        if (data.length < pageSize) break;
+        from += pageSize;
+      }
+      return [...new Set(all)].sort();
+    },
+  });
+}
+
 export function useBulkInsertMarcasModelos() {
   const qc = useQueryClient();
   return useMutation({
