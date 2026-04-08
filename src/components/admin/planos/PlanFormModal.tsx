@@ -105,20 +105,6 @@ export function PlanFormModal({
     enabled: !!plan?.id && open,
   });
 
-  // Fetch available linha_slugs from price tables
-  const { data: availableLinhaSlugs } = useQuery({
-    queryKey: ['available-linha-slugs'],
-    queryFn: async () => {
-      const { data } = await supabase
-        .from('tabelas_preco_mensalidade')
-        .select('linha_slug')
-        .eq('is_active', true);
-      const slugs = new Set<string>();
-      data?.forEach(d => { if (d.linha_slug) slugs.add(d.linha_slug); });
-      return Array.from(slugs).sort();
-    },
-    enabled: open,
-  });
 
   // Fetch current region links for editing
   const { data: currentRegioes } = useQuery({
