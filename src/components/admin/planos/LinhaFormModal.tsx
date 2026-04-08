@@ -139,19 +139,23 @@ export function LinhaFormModal({
   };
 
   const handleSaveAnoRule = async (entityId: string) => {
+    const config = {
+      ano_min: anoMin ? parseInt(anoMin) : null,
+      ano_max: anoMax ? parseInt(anoMax) : null,
+    };
     if (anoEnabled && (anoMin || anoMax)) {
-      await saveRule.mutateAsync({
-        id: anoRule?.id,
-        entity_type: 'linha',
-        entity_id: entityId,
-        rule_type: 'ano_range',
-        rule_mode: 'include',
-        rule_config: {
-          ano_min: anoMin ? parseInt(anoMin) : null,
-          ano_max: anoMax ? parseInt(anoMax) : null,
-        },
-        is_active: true,
-      });
+      if (anoRule) {
+        await updateRule.mutateAsync({ id: anoRule.id, rule_config: config });
+      } else {
+        await saveRule.mutateAsync({
+          entity_type: 'linha',
+          entity_id: entityId,
+          rule_type: 'ano_range',
+          rule_mode: 'include',
+          rule_config: config,
+          is_active: true,
+        });
+      }
     } else if (!anoEnabled && anoRule) {
       await deleteRule.mutateAsync(anoRule.id);
     }
