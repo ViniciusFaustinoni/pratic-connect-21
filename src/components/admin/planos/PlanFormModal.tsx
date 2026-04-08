@@ -196,6 +196,7 @@ export function PlanFormModal({
         ano_fabricacao_maximo: p.ano_fabricacao_maximo?.toString() || '',
         additional_price: p.adicional_mensal?.toString() || '',
         desconto_percentual: p.desconto_percentual?.toString() || '',
+        cota_participacao: p.cota_participacao?.toString() || '',
         restriction_alert: p.restriction_alert || '',
         footer_note: p.footer_note || '',
         display_order: (p.ordem || 0).toString(),
