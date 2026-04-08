@@ -243,12 +243,6 @@ export function PlanFormModal({
     }
   }, [fullPlanData, plan, defaultProductLineId, currentRegioes]);
 
-  // Sync linha_slug from currentPrecoMap (handles late async loading)
-  useEffect(() => {
-    if (currentPrecoMap?.linha_slug) {
-      setFormData(prev => ({ ...prev, linha_slug: currentPrecoMap.linha_slug }));
-    }
-  }, [currentPrecoMap]);
 
   // Sync selectedRegioes from DB when editing (handles late async loading)
   useEffect(() => {
