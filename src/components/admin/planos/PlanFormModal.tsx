@@ -402,7 +402,7 @@ export function PlanFormModal({
                     <TabsTrigger value="basico">Básico</TabsTrigger>
                     <TabsTrigger value="beneficios">Coberturas e Benefícios</TabsTrigger>
                     
-                    <TabsTrigger value="regras" disabled={!isEditing}>Regras</TabsTrigger>
+                    
                     <TabsTrigger value="outros">Outros</TabsTrigger>
                   </TabsList>
 
