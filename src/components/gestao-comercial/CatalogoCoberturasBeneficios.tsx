@@ -7,7 +7,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
-import { Plus, Pencil, Trash2, Loader2, Filter, Copy } from 'lucide-react';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Plus, Pencil, Trash2, Loader2, Filter, Copy, Search, ArrowDownAZ, ArrowUpAZ } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { useDuplicateCobertura, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
 import { useMutation, useQueryClient } from '@tanstack/react-query';
@@ -382,6 +383,30 @@ export function CatalogoCoberturasBeneficios() {
   const [cobSheet, setCobSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [benSheet, setBenSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item?: any; type?: 'cobertura' | 'beneficio' }>({ open: false });
+  const [cobSearch, setCobSearch] = useState('');
+  const [benSearch, setBenSearch] = useState('');
+  const [cobSort, setCobSort] = useState<'default' | 'az' | 'za'>('default');
+  const [benSort, setBenSort] = useState<'default' | 'az' | 'za'>('default');
+
+  const filterAndSort = (items: any[], search: string, sort: 'default' | 'az' | 'za', type: 'cobertura' | 'beneficio') => {
+    let filtered = items;
+    if (search.trim()) {
+      const term = search.toLowerCase();
+      filtered = items.filter(item => {
+        const nome = (type === 'cobertura' ? item.nome : item.name) || '';
+        const desc = (type === 'cobertura' ? item.descricao : item.description) || '';
+        return nome.toLowerCase().includes(term) || desc.toLowerCase().includes(term);
+      });
+    }
+    if (sort !== 'default') {
+      const getName = (item: any) => (type === 'cobertura' ? item.nome : item.name) || '';
+      filtered = [...filtered].sort((a, b) => {
+        const cmp = getName(a).localeCompare(getName(b), 'pt-BR');
+        return sort === 'az' ? cmp : -cmp;
+      });
+    }
+    return filtered;
+  };
 
   const handleDelete = (justificativa: string) => {
     if (!deleteDialog.item || !deleteDialog.type) return;
@@ -413,11 +438,25 @@ export function CatalogoCoberturasBeneficios() {
         </div>
 
         <TabsContent value="coberturas">
-          <div className="flex justify-end mb-3">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar cobertura..." value={cobSearch} onChange={e => setCobSearch(e.target.value)} className="pl-8 h-9" />
+            </div>
+            <Select value={cobSort} onValueChange={(v: any) => setCobSort(v)}>
+              <SelectTrigger className="w-[140px] h-9">
+                <SelectValue placeholder="Ordenar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Padrão</SelectItem>
+                <SelectItem value="az">A → Z</SelectItem>
+                <SelectItem value="za">Z → A</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="sm" onClick={() => setCobSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Cobertura</Button>
           </div>
           <ItemList
-            items={coberturas}
+            items={filterAndSort(coberturas, cobSearch, cobSort, 'cobertura')}
             type="cobertura"
             onEdit={(item) => setCobSheet({ open: true, item })}
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
@@ -427,11 +466,25 @@ export function CatalogoCoberturasBeneficios() {
         </TabsContent>
 
         <TabsContent value="beneficios">
-          <div className="flex justify-end mb-3">
+          <div className="flex items-center gap-2 mb-3">
+            <div className="relative flex-1 max-w-xs">
+              <Search className="absolute left-2.5 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input placeholder="Buscar benefício..." value={benSearch} onChange={e => setBenSearch(e.target.value)} className="pl-8 h-9" />
+            </div>
+            <Select value={benSort} onValueChange={(v: any) => setBenSort(v)}>
+              <SelectTrigger className="w-[140px] h-9">
+                <SelectValue placeholder="Ordenar" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="default">Padrão</SelectItem>
+                <SelectItem value="az">A → Z</SelectItem>
+                <SelectItem value="za">Z → A</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="sm" onClick={() => setBenSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Novo Benefício</Button>
           </div>
           <ItemList
-            items={benefits}
+            items={filterAndSort(benefits, benSearch, benSort, 'beneficio')}
             type="beneficio"
             onEdit={(item) => setBenSheet({ open: true, item })}
             onToggle={(id, is_active) => toggleBen.mutate({ id, is_active })}
