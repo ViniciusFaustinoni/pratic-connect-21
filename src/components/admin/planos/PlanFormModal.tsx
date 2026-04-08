@@ -489,36 +489,6 @@ export function PlanFormModal({
                           placeholder="Ex: 100% FIPE"
                         />
                       </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="min_vehicle_year">Ano Mínimo<FieldHint text={PLAN_FIELD_HINTS.min_vehicle_year} /></Label>
-                        <Input
-                          id="min_vehicle_year"
-                          type="number"
-                          value={formData.min_vehicle_year}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              min_vehicle_year: e.target.value,
-                            }))
-                          }
-                          placeholder="Ex: 2005"
-                        />
-                      </div>
-                      <div className="space-y-2">
-                        <Label htmlFor="ano_fabricacao_maximo">Ano Máximo<FieldHint text={PLAN_FIELD_HINTS.ano_fabricacao_maximo || 'Ano máximo de fabricação aceito. Veículos acima deste ano NÃO verão este plano na Cotação e Calculadora.'} /></Label>
-                        <Input
-                          id="ano_fabricacao_maximo"
-                          type="number"
-                          value={formData.ano_fabricacao_maximo}
-                          onChange={(e) =>
-                            setFormData((prev) => ({
-                              ...prev,
-                              ano_fabricacao_maximo: e.target.value,
-                            }))
-                          }
-                          placeholder="Ex: 2004"
-                        />
-                      </div>
                     </div>
 
                     {/* Cota de Participação */}
