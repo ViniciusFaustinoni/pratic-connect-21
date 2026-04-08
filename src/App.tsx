@@ -163,8 +163,6 @@ const OficinaDetalhe = lazy(() => import("./pages/oficina/OficinaDetalhe"));
 const OrdensServicoList = lazy(() => import("./pages/oficina/OrdensServicoList"));
 const OrdemServicoDetalhePage = lazy(() => import("./pages/oficina/OrdemServicoDetalhe"));
 
-// Admin
-const PlanosAdmin = lazy(() => import("./pages/admin/PlanosAdmin"));
 
 // Configurações
 // ConfiguracoesLayout handled via LazyConfiguracoesLayout below
