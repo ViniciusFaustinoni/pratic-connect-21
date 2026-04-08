@@ -524,12 +524,16 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const productLineId = plano.product_line_id;
       const planoRules = allEligibilityRules.filter(r => r.entity_type === 'plano' && r.entity_id === plano.id);
       const planoHasMarcaModeloRules = planoRules.some(r => r.rule_type === 'marca_modelo');
+      const planoHasAnoRangeRules = planoRules.some(r => r.rule_type === 'ano_range');
 
-      // Verificar regras da LINHA (excluindo marca_modelo se o plano já define as suas)
+      // Verificar regras da LINHA (excluindo marca_modelo/ano_range se o plano já define as suas)
       if (productLineId) {
         let linhaRules = allEligibilityRules.filter(r => r.entity_type === 'linha' && r.entity_id === productLineId);
         if (planoHasMarcaModeloRules) {
           linhaRules = linhaRules.filter(r => r.rule_type !== 'marca_modelo');
+        }
+        if (planoHasAnoRangeRules) {
+          linhaRules = linhaRules.filter(r => r.rule_type !== 'ano_range');
         }
         if (linhaRules.length > 0 && !checkAllRules(linhaRules, vehicleCtx)) {
           negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Bloqueado por regra da linha' });
