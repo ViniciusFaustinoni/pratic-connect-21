@@ -193,6 +193,7 @@ export function PlanFormModal({
   });
 
   const [selectedBenefits, setSelectedBenefits] = useState<PlanBenefitInput[]>([]);
+  const [selectedCoberturas, setSelectedCoberturas] = useState<{ cobertura_id: string }[]>([]);
   const [pendingExclusions, setPendingExclusions] = useState<Map<string, string[]>>(new Map());
   const [cotasCategorias, setCotasCategorias] = useState<CotaCategoria[]>([]);
   const [selectedRegioes, setSelectedRegioes] = useState<string[]>([]);
