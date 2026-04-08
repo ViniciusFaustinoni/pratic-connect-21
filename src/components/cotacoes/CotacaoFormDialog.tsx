@@ -1453,209 +1453,17 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
             <Separator />
 
-            {/* BLOCO: DATA DE VENCIMENTO */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Calendar className="h-4 w-4 text-primary" />
-                Data de Vencimento
-              </h3>
-              
-              <p className="text-xs text-muted-foreground">
-                Selecione o dia de vencimento das mensalidades
-              </p>
-              
-              <div className="grid grid-cols-2 gap-3">
-                {opcoesVencimento.map((dia) => (
-                  <div
-                    key={dia}
-                    onClick={() => setDiaVencimento(dia)}
-                    className={cn(
-                      "relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md text-center",
-                      diaVencimento === dia
-                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
-                        : "border-border hover:border-primary/50"
-                    )}
-                  >
-                    <p className={cn(
-                      "text-2xl font-bold",
-                      diaVencimento === dia && "text-primary"
-                    )}>
-                      {String(dia).padStart(2, '0')}
-                    </p>
-                    <p className="text-xs text-muted-foreground mt-1">
-                      Todo dia {dia}
-                    </p>
-                    {diaVencimento === dia && (
-                      <div className="absolute top-2 right-2">
-                        <CheckCircle2 className="h-5 w-5 text-primary" />
-                      </div>
-                    )}
-                  </div>
-                ))}
-              </div>
-            </div>
+            {/* ============================================= */}
+            {/* BLOCO 2 — VEÍCULO                             */}
+            {/* ============================================= */}
 
-            <Separator />
-
-            {/* BLOCO: REGIÃO */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <MapPin className="h-4 w-4 text-primary" />
-                Região
-              </h3>
-              
-              <Select
-                value={regiaoSelecionada}
-                onValueChange={setRegiaoSelecionada}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder={regioesLoading ? 'Carregando...' : 'Selecione a região'} />
-                </SelectTrigger>
-                <SelectContent>
-                  {regioesAtivas.map((regiao) => (
-                    <SelectItem key={regiao.id} value={regiao.codigo}>
-                      {regiao.nome}
-                    </SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
-              <p className="text-xs text-muted-foreground">
-                A região define a tabela de preços aplicada
-              </p>
-            </div>
-
-            <Separator />
-
-            {/* BLOCO 0.3: USO DO VEÍCULO */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Car className="h-4 w-4 text-primary" />
-                Uso do Veículo
-              </h3>
-              
-              <Select
-                value={usoVeiculo}
-                onValueChange={setUsoVeiculo}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o uso do veículo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {tiposUsoAtivos.length > 0 ? (
-                    tiposUsoAtivos.map((tipo) => (
-                      <SelectItem key={tipo.value} value={tipo.value}>
-                        {tipo.label}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <>
-                      <SelectItem value="particular">Particular</SelectItem>
-                      <SelectItem value="aplicativo">Aplicativo (Uber, 99, etc)</SelectItem>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-              
-              {/* Alerta quando aplicativo é selecionado */}
-              {(usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app')) && (
-                <Alert className="border-primary/50 bg-primary/5">
-                  <Info className="h-4 w-4 text-primary" />
-                  <AlertDescription className="text-sm">
-                    Categoria APP: cota de participação será 8% (mínimo R$ 3.000).
-                  </AlertDescription>
-                </Alert>
-              )}
-            </div>
-
-            <Separator />
-
-            {/* BLOCO 0.4: TIPO DE PLACA */}
-            <div className="space-y-3">
-              <h3 className="text-sm font-semibold flex items-center gap-2">
-                <Car className="h-4 w-4 text-primary" />
-                Tipo de Placa
-              </h3>
-              
-              <Select
-                value={tipoPlacaSelecionado}
-                onValueChange={setTipoPlacaSelecionado}
-              >
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o tipo de placa" />
-                </SelectTrigger>
-                <SelectContent>
-                  <SelectItem value="nenhuma">Nenhuma</SelectItem>
-                  {tiposPlacaAtivos.length > 0 ? (
-                    tiposPlacaAtivos.map((tipo) => (
-                      <SelectItem key={tipo.value} value={tipo.value}>
-                        {tipo.label}
-                      </SelectItem>
-                    ))
-                  ) : (
-                    <>
-                      <SelectItem value="mercosul">Mercosul</SelectItem>
-                      <SelectItem value="antiga">Antiga</SelectItem>
-                    </>
-                  )}
-                </SelectContent>
-              </Select>
-            </div>
-
-            <Separator />
-
-            {/* BLOCO 0.6: CONSULTOR RESPONSÁVEL - Apenas para liderança (diretor/gerente/supervisor) */}
-            {podeAtribuirVendedor && (
-              <div className="space-y-3">
-                <h3 className="text-sm font-semibold flex items-center gap-2">
-                  <UserCheck className="h-4 w-4 text-primary" />
-                  Consultor Responsável
-                </h3>
-                
-                <FormField
-                  control={form.control}
-                  name="vendedor_id"
-                  render={({ field }) => (
-                    <FormItem>
-                      <Select 
-                        onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
-                        value={field.value || '_none'}
-                        disabled={vendedoresLoading}
-                      >
-                        <FormControl>
-                          <SelectTrigger>
-                            {vendedoresLoading ? (
-                              <Loader2 className="h-4 w-4 animate-spin" />
-                            ) : (
-                              <SelectValue placeholder="Selecione um consultor" />
-                            )}
-                          </SelectTrigger>
-                        </FormControl>
-                        <SelectContent>
-                          <SelectItem value="_none">Não atribuído</SelectItem>
-                          {vendedores.map((v) => (
-                            <SelectItem key={v.id} value={v.user_id}>
-                              {v.nome}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-              </div>
-            )}
-
-            <Separator />
-
-            {/* BLOCO 1: VEÍCULO */}
+            {/* Busca por placa */}
             <div className="space-y-3">
               <h3 className="text-sm font-semibold flex items-center gap-2">
                 <Car className="h-4 w-4 text-primary" />
                 Veículo
               </h3>
               
-              {/* Busca por placa */}
               <div className="flex gap-2">
                 <Input
                   placeholder="ABC1D23"
@@ -1779,7 +1587,52 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
             <Separator />
 
-            {/* BLOCO 1.5: VALOR FIPE */}
+            {/* Combustível */}
+            {(veiculoEncontrado || valorFipe > 0) && (
+              <>
+                <div className="space-y-3">
+                  <h3 className="text-sm font-semibold flex items-center gap-2">
+                    <Fuel className="h-4 w-4 text-primary" />
+                    Combustível
+                  </h3>
+                  
+                  <Select
+                    value={combustivelSelecionado}
+                    onValueChange={setCombustivelSelecionado}
+                  >
+                    <SelectTrigger>
+                      <SelectValue placeholder="Selecione o combustível" />
+                    </SelectTrigger>
+                    <SelectContent>
+                      {combustiveisBanco.length > 0 ? (
+                        combustiveisBanco.map((c) => (
+                          <SelectItem key={c.value} value={c.value}>
+                            {c.label}
+                          </SelectItem>
+                        ))
+                      ) : (
+                        <>
+                          <SelectItem value="flex">Flex (Gasolina/Etanol)</SelectItem>
+                          <SelectItem value="gasolina">Gasolina</SelectItem>
+                          <SelectItem value="diesel">Diesel</SelectItem>
+                          <SelectItem value="eletrico">Elétrico</SelectItem>
+                        </>
+                      )}
+                    </SelectContent>
+                  </Select>
+                  
+                  {veiculoEncontrado?.vehicleData?.combustivel && (
+                    <p className="text-xs text-muted-foreground">
+                      Detectado via FIPE: {veiculoEncontrado.vehicleData.combustivel}
+                    </p>
+                  )}
+                </div>
+
+                <Separator />
+              </>
+            )}
+
+            {/* Valor FIPE */}
             <div>
               <div className="flex items-center justify-between mb-2">
                 <Label className="text-sm font-semibold">Valor FIPE</Label>
@@ -1919,49 +1772,115 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               })()}
             </div>
 
-            {/* BLOCO: COMBUSTÍVEL (detectado via FIPE ou manual) */}
-            {(veiculoEncontrado || valorFipe > 0) && (
-              <>
-                <Separator />
-                <div className="space-y-3">
-                  <h3 className="text-sm font-semibold flex items-center gap-2">
-                    <Fuel className="h-4 w-4 text-primary" />
-                    Combustível
-                  </h3>
-                  
-                  <Select
-                    value={combustivelSelecionado}
-                    onValueChange={setCombustivelSelecionado}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o combustível" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {combustiveisBanco.length > 0 ? (
-                        combustiveisBanco.map((c) => (
-                          <SelectItem key={c.value} value={c.value}>
-                            {c.label}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <>
-                          <SelectItem value="flex">Flex (Gasolina/Etanol)</SelectItem>
-                          <SelectItem value="gasolina">Gasolina</SelectItem>
-                          <SelectItem value="diesel">Diesel</SelectItem>
-                          <SelectItem value="eletrico">Elétrico</SelectItem>
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  
-                  {veiculoEncontrado?.vehicleData?.combustivel && (
-                    <p className="text-xs text-muted-foreground">
-                      Detectado via FIPE: {veiculoEncontrado.vehicleData.combustivel}
-                    </p>
+            <Separator />
+
+            {/* ============================================= */}
+            {/* BLOCO 3 — CONDIÇÕES DO VEÍCULO                */}
+            {/* ============================================= */}
+
+            {/* Região */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <MapPin className="h-4 w-4 text-primary" />
+                Região
+              </h3>
+              
+              <Select
+                value={regiaoSelecionada}
+                onValueChange={setRegiaoSelecionada}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder={regioesLoading ? 'Carregando...' : 'Selecione a região'} />
+                </SelectTrigger>
+                <SelectContent>
+                  {regioesAtivas.map((regiao) => (
+                    <SelectItem key={regiao.id} value={regiao.codigo}>
+                      {regiao.nome}
+                    </SelectItem>
+                  ))}
+                </SelectContent>
+              </Select>
+              <p className="text-xs text-muted-foreground">
+                A região define a tabela de preços aplicada
+              </p>
+            </div>
+
+            <Separator />
+
+            {/* Uso do Veículo */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Car className="h-4 w-4 text-primary" />
+                Uso do Veículo
+              </h3>
+              
+              <Select
+                value={usoVeiculo}
+                onValueChange={setUsoVeiculo}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o uso do veículo" />
+                </SelectTrigger>
+                <SelectContent>
+                  {tiposUsoAtivos.length > 0 ? (
+                    tiposUsoAtivos.map((tipo) => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="particular">Particular</SelectItem>
+                      <SelectItem value="aplicativo">Aplicativo (Uber, 99, etc)</SelectItem>
+                    </>
                   )}
-                </div>
-              </>
-            )}
+                </SelectContent>
+              </Select>
+              
+              {/* Alerta quando aplicativo é selecionado */}
+              {(usoVeiculo.toLowerCase().includes('aplicativo') || usoVeiculo.toLowerCase().includes('app')) && (
+                <Alert className="border-primary/50 bg-primary/5">
+                  <Info className="h-4 w-4 text-primary" />
+                  <AlertDescription className="text-sm">
+                    Categoria APP: cota de participação será 8% (mínimo R$ 3.000).
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* Tipo de Placa */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Car className="h-4 w-4 text-primary" />
+                Tipo de Placa
+              </h3>
+              
+              <Select
+                value={tipoPlacaSelecionado}
+                onValueChange={setTipoPlacaSelecionado}
+              >
+                <SelectTrigger>
+                  <SelectValue placeholder="Selecione o tipo de placa" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem value="nenhuma">Nenhuma</SelectItem>
+                  {tiposPlacaAtivos.length > 0 ? (
+                    tiposPlacaAtivos.map((tipo) => (
+                      <SelectItem key={tipo.value} value={tipo.value}>
+                        {tipo.label}
+                      </SelectItem>
+                    ))
+                  ) : (
+                    <>
+                      <SelectItem value="mercosul">Mercosul</SelectItem>
+                      <SelectItem value="antiga">Antiga</SelectItem>
+                    </>
+                  )}
+                </SelectContent>
+              </Select>
+            </div>
 
             {/* Alerta dinâmico baseado no tipo de placa selecionado */}
             {alertaCategoria && (
@@ -1989,111 +1908,11 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
             <Separator />
 
-            {/* BLOCO 2.6: CENÁRIO VENDEDOR EXTERNO (antes da taxa) */}
-            {isVendedorExterno && (
-              <div className="space-y-2">
-                <Label className="text-sm font-semibold">Cenário de Adesão e Instalação *</Label>
-                <div className="grid grid-cols-2 gap-2">
-                  {([
-                    { value: 'cobra_rota' as CenarioExterno, label: 'Cobra Adesão + Rota', desc: 'Cliente paga adesão, instalação em rota' },
-                    { value: 'cobra_base' as CenarioExterno, label: 'Cobra Adesão + Base', desc: 'Cliente paga adesão, instalação na base' },
-                    { value: 'isenta_rota' as CenarioExterno, label: 'Isenta Adesão + Rota', desc: 'Sem adesão, instalação em rota' },
-                    { value: 'isenta_base' as CenarioExterno, label: 'Isenta Adesão + Base', desc: 'Sem adesão, instalação na base' },
-                  ]).map((cenario) => (
-                    <button
-                      key={cenario.value}
-                      type="button"
-                      onClick={() => {
-                        setCenarioExterno(cenario.value);
-                        if (cenario.value.startsWith('isenta')) {
-                          form.setValue('valor_adesao', 0);
-                          adesaoEditadaManualmente.current = true;
-                        } else if (cenarioExterno?.startsWith('isenta')) {
-                          adesaoEditadaManualmente.current = false;
-                          if (valorFipe && valorFipe > 0) {
-                            const adesaoCalculada = Math.max(valorFipe * (percentualAdesaoConfig / 100), minimoAdesaoConfig);
-                            form.setValue('valor_adesao', Math.round(adesaoCalculada * 100) / 100);
-                          }
-                        }
-                      }}
-                      className={cn(
-                        'p-3 rounded-lg border text-left transition-all text-sm',
-                        cenarioExterno === cenario.value
-                          ? 'border-primary bg-primary/10 ring-1 ring-primary'
-                          : 'border-border hover:border-primary/50'
-                      )}
-                    >
-                      <span className="font-medium block">{cenario.label}</span>
-                      <span className="text-xs text-muted-foreground">{cenario.desc}</span>
-                    </button>
-                  ))}
-                </div>
-                {!cenarioExterno && (
-                  <p className="text-xs text-destructive flex items-center gap-1">
-                    <AlertCircle className="h-3 w-3" />
-                    Selecione um cenário para continuar
-                  </p>
-                )}
-              </div>
-            )}
+            {/* ============================================= */}
+            {/* BLOCO 4 — PLANO                               */}
+            {/* ============================================= */}
 
-            {/* BLOCO 2.5: TAXA DE FILIAÇÃO — oculto para externo quando isento ou sem cenário */}
-            {(!isVendedorExterno || (cenarioExterno && cenarioExterno.startsWith('cobra'))) && (
-              <div>
-                <Label className="text-sm font-semibold">Taxa de Filiação *</Label>
-                <FormField
-                  control={form.control}
-                  name="valor_adesao"
-                  render={({ field }) => (
-                    <FormItem>
-                      <FormControl>
-                        <CurrencyInput 
-                          value={field.value}
-                          onChange={(val) => {
-                            field.onChange(val);
-                            adesaoEditadaManualmente.current = true;
-                          }}
-                          placeholder="R$ 0,00"
-                        />
-                      </FormControl>
-                      <FormMessage />
-                    </FormItem>
-                  )}
-                />
-                <p className="text-xs text-muted-foreground mt-1">
-                  Valor sugerido: {percentualAdesaoConfig}% da FIPE (mín. {formatCurrency(minimoAdesaoConfig)}). Altere conforme necessário.
-                </p>
-              </div>
-            )}
-
-            {/* Blocos informativos dinâmicos */}
-            <div className="space-y-2">
-              {/* Alerta de adesão abaixo do mínimo */}
-              {!isCenarioIsento && form.watch('valor_adesao') > 0 && form.watch('valor_adesao') < minimoAdesaoConfig && (
-                <Alert className="border-destructive/50 bg-destructive/10">
-                  <AlertTriangle className="h-4 w-4 text-destructive" />
-                  <AlertDescription className="text-sm text-destructive">
-                    Valor de adesão ({formatCurrency(form.watch('valor_adesao'))}) abaixo do mínimo configurado ({formatCurrency(minimoAdesaoConfig)}).
-                  </AlertDescription>
-                </Alert>
-              )}
-
-              {/* Repasse volante */}
-              {cenarioExterno?.includes('rota') && (
-                <Alert className="border-amber-500/50 bg-amber-500/10">
-                  <Info className="h-4 w-4 text-amber-600" />
-                  <AlertDescription className="text-sm">
-                    <span className="font-medium">Repasse obrigatório:</span> {formatCurrency(repasseVolante)} será descontado (instalação rota).
-                  </AlertDescription>
-                </Alert>
-              )}
-
-
-            </div>
-
-            <Separator />
-
-            {/* BLOCO 3: PLANOS - Sempre visível */}
+            {/* Selecione o Plano */}
             <div>
               <div className="flex items-center justify-between mb-3">
                 <h3 className="text-sm font-semibold flex items-center gap-2">
@@ -2253,7 +2072,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               )}
             </div>
 
-            {/* BLOCO 3.5: VALOR ADICIONAL (após seleção de plano) */}
+            {/* Valor Adicional */}
             <Separator />
             <div className="space-y-3">
               <div className="flex items-center gap-2">
@@ -2284,6 +2103,205 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                   </FormItem>
                 )}
               />
+            </div>
+
+            {/* Cenário Vendedor Externo */}
+            {isVendedorExterno && (
+              <>
+                <Separator />
+                <div className="space-y-2">
+                  <Label className="text-sm font-semibold">Cenário de Adesão e Instalação *</Label>
+                  <div className="grid grid-cols-2 gap-2">
+                    {([
+                      { value: 'cobra_rota' as CenarioExterno, label: 'Cobra Adesão + Rota', desc: 'Cliente paga adesão, instalação em rota' },
+                      { value: 'cobra_base' as CenarioExterno, label: 'Cobra Adesão + Base', desc: 'Cliente paga adesão, instalação na base' },
+                      { value: 'isenta_rota' as CenarioExterno, label: 'Isenta Adesão + Rota', desc: 'Sem adesão, instalação em rota' },
+                      { value: 'isenta_base' as CenarioExterno, label: 'Isenta Adesão + Base', desc: 'Sem adesão, instalação na base' },
+                    ]).map((cenario) => (
+                      <button
+                        key={cenario.value}
+                        type="button"
+                        onClick={() => {
+                          setCenarioExterno(cenario.value);
+                          if (cenario.value.startsWith('isenta')) {
+                            form.setValue('valor_adesao', 0);
+                            adesaoEditadaManualmente.current = true;
+                          } else if (cenarioExterno?.startsWith('isenta')) {
+                            adesaoEditadaManualmente.current = false;
+                            if (valorFipe && valorFipe > 0) {
+                              const adesaoCalculada = Math.max(valorFipe * (percentualAdesaoConfig / 100), minimoAdesaoConfig);
+                              form.setValue('valor_adesao', Math.round(adesaoCalculada * 100) / 100);
+                            }
+                          }
+                        }}
+                        className={cn(
+                          'p-3 rounded-lg border text-left transition-all text-sm',
+                          cenarioExterno === cenario.value
+                            ? 'border-primary bg-primary/10 ring-1 ring-primary'
+                            : 'border-border hover:border-primary/50'
+                        )}
+                      >
+                        <span className="font-medium block">{cenario.label}</span>
+                        <span className="text-xs text-muted-foreground">{cenario.desc}</span>
+                      </button>
+                    ))}
+                  </div>
+                  {!cenarioExterno && (
+                    <p className="text-xs text-destructive flex items-center gap-1">
+                      <AlertCircle className="h-3 w-3" />
+                      Selecione um cenário para continuar
+                    </p>
+                  )}
+                </div>
+              </>
+            )}
+
+            {/* Taxa de Filiação */}
+            {(!isVendedorExterno || (cenarioExterno && cenarioExterno.startsWith('cobra'))) && (
+              <>
+                <Separator />
+                <div>
+                  <Label className="text-sm font-semibold">Taxa de Filiação *</Label>
+                  <FormField
+                    control={form.control}
+                    name="valor_adesao"
+                    render={({ field }) => (
+                      <FormItem>
+                        <FormControl>
+                          <CurrencyInput 
+                            value={field.value}
+                            onChange={(val) => {
+                              field.onChange(val);
+                              adesaoEditadaManualmente.current = true;
+                            }}
+                            placeholder="R$ 0,00"
+                          />
+                        </FormControl>
+                        <FormMessage />
+                      </FormItem>
+                    )}
+                  />
+                  <p className="text-xs text-muted-foreground mt-1">
+                    Valor sugerido: {percentualAdesaoConfig}% da FIPE (mín. {formatCurrency(minimoAdesaoConfig)}). Altere conforme necessário.
+                  </p>
+                </div>
+              </>
+            )}
+
+            {/* Blocos informativos dinâmicos */}
+            <div className="space-y-2">
+              {/* Alerta de adesão abaixo do mínimo */}
+              {!isCenarioIsento && form.watch('valor_adesao') > 0 && form.watch('valor_adesao') < minimoAdesaoConfig && (
+                <Alert className="border-destructive/50 bg-destructive/10">
+                  <AlertTriangle className="h-4 w-4 text-destructive" />
+                  <AlertDescription className="text-sm text-destructive">
+                    Valor de adesão ({formatCurrency(form.watch('valor_adesao'))}) abaixo do mínimo configurado ({formatCurrency(minimoAdesaoConfig)}).
+                  </AlertDescription>
+                </Alert>
+              )}
+
+              {/* Repasse volante */}
+              {cenarioExterno?.includes('rota') && (
+                <Alert className="border-amber-500/50 bg-amber-500/10">
+                  <Info className="h-4 w-4 text-amber-600" />
+                  <AlertDescription className="text-sm">
+                    <span className="font-medium">Repasse obrigatório:</span> {formatCurrency(repasseVolante)} será descontado (instalação rota).
+                  </AlertDescription>
+                </Alert>
+              )}
+            </div>
+
+            <Separator />
+
+            {/* ============================================= */}
+            {/* BLOCO 5 — DADOS COMERCIAIS                    */}
+            {/* ============================================= */}
+
+            {/* Consultor Responsável */}
+            {podeAtribuirVendedor && (
+              <div className="space-y-3">
+                <h3 className="text-sm font-semibold flex items-center gap-2">
+                  <UserCheck className="h-4 w-4 text-primary" />
+                  Consultor Responsável
+                </h3>
+                
+                <FormField
+                  control={form.control}
+                  name="vendedor_id"
+                  render={({ field }) => (
+                    <FormItem>
+                      <Select 
+                        onValueChange={(value) => field.onChange(value === '_none' ? null : value)} 
+                        value={field.value || '_none'}
+                        disabled={vendedoresLoading}
+                      >
+                        <FormControl>
+                          <SelectTrigger>
+                            {vendedoresLoading ? (
+                              <Loader2 className="h-4 w-4 animate-spin" />
+                            ) : (
+                              <SelectValue placeholder="Selecione um consultor" />
+                            )}
+                          </SelectTrigger>
+                        </FormControl>
+                        <SelectContent>
+                          <SelectItem value="_none">Não atribuído</SelectItem>
+                          {vendedores.map((v) => (
+                            <SelectItem key={v.id} value={v.user_id}>
+                              {v.nome}
+                            </SelectItem>
+                          ))}
+                        </SelectContent>
+                      </Select>
+                      <FormMessage />
+                    </FormItem>
+                  )}
+                />
+              </div>
+            )}
+
+            {podeAtribuirVendedor && <Separator />}
+
+            {/* Data de Vencimento */}
+            <div className="space-y-3">
+              <h3 className="text-sm font-semibold flex items-center gap-2">
+                <Calendar className="h-4 w-4 text-primary" />
+                Data de Vencimento
+              </h3>
+              
+              <p className="text-xs text-muted-foreground">
+                Selecione o dia de vencimento das mensalidades
+              </p>
+              
+              <div className="grid grid-cols-2 gap-3">
+                {opcoesVencimento.map((dia) => (
+                  <div
+                    key={dia}
+                    onClick={() => setDiaVencimento(dia)}
+                    className={cn(
+                      "relative cursor-pointer rounded-lg border-2 p-4 transition-all hover:shadow-md text-center",
+                      diaVencimento === dia
+                        ? "border-primary bg-primary/5 ring-2 ring-primary/20"
+                        : "border-border hover:border-primary/50"
+                    )}
+                  >
+                    <p className={cn(
+                      "text-2xl font-bold",
+                      diaVencimento === dia && "text-primary"
+                    )}>
+                      {String(dia).padStart(2, '0')}
+                    </p>
+                    <p className="text-xs text-muted-foreground mt-1">
+                      Todo dia {dia}
+                    </p>
+                    {diaVencimento === dia && (
+                      <div className="absolute top-2 right-2">
+                        <CheckCircle2 className="h-5 w-5 text-primary" />
+                      </div>
+                    )}
+                  </div>
+                ))}
+              </div>
             </div>
 
             {/* BLOCO 4: RESUMO INLINE (quando planos selecionados) */}
