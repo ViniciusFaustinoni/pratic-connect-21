@@ -806,13 +806,6 @@ export function PlanFormModal({
                     />
                   </TabsContent>
 
-                  <TabsContent value="elegibilidade">
-                    {plan?.id ? (
-                      <ElegibilidadeTab planoId={plan.id} linhaSlug={formData.linha_slug || ''} />
-                    ) : (
-                      <p className="text-sm text-muted-foreground py-4">Salve o plano primeiro para configurar elegibilidade.</p>
-                    )}
-                  </TabsContent>
 
                   <TabsContent value="regras" className="space-y-4">
                     {plan?.id ? (
