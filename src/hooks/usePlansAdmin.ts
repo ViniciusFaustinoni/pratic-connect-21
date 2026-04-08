@@ -27,6 +27,7 @@ export interface PlanInput {
   ano_fabricacao_maximo?: number | null;
   additional_price?: number | null;
   desconto_percentual?: number | null;
+  cota_participacao?: number | null;
   restriction_alert?: string | null;
   footer_note?: string | null;
   display_order?: number;
