@@ -19,7 +19,7 @@ import {
 import { useCreateProductLine, useUpdateProductLine } from '@/hooks/usePlansAdmin';
 import type { ProductLine } from '@/types/plans';
 import { MarcaModeloExclusionEditor } from './MarcaModeloExclusionEditor';
-import { useRulesForEntity, useSaveRule, useDeleteRule } from '@/hooks/useEntityEligibilityRules';
+import { useRulesForEntity, useSaveRule, useUpdateRule, useDeleteRule } from '@/hooks/useEntityEligibilityRules';
 import { ScrollArea } from '@/components/ui/scroll-area';
 
 interface LinhaFormModalProps {
