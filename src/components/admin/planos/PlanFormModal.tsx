@@ -150,17 +150,10 @@ export function PlanFormModal({
     ano_fabricacao_maximo: '',
     additional_price: '',
     desconto_percentual: '',
-    cota_passeio_percent: '',
-    cota_passeio_min: '',
-    cota_desagio_percent: '',
-    cota_desagio_min: '',
-    cota_app_percent: '',
-    cota_app_min: '',
     restriction_alert: '',
     footer_note: '',
     display_order: '0',
     is_active: true,
-    linha_slug: '',
     categorias_veiculo: [] as string[],
   });
 
