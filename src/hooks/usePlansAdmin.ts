@@ -249,6 +249,20 @@ export function useUpdatePlan() {
         }
       }
 
+      // Update planos_coberturas - delete old and insert new
+      if (coberturas !== undefined) {
+        await supabase.from('planos_coberturas').delete().eq('plano_id', id);
+        if (coberturas.length > 0) {
+          const { error: cobError } = await supabase
+            .from('planos_coberturas')
+            .insert(coberturas.map(c => ({
+              plano_id: id,
+              cobertura_id: c.cobertura_id,
+            })));
+          if (cobError) throw cobError;
+        }
+      }
+
       // Update region links
       if (regioes !== undefined) {
         await supabase.from('planos_regioes').delete().eq('plano_id', id);
