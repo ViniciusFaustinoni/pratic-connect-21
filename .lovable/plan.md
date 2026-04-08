@@ -1,37 +1,26 @@
 
 
-## Plan: Cascading Marca/Modelo Selects from `marcas_modelos` Table
+## Plan: Fix Clickable Coverage/Benefit Names in Plan Edit Modal
 
-### Summary
-Replace the free-text Marca and Modelo inputs in `VeiculosAceitosEditor.tsx` with two cascading `SearchableSelect` components fed by the `marcas_modelos` database table. The selected modelo value is trimmed to its first word before saving.
+### Problem
+In `PlanFormModal.tsx`, the `SearchableSelectionSection` component wraps each coverage/benefit item in a `<button>` element (line 200). The Radix `Checkbox` component also renders as a `<button>` internally. **Nested `<button>` elements are invalid HTML** — browsers break the DOM structure, causing unpredictable behavior when clicking the text area (the name/description). This is why clicking the label area causes errors or navigates away.
 
-### Changes
+### Fix
+In `src/components/admin/planos/PlanFormModal.tsx`, change the outer `<button>` wrapper (lines 200-232) to a `<div>` with `role="button"`, `tabIndex={0}`, and `onKeyDown` for Enter/Space accessibility. This eliminates the nested-button issue while keeping the entire row clickable.
 
-**File: `src/hooks/useMarcasModelos.ts`** -- Add two new hooks
+```text
+Before (line 200):
+  <button type="button" onClick={...} className={...}>
 
-- `useMarcasDistintas()`: queries `marcas_modelos` selecting distinct `marca` values, ordered alphabetically. Returns `string[]`.
-- `useModelosPorMarca(marca: string)`: queries `marcas_modelos` where `marca = marca`, selects distinct `modelo`, ordered alphabetically. Enabled only when `marca` is non-empty. Returns `string[]`.
+After:
+  <div role="button" tabIndex={0} onClick={...} onKeyDown={(e) => { if (e.key === 'Enter' || e.key === ' ') { e.preventDefault(); onToggle(item.id); } }} className={...}>
+```
 
-Both use the existing supabase client and react-query.
+And change the closing `</button>` (line 232) to `</div>`.
 
-**File: `src/components/admin/planos/VeiculosAceitosEditor.tsx`**
-
-- Import `SearchableSelect` and the two new hooks
-- Replace the Marca `<Input>` with a `<SearchableSelect>` fed by `useMarcasDistintas()`. On change, reset the modelo selection.
-- Replace the Modelo `<Input>` with a `<SearchableSelect>` fed by `useModelosPorMarca(marca)`. Disabled until a marca is selected. The full FIPE model name is shown in the dropdown (e.g., "COROLLA XEi 2.0 Flex 16V Aut.").
-- In `handleAdd`, extract the first word of the selected modelo string: `selectedModelo.split(' ')[0]` — this is what gets saved in `rule_config.modelos[].modelo`.
-- Ano de, Ano até, Status, and all persistence logic remain unchanged.
-
-### Technical Detail
-
-The `marcas_modelos` table has ~11k rows. The marca select derives distinct brands client-side from the query. The modelo select filters by the chosen brand. Since the table may hit the 1000-row Supabase default limit, the hooks will use `.limit(50000)` or paginate to ensure all records load. Alternatively, the marca query can use a Postgres `distinct` via RPC, but the simpler approach is to fetch all and deduplicate client-side since `useMarcasModelos()` already does this.
-
-The first-word extraction (`modelo.split(' ')[0]`) produces values like `COROLLA`, `CIVIC`, `ONIX` — matching the partial-match logic already in `findModelEligibility`.
-
-### Files Modified
-- `src/hooks/useMarcasModelos.ts` — add 2 hooks
-- `src/components/admin/planos/VeiculosAceitosEditor.tsx` — swap inputs for selects
+### File Modified
+- `src/components/admin/planos/PlanFormModal.tsx` — lines 200 and 232 only
 
 ### Not Changed
-- Persistence logic, rule_config format, eligibility engine, any other component
+- Checkbox logic, toggle functions, form submission, or any other component
 
