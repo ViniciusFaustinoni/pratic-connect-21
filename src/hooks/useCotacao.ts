@@ -412,6 +412,11 @@ export function useCriarCotacao() {
         dados_extras: (payload.associado_id || payload.tipo_entrada) ? {
           associado_id: payload.associado_id || null,
           tipo_entrada: payload.tipo_entrada || null,
+          ...(payload.veiculo_antigo_id && {
+            veiculo_antigo_id: payload.veiculo_antigo_id,
+            veiculo_antigo_placa: payload.veiculo_antigo_placa || null,
+            veiculo_antigo_modelo: payload.veiculo_antigo_modelo || null,
+          }),
         } : null,
       };
 

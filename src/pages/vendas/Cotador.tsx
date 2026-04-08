@@ -242,6 +242,10 @@ export default function CotadorPage() {
   const inclusaoAssociadoId = searchParams.get('associado_id');
   const inclusaoTipoEntrada = searchParams.get('tipo_entrada');
   const isInclusaoVeiculo = inclusaoTipoEntrada === 'inclusao' && !!inclusaoAssociadoId;
+  const isSubstituicao = inclusaoTipoEntrada === 'substituicao' && !!inclusaoAssociadoId;
+  const veiculoAntigoId = searchParams.get('veiculo_antigo_id');
+  const veiculoAntigoPlaca = searchParams.get('veiculo_antigo_placa') || '';
+  const veiculoAntigoModelo = searchParams.get('veiculo_antigo_modelo') || '';
 
   const { data: templateWhatsapp } = useTemplateWhatsappCotacao();
   const { data: percentualAdesaoConfig = 1 } = useTaxaAdesaoPercentual();
@@ -266,7 +270,7 @@ export default function CotadorPage() {
         .single();
       return data;
     },
-    enabled: isInclusaoVeiculo,
+    enabled: isInclusaoVeiculo || isSubstituicao,
   });
   
   // Modo de entrada
@@ -828,13 +832,16 @@ export default function CotadorPage() {
         indicador_id: indicadorId || null,
         indicador_nome: indicadorNome || null,
         associado_id: inclusaoAssociadoId || null,
-        tipo_entrada: isInclusaoVeiculo ? 'inclusao' : null,
+        tipo_entrada: isSubstituicao ? 'substituicao' : isInclusaoVeiculo ? 'inclusao' : null,
+        veiculo_antigo_id: isSubstituicao ? veiculoAntigoId : undefined,
+        veiculo_antigo_placa: isSubstituicao ? veiculoAntigoPlaca : undefined,
+        veiculo_antigo_modelo: isSubstituicao ? veiculoAntigoModelo : undefined,
       });
 
       setCotacaoSalva(cotacaoData);
 
-      // Se for inclusão de veículo, navegar automaticamente para contratação
-      if (isInclusaoVeiculo && cotacaoData?.id) {
+      // Se for inclusão ou substituição, navegar automaticamente para contratação
+      if ((isInclusaoVeiculo || isSubstituicao) && cotacaoData?.id) {
         toast.success('Cotação salva! Redirecionando para contratação...');
         setSalvandoCotacao(false);
         navigate(`/vendas/contratos/novo?cotacao=${cotacaoData.id}`);

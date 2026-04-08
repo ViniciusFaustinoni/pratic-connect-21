@@ -15,6 +15,7 @@ import { EtapaPagamentoCotacao } from '@/components/cotacao-publica/EtapaPagamen
 import { AgendamentoVistoriaCompleta } from '@/components/cotacao-publica/AgendamentoVistoriaCompleta';
 import { DocumentosPendentesPublico } from '@/components/cotacao-publica/DocumentosPendentesPublico';
 import { AgendamentoBaseResumo } from '@/components/cotacao-publica/AgendamentoBaseResumo';
+import { AgendamentoSubstituicao } from '@/components/cotacao-publica/AgendamentoSubstituicao';
 import { NavegacaoEtapas } from '@/components/cotacao-publica/NavegacaoEtapas';
 import type { DadosPessoaisForm } from '@/components/cotacao-publica/FormularioDadosPessoais';
 import { useState, useEffect, useMemo, useCallback } from 'react';
@@ -88,6 +89,11 @@ export default function CotacaoContratacao() {
   const [navegacaoManual, setNavegacaoManual] = useState(false);
 
   const [planoSelecionadoId, setPlanoSelecionadoId] = useState<string | null>(null);
+
+  // Substituição: detectar se é substituição e controlar etapa de "mesmo local"
+  const dadosExtras = (cotacao as any)?.dados_extras as Record<string, any> | null;
+  const isSubstituicao = dadosExtras?.tipo_entrada === 'substituicao';
+  const [substituicaoMesmoLocal, setSubstituicaoMesmoLocal] = useState<boolean | null>(null);
 
   // Determinar etapa baseada no status para saber o que está concluído
   // IMPORTANTE: Se tipo_vistoria já está preenchido, considera vistoria como concluída (etapa 4+)
@@ -487,8 +493,15 @@ export default function CotacaoContratacao() {
                   animate="animate"
                   exit="exit"
                 >
-                  {/* Estado intermediário: Vistoria Concluída, Aguardando Análise */}
-                  {cotacao?.vistoria_concluida_em ? (
+                  {/* Substituição: pergunta sobre localização dos veículos */}
+                  {isSubstituicao && substituicaoMesmoLocal === null && !cotacao?.vistoria_concluida_em && !cotacao?.tipo_vistoria ? (
+                    <AgendamentoSubstituicao
+                      veiculoAntigoPlaca={dadosExtras?.veiculo_antigo_placa || '???'}
+                      veiculoAntigoModelo={dadosExtras?.veiculo_antigo_modelo || ''}
+                      veiculoNovoDescricao={[cotacao.veiculo_marca, cotacao.veiculo_modelo, cotacao.veiculo_ano].filter(Boolean).join(' ')}
+                      onConfirm={(mesmoLocal) => setSubstituicaoMesmoLocal(mesmoLocal)}
+                    />
+                  ) : cotacao?.vistoria_concluida_em ? (
                     <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
                       <CardContent className="py-12 text-center space-y-6">
                         <motion.div 

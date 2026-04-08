@@ -71,6 +71,9 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const [searchTerm, setSearchTerm] = useState('');
   const [selectedAssociadoId, setSelectedAssociadoId] = useState<string | null>(null);
   const [selectedAssociadoNome, setSelectedAssociadoNome] = useState('');
+  const [veiculoAntigoId, setVeiculoAntigoId] = useState<string | null>(null);
+  const [veiculoAntigoPlaca, setVeiculoAntigoPlaca] = useState('');
+  const [veiculoAntigoModelo, setVeiculoAntigoModelo] = useState('');
 
   // Migração CPF
   const [migracaoCpf, setMigracaoCpf] = useState('');
@@ -81,8 +84,10 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   const [migracaoCpfParaDialog, setMigracaoCpfParaDialog] = useState('');
 
   // Search hooks (only for non-migracao types)
+  // Substituição usa busca por placa primária; outros tipos buscam por associado
+  const isSubstituicao = selectedTipo === 'substituicao';
   const { data: associadoResults, isLoading: loadingAssociados } = useAssociadoSearch(
-    selectedTipo && selectedTipo !== 'migracao' ? searchTerm : ''
+    selectedTipo && selectedTipo !== 'migracao' && !isSubstituicao ? searchTerm : ''
   );
   const { data: placaResults, isLoading: loadingPlacas } = useBuscaPlaca(
     selectedTipo && selectedTipo !== 'migracao' ? searchTerm : ''
@@ -197,12 +202,16 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     setSearchTerm('');
     setSelectedAssociadoId(null);
     setSelectedAssociadoNome('');
+    setVeiculoAntigoId(null);
+    setVeiculoAntigoPlaca('');
+    setVeiculoAntigoModelo('');
     setMigracaoCpf('');
   }, [selectedTipo]);
 
   // Merge associado + placa results
   const mergedAssociadoResults = (() => {
     if (selectedTipo === 'migracao') return [];
+    if (isSubstituicao) return []; // Substituição usa lista de placas diretamente
     const map = new Map<string, AssociadoSearchResult>();
     (associadoResults || []).forEach(a => map.set(a.id, a));
     (placaResults || []).forEach(p => {
@@ -218,6 +227,15 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     });
     return Array.from(map.values());
   })();
+
+  // Handler para selecionar placa (substituição)
+  const handleSelectPlaca = (result: import('@/hooks/useBuscaPlaca').PlacaSearchResult) => {
+    setSelectedAssociadoId(result.associadoId);
+    setSelectedAssociadoNome(result.associadoNome);
+    setVeiculoAntigoId(result.veiculoId);
+    setVeiculoAntigoPlaca(result.placa);
+    setVeiculoAntigoModelo(`${result.marca} ${result.modelo}`);
+  };
 
   const handleSelectAssociado = (associado: AssociadoSearchResult) => {
     if (selectedTipo === 'substituicao' || selectedTipo === 'inclusao') {
@@ -241,7 +259,14 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     if (!selectedAssociadoId) return;
     if (selectedTipo === 'substituicao') {
       onOpenChange(false);
-      navigate(`/vendas/substituicao/${selectedAssociadoId}`);
+      const params = new URLSearchParams({
+        associado_id: selectedAssociadoId,
+        tipo_entrada: 'substituicao',
+        veiculo_antigo_id: veiculoAntigoId || '',
+        veiculo_antigo_placa: veiculoAntigoPlaca,
+        veiculo_antigo_modelo: veiculoAntigoModelo,
+      });
+      navigate(`/vendas/cotacao?${params.toString()}`);
     } else if (selectedTipo === 'inclusao') {
       onOpenChange(false);
       navigate(`/vendas/cotacao?associado_id=${selectedAssociadoId}&tipo_entrada=inclusao`);
@@ -421,6 +446,113 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                     </div>
                   )}
                 </div>
+              ) : isSubstituicao ? (
+                // === Substituição: busca por PLACA ===
+                <>
+                  <div className="p-3 border-b">
+                    <div className="relative">
+                      <Search className="absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
+                      <Input
+                        placeholder="Buscar pela placa do veículo atual..."
+                        className="pl-9 h-9 uppercase"
+                        value={searchTerm}
+                        onChange={(e) => {
+                          setSearchTerm(e.target.value.toUpperCase());
+                          setSelectedAssociadoId(null);
+                          setVeiculoAntigoId(null);
+                        }}
+                        autoFocus
+                      />
+                    </div>
+                  </div>
+
+                  <div className="max-h-[320px] overflow-y-auto">
+                    {selectedAssociadoId ? (
+                      <div className="p-3 space-y-3">
+                        <div className="flex items-center gap-2 text-sm">
+                          <Car className="h-4 w-4 text-muted-foreground" />
+                          <div>
+                            <span className="font-medium">{selectedAssociadoNome}</span>
+                            <p className="text-xs text-muted-foreground">
+                              Veículo atual: <span className="font-mono">{veiculoAntigoPlaca}</span> — {veiculoAntigoModelo}
+                            </p>
+                          </div>
+                        </div>
+
+                        {loadingDebitos ? (
+                          <div className="flex items-center justify-center py-6">
+                            <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
+                            <span className="text-sm text-muted-foreground ml-2">Verificando elegibilidade...</span>
+                          </div>
+                        ) : bloqueado ? (
+                          <Alert variant="destructive">
+                            <AlertTriangle className="h-4 w-4" />
+                            <AlertTitle>Substituição bloqueada</AlertTitle>
+                            <AlertDescription className="space-y-2">
+                              <p className="text-xs">O associado está inadimplente.</p>
+                              {temDebitos && debitosData?.debitosPorVeiculo.map((dv, i) => (
+                                <div key={i} className="flex justify-between items-center text-xs bg-destructive/10 px-2 py-1.5 rounded">
+                                  <span>{dv.marca} {dv.modelo} — {dv.placa}</span>
+                                  <span className="font-semibold">{formatCurrency(dv.total)} ({dv.quantidade}x)</span>
+                                </div>
+                              ))}
+                              {repasseConfig?.repasse_maior_percentual && (
+                                <p className="text-xs mt-2 font-medium">
+                                  Repasse maior: {repasseConfig.repasse_maior_percentual}%
+                                  {repasseConfig.repasse_maior_descricao && ` — ${repasseConfig.repasse_maior_descricao}`}
+                                </p>
+                              )}
+                            </AlertDescription>
+                          </Alert>
+                        ) : (
+                          <div className="space-y-2">
+                            <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/50 border border-border">
+                              <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
+                              <span className="text-sm font-medium">Associado elegível para substituição</span>
+                            </div>
+                            <Button className="w-full" onClick={handleProsseguir}>
+                              Prosseguir — Cotar novo veículo
+                            </Button>
+                          </div>
+                        )}
+                      </div>
+                    ) : (
+                      <div className="p-1">
+                        {loadingPlacas && searchTerm.length >= 3 && (
+                          <div className="flex items-center justify-center py-6">
+                            <Loader2 className="h-4 w-4 animate-spin text-muted-foreground" />
+                          </div>
+                        )}
+
+                        {!loadingPlacas && searchTerm.length >= 3 && (!placaResults || placaResults.length === 0) && (
+                          <p className="text-sm text-muted-foreground text-center py-6">Nenhum veículo ativo encontrado com esta placa</p>
+                        )}
+
+                        {searchTerm.length < 3 && (
+                          <p className="text-xs text-muted-foreground text-center py-6">
+                            Digite pelo menos 3 caracteres da placa
+                          </p>
+                        )}
+
+                        {(placaResults || []).map((p) => (
+                          <button
+                            key={p.veiculoId}
+                            onClick={() => handleSelectPlaca(p)}
+                            className="w-full flex items-center justify-between px-3 py-2.5 rounded-lg hover:bg-accent/50 transition-colors text-left"
+                          >
+                            <div className="min-w-0">
+                              <p className="text-sm font-medium font-mono">{p.placa}</p>
+                              <p className="text-xs text-muted-foreground">{p.marca} {p.modelo} · {p.associadoNome}</p>
+                            </div>
+                            <Badge variant="outline" className="text-[10px] shrink-0 ml-2">
+                              {p.associadoStatus}
+                            </Badge>
+                          </button>
+                        ))}
+                      </div>
+                    )}
+                  </div>
+                </>
               ) : (
                 // === Other types: associado search ===
                 <>
@@ -441,14 +573,14 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                   </div>
 
                   <div className="max-h-[320px] overflow-y-auto">
-                    {selectedAssociadoId && (selectedTipo === 'substituicao' || selectedTipo === 'inclusao') ? (
+                    {selectedAssociadoId && selectedTipo === 'inclusao' ? (
                       <div className="p-3 space-y-3">
                         <div className="flex items-center gap-2 text-sm">
                           <Car className="h-4 w-4 text-muted-foreground" />
                           <span className="font-medium">{selectedAssociadoNome}</span>
                         </div>
 
-                        {(loadingDebitos || (selectedTipo === 'inclusao' && loadingAssociadoInclusao)) ? (
+                        {(loadingDebitos || loadingAssociadoInclusao) ? (
                           <div className="flex items-center justify-center py-6">
                             <Loader2 className="h-5 w-5 animate-spin text-muted-foreground" />
                             <span className="text-sm text-muted-foreground ml-2">Verificando elegibilidade...</span>
@@ -456,9 +588,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                         ) : bloqueado ? (
                           <Alert variant="destructive">
                             <AlertTriangle className="h-4 w-4" />
-                            <AlertTitle>
-                              {selectedTipo === 'inclusao' ? 'Inclusão bloqueada' : 'Substituição bloqueada'}
-                            </AlertTitle>
+                            <AlertTitle>Inclusão bloqueada</AlertTitle>
                             <AlertDescription className="space-y-2">
                               <p className="text-xs">
                                 {inclusaoStatusCheck === 'debitos'
@@ -467,7 +597,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                                   ? `O associado está com status "${associadoInclusaoData?.status}". Apenas associados ativos podem incluir novos veículos.`
                                   : inclusaoStatusCheck === 'limite_atingido'
                                   ? `O associado já possui ${associadoInclusaoData?.veiculos.length} veículo(s) ativo(s), atingindo o limite máximo de ${limiteVeiculosConfig} configurado.`
-                                  : 'O associado está inadimplente. Aplica-se a Regra do Repasse Maior.'}
+                                  : 'O associado está inadimplente.'}
                               </p>
                               {temDebitos && debitosData?.debitosPorVeiculo.map((dv, i) => (
                                 <div key={i} className="flex justify-between items-center text-xs bg-destructive/10 px-2 py-1.5 rounded">
@@ -475,15 +605,9 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
                                   <span className="font-semibold">{formatCurrency(dv.total)} ({dv.quantidade}x)</span>
                                 </div>
                               ))}
-                              {selectedTipo === 'substituicao' && repasseConfig?.repasse_maior_percentual && (
-                                <p className="text-xs mt-2 font-medium">
-                                  Repasse maior: {repasseConfig.repasse_maior_percentual}%
-                                  {repasseConfig.repasse_maior_descricao && ` — ${repasseConfig.repasse_maior_descricao}`}
-                                </p>
-                              )}
                             </AlertDescription>
                           </Alert>
-                        ) : selectedTipo === 'inclusao' && inclusaoStatusCheck === 'aprovado' ? (
+                        ) : inclusaoStatusCheck === 'aprovado' ? (
                           <div className="space-y-3">
                             <div className="flex items-center gap-2 p-3 rounded-lg bg-accent/50 border border-border">
                               <CheckCircle2 className="h-4 w-4 text-primary shrink-0" />
