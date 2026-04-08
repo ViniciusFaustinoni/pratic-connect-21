@@ -27,19 +27,12 @@ export interface PlanInput {
   ano_fabricacao_maximo?: number | null;
   additional_price?: number | null;
   desconto_percentual?: number | null;
-  cota_passeio_percent?: number | null;
-  cota_passeio_min?: number | null;
-  cota_desagio_percent?: number | null;
-  cota_desagio_min?: number | null;
-  cota_app_percent?: number | null;
-  cota_app_min?: number | null;
   restriction_alert?: string | null;
   footer_note?: string | null;
   display_order?: number;
   is_active?: boolean;
   benefits?: PlanBenefitInput[];
   coberturas?: { cobertura_id: string }[];
-  linha_slug?: string | null;
   categorias_veiculo?: string | null;
   regioes?: string[];
 }
