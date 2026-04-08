@@ -211,6 +211,7 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
   // Merge associado + placa results
   const mergedAssociadoResults = (() => {
     if (selectedTipo === 'migracao') return [];
+    if (isSubstituicao) return []; // Substituição usa lista de placas diretamente
     const map = new Map<string, AssociadoSearchResult>();
     (associadoResults || []).forEach(a => map.set(a.id, a));
     (placaResults || []).forEach(p => {
@@ -226,6 +227,15 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
     });
     return Array.from(map.values());
   })();
+
+  // Handler para selecionar placa (substituição)
+  const handleSelectPlaca = (result: import('@/hooks/useBuscaPlaca').PlacaSearchResult) => {
+    setSelectedAssociadoId(result.associadoId);
+    setSelectedAssociadoNome(result.associadoNome);
+    setVeiculoAntigoId(result.veiculoId);
+    setVeiculoAntigoPlaca(result.placa);
+    setVeiculoAntigoModelo(`${result.marca} ${result.modelo}`);
+  };
 
   const handleSelectAssociado = (associado: AssociadoSearchResult) => {
     if (selectedTipo === 'substituicao' || selectedTipo === 'inclusao') {
