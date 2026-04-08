@@ -10,6 +10,7 @@ import {
   FileCheck,
   Settings,
   ChevronDown,
+  ChevronRight,
   Shield,
   Wrench,
   MapPin,
@@ -73,6 +74,7 @@ import {
   Settings2,
   GraduationCap,
   UserSearch,
+  ShoppingCart,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
