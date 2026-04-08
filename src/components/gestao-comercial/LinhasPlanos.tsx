@@ -222,7 +222,7 @@ export function LinhasPlanos() {
         </div>
         <div className="flex gap-2">
           <Button size="sm" variant="outline" onClick={() => setImportModal(true)}><Upload className="h-4 w-4 mr-1" />Importar</Button>
-          <Button size="sm" onClick={() => setLinhaSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Linha</Button>
+          <Button size="sm" onClick={() => setLinhaModal({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Linha</Button>
         </div>
       </div>
 
