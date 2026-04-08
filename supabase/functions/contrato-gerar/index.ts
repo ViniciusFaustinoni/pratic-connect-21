@@ -639,13 +639,42 @@ serve(async (req) => {
       console.log('Novo veículo criado:', veiculoId);
     }
 
-    // 8. Calcular carência dinamicamente
-    const carenciaDias = await getConfiguracaoNumero(supabase, 'carencia_dias_padrao', 120);
+    // 8. Calcular carência dinamicamente — baseada no catálogo de coberturas do plano
+    const carenciaDiasPadrao = await getConfiguracaoNumero(supabase, 'carencia_dias_padrao', 120);
     const carenciaVidrosDias = await getConfiguracaoNumero(supabase, 'carencia_beneficio_vidros_dias', 120);
     const tipoEntrada = cotacao.tipo_entrada || 'adesao';
     const hoje = new Date().toISOString().split('T')[0];
     let dataCarenciaInicio: string | null = null;
     let dataCarenciaFim: string | null = null;
+
+    // Buscar carências individuais do catálogo de coberturas vinculadas ao plano
+    let carenciaDias = carenciaDiasPadrao;
+    const planoIdCarencia = cotacao.plano_escolhido_id || cotacao.plano_id;
+    if (planoIdCarencia) {
+      try {
+        const { data: coberturasCatalogo } = await supabase
+          .from('planos_coberturas')
+          .select('cobertura_id, coberturas:cobertura_id(carencia_ativa, carencia_dias)')
+          .eq('plano_id', planoIdCarencia);
+
+        if (coberturasCatalogo?.length) {
+          const diasPorCobertura = coberturasCatalogo
+            .map((pc: any) => {
+              const cob = pc.coberturas;
+              if (cob?.carencia_ativa) return cob.carencia_dias || carenciaDiasPadrao;
+              return 0;
+            })
+            .filter((d: number) => d > 0);
+
+          if (diasPorCobertura.length > 0) {
+            carenciaDias = Math.max(...diasPorCobertura);
+            console.log(`[CONTRATO-GERAR] Carência calculada do catálogo: max=${carenciaDias} dias (${diasPorCobertura.length} coberturas com carência ativa)`);
+          }
+        }
+      } catch (err) {
+        console.warn('[CONTRATO-GERAR] Erro ao buscar carências do catálogo, usando padrão:', err);
+      }
+    }
 
     // Carência de vidros — sempre calculada para todos os tipos de entrada
     let dataCarenciaVidrosInicio: string | null = hoje;

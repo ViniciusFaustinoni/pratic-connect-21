@@ -8,6 +8,7 @@ import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { gerarPosicoesAssinatura, buscarPosicoesConfig } from "../_shared/autentique-positions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/termo-afiliacao-template.ts";
+import { filterEligibleItems } from "../_shared/eligibility-filter.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa, buscarRegrasVenda, buscarRegrasDepreciacao } from "../_shared/termo-afiliacao-utils.ts";
 import { 
   substituirVariaveis, 
@@ -376,39 +377,60 @@ serve(async (req) => {
       templateData.regrasVenda = regrasVenda;
     }
 
-    // ============= BUSCAR COBERTURAS E BENEFÍCIOS DO PLANO =============
+    // ============= BUSCAR COBERTURAS E BENEFÍCIOS DO PLANO (COM FILTRO DE ELEGIBILIDADE) =============
     const planoId = contrato.planos?.id || contrato.plano_id;
     if (planoId) {
       try {
         const [{ data: coberturasData }, { data: beneficiosData }] = await Promise.all([
           supabase
             .from('planos_coberturas')
-            .select('valor_personalizado, carencia_dias, franquia_percentual, coberturas:cobertura_id(nome, descricao)')
+            .select('cobertura_id, valor_personalizado, carencia_dias, franquia_percentual, coberturas:cobertura_id(id, nome, descricao)')
             .eq('plano_id', planoId),
           supabase
             .from('planos_beneficios')
-            .select('custom_value, benefits:benefit_id(name, description)')
+            .select('benefit_id, custom_value, benefits:benefit_id(id, name, description)')
             .eq('plano_id', planoId),
         ]);
 
-        if (coberturasData?.length) {
-          templateData.plano.coberturas_detalhadas = coberturasData.map((pc: any) => ({
+        // Aplicar filtro de elegibilidade baseado no veículo do contrato
+        const veiculoParams = {
+          valor_fipe: contrato.veiculo_valor_fipe || contrato.valor_fipe,
+          regiao: contrato.regiao || contrato.cliente_uf,
+          combustivel: contrato.veiculo_combustivel,
+          tipo_placa: veiculoDB?.flag_placa_vermelha ? 'vermelha' : 'normal',
+          tipo_uso: contrato.uso_aplicativo ? 'aplicativo' : 'particular',
+        };
+
+        const cobIds = (coberturasData || []).map((pc: any) => pc.cobertura_id).filter(Boolean);
+        const benIds = (beneficiosData || []).map((pb: any) => pb.benefit_id).filter(Boolean);
+
+        const { coberturas: cobElegiveis, beneficios: benElegiveis } = await filterEligibleItems(
+          supabase,
+          coberturasData || [],
+          beneficiosData || [],
+          veiculoParams,
+          cobIds,
+          benIds
+        );
+
+        if (cobElegiveis.length) {
+          templateData.plano.coberturas_detalhadas = cobElegiveis.map((pc: any) => ({
             nome: pc.coberturas?.nome || '',
             descricao: pc.coberturas?.descricao || '',
             valor_personalizado: pc.valor_personalizado || '',
             carencia_dias: pc.carencia_dias,
             franquia_percentual: pc.franquia_percentual,
           }));
-          console.log(`[autentique-create] ${coberturasData.length} coberturas carregadas`);
+          console.log(`[autentique-create] ${cobElegiveis.length} coberturas elegíveis (de ${(coberturasData || []).length} total)`);
         }
 
-        if (beneficiosData?.length) {
-          templateData.plano.beneficios_detalhados = beneficiosData.map((pb: any) => ({
+        if (benElegiveis.length) {
+          templateData.plano.beneficios_detalhados = benElegiveis.map((pb: any) => ({
             nome: pb.benefits?.name || '',
             descricao: pb.benefits?.description || '',
             valor_personalizado: pb.custom_value || '',
           }));
-          console.log(`[autentique-create] ${beneficiosData.length} benefícios carregados`);
+          console.log(`[autentique-create] ${benElegiveis.length} benefícios elegíveis (de ${(beneficiosData || []).length} total)`);
         }
       } catch (err) {
         console.warn('[autentique-create] Erro ao buscar coberturas/benefícios (não-bloqueante):', err);

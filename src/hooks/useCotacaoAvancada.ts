@@ -79,6 +79,11 @@ export interface CotacaoSalva {
 // HOOKS DE DADOS
 // ============================================
 
+/**
+ * @deprecated Use usePlanosCotacao (motor unificado) em vez deste hook.
+ * Este hook usa tabelas legadas (plano_preco_map, tabelas_preco_mensalidade)
+ * que serão removidas. Mantido temporariamente para QuoteCalculatorModal.
+ */
 export function usePlanosParaCotacao(valorFipe: number, usoAplicativo: boolean, regiao: string = 'rj', combustivel: string = 'gasolina') {
   return useQuery({
     queryKey: ['planos-cotacao-avancada', valorFipe, usoAplicativo, regiao, combustivel],
