@@ -380,6 +380,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       modelo: p.modelo,
       tipoUso: p.usoApp ? 'aplicativo' : 'particular',
       combustivel: p.combustivel,
+      tipoPlaca: p.categoria,
     };
   };
 
@@ -408,116 +409,16 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
 
     for (const plano of planosBanco) {
       const linha = plano.linha?.toLowerCase() || null;
-      const tipoUsoPlano = plano.tipo_uso?.toLowerCase() || '';
-      const categoriaPlano = plano.categoria?.toLowerCase() || '';
       
       // Usar product_lines para regras dinâmicas
       const plProductLine = (plano as any).product_lines;
       const vehicleType = plProductLine?.vehicle_type || null;
-      const requiresRecentYear = plProductLine?.requires_recent_year || false;
       const sortPriority = plProductLine?.sort_priority || 100;
-
-      // Filtrar por tipo de uso: passeio vs aplicativo
-      if (params.usoApp && tipoUsoPlano !== 'aplicativo' && tipoUsoPlano !== 'ambos') {
-        // APP + deságio: planos 'passeio' da linha select passam (preço será de deságio, não APP)
-        const appComDesagioAtivo = !!categoria && categoria !== 'nenhuma'
-          && categoriasQueSobrepoeApp.includes(categoria);
-        const isLinhaSelect = plProductLine?.slug?.toLowerCase()?.startsWith('select');
-        if (!(appComDesagioAtivo && tipoUsoPlano === 'passeio' && isLinhaSelect)) {
-          continue;
-        }
-      }
-      if (!params.usoApp && tipoUsoPlano === 'aplicativo') continue;
-
-      // Filtro complementar: planos cujo NOME contém "Aplicativo" só aparecem em modo APP
-      // (cobre casos onde tipo_uso está incorretamente como 'passeio')
-      const nomeContainApp = (plano.nome || '').toLowerCase().includes('aplicativo');
-      if (!params.usoApp && nomeContainApp) continue;
-      if (params.usoApp && !nomeContainApp && tipoUsoPlano === 'passeio') {
-        // Em modo app, se há um plano irmão com "Aplicativo" no nome, ocultar o passeio
-        const temIrmaoApp = planosBanco.some(p2 =>
-          p2.id !== plano.id && p2.ativo &&
-          (p2.nome || '').toLowerCase().includes('aplicativo') &&
-          (plano.nome || '').split(' ').slice(0, 2).join(' ').toLowerCase() ===
-          (p2.nome || '').split(' ').slice(0, 2).join(' ').toLowerCase()
-        );
-        // Se tem irmão app, o passeio é oculto em modo app (o irmão aparece no lugar)
-        if (temIrmaoApp) continue;
-      }
-
-      // Filtrar motos/carros/elétricos usando vehicle_type e linha_slug do banco
       const plSlug = plProductLine?.slug?.toLowerCase() || '';
+
+      // Filtrar motos/carros usando vehicle_type da product_line
       if (tipoVeiculo === 'moto' && vehicleType !== 'motorcycle') continue;
-      if (tipoVeiculo === 'carro' && (vehicleType === 'motorcycle' || plSlug === 'eletrico')) continue;
-
-      // Verificar ano mínimo
-      const anoMinimo = plano.ano_minimo || plano.ano_minimo_veiculo || plano.ano_fabricacao_minimo || 0;
-      if (anoMinimo > 0 && anoVeiculoNum < anoMinimo) continue;
-
-      // Verificar ano máximo (ex: Especial aceita até 2004)
-      const anoMaximo = plano.ano_fabricacao_maximo || null;
-      if (anoMaximo && anoVeiculoNum > anoMaximo) continue;
-
-      // Verificar FIPE
-      if (plano.fipe_minima && valorFipe < Number(plano.fipe_minima)) continue;
-      if (plano.fipe_maxima && valorFipe > Number(plano.fipe_maxima)) continue;
-
-      // Regra de ano recente usando campo do banco
-      if (requiresRecentYear && anoVeiculoNum < anoAtual - 1) continue;
-
-      // Filtrar linhas que não suportam uso de aplicativo (dinâmico via product_lines)
-      if (params.usoApp && plProductLine?.supports_app === false) {
-        continue;
-      }
-
-      // Filtrar por categorias bloqueadas no product_line
-      // Nota: 'aplicativo' NÃO é exceção — o bloqueio por categoria é independente do uso (app/passeio)
-      const blockedCategories: string[] = plProductLine?.blocked_categories || [];
-      if (categoria && categoria !== 'nenhuma' 
-          && blockedCategories.length > 0 && blockedCategories.includes(categoria)) {
-        continue;
-      }
-
-      // ── Filtro de variantes Diesel ──
-      // Planos com "diesel" no código/nome só aparecem para veículos diesel
-      const codigoLower = (plano.codigo || '').toLowerCase();
-      const nomeLower = (plano.nome || '').toLowerCase();
-      const isDieselPlan = codigoLower.includes('diesel') || nomeLower.includes('diesel');
-      const combustivelVeiculo = (combustivel || 'flex').toLowerCase();
-      const veiculoIsDiesel = combustivelVeiculo === 'diesel';
-      
-      if (isDieselPlan && !veiculoIsDiesel) continue;
-      if (!isDieselPlan && veiculoIsDiesel) continue;
-
-      // ── Filtro de variantes Deságio ──
-      // Planos com "deságio"/"desagio" no código/nome só aparecem quando há categoria de deságio selecionada
-      const isDesagioPlan = codigoLower.includes('desagio') || codigoLower.includes('des-gio')
-        || nomeLower.includes('deságio') || nomeLower.includes('desagio');
-      const isDesagioCategoria = !!categoria && categoria !== 'nenhuma'
-        && categoriasDesagio.includes(categoria);
-      
-      if (isDesagioPlan && !isDesagioCategoria) continue;
-      if (!isDesagioPlan && isDesagioCategoria) continue;
-
-
-      // SELECT EXCLUSIVE: ocultar quando APP + categoria de deságio combinam
-      const isAppComDesagio = params.usoApp && !!categoria && categoria !== 'nenhuma'
-        && categoriasQueSobrepoeApp.includes(categoria);
-      if (isAppComDesagio && (plano.codigo?.toLowerCase().includes('exclusive') || plSlug === 'select-exclusive')) {
-        continue;
-      }
-
-      // Filtrar por categorias aceitas no plano (campo categoria do plano)
-      const categoriasAceitasPlano = categoriaPlano
-        ? categoriaPlano.split(',').map((c: string) => c.trim().toLowerCase()).filter(Boolean)
-        : [];
-      if (categoriasAceitasPlano.length > 0 && categoria && categoria !== 'nenhuma') {
-        const categoriaLower = categoria.toLowerCase();
-        // Se o plano define categorias aceitas e a categoria do veículo não está entre elas, excluir
-        if (!categoriasAceitasPlano.includes(categoriaLower) && !categoriasAceitasPlano.includes('todos')) {
-          continue;
-        }
-      }
+      if (tipoVeiculo === 'carro' && vehicleType === 'motorcycle') continue;
 
       // ── Regras unificadas de elegibilidade (entity_eligibility_rules) ──
       // Lógica de sobrescrita: regras marca_modelo do PLANO sobrescrevem as da LINHA
@@ -811,7 +712,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         categoriaVeiculo: categoria,
         cotaDesagio: Number(plano.cota_desagio) || undefined,
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
-        anoMinimo: anoMinimo || undefined,
+        anoMinimo: undefined,
         elegibilidadeStatus,
         precoDesagioAplicado: false,
       });
