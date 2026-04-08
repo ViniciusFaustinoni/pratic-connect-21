@@ -144,8 +144,6 @@ export function PlanFormModal({
     badge_text: '',
     badge_color: '',
     coverage_type: '',
-    min_vehicle_year: '',
-    ano_fabricacao_maximo: '',
     additional_price: '',
     desconto_percentual: '',
     cota_participacao: '',
