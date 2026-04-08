@@ -25,8 +25,6 @@ interface ModeloEntry {
   ano_min: number | null;
   ano_max: number | null;
   status: 'aceito' | 'limitado' | 'negado';
-  combustivel: string;
-  cobertura_fipe: number;
 }
 
 interface VeiculosAceitosEditorProps {
@@ -37,15 +35,6 @@ const STATUS_OPTIONS = [
   { value: 'aceito', label: 'Aceito' },
   { value: 'limitado', label: 'Limitado' },
   { value: 'negado', label: 'Negado' },
-];
-
-const COMBUSTIVEL_OPTIONS = [
-  { value: 'qualquer', label: 'Qualquer' },
-  { value: 'gasolina', label: 'Gasolina' },
-  { value: 'flex', label: 'Flex' },
-  { value: 'diesel', label: 'Diesel' },
-  { value: 'eletrico', label: 'Elétrico' },
-  { value: 'gnv', label: 'GNV' },
 ];
 
 const statusColors: Record<string, string> = {
@@ -68,8 +57,6 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
   const [anoMin, setAnoMin] = useState('');
   const [anoMax, setAnoMax] = useState('');
   const [status, setStatus] = useState<'aceito' | 'limitado' | 'negado'>('aceito');
-  const [combustivel, setCombustivel] = useState('qualquer');
-  const [coberturaFipe, setCoberturaFipe] = useState('100');
 
   const isPending = saveRule.isPending || updateRule.isPending || deleteRule.isPending;
 
@@ -82,8 +69,6 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
       ano_min: anoMin ? parseInt(anoMin) : null,
       ano_max: anoMax ? parseInt(anoMax) : null,
       status,
-      combustivel,
-      cobertura_fipe: parseInt(coberturaFipe) || 100,
     };
 
     const updatedModelos = [...modelos, newEntry];
@@ -104,14 +89,11 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
       });
     }
 
-    // Reset form
     setMarca('');
     setModelo('');
     setAnoMin('');
     setAnoMax('');
     setStatus('aceito');
-    setCombustivel('qualquer');
-    setCoberturaFipe('100');
   };
 
   const handleRemove = async (index: number) => {
@@ -139,8 +121,6 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
                 <TableHead className="text-xs">Ano De</TableHead>
                 <TableHead className="text-xs">Ano Até</TableHead>
                 <TableHead className="text-xs">Status</TableHead>
-                <TableHead className="text-xs">Combustível</TableHead>
-                <TableHead className="text-xs">FIPE %</TableHead>
                 <TableHead className="text-xs w-10"></TableHead>
               </TableRow>
             </TableHeader>
@@ -156,8 +136,6 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
                       {m.status}
                     </span>
                   </TableCell>
-                  <TableCell className="text-xs py-1.5">{m.combustivel}</TableCell>
-                  <TableCell className="text-xs py-1.5">{m.cobertura_fipe}%</TableCell>
                   <TableCell className="py-1.5">
                     <Button
                       type="button"
@@ -182,7 +160,7 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
       )}
 
       {/* Inline add form */}
-      <div className="grid grid-cols-7 gap-2 items-end">
+      <div className="grid grid-cols-6 gap-2 items-end">
         <div className="space-y-1">
           <label className="text-xs font-medium">Marca *</label>
           <Input
@@ -234,33 +212,11 @@ export function VeiculosAceitosEditor({ entityId }: VeiculosAceitosEditorProps) 
             </SelectContent>
           </Select>
         </div>
-        <div className="space-y-1">
-          <label className="text-xs font-medium">Combustível</label>
-          <Select value={combustivel} onValueChange={setCombustivel}>
-            <SelectTrigger className="h-8 text-xs">
-              <SelectValue />
-            </SelectTrigger>
-            <SelectContent>
-              {COMBUSTIVEL_OPTIONS.map(o => (
-                <SelectItem key={o.value} value={o.value}>{o.label}</SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
-        </div>
-        <div className="flex items-end gap-1">
-          <div className="space-y-1 flex-1">
-            <label className="text-xs font-medium">FIPE %</label>
-            <Input
-              type="number"
-              value={coberturaFipe}
-              onChange={(e) => setCoberturaFipe(e.target.value)}
-              className="h-8 text-xs"
-            />
-          </div>
+        <div>
           <Button
             type="button"
             size="icon"
-            className="h-8 w-8 shrink-0"
+            className="h-8 w-8"
             onClick={handleAdd}
             disabled={!marca.trim() || !modelo.trim() || isPending}
           >
