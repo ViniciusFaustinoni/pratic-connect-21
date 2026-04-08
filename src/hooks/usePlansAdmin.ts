@@ -24,6 +24,7 @@ export interface PlanInput {
   badge_color?: string | null;
   coverage_type?: string | null;
   min_vehicle_year?: string | null;
+  ano_fabricacao_maximo?: number | null;
   additional_price?: number | null;
   desconto_percentual?: number | null;
   cota_passeio_percent?: number | null;
