@@ -195,17 +195,10 @@ export function PlanFormModal({
         ano_fabricacao_maximo: p.ano_fabricacao_maximo?.toString() || '',
         additional_price: p.adicional_mensal?.toString() || '',
         desconto_percentual: p.desconto_percentual?.toString() || '',
-        cota_passeio_percent: p.cota_passeio_percent?.toString() || '',
-        cota_passeio_min: p.cota_passeio_min?.toString() || '',
-        cota_desagio_percent: p.cota_desagio_percent?.toString() || '',
-        cota_desagio_min: p.cota_desagio_min?.toString() || '',
-        cota_app_percent: p.cota_app_percent?.toString() || '',
-        cota_app_min: p.cota_app_min?.toString() || '',
         restriction_alert: p.restriction_alert || '',
         footer_note: p.footer_note || '',
         display_order: (p.ordem || 0).toString(),
         is_active: p.ativo ?? true,
-        linha_slug: currentPrecoMap?.linha_slug || '',
         categorias_veiculo: categorias,
       });
       setSelectedBenefits(
