@@ -163,8 +163,6 @@ const OficinaDetalhe = lazy(() => import("./pages/oficina/OficinaDetalhe"));
 const OrdensServicoList = lazy(() => import("./pages/oficina/OrdensServicoList"));
 const OrdemServicoDetalhePage = lazy(() => import("./pages/oficina/OrdemServicoDetalhe"));
 
-// Admin
-const PlanosAdmin = lazy(() => import("./pages/admin/PlanosAdmin"));
 
 // Configurações
 // ConfiguracoesLayout handled via LazyConfiguracoesLayout below
@@ -703,8 +701,6 @@ const App = () => (
               <Route path="/marketing/redes-sociais" element={<RedesSociais />} />
               <Route path="/marketing/origens" element={<OrigensLead />} />
               
-              {/* Admin */}
-              <Route path="/admin/planos" element={<PlanosAdmin />} />
               
               {/* Documentos */}
               <Route path="/documentos" element={<Navigate to="/documentos/gerar" replace />} />
