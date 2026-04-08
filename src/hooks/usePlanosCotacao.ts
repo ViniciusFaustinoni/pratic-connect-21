@@ -301,10 +301,41 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         continue;
       }
 
-      // === NOVO MODELO: Preço = Σ coberturas + Σ benefícios + taxa administrativa ===
-      
-      // Soma dos valores das coberturas vinculadas ao plano
+      // ── Verificar elegibilidade de CADA benefício e cobertura ANTES do preço ──
       const coberturasDoPlano = (planoCoberturasData || []).filter(pc => pc.plano_id === plano.id);
+      const beneficiosDoPlano = plano.planos_beneficios || [];
+
+      // Check each benefit
+      let planoReprovado = false;
+      for (const pb of beneficiosDoPlano) {
+        const benefitRules = allEligibilityRules
+          .filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id)
+          .filter(r => r.rule_type !== 'fipe_range');
+        if (benefitRules.length > 0 && !checkAllRules(benefitRules, vehicleCtx)) {
+          const benefitName = (pb as any).benefits?.name || pb.custom_text || 'Benefício';
+          negados.push({ planoId: plano.id, planoNome: plano.nome, linha, motivo: `Benefício "${benefitName}" bloqueado por regra de elegibilidade` });
+          planoReprovado = true;
+          break;
+        }
+      }
+      if (planoReprovado) continue;
+
+      // Check each coverage
+      for (const pc of coberturasDoPlano) {
+        const cobId = (pc as any).cobertura_id;
+        const cobRules = allEligibilityRules
+          .filter(r => r.entity_type === 'cobertura' && r.entity_id === cobId)
+          .filter(r => r.rule_type !== 'fipe_range');
+        if (cobRules.length > 0 && !checkAllRules(cobRules, vehicleCtx)) {
+          const cobNome = (pc as any).coberturas?.nome || 'Cobertura';
+          negados.push({ planoId: plano.id, planoNome: plano.nome, linha, motivo: `Cobertura "${cobNome}" bloqueada por regra de elegibilidade` });
+          planoReprovado = true;
+          break;
+        }
+      }
+      if (planoReprovado) continue;
+
+      // === NOVO MODELO: Preço = Σ coberturas + Σ benefícios + taxa administrativa ===
       const somaCoberturas = coberturasDoPlano.reduce((acc, pc) => {
         const cobId = (pc as any).cobertura_id;
         const fipeRangeRule = allEligibilityRules.find(
@@ -313,8 +344,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         if (fipeRangeRule) {
           const faixas = (fipeRangeRule.rule_config as any)?.faixas || [];
           const faixa = faixas.find((f: any) => valorFipe >= f.de && valorFipe < f.ate);
-          const valorFipe_resolved = faixa ? Number(faixa.valor) : 0;
-          return acc + valorFipe_resolved;
+          return acc + (faixa ? Number(faixa.valor) : 0);
         }
         const valor = (pc as any).coberturas?.valor || 0;
         return acc + Number(valor);
