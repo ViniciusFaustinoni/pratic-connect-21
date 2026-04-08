@@ -527,30 +527,6 @@ export function PlanFormModal({
                       </div>
                     </div>
 
-                    {/* Tabela de Preços (linha_slug) */}
-                    <div className="space-y-2">
-                      <Label>Tabela de Preços (Linha)<FieldHint text={PLAN_FIELD_HINTS.linha_slug} /></Label>
-                      <Select
-                        value={formData.linha_slug}
-                        onValueChange={(value) =>
-                          setFormData((prev) => ({ ...prev, linha_slug: value }))
-                        }
-                      >
-                        <SelectTrigger>
-                          <SelectValue placeholder="Vincular tabela de preços..." />
-                        </SelectTrigger>
-                        <SelectContent>
-                          {availableLinhaSlugs?.map((slug) => (
-                            <SelectItem key={slug} value={slug}>
-                              {slug}
-                            </SelectItem>
-                          ))}
-                        </SelectContent>
-                      </Select>
-                      <p className="text-xs text-muted-foreground">
-                        Define qual tabela de preços mensais será usada para este plano
-                      </p>
-                    </div>
 
                     {/* Categorias de Veículo Aceitas */}
                     <div className="space-y-2">
