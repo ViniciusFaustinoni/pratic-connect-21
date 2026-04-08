@@ -270,7 +270,7 @@ export default function CotadorPage() {
         .single();
       return data;
     },
-    enabled: isInclusaoVeiculo,
+    enabled: isInclusaoVeiculo || isSubstituicao,
   });
   
   // Modo de entrada
