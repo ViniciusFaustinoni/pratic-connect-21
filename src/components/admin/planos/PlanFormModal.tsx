@@ -288,16 +288,6 @@ export function PlanFormModal({
   const [coberturasSearch, setCoberturasSearch] = useState('');
   const hydratedStateKeyRef = useRef('');
 
-  const emptyFormState = useMemo(
-    () => createEmptyFormData(defaultProductLineId),
-    [defaultProductLineId],
-  );
-
-  const hydratedPlanState = useMemo(() => {
-    if (!planId || !fullPlanData) return null;
-    return mapPlanToState(fullPlanData, defaultProductLineId);
-  }, [planId, fullPlanData?.id, fullPlanData?.updated_at, defaultProductLineId]);
-
   const hydrationKey = useMemo(() => {
     if (!open) return '';
     if (!planId) return `new:${defaultProductLineId ?? ''}`;
@@ -312,23 +302,24 @@ export function PlanFormModal({
     }
 
     if (planId) {
-      if (!hydratedPlanState || hydrationKey.startsWith('loading:')) return;
+      if (!fullPlanData || hydrationKey.startsWith('loading:')) return;
       if (hydratedStateKeyRef.current === hydrationKey) return;
 
-      setFormData(hydratedPlanState.formData);
-      setSelectedBenefits(hydratedPlanState.selectedBenefits);
-      setSelectedCoberturas(hydratedPlanState.selectedCoberturas);
+      const nextState = mapPlanToState(fullPlanData, defaultProductLineId);
+      setFormData(nextState.formData);
+      setSelectedBenefits(nextState.selectedBenefits);
+      setSelectedCoberturas(nextState.selectedCoberturas);
       hydratedStateKeyRef.current = hydrationKey;
       return;
     }
 
     if (hydratedStateKeyRef.current === hydrationKey) return;
 
-    setFormData(emptyFormState);
+    setFormData(createEmptyFormData(defaultProductLineId));
     setSelectedBenefits([]);
     setSelectedCoberturas([]);
     hydratedStateKeyRef.current = hydrationKey;
-  }, [open, planId, hydrationKey, hydratedPlanState, emptyFormState]);
+  }, [open, planId, hydrationKey, defaultProductLineId, fullPlanData?.id, fullPlanData?.updated_at]);
 
   const selectedBenefitIds = useMemo(
     () => new Set(selectedBenefits.map((benefit) => benefit.benefit_id)),
