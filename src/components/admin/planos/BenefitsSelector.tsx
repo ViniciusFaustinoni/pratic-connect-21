@@ -306,12 +306,95 @@ export function BenefitsSelector({
     return acc;
   }, {} as Record<string, Benefit[]>);
 
+  // Group coberturas by tipo
+  const groupedCoberturas = useMemo(() => {
+    return coberturas.reduce((acc, cob) => {
+      const tipo = cob.tipo || 'cobertura';
+      if (!acc[tipo]) acc[tipo] = [];
+      acc[tipo].push(cob);
+      return acc;
+    }, {} as Record<string, Cobertura[]>);
+  }, [coberturas]);
+
+  const isCoberturaSelected = (id: string) =>
+    selectedCoberturas.some(c => c.cobertura_id === id);
+
+  const toggleCobertura = (id: string) => {
+    if (!onCoberturasChange) return;
+    if (isCoberturaSelected(id)) {
+      onCoberturasChange(selectedCoberturas.filter(c => c.cobertura_id !== id));
+    } else {
+      onCoberturasChange([...selectedCoberturas, { cobertura_id: id }]);
+    }
+  };
+
+  const tipoLabels: Record<string, string> = {
+    cobertura: 'Coberturas',
+    assistencia: 'Assistências',
+    servico: 'Serviços',
+  };
+
   return (
     <ScrollArea className="h-[500px] pr-4">
       <div className="space-y-6">
         <div className="flex items-start gap-2 p-3 rounded-lg bg-muted/50 border text-sm text-muted-foreground">
           <Info className="h-4 w-4 mt-0.5 shrink-0" />
           <p>{PLAN_FIELD_HINTS.beneficios}</p>
+        </div>
+
+        {/* Coberturas Section */}
+        {coberturas.length > 0 && (
+          <>
+            <div>
+              <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3 flex items-center gap-2">
+                <Shield className="h-4 w-4" />
+                Coberturas
+              </h3>
+              {Object.entries(groupedCoberturas).map(([tipo, items]) => (
+                <div key={tipo} className="mb-4">
+                  <h4 className="text-xs font-semibold text-muted-foreground mb-2 uppercase">
+                    {tipoLabels[tipo] || tipo}
+                  </h4>
+                  <div className="space-y-1">
+                    {items.map((cob) => (
+                      <div
+                        key={cob.id}
+                        className={`flex items-center gap-3 p-2 border rounded-lg transition-colors cursor-pointer ${
+                          isCoberturaSelected(cob.id)
+                            ? 'border-primary bg-primary/5'
+                            : 'border-border hover:bg-muted/30'
+                        }`}
+                        onClick={() => toggleCobertura(cob.id)}
+                      >
+                        <Checkbox
+                          checked={isCoberturaSelected(cob.id)}
+                          onCheckedChange={() => toggleCobertura(cob.id)}
+                        />
+                        <span className="text-lg">{cob.icone || '🛡️'}</span>
+                        <div className="flex-1">
+                          <span className="font-medium text-sm">{cob.nome}</span>
+                          {cob.codigo && (
+                            <span className="ml-2 text-xs text-muted-foreground">({cob.codigo})</span>
+                          )}
+                          {cob.subtitulo && (
+                            <p className="text-xs text-muted-foreground">{cob.subtitulo}</p>
+                          )}
+                        </div>
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              ))}
+            </div>
+            <hr className="border-border" />
+          </>
+        )}
+
+        {/* Benefícios Section */}
+        <div>
+          <h3 className="text-sm font-bold uppercase tracking-wider text-foreground mb-3">
+            Benefícios
+          </h3>
         </div>
         {Object.entries(groupedBenefits).map(([category, categoryBenefits]) => (
           <div key={category}>
