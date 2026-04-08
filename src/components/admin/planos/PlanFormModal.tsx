@@ -31,8 +31,6 @@ import { useCategoriasVeiculoPlano } from '@/hooks/useConteudosSistema';
 import { BenefitsSelector } from './BenefitsSelector';
 import { PlanPreview } from './PlanPreview';
 
-import { EligibilityRulesEditor } from './EligibilityRulesEditor';
-import { MarcaModeloExclusionEditor } from './MarcaModeloExclusionEditor';
 import { useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import type { PlanWithDetails } from '@/hooks/usePlans';
