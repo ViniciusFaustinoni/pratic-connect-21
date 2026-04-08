@@ -293,7 +293,7 @@ export function LinhasPlanos() {
                           <div className="min-w-0 flex-1 space-y-2">
                             <div className="flex items-center gap-2">
                               <ChevronDown className={cn('h-4 w-4 text-muted-foreground transition-transform', !isOpen && '-rotate-90')} />
-                              <h4 className="truncate text-lg font-semibold text-foreground">{linha.name}</h4>
+                              <h4 className="text-lg font-semibold text-foreground">{linha.name}</h4>
                             </div>
 
                             <div className="flex flex-wrap gap-2 text-xs text-muted-foreground">
@@ -353,7 +353,7 @@ export function LinhasPlanos() {
                                   <div className="min-w-0 flex-1 space-y-4">
                                     <div className="space-y-2">
                                       <div className="flex flex-wrap items-center gap-2">
-                                        <h5 className="truncate text-base font-semibold text-foreground">{plano.nome}</h5>
+                                        <h5 className="text-base font-semibold text-foreground">{plano.nome}</h5>
                                         {plano.badge_text ? (
                                           <Badge
                                             className="border"

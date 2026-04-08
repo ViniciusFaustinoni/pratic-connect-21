@@ -656,37 +656,6 @@ export function PlanFormModal({
                       emptyMessage="Nenhum benefício encontrado para o filtro informado."
                     />
 
-                    <section className="space-y-4 rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5">
-                      <div className="space-y-1">
-                        <div className="flex items-center gap-2">
-                          <FileText className="h-4 w-4 text-primary" />
-                          <h3 className="text-sm font-semibold text-foreground">Observações</h3>
-                        </div>
-                        <p className="text-xs text-muted-foreground">Mensagens exibidas no card e no rodapé do plano.</p>
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="plan-restriction-alert">Alerta de Restrição</Label>
-                        <Textarea
-                          id="plan-restriction-alert"
-                          value={formData.restriction_alert}
-                          onChange={(event) => setFormData((previous) => ({ ...previous, restriction_alert: event.target.value }))}
-                          placeholder="Texto curto de atenção para restrições do plano"
-                          rows={4}
-                        />
-                      </div>
-
-                      <div className="space-y-2">
-                        <Label htmlFor="plan-footer-note">Nota de Rodapé</Label>
-                        <Textarea
-                          id="plan-footer-note"
-                          value={formData.footer_note}
-                          onChange={(event) => setFormData((previous) => ({ ...previous, footer_note: event.target.value }))}
-                          placeholder="Observações complementares exibidas no rodapé"
-                          rows={3}
-                        />
-                      </div>
-                    </section>
                   </div>
                 </ScrollArea>
 
@@ -813,21 +782,6 @@ export function PlanFormModal({
                       </div>
                     </div>
 
-                    {formData.restriction_alert ? (
-                      <div className="rounded-2xl border border-amber-500/25 bg-amber-500/10 p-3 text-sm text-foreground">
-                        <div className="mb-1 flex items-center gap-2 font-medium text-amber-200">
-                          <AlertTriangle className="h-4 w-4" />
-                          Alerta de restrição
-                        </div>
-                        <p className="text-sm text-muted-foreground">{formData.restriction_alert}</p>
-                      </div>
-                    ) : null}
-
-                    {formData.footer_note ? (
-                      <div className="rounded-2xl border border-border/60 bg-background/60 p-3 text-sm text-muted-foreground">
-                        {formData.footer_note}
-                      </div>
-                    ) : null}
                   </div>
                 </div>
               </div>
