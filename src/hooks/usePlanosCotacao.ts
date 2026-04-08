@@ -712,7 +712,7 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         categoriaVeiculo: categoria,
         cotaDesagio: Number(plano.cota_desagio) || undefined,
         cotaMinimaDesagio: Number(plano.cota_minima_desagio) || undefined,
-        anoMinimo: anoMinimo || undefined,
+        anoMinimo: undefined,
         elegibilidadeStatus,
         precoDesagioAplicado: false,
       });
