@@ -356,11 +356,7 @@ const OuvidoriaNova = lazy(() => import("./pages/app/OuvidoriaNova"));
 const OuvidoriaLista = lazy(() => import("./pages/app/OuvidoriaLista"));
 const OuvidoriaDetalheApp = lazy(() => import("./pages/app/OuvidoriaDetalhe"));
 
-// ERP Ouvidoria
-const OuvidoriaDashboard = lazy(() => import("./pages/ouvidoria/OuvidoriaDashboard"));
-const OuvidoriaFila = lazy(() => import("./pages/ouvidoria/ManifestacoesList"));
-const OuvidoriaDetalhe = lazy(() => import("./pages/ouvidoria/ManifestacaoDetalhe"));
-const NovaManifestacao = lazy(() => import("./pages/ouvidoria/NovaManifestacao"));
+// Public Ouvidoria (kept)
 const CanalDenuncia = lazy(() => import("./pages/ouvidoria/CanalDenuncia"));
 const ConsultaProtocolo = lazy(() => import("./pages/ouvidoria/ConsultaProtocolo"));
 const PesquisaSatisfacao = lazy(() => import("./pages/ouvidoria/PesquisaSatisfacao"));
