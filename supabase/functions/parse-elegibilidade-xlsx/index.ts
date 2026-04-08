@@ -15,6 +15,7 @@ const STATUS_VALIDOS = ['aceito', 'limitado', 'negado']
 const COMBUSTIVEIS_VALIDOS = ['qualquer', 'flex', 'diesel', 'gasolina', 'eletrico']
 
 serve(async (req) => {
+  console.warn('[DEPRECATED] parse-elegibilidade-xlsx: Esta função importa dados para plano_elegibilidade_modelos (tabela legada). Use o editor de Veículos Aceitos na Linha.');
   if (req.method === 'OPTIONS') {
     return new Response('ok', { headers: corsHeaders })
   }
