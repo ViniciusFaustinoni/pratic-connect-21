@@ -355,8 +355,55 @@ export function useDuplicatePlan() {
         await supabase.from('planos_regioes').insert(newRegioes);
       }
 
+      // Duplicate coverages — each plan gets its own unique copies
+      const { data: originalCoberturas } = await supabase
+        .from('planos_coberturas')
+        .select('cobertura_id')
+        .eq('plano_id', id);
 
+      if (originalCoberturas && originalCoberturas.length > 0) {
+        for (const pc of originalCoberturas) {
+          // Fetch original coverage
+          const { data: origCob } = await supabase
+            .from('coberturas')
+            .select('*')
+            .eq('id', pc.cobertura_id)
+            .single();
 
+          if (!origCob) continue;
+
+          // Clone the coverage record
+          const { id: cobId, created_at: cobCreated, updated_at: cobUpdated, ...cobData } = origCob;
+          const { data: newCob, error: cobError } = await supabase
+            .from('coberturas')
+            .insert({ ...cobData })
+            .select()
+            .single();
+
+          if (cobError || !newCob) continue;
+
+          // Link cloned coverage to new plan
+          await supabase.from('planos_coberturas').insert({
+            plano_id: createdPlan.id,
+            cobertura_id: newCob.id,
+          });
+
+          // Clone eligibility rules for this coverage
+          const { data: rules } = await supabase
+            .from('entity_eligibility_rules')
+            .select('*')
+            .eq('entity_type', 'cobertura')
+            .eq('entity_id', pc.cobertura_id);
+
+          if (rules && rules.length > 0) {
+            const clonedRules = rules.map((r: any) => {
+              const { id: rId, created_at: rCreated, ...rData } = r;
+              return { ...rData, entity_id: newCob.id };
+            });
+            await supabase.from('entity_eligibility_rules').insert(clonedRules);
+          }
+        }
+      }
 
       return createdPlan;
     },
