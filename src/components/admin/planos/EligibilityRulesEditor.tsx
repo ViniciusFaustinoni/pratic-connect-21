@@ -172,7 +172,7 @@ function RuleCard({ rule, onDelete }: { rule: EligibilityRule; onDelete: (id: st
           )}
         </div>
       </div>
-      <Button size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => onDelete(rule.id)}>
+      <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => onDelete(rule.id)}>
         <Trash2 className="h-3.5 w-3.5 text-destructive" />
       </Button>
     </div>
