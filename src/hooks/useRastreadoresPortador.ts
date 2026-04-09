@@ -20,6 +20,8 @@ export function useRastreadoresDoPortador() {
   return useQuery({
     queryKey: ['rastreadores-meu-porte', profile?.id],
     enabled: !!profile?.id,
+    refetchOnMount: 'always' as const,
+    retry: 2,
     queryFn: async (): Promise<RastreadorEmPorte[]> => {
       const { data, error } = await supabase
         .from('rastreadores')
@@ -28,7 +30,11 @@ export function useRastreadoresDoPortador() {
         .eq('status', 'estoque')
         .order('codigo');
 
-      if (error) throw error;
+      if (error) {
+        console.error('[useRastreadoresDoPortador] Erro ao buscar:', error);
+        throw error;
+      }
+      console.log('[useRastreadoresDoPortador] Encontrados:', data?.length, 'para portador', profile!.id);
       return (data || []) as RastreadorEmPorte[];
     },
   });

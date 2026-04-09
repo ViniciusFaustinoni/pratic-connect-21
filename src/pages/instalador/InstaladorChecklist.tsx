@@ -146,7 +146,7 @@ export default function InstaladorChecklist() {
 
   const { data: servico, isLoading, error } = useServicoDetalhes(id);
   const { data: vistoriaCompleta, isLoading: isLoadingVistoria } = useVistoriaCompletaPorServico(id ?? null);
-  const { data: rastreadoresEmPorte, isLoading: isLoadingRastreadores } = useRastreadoresDoPortador();
+  const { data: rastreadoresEmPorte, isLoading: isLoadingRastreadores, error: erroRastreadores, refetch: refetchRastreadores } = useRastreadoresDoPortador();
   const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
   const { data: fipeMinRastreadorMoto = 9000 } = useConfigFipeRastreadorMoto();
   const uploadFotoMutation = useUploadFotoVistoriaCompleta();
@@ -1703,6 +1703,24 @@ export default function InstaladorChecklist() {
                           {rastreadoresEmPorte.length} rastreador(es) em seu porte
                         </p>
                       </>
+                    ) : erroRastreadores ? (
+                      <div className="rounded-lg bg-red-500/10 border border-red-500/30 p-3">
+                        <p className="text-sm text-red-400 flex items-center gap-2 font-medium">
+                          <AlertCircle className="h-4 w-4" />
+                          Erro ao carregar rastreadores
+                        </p>
+                        <p className="text-xs text-slate-400 mt-1">
+                          Não foi possível buscar seus rastreadores. Verifique sua conexão.
+                        </p>
+                        <Button
+                          variant="outline"
+                          size="sm"
+                          className="mt-2 border-slate-600 text-slate-300"
+                          onClick={() => refetchRastreadores()}
+                        >
+                          Tentar novamente
+                        </Button>
+                      </div>
                     ) : (
                       <div className="rounded-lg bg-amber-500/10 border border-amber-500/30 p-3">
                         <p className="text-sm text-amber-400 flex items-center gap-2 font-medium">
