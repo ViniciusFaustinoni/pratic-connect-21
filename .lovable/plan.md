@@ -1,19 +1,28 @@
 
 
-## Plano: Corrigir query de coberturas no modal de edicao do plano
+## Plano: Tornar coberturas somente leitura no modal de plano
 
 ### Problema
-A query em `PlanCoberturasList` faz `.order('display_order', { ascending: true })` na tabela `planos_coberturas`, mas essa tabela nao possui coluna `display_order`. A coluna existe apenas na tabela `coberturas`. Isso causa erro no PostgREST e retorna array vazio, fazendo com que nenhuma cobertura seja exibida no modal.
+Ao expandir uma cobertura no modal de edição de plano, aparece um formulário editável com botão "Salvar Cobertura". As coberturas devem ser somente leitura neste contexto.
 
-### Alteracao
+### Alteração
 
-**`src/components/admin/planos/PlanCoberturasList.tsx`** (linha ~177)
-- Remover o `.order('display_order', { ascending: true })` da query principal
-- Ordenar no client-side usando `coberturas.display_order` apos o mapeamento, ou usar `.order('coberturas(display_order)')` se suportado pelo PostgREST
-- Alternativa mais simples: remover o order e ordenar em JS: `(data || []).map(...).filter(Boolean).sort((a,b) => (a.display_order ?? 0) - (b.display_order ?? 0))`
+**`src/components/admin/planos/PlanCoberturasList.tsx`**
+
+1. Substituir o componente `CoberturaInlineForm` por um componente `CoberturaReadOnlyView` que exibe todos os dados sem inputs editáveis:
+   - Nome, Código, Subtítulo, Descrição como texto estático
+   - Valores financeiros (já são read-only)
+   - Ordem e status Ativo como texto
+   - Carência como texto
+   - Remover botão "Salvar Cobertura"
+   - Remover imports não utilizados (Input, Textarea, Switch, Save, useUpdateCobertura, CarenciaConfigSection, EligibilityRulesEditor)
+
+2. Manter funcionalidades de **excluir** (desvincular) e **criar nova cobertura** — essas são operações no nível do plano, não edição da cobertura em si.
 
 ### Resultado
-- Coberturas voltam a aparecer corretamente no modal de edicao do plano
+- Expandir cobertura mostra dados em formato somente leitura
+- Não é possível editar campos da cobertura a partir do plano
+- Criação e exclusão de vínculos continuam funcionando
 
 ### Arquivo
 - `src/components/admin/planos/PlanCoberturasList.tsx`
