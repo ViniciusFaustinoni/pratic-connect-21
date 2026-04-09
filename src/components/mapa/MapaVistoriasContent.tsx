@@ -676,7 +676,7 @@ export function MapaVistoriasContent() {
               const marker = e.target as L.Marker;
               const newPos = marker.getLatLng();
               
-              // Find nearest unassigned service within 800m
+              // Find nearest unassigned service within 5km
               const servicosNaoAtribuidos = vistoriasComCoordenadas.filter(v =>
                 !v.vistoriador_id && !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude
               );
@@ -695,7 +695,7 @@ export function MapaVistoriasContent() {
               // Reset marker to original position
               marker.setLatLng([vistoriador.latitude, vistoriador.longitude]);
               
-              if (melhorServico && melhorDist <= 0.8) {
+              if (melhorServico && melhorDist <= 5) {
                 setAssignConfirmation({
                   servico: melhorServico,
                   profissional: vistoriador,
