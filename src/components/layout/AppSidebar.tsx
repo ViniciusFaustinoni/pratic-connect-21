@@ -654,7 +654,6 @@ export function AppSidebar() {
 
   // Super-group state for directors
   const [openSuperGroups, setOpenSuperGroups] = useState<string[]>(() => {
-    if (!permissions.isDiretor) return [];
     const activeGroup = visibleGroups.find(g => isGroupActive(g.items));
     if (!activeGroup) return [];
     const sg = SUPER_GROUPS.find(s => s.moduleIds.includes(activeGroup.id));
@@ -682,8 +681,8 @@ export function AppSidebar() {
     if (activeGroup && !openGroups.includes(activeGroup.id)) {
       setOpenGroups(prev => [...prev, activeGroup.id]);
     }
-    // Auto-open super-group for directors
-    if (permissions.isDiretor && activeGroup) {
+    // Auto-open super-group for active route
+    if (activeGroup) {
       const sg = SUPER_GROUPS.find(s => s.moduleIds.includes(activeGroup.id));
       if (sg && !openSuperGroups.includes(sg.id)) {
         setOpenSuperGroups(prev => [...prev, sg.id]);
@@ -704,16 +703,19 @@ export function AppSidebar() {
     }
   }, [isDataLoading, visibleGroups.length]);
 
-  // Build super-groups with their visible sub-groups
-  const directorSuperGroups = useMemo(() => {
-    if (!permissions.isDiretor) return [];
-    return SUPER_GROUPS.map(sg => ({
+  // Build super-groups with their visible sub-groups (for all users)
+  const superGroups = useMemo(() => {
+    const result = SUPER_GROUPS.map(sg => ({
       ...sg,
       subGroups: sg.moduleIds
         .map(mid => visibleGroups.find(g => g.id === mid))
         .filter(Boolean) as MenuGroup[],
     })).filter(sg => sg.subGroups.length > 0);
-  }, [permissions.isDiretor, visibleGroups]);
+    return result;
+  }, [visibleGroups]);
+
+  // If user only has one super-group, skip the super-group level
+  const useSuperGroupLayout = superGroups.length > 1;
 
   return (
     <Sidebar collapsible="icon" className="border-r border-border bg-sidebar">
@@ -758,8 +760,8 @@ export function AppSidebar() {
                 </SidebarMenuItem>
               ))}
 
-              {permissions.isDiretor && directorSuperGroups.length > 0 ? (
-                directorSuperGroups.map((sg) => {
+              {useSuperGroupLayout && superGroups.length > 0 ? (
+                superGroups.map((sg) => {
                   const sgActive = sg.subGroups.some(g => isGroupActive(g.items));
                   return (
                     <SidebarMenuItem key={sg.id}>
@@ -945,9 +947,9 @@ export function AppSidebar() {
               </SidebarGroup>
             )}
 
-            {permissions.isDiretor && directorSuperGroups.length > 0 ? (
-              /* SUPER-GRUPOS PARA DIRETORES */
-              directorSuperGroups.map((sg) => (
+            {useSuperGroupLayout && superGroups.length > 0 ? (
+              /* SUPER-GRUPOS PARA TODOS OS PERFIS */
+              superGroups.map((sg) => (
                 <Collapsible
                   key={sg.id}
                   open={openSuperGroups.includes(sg.id)}
