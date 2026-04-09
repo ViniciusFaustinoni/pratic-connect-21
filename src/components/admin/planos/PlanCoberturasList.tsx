@@ -174,9 +174,8 @@ export function PlanCoberturasList({ planId }: PlanCoberturasListProps) {
         .from('planos_coberturas')
         .select('*, coberturas:cobertura_id(*)')
         .eq('plano_id', planId)
-        .order('display_order', { ascending: true });
       if (error) throw error;
-      return (data || []).map((pc: any) => pc.coberturas).filter(Boolean);
+      return (data || []).map((pc: any) => pc.coberturas).filter(Boolean).sort((a: any, b: any) => (a.display_order ?? 0) - (b.display_order ?? 0));
     },
     enabled: !!planId,
   });
