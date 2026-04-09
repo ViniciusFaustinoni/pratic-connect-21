@@ -269,7 +269,7 @@ export function LinhasPlanos() {
   const { data: linhas = [], isLoading } = useLinhasComPlanos();
   const [openLines, setOpenLines] = useState<Set<string>>(new Set());
   const [linhaModal, setLinhaModal] = useState<{ open: boolean; productLine?: any }>({ open: false });
-  const [planoModal, setPlanoModal] = useState<{ open: boolean; planId?: string; defaultLineId?: string }>({ open: false });
+  const [planoModal, setPlanoModal] = useState<{ open: boolean; planId?: string; defaultLineId?: string; focusItemId?: string }>({ open: false });
   const [importModal, setImportModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
   const [duplicarModal, setDuplicarModal] = useState<{ open: boolean; plano: { id: string; nome: string } | null }>({ open: false, plano: null });
@@ -537,7 +537,7 @@ export function LinhasPlanos() {
                                                 key={cob.id}
                                                 type="button"
                                                 className="w-full flex flex-col gap-1 px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
-                                                onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
+                                                onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id, focusItemId: cob.id })}
                                               >
                                                 <div className="flex items-center justify-between w-full">
                                                   <span className="text-foreground">{cob.nome}</span>
@@ -582,7 +582,7 @@ export function LinhasPlanos() {
                                                 key={ben.id}
                                                 type="button"
                                                 className="w-full flex flex-col gap-1 px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
-                                                onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
+                                                onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id, focusItemId: ben.id })}
                                               >
                                                 <div className="flex items-center justify-between w-full">
                                                   <span className="text-foreground">{ben.name}</span>
@@ -648,6 +648,7 @@ export function LinhasPlanos() {
         onOpenChange={(open) => { if (!open) setPlanoModal({ open: false }); }}
         plan={selectedPlan}
         defaultProductLineId={planoModal.defaultLineId}
+        focusItemId={planoModal.focusItemId}
       />
 
       <ImportarLinhasModal open={importModal} onClose={() => setImportModal(false)} />

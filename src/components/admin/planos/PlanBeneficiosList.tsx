@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Plus, Save, Trash2, Loader2, Sparkles } from 'lucide-react';
 
@@ -34,6 +34,7 @@ const CATEGORIES = [
 
 interface PlanBeneficiosListProps {
   planId: string;
+  focusItemId?: string;
 }
 
 function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () => void }) {
@@ -157,13 +158,15 @@ function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () =
   );
 }
 
-export function PlanBeneficiosList({ planId }: PlanBeneficiosListProps) {
+export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListProps) {
   const queryClient = useQueryClient();
   const deleteBenefit = useDeleteBenefit();
   const createBenefit = useCreateBenefit();
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [newForm, setNewForm] = useState({ name: '', icon: '' });
+  const focusRef = useRef<HTMLDivElement>(null);
+  const hasFocused = useRef(false);
 
   const { data: benefits = [], isLoading } = useQuery({
     queryKey: ['plan-benefits-inline', planId],
@@ -178,6 +181,19 @@ export function PlanBeneficiosList({ planId }: PlanBeneficiosListProps) {
     },
     enabled: !!planId,
   });
+
+  useEffect(() => {
+    if (focusItemId && benefits.length > 0 && !hasFocused.current) {
+      const match = benefits.find((b: any) => b.id === focusItemId);
+      if (match) {
+        setOpenItems(new Set([focusItemId]));
+        hasFocused.current = true;
+        setTimeout(() => {
+          focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      }
+    }
+  }, [focusItemId, benefits]);
 
   const toggleItem = (id: string) => {
     setOpenItems(prev => {
@@ -272,7 +288,7 @@ export function PlanBeneficiosList({ planId }: PlanBeneficiosListProps) {
         <div className="space-y-2">
           {benefits.map((ben: any) => (
             <Collapsible key={ben.id} open={openItems.has(ben.id)} onOpenChange={() => toggleItem(ben.id)}>
-              <div className={cn(
+              <div ref={ben.id === focusItemId ? focusRef : undefined} className={cn(
                 'rounded-2xl border transition-all',
                 openItems.has(ben.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-card/60'
               )}>

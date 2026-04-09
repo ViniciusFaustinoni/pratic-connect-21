@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Plus, Save, Trash2, Loader2 } from 'lucide-react';
 import { Shield } from 'lucide-react';
@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 
 interface PlanCoberturasListProps {
   planId: string;
+  focusItemId?: string;
 }
 
 function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: () => void }) {
@@ -186,13 +187,15 @@ function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: 
   );
 }
 
-export function PlanCoberturasList({ planId }: PlanCoberturasListProps) {
+export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListProps) {
   const queryClient = useQueryClient();
   const deleteCobertura = useDeleteCobertura();
   const createCobertura = useCreateCobertura();
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [newForm, setNewForm] = useState({ nome: '', icon: '' });
+  const focusRef = useRef<HTMLDivElement>(null);
+  const hasFocused = useRef(false);
 
   const { data: coberturas = [], isLoading } = useQuery({
     queryKey: ['plan-coberturas-inline', planId],
@@ -206,6 +209,19 @@ export function PlanCoberturasList({ planId }: PlanCoberturasListProps) {
     },
     enabled: !!planId,
   });
+
+  useEffect(() => {
+    if (focusItemId && coberturas.length > 0 && !hasFocused.current) {
+      const match = coberturas.find((c: any) => c.id === focusItemId);
+      if (match) {
+        setOpenItems(new Set([focusItemId]));
+        hasFocused.current = true;
+        setTimeout(() => {
+          focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      }
+    }
+  }, [focusItemId, coberturas]);
 
   const toggleItem = (id: string) => {
     setOpenItems(prev => {
@@ -296,7 +312,7 @@ export function PlanCoberturasList({ planId }: PlanCoberturasListProps) {
         <div className="space-y-2">
           {coberturas.map((cob: any) => (
             <Collapsible key={cob.id} open={openItems.has(cob.id)} onOpenChange={() => toggleItem(cob.id)}>
-              <div className={cn(
+              <div ref={cob.id === focusItemId ? focusRef : undefined} className={cn(
                 'rounded-2xl border transition-all',
                 openItems.has(cob.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-card/60'
               )}>
