@@ -2467,13 +2467,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
             <div className="sticky bottom-0 bg-background border-t px-4 py-3 sm:px-6 flex items-center justify-end">
               <Button 
                 type="submit" 
-                disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || (valorAdesao <= 0 && !isCenarioIsento) || !dadosAssociadoValidos || (() => {
-                  if (!valorFipe || valorFipe <= 0 || !configLimites) return false;
-                  const limiteAplicavel = tipoVeiculoDetectado === 'moto' ? configLimites.fipeLimiteAutorizacaoMoto : configLimites.fipeLimiteAutorizacao;
-                  if (valorFipe <= limiteAplicavel) return false;
-                  const jaAprovado = cotacaoParaEditar?.id ? aprovacaoFipeLimiteExistente?.status === 'aprovado' : false;
-                  return !jaAprovado;
-                })()}
+                disabled={(createCotacao.isPending || updateCotacao.isPending) || planosSelecionados.length === 0 || (valorAdesao <= 0 && !isCenarioIsento) || !dadosAssociadoValidos}
               >
                 {(createCotacao.isPending || updateCotacao.isPending) ? (
                   <Loader2 className="h-4 w-4 animate-spin mr-1" />
