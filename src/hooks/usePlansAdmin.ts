@@ -329,21 +329,73 @@ export function useDuplicatePlan() {
 
       if (createError) throw createError;
 
-      // Duplicate benefits
+      // Duplicate benefits — clone each benefit record (same pattern as coverages)
       if (planos_beneficios && planos_beneficios.length > 0) {
-        const newBenefits = planos_beneficios.map((pb: any) => ({
-          plano_id: createdPlan.id,
-          benefit_id: pb.benefit_id,
-          beneficio: pb.beneficio,
-          custom_text: pb.custom_text,
-          custom_value: pb.custom_value,
-          additional_info: pb.additional_info,
-          is_highlighted: pb.is_highlighted,
-          display_order: pb.display_order,
-          incluso: pb.incluso,
-        }));
+        for (const pb of planos_beneficios as any[]) {
+          if (!pb.benefit_id) continue;
 
-        await supabase.from('planos_beneficios').insert(newBenefits);
+          // Fetch original benefit
+          const { data: origBenefit } = await supabase
+            .from('benefits')
+            .select('*')
+            .eq('id', pb.benefit_id)
+            .single();
+
+          if (!origBenefit) continue;
+
+          // Clone benefit record
+          const { id: bId, created_at: bCreated, ...bData } = origBenefit;
+          const uniqueSuffix = `-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+          const { data: newBenefit, error: bError } = await supabase
+            .from('benefits')
+            .insert({ ...bData, slug: ((bData.slug as string) || '').slice(0, 80) + uniqueSuffix })
+            .select()
+            .single();
+
+          if (bError || !newBenefit) continue;
+
+          // Link cloned benefit to new plan
+          await supabase.from('planos_beneficios').insert({
+            plano_id: createdPlan.id,
+            benefit_id: newBenefit.id,
+            beneficio: pb.beneficio,
+            custom_text: pb.custom_text,
+            custom_value: pb.custom_value,
+            additional_info: pb.additional_info,
+            is_highlighted: pb.is_highlighted,
+            display_order: pb.display_order,
+            incluso: pb.incluso,
+          });
+
+          // Clone eligibility rules for this benefit
+          const { data: bRules } = await supabase
+            .from('entity_eligibility_rules')
+            .select('*')
+            .eq('entity_type', 'benefit')
+            .eq('entity_id', pb.benefit_id);
+
+          if (bRules && bRules.length > 0) {
+            const clonedBRules = bRules.map((r: any) => {
+              const { id: rId, created_at: rCreated, ...rData } = r;
+              return { ...rData, entity_id: newBenefit.id };
+            });
+            await supabase.from('entity_eligibility_rules').insert(clonedBRules);
+          }
+
+          // Clone category exclusions
+          const { data: bExcl } = await supabase
+            .from('benefit_category_exclusions')
+            .select('*')
+            .eq('benefit_id', pb.benefit_id);
+
+          if (bExcl && bExcl.length > 0) {
+            const clonedExcl = bExcl.map((e: any) => ({
+              benefit_id: newBenefit.id,
+              categoria_veiculo: e.categoria_veiculo,
+            }));
+            await supabase.from('benefit_category_exclusions').insert(clonedExcl);
+          }
+        }
       }
 
       // Duplicate region links
