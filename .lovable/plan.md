@@ -1,34 +1,57 @@
 
 
-## Plano: Corrigir exclusao de associado/veiculo na Base Antiga
+## Plano: Auto-finalizar almoco no servidor (cron)
 
 ### Problema
-Ao excluir um associado (e seus veiculos), a FK `substituicoes_veiculo_veiculo_novo_id_fkey` e `substituicoes_veiculo_veiculo_antigo_id_fkey` na tabela `substituicoes_veiculo` bloqueia o DELETE nos veiculos.
+A finalizacao do almoco apos 60 minutos so acontece no **client-side** (useEffect em `useJornadaTrabalho.ts`). Se o app do tecnico esta inativo ou em background, o status `em_almoco` permanece no banco indefinidamente. O cron (`cron-atribuir-tarefas`) ve `status === 'em_almoco'` e pula o profissional, que nunca mais recebe tarefas.
 
 ### Correcao
-**`src/hooks/useDeleteBaseAntiga.ts`** - antes de excluir veiculos, limpar referencias na tabela `substituicoes_veiculo`:
-
-Para **tipo === 'veiculo'**:
-1. Deletar registros de `substituicoes_veiculo` onde `veiculo_antigo_id = id` ou `veiculo_novo_id = id`
-2. Depois deletar o veiculo
-
-Para **tipo === 'associado'**:
-1. Buscar IDs dos veiculos do associado
-2. Deletar registros de `substituicoes_veiculo` onde `veiculo_antigo_id` ou `veiculo_novo_id` estejam na lista de IDs dos veiculos, **ou** onde `associado_id = id`
-3. Deletar os veiculos
-4. Deletar o associado
+**`supabase/functions/cron-atribuir-tarefas/index.ts`** (linhas 170-174) — antes de pular o profissional em almoco, verificar se ja passou 60+ minutos. Se sim, finalizar o almoco automaticamente no servidor e continuar a atribuicao normalmente.
 
 ```typescript
-// Antes de deletar veiculo(s), limpar substituicoes
-const veiculoIds = [...]; // IDs a deletar
-for (const vid of veiculoIds) {
-  await supabase.from('substituicoes_veiculo').delete().eq('veiculo_antigo_id', vid);
-  await supabase.from('substituicoes_veiculo').delete().eq('veiculo_novo_id', vid);
+// Onde hoje tem:
+if (turnoHoje?.status === 'em_almoco') {
+  console.log(`... em ALMOÇO - pulando`);
+  continue;
 }
-// Tambem limpar por associado_id
-await supabase.from('substituicoes_veiculo').delete().eq('associado_id', id);
+
+// Substituir por:
+if (turnoHoje?.status === 'em_almoco' && turnoHoje.inicio_almoco) {
+  const inicioAlmoco = new Date(turnoHoje.inicio_almoco);
+  const agora = new Date();
+  const minutosEmAlmoco = Math.floor((agora.getTime() - inicioAlmoco.getTime()) / 60000);
+
+  if (minutosEmAlmoco < 60) {
+    console.log(`... em ALMOÇO há ${minutosEmAlmoco}min - pulando`);
+    continue;
+  }
+
+  // Almoco expirado — finalizar automaticamente no servidor
+  const minutosAtraso = Math.max(0, minutosEmAlmoco - 60);
+  console.log(`... ALMOÇO expirado (${minutosEmAlmoco}min) — finalizando server-side`);
+  
+  await supabase
+    .from('turnos_profissionais')
+    .update({
+      status: 'ativo',
+      fim_almoco: agora.toISOString(),
+      minutos_atraso_almoco: minutosAtraso,
+    })
+    .eq('id', turnoHoje.id);
+  
+  // Continuar normalmente (nao dar continue) para atribuir tarefa
+}
 ```
 
-### Arquivo
-- `src/hooks/useDeleteBaseAntiga.ts`
+**Mesma logica em `supabase/functions/atribuir-proxima-tarefa/index.ts`** (linhas 229-252) — quando o tecnico pede tarefa e o almoco ja expirou, finalizar o almoco e prosseguir em vez de retornar `em_almoco`.
+
+### Resultado
+- Se o almoco passou de 60 minutos, o **servidor** finaliza automaticamente o almoco
+- O tecnico volta a receber tarefas mesmo que o app estivesse em background
+- O atraso de almoco continua sendo registrado corretamente
+- O client-side continua funcionando como fallback rapido
+
+### Arquivos
+- `supabase/functions/cron-atribuir-tarefas/index.ts`
+- `supabase/functions/atribuir-proxima-tarefa/index.ts`
 
