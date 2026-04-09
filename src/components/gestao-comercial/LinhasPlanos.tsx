@@ -1,4 +1,4 @@
-import { useMemo, useState, useCallback } from 'react';
+import { useMemo, useState } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -72,36 +72,34 @@ function useLinhasComPlanos() {
       if (plansError) throw plansError;
 
       const planoIds = (planos || []).map((plan) => plan.id);
-      const coberturaValores = new Map<string, number>();
-      const beneficioValores = new Map<string, number>();
-      const coberturaContagens = new Map<string, number>();
-      const beneficioContagens = new Map<string, number>();
+      const coberturasMap = new Map<string, { id: string; nome: string; valor: number }[]>();
+      const beneficiosMap = new Map<string, { id: string; name: string; preco_sugerido: number }[]>();
 
       if (planoIds.length > 0) {
         const { data: coberturas } = await supabase
           .from('planos_coberturas')
-          .select('plano_id, coberturas(valor)')
+          .select('plano_id, cobertura_id, coberturas(id, nome, valor)')
           .in('plano_id', planoIds);
 
-        for (const cobertura of coberturas || []) {
-          coberturaValores.set(
-            cobertura.plano_id,
-            (coberturaValores.get(cobertura.plano_id) || 0) + (((cobertura.coberturas as any)?.valor as number) || 0),
-          );
-          coberturaContagens.set(cobertura.plano_id, (coberturaContagens.get(cobertura.plano_id) || 0) + 1);
+        for (const c of coberturas || []) {
+          const cob = c.coberturas as any;
+          if (!cob) continue;
+          const list = coberturasMap.get(c.plano_id) || [];
+          list.push({ id: cob.id, nome: cob.nome, valor: cob.valor || 0 });
+          coberturasMap.set(c.plano_id, list);
         }
 
         const { data: beneficios } = await supabase
           .from('planos_beneficios')
-          .select('plano_id, benefits:benefit_id(preco_sugerido)')
+          .select('plano_id, benefit_id, benefits:benefit_id(id, name, preco_sugerido)')
           .in('plano_id', planoIds);
 
-        for (const beneficio of beneficios || []) {
-          beneficioValores.set(
-            beneficio.plano_id,
-            (beneficioValores.get(beneficio.plano_id) || 0) + (((beneficio.benefits as any)?.preco_sugerido as number) || 0),
-          );
-          beneficioContagens.set(beneficio.plano_id, (beneficioContagens.get(beneficio.plano_id) || 0) + 1);
+        for (const b of beneficios || []) {
+          const ben = b.benefits as any;
+          if (!ben) continue;
+          const list = beneficiosMap.get(b.plano_id) || [];
+          list.push({ id: ben.id, name: ben.name, preco_sugerido: ben.preco_sugerido || 0 });
+          beneficiosMap.set(b.plano_id, list);
         }
       }
 
@@ -109,12 +107,18 @@ function useLinhasComPlanos() {
         ...line,
         plans: (planos || [])
           .filter((plan) => plan.product_line_id === line.id)
-          .map((plan) => ({
-            ...plan,
-            valor_mensal: (coberturaValores.get(plan.id) || 0) + (beneficioValores.get(plan.id) || 0),
-            coberturas_count: coberturaContagens.get(plan.id) || 0,
-            beneficios_count: beneficioContagens.get(plan.id) || 0,
-          })),
+          .map((plan) => {
+            const cobs = coberturasMap.get(plan.id) || [];
+            const bens = beneficiosMap.get(plan.id) || [];
+            return {
+              ...plan,
+              coberturas_list: cobs,
+              beneficios_list: bens,
+              valor_mensal: cobs.reduce((s, c) => s + c.valor, 0) + bens.reduce((s, b) => s + b.preco_sugerido, 0),
+              coberturas_count: cobs.length,
+              beneficios_count: bens.length,
+            };
+          }),
       }));
     },
   });
@@ -176,6 +180,7 @@ export function LinhasPlanos() {
   const [importModal, setImportModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
   const [duplicarModal, setDuplicarModal] = useState<{ open: boolean; plano: { id: string; nome: string } | null }>({ open: false, plano: null });
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
   const selectedPlan = useMemo(
     () => (planoModal.planId ? { id: planoModal.planId } : null),
@@ -345,70 +350,128 @@ export function LinhasPlanos() {
                         <div className="divide-y divide-border/60">
                           {linha.plans.map((plano: any) => {
                             const badgeTone = plano.badge_color ? BADGE_TONES[plano.badge_color] : null;
+                            const isExpanded = expandedPlanId === plano.id;
 
                             return (
-                              <div
-                                key={plano.id}
-                                className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40 rounded-lg"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-sm font-medium text-foreground">{plano.nome}</span>
-                                    {plano.badge_text ? (
-                                      <Badge
-                                        className="border text-[10px] px-1.5 py-0"
-                                        style={badgeTone ? {
-                                          backgroundColor: `hsl(${badgeTone.background})`,
-                                          borderColor: `hsl(${badgeTone.border})`,
-                                          color: `hsl(${badgeTone.text})`,
-                                        } : undefined}
+                              <div key={plano.id}>
+                                <div
+                                  className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40 rounded-lg cursor-pointer"
+                                  onClick={() => setExpandedPlanId(isExpanded ? null : plano.id)}
+                                >
+                                  <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0', !isExpanded && '-rotate-90')} />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-sm font-medium text-foreground">{plano.nome}</span>
+                                      {plano.badge_text ? (
+                                        <Badge
+                                          className="border text-[10px] px-1.5 py-0"
+                                          style={badgeTone ? {
+                                            backgroundColor: `hsl(${badgeTone.background})`,
+                                            borderColor: `hsl(${badgeTone.border})`,
+                                            color: `hsl(${badgeTone.text})`,
+                                          } : undefined}
+                                        >
+                                          {plano.badge_text}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                  </div>
+
+                                  <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
+                                    <span className="flex items-center gap-1">
+                                      <Shield className="h-3.5 w-3.5" />
+                                      {plano.coberturas_count} cob.
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Sparkles className="h-3.5 w-3.5" />
+                                      {plano.beneficios_count} ben.
+                                    </span>
+                                    <span>Ordem {plano.ordem ?? 0}</span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    <Switch
+                                      checked={plano.ativo}
+                                      onCheckedChange={(checked) => toggleStatus.mutate({ id: plano.id, is_active: checked })}
+                                      disabled={toggleStatus.isPending}
+                                    />
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8"
+                                      onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDuplicarModal({ open: true, plano: { id: plano.id, nome: plano.nome } })}>
+                                      <Copy className="h-3.5 w-3.5" />
+                                    </Button>
+                                    {canDelete ? (
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8 text-destructive hover:text-destructive"
+                                        onClick={() => setDeleteConfirm({ type: 'plano', id: plano.id, name: plano.nome })}
                                       >
-                                        {plano.badge_text}
-                                      </Badge>
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
                                     ) : null}
                                   </div>
                                 </div>
 
-                                <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
-                                  <span className="flex items-center gap-1">
-                                    <Shield className="h-3.5 w-3.5" />
-                                    {plano.coberturas_count} cob.
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <Sparkles className="h-3.5 w-3.5" />
-                                    {plano.beneficios_count} ben.
-                                  </span>
-                                  <span>Ordem {plano.ordem ?? 0}</span>
-                                </div>
+                                {isExpanded && (
+                                  <div className="ml-8 mr-3 mb-2 rounded-xl border border-border/50 bg-muted/20 p-3 space-y-3">
+                                    {plano.coberturas_list.length > 0 && (
+                                      <div>
+                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                                          <Shield className="h-3.5 w-3.5" /> Coberturas
+                                        </p>
+                                        <div className="space-y-0.5">
+                                          {plano.coberturas_list.map((cob: any) => (
+                                            <button
+                                              key={cob.id}
+                                              type="button"
+                                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
+                                              onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
+                                            >
+                                              <span className="text-foreground">{cob.nome}</span>
+                                              <span className="text-muted-foreground font-medium tabular-nums">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cob.valor)}
+                                              </span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
 
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Switch
-                                    checked={plano.ativo}
-                                    onCheckedChange={(checked) => toggleStatus.mutate({ id: plano.id, is_active: checked })}
-                                    disabled={toggleStatus.isPending}
-                                  />
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDuplicarModal({ open: true, plano: { id: plano.id, nome: plano.nome } })}>
-                                    <Copy className="h-3.5 w-3.5" />
-                                  </Button>
-                                  {canDelete ? (
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-8 w-8 text-destructive hover:text-destructive"
-                                      onClick={() => setDeleteConfirm({ type: 'plano', id: plano.id, name: plano.nome })}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  ) : null}
-                                </div>
+                                    {plano.beneficios_list.length > 0 && (
+                                      <div>
+                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                                          <Sparkles className="h-3.5 w-3.5" /> Benefícios
+                                        </p>
+                                        <div className="space-y-0.5">
+                                          {plano.beneficios_list.map((ben: any) => (
+                                            <button
+                                              key={ben.id}
+                                              type="button"
+                                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
+                                              onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
+                                            >
+                                              <span className="text-foreground">{ben.name}</span>
+                                              <span className="text-muted-foreground font-medium tabular-nums">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ben.preco_sugerido)}
+                                              </span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {plano.coberturas_list.length === 0 && plano.beneficios_list.length === 0 && (
+                                      <p className="text-sm text-muted-foreground text-center py-2">Nenhuma cobertura ou benefício cadastrado.</p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
