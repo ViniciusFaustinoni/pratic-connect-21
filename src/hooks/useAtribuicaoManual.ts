@@ -122,6 +122,17 @@ export function useVistoriadoresAtivos() {
   });
 }
 
+async function getProfileId(): Promise<string | null> {
+  const { data: { user } } = await supabase.auth.getUser();
+  if (!user) return null;
+  const { data: profile } = await supabase
+    .from('profiles')
+    .select('id')
+    .eq('id', user.id)
+    .maybeSingle();
+  return profile?.id || null;
+}
+
 export function useAtribuirServicoManual() {
   const qc = useQueryClient();
 
@@ -138,15 +149,16 @@ export function useAtribuirServicoManual() {
 
       if (error) throw error;
 
-      // Registrar no log de atribuições
-      const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('servicos_atribuicoes_log').insert({
+      // Registrar no log de atribuições usando profiles.id
+      const profileId = await getProfileId();
+      const { error: logError } = await supabase.from('servicos_atribuicoes_log').insert({
         servico_id: servicoId,
         profissional_id: profissionalId,
         tipo_atribuicao: 'manual',
-        atribuido_por: user?.id || null,
+        atribuido_por: profileId,
         observacoes: 'Atribuição manual pelo painel',
       });
+      if (logError) console.error('Erro ao registrar log de atribuição:', logError);
 
       // Get servico + profissional data for WhatsApp notification
       const { data: servico } = await supabase
@@ -157,13 +169,13 @@ export function useAtribuirServicoManual() {
           veiculo:veiculos!servicos_veiculo_id_fkey(placa)
         `)
         .eq('id', servicoId)
-        .single();
+        .maybeSingle();
 
       const { data: profissional } = await supabase
         .from('profiles')
         .select('telefone, whatsapp, nome')
         .eq('id', profissionalId)
-        .single();
+        .maybeSingle();
 
       // Send WhatsApp template to vistoriador
       if (profissional?.telefone || profissional?.whatsapp) {
@@ -202,6 +214,8 @@ export function useAtribuirServicoManual() {
       toast.success('Serviço atribuído com sucesso');
       qc.invalidateQueries({ queryKey: ['servicos-para-atribuir-manual'] });
       qc.invalidateQueries({ queryKey: ['vistoriadores-ativos-manual'] });
+      qc.invalidateQueries({ queryKey: ['vistorias-mapa'] });
+      qc.invalidateQueries({ queryKey: ['vistoriadores-localizacao-realtime'] });
     },
     onError: (err: any) => {
       toast.error('Erro ao atribuir serviço: ' + (err.message || ''));

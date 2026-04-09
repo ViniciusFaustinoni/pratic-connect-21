@@ -28542,6 +28542,7 @@ export type Database = {
           id: string | null
           latitude: number | null
           longitude: number | null
+          origem_registro: string | null
           periodo: string | null
           permite_encaixe: boolean | null
           rota_codigo: string | null
