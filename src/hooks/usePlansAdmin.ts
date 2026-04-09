@@ -350,12 +350,17 @@ export function useDuplicatePlan() {
 
           if (!origBenefit) continue;
 
-          // Clone benefit record
+          // Clone benefit record with suffix and discount
           const { id: bId, created_at: bCreated, ...bData } = origBenefit;
           const uniqueSuffix = `-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
           const { data: newBenefit, error: bError } = await supabase
             .from('benefits')
-            .insert({ ...bData, slug: ((bData.slug as string) || '').slice(0, 80) + uniqueSuffix })
+            .insert({
+              ...bData,
+              name: sufixo ? `${bData.name}${sufixo}` : bData.name,
+              slug: ((bData.slug as string) || '').slice(0, 80) + uniqueSuffix,
+              preco_sugerido: applyDiscount(bData.preco_sugerido, desconto),
+            })
             .select()
             .single();
 
@@ -431,12 +436,19 @@ export function useDuplicatePlan() {
 
           if (!origCob) continue;
 
-          // Clone the coverage record
+          // Clone the coverage record with suffix and discount
           const { id: cobId, created_at: cobCreated, ...cobData } = origCob;
           const uniqueSuffix = `-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
           const { data: newCob, error: cobError } = await supabase
             .from('coberturas')
-            .insert({ ...cobData, codigo: (cobData.codigo || '').slice(0, 80) + uniqueSuffix })
+            .insert({
+              ...cobData,
+              nome: sufixo ? `${cobData.nome}${sufixo}` : cobData.nome,
+              codigo: (cobData.codigo || '').slice(0, 80) + uniqueSuffix,
+              valor: applyDiscount(cobData.valor, desconto),
+              valor_limite: applyDiscount(cobData.valor_limite, desconto),
+              franquia_valor: applyDiscount(cobData.franquia_valor, desconto),
+            })
             .select()
             .single();
 
