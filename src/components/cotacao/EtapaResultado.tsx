@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -191,11 +191,11 @@ export function EtapaResultado({
           </div>
 
           {/* Observações */}
-          {observacao && (
+          {alertaCategoria && (
             <Alert className="border-amber-500/50 bg-amber-500/10">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               <AlertDescription className="text-amber-700 dark:text-amber-400">
-                {observacao}
+                {alertaCategoria.mensagem}
               </AlertDescription>
             </Alert>
           )}
