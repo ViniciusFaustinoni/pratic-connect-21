@@ -1,57 +1,56 @@
 
 
-## Plano: Auto-finalizar almoco no servidor (cron)
+## Plano: Corrigir rastreadores em porte nao aparecendo para instalador
 
-### Problema
-A finalizacao do almoco apos 60 minutos so acontece no **client-side** (useEffect em `useJornadaTrabalho.ts`). Se o app do tecnico esta inativo ou em background, o status `em_almoco` permanece no banco indefinidamente. O cron (`cron-atribuir-tarefas`) ve `status === 'em_almoco'` e pula o profissional, que nunca mais recebe tarefas.
+### Diagnostico
+Os dados existem no banco (2 rastreadores com `portador_id` do `[TESTE] Vistoriador` e `status = 'estoque'`). As politicas RLS parecem permitir acesso. O problema provavel e um dos seguintes:
 
-### Correcao
-**`supabase/functions/cron-atribuir-tarefas/index.ts`** (linhas 170-174) — antes de pular o profissional em almoco, verificar se ja passou 60+ minutos. Se sim, finalizar o almoco automaticamente no servidor e continuar a atribuicao normalmente.
+1. **Cache stale do React Query** — a query `rastreadores-meu-porte` pode ter sido cacheada como vazia em uma sessao anterior e nao refetch ao entrar no checklist
+2. **Erro silencioso** — o hook nao captura nem exibe erros da query, entao falhas de RLS ou rede passam despercebidas
+3. **Profile ainda nao carregado** — timing entre auth context e a query
+
+### Correcoes
+
+**1. `src/hooks/useRastreadoresPortador.ts`**
+- Adicionar `refetchOnMount: 'always'` para garantir dados frescos ao abrir o checklist
+- Adicionar `retry: 2` para resiliencia em conexoes instáveis (mobile)
+- Logar erro no console para facilitar debug futuro
 
 ```typescript
-// Onde hoje tem:
-if (turnoHoje?.status === 'em_almoco') {
-  console.log(`... em ALMOÇO - pulando`);
-  continue;
-}
+return useQuery({
+  queryKey: ['rastreadores-meu-porte', profile?.id],
+  enabled: !!profile?.id,
+  refetchOnMount: 'always',
+  retry: 2,
+  queryFn: async (): Promise<RastreadorEmPorte[]> => {
+    const { data, error } = await supabase
+      .from('rastreadores')
+      .select('id, codigo, imei, numero_serie, plataforma')
+      .eq('portador_id', profile!.id)
+      .eq('status', 'estoque')
+      .order('codigo');
 
-// Substituir por:
-if (turnoHoje?.status === 'em_almoco' && turnoHoje.inicio_almoco) {
-  const inicioAlmoco = new Date(turnoHoje.inicio_almoco);
-  const agora = new Date();
-  const minutosEmAlmoco = Math.floor((agora.getTime() - inicioAlmoco.getTime()) / 60000);
-
-  if (minutosEmAlmoco < 60) {
-    console.log(`... em ALMOÇO há ${minutosEmAlmoco}min - pulando`);
-    continue;
-  }
-
-  // Almoco expirado — finalizar automaticamente no servidor
-  const minutosAtraso = Math.max(0, minutosEmAlmoco - 60);
-  console.log(`... ALMOÇO expirado (${minutosEmAlmoco}min) — finalizando server-side`);
-  
-  await supabase
-    .from('turnos_profissionais')
-    .update({
-      status: 'ativo',
-      fim_almoco: agora.toISOString(),
-      minutos_atraso_almoco: minutosAtraso,
-    })
-    .eq('id', turnoHoje.id);
-  
-  // Continuar normalmente (nao dar continue) para atribuir tarefa
-}
+    if (error) {
+      console.error('[useRastreadoresDoPortador] Erro ao buscar:', error);
+      throw error;
+    }
+    console.log('[useRastreadoresDoPortador] Encontrados:', data?.length, 'para portador', profile!.id);
+    return (data || []) as RastreadorEmPorte[];
+  },
+});
 ```
 
-**Mesma logica em `supabase/functions/atribuir-proxima-tarefa/index.ts`** (linhas 229-252) — quando o tecnico pede tarefa e o almoco ja expirou, finalizar o almoco e prosseguir em vez de retornar `em_almoco`.
+**2. `src/pages/instalador/InstaladorChecklist.tsx`**
+- Capturar o `error` retornado pelo hook: `const { data: rastreadoresEmPorte, isLoading: isLoadingRastreadores, error: erroRastreadores } = useRastreadoresDoPortador();`
+- Na UI, quando houver erro, mostrar mensagem informativa em vez de "nenhum em porte" (para que o usuario saiba que houve falha e pode tentar recarregar)
+- Adicionar botao "Tentar novamente" que faz refetch
 
 ### Resultado
-- Se o almoco passou de 60 minutos, o **servidor** finaliza automaticamente o almoco
-- O tecnico volta a receber tarefas mesmo que o app estivesse em background
-- O atraso de almoco continua sendo registrado corretamente
-- O client-side continua funcionando como fallback rapido
+- Dados frescos sempre ao abrir o checklist
+- Erros visiveis no console e na UI
+- Botao de retry para o instalador caso haja falha de rede
 
 ### Arquivos
-- `supabase/functions/cron-atribuir-tarefas/index.ts`
-- `supabase/functions/atribuir-proxima-tarefa/index.ts`
+- `src/hooks/useRastreadoresPortador.ts`
+- `src/pages/instalador/InstaladorChecklist.tsx`
 
