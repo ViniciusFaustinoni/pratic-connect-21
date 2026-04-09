@@ -50,12 +50,22 @@ export function useAllEligibilityRules() {
   return useQuery({
     queryKey: ['entity_eligibility_rules', 'all'],
     queryFn: async () => {
-      const { data, error } = await supabase
-        .from('entity_eligibility_rules' as any)
-        .select('*')
-        .eq('is_active', true);
-      if (error) throw error;
-      return (data || []) as unknown as EligibilityRule[];
+      const PAGE_SIZE = 1000;
+      let allData: EligibilityRule[] = [];
+      let from = 0;
+      while (true) {
+        const { data, error } = await supabase
+          .from('entity_eligibility_rules' as any)
+          .select('*')
+          .eq('is_active', true)
+          .range(from, from + PAGE_SIZE - 1);
+        if (error) throw error;
+        const page = (data || []) as unknown as EligibilityRule[];
+        allData = allData.concat(page);
+        if (page.length < PAGE_SIZE) break;
+        from += PAGE_SIZE;
+      }
+      return allData;
     },
     staleTime: 1000 * 60 * 5,
   });
