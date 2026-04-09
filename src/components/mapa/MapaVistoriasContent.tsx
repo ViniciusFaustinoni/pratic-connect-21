@@ -283,6 +283,10 @@ export function MapaVistoriasContent() {
   };
 
   const iniciarAtribuicao = useCallback((vistoria: VistoriaMapa) => {
+    if (vistoria.origem_registro !== 'servicos') {
+      toast.error('Este item não pode ser atribuído manualmente por este fluxo.');
+      return;
+    }
     setServicoParaAtribuir(vistoria);
     if (vistoria.latitude && vistoria.longitude) {
       setPosicaoSelecionada([vistoria.latitude, vistoria.longitude]);
