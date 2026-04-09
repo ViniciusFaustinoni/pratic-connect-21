@@ -12,7 +12,7 @@ export function useDesatribuirServico() {
         .from('servicos')
         .select('profissional_id')
         .eq('id', servicoId)
-        .single();
+        .maybeSingle();
 
       const profissionalAnterior = servico?.profissional_id;
 
@@ -27,15 +27,27 @@ export function useDesatribuirServico() {
 
       if (error) throw error;
 
-      // Log cancellation
+      // Get profiles.id for the authenticated user
       const { data: { user } } = await supabase.auth.getUser();
-      await supabase.from('servicos_atribuicoes_log').insert({
+      let profileId: string | null = null;
+      if (user) {
+        const { data: profile } = await supabase
+          .from('profiles')
+          .select('id')
+          .eq('id', user.id)
+          .maybeSingle();
+        profileId = profile?.id || null;
+      }
+
+      // Log cancellation
+      const { error: logError } = await supabase.from('servicos_atribuicoes_log').insert({
         servico_id: servicoId,
         profissional_id: profissionalAnterior || null,
         tipo_atribuicao: 'cancelamento_manual',
-        atribuido_por: user?.id || null,
+        atribuido_por: profileId,
         observacoes: 'Cancelamento manual de atribuição pelo mapa',
       });
+      if (logError) console.error('Erro ao registrar log de cancelamento:', logError);
     },
     onSuccess: () => {
       toast.success('Atribuição cancelada com sucesso');

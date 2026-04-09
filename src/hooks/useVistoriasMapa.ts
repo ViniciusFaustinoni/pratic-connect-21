@@ -33,6 +33,7 @@ export interface VistoriaMapa {
   confirmacao_whatsapp: string | null;
   permite_encaixe: boolean;
   periodo: string | null;
+  origem_registro: string | null;
 }
 
 export interface RotaAgrupada {

@@ -417,7 +417,7 @@ export function MapaVistoriasContent() {
               ? new Date(v.data_agendada + 'T00:00:00') < hojeNorm && v.status !== 'concluida' && v.status !== 'cancelada'
               : false;
             const isRealizada = STATUS_REALIZADOS.includes(v.status);
-            const canAssign = !!atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.latitude;
+            const canAssign = !!atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.latitude && v.origem_registro === 'servicos';
             const isSelected = servicoParaAtribuir?.id === v.id;
             const canSendConfirmation = podeEnviarConfirmacao(v);
 
@@ -680,7 +680,7 @@ export function MapaVistoriasContent() {
               
               // Find nearest unassigned service within 5km
               const servicosNaoAtribuidos = vistoriasComCoordenadas.filter(v =>
-                !v.vistoriador_id && !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude
+                !v.vistoriador_id && !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude && v.origem_registro === 'servicos'
               );
               
               let melhorServico: VistoriaMapa | null = null;
@@ -709,7 +709,7 @@ export function MapaVistoriasContent() {
               } else if (melhorServico) {
                 toast.error(`Serviço mais próximo está a ${melhorDist.toFixed(1)} km. Solte mais perto do pin do serviço.`);
               } else {
-                toast.error('Nenhum serviço não atribuído encontrado nesta região');
+                toast.error('Nenhum serviço atribuível encontrado nesta região. Apenas serviços unificados podem ser atribuídos por este fluxo.');
               }
             },
           }}
