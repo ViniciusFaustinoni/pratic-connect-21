@@ -368,8 +368,8 @@ serve(async (req) => {
         .eq('permite_encaixe', true)  // APENAS os que aceitam encaixe
         .not('latitude', 'is', null)
         .not('longitude', 'is', null)
-        // FILTRO DE CONFIRMAÇÃO: Encaixes também precisam de confirmação
-        .eq('confirmacao_whatsapp', 'confirmada');
+        // FILTRO DE CONFIRMAÇÃO: Encaixes podem ter confirmação NULL (confirmados presencialmente)
+        .or('confirmacao_whatsapp.eq.confirmada,confirmacao_whatsapp.is.null');
 
       if (servicosEncaixeError) {
         console.error('[cron-atribuir-tarefas] Erro ao buscar serviços encaixe:', servicosEncaixeError);
@@ -392,7 +392,7 @@ serve(async (req) => {
         .or('local_vistoria.is.null,local_vistoria.eq.cliente')
         .is('latitude', null)
         .not('logradouro', 'is', null)
-        .eq('confirmacao_whatsapp', 'confirmada');
+        .or('confirmacao_whatsapp.eq.confirmada,confirmacao_whatsapp.is.null');
 
       // Geocodificar on-the-fly os serviços sem coordenadas
       const servicosGeocodificados: any[] = [];
@@ -576,103 +576,7 @@ serve(async (req) => {
         const tipoAtribuicao = servico.is_encaixe ? 'encaixe' : (servico.is_hoje ? 'hoje' : 'amanha');
         console.log(`[cron-atribuir-tarefas] Tentando atribuir ${servico.tipo} ${servico.id} (${servico.distancia_km.toFixed(2)} km, tipo: ${tipoAtribuicao})`);
 
-        // ========== ENCAIXE: CONFIRMAÇÃO VIA WHATSAPP ANTES DE ATRIBUIR ==========
-        if (servico.is_encaixe && !(servico as any).confirmacao_whatsapp) {
-          // DEDUP: pular se já enviamos confirmação para este serviço nesta execução
-          if (encaixesJaEnviados.has(servico.id)) {
-            console.log(`[cron-atribuir-tarefas] 🔄 Encaixe ${servico.id} já teve confirmação enviada nesta execução - pulando`);
-            continue;
-          }
-
-          // UPDATE ATÔMICO ANTES DO ENVIO: previne race condition entre execuções
-          const { data: lockResult, error: lockError } = await supabase
-            .from('servicos')
-            .update({ confirmacao_whatsapp: 'aguardando_confirmacao_encaixe' })
-            .eq('id', servico.id)
-            .is('confirmacao_whatsapp', null)
-            .select('id');
-
-          if (lockError || !lockResult || lockResult.length === 0) {
-            console.log(`[cron-atribuir-tarefas] 🔒 Encaixe ${servico.id} já está sendo processado por outra execução - pulando`);
-            encaixesJaEnviados.add(servico.id);
-            continue;
-          }
-
-          // Lock obtido com sucesso - marcar no Set local
-          encaixesJaEnviados.add(servico.id);
-          console.log(`[cron-atribuir-tarefas] ⏳ Encaixe ${servico.id} precisa de confirmação do associado antes de atribuir`);
-          
-          try {
-            // Buscar dados do associado para enviar confirmação
-            const assocEncaixe = (servico as any).associado;
-            const telefoneEncaixe = assocEncaixe?.whatsapp || assocEncaixe?.telefone || '';
-            const nomeEncaixe = assocEncaixe?.nome || 'Cliente';
-            const associadoIdEncaixe = (servico as any).associado_id;
-            
-            if (telefoneEncaixe && associadoIdEncaixe) {
-              const telefoneFormatado = telefoneEncaixe.replace(/\D/g, '');
-              const tipoServicoEncaixe = servico.tipo === 'instalacao' ? 'instalação do rastreador' : 'vistoria veicular';
-              
-              // Buscar nome do profissional disponível
-              const { data: profEncaixe } = await supabase
-                .from('profiles')
-                .select('nome')
-                .eq('id', prof.vistoriador_id)
-                .single();
-              const nomeProfEncaixe = profEncaixe?.nome || 'profissional';
-
-              const mensagemEncaixe = `Olá, *${nomeEncaixe.split(' ')[0]}*! 👋
-
-Aqui é a *PRATIC Proteção Veicular*.
-
-Temos um profissional (*${nomeProfEncaixe}*) disponível *próximo de você agora*! 🚗
-
-Podemos antecipar sua *${tipoServicoEncaixe}* para *HOJE*?
-
-✅ Responda *SIM* para confirmar o encaixe
-❌ Ou *NÃO* para manter a data original
-
-Aguardamos sua confirmação! ⚡`;
-
-              await supabase.functions.invoke('whatsapp-send-text', {
-                body: {
-                  telefone: telefoneFormatado,
-                  mensagem: mensagemEncaixe,
-                  template_name: 'confirmacao_agendamento_v1',
-                  template_params: [
-                    nomeEncaixe.split(' ')[0],
-                    tipoServicoEncaixe,
-                    'Encaixe HOJE - profissional disponível na região',
-                  ],
-                }
-              });
-
-              // Criar registro de confirmação para o webhook tratar a resposta
-              await supabase.from('confirmacoes_agendamento').insert({
-                servico_id: servico.id,
-                telefone: telefoneFormatado,
-                status: 'enviada',
-                mensagem_enviada_em: new Date().toISOString(),
-                contexto_ia: {
-                  nome_cliente: nomeEncaixe,
-                  tipo_servico: servico.tipo,
-                  tipo_confirmacao: 'encaixe',
-                  profissional_id: prof.vistoriador_id,
-                  profissional_nome: nomeProfEncaixe,
-                }
-              });
-
-              console.log(`[cron-atribuir-tarefas] ✓ Confirmação de encaixe enviada para ${telefoneFormatado} (serviço ${servico.id})`);
-            } else {
-              console.log(`[cron-atribuir-tarefas] ⚠️ Encaixe ${servico.id} sem telefone/associado - pulando confirmação`);
-            }
-          } catch (encaixeErr) {
-            console.error(`[cron-atribuir-tarefas] Erro ao enviar confirmação de encaixe:`, encaixeErr);
-          }
-          
-          continue; // NÃO atribuir - aguardar confirmação do associado
-        }
-        // ========== FIM ENCAIXE CONFIRMAÇÃO ==========
+        // Encaixes com confirmacao_whatsapp = NULL são confirmados presencialmente — atribuir direto
 
         const agora = new Date().toISOString();
 
