@@ -1782,25 +1782,14 @@ ${templateWhatsapp || '✨ *Benefícios exclusivos PRATIC:*\n• Cobertura 100% 
                     <div className="space-y-3">
                       <p className="text-sm font-medium">Coberturas incluídas:</p>
                       <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
-                        {planoAtual.coberturas.map((cobertura, i) => {
-                          const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo);
-                          return (
+                        {planoAtual.coberturas
+                          .filter(cobertura => !isCoberturaRemovida(cobertura, categoriaVeiculo))
+                          .map((cobertura, i) => (
                             <div key={i} className="flex items-center gap-2 text-sm">
-                              {isRemovida ? (
-                                <>
-                                  <X className="h-4 w-4 text-destructive shrink-0" />
-                                  <span className="text-muted-foreground line-through">{cobertura}</span>
-                                  <span className="text-xs text-destructive">(não cobre)</span>
-                                </>
-                              ) : (
-                                <>
-                                  <Check className="h-4 w-4 text-green-500 shrink-0" />
-                                  <span>{cobertura}</span>
-                                </>
-                              )}
+                              <Check className="h-4 w-4 text-green-500 shrink-0" />
+                              <span>{cobertura}</span>
                             </div>
-                          );
-                        })}
+                          ))}
                       </div>
 
                       {planoAtual.naoInclui.length > 0 && (
