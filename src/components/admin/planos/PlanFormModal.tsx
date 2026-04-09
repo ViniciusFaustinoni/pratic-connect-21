@@ -27,6 +27,7 @@ import { supabase } from '@/integrations/supabase/client';
 import type { PlanWithDetails } from '@/hooks/usePlans';
 import { PlanCoberturasList } from './PlanCoberturasList';
 import { PlanBeneficiosList } from './PlanBeneficiosList';
+import { EligibilityRulesEditor } from './EligibilityRulesEditor';
 
 interface PlanFormModalProps {
   open: boolean;
