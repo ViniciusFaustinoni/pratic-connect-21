@@ -196,6 +196,10 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [newForm, setNewForm] = useState({ nome: '', icon: '' });
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignSearch, setAssignSearch] = useState('');
+  const [assignSelected, setAssignSelected] = useState<Set<string>>(new Set());
+  const [assigning, setAssigning] = useState(false);
   const focusRef = useRef<HTMLDivElement>(null);
   const hasFocused = useRef(false);
 
