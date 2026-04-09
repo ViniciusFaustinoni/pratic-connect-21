@@ -143,6 +143,19 @@ function getPeriodoLabel(periodo?: string | null): string {
   return '';
 }
 
+function safeParseDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function safeFormat(dateStr: string | null | undefined, fmt: string): string {
+  if (!dateStr) return '';
+  const d = safeParseDate(dateStr);
+  if (!d) return '';
+  try { return format(d, fmt, { locale: ptBR }); } catch { return ''; }
+}
+
 function getConfirmacaoLabel(confirmacao_whatsapp?: string | null, permite_encaixe?: boolean): string {
   if (permite_encaixe) return 'Encaixe';
   if (confirmacao_whatsapp === 'confirmada') return '✅ Confirmado';
