@@ -61,6 +61,56 @@ interface EligibilityRule {
   is_active: boolean;
 }
 
+const RULE_BADGE_STYLES: Record<string, { bg: string; border: string; text: string }> = {
+  tipo_uso: { bg: '271 91% 65% / 0.14', border: '271 91% 65% / 0.32', text: '271 91% 76%' },
+  combustivel: { bg: '24 95% 53% / 0.14', border: '24 95% 53% / 0.32', text: '24 95% 68%' },
+  regiao: { bg: '217 91% 60% / 0.14', border: '217 91% 60% / 0.32', text: '217 91% 70%' },
+  tipo_placa: { bg: '0 84% 60% / 0.14', border: '0 84% 60% / 0.32', text: '0 84% 72%' },
+};
+
+const RULE_LABELS: Record<string, Record<string, string>> = {
+  tipo_uso: { particular: 'Passeio', aplicativo: 'APP', comercial: 'Comercial' },
+  combustivel: { diesel: 'Diesel', flex: 'Flex', gasolina: 'Gasolina', etanol: 'Etanol', eletrico: 'Elétrico', hibrido: 'Híbrido' },
+  tipo_placa: { mercosul: 'Mercosul', leilao: 'Leilão', chassi_remarcado: 'Chassi Remarcado', placa_vermelha: 'Placa Vermelha', taxi: 'Táxi', ex_taxi: 'Ex-Táxi', veiculo_que_ja_teve_ressarcimento_integral: 'Ressarc. Integral' },
+};
+
+function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
+  const visibleRules = rules.filter((r) => r.rule_type !== 'fipe_range');
+  if (visibleRules.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {visibleRules.map((rule) => {
+        const style = RULE_BADGE_STYLES[rule.rule_type] || RULE_BADGE_STYLES.tipo_uso;
+        const values = rule.rule_config?.values as string[] | undefined;
+        let label = rule.rule_type;
+
+        if (rule.rule_type === 'regiao') {
+          label = `Região (${values?.length || 0})`;
+        } else if (values && RULE_LABELS[rule.rule_type]) {
+          label = values
+            .map((v) => RULE_LABELS[rule.rule_type]?.[v] || v)
+            .join(', ');
+        }
+
+        return (
+          <span
+            key={rule.id}
+            className="text-[9px] font-medium px-1.5 py-0.5 rounded-full leading-tight"
+            style={{
+              backgroundColor: `hsl(${style.bg})`,
+              color: `hsl(${style.text})`,
+              border: `1px solid hsl(${style.border})`,
+            }}
+          >
+            {label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function useLinhasComPlanos() {
   return useQuery({
     queryKey: ['linhas_com_planos_clean'],
