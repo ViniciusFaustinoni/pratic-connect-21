@@ -1,39 +1,31 @@
 
+## Plano: Adicionar campos de valores editaveis nas coberturas e beneficios
 
-## Plano: Expandir plano inline com coberturas/beneficios e modal de edicao
-
-### Objetivo
-Ao clicar num plano na lista de LinhasPlanos, expandir inline mostrando coberturas e beneficios com seus valores. Ao clicar num item, abrir o PlanFormModal focado nesse plano (onde ja existem os editores inline de coberturas e beneficios).
+### Problema
+Os formularios inline de cobertura (`CoberturaInlineForm`) e beneficio (`BeneficioInlineForm`) no modal de edicao de plano nao mostram nem permitem editar os campos de valor financeiro.
 
 ### Alteracoes
 
-**1. Expandir dados na query `useLinhasComPlanos`** (`src/components/gestao-comercial/LinhasPlanos.tsx`)
-- Alterar as queries de coberturas e beneficios para trazer nome e valor de cada item (nao so agregados)
-- Coberturas: `planos_coberturas` → `select('plano_id, cobertura_id, coberturas(id, nome, valor, tipo, ativo)')`
-- Beneficios: `planos_beneficios` → `select('plano_id, benefit_id, benefits:benefit_id(id, name, preco_sugerido, category, is_active)')`
-- Armazenar listas completas por plano alem dos contadores/somas
+**1. `CoberturaInlineForm`** em `src/components/admin/planos/PlanCoberturasList.tsx`
+- Adicionar ao state do form: `valor`, `valor_limite`, `percentual_cobertura`, `franquia_percentual`, `franquia_valor`
+- Adicionar secao de campos no formulario com grid 3 colunas:
+  - Valor (R$) — `valor`
+  - Valor Limite (R$) — `valor_limite`
+  - % Cobertura — `percentual_cobertura`
+- Adicionar linha com grid 2 colunas:
+  - Franquia (%) — `franquia_percentual`
+  - Franquia (R$) — `franquia_valor`
+- Incluir esses campos no payload do `handleSave`
 
-**2. Adicionar estado de expansao por plano** (`src/components/gestao-comercial/LinhasPlanos.tsx`)
-- Novo state `expandedPlanId: string | null`
-- Clicar na linha do plano alterna expansao (toggle)
-- Manter botoes de acao (editar, duplicar, excluir) no mesmo lugar
-
-**3. Renderizar lista expandida inline**
-- Abaixo da linha do plano expandido, mostrar:
-  - Secao "Coberturas" com lista: nome + valor formatado (R$)
-  - Secao "Beneficios" com lista: nome + preco_sugerido formatado (R$)
-  - Cada item clicavel com cursor pointer e hover highlight
-- Clicar num item abre `PlanFormModal` com `planId` do plano pai
-
-**4. Abertura do modal ao clicar em item**
-- Ao clicar em cobertura ou beneficio, chamar `setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })`
-- O PlanFormModal ja possui PlanCoberturasList e PlanBeneficiosList com edicao inline completa
+**2. `BeneficioInlineForm`** em `src/components/admin/planos/PlanBeneficiosList.tsx`
+- Adicionar ao state do form: `preco_sugerido`
+- Adicionar campo "Preco Sugerido (R$)" no grid existente de Ordem/Ativo
+- Incluir no payload do `handleSave`
 
 ### Resultado
-- Clique no plano → expande inline com coberturas e beneficios e valores
-- Clique em qualquer item → abre modal de edicao do plano com dados pre-carregados
-- Sem novos componentes — tudo dentro de LinhasPlanos existente
+- Valores financeiros visiveis e editaveis diretamente no formulario inline
+- Salvos via os hooks existentes `useUpdateCobertura` / `useUpdateBenefit` (que ja aceitam esses campos)
 
-### Arquivo
-- `src/components/gestao-comercial/LinhasPlanos.tsx`
-
+### Arquivos
+- `src/components/admin/planos/PlanCoberturasList.tsx`
+- `src/components/admin/planos/PlanBeneficiosList.tsx`
