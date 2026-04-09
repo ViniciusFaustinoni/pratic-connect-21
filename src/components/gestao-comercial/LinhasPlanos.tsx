@@ -52,6 +52,65 @@ const BADGE_TONES: Record<string, { background: string; border: string; text: st
   red: { background: '0 84% 60% / 0.14', border: '0 84% 60% / 0.32', text: '0 84% 72%' },
 };
 
+interface EligibilityRule {
+  id: string;
+  entity_id: string;
+  rule_type: string;
+  rule_mode: string;
+  rule_config: any;
+  is_active: boolean;
+}
+
+const RULE_BADGE_STYLES: Record<string, { bg: string; border: string; text: string }> = {
+  tipo_uso: { bg: '271 91% 65% / 0.14', border: '271 91% 65% / 0.32', text: '271 91% 76%' },
+  combustivel: { bg: '24 95% 53% / 0.14', border: '24 95% 53% / 0.32', text: '24 95% 68%' },
+  regiao: { bg: '217 91% 60% / 0.14', border: '217 91% 60% / 0.32', text: '217 91% 70%' },
+  tipo_placa: { bg: '0 84% 60% / 0.14', border: '0 84% 60% / 0.32', text: '0 84% 72%' },
+};
+
+const RULE_LABELS: Record<string, Record<string, string>> = {
+  tipo_uso: { particular: 'Passeio', aplicativo: 'APP', comercial: 'Comercial' },
+  combustivel: { diesel: 'Diesel', flex: 'Flex', gasolina: 'Gasolina', etanol: 'Etanol', eletrico: 'Elétrico', hibrido: 'Híbrido' },
+  tipo_placa: { mercosul: 'Mercosul', leilao: 'Leilão', chassi_remarcado: 'Chassi Remarcado', placa_vermelha: 'Placa Vermelha', taxi: 'Táxi', ex_taxi: 'Ex-Táxi', veiculo_que_ja_teve_ressarcimento_integral: 'Ressarc. Integral' },
+};
+
+function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
+  const visibleRules = rules.filter((r) => r.rule_type !== 'fipe_range');
+  if (visibleRules.length === 0) return null;
+
+  return (
+    <div className="flex flex-wrap gap-1">
+      {visibleRules.map((rule) => {
+        const style = RULE_BADGE_STYLES[rule.rule_type] || RULE_BADGE_STYLES.tipo_uso;
+        const values = rule.rule_config?.values as string[] | undefined;
+        let label = rule.rule_type;
+
+        if (rule.rule_type === 'regiao') {
+          label = `Região (${values?.length || 0})`;
+        } else if (values && RULE_LABELS[rule.rule_type]) {
+          label = values
+            .map((v) => RULE_LABELS[rule.rule_type]?.[v] || v)
+            .join(', ');
+        }
+
+        return (
+          <span
+            key={rule.id}
+            className="text-[9px] font-medium px-1.5 py-0.5 rounded-full leading-tight"
+            style={{
+              backgroundColor: `hsl(${style.bg})`,
+              color: `hsl(${style.text})`,
+              border: `1px solid hsl(${style.border})`,
+            }}
+          >
+            {label}
+          </span>
+        );
+      })}
+    </div>
+  );
+}
+
 function useLinhasComPlanos() {
   return useQuery({
     queryKey: ['linhas_com_planos_clean'],
@@ -72,8 +131,8 @@ function useLinhasComPlanos() {
       if (plansError) throw plansError;
 
       const planoIds = (planos || []).map((plan) => plan.id);
-      const coberturasMap = new Map<string, { id: string; nome: string; valor: number }[]>();
-      const beneficiosMap = new Map<string, { id: string; name: string; preco_sugerido: number }[]>();
+      const coberturasMap = new Map<string, { id: string; nome: string; valor: number; rules: EligibilityRule[] }[]>();
+      const beneficiosMap = new Map<string, { id: string; name: string; preco_sugerido: number; rules: EligibilityRule[] }[]>();
 
       if (planoIds.length > 0) {
         const { data: coberturas } = await supabase
@@ -85,7 +144,7 @@ function useLinhasComPlanos() {
           const cob = c.coberturas as any;
           if (!cob) continue;
           const list = coberturasMap.get(c.plano_id) || [];
-          list.push({ id: cob.id, nome: cob.nome, valor: cob.valor || 0 });
+          list.push({ id: cob.id, nome: cob.nome, valor: cob.valor || 0, rules: [] });
           coberturasMap.set(c.plano_id, list);
         }
 
@@ -98,8 +157,42 @@ function useLinhasComPlanos() {
           const ben = b.benefits as any;
           if (!ben) continue;
           const list = beneficiosMap.get(b.plano_id) || [];
-          list.push({ id: ben.id, name: ben.name, preco_sugerido: ben.preco_sugerido || 0 });
+          list.push({ id: ben.id, name: ben.name, preco_sugerido: ben.preco_sugerido || 0, rules: [] });
           beneficiosMap.set(b.plano_id, list);
+        }
+
+        // Collect all entity IDs for rules fetch
+        const allCobIds = new Set<string>();
+        const allBenIds = new Set<string>();
+        coberturasMap.forEach((list) => list.forEach((c) => allCobIds.add(c.id)));
+        beneficiosMap.forEach((list) => list.forEach((b) => allBenIds.add(b.id)));
+        const allEntityIds = [...allCobIds, ...allBenIds];
+
+        if (allEntityIds.length > 0) {
+          const { data: rules } = await supabase
+            .from('entity_eligibility_rules')
+            .select('*')
+            .in('entity_id', allEntityIds)
+            .eq('is_active', true);
+
+          const rulesMap = new Map<string, EligibilityRule[]>();
+          for (const r of (rules || []) as EligibilityRule[]) {
+            const list = rulesMap.get(r.entity_id) || [];
+            list.push(r);
+            rulesMap.set(r.entity_id, list);
+          }
+
+          // Attach rules to coberturas and beneficios
+          coberturasMap.forEach((list) => {
+            for (const c of list) {
+              c.rules = rulesMap.get(c.id) || [];
+            }
+          });
+          beneficiosMap.forEach((list) => {
+            for (const b of list) {
+              b.rules = rulesMap.get(b.id) || [];
+            }
+          });
         }
       }
 
@@ -427,19 +520,41 @@ export function LinhasPlanos() {
                                           <Shield className="h-3.5 w-3.5" /> Coberturas
                                         </p>
                                         <div className="space-y-0.5">
-                                          {plano.coberturas_list.map((cob: any) => (
-                                            <button
-                                              key={cob.id}
-                                              type="button"
-                                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
-                                              onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
-                                            >
-                                              <span className="text-foreground">{cob.nome}</span>
-                                              <span className="text-muted-foreground font-medium tabular-nums">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cob.valor)}
-                                              </span>
-                                            </button>
-                                          ))}
+                                          {plano.coberturas_list.map((cob: any) => {
+                                            const fipeRule = cob.rules?.find((r: EligibilityRule) => r.rule_type === 'fipe_range');
+                                            const hasFipe = !!fipeRule;
+                                            let fipeRange = '';
+                                            if (hasFipe && fipeRule.rule_config?.faixas?.length > 0) {
+                                              const activeFaixas = fipeRule.rule_config.faixas.filter((f: any) => f.ativo !== false);
+                                              if (activeFaixas.length > 0) {
+                                                const minVal = Math.min(...activeFaixas.map((f: any) => f.valor));
+                                                const maxVal = Math.max(...activeFaixas.map((f: any) => f.valor));
+                                                fipeRange = `R$ ${minVal.toFixed(2).replace('.', ',')} ~ R$ ${maxVal.toFixed(2).replace('.', ',')}`;
+                                              }
+                                            }
+                                            return (
+                                              <button
+                                                key={cob.id}
+                                                type="button"
+                                                className="w-full flex flex-col gap-1 px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
+                                                onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
+                                              >
+                                                <div className="flex items-center justify-between w-full">
+                                                  <span className="text-foreground">{cob.nome}</span>
+                                                  {hasFipe ? (
+                                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'hsl(45 93% 47% / 0.14)', color: 'hsl(45 93% 62%)', border: '1px solid hsl(45 93% 47% / 0.32)' }}>
+                                                      {fipeRange || 'Variável por FIPE'}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-muted-foreground font-medium tabular-nums">
+                                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cob.valor)}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <RuleBadges rules={cob.rules || []} />
+                                              </button>
+                                            );
+                                          })}
                                         </div>
                                       </div>
                                     )}
@@ -450,19 +565,41 @@ export function LinhasPlanos() {
                                           <Sparkles className="h-3.5 w-3.5" /> Benefícios
                                         </p>
                                         <div className="space-y-0.5">
-                                          {plano.beneficios_list.map((ben: any) => (
-                                            <button
-                                              key={ben.id}
-                                              type="button"
-                                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
-                                              onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
-                                            >
-                                              <span className="text-foreground">{ben.name}</span>
-                                              <span className="text-muted-foreground font-medium tabular-nums">
-                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ben.preco_sugerido)}
-                                              </span>
-                                            </button>
-                                          ))}
+                                          {plano.beneficios_list.map((ben: any) => {
+                                            const fipeRule = ben.rules?.find((r: EligibilityRule) => r.rule_type === 'fipe_range');
+                                            const hasFipe = !!fipeRule;
+                                            let fipeRange = '';
+                                            if (hasFipe && fipeRule.rule_config?.faixas?.length > 0) {
+                                              const activeFaixas = fipeRule.rule_config.faixas.filter((f: any) => f.ativo !== false);
+                                              if (activeFaixas.length > 0) {
+                                                const minVal = Math.min(...activeFaixas.map((f: any) => f.valor));
+                                                const maxVal = Math.max(...activeFaixas.map((f: any) => f.valor));
+                                                fipeRange = `R$ ${minVal.toFixed(2).replace('.', ',')} ~ R$ ${maxVal.toFixed(2).replace('.', ',')}`;
+                                              }
+                                            }
+                                            return (
+                                              <button
+                                                key={ben.id}
+                                                type="button"
+                                                className="w-full flex flex-col gap-1 px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
+                                                onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
+                                              >
+                                                <div className="flex items-center justify-between w-full">
+                                                  <span className="text-foreground">{ben.name}</span>
+                                                  {hasFipe ? (
+                                                    <span className="text-[10px] font-medium px-1.5 py-0.5 rounded-full" style={{ backgroundColor: 'hsl(45 93% 47% / 0.14)', color: 'hsl(45 93% 62%)', border: '1px solid hsl(45 93% 47% / 0.32)' }}>
+                                                      {fipeRange || 'Variável por FIPE'}
+                                                    </span>
+                                                  ) : (
+                                                    <span className="text-muted-foreground font-medium tabular-nums">
+                                                      {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ben.preco_sugerido)}
+                                                    </span>
+                                                  )}
+                                                </div>
+                                                <RuleBadges rules={ben.rules || []} />
+                                              </button>
+                                            );
+                                          })}
                                         </div>
                                       </div>
                                     )}
