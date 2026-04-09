@@ -1,39 +1,39 @@
 
 
-## Plano: Duplicar plano com desconto e sufixo
+## Plano: Expandir plano inline com coberturas/beneficios e modal de edicao
 
-### Contexto
-A funcao `useDuplicatePlan` ja clona coberturas, beneficios, regras de elegibilidade e exclusoes. Falta a possibilidade de aplicar desconto percentual nos valores e sufixo nos nomes ao duplicar.
+### Objetivo
+Ao clicar num plano na lista de LinhasPlanos, expandir inline mostrando coberturas e beneficios com seus valores. Ao clicar num item, abrir o PlanFormModal focado nesse plano (onde ja existem os editores inline de coberturas e beneficios).
 
 ### Alteracoes
 
-**1. Novo componente `DuplicarPlanoModal`** (`src/components/admin/planos/DuplicarPlanoModal.tsx`)
-- Modal com campos:
-  - **Desconto (%)**: input numerico (0-100), default 0
-  - **Sufixo**: input texto (ex: "- SP"), default vazio
-- Botao "Duplicar" que chama a mutation com os parametros
-- Preview do nome resultante: `{nomeOriginal} (cópia){sufixo}`
+**1. Expandir dados na query `useLinhasComPlanos`** (`src/components/gestao-comercial/LinhasPlanos.tsx`)
+- Alterar as queries de coberturas e beneficios para trazer nome e valor de cada item (nao so agregados)
+- Coberturas: `planos_coberturas` → `select('plano_id, cobertura_id, coberturas(id, nome, valor, tipo, ativo)')`
+- Beneficios: `planos_beneficios` → `select('plano_id, benefit_id, benefits:benefit_id(id, name, preco_sugerido, category, is_active)')`
+- Armazenar listas completas por plano alem dos contadores/somas
 
-**2. Atualizar `useDuplicatePlan`** (`src/hooks/usePlansAdmin.ts`)
-- Mudar assinatura para receber `{ id, desconto?, sufixo? }`
-- No nome do plano: `nome (cópia){sufixo}`
-- Ao clonar cada **cobertura**: aplicar sufixo no `nome`, aplicar desconto em `valor`, `valor_limite`, `franquia_valor` (multiplicar por `(100 - desconto) / 100`, arredondar 2 casas)
-- Ao clonar cada **beneficio**: aplicar sufixo no `name`, aplicar desconto em `preco_sugerido`
-- Valores nulos permanecem nulos
+**2. Adicionar estado de expansao por plano** (`src/components/gestao-comercial/LinhasPlanos.tsx`)
+- Novo state `expandedPlanId: string | null`
+- Clicar na linha do plano alterna expansao (toggle)
+- Manter botoes de acao (editar, duplicar, excluir) no mesmo lugar
 
-**3. Atualizar chamadas em `LinhasPlanos.tsx` e `ProdutosPlanos.tsx`**
-- Em vez de `duplicatePlan.mutate(plano.id)`, abrir o `DuplicarPlanoModal` passando o plano
-- O modal chama `duplicatePlan.mutateAsync({ id, desconto, sufixo })`
+**3. Renderizar lista expandida inline**
+- Abaixo da linha do plano expandido, mostrar:
+  - Secao "Coberturas" com lista: nome + valor formatado (R$)
+  - Secao "Beneficios" com lista: nome + preco_sugerido formatado (R$)
+  - Cada item clicavel com cursor pointer e hover highlight
+- Clicar num item abre `PlanFormModal` com `planId` do plano pai
+
+**4. Abertura do modal ao clicar em item**
+- Ao clicar em cobertura ou beneficio, chamar `setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })`
+- O PlanFormModal ja possui PlanCoberturasList e PlanBeneficiosList com edicao inline completa
 
 ### Resultado
-- Ao clicar em "Duplicar", abre modal com opcoes de desconto e sufixo
-- Desconto 0% e sufixo vazio = comportamento identico ao atual
-- Desconto e sufixo aplicados automaticamente em todas as coberturas e beneficios clonados
-- Cada item clonado continua independente para edicao posterior
+- Clique no plano → expande inline com coberturas e beneficios e valores
+- Clique em qualquer item → abre modal de edicao do plano com dados pre-carregados
+- Sem novos componentes — tudo dentro de LinhasPlanos existente
 
-### Arquivos
-- `src/components/admin/planos/DuplicarPlanoModal.tsx` (novo)
-- `src/hooks/usePlansAdmin.ts`
+### Arquivo
 - `src/components/gestao-comercial/LinhasPlanos.tsx`
-- `src/components/gestao-comercial/ProdutosPlanos.tsx`
 
