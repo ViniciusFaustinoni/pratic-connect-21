@@ -210,7 +210,19 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
     enabled: !!planId,
   });
 
-  const toggleItem = (id: string) => {
+  useEffect(() => {
+    if (focusItemId && coberturas.length > 0 && !hasFocused.current) {
+      const match = coberturas.find((c: any) => c.id === focusItemId);
+      if (match) {
+        setOpenItems(new Set([focusItemId]));
+        hasFocused.current = true;
+        setTimeout(() => {
+          focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      }
+    }
+  }, [focusItemId, coberturas]);
+
     setOpenItems(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);

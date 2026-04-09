@@ -182,7 +182,19 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
     enabled: !!planId,
   });
 
-  const toggleItem = (id: string) => {
+  useEffect(() => {
+    if (focusItemId && benefits.length > 0 && !hasFocused.current) {
+      const match = benefits.find((b: any) => b.id === focusItemId);
+      if (match) {
+        setOpenItems(new Set([focusItemId]));
+        hasFocused.current = true;
+        setTimeout(() => {
+          focusRef.current?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }, 150);
+      }
+    }
+  }, [focusItemId, benefits]);
+
     setOpenItems(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
