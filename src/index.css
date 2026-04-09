@@ -480,6 +480,17 @@
   cursor: grabbing !important;
 }
 
+/* Clean tooltip for map markers */
+.custom-tooltip-clean {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.custom-tooltip-clean::before {
+  display: none !important;
+}
+
 /* Logo PRATIC styles */
 .pratic-logo-text {
   font-weight: 700;

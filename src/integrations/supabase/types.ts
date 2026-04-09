@@ -28531,6 +28531,7 @@ export type Database = {
           associado_nome: string | null
           associado_telefone: string | null
           associado_whatsapp: string | null
+          confirmacao_whatsapp: string | null
           data_agendada: string | null
           endereco_bairro: string | null
           endereco_cep: string | null
@@ -28541,6 +28542,8 @@ export type Database = {
           id: string | null
           latitude: number | null
           longitude: number | null
+          periodo: string | null
+          permite_encaixe: boolean | null
           rota_codigo: string | null
           rota_cor: string | null
           rota_id: string | null

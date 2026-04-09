@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo, useCallback } from "react";
-import { MapContainer, TileLayer, Marker, Popup, useMap } from "react-leaflet";
+import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import { RotaPolyline } from "@/components/mapa/RotaPolyline";
 import L from "leaflet";
 import { format, isSameDay, formatDistanceToNow } from "date-fns";
@@ -39,6 +39,8 @@ import {
   User,
   List,
   MousePointerClick,
+  MessageSquare,
+  Send,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
@@ -50,15 +52,34 @@ import { useIsMobile } from "@/hooks/use-mobile";
 import { useConfigAtribuicaoManual, useAtribuirServicoManual } from "@/hooks/useAtribuicaoManual";
 import { useDesatribuirServico } from "@/hooks/useDesatribuirServico";
 import { usePermissions } from "@/hooks/usePermissions";
+import { useEnviarConfirmacaoWhatsApp } from "@/hooks/useEnviarConfirmacaoWhatsApp";
 
 const COR_REALIZADA = '#10B981';
 const COR_A_REALIZAR = '#EF4444';
 const COR_SELECIONADO = '#F59E0B';
+const COR_NAO_CONFIRMADO = '#F97316'; // Orange
+const COR_CONFIRMADO = '#10B981'; // Green
+const COR_AGUARDANDO = '#EAB308'; // Yellow
 const STATUS_REALIZADOS = ['concluida', 'aprovada', 'reprovada', 'em_analise'];
 
-function getCorPorStatus(status: string): string {
+function getCorPorStatus(status: string, confirmacao_whatsapp?: string | null, permite_encaixe?: boolean): string {
   if (STATUS_REALIZADOS.includes(status)) return COR_REALIZADA;
+  // Encaixe: always red (normal treatment)
+  if (permite_encaixe) return COR_A_REALIZAR;
+  // Confirmed
+  if (confirmacao_whatsapp === 'confirmada') return COR_CONFIRMADO;
+  // Awaiting confirmation
+  if (confirmacao_whatsapp?.startsWith('aguardando')) return COR_AGUARDANDO;
+  // Not sent or null
+  if (!confirmacao_whatsapp) return COR_NAO_CONFIRMADO;
   return COR_A_REALIZAR;
+}
+
+function getTooltipColor(confirmacao_whatsapp?: string | null, permite_encaixe?: boolean): string {
+  if (permite_encaixe) return '#6B7280'; // gray for encaixe
+  if (confirmacao_whatsapp === 'confirmada') return COR_CONFIRMADO;
+  if (confirmacao_whatsapp?.startsWith('aguardando')) return COR_AGUARDANDO;
+  return '#9CA3AF'; // light gray = not sent
 }
 
 const iconCache = new Map<string, L.Icon>();
@@ -116,6 +137,20 @@ function FlyToPosition({ position, zoom = 15 }: { position: [number, number] | n
   return null;
 }
 
+function getPeriodoLabel(periodo?: string | null): string {
+  if (periodo === 'manha') return 'M';
+  if (periodo === 'tarde') return 'T';
+  return '';
+}
+
+function getConfirmacaoLabel(confirmacao_whatsapp?: string | null, permite_encaixe?: boolean): string {
+  if (permite_encaixe) return 'Encaixe';
+  if (confirmacao_whatsapp === 'confirmada') return '✅ Confirmado';
+  if (confirmacao_whatsapp?.startsWith('aguardando')) return '⏳ Aguardando';
+  if (confirmacao_whatsapp === 'recusada') return '❌ Recusado';
+  return '⚪ Não enviado';
+}
+
 export function MapaVistoriasContent() {
   const isMobile = useIsMobile();
   const { data: vistorias, isLoading } = useVistoriasMapa();
@@ -123,6 +158,7 @@ export function MapaVistoriasContent() {
   const { data: atribuicaoManualAtiva } = useConfigAtribuicaoManual();
   const atribuirMutation = useAtribuirServicoManual();
   const desatribuirMutation = useDesatribuirServico();
+  const enviarConfirmacaoMutation = useEnviarConfirmacaoWhatsApp();
   const { isDiretor, isCoordenadorMonitoramento, isAdminMaster, isDesenvolvedor } = usePermissions();
 
   const podeCancelarAtribuicao = isDiretor || isCoordenadorMonitoramento || isAdminMaster || isDesenvolvedor;
@@ -185,7 +221,9 @@ export function MapaVistoriasContent() {
   const contadores = useMemo(() => {
     const realizadas = vistoriasComCoordenadas.filter(v => STATUS_REALIZADOS.includes(v.status)).length;
     const aRealizar = vistoriasComCoordenadas.length - realizadas;
-    return { realizadas, aRealizar };
+    const confirmados = vistoriasComCoordenadas.filter(v => v.confirmacao_whatsapp === 'confirmada').length;
+    const naoConfirmados = vistoriasComCoordenadas.filter(v => !STATUS_REALIZADOS.includes(v.status) && !v.permite_encaixe && !v.confirmacao_whatsapp).length;
+    return { realizadas, aRealizar, confirmados, naoConfirmados };
   }, [vistoriasComCoordenadas]);
 
   const linhasDeRota = useMemo(() => {
@@ -273,6 +311,13 @@ export function MapaVistoriasContent() {
     setCancelConfirmation(null);
   }, [cancelConfirmation, desatribuirMutation]);
 
+  const podeEnviarConfirmacao = (v: VistoriaMapa) => {
+    return !!atribuicaoManualAtiva 
+      && !v.permite_encaixe 
+      && (!v.confirmacao_whatsapp || v.confirmacao_whatsapp === 'recusada')
+      && !STATUS_REALIZADOS.includes(v.status);
+  };
+
   const abrirWhatsApp = (telefone: string | null) => {
     if (!telefone) { toast.error("Telefone não cadastrado"); return; }
     window.open(`https://wa.me/55${telefone.replace(/\D/g, "")}`, "_blank");
@@ -308,7 +353,7 @@ export function MapaVistoriasContent() {
 
   const renderFilters = () => (
     <>
-      <div className="flex gap-2">
+      <div className="flex gap-2 flex-wrap">
         <Badge className="bg-red-500/10 text-red-600 border-red-500/20">
           {vistoriasComCoordenadas.length} no mapa
         </Badge>
@@ -350,7 +395,7 @@ export function MapaVistoriasContent() {
       ) : (
         <div className="space-y-2">
           {vistoriasFiltradas.map((v) => {
-            const color = getCorPorStatus(v.status);
+            const color = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe);
             const hojeNorm = new Date();
             hojeNorm.setHours(0, 0, 0, 0);
             const isAtrasada = v.data_agendada
@@ -359,6 +404,7 @@ export function MapaVistoriasContent() {
             const isRealizada = STATUS_REALIZADOS.includes(v.status);
             const canAssign = !!atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.latitude;
             const isSelected = servicoParaAtribuir?.id === v.id;
+            const canSendConfirmation = podeEnviarConfirmacao(v);
 
             return (
               <div
@@ -383,6 +429,9 @@ export function MapaVistoriasContent() {
                       {isAtrasada && (
                         <Badge variant="outline" className="text-xs bg-orange-100 text-orange-700 border-orange-300">Atrasada</Badge>
                       )}
+                      {v.permite_encaixe && (
+                        <Badge variant="outline" className="text-xs bg-purple-100 text-purple-700 border-purple-300">Encaixe</Badge>
+                      )}
                     </div>
                     <p className="text-xs text-muted-foreground truncate">{v.associado_nome || "Sem associado"}</p>
                     {v.endereco_bairro && (
@@ -396,6 +445,17 @@ export function MapaVistoriasContent() {
                       </p>
                     ) : (
                       <p className="text-xs text-orange-600 mt-1">⚠️ Não atribuído</p>
+                    )}
+                    {/* Confirmation status */}
+                    {!isRealizada && !v.permite_encaixe && (
+                      <p className={cn("text-xs mt-1 flex items-center gap-1", 
+                        v.confirmacao_whatsapp === 'confirmada' ? 'text-green-600' :
+                        v.confirmacao_whatsapp?.startsWith('aguardando') ? 'text-amber-600' :
+                        'text-gray-500'
+                      )}>
+                        <MessageSquare className="h-3 w-3" />
+                        {getConfirmacaoLabel(v.confirmacao_whatsapp, v.permite_encaixe)}
+                      </p>
                     )}
                     {isRealizada && (
                       <p className="text-xs mt-1 flex items-center gap-1 text-green-600">
@@ -426,6 +486,21 @@ export function MapaVistoriasContent() {
                         title={isSelected ? "Cancelar atribuição" : "Atribuir a um técnico"}
                       >
                         {isSelected ? <XIcon className="h-4 w-4" /> : <MousePointerClick className="h-4 w-4" />}
+                      </Button>
+                    )}
+                    {canSendConfirmation && (
+                      <Button
+                        variant="outline"
+                        size="icon"
+                        className="h-8 w-8 text-green-600 border-green-300 hover:bg-green-50"
+                        onClick={(e) => {
+                          e.stopPropagation();
+                          enviarConfirmacaoMutation.mutate(v.id);
+                        }}
+                        disabled={enviarConfirmacaoMutation.isPending}
+                        title="Enviar confirmação WhatsApp"
+                      >
+                        <Send className="h-4 w-4" />
                       </Button>
                     )}
                   </div>
@@ -465,22 +540,46 @@ export function MapaVistoriasContent() {
 
       {/* Marcadores de vistorias */}
       {vistoriasComCoordenadas.map((v) => {
-        const markerColor = getCorPorStatus(v.status);
+        const markerColor = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe);
         const isRealizada = STATUS_REALIZADOS.includes(v.status);
         const isSelectedForAssign = servicoParaAtribuir?.id === v.id;
+        const tooltipColor = getTooltipColor(v.confirmacao_whatsapp, v.permite_encaixe);
+        const periodoStr = getPeriodoLabel(v.periodo);
+        const dataLabel = v.data_agendada ? format(new Date(v.data_agendada + 'T00:00:00'), "dd/MM", { locale: ptBR }) : '';
+        const tooltipText = [dataLabel, periodoStr].filter(Boolean).join(' ');
 
         return (
           <Marker
             key={`marker-${v.id}-${markerColor}-${isSelectedForAssign}`}
             position={[v.latitude!, v.longitude!]}
-            icon={isSelectedForAssign ? getSelectedIcon(COR_A_REALIZAR) : getColoredIcon(markerColor)}
+            icon={isSelectedForAssign ? getSelectedIcon(markerColor) : getColoredIcon(markerColor)}
           >
+            {tooltipText && (
+              <Tooltip
+                permanent
+                direction="top"
+                offset={[0, -42]}
+                className="custom-tooltip-clean"
+              >
+                <span style={{
+                  backgroundColor: tooltipColor,
+                  color: 'white',
+                  padding: '1px 5px',
+                  borderRadius: '3px',
+                  fontSize: '10px',
+                  fontWeight: 600,
+                  whiteSpace: 'nowrap',
+                }}>
+                  {tooltipText}
+                </span>
+              </Tooltip>
+            )}
             <Popup>
               <div className="min-w-[200px]">
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
                   <span className="text-xs px-2 py-0.5 rounded text-white" style={{ backgroundColor: isSelectedForAssign ? COR_SELECIONADO : markerColor }}>
-                    {isSelectedForAssign ? "Selecionado" : isRealizada ? "Realizada" : "A Realizar"}
+                    {isSelectedForAssign ? "Selecionado" : isRealizada ? "Realizada" : v.permite_encaixe ? "Encaixe" : v.confirmacao_whatsapp === 'confirmada' ? "Confirmado" : "A Realizar"}
                   </span>
                 </div>
                 <div className="text-xs space-y-1 mb-2">
@@ -490,6 +589,9 @@ export function MapaVistoriasContent() {
                   {v.data_agendada && <p><strong>Agendada:</strong> {format(new Date(v.data_agendada), "dd/MM/yyyy", { locale: ptBR })}</p>}
                   <p><strong>Local:</strong> {v.endereco_bairro}, {v.endereco_cidade}</p>
                   <p><strong>Status:</strong> {v.status}</p>
+                  {!isRealizada && !v.permite_encaixe && (
+                    <p style={{ color: tooltipColor }}><strong>Confirmação:</strong> {getConfirmacaoLabel(v.confirmacao_whatsapp, v.permite_encaixe)}</p>
+                  )}
                   {v.vistoriador_nome ? (
                     <p><strong>Vistoriador:</strong> {v.vistoriador_nome}</p>
                   ) : (
@@ -497,6 +599,16 @@ export function MapaVistoriasContent() {
                   )}
                 </div>
                 <div className="flex gap-2 flex-wrap">
+                  {/* Botão enviar confirmação no popup */}
+                  {podeEnviarConfirmacao(v) && (
+                    <button
+                      onClick={() => enviarConfirmacaoMutation.mutate(v.id)}
+                      disabled={enviarConfirmacaoMutation.isPending}
+                      className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50"
+                    >
+                      <Send className="h-3 w-3" />Enviar Confirmação
+                    </button>
+                  )}
                   {/* Botão atribuir no popup */}
                   {atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && (
                     <button
@@ -606,6 +718,20 @@ export function MapaVistoriasContent() {
           <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_REALIZADA }} />
           <span className="flex-1 text-left">Realizadas</span>
           <Badge variant="secondary" className="text-xs">{contadores.realizadas}</Badge>
+        </div>
+        <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+          <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_NAO_CONFIRMADO }} />
+          <span className="flex-1 text-left">Não confirmado</span>
+          <Badge variant="secondary" className="text-xs">{contadores.naoConfirmados}</Badge>
+        </div>
+        <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+          <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_AGUARDANDO }} />
+          <span className="flex-1 text-left">Aguardando</span>
+        </div>
+        <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+          <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_CONFIRMADO }} />
+          <span className="flex-1 text-left">Confirmado</span>
+          <Badge variant="secondary" className="text-xs">{contadores.confirmados}</Badge>
         </div>
         <div className="flex items-center gap-2 text-sm p-2 rounded-md">
           <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_A_REALIZAR }} />
