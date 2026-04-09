@@ -1,44 +1,34 @@
 
 
-## Plano: Substituir link WhatsApp por telefone do técnico no template "Técnico a Caminho"
+## Plano: Corrigir exclusao de associado/veiculo na Base Antiga
 
 ### Problema
-A Meta não permite envio de links no corpo de templates. O template `tecnico_a_caminho_1` recebe um link `wa.me/...` como parâmetro 4, que é bloqueado. O usuário quer que seja enviado o telefone formatado do técnico no lugar.
+Ao excluir um associado (e seus veiculos), a FK `substituicoes_veiculo_veiculo_novo_id_fkey` e `substituicoes_veiculo_veiculo_antigo_id_fkey` na tabela `substituicoes_veiculo` bloqueia o DELETE nos veiculos.
 
-### Alterações
+### Correcao
+**`src/hooks/useDeleteBaseAntiga.ts`** - antes de excluir veiculos, limpar referencias na tabela `substituicoes_veiculo`:
 
-**1. `supabase/functions/notificar-cliente/index.ts`** (linha ~466)
-- Trocar o parâmetro 4 de `tecnico_whatsapp_link` para `tecnico_telefone` (que já vem formatado como `(XX) XXXXX-XXXX`)
-- Resultado: o template recebe o número de telefone em vez do link
+Para **tipo === 'veiculo'**:
+1. Deletar registros de `substituicoes_veiculo` onde `veiculo_antigo_id = id` ou `veiculo_novo_id = id`
+2. Depois deletar o veiculo
+
+Para **tipo === 'associado'**:
+1. Buscar IDs dos veiculos do associado
+2. Deletar registros de `substituicoes_veiculo` onde `veiculo_antigo_id` ou `veiculo_novo_id` estejam na lista de IDs dos veiculos, **ou** onde `associado_id = id`
+3. Deletar os veiculos
+4. Deletar o associado
 
 ```typescript
-// De:
-(dados?.tecnico_whatsapp_link as string) || '',
-// Para:
-(dados?.tecnico_telefone as string) || 'Não informado',
+// Antes de deletar veiculo(s), limpar substituicoes
+const veiculoIds = [...]; // IDs a deletar
+for (const vid of veiculoIds) {
+  await supabase.from('substituicoes_veiculo').delete().eq('veiculo_antigo_id', vid);
+  await supabase.from('substituicoes_veiculo').delete().eq('veiculo_novo_id', vid);
+}
+// Tambem limpar por associado_id
+await supabase.from('substituicoes_veiculo').delete().eq('associado_id', id);
 ```
 
-**2. `supabase/functions/notificar-cliente/index.ts`** (linha ~149)
-- Na mensagem de fallback de texto, trocar `{tecnico_whatsapp_link}` por `{tecnico_telefone}` para consistência
-
-```
-// De:
-💬 *WhatsApp:* {tecnico_whatsapp_link}
-// Para:
-📞 *Contato:* {tecnico_telefone}
-```
-
-**3. `supabase/functions/notificar-inicio-rota/index.ts`** (linhas ~124-126, ~142)
-- Remover a montagem de `profissionalWhatsappLink` (não será mais usado)
-- Remover `tecnico_whatsapp_link` do body enviado ao `notificar-cliente`
-- Confirmar que `tecnico_telefone` já está sendo enviado corretamente (já está, linha 141)
-
-### Resultado
-- O template Meta recebe o telefone formatado `(XX) XXXXX-XXXX` no lugar do link
-- Meta não bloqueia mais o envio
-- O cliente vê o telefone do técnico para contato direto
-
-### Arquivos
-- `supabase/functions/notificar-cliente/index.ts`
-- `supabase/functions/notificar-inicio-rota/index.ts`
+### Arquivo
+- `src/hooks/useDeleteBaseAntiga.ts`
 
