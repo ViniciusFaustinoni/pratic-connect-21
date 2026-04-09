@@ -1,56 +1,36 @@
 
 
-## Plano: Corrigir rastreadores em porte nao aparecendo para instalador
+## Plano: Modal de analise e aprovacao ao clicar em associado "Em Analise"
 
-### Diagnostico
-Os dados existem no banco (2 rastreadores com `portador_id` do `[TESTE] Vistoriador` e `status = 'estoque'`). As politicas RLS parecem permitir acesso. O problema provavel e um dos seguintes:
+### Problema
+Quando o analista de cadastro clica num associado com status "em_analise" na lista de Associados, abre o modal generico `AssociadoDetalhe`. O analista precisa de um fluxo direto de analise/aprovacao com acesso ao veiculo para autorizar.
 
-1. **Cache stale do React Query** — a query `rastreadores-meu-porte` pode ter sido cacheada como vazia em uma sessao anterior e nao refetch ao entrar no checklist
-2. **Erro silencioso** — o hook nao captura nem exibe erros da query, entao falhas de RLS ou rede passam despercebidas
-3. **Profile ainda nao carregado** — timing entre auth context e a query
+### Abordagem
+A pagina `/cadastro/propostas/:contratoId` (`PropostaAnalise`) ja tem todo o fluxo de aprovacao (documentos, vistoria, veiculo, botoes aprovar/reprovar/solicitar docs). Em vez de duplicar essa logica, a solucao e:
 
-### Correcoes
+1. Quando o associado clicado tem status `em_analise`, buscar o contrato vinculado (`contratos.associado_id`) e navegar para `/cadastro/propostas/:contratoId`
+2. Se nao houver contrato, abrir o `AssociadoDetalhe` normalmente (fallback)
 
-**1. `src/hooks/useRastreadoresPortador.ts`**
-- Adicionar `refetchOnMount: 'always'` para garantir dados frescos ao abrir o checklist
-- Adicionar `retry: 2` para resiliencia em conexoes instáveis (mobile)
-- Logar erro no console para facilitar debug futuro
+### Alteracoes
 
-```typescript
-return useQuery({
-  queryKey: ['rastreadores-meu-porte', profile?.id],
-  enabled: !!profile?.id,
-  refetchOnMount: 'always',
-  retry: 2,
-  queryFn: async (): Promise<RastreadorEmPorte[]> => {
-    const { data, error } = await supabase
-      .from('rastreadores')
-      .select('id, codigo, imei, numero_serie, plataforma')
-      .eq('portador_id', profile!.id)
-      .eq('status', 'estoque')
-      .order('codigo');
+**`src/pages/cadastro/Associados.tsx`**
 
-    if (error) {
-      console.error('[useRastreadoresDoPortador] Erro ao buscar:', error);
-      throw error;
-    }
-    console.log('[useRastreadoresDoPortador] Encontrados:', data?.length, 'para portador', profile!.id);
-    return (data || []) as RastreadorEmPorte[];
-  },
-});
-```
+1. Criar funcao `handleAssociadoClick(associado)`:
+   - Se `associado.status === 'em_analise'` ou `pendente_vistoria` ou `documentacao_pendente`:
+     - Buscar contrato: `supabase.from('contratos').select('id').eq('associado_id', associado.id).in('status', ['assinado','ativo']).order('created_at', {ascending: false}).limit(1).maybeSingle()`
+     - Se encontrou contrato: `navigate('/cadastro/propostas/' + contrato.id)`
+     - Se nao encontrou: `setDetalheAssociadoId(associado.id)` (fallback)
+   - Senao: `setDetalheAssociadoId(associado.id)` (comportamento atual)
 
-**2. `src/pages/instalador/InstaladorChecklist.tsx`**
-- Capturar o `error` retornado pelo hook: `const { data: rastreadoresEmPorte, isLoading: isLoadingRastreadores, error: erroRastreadores } = useRastreadoresDoPortador();`
-- Na UI, quando houver erro, mostrar mensagem informativa em vez de "nenhum em porte" (para que o usuario saiba que houve falha e pode tentar recarregar)
-- Adicionar botao "Tentar novamente" que faz refetch
+2. Substituir todos os `onClick={() => setDetalheAssociadoId(associado.id)}` nas TableCells por `onClick={() => handleAssociadoClick(associado)}`
+
+3. Manter o dropdown "Ver detalhes" apontando para `setDetalheAssociadoId` (acesso direto ao detalhe continua disponivel)
 
 ### Resultado
-- Dados frescos sempre ao abrir o checklist
-- Erros visiveis no console e na UI
-- Botao de retry para o instalador caso haja falha de rede
+- Analista clica em associado "Em Analise" → vai direto para a tela de analise da proposta com veiculo, documentos e botoes de aprovacao
+- Associados ativos/outros status → abre o detalhe normal como antes
+- Dropdown "Ver detalhes" continua abrindo o modal de detalhe para qualquer status
 
-### Arquivos
-- `src/hooks/useRastreadoresPortador.ts`
-- `src/pages/instalador/InstaladorChecklist.tsx`
+### Arquivo
+- `src/pages/cadastro/Associados.tsx`
 
