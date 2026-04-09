@@ -1,42 +1,14 @@
 
 
-## Plano: Drag-and-drop do tecnico ate o servico + rota nas ruas
+## Plano: Aumentar raio de detecção do drag-and-drop
 
 ### Problema
-O usuario espera arrastar o pin do **tecnico** ate o **servico** (e nao o contrario). Apos atribuir, a rota deve ser tracada seguindo as ruas do mapa.
+O raio de proximidade para atribuição por drag-and-drop é de 800m. Na prática, os pins raramente ficam tão próximos, causando falhas frequentes.
 
-### Solucao
+### Solução
+Aumentar o raio de **0.8 km para 5 km** na linha 698 de `MapaVistoriasContent.tsx`. Isso permite soltar o técnico em qualquer lugar razoavelmente perto do serviço. Como o sistema já mostra a distância real na confirmação, não há risco de atribuição acidental.
 
-Manter o click-to-assign existente como alternativa e **adicionar drag-and-drop nos marcadores de tecnicos**.
-
-### Alteracoes em `src/components/mapa/MapaVistoriasContent.tsx`
-
-**1. Tornar marcadores de tecnicos arrastáveis (quando atribuicaoManualAtiva)**
-
-- Marcador do vistoriador recebe `draggable={!!atribuicaoManualAtiva}`
-- No `eventHandlers.dragend`, capturar posicao final do arrasto
-- Encontrar o servico nao atribuido mais proximo da posicao final (raio de 800m)
-- Se encontrar: abrir dialog de confirmacao (reusa `assignConfirmation` existente)
-- Se nao encontrar: toast de erro + retornar marcador a posicao original
-- Apos confirmacao ou cancelamento, marcador volta a posicao real do tecnico (GPS)
-
-**2. Retorno visual do marcador**
-
-- Guardar ref do marcador do vistoriador para resetar posicao via `setLatLng()` apos arrastar
-- Usar `useRef` com Map de `vistoriador_id -> L.Marker`
-
-**3. Rota nas ruas ja funciona**
-
-- O `linhasDeRota` + `RotaPolyline` ja traca rota real (OSRM) do tecnico ao servico apos atribuicao
-- Nenhuma alteracao necessaria neste fluxo
-
-**4. Legenda atualizada**
-
-- Trocar texto de "Clique em Atribuir e depois no tecnico" para "Arraste o tecnico ate o servico ou clique em Atribuir"
-
-### Nao alterado
-- Click-to-assign (botao Atribuir no popup/sidebar + clique no tecnico) — mantido como alternativa
-- `useAtribuirServicoManual` — mutation continua igual
-- `RotaPolyline` / `useRotaRealMultiWaypoint` — ja funciona
-- Dialogs de confirmacao — reutilizados
+### Alteração
+- **`src/components/mapa/MapaVistoriasContent.tsx`** linha 698: trocar `0.8` por `5`
+- Atualizar mensagem de erro (linha 708) para refletir o novo raio
 
