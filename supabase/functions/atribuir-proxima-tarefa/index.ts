@@ -226,29 +226,41 @@ serve(async (req) => {
       console.error('[atribuir-proxima-tarefa] Erro ao buscar turno:', turnoError);
     }
 
-    // Se está em almoço, não atribuir novas tarefas
-    if (turnoHoje?.status === 'em_almoco') {
-      const inicioAlmoco = new Date(turnoHoje.inicio_almoco!);
+    // Se está em almoço, verificar se já expirou (60+ min)
+    if (turnoHoje?.status === 'em_almoco' && turnoHoje.inicio_almoco) {
+      const inicioAlmoco = new Date(turnoHoje.inicio_almoco);
       const agora = new Date();
       const minutosEmAlmoco = Math.floor((agora.getTime() - inicioAlmoco.getTime()) / 60000);
-      const minutosRestantes = Math.max(0, 60 - minutosEmAlmoco);
-      const emAtraso = minutosEmAlmoco > 60;
-      const minutosAtraso = emAtraso ? minutosEmAlmoco - 60 : 0;
 
-      console.log(`[atribuir-proxima-tarefa] Profissional em almoço há ${minutosEmAlmoco} minutos. Atraso: ${minutosAtraso} min`);
+      if (minutosEmAlmoco < 60) {
+        const minutosRestantes = 60 - minutosEmAlmoco;
+        console.log(`[atribuir-proxima-tarefa] Profissional em almoço há ${minutosEmAlmoco} minutos.`);
 
-      return new Response(
-        JSON.stringify({
-          resultado: 'em_almoco',
-          mensagem: emAtraso 
-            ? `Você está ${minutosAtraso} minutos atrasado do almoço. Este tempo será acrescido à sua jornada.`
-            : `Você está em horário de almoço. Aguarde ${minutosRestantes} minutos para receber novas tarefas.`,
-          minutos_restantes: minutosRestantes,
-          em_atraso: emAtraso,
-          minutos_atraso: minutosAtraso
-        }),
-        { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
+        return new Response(
+          JSON.stringify({
+            resultado: 'em_almoco',
+            mensagem: `Você está em horário de almoço. Aguarde ${minutosRestantes} minutos para receber novas tarefas.`,
+            minutos_restantes: minutosRestantes,
+            em_atraso: false,
+            minutos_atraso: 0
+          }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // Almoço expirado — finalizar automaticamente no servidor
+      const minutosAtraso = Math.max(0, minutosEmAlmoco - 60);
+      console.log(`[atribuir-proxima-tarefa] ALMOÇO expirado (${minutosEmAlmoco}min) — finalizando server-side. Atraso: ${minutosAtraso}min`);
+
+      await supabase
+        .from('turnos_profissionais')
+        .update({
+          status: 'ativo',
+          fim_almoco: agora.toISOString(),
+          minutos_atraso_almoco: minutosAtraso,
+        })
+        .eq('id', turnoHoje.id);
+      // Prosseguir normalmente para atribuir tarefa
     }
 
     // Forçar almoço se atingiu limite configurado sem iniciar

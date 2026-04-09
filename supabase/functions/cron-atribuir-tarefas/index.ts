@@ -167,10 +167,30 @@ serve(async (req) => {
         .eq('data', hoje)
         .maybeSingle();
 
-      // Se está em almoço, pular atribuição
-      if (turnoHoje?.status === 'em_almoco') {
-        console.log(`[cron-atribuir-tarefas] ☕ Profissional ${prof.vistoriador_id} em ALMOÇO - pulando`);
-        continue;
+      // Se está em almoço, verificar se já expirou (60+ min)
+      if (turnoHoje?.status === 'em_almoco' && turnoHoje.inicio_almoco) {
+        const inicioAlmoco = new Date(turnoHoje.inicio_almoco);
+        const agora = new Date();
+        const minutosEmAlmoco = Math.floor((agora.getTime() - inicioAlmoco.getTime()) / 60000);
+
+        if (minutosEmAlmoco < 60) {
+          console.log(`[cron-atribuir-tarefas] ☕ Profissional ${prof.vistoriador_id} em ALMOÇO há ${minutosEmAlmoco}min - pulando`);
+          continue;
+        }
+
+        // Almoço expirado — finalizar automaticamente no servidor
+        const minutosAtraso = Math.max(0, minutosEmAlmoco - 60);
+        console.log(`[cron-atribuir-tarefas] ☕ ALMOÇO expirado (${minutosEmAlmoco}min) para ${prof.vistoriador_id} — finalizando server-side`);
+
+        await supabase
+          .from('turnos_profissionais')
+          .update({
+            status: 'ativo',
+            fim_almoco: agora.toISOString(),
+            minutos_atraso_almoco: minutosAtraso,
+          })
+          .eq('id', turnoHoje.id);
+        // Não dar continue — prosseguir para atribuir tarefa
       }
 
       // Verificar se precisa forçar almoço (4h trabalhadas sem almoço)
