@@ -420,10 +420,15 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
                       checked={assignSelected.has(cob.id)}
                       onCheckedChange={() => toggleAssignItem(cob.id)}
                     />
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       {cob.icon && <span className="text-base">{cob.icon}</span>}
                       <span className="text-sm truncate">{cob.nome}</span>
                     </div>
+                    {cob.vinculadaAo && (
+                      <Badge variant="outline" className="text-[10px] shrink-0 bg-muted text-muted-foreground">
+                        {(cob.vinculadaAo as any).planos?.nome || 'Outro plano'}
+                      </Badge>
+                    )}
                   </label>
                 ))
               )}
