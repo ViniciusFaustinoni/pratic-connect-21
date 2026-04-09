@@ -182,7 +182,7 @@ function useLinhasComPlanos() {
           }
 
           const rulesMap = new Map<string, EligibilityRule[]>();
-          for (const r of (rules || []) as EligibilityRule[]) {
+          for (const r of allRules) {
             const list = rulesMap.get(r.entity_id) || [];
             list.push(r);
             rulesMap.set(r.entity_id, list);
