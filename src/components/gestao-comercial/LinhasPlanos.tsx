@@ -350,70 +350,128 @@ export function LinhasPlanos() {
                         <div className="divide-y divide-border/60">
                           {linha.plans.map((plano: any) => {
                             const badgeTone = plano.badge_color ? BADGE_TONES[plano.badge_color] : null;
+                            const isExpanded = expandedPlanId === plano.id;
 
                             return (
-                              <div
-                                key={plano.id}
-                                className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40 rounded-lg"
-                              >
-                                <div className="min-w-0 flex-1">
-                                  <div className="flex flex-wrap items-center gap-2">
-                                    <span className="text-sm font-medium text-foreground">{plano.nome}</span>
-                                    {plano.badge_text ? (
-                                      <Badge
-                                        className="border text-[10px] px-1.5 py-0"
-                                        style={badgeTone ? {
-                                          backgroundColor: `hsl(${badgeTone.background})`,
-                                          borderColor: `hsl(${badgeTone.border})`,
-                                          color: `hsl(${badgeTone.text})`,
-                                        } : undefined}
+                              <div key={plano.id}>
+                                <div
+                                  className="flex items-center gap-3 px-3 py-2.5 transition-colors hover:bg-muted/40 rounded-lg cursor-pointer"
+                                  onClick={() => setExpandedPlanId(isExpanded ? null : plano.id)}
+                                >
+                                  <ChevronDown className={cn('h-3.5 w-3.5 text-muted-foreground transition-transform shrink-0', !isExpanded && '-rotate-90')} />
+                                  <div className="min-w-0 flex-1">
+                                    <div className="flex flex-wrap items-center gap-2">
+                                      <span className="text-sm font-medium text-foreground">{plano.nome}</span>
+                                      {plano.badge_text ? (
+                                        <Badge
+                                          className="border text-[10px] px-1.5 py-0"
+                                          style={badgeTone ? {
+                                            backgroundColor: `hsl(${badgeTone.background})`,
+                                            borderColor: `hsl(${badgeTone.border})`,
+                                            color: `hsl(${badgeTone.text})`,
+                                          } : undefined}
+                                        >
+                                          {plano.badge_text}
+                                        </Badge>
+                                      ) : null}
+                                    </div>
+                                  </div>
+
+                                  <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
+                                    <span className="flex items-center gap-1">
+                                      <Shield className="h-3.5 w-3.5" />
+                                      {plano.coberturas_count} cob.
+                                    </span>
+                                    <span className="flex items-center gap-1">
+                                      <Sparkles className="h-3.5 w-3.5" />
+                                      {plano.beneficios_count} ben.
+                                    </span>
+                                    <span>Ordem {plano.ordem ?? 0}</span>
+                                  </div>
+
+                                  <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
+                                    <Switch
+                                      checked={plano.ativo}
+                                      onCheckedChange={(checked) => toggleStatus.mutate({ id: plano.id, is_active: checked })}
+                                      disabled={toggleStatus.isPending}
+                                    />
+                                    <Button
+                                      size="icon"
+                                      variant="ghost"
+                                      className="h-8 w-8"
+                                      onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
+                                    >
+                                      <Pencil className="h-3.5 w-3.5" />
+                                    </Button>
+                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDuplicarModal({ open: true, plano: { id: plano.id, nome: plano.nome } })}>
+                                      <Copy className="h-3.5 w-3.5" />
+                                    </Button>
+                                    {canDelete ? (
+                                      <Button
+                                        size="icon"
+                                        variant="ghost"
+                                        className="h-8 w-8 text-destructive hover:text-destructive"
+                                        onClick={() => setDeleteConfirm({ type: 'plano', id: plano.id, name: plano.nome })}
                                       >
-                                        {plano.badge_text}
-                                      </Badge>
+                                        <Trash2 className="h-3.5 w-3.5" />
+                                      </Button>
                                     ) : null}
                                   </div>
                                 </div>
 
-                                <div className="hidden sm:flex items-center gap-4 text-xs text-muted-foreground shrink-0">
-                                  <span className="flex items-center gap-1">
-                                    <Shield className="h-3.5 w-3.5" />
-                                    {plano.coberturas_count} cob.
-                                  </span>
-                                  <span className="flex items-center gap-1">
-                                    <Sparkles className="h-3.5 w-3.5" />
-                                    {plano.beneficios_count} ben.
-                                  </span>
-                                  <span>Ordem {plano.ordem ?? 0}</span>
-                                </div>
+                                {isExpanded && (
+                                  <div className="ml-8 mr-3 mb-2 rounded-xl border border-border/50 bg-muted/20 p-3 space-y-3">
+                                    {plano.coberturas_list.length > 0 && (
+                                      <div>
+                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                                          <Shield className="h-3.5 w-3.5" /> Coberturas
+                                        </p>
+                                        <div className="space-y-0.5">
+                                          {plano.coberturas_list.map((cob: any) => (
+                                            <button
+                                              key={cob.id}
+                                              type="button"
+                                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
+                                              onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
+                                            >
+                                              <span className="text-foreground">{cob.nome}</span>
+                                              <span className="text-muted-foreground font-medium tabular-nums">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(cob.valor)}
+                                              </span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
 
-                                <div className="flex items-center gap-1 shrink-0">
-                                  <Switch
-                                    checked={plano.ativo}
-                                    onCheckedChange={(checked) => toggleStatus.mutate({ id: plano.id, is_active: checked })}
-                                    disabled={toggleStatus.isPending}
-                                  />
-                                  <Button
-                                    size="icon"
-                                    variant="ghost"
-                                    className="h-8 w-8"
-                                    onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
-                                  >
-                                    <Pencil className="h-3.5 w-3.5" />
-                                  </Button>
-                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDuplicarModal({ open: true, plano: { id: plano.id, nome: plano.nome } })}>
-                                    <Copy className="h-3.5 w-3.5" />
-                                  </Button>
-                                  {canDelete ? (
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-8 w-8 text-destructive hover:text-destructive"
-                                      onClick={() => setDeleteConfirm({ type: 'plano', id: plano.id, name: plano.nome })}
-                                    >
-                                      <Trash2 className="h-3.5 w-3.5" />
-                                    </Button>
-                                  ) : null}
-                                </div>
+                                    {plano.beneficios_list.length > 0 && (
+                                      <div>
+                                        <p className="text-[11px] font-semibold uppercase tracking-wider text-muted-foreground mb-1.5 flex items-center gap-1.5">
+                                          <Sparkles className="h-3.5 w-3.5" /> Benefícios
+                                        </p>
+                                        <div className="space-y-0.5">
+                                          {plano.beneficios_list.map((ben: any) => (
+                                            <button
+                                              key={ben.id}
+                                              type="button"
+                                              className="w-full flex items-center justify-between px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
+                                              onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
+                                            >
+                                              <span className="text-foreground">{ben.name}</span>
+                                              <span className="text-muted-foreground font-medium tabular-nums">
+                                                {new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(ben.preco_sugerido)}
+                                              </span>
+                                            </button>
+                                          ))}
+                                        </div>
+                                      </div>
+                                    )}
+
+                                    {plano.coberturas_list.length === 0 && plano.beneficios_list.length === 0 && (
+                                      <p className="text-sm text-muted-foreground text-center py-2">Nenhuma cobertura ou benefício cadastrado.</p>
+                                    )}
+                                  </div>
+                                )}
                               </div>
                             );
                           })}
