@@ -1,36 +1,44 @@
 
-
-## Plano: Permitir atribuição automática de encaixes sem confirmação WhatsApp
+## Plano: Corrigir atribuição manual no mapa — click-to-assign + rota
 
 ### Problema
-O motor de atribuição (`cron-atribuir-tarefas`) exige `confirmacao_whatsapp = 'confirmada'` para **todos** os serviços, incluindo encaixes. Encaixes são confirmados presencialmente, então ficam com `confirmacao_whatsapp = NULL` e nunca são atribuídos.
+1. O drag-and-drop atual exige arrastar o pin do **serviço** até o **técnico**, com raio de 500m — UX confusa e falha silenciosamente
+2. O usuário espera o contrário: selecionar serviço, clicar no técnico (ou vice-versa), e ver a rota traçada do técnico até o local do serviço
 
-Além disso, nas linhas 579-650, existe lógica que tenta enviar confirmação WhatsApp para encaixes antes de atribuir — redundante se encaixes já estão confirmados presencialmente.
+### Solução: Click-to-assign em dois passos
+
+Substituir o drag-and-drop por um fluxo de dois cliques:
+
+1. Usuário clica num serviço não atribuído (no sidebar ou no pin do mapa) → entra em "modo atribuição" com destaque visual
+2. Usuário clica num técnico no mapa → abre dialog de confirmação com distância estimada
+3. Após confirmar, o serviço é atribuído e a rota é traçada do técnico ao serviço
 
 ### Alterações
 
-**Arquivo: `supabase/functions/cron-atribuir-tarefas/index.ts`**
+**Arquivo: `src/components/mapa/MapaVistoriasContent.tsx`**
 
-1. **BUSCA 1 (serviços normais, linha ~335)**: Manter `.eq('confirmacao_whatsapp', 'confirmada')` — serviços normais continuam precisando de confirmação.
+1. **Remover drag-and-drop**: Remover `draggable`, `getDraggableIcon`, `handleMarkerDragEnd`, `COR_DRAGGABLE` e toda lógica de arrastar pins
 
-2. **BUSCA 2 (encaixes, linha ~372)**: Remover `.eq('confirmacao_whatsapp', 'confirmada')` e substituir por filtro que aceite `confirmada` OU `NULL`:
+2. **Adicionar estado de seleção para atribuição**:
+   - Novo estado `servicoParaAtribuir: VistoriaMapa | null`
+   - Ao clicar num serviço não atribuído (botão "Atribuir" no popup ou no card do sidebar), define `servicoParaAtribuir`
+   - UI indica visualmente qual serviço está selecionado (pin pulsante ou cor diferente)
+
+3. **Tornar pins de técnicos clicáveis para atribuir**:
+   - Quando `servicoParaAtribuir` está definido, clicar num técnico no mapa dispara a confirmação
+   - Dialog mostra: serviço selecionado, técnico escolhido, distância calculada
+   - Botão confirmar chama `atribuirMutation`
+
+4. **Barra de contexto**: Quando em modo atribuição, mostrar barra fixa no topo do mapa:
    ```
-   .or('confirmacao_whatsapp.eq.confirmada,confirmacao_whatsapp.is.null')
+   "Selecione um técnico para: LTB4J74 - Instalação | [Cancelar]"
    ```
 
-3. **BUSCA 3 (sem coordenadas, linha ~395)**: Mesmo ajuste — aceitar encaixes sem confirmação:
-   ```
-   .or('confirmacao_whatsapp.eq.confirmada,confirmacao_whatsapp.is.null,permite_encaixe.eq.true')
-   ```
-   Ou separar em duas buscas. Abordagem mais simples: `.or('confirmacao_whatsapp.eq.confirmada,confirmacao_whatsapp.is.null')`.
-
-4. **Bloco de confirmação WhatsApp para encaixes (linhas ~579-650)**: Remover toda a lógica que envia confirmação WhatsApp para encaixes e bloqueia atribuição. Encaixes passarão direto para atribuição como serviços normais confirmados.
+5. **Manter rotas existentes** (`linhasDeRota` + `RotaPolyline`): Após atribuição, a rota do técnico ao serviço já aparece automaticamente via a lógica existente de `linhasDeRota`
 
 ### Não alterado
-- Fluxo de confirmação WhatsApp para serviços normais (véspera + matinal)
-- Lógica de geolocalização e priorização
-- BUSCA 1 (serviços normais) — continua exigindo confirmação
-
-### Resultado esperado
-Encaixes com `confirmacao_whatsapp = NULL` serão incluídos nas buscas e atribuídos automaticamente ao profissional mais próximo, sem aguardar confirmação WhatsApp.
-
+- `useAtribuirServicoManual` — mutation continua igual
+- `useDesatribuirServico` — cancelamento continua igual
+- `useConfigAtribuicaoManual` — flag continua controlando se o modo aparece
+- Sidebar e legendas — mantidos
+- Rotas polyline — já funcionam para serviços atribuídos
