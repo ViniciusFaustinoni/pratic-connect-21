@@ -130,12 +130,21 @@ export default function Cotacoes() {
   useEffect(() => {
     const leadParam = searchParams.get('lead');
     const novoParam = searchParams.get('novo');
+    const tipoEntrada = searchParams.get('tipo_entrada');
+    const associadoId = searchParams.get('associado_id');
     
     if (leadParam) {
       setLeadIdFromUrl(leadParam);
       setShowCotacaoForm(true);
       searchParams.delete('lead');
       setSearchParams(searchParams, { replace: true });
+    } else if (tipoEntrada === 'substituicao' || tipoEntrada === 'inclusao') {
+      // Substituição/Inclusão: abrir modal de cotação direto
+      // Os dados do associado/veículo antigo serão salvos em dados_extras na cotação
+      setShowCotacaoForm(true);
+      // Limpar params após abrir
+      const newParams = new URLSearchParams();
+      setSearchParams(newParams, { replace: true });
     } else if (novoParam === 'true') {
       setShowNovaEntrada(true);
       searchParams.delete('novo');

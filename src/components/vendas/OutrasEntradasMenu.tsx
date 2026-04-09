@@ -266,10 +266,10 @@ export function NovaEntradaDialog({ open, onOpenChange, onNovaCotacao }: NovaEnt
         veiculo_antigo_placa: veiculoAntigoPlaca,
         veiculo_antigo_modelo: veiculoAntigoModelo,
       });
-      navigate(`/vendas/cotacao?${params.toString()}`);
+      navigate(`/vendas/cotacoes?${params.toString()}`);
     } else if (selectedTipo === 'inclusao') {
       onOpenChange(false);
-      navigate(`/vendas/cotacao?associado_id=${selectedAssociadoId}&tipo_entrada=inclusao`);
+      navigate(`/vendas/cotacoes?associado_id=${selectedAssociadoId}&tipo_entrada=inclusao`);
     }
   };
 
