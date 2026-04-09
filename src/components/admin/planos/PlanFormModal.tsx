@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { Eye, Loader2, Search, Shield, Sparkles } from 'lucide-react';
+import { Eye, Loader2, Sparkles } from 'lucide-react';
 import { useQuery } from '@tanstack/react-query';
 
 import {
@@ -11,9 +11,7 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
-import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
-import { Checkbox } from '@/components/ui/checkbox';
 import {
   Select,
   SelectContent,
@@ -23,11 +21,12 @@ import {
 } from '@/components/ui/select';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { cn } from '@/lib/utils';
-import { useProductLines, useBenefits, useCoberturas } from '@/hooks/usePlans';
+import { useProductLines } from '@/hooks/usePlans';
 import { useCreatePlan, useUpdatePlan, PlanBenefitInput } from '@/hooks/usePlansAdmin';
 import { supabase } from '@/integrations/supabase/client';
 import type { PlanWithDetails } from '@/hooks/usePlans';
+import { PlanCoberturasList } from './PlanCoberturasList';
+import { PlanBeneficiosList } from './PlanBeneficiosList';
 
 interface PlanFormModalProps {
   open: boolean;
@@ -46,15 +45,6 @@ interface PlanFormData {
   footer_note: string;
   display_order: string;
   is_active: boolean;
-}
-
-interface SelectionItem {
-  id: string;
-  label: string;
-  description?: string | null;
-  icon?: string | null;
-  group: string;
-  meta?: string | null;
 }
 
 const BADGE_COLORS = [
@@ -121,126 +111,9 @@ function mapPlanToState(planData: any, defaultProductLineId?: string) {
       display_order: (planData?.ordem || 0).toString(),
       is_active: planData?.ativo ?? true,
     } satisfies PlanFormData,
-    selectedBenefits: ((planData?.planos_beneficios || []) as any[]).map((pb, index) => ({
-      benefit_id: pb.benefit_id,
-      custom_text: pb.custom_text,
-      custom_value: pb.custom_value,
-      additional_info: pb.additional_info,
-      is_highlighted: pb.is_highlighted ?? false,
-      display_order: pb.display_order ?? index,
-    })),
-    selectedCoberturas: ((planData?.planos_coberturas || []) as any[]).map((pc) => ({
-      cobertura_id: pc.cobertura_id,
-    })),
+    coberturasCount: (planData?.planos_coberturas || []).length,
+    benefitsCount: (planData?.planos_beneficios || []).length,
   };
-}
-
-function SearchableSelectionSection({
-  title,
-  description,
-  icon: Icon,
-  searchValue,
-  onSearchChange,
-  groups,
-  selectedIds,
-  onToggle,
-  emptyMessage,
-}: {
-  title: string;
-  description: string;
-  icon: typeof Shield;
-  searchValue: string;
-  onSearchChange: (value: string) => void;
-  groups: Array<[string, SelectionItem[]]>;
-  selectedIds: Set<string>;
-  onToggle: (id: string) => void;
-  emptyMessage: string;
-}) {
-  const selectedCount = selectedIds.size;
-
-  return (
-    <section className="space-y-4 rounded-3xl border border-border/60 bg-card/60 p-4 sm:p-5">
-      <div className="flex flex-col gap-3 sm:flex-row sm:items-center sm:justify-between">
-        <div className="space-y-1">
-          <div className="flex items-center gap-2">
-            <Icon className="h-4 w-4 text-primary" />
-            <h3 className="text-sm font-semibold text-foreground">{title}</h3>
-            <Badge variant="secondary" className="text-[11px]">
-              {selectedCount} selecionado{selectedCount === 1 ? '' : 's'}
-            </Badge>
-          </div>
-          <p className="text-xs text-muted-foreground">{description}</p>
-        </div>
-
-        <div className="relative w-full sm:max-w-xs">
-          <Search className="pointer-events-none absolute left-3 top-1/2 h-4 w-4 -translate-y-1/2 text-muted-foreground" />
-          <Input
-            value={searchValue}
-            onChange={(event) => onSearchChange(event.target.value)}
-            placeholder="Buscar..."
-            className="pl-9"
-          />
-        </div>
-      </div>
-
-      <ScrollArea className="h-[320px] rounded-2xl border border-border/50 bg-background/40">
-        <div className="space-y-4 p-3">
-          {groups.length > 0 ? (
-            groups.map(([groupName, items]) => (
-              <div key={groupName} className="space-y-2">
-                <div className="sticky top-0 z-10 bg-background/95 px-1 py-1 text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground backdrop-blur-sm">
-                  {groupName}
-                </div>
-
-                <div className="space-y-2">
-                  {items.map((item) => {
-                    const selected = selectedIds.has(item.id);
-
-                    return (
-                      <div
-                        key={item.id}
-                        className={cn(
-                          'flex w-full items-start gap-3 rounded-2xl border px-3 py-3 text-left transition-all',
-                          selected
-                            ? 'border-primary/40 bg-primary/10 shadow-sm'
-                            : 'border-border/60 bg-card/60',
-                        )}
-                      >
-                        <Checkbox
-                          checked={selected}
-                          onCheckedChange={() => onToggle(item.id)}
-                          className="mt-0.5 cursor-pointer"
-                        />
-
-                        <div className="min-w-0 flex-1 space-y-1">
-                          <div className="flex items-center gap-2">
-                            {item.icon ? <span className="text-base leading-none">{item.icon}</span> : null}
-                            <span className="text-sm font-medium text-foreground">{item.label}</span>
-                          </div>
-
-                          {item.description ? (
-                            <p className="text-xs text-muted-foreground">{item.description}</p>
-                          ) : null}
-
-                          {item.meta ? (
-                            <p className="text-[11px] uppercase tracking-wide text-muted-foreground/80">{item.meta}</p>
-                          ) : null}
-                        </div>
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            ))
-          ) : (
-            <div className="flex h-[260px] items-center justify-center rounded-2xl border border-dashed border-border/60 bg-card/40 px-6 text-center text-sm text-muted-foreground">
-              {emptyMessage}
-            </div>
-          )}
-        </div>
-      </ScrollArea>
-    </section>
-  );
 }
 
 export function PlanFormModal({
@@ -253,8 +126,6 @@ export function PlanFormModal({
   const isEditing = !!planId;
 
   const { data: productLines = [], isLoading: loadingProductLines } = useProductLines();
-  const { data: benefits = [] } = useBenefits();
-  const { data: coberturasCatalogo = [] } = useCoberturas();
   const createPlan = useCreatePlan();
   const updatePlan = useUpdatePlan();
 
@@ -279,10 +150,7 @@ export function PlanFormModal({
   });
 
   const [formData, setFormData] = useState<PlanFormData>(() => createEmptyFormData(defaultProductLineId));
-  const [selectedBenefits, setSelectedBenefits] = useState<PlanBenefitInput[]>([]);
-  const [selectedCoberturas, setSelectedCoberturas] = useState<{ cobertura_id: string }[]>([]);
-  const [benefitsSearch, setBenefitsSearch] = useState('');
-  const [coberturasSearch, setCoberturasSearch] = useState('');
+  const [previewCounts, setPreviewCounts] = useState({ coberturas: 0, benefits: 0 });
   const hydratedStateKeyRef = useRef('');
 
   const hydrationKey = useMemo(() => {
@@ -304,8 +172,7 @@ export function PlanFormModal({
 
       const nextState = mapPlanToState(fullPlanData, defaultProductLineId);
       setFormData(nextState.formData);
-      setSelectedBenefits(nextState.selectedBenefits);
-      setSelectedCoberturas(nextState.selectedCoberturas);
+      setPreviewCounts({ coberturas: nextState.coberturasCount, benefits: nextState.benefitsCount });
       hydratedStateKeyRef.current = hydrationKey;
       return;
     }
@@ -313,86 +180,14 @@ export function PlanFormModal({
     if (hydratedStateKeyRef.current === hydrationKey) return;
 
     setFormData(createEmptyFormData(defaultProductLineId));
-    setSelectedBenefits([]);
-    setSelectedCoberturas([]);
+    setPreviewCounts({ coberturas: 0, benefits: 0 });
     hydratedStateKeyRef.current = hydrationKey;
   }, [open, planId, hydrationKey, defaultProductLineId, fullPlanData?.id, fullPlanData?.updated_at]);
 
-  const selectedBenefitIds = useMemo(
-    () => new Set(selectedBenefits.map((benefit) => benefit.benefit_id)),
-    [selectedBenefits],
-  );
-
-  const selectedCoberturaIds = useMemo(
-    () => new Set(selectedCoberturas.map((cobertura) => cobertura.cobertura_id)),
-    [selectedCoberturas],
-  );
-
-  const filteredBenefits = useMemo(() => {
-    const search = benefitsSearch.trim().toLowerCase();
-
-    return benefits
-      .filter((benefit) => {
-        if (!search) return true;
-        return [benefit.name, benefit.category, benefit.description]
-          .filter(Boolean)
-          .some((value) => value!.toLowerCase().includes(search));
-      })
-      .map((benefit) => ({
-        id: benefit.id,
-        label: benefit.name,
-        description: benefit.description,
-        icon: benefit.icon,
-        group: benefit.category || 'Outros',
-      })) as SelectionItem[];
-  }, [benefits, benefitsSearch]);
-
-  const filteredCoberturas = useMemo(() => {
-    const search = coberturasSearch.trim().toLowerCase();
-
-    return coberturasCatalogo
-      .filter((cobertura) => {
-        if (!search) return true;
-        return [cobertura.nome, cobertura.subtitle, cobertura.tipo, cobertura.codigo]
-          .filter(Boolean)
-          .some((value) => value!.toLowerCase().includes(search));
-      })
-      .map((cobertura) => ({
-        id: cobertura.id,
-        label: cobertura.nome,
-        description: cobertura.subtitle,
-        icon: cobertura.icon,
-        group: cobertura.tipo || 'Coberturas',
-        meta: cobertura.codigo || null,
-      })) as SelectionItem[];
-  }, [coberturasCatalogo, coberturasSearch]);
-
-  const groupedBenefits = useMemo(() => {
-    const groups = filteredBenefits.reduce<Record<string, SelectionItem[]>>((accumulator, benefit) => {
-      if (!accumulator[benefit.group]) accumulator[benefit.group] = [];
-      accumulator[benefit.group].push(benefit);
-      return accumulator;
-    }, {});
-
-    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [filteredBenefits]);
-
-  const groupedCoberturas = useMemo(() => {
-    const groups = filteredCoberturas.reduce<Record<string, SelectionItem[]>>((accumulator, cobertura) => {
-      if (!accumulator[cobertura.group]) accumulator[cobertura.group] = [];
-      accumulator[cobertura.group].push(cobertura);
-      return accumulator;
-    }, {});
-
-    return Object.entries(groups).sort((a, b) => a[0].localeCompare(b[0]));
-  }, [filteredCoberturas]);
-
   const productLineOptions = useMemo(() => {
     const currentLine = fullPlanData?.product_lines;
-
     if (!currentLine?.id) return productLines;
     if (productLines.some((line) => line.id === currentLine.id)) return productLines;
-
     return [currentLine, ...productLines];
   }, [productLines, fullPlanData?.product_lines]);
 
@@ -421,53 +216,12 @@ export function PlanFormModal({
   const selectedLineTone = LINE_TONES[selectedLine?.color || 'blue'] || LINE_TONES.blue;
   const selectedBadgeTone = formData.badge_color ? BADGE_TONES[formData.badge_color] : null;
 
-  const selectedBenefitsPreview = useMemo(
-    () => benefits.filter((benefit) => selectedBenefitIds.has(benefit.id)).slice(0, 4),
-    [benefits, selectedBenefitIds],
-  );
-
-  const selectedCoberturasPreview = useMemo(
-    () => coberturasCatalogo.filter((cobertura) => selectedCoberturaIds.has(cobertura.id)).slice(0, 4),
-    [coberturasCatalogo, selectedCoberturaIds],
-  );
-
   const handleNameChange = (name: string) => {
     setFormData((previous) => ({
       ...previous,
       name,
       slug: isEditing ? previous.slug : generateSlug(name),
     }));
-  };
-
-  const toggleBenefit = (benefitId: string) => {
-    setSelectedBenefits((previous) => {
-      const existing = previous.find((benefit) => benefit.benefit_id === benefitId);
-      if (existing) {
-        return previous.filter((benefit) => benefit.benefit_id !== benefitId);
-      }
-
-      return [
-        ...previous,
-        {
-          benefit_id: benefitId,
-          custom_text: null,
-          custom_value: null,
-          additional_info: null,
-          is_highlighted: false,
-          display_order: previous.length,
-        },
-      ];
-    });
-  };
-
-  const toggleCobertura = (coberturaId: string) => {
-    setSelectedCoberturas((previous) => {
-      if (previous.some((cobertura) => cobertura.cobertura_id === coberturaId)) {
-        return previous.filter((cobertura) => cobertura.cobertura_id !== coberturaId);
-      }
-
-      return [...previous, { cobertura_id: coberturaId }];
-    });
   };
 
   const handleSubmit = async (event: React.FormEvent) => {
@@ -483,12 +237,14 @@ export function PlanFormModal({
       footer_note: formData.footer_note || null,
       display_order: parseInt(formData.display_order, 10) || 0,
       is_active: formData.is_active,
-      benefits: selectedBenefits,
-      coberturas: selectedCoberturas,
+      // Coberturas e benefícios são gerenciados inline, não mais aqui
+      benefits: [],
+      coberturas: [],
     };
 
     try {
       if (isEditing && planId) {
+        // Only update plan metadata, don't touch coberturas/benefits links
         await updatePlan.mutateAsync({ id: planId, ...payload });
       } else {
         await createPlan.mutateAsync(payload);
@@ -629,29 +385,17 @@ export function PlanFormModal({
                       </div>
                     </section>
 
-                    <SearchableSelectionSection
-                      title="Coberturas"
-                      description="Selecione as coberturas vinculadas ao plano."
-                      icon={Shield}
-                      searchValue={coberturasSearch}
-                      onSearchChange={setCoberturasSearch}
-                      groups={groupedCoberturas}
-                      selectedIds={selectedCoberturaIds}
-                      onToggle={toggleCobertura}
-                      emptyMessage="Nenhuma cobertura encontrada para o filtro informado."
-                    />
-
-                    <SearchableSelectionSection
-                      title="Benefícios"
-                      description="Selecione os benefícios vinculados ao plano."
-                      icon={Sparkles}
-                      searchValue={benefitsSearch}
-                      onSearchChange={setBenefitsSearch}
-                      groups={groupedBenefits}
-                      selectedIds={selectedBenefitIds}
-                      onToggle={toggleBenefit}
-                      emptyMessage="Nenhum benefício encontrado para o filtro informado."
-                    />
+                    {/* Coberturas e Benefícios inline — só em modo edição */}
+                    {isEditing && planId ? (
+                      <>
+                        <PlanCoberturasList planId={planId} />
+                        <PlanBeneficiosList planId={planId} />
+                      </>
+                    ) : (
+                      <div className="rounded-3xl border border-dashed border-border/60 bg-card/40 px-6 py-8 text-center text-sm text-muted-foreground">
+                        Salve o plano primeiro para adicionar coberturas e benefícios.
+                      </div>
+                    )}
 
                   </div>
                 </ScrollArea>
@@ -728,57 +472,13 @@ export function PlanFormModal({
                     <div className="grid grid-cols-2 gap-3">
                       <div className="rounded-2xl border border-border/60 bg-background/60 p-3">
                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Coberturas</p>
-                        <p className="mt-1 text-xl font-semibold text-foreground">{selectedCoberturas.length}</p>
+                        <p className="mt-1 text-xl font-semibold text-foreground">{previewCounts.coberturas}</p>
                       </div>
                       <div className="rounded-2xl border border-border/60 bg-background/60 p-3">
                         <p className="text-[11px] uppercase tracking-wide text-muted-foreground">Benefícios</p>
-                        <p className="mt-1 text-xl font-semibold text-foreground">{selectedBenefits.length}</p>
+                        <p className="mt-1 text-xl font-semibold text-foreground">{previewCounts.benefits}</p>
                       </div>
                     </div>
-
-                    <div className="space-y-3">
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Coberturas em destaque</p>
-                        <div className="flex flex-wrap gap-2">
-                          {selectedCoberturasPreview.length > 0 ? (
-                            <>
-                              {selectedCoberturasPreview.map((cobertura) => (
-                                <Badge key={cobertura.id} variant="outline" className="max-w-full truncate">
-                                  {cobertura.nome}
-                                </Badge>
-                              ))}
-                              {selectedCoberturas.length > selectedCoberturasPreview.length ? (
-                                <Badge variant="secondary">+{selectedCoberturas.length - selectedCoberturasPreview.length}</Badge>
-                              ) : null}
-                            </>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">Nenhuma cobertura vinculada.</p>
-                          )}
-                        </div>
-                      </div>
-
-                      <div className="space-y-2">
-                        <p className="text-[11px] font-semibold uppercase tracking-[0.18em] text-muted-foreground">Benefícios em destaque</p>
-                        <div className="space-y-2">
-                          {selectedBenefitsPreview.length > 0 ? (
-                            <>
-                              {selectedBenefitsPreview.map((benefit) => (
-                                <div key={benefit.id} className="flex items-center gap-2 rounded-2xl border border-border/60 bg-background/60 px-3 py-2 text-sm">
-                                  <span className="text-base leading-none">{benefit.icon || '✨'}</span>
-                                  <span className="truncate text-foreground">{benefit.name}</span>
-                                </div>
-                              ))}
-                              {selectedBenefits.length > selectedBenefitsPreview.length ? (
-                                <p className="text-xs text-muted-foreground">+{selectedBenefits.length - selectedBenefitsPreview.length} benefício(s) adicional(is)</p>
-                              ) : null}
-                            </>
-                          ) : (
-                            <p className="text-sm text-muted-foreground">Nenhum benefício vinculado.</p>
-                          )}
-                        </div>
-                      </div>
-                    </div>
-
                   </div>
                 </div>
               </div>
