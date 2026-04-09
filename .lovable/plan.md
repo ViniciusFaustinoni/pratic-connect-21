@@ -1,41 +1,45 @@
 
 
-## Plano: Permitir atribuir coberturas existentes nao vinculadas no modal do plano
+## Plano: Regras de elegibilidade do plano sobrescrevem as mesmas regras nas coberturas/beneficios
 
 ### Problema
-O botao "Nova Cobertura" no modal de edicao do plano so permite criar uma cobertura do zero. Nao ha opcao de selecionar e vincular uma cobertura ja existente no catalogo que ainda nao esteja atribuida a nenhum plano.
+Atualmente, regras do plano e regras das coberturas/beneficios sao avaliadas de forma independente. Se o plano tem uma regra `tipo_uso` (ex: "aplicativo"), as coberturas individuais que tambem tem regra `tipo_uso` sao avaliadas separadamente, podendo causar conflitos ou redundancia.
 
-### Alteracoes
+### Solucao
+No motor de cotacao, identificar quais `rule_type` existem no nivel do plano. Ao filtrar coberturas e beneficios, ignorar regras individuais cujo `rule_type` ja esta coberto por uma regra do plano.
 
-**`src/components/admin/planos/PlanCoberturasList.tsx`**
+### Alteracao
 
-1. Adicionar botao "Atribuir Existente" ao lado de "Nova Cobertura"
-2. Ao clicar, abrir um dialog que:
-   - Busca todas as coberturas da tabela `coberturas` que NAO possuem vinculo em `planos_coberturas` (subquery ou left join)
-   - Exibe lista filtrada com campo de busca por nome
-   - Permite selecionar uma ou mais coberturas
-   - Ao confirmar, insere os registros em `planos_coberturas` vinculando ao plano atual
-3. Query para coberturas disponiveis:
-```sql
-SELECT c.* FROM coberturas c
-WHERE c.ativo = true
-AND c.id NOT IN (SELECT cobertura_id FROM planos_coberturas)
-ORDER BY c.nome
+**`src/hooks/usePlanosCotacao.ts` (~linha 323-364)**
+
+1. Apos obter `planoRulesNonMarcaModelo` (linha 323), extrair os tipos de regra ativos no plano:
+```ts
+const planoRuleTypes = new Set(
+  planoRulesNonMarcaModelo.map(r => r.rule_type)
+);
 ```
 
-**Estrutura do dialog (inline no componente):**
-- State `assignOpen` para controlar visibilidade
-- State `search` para filtro de texto
-- Query `useQuery` com key `['coberturas-disponiveis']` que busca coberturas sem vinculo
-- Lista com checkboxes para selecao multipla
-- Botao "Vincular Selecionadas" que faz batch insert em `planos_coberturas`
-- Invalida queries apos vinculacao
+2. Na filtragem de beneficios (linha 339-341), excluir regras cujo tipo ja existe no plano:
+```ts
+const benefitRules = allEligibilityRules
+  .filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id)
+  .filter(r => r.rule_type !== 'fipe_range')
+  .filter(r => !planoRuleTypes.has(r.rule_type)); // sobrescrita pelo plano
+```
+
+3. Na filtragem de coberturas (linha 354-356), mesma logica:
+```ts
+const cobRules = allEligibilityRules
+  .filter(r => r.entity_type === 'cobertura' && r.entity_id === cobId)
+  .filter(r => r.rule_type !== 'fipe_range')
+  .filter(r => !planoRuleTypes.has(r.rule_type)); // sobrescrita pelo plano
+```
 
 ### Resultado
-- Gestor pode criar cobertura nova OU atribuir cobertura existente do catalogo
-- Apenas coberturas nao vinculadas a nenhum plano aparecem como opcao (consistente com a regra de itens unicos por plano)
-- Fluxo rapido sem sair do modal de edicao
+- Se o plano "Select One Aplicativo" tem regra `tipo_uso: aplicativo`, as regras `tipo_uso` individuais das coberturas/beneficios desse plano sao ignoradas
+- A regra do plano ja foi validada na etapa anterior (linha 327) e serve como filtro unico
+- Outros tipos de regra nas coberturas (ex: `regiao`, `combustivel`) continuam funcionando normalmente se nao existem no nivel do plano
 
 ### Arquivo
-- `src/components/admin/planos/PlanCoberturasList.tsx`
+- `src/hooks/usePlanosCotacao.ts`
 
