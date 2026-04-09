@@ -1,68 +1,129 @@
 
-Diagnóstico
+### Plano para corrigir o conflito entre `vistorias` / `instalacoes` / `servicos`
 
-- O erro vem de um desencontro entre o mapa e a mutation de atribuição.
-- `view_vistorias_mapa` hoje mistura 3 origens: `vistorias`, `instalacoes` e `servicos` (`supabase/migrations/20260409115536_9e44b776-7592-402e-a917-1f48f6cc183a.sql`).
-- Em `src/components/mapa/MapaVistoriasContent.tsx`, o drag-and-drop e o botão “Atribuir” tratam qualquer item sem técnico como atribuível.
-- Porém `src/hooks/useAtribuicaoManual.ts` atualiza apenas `public.servicos`.
-- Resultado: ao soltar perto de um item que veio de `vistorias` ou `instalacoes`, o `UPDATE servicos` não encontra linha; depois o insert em `servicos_atribuicoes_log` tenta gravar um `servico_id` que não existe em `servicos`, gerando o `409`; em seguida o `.single()` em `servicos` retorna `406` porque não há linha para aquele id.
-- Há um segundo problema no log: `atribuido_por` recebe `auth.users.id`, mas a FK aponta para `profiles.id`. Isso também pode gerar `409`.
-- E mesmo quando a atribuição dá certo, a rota pode não aparecer na hora porque `useAtribuirServicoManual` não invalida `['vistorias-mapa']` nem `['vistoriadores-localizacao-realtime']`.
+### Diagnóstico
+O problema não é “o drag-and-drop em si”. O conflito está no modelo de dados do mapa:
 
-Plano de correção
+- `view_vistorias_mapa` mistura **3 fontes**: `vistorias`, `instalacoes` e `servicos`
+- mas os fluxos de ação do mapa (`atribuir`, `desatribuir`, `enviar confirmação`) operam em **`public.servicos`**
+- a correção anterior bloqueou tudo que não fosse `origem_registro = 'servicos'`, o que evitou erro, mas quebrou o comportamento que você precisa
+- na prática, muitos itens de `vistorias`/`instalacoes` **já têm um `servico` correspondente** via `vistoria_origem_id` / `instalacao_origem_id`; o mapa é que continua usando o **ID e os campos da origem legada**, então:
+  - a atribuição usa o ID errado
+  - a confirmação usa o ID errado
+  - a rota não aparece porque o mapa continua lendo `vistoriador_id`/`rota_id` da tabela legada, não do `servico`
 
-1. Tornar a origem do marcador explícita
-- Atualizar a view `view_vistorias_mapa` para incluir um campo claro, por exemplo `origem_registro`, com valores:
-  - `vistorias`
-  - `instalacoes`
-  - `servicos`
+### Abordagem correta
+Em vez de esconder ou bloquear itens legados, vou fazer o mapa trabalhar com um **ID unificado de serviço**.
 
-2. Ajustar o tipo consumido no frontend
-- Atualizar `src/hooks/useVistoriasMapa.ts` para expor `origem_registro` no tipo `VistoriaMapa`.
+### Implementação
 
-3. Restringir a atribuição manual do mapa ao que a mutation realmente suporta
-- Em `src/components/mapa/MapaVistoriasContent.tsx`, permitir drag-and-drop/manual assign apenas para itens com `origem_registro === 'servicos'`.
-- Aplicar essa regra em todos os pontos:
-  - lista lateral (`canAssign`)
-  - botão “Atribuir” no popup
-  - busca do serviço mais próximo no `dragend`
-- Se o técnico for solto perto de um item não atribuível por esse fluxo, mostrar mensagem clara em vez de deixar quebrar.
+#### 1. Tornar a view do mapa “service-aware”
+Atualizar `view_vistorias_mapa` para expor um campo como `servico_id_unificado`:
 
-4. Corrigir o log da atribuição
-- Em `src/hooks/useAtribuicaoManual.ts`, antes de inserir no log, buscar o `profiles.id` do usuário autenticado via `user_id`.
-- Gravar esse `profiles.id` em `atribuido_por`.
-- Passar a verificar explicitamente o erro do insert em `servicos_atribuicoes_log`.
+- em linhas de `servicos`: `servico_id_unificado = s.id`
+- em linhas de `vistorias`: buscar o `servicos.id` ligado por `vistoria_origem_id = v.id`
+- em linhas de `instalacoes`: buscar o `servicos.id` ligado por `instalacao_origem_id = i.id`
 
-5. Fazer a rota aparecer imediatamente após atribuir
-- No `onSuccess` de `useAtribuirServicoManual`, invalidar também:
-  - `['vistorias-mapa']`
-  - `['vistoriadores-localizacao-realtime']`
-- Isso força o mapa a recarregar o serviço já atribuído e recalcular `linhasDeRota`.
+Além disso, na view, os campos usados pelo mapa devem passar a preferir o estado do `servico` vinculado:
+- `vistoriador_id`
+- `vistoriador_nome`
+- `rota_id`, `rota_codigo`, `rota_regiao`, `rota_cor`
+- `confirmacao_whatsapp`
+- `periodo`
+- `permite_encaixe`
+- quando fizer sentido, também `status`
 
-6. Endurecer as leituras auxiliares para não gerar 406 desnecessário
-- Trocar os `.single()` usados só para montar payload de WhatsApp por `.maybeSingle()` em `useAtribuicaoManual.ts`.
-- Se algum dado não existir, seguir com fallback amigável em vez de erro de rede visível.
+Assim o mapa continua mostrando uma linha por item visível, mas com o **estado operacional vindo do serviço unificado**.
 
-7. Aplicar o mesmo conserto no cancelamento
-- Em `src/hooks/useDesatribuirServico.ts`, corrigir `atribuido_por` para usar `profiles.id`, evitando o mesmo conflito no log de cancelamento.
+#### 2. Garantir que itens legados tenham serviço correspondente
+Criar uma migration de backfill para inserir `servicos` faltantes para:
+- `vistorias` ativas/agendadas sem `servico` vinculado
+- `instalacoes` ativas/agendadas sem `servico` vinculado
 
-Arquivos envolvidos
+Usando as mesmas regras de mapeamento já existentes nas migrations de sincronização.
 
-- `supabase/migrations/...view_vistorias_mapa...sql`
+Isso elimina os “buracos” onde o item aparece no mapa mas não existe `servico` para atribuir/confirmar.
+
+#### 3. Parar de usar `origem_registro` como bloqueio
+No frontend (`MapaVistoriasContent.tsx`), `origem_registro` deve virar só informativo.
+
+Trocar os guards atuais:
+- `v.origem_registro === 'servicos'`
+
+por uma regra única:
+- `!!v.servico_id_unificado`
+
+Aplicar isso em todos os pontos:
+- botão “Atribuir” na lista
+- botão “Atribuir” no popup
+- busca do serviço mais próximo no `dragend`
+- cancelamento de atribuição
+- envio de confirmação WhatsApp
+
+#### 4. Usar sempre o ID do serviço unificado nas actions
+Quando o usuário:
+- clicar para atribuir
+- arrastar e soltar técnico
+- cancelar rota
+- enviar confirmação
+
+o ID enviado para mutation/edge function deve ser sempre:
+- `v.servico_id_unificado`
+
+e não mais `v.id` da linha visual do mapa.
+
+#### 5. Restaurar o botão de confirmação para os casos corretos
+Hoje `podeEnviarConfirmacao` depende de:
+- `atribuicaoManualAtiva`
+- `origem_registro === 'servicos'`
+
+Isso está errado para sua regra de negócio.
+
+Vou ajustar para exibir a confirmação sempre que:
+- existir `servico_id_unificado`
+- não for serviço realizado
+- não for encaixe
+- não estiver confirmado
+- estiver apto ao fluxo de confirmação
+
+Ou seja: confirmação volta a aparecer e funcionar independentemente do modo manual.
+
+#### 6. Fazer a rota aparecer logo após atribuir
+Com a view lendo os campos efetivos do `servico`, a rota volta a aparecer no mapa assim que a atribuição salvar.
+
+Manter/validar a invalidação de queries já usada após sucesso:
+- `['vistorias-mapa']`
+- `['vistoriadores-localizacao-realtime']`
+
+Assim:
+- o pin passa a mostrar o técnico atribuído
+- `linhasDeRota` recalcula
+- a polyline aparece imediatamente
+
+#### 7. Endurecer as mutations para evitar falha silenciosa
+Em `useAtribuicaoManual.ts` e `useDesatribuirServico.ts`:
+- validar que o `servico` alvo realmente existe/foi atualizado
+- só registrar log depois disso
+- manter `atribuido_por` usando `profiles.id`
+
+Isso evita voltar a cair em erro confuso por atualização “sem linha afetada”.
+
+### Arquivos envolvidos
+- `supabase/migrations/...` nova migration da view + backfill
 - `src/hooks/useVistoriasMapa.ts`
 - `src/components/mapa/MapaVistoriasContent.tsx`
 - `src/hooks/useAtribuicaoManual.ts`
 - `src/hooks/useDesatribuirServico.ts`
 
-Resultado esperado
+### Resultado esperado
+Depois dessa correção:
 
-- Drag-and-drop deixa de disparar `409/406`.
-- Só serviços realmente compatíveis com a mutation entram no fluxo manual.
-- A atribuição conclui sem erro.
-- A rota do técnico para o serviço aparece logo após confirmar.
-- O cancelamento também deixa de falhar silenciosamente no log.
+- será possível atribuir por **drag-and-drop** e por **clique**
+- isso funcionará para itens visíveis no mapa, mesmo quando vierem de `vistorias` ou `instalacoes`
+- o botão de **enviar confirmação** volta a aparecer e funcionar
+- a atribuição poderá ocorrer **com ou sem confirmação**
+- após atribuir, a **rota do técnico até o serviço** aparecerá no mapa
+- `origem_registro` deixa de quebrar o fluxo manual
 
-Escopo que não muda agora
-
-- Não vou mexer no motor automático.
-- Não vou redesenhar a atribuição para suportar `vistorias` e `instalacoes` legadas no mesmo fluxo; isso exigiria uma mutation/log genéricos. Para corrigir o bug atual, o ajuste certo é alinhar o mapa manual ao modelo já existente em `servicos`.
+### Decisão de design
+Eu não seguiria criando mais bloqueios por origem nem adicionaria remendo só no popup. O conserto certo é fazer o mapa operar sobre um **identificador unificado de `servicos`**, porque é isso que o backend de atribuição e confirmação já usa.
