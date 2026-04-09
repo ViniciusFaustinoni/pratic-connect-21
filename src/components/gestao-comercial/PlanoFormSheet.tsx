@@ -27,9 +27,29 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const qc = useQueryClient();
   
   // Data sources
-  const { data: coberturas = [] } = useCoberturas(true);
-  const { data: benefits = [] } = useBenefits();
+  const { data: allCoberturas = [] } = useCoberturas(true);
+  const { data: allBenefits = [] } = useBenefits();
   const { data: allRules = [] } = useAllEligibilityRules();
+
+  // IDs already assigned to OTHER plans (exclude current plan being edited)
+  const { data: assignedCoberturaIds = new Set<string>() } = useQuery({
+    queryKey: ['assigned-cobertura-ids', planoId],
+    queryFn: async () => {
+      let query = supabase.from('planos_coberturas').select('cobertura_id');
+      if (planoId) query = query.neq('plano_id', planoId);
+      const { data } = await query;
+      return new Set((data || []).map((r: any) => r.cobertura_id));
+    },
+  });
+  const { data: assignedBenefitIds = new Set<string>() } = useQuery({
+    queryKey: ['assigned-benefit-ids', planoId],
+    queryFn: async () => {
+      let query = supabase.from('planos_beneficios').select('benefit_id');
+      if (planoId) query = query.neq('plano_id', planoId);
+      const { data } = await query;
+      return new Set((data || []).map((r: any) => r.benefit_id));
+    },
+  });
 
   // Set of entity_ids that have fipe_range rules (variable pricing)
   const fipeRangeEntityIds = useMemo(() => {
@@ -49,6 +69,10 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [selectedCoberturas, setSelectedCoberturas] = useState<Set<string>>(new Set());
   const [selectedBeneficios, setSelectedBeneficios] = useState<Set<string>>(new Set());
   const [templateContratoId, setTemplateContratoId] = useState<string>('');
+
+  // Filter to only show unassigned items (+ those already selected by this plan)
+  const coberturas = useMemo(() => allCoberturas.filter(c => !assignedCoberturaIds.has(c.id) || selectedCoberturas.has(c.id)), [allCoberturas, assignedCoberturaIds, selectedCoberturas]);
+  const benefits = useMemo(() => allBenefits.filter(b => !assignedBenefitIds.has(b.id) || selectedBeneficios.has(b.id)), [allBenefits, assignedBenefitIds, selectedBeneficios]);
 
 
   // Load templates

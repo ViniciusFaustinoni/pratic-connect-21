@@ -26,14 +26,13 @@ export function VincularBeneficioModal({ open, onClose, planoId }: VincularBenef
     is_highlighted: false,
   });
 
-  // Benefits not yet linked to this plan
+  // Benefits not yet linked to ANY plan
   const { data: availableBenefits, isLoading } = useQuery({
-    queryKey: ['benefits-disponiveis', planoId],
+    queryKey: ['benefits-disponiveis-global', planoId],
     queryFn: async () => {
       const { data: vinculados } = await supabase
         .from('planos_beneficios')
-        .select('benefit_id')
-        .eq('plano_id', planoId);
+        .select('benefit_id');
 
       const idsVinculados = vinculados?.map(v => v.benefit_id).filter(Boolean) || [];
 
