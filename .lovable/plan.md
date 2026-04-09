@@ -1,27 +1,20 @@
 
 
-## Plano: Tornar valores financeiros somente leitura nos formularios inline
+## Plano: Corrigir query de coberturas no modal de edicao do plano
 
 ### Problema
-Os campos de valores financeiros (Valor, Valor Limite, % Cobertura, Franquia %, Franquia R$, Preço Sugerido) foram adicionados como inputs editaveis nos formularios inline de coberturas e beneficios. O usuario quer que sejam apenas visuais (read-only).
+A query em `PlanCoberturasList` faz `.order('display_order', { ascending: true })` na tabela `planos_coberturas`, mas essa tabela nao possui coluna `display_order`. A coluna existe apenas na tabela `coberturas`. Isso causa erro no PostgREST e retorna array vazio, fazendo com que nenhuma cobertura seja exibida no modal.
 
-### Alteracoes
+### Alteracao
 
-**1. `CoberturaInlineForm`** em `src/components/admin/planos/PlanCoberturasList.tsx`
-- Substituir os 5 `<Input>` financeiros (linhas 102-126) por exibicao somente leitura:
-  - Usar `<div>` com texto formatado em R$ ou % em vez de inputs editaveis
-  - Manter os labels, mas mostrar valores como texto estilizado (bg-muted, rounded, padding)
-- Remover `valor`, `valor_limite`, `percentual_cobertura`, `franquia_percentual`, `franquia_valor` do state do form e do payload do `handleSave` (deixar esses campos inalterados no banco)
-
-**2. `BeneficioInlineForm`** em `src/components/admin/planos/PlanBeneficiosList.tsx`
-- Substituir o `<Input>` de `preco_sugerido` por exibicao somente leitura
-- Remover `preco_sugerido` do state do form e do payload do `handleSave`
+**`src/components/admin/planos/PlanCoberturasList.tsx`** (linha ~177)
+- Remover o `.order('display_order', { ascending: true })` da query principal
+- Ordenar no client-side usando `coberturas.display_order` apos o mapeamento, ou usar `.order('coberturas(display_order)')` se suportado pelo PostgREST
+- Alternativa mais simples: remover o order e ordenar em JS: `(data || []).map(...).filter(Boolean).sort((a,b) => (a.display_order ?? 0) - (b.display_order ?? 0))`
 
 ### Resultado
-- Valores financeiros visiveis mas nao editaveis nos formularios inline
-- Salvamento nao altera valores financeiros acidentalmente
+- Coberturas voltam a aparecer corretamente no modal de edicao do plano
 
-### Arquivos
+### Arquivo
 - `src/components/admin/planos/PlanCoberturasList.tsx`
-- `src/components/admin/planos/PlanBeneficiosList.tsx`
 
