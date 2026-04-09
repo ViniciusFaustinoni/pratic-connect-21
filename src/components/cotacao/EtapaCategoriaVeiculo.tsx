@@ -10,7 +10,9 @@ import {
   ArrowLeft
 } from 'lucide-react';
 import { VehicleCategorySelect, CATEGORIAS_VEICULO } from '@/components/cotador/VehicleCategorySelect';
-import { getRestricaoCategoria } from '@/data/restricoesCategorias';
+import { useAllEligibilityRules } from '@/hooks/useEntityEligibilityRules';
+import { useCoberturas, useBenefits } from '@/hooks/usePlans';
+import { gerarAlertaCategoriaElegibilidade } from '@/utils/alertaCategoriaElegibilidade';
 
 interface EtapaCategoriaVeiculoProps {
   categoria: string | null;
@@ -30,20 +32,23 @@ export function EtapaCategoriaVeiculo({
   
   const handleCategoriaChange = (value: string) => {
     setCategoria(value);
-    // Se selecionou "aplicativo", marca uso de app automaticamente
     setUsoApp(value === 'aplicativo');
   };
 
-  // Usar fonte única de verdade para alertas de categoria
+  const { data: allRules = [] } = useAllEligibilityRules();
+  const { data: coberturasGlobal = [] } = useCoberturas(true);
+  const { data: beneficiosGlobal = [] } = useBenefits();
+
+  // Alerta dinâmico baseado nas regras de elegibilidade reais
   const alerta = useMemo(() => {
     if (!categoria) return null;
-    const restricao = getRestricaoCategoria(categoria);
-    if (!restricao || !restricao.mensagemAlerta) return null;
-    return {
-      tipo: restricao.tipoAlerta,
-      mensagem: restricao.mensagemAlerta,
-    };
-  }, [categoria]);
+    return gerarAlertaCategoriaElegibilidade(
+      categoria,
+      allRules,
+      coberturasGlobal.map(c => ({ id: c.id, nome: c.nome })),
+      beneficiosGlobal.map(b => ({ id: b.id, name: b.name }))
+    );
+  }, [categoria, allRules, coberturasGlobal, beneficiosGlobal]);
 
   const canProceed = categoria !== null;
 
@@ -64,37 +69,20 @@ export function EtapaCategoriaVeiculo({
       </CardHeader>
       
       <CardContent className="space-y-6">
-        {/* Select de Categoria */}
         <VehicleCategorySelect
           value={categoria}
           onChange={handleCategoriaChange}
         />
 
-        {/* Alerta dinâmico baseado na categoria */}
         {alerta && (
-          <Alert 
-            className={
-              alerta.tipo === 'warning' 
-                ? 'border-amber-500/50 bg-amber-500/10' 
-                : 'border-blue-500/50 bg-blue-500/10'
-            }
-          >
-            {alerta.tipo === 'warning' ? (
-              <AlertTriangle className="h-4 w-4 text-amber-500" />
-            ) : (
-              <Info className="h-4 w-4 text-blue-500" />
-            )}
-            <AlertDescription className={
-              alerta.tipo === 'warning'
-                ? 'text-amber-700 dark:text-amber-400'
-                : 'text-blue-700 dark:text-blue-400'
-            }>
+          <Alert className="border-amber-500/50 bg-amber-500/10">
+            <AlertTriangle className="h-4 w-4 text-amber-500" />
+            <AlertDescription className="text-amber-700 dark:text-amber-400">
               {alerta.mensagem}
             </AlertDescription>
           </Alert>
         )}
 
-        {/* Aviso geral */}
         <Alert className="border-muted bg-muted/50">
           <Info className="h-4 w-4 text-muted-foreground" />
           <AlertDescription className="text-muted-foreground text-sm">
@@ -102,23 +90,12 @@ export function EtapaCategoriaVeiculo({
           </AlertDescription>
         </Alert>
 
-        {/* Navegação */}
         <div className="flex justify-between pt-4 border-t border-border">
-          <Button
-            variant="outline"
-            onClick={onBack}
-            size="lg"
-          >
+          <Button variant="outline" onClick={onBack} size="lg">
             <ArrowLeft className="mr-2 h-4 w-4" />
             Voltar
           </Button>
-          
-          <Button
-            onClick={onNext}
-            disabled={!canProceed}
-            size="lg"
-            className="min-w-[140px]"
-          >
+          <Button onClick={onNext} disabled={!canProceed} size="lg" className="min-w-[140px]">
             Avançar
             <ArrowRight className="ml-2 h-4 w-4" />
           </Button>

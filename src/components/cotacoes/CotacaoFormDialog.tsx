@@ -6,7 +6,10 @@ import { useAssociadoSearch } from '@/hooks/useAssociadoSearch';
 
 import { ChevronDown, ChevronUp, Fuel } from 'lucide-react';
 import { mapearRegiaoParaPricing } from '@/utils/regiaoMapping';
-import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useCarenciaVidrosDias, useMigracaoConfig, useObservacoesCategoria, useMarcasAceitasMotos, useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistema';
+import { useTaxaAdesaoPercentual, useTaxaAdesaoMinimoBase, useTaxaAdesaoMinimoVolanteInterno, useTaxaAdesaoMinimoVolanteExterno, useTaxaRepasseVolante, useTaxaRepasseVolanteExterno, useCarenciaDiasPadrao, useCarenciaVidrosDias, useMigracaoConfig, useMarcasAceitasMotos, useConfiguracaoJson, useCombustiveis } from '@/hooks/useConteudosSistema';
+import { useAllEligibilityRules } from '@/hooks/useEntityEligibilityRules';
+import { useCoberturas, useBenefits } from '@/hooks/usePlans';
+import { gerarAlertaCategoriaElegibilidade } from '@/utils/alertaCategoriaElegibilidade';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { type MigracaoState } from '@/components/cotacoes/MigracaoToggle';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
@@ -156,7 +159,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   
   const tiposUsoAtivos = useMemo(() => tiposUsoBanco.filter(t => t.ativo !== false), [tiposUsoBanco]);
   const tiposPlacaAtivos = useMemo(() => tiposPlacaBanco.filter(t => t.ativo !== false), [tiposPlacaBanco]);
-  const { data: observacoesCategoria = {} } = useObservacoesCategoria();
+  const { data: allEligibilityRules = [] } = useAllEligibilityRules();
+  const { data: coberturasGlobal = [] } = useCoberturas(true);
+  const { data: beneficiosGlobal = [] } = useBenefits();
   
   // Estado do cenário de adesão para vendedor externo
   type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
@@ -455,13 +460,16 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     return nomeValido && telefoneValido;
   }, [nomeAssociado, telefoneAssociado]);
 
-  // Alerta da categoria selecionada (do banco) — agora usa tipoPlacaSelecionado
+  // Alerta da categoria selecionada — dinâmico baseado nas regras de elegibilidade reais
   const alertaCategoria = useMemo(() => {
-    if (!tipoPlacaSelecionado || !observacoesCategoria) return null;
-    const texto = observacoesCategoria[tipoPlacaSelecionado];
-    if (!texto) return null;
-    return { tipo: 'warning' as const, mensagem: texto };
-  }, [tipoPlacaSelecionado, observacoesCategoria]);
+    if (!tipoPlacaSelecionado) return null;
+    return gerarAlertaCategoriaElegibilidade(
+      tipoPlacaSelecionado,
+      allEligibilityRules,
+      coberturasGlobal.map(c => ({ id: c.id, nome: c.nome })),
+      beneficiosGlobal.map(b => ({ id: b.id, name: b.name }))
+    );
+  }, [tipoPlacaSelecionado, allEligibilityRules, coberturasGlobal, beneficiosGlobal]);
 
   // Resetar formulário quando o modal abre sem leadId (exceto em modo edição ou duplicação)
   useEffect(() => {

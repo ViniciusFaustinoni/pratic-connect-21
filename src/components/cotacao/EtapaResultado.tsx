@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useMemo } from 'react';
 import { Button } from '@/components/ui/button';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Alert, AlertDescription } from '@/components/ui/alert';
@@ -16,7 +16,10 @@ import {
   Loader2,
   Fuel
 } from 'lucide-react';
-import { useCategoriasVeiculo, useObservacoesCategoria } from '@/hooks/useConteudosSistema';
+import { useCategoriasVeiculo } from '@/hooks/useConteudosSistema';
+import { useAllEligibilityRules } from '@/hooks/useEntityEligibilityRules';
+import { useCoberturas, useBenefits } from '@/hooks/usePlans';
+import { gerarAlertaCategoriaElegibilidade } from '@/utils/alertaCategoriaElegibilidade';
 import { BlocoDepreciacaoCotacao } from './BlocoDepreciacaoCotacao';
 import { useRegioesAtivas } from '@/hooks/useRegioes';
 import { PlanoCardCotacao } from './PlanoCardCotacao';
@@ -91,13 +94,23 @@ export function EtapaResultado({
 
   // Dados dinâmicos do banco
   const { data: categoriasVeiculo = [] } = useCategoriasVeiculo();
-  const { data: observacoesCategoria = {} } = useObservacoesCategoria();
+  const { data: allRules = [] } = useAllEligibilityRules();
+  const { data: coberturasGlobal = [] } = useCoberturas(true);
+  const { data: beneficiosGlobal = [] } = useBenefits();
   const { data: regioesDb = [] } = useRegioesAtivas();
 
   const categoriaLabel = categoriasVeiculo.find(c => c.value === categoria)?.label || categoria;
   const regiaoDb = regioesDb.find(r => r.codigo.toLowerCase() === regiao.toLowerCase());
   const regiaoLabel = regiaoDb?.nome || regiao;
-  const observacao = categoria ? observacoesCategoria[categoria] || null : null;
+  const alertaCategoria = useMemo(() => {
+    if (!categoria) return null;
+    return gerarAlertaCategoriaElegibilidade(
+      categoria,
+      allRules,
+      coberturasGlobal.map(c => ({ id: c.id, nome: c.nome })),
+      beneficiosGlobal.map(b => ({ id: b.id, name: b.name }))
+    );
+  }, [categoria, allRules, coberturasGlobal, beneficiosGlobal]);
 
   // Mostrar 3 planos por padrão, ou todos se expandido
   const planosVisiveis = showAllPlanos ? planos : planos.slice(0, 3);
@@ -178,11 +191,11 @@ export function EtapaResultado({
           </div>
 
           {/* Observações */}
-          {observacao && (
+          {alertaCategoria && (
             <Alert className="border-amber-500/50 bg-amber-500/10">
               <AlertTriangle className="h-4 w-4 text-amber-500" />
               <AlertDescription className="text-amber-700 dark:text-amber-400">
-                {observacao}
+                {alertaCategoria.mensagem}
               </AlertDescription>
             </Alert>
           )}
