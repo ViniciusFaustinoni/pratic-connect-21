@@ -28549,6 +28549,7 @@ export type Database = {
           rota_cor: string | null
           rota_id: string | null
           rota_regiao: string | null
+          servico_id_unificado: string | null
           status: string | null
           tipo_servico: string | null
           tipo_vistoria: string | null
