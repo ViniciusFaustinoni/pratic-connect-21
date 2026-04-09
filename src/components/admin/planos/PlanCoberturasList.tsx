@@ -275,7 +275,7 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['plan-coberturas-inline', planId] });
     queryClient.invalidateQueries({ queryKey: ['plan-form-modal-full', planId] });
-    queryClient.invalidateQueries({ queryKey: ['coberturas-disponiveis'] });
+    queryClient.invalidateQueries({ queryKey: ['coberturas-disponiveis-all'] });
     queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
   };
 
