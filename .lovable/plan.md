@@ -1,30 +1,36 @@
 
 
-## Plano: Tornar combustível somente-leitura quando detectado pela FIPE
+## Plano: Permitir atribuição automática de encaixes sem confirmação WhatsApp
 
 ### Problema
-Quando a API FIPE retorna o combustível do veículo, o sistema auto-preenche o valor mas mantém o dropdown editável. Isso confunde o usuário, que vê um campo de seleção para um dado que já foi identificado automaticamente.
+O motor de atribuição (`cron-atribuir-tarefas`) exige `confirmacao_whatsapp = 'confirmada'` para **todos** os serviços, incluindo encaixes. Encaixes são confirmados presencialmente, então ficam com `confirmacao_whatsapp = NULL` e nunca são atribuídos.
 
-### Solução
-- Quando `veiculoEncontrado?.vehicleData?.combustivel` existe e o combustível foi auto-detectado: exibir como **campo somente-leitura** (texto com badge, sem dropdown)
-- Quando não há detecção (preenchimento manual sem placa): manter o dropdown editável como está
-- Remover a linha "Detectado via FIPE: ..." que se torna redundante
+Além disso, nas linhas 579-650, existe lógica que tenta enviar confirmação WhatsApp para encaixes antes de atribuir — redundante se encaixes já estão confirmados presencialmente.
 
-### Arquivo alterado
+### Alterações
 
-**`src/components/cotacoes/CotacaoFormDialog.tsx`** (linhas ~1598-1637)
+**Arquivo: `supabase/functions/cron-atribuir-tarefas/index.ts`**
 
-Substituir o bloco do Select por lógica condicional:
+1. **BUSCA 1 (serviços normais, linha ~335)**: Manter `.eq('confirmacao_whatsapp', 'confirmada')` — serviços normais continuam precisando de confirmação.
 
-```text
-Se veiculoEncontrado?.vehicleData?.combustivel:
-  → Exibir Input disabled com o label do combustível + badge "Via FIPE"
-Senão:
-  → Manter Select dropdown como está (para preenchimento manual)
-```
+2. **BUSCA 2 (encaixes, linha ~372)**: Remover `.eq('confirmacao_whatsapp', 'confirmada')` e substituir por filtro que aceite `confirmada` OU `NULL`:
+   ```
+   .or('confirmacao_whatsapp.eq.confirmada,confirmacao_whatsapp.is.null')
+   ```
 
-### Nao alterado
-- Lógica de auto-detecção (linhas 704-720) — continua preenchendo `combustivelSelecionado`
-- Motor de cotação — continua recebendo `combustivelSelecionado` normalmente
-- Formulário multi-step (EtapaCategoriaVeiculo) — verificar se tem o mesmo padrão
+3. **BUSCA 3 (sem coordenadas, linha ~395)**: Mesmo ajuste — aceitar encaixes sem confirmação:
+   ```
+   .or('confirmacao_whatsapp.eq.confirmada,confirmacao_whatsapp.is.null,permite_encaixe.eq.true')
+   ```
+   Ou separar em duas buscas. Abordagem mais simples: `.or('confirmacao_whatsapp.eq.confirmada,confirmacao_whatsapp.is.null')`.
+
+4. **Bloco de confirmação WhatsApp para encaixes (linhas ~579-650)**: Remover toda a lógica que envia confirmação WhatsApp para encaixes e bloqueia atribuição. Encaixes passarão direto para atribuição como serviços normais confirmados.
+
+### Não alterado
+- Fluxo de confirmação WhatsApp para serviços normais (véspera + matinal)
+- Lógica de geolocalização e priorização
+- BUSCA 1 (serviços normais) — continua exigindo confirmação
+
+### Resultado esperado
+Encaixes com `confirmacao_whatsapp = NULL` serão incluídos nas buscas e atribuídos automaticamente ao profissional mais próximo, sem aguardar confirmação WhatsApp.
 
