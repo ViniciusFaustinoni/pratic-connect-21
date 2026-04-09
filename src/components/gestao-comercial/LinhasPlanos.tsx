@@ -386,7 +386,7 @@ export function LinhasPlanos() {
                                       <Sparkles className="h-3.5 w-3.5" />
                                       {plano.beneficios_count} ben.
                                     </span>
-                                    <span>Ordem {plano.ordem ?? 0}</span>
+                                    
                                   </div>
 
                                   <div className="flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()}>
