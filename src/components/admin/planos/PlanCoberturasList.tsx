@@ -187,13 +187,15 @@ function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: 
   );
 }
 
-export function PlanCoberturasList({ planId }: PlanCoberturasListProps) {
+export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListProps) {
   const queryClient = useQueryClient();
   const deleteCobertura = useDeleteCobertura();
   const createCobertura = useCreateCobertura();
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [newForm, setNewForm] = useState({ nome: '', icon: '' });
+  const focusRef = useRef<HTMLDivElement>(null);
+  const hasFocused = useRef(false);
 
   const { data: coberturas = [], isLoading } = useQuery({
     queryKey: ['plan-coberturas-inline', planId],

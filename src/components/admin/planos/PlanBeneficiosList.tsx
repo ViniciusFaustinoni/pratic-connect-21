@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Plus, Save, Trash2, Loader2, Sparkles } from 'lucide-react';
 
@@ -158,13 +158,15 @@ function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () =
   );
 }
 
-export function PlanBeneficiosList({ planId }: PlanBeneficiosListProps) {
+export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListProps) {
   const queryClient = useQueryClient();
   const deleteBenefit = useDeleteBenefit();
   const createBenefit = useCreateBenefit();
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [newForm, setNewForm] = useState({ name: '', icon: '' });
+  const focusRef = useRef<HTMLDivElement>(null);
+  const hasFocused = useRef(false);
 
   const { data: benefits = [], isLoading } = useQuery({
     queryKey: ['plan-benefits-inline', planId],
