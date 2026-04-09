@@ -1,93 +1,74 @@
 
-### Objetivo
-Deixar apenas a área interna correta de cotação em `/vendas/cotacoes` e fazer esse fluxo respeitar exclusivamente a regra geral de filtros.
 
-### O que o código mostra hoje
-- Há múltiplas entradas internas de cotação em `src/App.tsx`:
-  - `/vendas/cotacao` → `src/pages/vendas/Cotacao.tsx` (legado, página inteira)
-  - `/vendas/cotacoes` → `src/pages/vendas/Cotacoes.tsx` (produção, lista + modal correto)
-  - `/vendas/cotador` → `src/pages/vendas/Cotador.tsx` (terceiro fluxo paralelo)
-- O modal correto de produção é `src/components/cotacoes/CotacaoFormDialog.tsx`, aberto dentro de `src/pages/vendas/Cotacoes.tsx`.
-- `src/components/vendas/OutrasEntradasMenu.tsx` ainda manda substituição/inclusão para `/vendas/cotacao`, então o fluxo certo cai no fluxo errado.
-- O modal correto já usa `usePlanosCotacao`, mas o hook ainda tem lógica extra que conflita com sua regra:
-  - `src/hooks/usePlanosCotacao.ts` ainda considera regras em `entity_type='plano'`
-  - `src/hooks/useEntityEligibilityRules.ts` libera `tipo_placa` de forma permissiva para veículo normal
-  - `src/hooks/usePlanosCotacao.ts` mantém plano vivo mesmo se todas as coberturas forem removidas e sobrar só benefício residual
+## Plano: Coberturas Únicas por Plano + Correção da Duplicação
 
-### Plano de implementação
+### Problema Confirmado no Banco
 
-1. **Consolidar as rotas internas**
-   - Remover a rota funcional de `/vendas/cotacao`
-   - Transformar `/vendas/cotacao` em redirecionamento para `/vendas/cotacoes`, preservando query params
-   - Desativar também `/vendas/cotador` como área paralela, redirecionando para `/vendas/cotacoes`
-   - Manter intactas as rotas públicas (`/cotacao/:token`, `/cotacao-visualizar/:token`, `/q/:token`)
+As coberturas são **compartilhadas** entre planos via `planos_coberturas`. Exemplos reais:
 
-2. **Fazer toda navegação interna cair em `/vendas/cotacoes`**
-   - Ajustar `src/components/vendas/OutrasEntradasMenu.tsx` para nunca mais navegar para `/vendas/cotacao`
-   - Passar a abrir o fluxo certo em `/vendas/cotacoes` usando query/state para:
-     - nova cotação
-     - substituição
-     - inclusão
-     - demais entradas que hoje desviam para o legado
+| Cobertura | Planos que usam |
+|-----------|----------------|
+| Colisão - Select | 11 planos (Basic, Deságio 70%, 75%, One, One APP...) |
+| Colisão - Lançamento | 18 planos (todos da linha Lançamento) |
+| Alagamento - Select | 11 planos |
+| Taxa Administrativa Select | 6 planos |
 
-3. **Expandir `/vendas/cotacoes` para absorver os contextos do legado**
-   - Em `src/pages/vendas/Cotacoes.tsx`, além de `lead` e `novo=true`, ler:
-     - `tipo_entrada`
-     - `associado_id`
-     - `veiculo_antigo_id`
-     - `veiculo_antigo_placa`
-     - `veiculo_antigo_modelo`
-   - Abrir o modal correto com esse contexto já resolvido
-   - Limpar a URL após abrir, como já é feito com `lead` e `novo=true`
+A cobertura "Colisão - Select" tem regra `combustivel: include [flex]` e `regiao: include [RJ]`. Quando o plano "Select Basic - Deságio 70%" usa essa MESMA cobertura, ela passa na elegibilidade de um veículo Flex normal — porque a cobertura não tem regra de `tipo_placa`. E não pode ter, porque quebraria o plano normal que também a usa.
 
-4. **Adaptar o modal correto para inclusão/substituição**
-   - Estender `src/components/cotacoes/CotacaoFormDialog.tsx` com um `entryContext`
-   - Pré-carregar dados do associado quando houver `associado_id`
-   - Mostrar banner/título correto para substituição e inclusão
-   - Carregar dados do veículo antigo quando houver substituição
-   - Assim, o usuário fica sempre em `/vendas/cotacoes`, mas com o comportamento que hoje só existe em `/vendas/cotacao`
+Além disso, `useDuplicatePlan()` (linha 300 de `usePlansAdmin.ts`) **não duplica coberturas** — só copia benefícios e regiões. Coberturas ficam de fora.
 
-5. **Fazer o motor respeitar sua regra geral**
-   - Em `src/hooks/usePlanosCotacao.ts`:
-     - Linha restringe por tipo de veículo, ano e marca/modelo
-     - Plano não restringe nada
-     - Coberturas/benefícios filtram individualmente
-     - Se um plano perder todas as coberturas reais, ele não deve aparecer
-   - Em `src/hooks/useEntityEligibilityRules.ts`:
-     - corrigir a regra de `tipo_placa` para veículo normal não passar em regras `include` de placas/categorias especiais
-   - Ignorar qualquer restrição extra no nível de plano, mesmo que exista em `entity_eligibility_rules`
+### Regra do Usuário
+> "Não existe cobertura compartilhada entre planos. Se um plano foi duplicado, suas coberturas devem ser duplicadas também, podendo ser configuradas separadamente."
 
-6. **Preservar os fluxos posteriores sem depender da rota antiga**
-   - Hoje o contrato ainda tenta ler `tipo_entrada`/`associado_id` como se estivessem na cotação
-   - Como a tabela `cotacoes` não expõe isso de forma tipada, salvar esse contexto em `dados_extras`
-   - Atualizar `ContratoWizard` para ler `dados_extras.contexto_entrada` em vez de depender do fluxo legado
-   - Isso evita quebrar substituição/inclusão quando `/vendas/cotacao` deixar de existir
+### Solução em 2 Partes
 
-7. **Desligar o legado sem quebrar acesso antigo**
-   - Primeiro redirecionar `/vendas/cotacao` e `/vendas/cotador`
-   - Depois remover referências internas restantes
-   - Por fim, os arquivos legados podem ser mantidos só como fallback temporário ou excluídos numa segunda etapa
+#### Parte 1 — Corrigir `useDuplicatePlan` (código)
 
-### Resultado esperado
-- Existe apenas uma área interna de cotação: `/vendas/cotacoes`
-- O modal correto vira a única entrada real para cotação
-- Substituição e inclusão também passam pelo fluxo de `/vendas/cotacoes`
-- O motor de planos passa a seguir só esta hierarquia:
-  - **Linha**: restringe
-  - **Plano**: não restringe
-  - **Coberturas/benefícios**: filtram item a item
-- Planos errados, fantasmas, Diesel/Deságio indevidos e efeitos de regras extras deixam de aparecer nesse fluxo
+Alterar `src/hooks/usePlansAdmin.ts`, função `useDuplicatePlan()`:
 
-### Arquivos principais
-- `src/App.tsx`
-- `src/pages/vendas/Cotacoes.tsx`
-- `src/components/vendas/OutrasEntradasMenu.tsx`
-- `src/components/cotacoes/CotacaoFormDialog.tsx`
-- `src/hooks/usePlanosCotacao.ts`
-- `src/hooks/useEntityEligibilityRules.ts`
-- `src/components/contratos/ContratoWizard.tsx`
+1. Buscar `planos_coberturas` do plano original
+2. Para cada cobertura vinculada:
+   - Clonar o registro na tabela `coberturas` (novo ID, nome com sufixo do plano)
+   - Clonar as `entity_eligibility_rules` da cobertura original para o novo ID
+   - Inserir vínculo em `planos_coberturas` com o novo plano e a nova cobertura
+3. Manter a duplicação de benefícios e regiões como já está
 
-### Não alterar
-- Rotas públicas de cotação por token
-- A tela `/vendas/cotacoes` como ponto de entrada visual principal
-- O uso do `CotacaoFormDialog` como modal oficial de produção
+Isso garante que a partir de agora, todo plano duplicado terá coberturas independentes.
+
+#### Parte 2 — Corrigir dados existentes (script de migração)
+
+Criar um script que percorre todas as coberturas compartilhadas (as que aparecem em mais de 1 plano):
+
+1. Para cada cobertura compartilhada, manter o original no PRIMEIRO plano encontrado
+2. Para cada plano adicional que usa a mesma cobertura:
+   - Clonar a cobertura (novo registro em `coberturas`)
+   - Clonar as regras de elegibilidade
+   - Atualizar `planos_coberturas` para apontar para a cópia
+3. Após a migração, cada plano terá coberturas exclusivas
+
+O nome das cópias seguirá o padrão existente (ex: se "Colisão - Select" é clonada para o plano "Select Basic - Deságio 70%", o nome fica "Colisão - Select Deságio" ou mantém o original — o administrador pode renomear depois).
+
+### Impacto nos Motores
+
+Após a migração:
+- Cada cobertura de um plano de deságio pode ter sua própria regra `tipo_placa: include [leilao, chassi_remarcado]`
+- O motor de cotação (`usePlanosCotacao.ts`) funciona corretamente sem precisar de lógica de "remoção estrutural"
+- A correção já feita na linha 264 de `useEntityEligibilityRules.ts` (`isInclude ? false : true`) continua válida
+- O check de `coberturasDoPlano.length === 0` continua como safety net
+
+### Arquivos Alterados
+- `src/hooks/usePlansAdmin.ts` — `useDuplicatePlan()`: adicionar clonagem de coberturas + regras
+- Script de migração (executado via `code--exec`): descompartilhar coberturas existentes
+
+### Não Alterado
+- Motor de cotação (`usePlanosCotacao.ts`) — já funciona com coberturas únicas
+- Motor de regras (`useEntityEligibilityRules.ts`) — já corrigido
+- UI de gestão comercial — já suporta a estrutura
+- `useDuplicateCobertura()` — já existe e funciona bem para duplicação individual no catálogo
+
+### Resultado
+- Cada plano passa a ter coberturas exclusivas e configuráveis individualmente
+- Duplicar um plano clona automaticamente suas coberturas com todas as regras
+- O administrador pode então configurar regras de `tipo_placa`, `combustivel` etc. em cada cobertura sem afetar outros planos
+- O motor de cotação filtra corretamente sem gambiarras de "detecção estrutural"
+
