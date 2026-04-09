@@ -73,7 +73,7 @@ export function AppAssociadoLayout({ children }: { children?: React.ReactNode })
       <div className="max-w-md mx-auto border-x border-border min-h-screen bg-background flex flex-col">
         
         {/* HEADER FIXO */}
-        <header className="sticky top-0 z-50 bg-background shadow-sm border-b border-border">
+        <header className="sticky top-0 z-50 bg-background shadow-sm border-b border-border pt-safe">
           <div className="h-14 px-4 flex items-center justify-between">
             {/* LOGO */}
             <Link to="/app" className="flex items-center">

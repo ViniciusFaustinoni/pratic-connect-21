@@ -134,7 +134,7 @@ export function InstaladorLayout() {
           
           {/* Header - hidden on execution routes */}
           {!isRotaExecucao && (
-            <header className="flex-shrink-0 z-50 bg-slate-800 shadow-sm border-b border-slate-700">
+            <header className="flex-shrink-0 z-50 bg-slate-800 shadow-sm border-b border-slate-700 pt-safe">
               <div className="flex items-center justify-between px-4 py-3">
                 <div className="flex items-center gap-3">
                   <img src={logoFullDark} alt="PRATIC" className="h-9 w-auto" />
