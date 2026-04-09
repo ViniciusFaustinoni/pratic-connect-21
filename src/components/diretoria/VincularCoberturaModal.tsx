@@ -31,7 +31,7 @@ export function VincularCoberturaModal({ open, onClose, planoId }: VincularCober
 
   // Coberturas disponíveis (não vinculadas)
   const { data: coberturas, isLoading } = useQuery({
-    queryKey: ['coberturas-disponiveis', planoId],
+    queryKey: ['coberturas-disponiveis-global', planoId],
     queryFn: async () => {
       const { data: vinculadas } = await supabase
         .from('planos_coberturas')
