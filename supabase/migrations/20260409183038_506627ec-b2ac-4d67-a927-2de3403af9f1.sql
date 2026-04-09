@@ -1,0 +1,2 @@
+ALTER TABLE planos_coberturas ADD CONSTRAINT planos_coberturas_cobertura_id_unique UNIQUE (cobertura_id);
+ALTER TABLE planos_beneficios ADD CONSTRAINT planos_beneficios_benefit_id_unique UNIQUE (benefit_id);

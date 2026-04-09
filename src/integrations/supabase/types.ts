@@ -18333,14 +18333,14 @@ export type Database = {
           {
             foreignKeyName: "planos_beneficios_benefit_id_fkey"
             columns: ["benefit_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "benefits"
             referencedColumns: ["id"]
           },
           {
             foreignKeyName: "planos_beneficios_benefit_id_fkey"
             columns: ["benefit_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "vw_custo_real_benefits"
             referencedColumns: ["beneficio_id"]
           },
@@ -18401,7 +18401,7 @@ export type Database = {
           {
             foreignKeyName: "planos_coberturas_cobertura_id_fkey"
             columns: ["cobertura_id"]
-            isOneToOne: false
+            isOneToOne: true
             referencedRelation: "coberturas"
             referencedColumns: ["id"]
           },
