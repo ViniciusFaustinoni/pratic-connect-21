@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Plus, Save, Trash2, Loader2 } from 'lucide-react';
+import { ChevronDown, Plus, Save, Trash2, Loader2, Link2, Search } from 'lucide-react';
 import { Shield } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
@@ -10,6 +10,8 @@ import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
+import { Checkbox } from '@/components/ui/checkbox';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCreateCobertura, useUpdateCobertura, useDeleteCobertura } from '@/hooks/usePlansAdmin';
@@ -194,6 +196,10 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
   const [openItems, setOpenItems] = useState<Set<string>>(new Set());
   const [creating, setCreating] = useState(false);
   const [newForm, setNewForm] = useState({ nome: '', icon: '' });
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignSearch, setAssignSearch] = useState('');
+  const [assignSelected, setAssignSelected] = useState<Set<string>>(new Set());
+  const [assigning, setAssigning] = useState(false);
   const focusRef = useRef<HTMLDivElement>(null);
   const hasFocused = useRef(false);
 
@@ -269,6 +275,71 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['plan-coberturas-inline', planId] });
     queryClient.invalidateQueries({ queryKey: ['plan-form-modal-full', planId] });
+    queryClient.invalidateQueries({ queryKey: ['coberturas-disponiveis'] });
+    queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+  };
+
+  // Query for unassigned coberturas
+  const { data: coberturasDisponiveis = [], isLoading: loadingDisponiveis } = useQuery({
+    queryKey: ['coberturas-disponiveis'],
+    queryFn: async () => {
+      // Get all cobertura_ids already assigned to any plan
+      const { data: assigned } = await supabase
+        .from('planos_coberturas')
+        .select('cobertura_id');
+      const assignedIds = (assigned || []).map((a: any) => a.cobertura_id);
+
+      let query = supabase.from('coberturas').select('*').eq('ativo', true).order('nome');
+      if (assignedIds.length > 0) {
+        // Filter out assigned ones - use NOT IN via filter
+        const { data, error } = await supabase
+          .from('coberturas')
+          .select('*')
+          .eq('ativo', true)
+          .order('nome');
+        if (error) throw error;
+        return (data || []).filter((c: any) => !assignedIds.includes(c.id));
+      }
+      const { data, error } = await query;
+      if (error) throw error;
+      return data || [];
+    },
+    enabled: assignOpen,
+  });
+
+  const filteredDisponiveis = coberturasDisponiveis.filter((c: any) =>
+    c.nome.toLowerCase().includes(assignSearch.toLowerCase())
+  );
+
+  const handleAssign = async () => {
+    if (assignSelected.size === 0) return;
+    setAssigning(true);
+    try {
+      const inserts = Array.from(assignSelected).map((coberturaId, i) => ({
+        plano_id: planId,
+        cobertura_id: coberturaId,
+        display_order: coberturas.length + i,
+      }));
+      const { error } = await supabase.from('planos_coberturas').insert(inserts);
+      if (error) throw error;
+      toast.success(`${assignSelected.size} cobertura(s) vinculada(s) com sucesso`);
+      setAssignOpen(false);
+      setAssignSelected(new Set());
+      setAssignSearch('');
+      invalidate();
+    } catch {
+      toast.error('Erro ao vincular coberturas');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const toggleAssignItem = (id: string) => {
+    setAssignSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
   };
 
   return (
@@ -279,10 +350,76 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
           <h3 className="text-sm font-semibold text-foreground">Coberturas</h3>
           <Badge variant="secondary" className="text-[11px]">{coberturas.length}</Badge>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={() => setCreating(true)}>
-          <Plus className="mr-1 h-3 w-3" /> Nova Cobertura
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => { setAssignOpen(true); setAssignSelected(new Set()); setAssignSearch(''); }}>
+            <Link2 className="mr-1 h-3 w-3" /> Atribuir Existente
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setCreating(true)}>
+            <Plus className="mr-1 h-3 w-3" /> Nova Cobertura
+          </Button>
+        </div>
       </div>
+
+      {/* Dialog de atribuição de coberturas existentes */}
+      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+        <DialogContent className="max-w-md max-h-[80vh]" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Atribuir Coberturas Existentes</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar cobertura..."
+                value={assignSearch}
+                onChange={(e) => setAssignSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div className="max-h-[40vh] overflow-y-auto space-y-1 border rounded-lg p-2">
+              {loadingDisponiveis ? (
+                <div className="flex items-center justify-center py-6 text-muted-foreground text-sm">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando...
+                </div>
+              ) : filteredDisponiveis.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  Nenhuma cobertura disponível para atribuição.
+                </div>
+              ) : (
+                filteredDisponiveis.map((cob: any) => (
+                  <label
+                    key={cob.id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-accent/50 transition-colors"
+                  >
+                    <Checkbox
+                      checked={assignSelected.has(cob.id)}
+                      onCheckedChange={() => toggleAssignItem(cob.id)}
+                    />
+                    <div className="flex items-center gap-2 min-w-0">
+                      {cob.icon && <span className="text-base">{cob.icon}</span>}
+                      <span className="text-sm truncate">{cob.nome}</span>
+                    </div>
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs text-muted-foreground">
+                {assignSelected.size} selecionada(s)
+              </span>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="ghost" onClick={() => setAssignOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="button" size="sm" onClick={handleAssign} disabled={assignSelected.size === 0 || assigning}>
+                  {assigning ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Link2 className="mr-1 h-3 w-3" />}
+                  Vincular Selecionadas
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {creating && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-3 space-y-3">
