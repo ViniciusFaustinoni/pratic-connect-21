@@ -1,76 +1,42 @@
 
 
-## Plano: Serviços sem confirmação no mapa + botão de envio manual de confirmação WhatsApp
+## Plano: Drag-and-drop do tecnico ate o servico + rota nas ruas
 
-### Problema atual
-1. A `view_vistorias_mapa` nao inclui `confirmacao_whatsapp`, `permite_encaixe` nem `periodo` — impossível distinguir visualmente serviços confirmados de nao confirmados
-2. Nao existe botao para forçar envio de confirmacao WhatsApp manualmente
-3. Serviços sem encaixe e sem confirmacao nao tem tratamento visual diferenciado
+### Problema
+O usuario espera arrastar o pin do **tecnico** ate o **servico** (e nao o contrario). Apos atribuir, a rota deve ser tracada seguindo as ruas do mapa.
 
-### Alteracoes
+### Solucao
 
-#### 1. Migration SQL — adicionar campos na view
+Manter o click-to-assign existente como alternativa e **adicionar drag-and-drop nos marcadores de tecnicos**.
 
-Recriar `view_vistorias_mapa` adicionando 3 campos em cada UNION:
-- `confirmacao_whatsapp` (da tabela `servicos`; NULL para vistorias e instalacoes legadas)
-- `permite_encaixe` (da tabela `servicos`; false para vistorias e instalacoes legadas)
-- `periodo` (da tabela `servicos`; NULL para vistorias, mapeado para instalacoes)
+### Alteracoes em `src/components/mapa/MapaVistoriasContent.tsx`
 
-#### 2. Hook `useVistoriasMapa` — adicionar campos na interface
+**1. Tornar marcadores de tecnicos arrastáveis (quando atribuicaoManualAtiva)**
 
-Adicionar `confirmacao_whatsapp`, `permite_encaixe` e `periodo` ao tipo `VistoriaMapa`.
+- Marcador do vistoriador recebe `draggable={!!atribuicaoManualAtiva}`
+- No `eventHandlers.dragend`, capturar posicao final do arrasto
+- Encontrar o servico nao atribuido mais proximo da posicao final (raio de 800m)
+- Se encontrar: abrir dialog de confirmacao (reusa `assignConfirmation` existente)
+- Se nao encontrar: toast de erro + retornar marcador a posicao original
+- Apos confirmacao ou cancelamento, marcador volta a posicao real do tecnico (GPS)
 
-#### 3. Hook `useEnviarConfirmacaoWhatsApp` — novo hook
+**2. Retorno visual do marcador**
 
-Criar mutation que invoca a Edge Function `confirmar-vistorias-manha-cron` para um servico especifico, ou alternativamente invocar `whatsapp-send-text` diretamente com o template `confirmacao_manha_v1` e atualizar `confirmacao_whatsapp` no servico.
+- Guardar ref do marcador do vistoriador para resetar posicao via `setLatLng()` apos arrastar
+- Usar `useRef` com Map de `vistoriador_id -> L.Marker`
 
-Abordagem mais simples: criar uma pequena Edge Function `enviar-confirmacao-manual` que:
-- Recebe `servico_id`
-- Busca dados do servico
-- Envia template via `whatsapp-send-text`
-- Atualiza `confirmacao_whatsapp = 'enviada'`
-- Registra em `confirmacoes_agendamento`
+**3. Rota nas ruas ja funciona**
 
-#### 4. `MapaVistoriasContent.tsx` — mudancas visuais e funcionais
+- O `linhasDeRota` + `RotaPolyline` ja traca rota real (OSRM) do tecnico ao servico apos atribuicao
+- Nenhuma alteracao necessaria neste fluxo
 
-**Cores diferenciadas por data e confirmacao:**
-- Servico de HOJE nao confirmado: cor laranja (`#F97316`)
-- Servico de AMANHA ou futuro: cor amarela (`#EAB308`)
-- Servico confirmado: cor verde (`#10B981`)
-- Servico atrasado: cor vermelha (`#EF4444`) (ja existe)
+**4. Legenda atualizada**
 
-**Tooltip permanente nos pins:**
-- Mostrar tooltip fixo (usando `permanent: true` no Leaflet Tooltip) com data formatada e periodo (M/T)
-- Cor do tooltip muda conforme `confirmacao_whatsapp`: cinza (nao enviado), amarelo (enviado/aguardando), verde (confirmado)
-
-**Botao "Enviar Confirmação" no Popup:**
-- Quando `atribuicaoManualAtiva` e servico nao é encaixe (`permite_encaixe = false`) e `confirmacao_whatsapp` é NULL ou nao confirmado
-- Botao aparece no popup do pin e no card do sidebar
-- Ao clicar, invoca `enviar-confirmacao-manual`
-- Apos sucesso, tooltip muda de cor
-
-**Legenda atualizada:**
-- Adicionar itens para "Nao confirmado" (laranja) e "Confirmado" (verde)
-
-#### 5. Edge Function `enviar-confirmacao-manual`
-
-```typescript
-// Recebe: { servico_id }
-// 1. Busca servico com associado/cotacao para telefone
-// 2. Envia whatsapp-send-text com template confirmacao_manha_v1
-// 3. Atualiza servicos.confirmacao_whatsapp = 'enviada'
-// 4. Insere em confirmacoes_agendamento
-// 5. Retorna { success: true }
-```
-
-### Arquivos alterados
-- **Nova migration SQL** — recriar `view_vistorias_mapa` com 3 campos extras
-- **`src/hooks/useVistoriasMapa.ts`** — adicionar campos ao tipo
-- **Nova Edge Function** `supabase/functions/enviar-confirmacao-manual/index.ts`
-- **`src/components/mapa/MapaVistoriasContent.tsx`** — cores, tooltips permanentes, botao confirmacao, legenda
+- Trocar texto de "Clique em Atribuir e depois no tecnico" para "Arraste o tecnico ate o servico ou clique em Atribuir"
 
 ### Nao alterado
-- `cron-atribuir-tarefas` — motor automatico continua igual
-- `confirmar-vistorias-manha-cron` — cron de vespera/manha continua igual
-- `whatsapp-webhook` — processamento de respostas continua igual
+- Click-to-assign (botao Atribuir no popup/sidebar + clique no tecnico) — mantido como alternativa
+- `useAtribuirServicoManual` — mutation continua igual
+- `RotaPolyline` / `useRotaRealMultiWaypoint` — ja funciona
+- Dialogs de confirmacao — reutilizados
 
