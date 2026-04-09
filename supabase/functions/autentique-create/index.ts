@@ -410,7 +410,8 @@ serve(async (req) => {
           beneficiosData || [],
           veiculoParams,
           cobIds,
-          benIds
+          benIds,
+          planoId
         );
 
         if (cobElegiveis.length) {
