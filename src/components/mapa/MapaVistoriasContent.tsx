@@ -337,7 +337,6 @@ export function MapaVistoriasContent() {
 
   const podeEnviarConfirmacao = (v: VistoriaMapa) => {
     return !!v.servico_id_unificado
-      && !v.permite_encaixe 
       && (!v.confirmacao_whatsapp || v.confirmacao_whatsapp === 'recusada')
       && !STATUS_REALIZADOS.includes(v.status);
   };
