@@ -1604,35 +1604,40 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     Combustível
                   </h3>
                   
-                  <Select
-                    value={combustivelSelecionado}
-                    onValueChange={setCombustivelSelecionado}
-                  >
-                    <SelectTrigger>
-                      <SelectValue placeholder="Selecione o combustível" />
-                    </SelectTrigger>
-                    <SelectContent>
-                      {combustiveisBanco.length > 0 ? (
-                        combustiveisBanco.map((c) => (
-                          <SelectItem key={c.value} value={c.value}>
-                            {c.label}
-                          </SelectItem>
-                        ))
-                      ) : (
-                        <>
-                          <SelectItem value="flex">Flex (Gasolina/Etanol)</SelectItem>
-                          <SelectItem value="gasolina">Gasolina</SelectItem>
-                          <SelectItem value="diesel">Diesel</SelectItem>
-                          <SelectItem value="eletrico">Elétrico</SelectItem>
-                        </>
-                      )}
-                    </SelectContent>
-                  </Select>
-                  
-                  {veiculoEncontrado?.vehicleData?.combustivel && (
-                    <p className="text-xs text-muted-foreground">
-                      Detectado via FIPE: {veiculoEncontrado.vehicleData.combustivel}
-                    </p>
+                  {veiculoEncontrado?.vehicleData?.combustivel ? (
+                    <div className="flex items-center gap-2">
+                      <Input
+                        disabled
+                        value={combustiveisBanco.find(c => c.value === combustivelSelecionado)?.label || combustivelSelecionado}
+                        className="bg-muted flex-1"
+                      />
+                      <Badge variant="secondary" className="text-xs whitespace-nowrap">Via FIPE</Badge>
+                    </div>
+                  ) : (
+                    <Select
+                      value={combustivelSelecionado}
+                      onValueChange={setCombustivelSelecionado}
+                    >
+                      <SelectTrigger>
+                        <SelectValue placeholder="Selecione o combustível" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        {combustiveisBanco.length > 0 ? (
+                          combustiveisBanco.map((c) => (
+                            <SelectItem key={c.value} value={c.value}>
+                              {c.label}
+                            </SelectItem>
+                          ))
+                        ) : (
+                          <>
+                            <SelectItem value="flex">Flex (Gasolina/Etanol)</SelectItem>
+                            <SelectItem value="gasolina">Gasolina</SelectItem>
+                            <SelectItem value="diesel">Diesel</SelectItem>
+                            <SelectItem value="eletrico">Elétrico</SelectItem>
+                          </>
+                        )}
+                      </SelectContent>
+                    </Select>
                   )}
                 </div>
 
