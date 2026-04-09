@@ -34,6 +34,7 @@ const CATEGORIES = [
 
 interface PlanBeneficiosListProps {
   planId: string;
+  focusItemId?: string;
 }
 
 function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () => void }) {

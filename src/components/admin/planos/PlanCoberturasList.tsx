@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { ChevronDown, Plus, Save, Trash2, Loader2 } from 'lucide-react';
 import { Shield } from 'lucide-react';
@@ -19,6 +19,7 @@ import { toast } from 'sonner';
 
 interface PlanCoberturasListProps {
   planId: string;
+  focusItemId?: string;
 }
 
 function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: () => void }) {

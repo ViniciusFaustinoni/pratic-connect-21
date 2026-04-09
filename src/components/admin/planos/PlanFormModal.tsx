@@ -123,6 +123,7 @@ export function PlanFormModal({
   onOpenChange,
   plan,
   defaultProductLineId,
+  focusItemId,
 }: PlanFormModalProps) {
   const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
   const planId = createdPlanId ?? plan?.id ?? null;
