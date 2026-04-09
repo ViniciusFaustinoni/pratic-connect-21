@@ -34,6 +34,7 @@ interface PlanFormModalProps {
   onOpenChange: (open: boolean) => void;
   plan: PlanWithDetails | { id: string } | null;
   defaultProductLineId?: string;
+  focusItemId?: string;
 }
 
 interface PlanFormData {
@@ -395,8 +396,8 @@ export function PlanFormModal({
                     {/* Coberturas e Benefícios inline — só em modo edição */}
                     {isEditing && planId ? (
                       <>
-                        <PlanCoberturasList planId={planId} />
-                        <PlanBeneficiosList planId={planId} />
+                        <PlanCoberturasList planId={planId} focusItemId={focusItemId} />
+                        <PlanBeneficiosList planId={planId} focusItemId={focusItemId} />
                         <section className="space-y-3 border-t pt-4">
                           <h3 className="text-sm font-semibold text-foreground">Regras de Elegibilidade do Plano</h3>
                           <p className="text-xs text-muted-foreground">
