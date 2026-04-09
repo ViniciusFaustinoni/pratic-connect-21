@@ -113,13 +113,29 @@ export async function filterEligibleItems(
   beneficios: any[],
   veiculo: VeiculoParams,
   coberturaIds: string[],
-  beneficioIds: string[]
+  beneficioIds: string[],
+  planoId?: string
 ): Promise<{ coberturas: any[]; beneficios: any[] }> {
   if (coberturaIds.length === 0 && beneficioIds.length === 0) {
     return { coberturas, beneficios };
   }
 
   try {
+    // Buscar regras do plano para identificar quais rule_types são sobrescritos
+    let planoRuleTypes = new Set<string>();
+    if (planoId) {
+      const { data: planoRules } = await supabase
+        .from('entity_eligibility_rules')
+        .select('rule_type')
+        .eq('entity_id', planoId)
+        .eq('entity_type', 'plano')
+        .eq('is_active', true);
+      if (planoRules && planoRules.length > 0) {
+        planoRuleTypes = new Set(planoRules.map((r: any) => r.rule_type));
+        console.log(`[eligibility-filter] Regras do plano sobrescrevem tipos: ${[...planoRuleTypes].join(', ')}`);
+      }
+    }
+
     // Buscar regras para coberturas e benefícios do plano
     const allEntityIds = [...coberturaIds, ...beneficioIds];
     const { data: rules, error } = await supabase
@@ -138,18 +154,21 @@ export async function filterEligibleItems(
       return { coberturas, beneficios };
     }
 
-    console.log(`[eligibility-filter] ${rules.length} regras encontradas para ${allEntityIds.length} itens`);
+    // Filtrar regras cujo tipo já é coberto pelo plano (sobrescrita)
+    const filteredRules = rules.filter((r: EligibilityRule) => !planoRuleTypes.has(r.rule_type));
+
+    console.log(`[eligibility-filter] ${rules.length} regras encontradas, ${rules.length - filteredRules.length} sobrescritas pelo plano`);
 
     const coberturasElegiveis = coberturas.filter((cob: any) => {
       const cobId = cob.cobertura_id || cob.coberturas?.id;
       if (!cobId) return true;
-      return checkItemEligibility(cobId, 'cobertura', rules, veiculo);
+      return checkItemEligibility(cobId, 'cobertura', filteredRules, veiculo);
     });
 
     const beneficiosElegiveis = beneficios.filter((ben: any) => {
       const benId = ben.benefit_id || ben.benefits?.id;
       if (!benId) return true;
-      return checkItemEligibility(benId, 'beneficio', rules, veiculo);
+      return checkItemEligibility(benId, 'beneficio', filteredRules, veiculo);
     });
 
     const removedCob = coberturas.length - coberturasElegiveis.length;
