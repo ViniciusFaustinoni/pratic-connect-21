@@ -1,37 +1,46 @@
 
 
-## Plano: Clicar em cobertura/beneficio abre modal com item expandido + criar coberturas no modal
+## Plano: Corrigir carregamento de regras de elegibilidade na lista de planos
 
 ### Problema
-1. Clicar numa cobertura ou beneficio na lista expandida do plano abre o modal de edicao do plano, mas sem indicar qual item deve estar aberto para edicao
-2. Ja e possivel criar coberturas no modal (botao "Nova Cobertura" existe em PlanCoberturasList), entao esse ponto ja esta resolvido
+A query que busca regras de elegibilidade usa `.in('entity_id', allEntityIds)` com ~574 IDs. O Supabase tem limite de tamanho de URL para queries GET, causando falha silenciosa ou resultados parciais. Por isso muitos badges de regras nao aparecem.
 
-### Alteracoes
+### Solucao
+Dividir a query `.in()` em lotes de 100 IDs e concatenar os resultados.
 
-**1. `src/components/gestao-comercial/LinhasPlanos.tsx`**
-- Adicionar campo `focusItemId` ao estado `planoModal`: `{ open: boolean; planId?: string; defaultLineId?: string; focusItemId?: string }`
-- Nos clicks de cobertura (linha 540) e beneficio (linha 585), passar `focusItemId: cob.id` ou `focusItemId: ben.id`
-- Propagar `focusItemId` como nova prop do `PlanFormModal`
+### Alteracao
 
-**2. `src/components/admin/planos/PlanFormModal.tsx`**
-- Adicionar prop `focusItemId?: string` na interface `PlanFormModalProps`
-- Repassar `focusItemId` para `PlanCoberturasList` e `PlanBeneficiosList`
+**`src/components/gestao-comercial/LinhasPlanos.tsx` (linhas 171-196)**
+- Substituir a query unica por um loop que divide `allEntityIds` em chunks de 100
+- Para cada chunk, fazer `.in('entity_id', chunk)` separadamente
+- Concatenar todos os resultados antes de montar o `rulesMap`
 
-**3. `src/components/admin/planos/PlanCoberturasList.tsx`**
-- Adicionar prop `focusItemId?: string` na interface
-- No `useEffect`, se `focusItemId` estiver presente e corresponder a uma cobertura carregada, adicionar o ID ao `openItems` automaticamente (expandir o item)
-- Fazer scroll ate o item com `scrollIntoView`
+```ts
+// Antes (falha com muitos IDs):
+const { data: rules } = await supabase
+  .from('entity_eligibility_rules')
+  .select('*')
+  .in('entity_id', allEntityIds)
+  .eq('is_active', true);
 
-**4. `src/components/admin/planos/PlanBeneficiosList.tsx`**
-- Mesma logica: prop `focusItemId`, auto-expandir e scroll ate o item
+// Depois (lotes de 100):
+const CHUNK = 100;
+const allRules: EligibilityRule[] = [];
+for (let i = 0; i < allEntityIds.length; i += CHUNK) {
+  const chunk = allEntityIds.slice(i, i + CHUNK);
+  const { data } = await supabase
+    .from('entity_eligibility_rules')
+    .select('*')
+    .in('entity_id', chunk)
+    .eq('is_active', true);
+  if (data) allRules.push(...(data as EligibilityRule[]));
+}
+```
 
 ### Resultado
-- Clicar em "Colisao - Select One Aplicativo" na lista abre o modal com o formulario dessa cobertura ja expandido
-- Criar coberturas/beneficios ja funciona (botao existente)
+- Todas as regras sao carregadas independentemente da quantidade de entidades
+- Badges de tipo_uso, regiao, combustivel e tipo_placa aparecem corretamente em todas as coberturas e beneficios
 
-### Arquivos
+### Arquivo
 - `src/components/gestao-comercial/LinhasPlanos.tsx`
-- `src/components/admin/planos/PlanFormModal.tsx`
-- `src/components/admin/planos/PlanCoberturasList.tsx`
-- `src/components/admin/planos/PlanBeneficiosList.tsx`
 
