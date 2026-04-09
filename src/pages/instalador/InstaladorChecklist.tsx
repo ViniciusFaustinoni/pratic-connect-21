@@ -146,7 +146,7 @@ export default function InstaladorChecklist() {
 
   const { data: servico, isLoading, error } = useServicoDetalhes(id);
   const { data: vistoriaCompleta, isLoading: isLoadingVistoria } = useVistoriaCompletaPorServico(id ?? null);
-  const { data: rastreadoresEmPorte, isLoading: isLoadingRastreadores } = useRastreadoresDoPortador();
+  const { data: rastreadoresEmPorte, isLoading: isLoadingRastreadores, error: erroRastreadores, refetch: refetchRastreadores } = useRastreadoresDoPortador();
   const { data: fipeMinRastreador = 30000 } = useConfigFipeRastreador();
   const { data: fipeMinRastreadorMoto = 9000 } = useConfigFipeRastreadorMoto();
   const uploadFotoMutation = useUploadFotoVistoriaCompleta();
