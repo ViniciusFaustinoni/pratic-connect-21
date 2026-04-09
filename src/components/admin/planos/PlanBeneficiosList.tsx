@@ -288,7 +288,7 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
         <div className="space-y-2">
           {benefits.map((ben: any) => (
             <Collapsible key={ben.id} open={openItems.has(ben.id)} onOpenChange={() => toggleItem(ben.id)}>
-              <div className={cn(
+              <div ref={ben.id === focusItemId ? focusRef : undefined} className={cn(
                 'rounded-2xl border transition-all',
                 openItems.has(ben.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-card/60'
               )}>

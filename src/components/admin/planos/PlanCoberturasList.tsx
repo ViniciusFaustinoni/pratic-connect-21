@@ -312,7 +312,7 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
         <div className="space-y-2">
           {coberturas.map((cob: any) => (
             <Collapsible key={cob.id} open={openItems.has(cob.id)} onOpenChange={() => toggleItem(cob.id)}>
-              <div className={cn(
+              <div ref={cob.id === focusItemId ? focusRef : undefined} className={cn(
                 'rounded-2xl border transition-all',
                 openItems.has(cob.id) ? 'border-primary/40 bg-primary/5' : 'border-border/60 bg-card/60'
               )}>
