@@ -1741,45 +1741,13 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
 
                 return (
                   <div className="mt-2 space-y-2">
-                    <Alert className="border-destructive/50 bg-destructive/10">
-                      <AlertTriangle className="h-4 w-4 text-destructive" />
-                      <AlertDescription className="text-sm text-destructive">
+                    <Alert className="border-amber-500/50 bg-amber-500/10">
+                      <AlertTriangle className="h-4 w-4 text-amber-600" />
+                      <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
                         FIPE ({formatCurrency(valorFipe)}) acima do limite de {formatCurrency(limiteAplicavel)} para {tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros'}.
-                        Este veículo requer autorização prévia. Uma solicitação será enviada automaticamente para análise.
+                        Você pode criar a cotação normalmente, mas a <strong>aprovação final</strong> dependerá de autorização do analista.
                       </AlertDescription>
                     </Alert>
-                    <Button
-                      type="button"
-                      variant="outline"
-                      size="sm"
-                      disabled={criarSolicitacaoFipeLimite.isPending}
-                      onClick={async () => {
-                        if (!cotacaoParaEditar?.id) {
-                          toast.error('Salve a cotação antes de solicitar autorização.');
-                          return;
-                        }
-                        await criarSolicitacaoFipeLimite.mutateAsync({
-                          cotacao_id: cotacaoParaEditar.id,
-                          valor_fipe: valorFipe,
-                          limite_aplicado: limiteAplicavel,
-                          tipo_veiculo: tipoVeiculoDetectado,
-                          veiculo_marca: veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || undefined,
-                          veiculo_modelo: veiculoEncontrado?.vehicleData?.modelo || modeloResolvido || undefined,
-                          veiculo_ano: anoNumerico,
-                          veiculo_placa: placa || undefined,
-                          nome_solicitante: nomeAssociado || undefined,
-                        });
-                        setFipeLimiteSolicitado(true);
-                      }}
-                      className="gap-1.5"
-                    >
-                      {criarSolicitacaoFipeLimite.isPending ? (
-                        <Loader2 className="h-4 w-4 animate-spin" />
-                      ) : (
-                        <Shield className="h-4 w-4" />
-                      )}
-                      Solicitar Autorização
-                    </Button>
                   </div>
                 );
               })()}
