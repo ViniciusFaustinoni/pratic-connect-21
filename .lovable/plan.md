@@ -1,41 +1,37 @@
 
 
-## Plano: Corrigir responsividade iOS — safe area no topo
+## Plano: Corrigir responsividade da TabsList em Serviços de Campo
 
 ### Problema
-No iOS com notch/Dynamic Island, o status bar (hora, sinal, bateria) sobrepoe o header do app porque:
-- `viewport-fit=cover` esta configurado no `index.html`
-- `apple-mobile-web-app-status-bar-style` e `black-translucent` (conteudo vai atras da status bar)
-- Mas nenhum layout aplica `padding-top` com `env(safe-area-inset-top)` no header
+A `TabsList` tem 7-8 abas (Instalações, Vistorias, Retiradas, Encaixes, Viagens, Manutenção, Histórico + opcionalmente Atribuição Manual). Em telas mobile, as abas não cabem e ficam cortadas, impossibilitando o acesso a todas.
 
-### Alteracoes
+### Alteração
 
-**1. `src/index.css`** — Garantir que a classe `pt-safe` funciona tanto em PWA standalone quanto no browser:
-- Atualizar `.pt-safe` para usar `env(safe-area-inset-top, 0px)` sem condicional de `display-mode`
+**`src/pages/monitoramento/VistoriasInstalacoesMon.tsx`**
 
-**2. `src/components/layout/AppLayout.tsx`** (layout da diretoria/funcionarios)
-- Adicionar `pt-safe` ao container raiz `div.flex.h-screen` para empurrar todo o conteudo abaixo da safe area
+1. Aplicar `overflow-x-auto` na `TabsList` para permitir scroll horizontal
+2. Adicionar `flex-nowrap w-auto inline-flex` para que as abas não quebrem linha
+3. Em mobile, esconder o texto das abas e mostrar apenas ícones (padrão já usado em `Estoque.tsx`)
+4. Envolver a `TabsList` num container com `overflow-x-auto` e estilo de scroll suave
 
-**3. `src/components/layout/AppHeader.tsx`** (header da diretoria)
-- Alternativa: adicionar `pt-safe` diretamente no `<header>` sticky
-
-**4. `src/layouts/AppAssociadoLayout.tsx`** (layout do app do associado)
-- Adicionar `pt-safe` ao `<header>` sticky (linha 76)
-- Adicionar `pb-safe` ao bottom nav (ja tem `h-safe-area-inset-bottom`, validar)
-
-**5. `src/pages/instalador/InstaladorHome.tsx`** e layout do instalador
-- Verificar e adicionar `pt-safe` ao header/container principal
-
-**Abordagem escolhida**: Aplicar `pt-safe` nos headers sticky de cada layout. Isso e mais preciso do que no container raiz, pois o header e o elemento que fica no `top-0` e precisa do offset.
+Estrutura resultante:
+```tsx
+<div className="overflow-x-auto -mx-4 px-4">
+  <TabsList className="w-auto inline-flex">
+    <TabsTrigger value="instalacoes" className="gap-2 shrink-0">
+      <Wrench className="h-4 w-4" />
+      <span className="hidden sm:inline">Instalações</span>
+    </TabsTrigger>
+    {/* ... demais abas com mesmo padrão */}
+  </TabsList>
+</div>
+```
 
 ### Resultado
-- O botao de menu e o header ficam abaixo da barra de status do iOS
-- Funciona em iPhones com notch, Dynamic Island e modelos antigos (fallback 0px)
-- Nao afeta Android ou desktop
+- Em mobile: abas mostram apenas ícones, com scroll horizontal se necessário
+- Em tablet/desktop: abas completas com ícone + texto
+- Todas as abas acessíveis em qualquer dispositivo
 
-### Arquivos
-- `src/index.css`
-- `src/components/layout/AppHeader.tsx`
-- `src/layouts/AppAssociadoLayout.tsx`
-- Verificar layout do instalador
+### Arquivo
+- `src/pages/monitoramento/VistoriasInstalacoesMon.tsx`
 
