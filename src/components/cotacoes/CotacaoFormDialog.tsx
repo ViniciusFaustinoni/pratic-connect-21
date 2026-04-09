@@ -1258,6 +1258,31 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           });
         }
         
+        // Se FIPE acima do limite, criar solicitação de autorização automaticamente
+        if (novaCotacao?.id && configLimites && valorFipe > 0) {
+          const limiteAplicavel = tipoVeiculoDetectado === 'moto' 
+            ? configLimites.fipeLimiteAutorizacaoMoto 
+            : configLimites.fipeLimiteAutorizacao;
+          if (valorFipe > limiteAplicavel) {
+            try {
+              await criarSolicitacaoFipeLimite.mutateAsync({
+                cotacao_id: novaCotacao.id,
+                valor_fipe: valorFipe,
+                limite_aplicado: limiteAplicavel,
+                tipo_veiculo: tipoVeiculoDetectado,
+                veiculo_marca: veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || undefined,
+                veiculo_modelo: veiculoEncontrado?.vehicleData?.modelo || modeloResolvido || undefined,
+                veiculo_ano: anoNumerico,
+                veiculo_placa: placa || undefined,
+                nome_solicitante: nomeAssociado || undefined,
+              });
+              toast.info('Solicitação de autorização FIPE alto valor enviada automaticamente.');
+            } catch (e) {
+              console.error('Erro ao criar solicitação FIPE limite:', e);
+            }
+          }
+        }
+        
         toast.success('Cotação criada com sucesso!');
         navigate('/vendas/cotacoes');
       }
