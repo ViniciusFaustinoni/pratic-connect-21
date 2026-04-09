@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -22,6 +22,7 @@ import { PlanFormModal } from '@/components/admin/planos/PlanFormModal';
 import { usePermissions } from '@/hooks/usePermissions';
 import { useDuplicateProductLine, useDuplicatePlan, useTogglePlanStatus } from '@/hooks/usePlansAdmin';
 import { ImportarLinhasModal } from './ImportarLinhasModal';
+import { DuplicarPlanoModal } from '@/components/admin/planos/DuplicarPlanoModal';
 import {
   ChevronDown,
   Copy,
@@ -174,6 +175,7 @@ export function LinhasPlanos() {
   const [planoModal, setPlanoModal] = useState<{ open: boolean; planId?: string; defaultLineId?: string }>({ open: false });
   const [importModal, setImportModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
+  const [duplicarModal, setDuplicarModal] = useState<{ open: boolean; plano: { id: string; nome: string } | null }>({ open: false, plano: null });
 
   const selectedPlan = useMemo(
     () => (planoModal.planId ? { id: planoModal.planId } : null),
@@ -393,7 +395,7 @@ export function LinhasPlanos() {
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
-                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => duplicatePlan.mutate(plano.id)}>
+                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDuplicarModal({ open: true, plano: { id: plano.id, nome: plano.nome } })}>
                                     <Copy className="h-3.5 w-3.5" />
                                   </Button>
                                   {canDelete ? (
@@ -487,6 +489,11 @@ export function LinhasPlanos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <DuplicarPlanoModal
+        open={duplicarModal.open}
+        onOpenChange={(open) => setDuplicarModal({ open, plano: open ? duplicarModal.plano : null })}
+        plano={duplicarModal.plano}
+      />
     </>
   );
 }

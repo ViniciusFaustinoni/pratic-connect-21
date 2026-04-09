@@ -1,5 +1,6 @@
 import { useState, useMemo, useRef } from 'react';
 import { Package, Plus, Users, DollarSign, Shield, ChevronRight, Edit, Copy, Trash2, MoreVertical, Star, Gift, MapPin, Upload, Download, History, Filter, Loader2 } from 'lucide-react';
+import { DuplicarPlanoModal } from '@/components/admin/planos/DuplicarPlanoModal';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -66,6 +67,7 @@ export function ProdutosPlanos() {
   const [faixaEdit, setFaixaEdit] = useState<any>(null);
   const [faixaDeleteConfirm, setFaixaDeleteConfirm] = useState<string | null>(null);
   const [historicoModalOpen, setHistoricoModalOpen] = useState(false);
+  const [duplicarModal, setDuplicarModal] = useState<{ open: boolean; plano: { id: string; nome: string } | null }>({ open: false, plano: null });
   const [historicoFaixaId, setHistoricoFaixaId] = useState<string | null>(null);
 
   const fileInputRef = useRef<HTMLInputElement>(null);
@@ -402,7 +404,7 @@ export function ProdutosPlanos() {
                     <DropdownMenuItem onClick={() => { setProdutoEdit(selectedPlan); setModalOpen(true); }}>
                       <Edit className="h-4 w-4 mr-2" /> Editar
                     </DropdownMenuItem>
-                    <DropdownMenuItem onClick={() => duplicatePlan.mutate(selectedPlan.id)}>
+                    <DropdownMenuItem onClick={() => setDuplicarModal({ open: true, plano: { id: selectedPlan.id, nome: selectedPlan.nome } })}>
                       <Copy className="h-4 w-4 mr-2" /> Duplicar
                     </DropdownMenuItem>
                     {!canDelete ? (
@@ -921,6 +923,11 @@ export function ProdutosPlanos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <DuplicarPlanoModal
+        open={duplicarModal.open}
+        onOpenChange={(open) => setDuplicarModal({ open, plano: open ? duplicarModal.plano : null })}
+        plano={duplicarModal.plano}
+      />
     </div>
   );
 }
