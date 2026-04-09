@@ -52,6 +52,15 @@ const BADGE_TONES: Record<string, { background: string; border: string; text: st
   red: { background: '0 84% 60% / 0.14', border: '0 84% 60% / 0.32', text: '0 84% 72%' },
 };
 
+interface EligibilityRule {
+  id: string;
+  entity_id: string;
+  rule_type: string;
+  rule_mode: string;
+  rule_config: any;
+  is_active: boolean;
+}
+
 function useLinhasComPlanos() {
   return useQuery({
     queryKey: ['linhas_com_planos_clean'],
@@ -72,8 +81,8 @@ function useLinhasComPlanos() {
       if (plansError) throw plansError;
 
       const planoIds = (planos || []).map((plan) => plan.id);
-      const coberturasMap = new Map<string, { id: string; nome: string; valor: number }[]>();
-      const beneficiosMap = new Map<string, { id: string; name: string; preco_sugerido: number }[]>();
+      const coberturasMap = new Map<string, { id: string; nome: string; valor: number; rules: EligibilityRule[] }[]>();
+      const beneficiosMap = new Map<string, { id: string; name: string; preco_sugerido: number; rules: EligibilityRule[] }[]>();
 
       if (planoIds.length > 0) {
         const { data: coberturas } = await supabase
@@ -85,7 +94,7 @@ function useLinhasComPlanos() {
           const cob = c.coberturas as any;
           if (!cob) continue;
           const list = coberturasMap.get(c.plano_id) || [];
-          list.push({ id: cob.id, nome: cob.nome, valor: cob.valor || 0 });
+          list.push({ id: cob.id, nome: cob.nome, valor: cob.valor || 0, rules: [] });
           coberturasMap.set(c.plano_id, list);
         }
 
@@ -98,8 +107,42 @@ function useLinhasComPlanos() {
           const ben = b.benefits as any;
           if (!ben) continue;
           const list = beneficiosMap.get(b.plano_id) || [];
-          list.push({ id: ben.id, name: ben.name, preco_sugerido: ben.preco_sugerido || 0 });
+          list.push({ id: ben.id, name: ben.name, preco_sugerido: ben.preco_sugerido || 0, rules: [] });
           beneficiosMap.set(b.plano_id, list);
+        }
+
+        // Collect all entity IDs for rules fetch
+        const allCobIds = new Set<string>();
+        const allBenIds = new Set<string>();
+        coberturasMap.forEach((list) => list.forEach((c) => allCobIds.add(c.id)));
+        beneficiosMap.forEach((list) => list.forEach((b) => allBenIds.add(b.id)));
+        const allEntityIds = [...allCobIds, ...allBenIds];
+
+        if (allEntityIds.length > 0) {
+          const { data: rules } = await supabase
+            .from('entity_eligibility_rules')
+            .select('*')
+            .in('entity_id', allEntityIds)
+            .eq('is_active', true);
+
+          const rulesMap = new Map<string, EligibilityRule[]>();
+          for (const r of (rules || []) as EligibilityRule[]) {
+            const list = rulesMap.get(r.entity_id) || [];
+            list.push(r);
+            rulesMap.set(r.entity_id, list);
+          }
+
+          // Attach rules to coberturas and beneficios
+          coberturasMap.forEach((list) => {
+            for (const c of list) {
+              c.rules = rulesMap.get(c.id) || [];
+            }
+          });
+          beneficiosMap.forEach((list) => {
+            for (const b of list) {
+              b.rules = rulesMap.get(b.id) || [];
+            }
+          });
         }
       }
 
