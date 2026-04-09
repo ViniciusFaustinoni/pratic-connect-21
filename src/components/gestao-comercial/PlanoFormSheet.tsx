@@ -51,10 +51,6 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
     },
   });
 
-  // Filter to only show unassigned items (+ those already selected by this plan)
-  const coberturas = useMemo(() => allCoberturas.filter(c => !assignedCoberturaIds.has(c.id) || selectedCoberturas.has(c.id)), [allCoberturas, assignedCoberturaIds, selectedCoberturas]);
-  const benefits = useMemo(() => allBenefits.filter(b => !assignedBenefitIds.has(b.id) || selectedBeneficios.has(b.id)), [allBenefits, assignedBenefitIds, selectedBeneficios]);
-
   // Set of entity_ids that have fipe_range rules (variable pricing)
   const fipeRangeEntityIds = useMemo(() => {
     const ids = new Set<string>();
@@ -73,6 +69,10 @@ export function PlanoFormSheet({ open, onClose, planoId, linhaId }: Props) {
   const [selectedCoberturas, setSelectedCoberturas] = useState<Set<string>>(new Set());
   const [selectedBeneficios, setSelectedBeneficios] = useState<Set<string>>(new Set());
   const [templateContratoId, setTemplateContratoId] = useState<string>('');
+
+  // Filter to only show unassigned items (+ those already selected by this plan)
+  const coberturas = useMemo(() => allCoberturas.filter(c => !assignedCoberturaIds.has(c.id) || selectedCoberturas.has(c.id)), [allCoberturas, assignedCoberturaIds, selectedCoberturas]);
+  const benefits = useMemo(() => allBenefits.filter(b => !assignedBenefitIds.has(b.id) || selectedBeneficios.has(b.id)), [allBenefits, assignedBenefitIds, selectedBeneficios]);
 
 
   // Load templates
