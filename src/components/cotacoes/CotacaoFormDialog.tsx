@@ -1972,48 +1972,31 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                           <span className="text-xs font-normal text-muted-foreground">/mês</span>
                         </p>
                         <ul className="text-xs space-y-1 text-muted-foreground">
-                          {plano.coberturas.slice(0, 4).map((cobertura, idx) => {
-                            const isRemovida = plano.coberturasRemovidas.some(
-                              cr => cr.toLowerCase().includes(cobertura.toLowerCase())
+                          {(() => {
+                            const coberturasVisiveis = plano.coberturas.filter(
+                              c => !(plano.coberturasRemovidas || []).some(
+                                cr => cr.toLowerCase().includes(c.toLowerCase())
+                              )
                             );
                             return (
-                              <li key={idx} className="flex items-start gap-1">
-                                {isRemovida ? (
-                                  <>
-                                    <X className="h-3 w-3 text-destructive shrink-0 mt-0.5" />
-                                    <span className="line-through text-muted-foreground/60">{cobertura}</span>
-                                    <span className="text-[10px] text-destructive shrink-0">(não cobre)</span>
-                                  </>
-                                ) : (
-                                  <>
+                              <>
+                                {coberturasVisiveis.slice(0, 4).map((cobertura, idx) => (
+                                  <li key={idx} className="flex items-start gap-1">
                                     <Check className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
                                     <span>{cobertura}</span>
-                                  </>
-                                )}
-                              </li>
-                            );
-                          })}
-                          <div className={`overflow-hidden transition-all duration-200 ${expandedPlanos[plano.id] ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                                {plano.coberturas.slice(4).map((cobertura, idx) => {
-                                   const isRemovida = (plano.coberturasRemovidas || []).includes(cobertura);
-                                  return (
+                                  </li>
+                                ))}
+                                <div className={`overflow-hidden transition-all duration-200 ${expandedPlanos[plano.id] ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                                  {coberturasVisiveis.slice(4).map((cobertura, idx) => (
                                     <li key={idx + 4} className="flex items-start gap-1 mt-1">
-                                      {isRemovida ? (
-                                        <>
-                                          <X className="h-3 w-3 text-destructive shrink-0 mt-0.5" />
-                                          <span className="line-through text-muted-foreground/60">{cobertura}</span>
-                                          <span className="text-[10px] text-destructive shrink-0">(não cobre)</span>
-                                        </>
-                                      ) : (
-                                        <>
-                                          <Check className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
-                                          <span>{cobertura}</span>
-                                        </>
-                                      )}
+                                      <Check className="h-3 w-3 text-green-500 shrink-0 mt-0.5" />
+                                      <span>{cobertura}</span>
                                     </li>
-                                  );
-                                })}
-                          </div>
+                                  ))}
+                                </div>
+                              </>
+                            );
+                          })()}
                           {plano.coberturas.length > 4 && (
                             <li className="pt-1">
                               <button
@@ -2354,44 +2337,29 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                               </p>
                               {/* Lista de benefícios com Ver mais */}
                               <ul className="text-sm space-y-1.5 text-muted-foreground">
-                                {plano.coberturas.slice(0, LIMIT).map((cobertura, i) => {
-                                   const isRemovida = (plano.coberturasRemovidas || []).includes(cobertura);
+                                {(() => {
+                                  const coberturasVisiveis = plano.coberturas.filter(
+                                    c => !(plano.coberturasRemovidas || []).includes(c)
+                                  );
                                   return (
-                                    <li key={i} className="flex items-start gap-2">
-                                      {isRemovida ? (
-                                        <>
-                                          <X className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
-                                          <span className="line-through text-muted-foreground/60">{cobertura}</span>
-                                        </>
-                                      ) : (
-                                        <>
+                                    <>
+                                      {coberturasVisiveis.slice(0, LIMIT).map((cobertura, i) => (
+                                        <li key={i} className="flex items-start gap-2">
                                           <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
                                           <span>{cobertura}</span>
-                                        </>
-                                      )}
-                                    </li>
-                                  );
-                                })}
-                                <div className={`overflow-hidden transition-all duration-200 ${isExpanded && hasMore ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
-                                      {plano.coberturas.slice(LIMIT).map((cobertura, i) => {
-                                        const isRemovida = (plano.coberturasRemovidas || []).includes(cobertura);
-                                        return (
+                                        </li>
+                                      ))}
+                                      <div className={`overflow-hidden transition-all duration-200 ${isExpanded && hasMore ? 'max-h-[500px] opacity-100' : 'max-h-0 opacity-0'}`}>
+                                        {coberturasVisiveis.slice(LIMIT).map((cobertura, i) => (
                                           <li key={i + LIMIT} className="flex items-start gap-2 mt-1.5">
-                                            {isRemovida ? (
-                                              <>
-                                                <X className="h-4 w-4 text-destructive mt-0.5 flex-shrink-0" />
-                                                <span className="line-through text-muted-foreground/60">{cobertura}</span>
-                                              </>
-                                            ) : (
-                                              <>
-                                                <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
-                                                <span>{cobertura}</span>
-                                              </>
-                                            )}
+                                            <Check className="h-4 w-4 text-green-500 mt-0.5 flex-shrink-0" />
+                                            <span>{cobertura}</span>
                                           </li>
-                                        );
-                                      })}
-                                </div>
+                                        ))}
+                                      </div>
+                                    </>
+                                  );
+                                })()}
                                 {hasMore && (
                                   <li className="pt-1">
                                     <button

@@ -122,45 +122,28 @@ export function PlanoCardComparativo({
 
         {/* Coberturas incluídas */}
         <div className="space-y-1.5">
-          {coberturasExibidas.map((cobertura, i) => {
-            const isRemovida = isCoberturaRemovida?.(cobertura, categoriaVeiculo) || false;
-            
-            return (
-              <div 
-                key={i} 
-                className={cn(
-                  "flex items-center gap-2 text-sm",
-                  isRemovida && "opacity-50"
-                )}
-              >
-                {isRemovida ? (
-                  <X className="h-4 w-4 text-destructive flex-shrink-0" />
-                ) : (
-                  <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                )}
-                <span className={cn(isRemovida && "line-through")}>
-                  {cobertura}
-                </span>
-              </div>
+          {(() => {
+            const coberturasVisiveis = coberturas.filter(
+              c => !(isCoberturaRemovida?.(c, categoriaVeiculo))
             );
-          })}
-          
-          {/* Coberturas não incluídas (primeiras 3) */}
-          {naoInclui.slice(0, 3).map((item, i) => (
-            <div 
-              key={`nao-${i}`}
-              className="flex items-center gap-2 text-sm opacity-40"
-            >
-              <X className="h-4 w-4 text-muted-foreground flex-shrink-0" />
-              <span className="line-through">{item}</span>
-            </div>
-          ))}
-
-          {temMaisCoberturas && (
-            <p className="text-xs text-muted-foreground text-center pt-1">
-              +{coberturas.length - 8} coberturas
-            </p>
-          )}
+            const exibidas = coberturasVisiveis.slice(0, 8);
+            const temMais = coberturasVisiveis.length > 8;
+            return (
+              <>
+                {exibidas.map((cobertura, i) => (
+                  <div key={i} className="flex items-center gap-2 text-sm">
+                    <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+                    <span>{cobertura}</span>
+                  </div>
+                ))}
+                {temMais && (
+                  <p className="text-xs text-muted-foreground text-center pt-1">
+                    +{coberturasVisiveis.length - 8} coberturas
+                  </p>
+                )}
+              </>
+            );
+          })()}
         </div>
 
         <Separator />

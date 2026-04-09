@@ -627,31 +627,7 @@ export async function gerarPdfCotacao(cotacao: CotacaoParaPdf): Promise<void> {
 
   y += SECTION_GAP;
 
-  // ============= COBERTURAS REMOVIDAS (PDF SIMPLES) =============
-  if (cotacao.coberturasRemovidas && cotacao.coberturasRemovidas.length > 0) {
-    checkPageBreak(40);
-    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO APLICÁVEL PARA ESTE VEÍCULO', brandRed, brandBlue);
-    y += HEADER_HEIGHT + INNER_GAP;
-
-    cotacao.coberturasRemovidas.forEach((item, index) => {
-      checkPageBreak(coberturaLineHeight + 4);
-      const lineTop = y;
-      const textYR = lineTop + coberturaLineHeight / 2 + 2;
-      if (index % 2 === 0) {
-        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-        doc.rect(margin, lineTop, contentWidth, coberturaLineHeight, 'F');
-      }
-      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-      doc.setFontSize(10);
-      doc.text('⚠', margin + 6, textYR);
-      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
-      doc.setFont('helvetica', 'normal');
-      doc.text(item, margin + 14, textYR);
-      y += coberturaLineHeight;
-    });
-
-    y += SECTION_GAP;
-  }
+  // Coberturas removidas: não exibir no PDF (ocultas silenciosamente)
 
   // ============= BADGES E COTAS (PDF SIMPLES) =============
   if ((cotacao.coberturaFipe && cotacao.coberturaFipe !== 100) || cotacao.anoMinimo || (cotacao.cotaPercentual && cotacao.cotaMinima)) {
@@ -1576,51 +1552,7 @@ const desenharPaginaDetalhesPlano = (
     y = startNaoY + Math.max(naoIncluiCol1.length, naoIncluiCol2.length) * coberturaLineHeight + 10;
   }
 
-  // ============= COBERTURAS REMOVIDAS (NÃO APLICÁVEL) =============
-  if (plano.coberturasRemovidas && plano.coberturasRemovidas.length > 0) {
-    drawPremiumSectionHeader(doc, margin, y, contentWidth, 'NÃO APLICÁVEL PARA ESTE VEÍCULO', brandRed);
-    y += HEADER_HEIGHT + 6;
-
-    const removCol1 = plano.coberturasRemovidas.slice(0, Math.ceil(plano.coberturasRemovidas.length / 2));
-    const removCol2 = plano.coberturasRemovidas.slice(Math.ceil(plano.coberturasRemovidas.length / 2));
-    
-    const startRemovY = y;
-    removCol1.forEach((item, index) => {
-      const lineY = startRemovY + index * coberturaLineHeight;
-      const textY = lineY + 6;
-      
-      if (index % 2 === 0) {
-        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-        doc.rect(col1X, lineY, colWidthVal, coberturaLineHeight, 'F');
-      }
-      
-      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-      doc.setFontSize(9);
-      doc.text('⚠', col1X + 6, textY);
-      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
-      doc.setFont('helvetica', 'normal');
-      doc.text(truncateText(item, 42), col1X + 14, textY);
-    });
-
-    removCol2.forEach((item, index) => {
-      const lineY = startRemovY + index * coberturaLineHeight;
-      const textY = lineY + 6;
-      
-      if (index % 2 === 0) {
-        doc.setFillColor(stripeBg.r, stripeBg.g, stripeBg.b);
-        doc.rect(col2X, lineY, colWidthVal, coberturaLineHeight, 'F');
-      }
-      
-      doc.setTextColor(warningYellow.r, warningYellow.g, warningYellow.b);
-      doc.setFontSize(9);
-      doc.text('⚠', col2X + 6, textY);
-      doc.setTextColor(glowRed.r, glowRed.g, glowRed.b);
-      doc.setFont('helvetica', 'normal');
-      doc.text(truncateText(item, 42), col2X + 14, textY);
-    });
-
-    y = startRemovY + Math.max(removCol1.length, removCol2.length) * coberturaLineHeight + 10;
-  }
+  // Coberturas removidas: não exibir no PDF (ocultas silenciosamente)
 
   // ============= VALORES =============
   const labelCol = margin + 8;
@@ -1717,13 +1649,10 @@ const desenharPaginaComparativoCoberturas = (
 
   let y = headerHeight + 8;
 
-  // Coletar todas as coberturas únicas (incluindo removidas)
+  // Coletar apenas coberturas ativas (excluindo removidas)
   const todasCoberturas: string[] = [];
   planos.forEach(plano => {
     plano.coberturas.forEach(c => {
-      if (!todasCoberturas.includes(c)) todasCoberturas.push(c);
-    });
-    plano.coberturasRemovidas?.forEach(c => {
       if (!todasCoberturas.includes(c)) todasCoberturas.push(c);
     });
   });
@@ -1779,7 +1708,6 @@ const desenharPaginaComparativoCoberturas = (
       const centerX = colX + colPlanoWidth / 2;
       const centerY = y + rowHeight / 2;
       const inclui = plano.coberturas.includes(cobertura);
-      const removida = plano.coberturasRemovidas?.includes(cobertura);
 
       if (inclui) {
         // Círculo verde preenchido
@@ -1790,19 +1718,6 @@ const desenharPaginaComparativoCoberturas = (
         doc.setLineWidth(0.6);
         doc.line(centerX - 1.2, centerY, centerX - 0.3, centerY + 1);
         doc.line(centerX - 0.3, centerY + 1, centerX + 1.3, centerY - 1);
-      } else if (removida) {
-        // Triângulo amarelo (alerta)
-        doc.setFillColor(warningYellow.r, warningYellow.g, warningYellow.b);
-        doc.triangle(
-          centerX, centerY - 2.5,
-          centerX - 2.5, centerY + 1.5,
-          centerX + 2.5, centerY + 1.5,
-          'F'
-        );
-        // Exclamação branca
-        doc.setFillColor(255, 255, 255);
-        doc.rect(centerX - 0.3, centerY - 1.2, 0.6, 1.8, 'F');
-        doc.circle(centerX, centerY + 1, 0.35, 'F');
       } else {
         // X vermelho com linhas cruzadas
         doc.setDrawColor(glowRed.r, glowRed.g, glowRed.b);

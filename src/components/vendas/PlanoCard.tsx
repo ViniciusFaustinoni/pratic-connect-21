@@ -62,26 +62,14 @@ export function PlanoCard({ plano, selecionado, onSelecionar, categoriaVeiculo }
 
       {/* Coberturas */}
       <div className="space-y-1.5 mb-4 pl-3">
-        {plano.coberturas.map((cobertura, index) => {
-          const isRemovida = isCoberturaRemovida(cobertura, categoriaVeiculo || plano.categoriaVeiculo);
-          
-          return (
+        {plano.coberturas
+          .filter(cobertura => !isCoberturaRemovida(cobertura, categoriaVeiculo || plano.categoriaVeiculo))
+          .map((cobertura, index) => (
             <div key={index} className="flex items-center gap-2 text-sm">
-              {isRemovida ? (
-                <>
-                  <X className="h-4 w-4 text-destructive flex-shrink-0" />
-                  <span className="text-muted-foreground line-through">{cobertura}</span>
-                  <span className="text-xs text-destructive ml-auto">(não disponível)</span>
-                </>
-              ) : (
-                <>
-                  <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
-                  <span>{cobertura}</span>
-                </>
-              )}
+              <Check className="h-4 w-4 text-green-500 flex-shrink-0" />
+              <span>{cobertura}</span>
             </div>
-          );
-        })}
+          ))}
       </div>
 
       {/* Valores */}
