@@ -277,11 +277,35 @@ serve(async (req) => {
 
     if (authError) {
       if ((authError as any).code === 'email_exists' || authError.message?.includes('already been registered')) {
-        console.log('Email já registrado no Auth, buscando user existente...');
-        const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers();
-        const existingUser = users?.find(u => u.email?.toLowerCase() === associado.email.toLowerCase());
+        console.log('Email já registrado no Auth, buscando user existente via API...');
+        // listUsers() só retorna a primeira página (50 users). Usar fetch direto para buscar por email.
+        const authResponse = await fetch(
+          `${supabaseUrl}/auth/v1/admin/users?page=1&per_page=1`,
+          {
+            method: 'GET',
+            headers: {
+              'Authorization': `Bearer ${supabaseServiceKey}`,
+              'apikey': supabaseServiceKey,
+            },
+          }
+        );
         
-        if (!existingUser || listError) {
+        // Buscar pelo email específico usando filter na query
+        const emailLower = associado.email.toLowerCase();
+        let existingUser = null;
+        
+        // Tentar via listUsers com paginação ampla
+        let page = 1;
+        const perPage = 500;
+        while (!existingUser) {
+          const { data: { users }, error: listError } = await supabaseAdmin.auth.admin.listUsers({ page, perPage });
+          if (listError || !users || users.length === 0) break;
+          existingUser = users.find(u => u.email?.toLowerCase() === emailLower);
+          if (users.length < perPage) break;
+          page++;
+        }
+        
+        if (!existingUser) {
           throw new Error('Email já registrado mas não foi possível localizar o usuário existente.');
         }
         
