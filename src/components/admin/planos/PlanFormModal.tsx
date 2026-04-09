@@ -123,7 +123,8 @@ export function PlanFormModal({
   plan,
   defaultProductLineId,
 }: PlanFormModalProps) {
-  const planId = plan?.id ?? null;
+  const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
+  const planId = createdPlanId ?? plan?.id ?? null;
   const isEditing = !!planId;
 
   const { data: productLines = [], isLoading: loadingProductLines } = useProductLines();
@@ -164,6 +165,7 @@ export function PlanFormModal({
   useEffect(() => {
     if (!open) {
       hydratedStateKeyRef.current = '';
+      setCreatedPlanId(null);
       return;
     }
 
@@ -243,12 +245,18 @@ export function PlanFormModal({
 
     try {
       if (isEditing && planId) {
-        // Only update plan metadata, don't touch coberturas/benefits links
         await updatePlan.mutateAsync({ id: planId, ...payload });
+        onOpenChange(false);
       } else {
-        await createPlan.mutateAsync(payload);
+        const newPlan = await createPlan.mutateAsync(payload);
+        if (newPlan?.id) {
+          setCreatedPlanId(newPlan.id);
+          const { toast } = await import('sonner');
+          toast.success('Plano criado! Agora adicione coberturas e benefícios.');
+        } else {
+          onOpenChange(false);
+        }
       }
-      onOpenChange(false);
     } catch {
       // handled by mutation hooks
     }
