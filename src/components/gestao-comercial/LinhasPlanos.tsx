@@ -180,6 +180,7 @@ export function LinhasPlanos() {
   const [importModal, setImportModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
   const [duplicarModal, setDuplicarModal] = useState<{ open: boolean; plano: { id: string; nome: string } | null }>({ open: false, plano: null });
+  const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
   const selectedPlan = useMemo(
     () => (planoModal.planId ? { id: planoModal.planId } : null),
