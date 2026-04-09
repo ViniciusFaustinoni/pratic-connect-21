@@ -34,6 +34,7 @@ export interface VistoriaMapa {
   permite_encaixe: boolean;
   periodo: string | null;
   origem_registro: string | null;
+  servico_id_unificado: string | null;
 }
 
 export interface RotaAgrupada {
