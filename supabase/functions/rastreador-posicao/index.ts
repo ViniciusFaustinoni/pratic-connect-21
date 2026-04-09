@@ -643,30 +643,65 @@ serve(async (req) => {
   } catch (error) {
     console.error('Erro posição:', error);
     
-    // Log de erro
+    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+    const isServiceError = /indisponível|Internal Service|503|502|504|404|resolver/i.test(errorMessage);
+
+    // Tentar retornar última posição conhecida como fallback
+    let fallbackPosicao = null;
     try {
-      const supabase = createClient(
+      const supabaseForFallback = createClient(
         Deno.env.get('SUPABASE_URL')!,
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
-      
-      await supabase
+
+      const body = await req.clone().json().catch(() => ({}));
+      if (body.rastreador_id) {
+        const { data: rast } = await supabaseForFallback
+          .from('rastreadores')
+          .select('ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao')
+          .eq('id', body.rastreador_id)
+          .single();
+
+        if (rast?.ultima_posicao_lat && rast?.ultima_posicao_lng) {
+          fallbackPosicao = {
+            latitude: rast.ultima_posicao_lat,
+            longitude: rast.ultima_posicao_lng,
+            velocidade: rast.ultima_velocidade || 0,
+            ignicao: rast.ultima_ignicao || false,
+            data_posicao: rast.ultima_comunicacao,
+            endereco: null,
+          };
+        }
+      }
+
+      // Log de erro
+      await supabaseForFallback
         .from('rastreadores_logs')
         .insert({
+          rastreador_id: body.rastreador_id || null,
           plataforma: 'unknown',
           operacao: 'posicao_tempo_real',
           status: 'erro',
-          erro_mensagem: error instanceof Error ? error.message : 'Erro desconhecido',
+          erro_mensagem: errorMessage,
           tempo_ms: Date.now() - startTime,
         });
     } catch (logError) {
-      console.error('Falha ao registrar log:', logError);
+      console.error('Falha ao registrar log/fallback:', logError);
     }
-    
-    const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
+
+    // Retornar 200 com fallback para que o client possa ler o body
     return new Response(
-      JSON.stringify({ success: false, error: errorMessage }),
-      { status: 500, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      JSON.stringify({
+        success: false,
+        error: isServiceError ? 'Serviço de rastreamento temporariamente indisponível' : errorMessage,
+        fallback: isServiceError,
+        tempo_real: false,
+        posicao: fallbackPosicao,
+        mensagem: fallbackPosicao
+          ? 'Serviço indisponível. Exibindo última posição conhecida.'
+          : 'Serviço indisponível e sem posição anterior registrada.',
+      }),
+      { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
     );
   }
 });
