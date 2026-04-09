@@ -934,9 +934,13 @@ export function MapaVistoriasContent() {
               <CardTitle className="text-base">Mapa de Atribuições</CardTitle>
             </div>
             <div className="flex items-center gap-2">
-              {atribuicaoManualAtiva && (
+              {atribuicaoManualAtiva ? (
                 <Badge variant="outline" className="gap-1.5 text-xs text-amber-600 border-amber-300">
-                  <MousePointerClick className="h-3 w-3" />Click-to-assign
+                  <MousePointerClick className="h-3 w-3" />Manual — Arraste ou clique
+                </Badge>
+              ) : (
+                <Badge variant="outline" className="gap-1.5 text-xs text-green-600 border-green-300">
+                  <span className="h-2 w-2 rounded-full bg-green-500" />Modo Automático
                 </Badge>
               )}
               <Badge variant="outline" className="gap-1.5 text-xs">
