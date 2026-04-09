@@ -283,8 +283,8 @@ export function MapaVistoriasContent() {
   };
 
   const iniciarAtribuicao = useCallback((vistoria: VistoriaMapa) => {
-    if (vistoria.origem_registro !== 'servicos') {
-      toast.error('Este item não pode ser atribuído manualmente por este fluxo.');
+    if (!vistoria.servico_id_unificado) {
+      toast.error('Este item não possui serviço vinculado para atribuição.');
       return;
     }
     setServicoParaAtribuir(vistoria);
@@ -316,8 +316,13 @@ export function MapaVistoriasContent() {
 
   const confirmarAtribuicao = useCallback(() => {
     if (!assignConfirmation) return;
+    const servicoId = assignConfirmation.servico.servico_id_unificado;
+    if (!servicoId) {
+      toast.error('Serviço sem ID unificado, não é possível atribuir.');
+      return;
+    }
     atribuirMutation.mutate({
-      servicoId: assignConfirmation.servico.id,
+      servicoId,
       profissionalId: assignConfirmation.profissional.vistoriador_id,
     });
     setAssignConfirmation(null);
@@ -331,11 +336,10 @@ export function MapaVistoriasContent() {
   }, [cancelConfirmation, desatribuirMutation]);
 
   const podeEnviarConfirmacao = (v: VistoriaMapa) => {
-    return !!atribuicaoManualAtiva 
+    return !!v.servico_id_unificado
       && !v.permite_encaixe 
       && (!v.confirmacao_whatsapp || v.confirmacao_whatsapp === 'recusada')
-      && !STATUS_REALIZADOS.includes(v.status)
-      && v.origem_registro === 'servicos';
+      && !STATUS_REALIZADOS.includes(v.status);
   };
 
   const abrirWhatsApp = (telefone: string | null) => {
@@ -422,7 +426,7 @@ export function MapaVistoriasContent() {
               ? new Date(v.data_agendada + 'T00:00:00') < hojeNorm && v.status !== 'concluida' && v.status !== 'cancelada'
               : false;
             const isRealizada = STATUS_REALIZADOS.includes(v.status);
-            const canAssign = !!atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.latitude && v.origem_registro === 'servicos';
+            const canAssign = !!atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.latitude && !!v.servico_id_unificado;
             const isSelected = servicoParaAtribuir?.id === v.id;
             const canSendConfirmation = podeEnviarConfirmacao(v);
 
@@ -515,7 +519,7 @@ export function MapaVistoriasContent() {
                         className="h-8 w-8 text-green-600 border-green-300 hover:bg-green-50"
                         onClick={(e) => {
                           e.stopPropagation();
-                          enviarConfirmacaoMutation.mutate(v.id);
+                          enviarConfirmacaoMutation.mutate(v.servico_id_unificado!);
                         }}
                         disabled={enviarConfirmacaoMutation.isPending}
                         title="Enviar confirmação WhatsApp"
@@ -622,7 +626,7 @@ export function MapaVistoriasContent() {
                   {/* Botão enviar confirmação no popup */}
                   {podeEnviarConfirmacao(v) && (
                     <button
-                      onClick={() => enviarConfirmacaoMutation.mutate(v.id)}
+                      onClick={() => enviarConfirmacaoMutation.mutate(v.servico_id_unificado!)}
                       disabled={enviarConfirmacaoMutation.isPending}
                       className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50"
                     >
@@ -630,7 +634,7 @@ export function MapaVistoriasContent() {
                     </button>
                   )}
                   {/* Botão atribuir no popup */}
-                  {atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && (
+                  {atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.servico_id_unificado && (
                     <button
                       onClick={() => iniciarAtribuicao(v)}
                       className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs hover:bg-amber-600"
@@ -646,10 +650,10 @@ export function MapaVistoriasContent() {
                   <button onClick={() => abrirGoogleMaps(v.latitude!, v.longitude!)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
                     <Navigation className="h-3 w-3" />Google Maps
                   </button>
-                  {podeCancelarAtribuicao && v.vistoriador_id && !isRealizada && (
+                  {podeCancelarAtribuicao && v.vistoriador_id && !isRealizada && v.servico_id_unificado && (
                     <button
                       onClick={() => setCancelConfirmation({
-                        servicoId: v.id,
+                        servicoId: v.servico_id_unificado!,
                         servicoPlaca: v.veiculo_placa,
                         profissionalNome: v.vistoriador_nome,
                       })}
@@ -685,7 +689,7 @@ export function MapaVistoriasContent() {
               
               // Find nearest unassigned service within 5km
               const servicosNaoAtribuidos = vistoriasComCoordenadas.filter(v =>
-                !v.vistoriador_id && !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude && v.origem_registro === 'servicos'
+                !v.vistoriador_id && !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude && !!v.servico_id_unificado
               );
               
               let melhorServico: VistoriaMapa | null = null;
@@ -714,7 +718,7 @@ export function MapaVistoriasContent() {
               } else if (melhorServico) {
                 toast.error(`Serviço mais próximo está a ${melhorDist.toFixed(1)} km. Solte mais perto do pin do serviço.`);
               } else {
-                toast.error('Nenhum serviço atribuível encontrado nesta região. Apenas serviços unificados podem ser atribuídos por este fluxo.');
+                toast.error('Nenhum serviço pendente encontrado nesta região.');
               }
             },
           }}
