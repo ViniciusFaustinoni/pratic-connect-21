@@ -175,6 +175,7 @@ export function LinhasPlanos() {
   const [planoModal, setPlanoModal] = useState<{ open: boolean; planId?: string; defaultLineId?: string }>({ open: false });
   const [importModal, setImportModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
+  const [duplicarModal, setDuplicarModal] = useState<{ open: boolean; plano: { id: string; nome: string } | null }>({ open: false, plano: null });
 
   const selectedPlan = useMemo(
     () => (planoModal.planId ? { id: planoModal.planId } : null),
@@ -394,7 +395,7 @@ export function LinhasPlanos() {
                                   >
                                     <Pencil className="h-3.5 w-3.5" />
                                   </Button>
-                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => duplicatePlan.mutate(plano.id)}>
+                                  <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDuplicarModal({ open: true, plano: { id: plano.id, nome: plano.nome } })}>
                                     <Copy className="h-3.5 w-3.5" />
                                   </Button>
                                   {canDelete ? (
