@@ -1,32 +1,43 @@
 
 
-## Plano: Tornar coberturas editaveis inline no modal do plano
+## Plano: Exibir regras e variacao FIPE na lista de coberturas/beneficios do plano
 
 ### Problema
-Coberturas no modal de plano usam `CoberturaReadOnlyView` (somente leitura). Beneficios ja tem formulario editavel completo (`BeneficioInlineForm`) com carencia, regras de elegibilidade e botao salvar. O pedido e que coberturas tenham o mesmo nivel de edicao.
+Na tela de gestao (LinhasPlanos), ao expandir um plano, as coberturas e beneficios mostram apenas nome e valor fixo. Nao exibem:
+1. Regras de elegibilidade (tipo_uso, regiao, combustivel, etc.)
+2. Valor variavel por FIPE quando a cobertura/beneficio tem regra `fipe_range` ativa
 
-### Alteracoes
+### Alteracao
 
-**1. `src/hooks/usePlansAdmin.ts` — Expandir `CoberturaInput`**
-- Adicionar campos financeiros que existem na tabela `coberturas` mas faltam no tipo:
-  - `valor`, `valor_limite`, `percentual_cobertura`, `franquia_percentual`, `franquia_valor`
-  - `carencia_ativa`, `carencia_dias`, `carencia_tipo`, `carencia_multiplicador`
+**`src/components/gestao-comercial/LinhasPlanos.tsx`**
 
-**2. `src/components/admin/planos/PlanCoberturasList.tsx` — Substituir read-only por formulario editavel**
-- Remover `CoberturaReadOnlyView`
-- Criar `CoberturaInlineForm` seguindo o mesmo padrao de `BeneficioInlineForm`:
-  - Campos editaveis: icone, nome, codigo, subtitulo, descricao
-  - Campos financeiros: valor (R$), valor limite (R$), % cobertura, franquia (%), franquia (R$)
-  - Ordem, status ativo/inativo
-  - `CarenciaConfigSection` (carencia ativa, tipo, dias, multiplicador)
-  - `EligibilityRulesEditor` (regras de elegibilidade da cobertura)
-  - Botao "Salvar Cobertura" usando `useUpdateCobertura`
+1. **Carregar regras de elegibilidade** — No hook `useLinhasComPlanos`, apos carregar coberturas e beneficios, buscar todas as regras da tabela `entity_eligibility_rules` para os entity_ids de coberturas e beneficios vinculados. Criar um mapa `rulesMap: Map<string, EligibilityRule[]>`.
+
+2. **Propagar dados para a lista** — Cada item em `coberturas_list` e `beneficios_list` recebe um campo `rules: EligibilityRule[]` com suas regras.
+
+3. **Renderizar badges de regras** — Na lista expandida de cada cobertura/beneficio (linhas 430-442 e 453-465):
+   - Apos o nome, exibir badges compactos para cada regra ativa:
+     - `tipo_uso: include [aplicativo]` → Badge "APP"
+     - `tipo_uso: include [passeio]` → Badge "Passeio"
+     - `regiao: include [...]` → Badge "Regiao: SP, RJ"
+     - `combustivel: include [diesel]` → Badge "Diesel"
+     - `tipo_placa: include [mercosul]` → Badge "Mercosul"
+   - Badges com cores distintas por tipo de regra
+
+4. **Exibir valor variavel por FIPE** — Se o item tem regra `fipe_range` ativa:
+   - Em vez de exibir "R$ 2,50", exibir badge "Variavel por FIPE" (amber)
+   - Ou exibir o range: "R$ X ~ R$ Y" baseado nos valores min/max das faixas
+
+### Detalhes tecnicos
+- Query adicional no hook: `supabase.from('entity_eligibility_rules').select('*').in('entity_id', [...cobIds, ...benIds]).eq('is_active', true)`
+- Mapeamento de `rule_type` + `rule_mode` + `rule_config.values` para labels legíveis
+- Reutilizar o pattern ja existente em `PlanoFormSheet` (linha 288-290) para badge "Variavel por FIPE"
 
 ### Resultado
-- Todas as configuracoes de coberturas (valores, franquias, carencias, regras) editaveis diretamente no modal do plano
-- Consistencia total entre a experiencia de edicao de coberturas e beneficios
+- Lista de coberturas mostra visualmente quais regras cada item possui (APP, regiao, combustivel, etc.)
+- Valores variaveis por FIPE sao indicados com badge em vez de valor fixo incorreto
+- Gestores identificam rapidamente a configuracao de cada item sem precisar abrir o modal de edicao
 
-### Arquivos
-- `src/hooks/usePlansAdmin.ts`
-- `src/components/admin/planos/PlanCoberturasList.tsx`
+### Arquivo
+- `src/components/gestao-comercial/LinhasPlanos.tsx`
 
