@@ -374,9 +374,10 @@ export function useDuplicatePlan() {
 
           // Clone the coverage record
           const { id: cobId, created_at: cobCreated, ...cobData } = origCob;
+          const uniqueSuffix = `-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
           const { data: newCob, error: cobError } = await supabase
             .from('coberturas')
-            .insert({ ...cobData })
+            .insert({ ...cobData, codigo: (cobData.codigo || '').slice(0, 80) + uniqueSuffix })
             .select()
             .single();
 
