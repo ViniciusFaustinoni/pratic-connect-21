@@ -371,7 +371,7 @@ export function useDuplicatePlan() {
           const { data: bRules } = await supabase
             .from('entity_eligibility_rules')
             .select('*')
-            .eq('entity_type', 'benefit')
+            .eq('entity_type', 'beneficio')
             .eq('entity_id', pb.benefit_id);
 
           if (bRules && bRules.length > 0) {
