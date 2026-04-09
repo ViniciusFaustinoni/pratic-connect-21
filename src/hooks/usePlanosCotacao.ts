@@ -318,7 +318,16 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
           }
         }
       }
-      // Planos NÃO têm restrições próprias — pulamos checkAllRules de plano
+      // Verificar regras próprias do plano (tipo_uso, regiao, combustivel, etc.)
+      // Excluímos marca_modelo e ano_range que já são tratados acima
+      const planoRulesNonMarcaModelo = allEligibilityRules.filter(
+        r => r.entity_type === 'plano' && r.entity_id === plano.id && r.is_active
+          && r.rule_type !== 'marca_modelo' && r.rule_type !== 'ano_range'
+      );
+      if (planoRulesNonMarcaModelo.length > 0 && !checkAllRules(planoRulesNonMarcaModelo, vehicleCtx)) {
+        negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Bloqueado por regra do plano' });
+        continue;
+      }
 
       // ── Filtrar coberturas e benefícios individualmente ──
       const coberturasDoPlanoRaw = (planoCoberturasData || []).filter(pc => pc.plano_id === plano.id);
