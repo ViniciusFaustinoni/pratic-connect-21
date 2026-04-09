@@ -268,7 +268,7 @@ export function PlanFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[92vh] max-w-7xl overflow-hidden p-0">
+      <DialogContent className="h-[92vh] max-w-7xl overflow-hidden p-0" onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader className="border-b border-border/60 px-6 py-5">
           <DialogTitle className="flex items-center gap-2 text-left">
             <Sparkles className="h-5 w-5 text-primary" />
