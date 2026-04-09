@@ -1,43 +1,53 @@
 
 
-## Plano: Exibir regras e variacao FIPE na lista de coberturas/beneficios do plano
+## Plano: Corrigir visibilidade do "Select One Aplicativo" para veiculos particulares
 
-### Problema
-Na tela de gestao (LinhasPlanos), ao expandir um plano, as coberturas e beneficios mostram apenas nome e valor fixo. Nao exibem:
-1. Regras de elegibilidade (tipo_uso, regiao, combustivel, etc.)
-2. Valor variavel por FIPE quando a cobertura/beneficio tem regra `fipe_range` ativa
+### Diagnostico
 
-### Alteracao
+O plano "Select One Aplicativo" NAO tem nenhuma regra de nivel de plano na tabela `entity_eligibility_rules`. O codigo do motor (linha 327 de `usePlanosCotacao.ts`) verifica regras do plano corretamente, mas como nao existem regras, o plano passa.
 
-**`src/components/gestao-comercial/LinhasPlanos.tsx`**
+As coberturas individuais tem regras `tipo_uso`, porem 3 delas incluem "particular":
+- Chuva de Granizo: `include [particular]`
+- Alagamento: `include [particular]`
+- Perda Total: `include [particular, aplicativo]`
 
-1. **Carregar regras de elegibilidade** — No hook `useLinhasComPlanos`, apos carregar coberturas e beneficios, buscar todas as regras da tabela `entity_eligibility_rules` para os entity_ids de coberturas e beneficios vinculados. Criar um mapa `rulesMap: Map<string, EligibilityRule[]>`.
+Os 8 beneficios nao tem nenhuma regra `tipo_uso`.
 
-2. **Propagar dados para a lista** — Cada item em `coberturas_list` e `beneficios_list` recebe um campo `rules: EligibilityRule[]` com suas regras.
+Resultado: para um veiculo particular, 3 coberturas + 8 beneficios passam. O plano so e descartado se TODAS as coberturas forem removidas (linha 367). Como 3 sobrevivem, o plano aparece.
 
-3. **Renderizar badges de regras** — Na lista expandida de cada cobertura/beneficio (linhas 430-442 e 453-465):
-   - Apos o nome, exibir badges compactos para cada regra ativa:
-     - `tipo_uso: include [aplicativo]` → Badge "APP"
-     - `tipo_uso: include [passeio]` → Badge "Passeio"
-     - `regiao: include [...]` → Badge "Regiao: SP, RJ"
-     - `combustivel: include [diesel]` → Badge "Diesel"
-     - `tipo_placa: include [mercosul]` → Badge "Mercosul"
-   - Badges com cores distintas por tipo de regra
+### Solucao
 
-4. **Exibir valor variavel por FIPE** — Se o item tem regra `fipe_range` ativa:
-   - Em vez de exibir "R$ 2,50", exibir badge "Variavel por FIPE" (amber)
-   - Ou exibir o range: "R$ X ~ R$ Y" baseado nos valores min/max das faixas
+Duas acoes necessarias:
 
-### Detalhes tecnicos
-- Query adicional no hook: `supabase.from('entity_eligibility_rules').select('*').in('entity_id', [...cobIds, ...benIds]).eq('is_active', true)`
-- Mapeamento de `rule_type` + `rule_mode` + `rule_config.values` para labels legíveis
-- Reutilizar o pattern ja existente em `PlanoFormSheet` (linha 288-290) para badge "Variavel por FIPE"
+**1. Inserir regra de plano no banco de dados (migration)**
+- Adicionar uma regra `tipo_uso: include ["aplicativo"]` na `entity_eligibility_rules` com `entity_type = 'plano'` e `entity_id = 'd3a61bfd-5b40-4503-949d-cfc71dbfabb2'`
+- Isso faz o motor bloquear o plano inteiro na linha 327 antes de avaliar coberturas/beneficios
+
+**2. Verificar e corrigir coberturas com tipo_uso inconsistente**
+- "Chuva de Granizo - Select One Passeio" e "Alagamento - Select One Passeio" tem `include [particular]` mas estao vinculadas a um plano de Aplicativo
+- Estes itens parecem ser coberturas da versao Passeio reutilizadas incorretamente. Devem ser corrigidos para `include [aplicativo]` ou substituidos por coberturas especificas de APP
+- "Perda Total (PT) - Select" tem `include [particular, aplicativo]` — esta correto se e compartilhada
+
+### Alteracoes
+
+**Migration SQL**
+```sql
+-- Regra de plano: Select One Aplicativo = apenas aplicativo
+INSERT INTO entity_eligibility_rules (entity_id, entity_type, rule_type, rule_mode, rule_config, is_active)
+VALUES ('d3a61bfd-5b40-4503-949d-cfc71dbfabb2', 'plano', 'tipo_uso', 'include', '{"values":["aplicativo"]}', true);
+
+-- Corrigir coberturas com tipo_uso inconsistente
+UPDATE entity_eligibility_rules 
+SET rule_config = '{"values":["aplicativo"]}'
+WHERE entity_id IN ('b2000001-0000-0000-0000-000000000005', 'b2000001-0000-0000-0000-000000000007')
+  AND rule_type = 'tipo_uso';
+```
 
 ### Resultado
-- Lista de coberturas mostra visualmente quais regras cada item possui (APP, regiao, combustivel, etc.)
-- Valores variaveis por FIPE sao indicados com badge em vez de valor fixo incorreto
-- Gestores identificam rapidamente a configuracao de cada item sem precisar abrir o modal de edicao
+- O plano "Select One Aplicativo" sera bloqueado pelo motor na etapa de regras do plano para veiculos particulares
+- As coberturas Granizo e Alagamento ficarao consistentes com o plano APP
+- Nenhuma alteracao de codigo necessaria — o motor ja suporta regras de plano (linha 327)
 
-### Arquivo
-- `src/components/gestao-comercial/LinhasPlanos.tsx`
+### Arquivos
+- Nova migration SQL
 
