@@ -26,42 +26,44 @@ export default function VistoriasInstalacoesMon() {
       </div>
 
       <Tabs defaultValue={manualAtiva ? 'atribuicao-manual' : 'instalacoes'} className="w-full">
-        <TabsList>
-          {manualAtiva && (
-            <TabsTrigger value="atribuicao-manual" className="gap-2">
-              <Hand className="h-4 w-4" />
-              Atribuição Manual
+        <div className="overflow-x-auto -mx-4 px-4">
+          <TabsList className="w-auto inline-flex">
+            {manualAtiva && (
+              <TabsTrigger value="atribuicao-manual" className="gap-2 shrink-0">
+                <Hand className="h-4 w-4" />
+                <span className="hidden sm:inline">Atribuição Manual</span>
+              </TabsTrigger>
+            )}
+            <TabsTrigger value="instalacoes" className="gap-2 shrink-0">
+              <Wrench className="h-4 w-4" />
+              <span className="hidden sm:inline">Instalações</span>
             </TabsTrigger>
-          )}
-          <TabsTrigger value="instalacoes" className="gap-2">
-            <Wrench className="h-4 w-4" />
-            Instalações
-          </TabsTrigger>
-          <TabsTrigger value="vistorias" className="gap-2">
-            <ClipboardCheck className="h-4 w-4" />
-            Vistorias
-          </TabsTrigger>
-          <TabsTrigger value="retiradas" className="gap-2">
-            <PackageX className="h-4 w-4" />
-            Retiradas
-          </TabsTrigger>
-          <TabsTrigger value="encaixes" className="gap-2">
-            <Puzzle className="h-4 w-4" />
-            Encaixes
-          </TabsTrigger>
-          <TabsTrigger value="viagens" className="gap-2">
-            <Truck className="h-4 w-4" />
-            Viagens
-          </TabsTrigger>
-          <TabsTrigger value="manutencao" className="gap-2">
-            <Settings className="h-4 w-4" />
-            Manutenção
-          </TabsTrigger>
-          <TabsTrigger value="historico" className="gap-2">
-            <History className="h-4 w-4" />
-            Histórico
-          </TabsTrigger>
-        </TabsList>
+            <TabsTrigger value="vistorias" className="gap-2 shrink-0">
+              <ClipboardCheck className="h-4 w-4" />
+              <span className="hidden sm:inline">Vistorias</span>
+            </TabsTrigger>
+            <TabsTrigger value="retiradas" className="gap-2 shrink-0">
+              <PackageX className="h-4 w-4" />
+              <span className="hidden sm:inline">Retiradas</span>
+            </TabsTrigger>
+            <TabsTrigger value="encaixes" className="gap-2 shrink-0">
+              <Puzzle className="h-4 w-4" />
+              <span className="hidden sm:inline">Encaixes</span>
+            </TabsTrigger>
+            <TabsTrigger value="viagens" className="gap-2 shrink-0">
+              <Truck className="h-4 w-4" />
+              <span className="hidden sm:inline">Viagens</span>
+            </TabsTrigger>
+            <TabsTrigger value="manutencao" className="gap-2 shrink-0">
+              <Settings className="h-4 w-4" />
+              <span className="hidden sm:inline">Manutenção</span>
+            </TabsTrigger>
+            <TabsTrigger value="historico" className="gap-2 shrink-0">
+              <History className="h-4 w-4" />
+              <span className="hidden sm:inline">Histórico</span>
+            </TabsTrigger>
+          </TabsList>
+        </div>
 
         {manualAtiva && (
           <TabsContent value="atribuicao-manual">
