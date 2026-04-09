@@ -661,6 +661,15 @@ export interface CoberturaInput {
   subtitle?: string | null;
   display_order?: number;
   ativo?: boolean;
+  valor?: number | null;
+  valor_limite?: number | null;
+  percentual_cobertura?: number | null;
+  franquia_percentual?: number | null;
+  franquia_valor?: number | null;
+  carencia_ativa?: boolean;
+  carencia_dias?: number | null;
+  carencia_tipo?: string | null;
+  carencia_multiplicador?: number | null;
 }
 
 export function useCreateCobertura() {

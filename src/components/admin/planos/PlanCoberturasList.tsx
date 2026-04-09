@@ -1,109 +1,170 @@
 import { useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Plus, Trash2, Loader2 } from 'lucide-react';
+import { ChevronDown, Plus, Save, Trash2, Loader2 } from 'lucide-react';
 import { Shield } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
+import { Textarea } from '@/components/ui/textarea';
+import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
-import { useCreateCobertura, useDeleteCobertura } from '@/hooks/usePlansAdmin';
+import { useCreateCobertura, useUpdateCobertura, useDeleteCobertura } from '@/hooks/usePlansAdmin';
+import { EligibilityRulesEditor } from './EligibilityRulesEditor';
+import { CarenciaConfigSection } from './CarenciaConfigSection';
 import { toast } from 'sonner';
 
 interface PlanCoberturasListProps {
   planId: string;
 }
 
-function CoberturaReadOnlyView({ cobertura }: { cobertura: any }) {
-  const formatCurrency = (v: number | null | undefined) => {
-    if (v == null) return '—';
-    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
-  };
-  const formatPercent = (v: number | null | undefined) => {
-    if (v == null) return '—';
-    return `${v}%`;
+function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: () => void }) {
+  const updateCobertura = useUpdateCobertura();
+
+  const [form, setForm] = useState({
+    icon: cobertura.icon || '',
+    nome: cobertura.nome || '',
+    codigo: cobertura.codigo || '',
+    subtitle: cobertura.subtitle || '',
+    descricao: cobertura.descricao || '',
+    display_order: cobertura.display_order?.toString() || '0',
+    ativo: cobertura.ativo ?? true,
+    valor: cobertura.valor?.toString() || '',
+    valor_limite: cobertura.valor_limite?.toString() || '',
+    percentual_cobertura: cobertura.percentual_cobertura?.toString() || '',
+    franquia_percentual: cobertura.franquia_percentual?.toString() || '',
+    franquia_valor: cobertura.franquia_valor?.toString() || '',
+    carencia_ativa: cobertura.carencia_ativa ?? false,
+    carencia_tipo: cobertura.carencia_tipo || '',
+    carencia_dias: cobertura.carencia_dias?.toString() || '',
+    carencia_multiplicador: cobertura.carencia_multiplicador?.toString() || '',
+  });
+
+  const handleSave = async () => {
+    const payload = {
+      id: cobertura.id,
+      nome: form.nome,
+      codigo: form.codigo || undefined,
+      icon: form.icon || null,
+      subtitle: form.subtitle || null,
+      descricao: form.descricao || null,
+      display_order: parseInt(form.display_order) || 0,
+      ativo: form.ativo,
+      valor: form.valor ? parseFloat(form.valor) : null,
+      valor_limite: form.valor_limite ? parseFloat(form.valor_limite) : null,
+      percentual_cobertura: form.percentual_cobertura ? parseFloat(form.percentual_cobertura) : null,
+      franquia_percentual: form.franquia_percentual ? parseFloat(form.franquia_percentual) : null,
+      franquia_valor: form.franquia_valor ? parseFloat(form.franquia_valor) : null,
+      carencia_ativa: form.carencia_ativa,
+      carencia_dias: form.carencia_dias ? parseInt(form.carencia_dias) : null,
+      carencia_tipo: form.carencia_ativa ? form.carencia_tipo || null : null,
+      carencia_multiplicador: form.carencia_tipo === 'multiplicadora_cota' && form.carencia_multiplicador
+        ? parseFloat(form.carencia_multiplicador) : null,
+    };
+
+    try {
+      await updateCobertura.mutateAsync(payload);
+      onSaved();
+    } catch {}
   };
 
   return (
     <div className="space-y-4 p-4">
+      {/* Ícone + Nome */}
       <div className="grid grid-cols-[60px_1fr] gap-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Ícone</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-center text-xl">{cobertura.icon || '—'}</div>
+          <Label className="text-xs">Ícone</Label>
+          <Input value={form.icon} onChange={(e) => setForm(p => ({ ...p, icon: e.target.value }))} placeholder="🛡️" className="text-center text-xl h-10" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Nome</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm">{cobertura.nome || '—'}</div>
+          <Label className="text-xs">Nome</Label>
+          <Input value={form.nome} onChange={(e) => setForm(p => ({ ...p, nome: e.target.value }))} />
         </div>
       </div>
 
+      {/* Código + Subtítulo */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Código</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm font-mono">{cobertura.codigo || '—'}</div>
+          <Label className="text-xs">Código</Label>
+          <Input value={form.codigo} onChange={(e) => setForm(p => ({ ...p, codigo: e.target.value }))} className="font-mono text-xs" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Subtítulo</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm">{cobertura.subtitle || '—'}</div>
+          <Label className="text-xs">Subtítulo</Label>
+          <Input value={form.subtitle} onChange={(e) => setForm(p => ({ ...p, subtitle: e.target.value }))} />
         </div>
       </div>
 
-      {cobertura.descricao && (
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Descrição</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm whitespace-pre-wrap">{cobertura.descricao}</div>
-        </div>
-      )}
+      {/* Descrição */}
+      <div className="space-y-1">
+        <Label className="text-xs">Descrição</Label>
+        <Textarea value={form.descricao} onChange={(e) => setForm(p => ({ ...p, descricao: e.target.value }))} rows={2} />
+      </div>
 
+      {/* Valores financeiros */}
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Valor (R$)</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm">{formatCurrency(cobertura.valor)}</div>
+          <Label className="text-xs">Valor (R$)</Label>
+          <Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm(p => ({ ...p, valor: e.target.value }))} placeholder="0,00" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Valor Limite (R$)</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm">{formatCurrency(cobertura.valor_limite)}</div>
+          <Label className="text-xs">Valor Limite (R$)</Label>
+          <Input type="number" step="0.01" value={form.valor_limite} onChange={(e) => setForm(p => ({ ...p, valor_limite: e.target.value }))} placeholder="0,00" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">% Cobertura</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm">{formatPercent(cobertura.percentual_cobertura)}</div>
+          <Label className="text-xs">% Cobertura</Label>
+          <Input type="number" step="0.1" value={form.percentual_cobertura} onChange={(e) => setForm(p => ({ ...p, percentual_cobertura: e.target.value }))} placeholder="100" />
         </div>
       </div>
 
+      {/* Franquias */}
       <div className="grid grid-cols-2 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Franquia (%)</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm">{formatPercent(cobertura.franquia_percentual)}</div>
+          <Label className="text-xs">Franquia (%)</Label>
+          <Input type="number" step="0.1" value={form.franquia_percentual} onChange={(e) => setForm(p => ({ ...p, franquia_percentual: e.target.value }))} placeholder="0" />
         </div>
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Franquia (R$)</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm">{formatCurrency(cobertura.franquia_valor)}</div>
+          <Label className="text-xs">Franquia (R$)</Label>
+          <Input type="number" step="0.01" value={form.franquia_valor} onChange={(e) => setForm(p => ({ ...p, franquia_valor: e.target.value }))} placeholder="0,00" />
         </div>
       </div>
 
+      {/* Ordem + Ativo */}
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Ordem</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm">{cobertura.display_order ?? 0}</div>
+          <Label className="text-xs">Ordem</Label>
+          <Input type="number" value={form.display_order} onChange={(e) => setForm(p => ({ ...p, display_order: e.target.value }))} />
         </div>
-        <div className="space-y-1">
-          <Label className="text-xs text-muted-foreground">Status</Label>
-          <div className="rounded-md bg-muted px-3 py-2 text-sm">{cobertura.ativo ? 'Ativo' : 'Inativo'}</div>
+        <div className="flex items-center gap-2 pt-5">
+          <Switch checked={form.ativo} onCheckedChange={(v) => setForm(p => ({ ...p, ativo: v }))} />
+          <Label className="text-xs">Ativo</Label>
         </div>
-        {cobertura.carencia_ativa && (
-          <div className="space-y-1">
-            <Label className="text-xs text-muted-foreground">Carência</Label>
-            <div className="rounded-md bg-muted px-3 py-2 text-sm">
-              {cobertura.carencia_dias ? `${cobertura.carencia_dias} dias` : '—'}
-              {cobertura.carencia_tipo === 'multiplicadora_cota' && cobertura.carencia_multiplicador
-                ? ` (×${cobertura.carencia_multiplicador})`
-                : ''}
-            </div>
-          </div>
-        )}
+      </div>
+
+      {/* Carência */}
+      <CarenciaConfigSection
+        config={{
+          carencia_ativa: form.carencia_ativa,
+          carencia_tipo: form.carencia_tipo,
+          carencia_dias: form.carencia_dias,
+          carencia_multiplicador: form.carencia_multiplicador,
+        }}
+        onChange={(c) => setForm(p => ({ ...p, ...c }))}
+      />
+
+      {/* Regras de Elegibilidade */}
+      <div className="border-t pt-3">
+        <EligibilityRulesEditor entityType="cobertura" entityId={cobertura.id} />
+      </div>
+
+      {/* Salvar */}
+      <div className="flex justify-end">
+        <Button type="button" size="sm" onClick={handleSave} disabled={updateCobertura.isPending}>
+          {updateCobertura.isPending ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Save className="mr-1 h-3 w-3" />}
+          Salvar Cobertura
+        </Button>
       </div>
     </div>
   );
@@ -171,6 +232,11 @@ export function PlanCoberturasList({ planId }: PlanCoberturasListProps) {
     } catch {
       toast.error('Erro ao criar cobertura');
     }
+  };
+
+  const invalidate = () => {
+    queryClient.invalidateQueries({ queryKey: ['plan-coberturas-inline', planId] });
+    queryClient.invalidateQueries({ queryKey: ['plan-form-modal-full', planId] });
   };
 
   return (
@@ -241,7 +307,7 @@ export function PlanCoberturasList({ planId }: PlanCoberturasListProps) {
                 </CollapsibleTrigger>
                 <CollapsibleContent>
                   <div className="border-t border-border/40">
-                    <CoberturaReadOnlyView cobertura={cob} />
+                    <CoberturaInlineForm cobertura={cob} onSaved={invalidate} />
                   </div>
                 </CollapsibleContent>
               </div>
