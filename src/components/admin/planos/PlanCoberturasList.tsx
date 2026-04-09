@@ -23,6 +23,7 @@ interface PlanCoberturasListProps {
 
 function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: () => void }) {
   const updateCobertura = useUpdateCobertura();
+  const eligibility = useEligibilityState('cobertura', cobertura.id);
 
   const [form, setForm] = useState({
     icon: cobertura.icon || '',
@@ -43,6 +44,8 @@ function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: 
     carencia_multiplicador: cobertura.carencia_multiplicador?.toString() || '',
   });
 
+  const [variaComFipe, setVariaComFipe] = useState(false);
+
   const handleSave = async () => {
     const payload = {
       id: cobertura.id,
@@ -53,7 +56,7 @@ function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: 
       descricao: form.descricao || null,
       display_order: parseInt(form.display_order) || 0,
       ativo: form.ativo,
-      valor: form.valor ? parseFloat(form.valor) : null,
+      valor: variaComFipe ? null : (form.valor ? parseFloat(form.valor) : null),
       valor_limite: form.valor_limite ? parseFloat(form.valor_limite) : null,
       percentual_cobertura: form.percentual_cobertura ? parseFloat(form.percentual_cobertura) : null,
       franquia_percentual: form.franquia_percentual ? parseFloat(form.franquia_percentual) : null,
@@ -67,8 +70,12 @@ function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: 
 
     try {
       await updateCobertura.mutateAsync(payload);
+      await saveEligibilityRules('cobertura', cobertura.id, eligibility.state);
       onSaved();
-    } catch {}
+      toast.success('Cobertura salva com sucesso');
+    } catch {
+      toast.error('Erro ao salvar cobertura');
+    }
   };
 
   return (
@@ -107,7 +114,13 @@ function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: 
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
           <Label className="text-xs">Valor (R$)</Label>
-          <Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm(p => ({ ...p, valor: e.target.value }))} placeholder="0,00" />
+          <Input
+            type="number" step="0.01" value={form.valor}
+            onChange={(e) => setForm(p => ({ ...p, valor: e.target.value }))}
+            placeholder="0,00"
+            disabled={variaComFipe}
+          />
+          {variaComFipe && <p className="text-[10px] text-amber-500">Valor definido pelas faixas FIPE abaixo</p>}
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Valor Limite (R$)</Label>
@@ -154,10 +167,13 @@ function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: 
         onChange={(c) => setForm(p => ({ ...p, ...c }))}
       />
 
-      {/* Regras de Elegibilidade */}
-      <div className="border-t pt-3">
-        <EligibilityRulesEditor entityType="cobertura" entityId={cobertura.id} />
-      </div>
+      {/* Regras de Elegibilidade Completas (FIPE, região, uso, placa, combustível) */}
+      <EligibilityConfigSection
+        entityType="cobertura"
+        entityId={cobertura.id}
+        onVariaComFipeChange={setVariaComFipe}
+        externalState={eligibility}
+      />
 
       {/* Salvar */}
       <div className="flex justify-end">
