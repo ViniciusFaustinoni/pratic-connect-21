@@ -334,7 +334,8 @@ export function MapaVistoriasContent() {
     return !!atribuicaoManualAtiva 
       && !v.permite_encaixe 
       && (!v.confirmacao_whatsapp || v.confirmacao_whatsapp === 'recusada')
-      && !STATUS_REALIZADOS.includes(v.status);
+      && !STATUS_REALIZADOS.includes(v.status)
+      && v.origem_registro === 'servicos';
   };
 
   const abrirWhatsApp = (telefone: string | null) => {
