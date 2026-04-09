@@ -279,30 +279,34 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
     queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
   };
 
-  // Query for unassigned coberturas
+  // Query for ALL active coberturas with their current plan binding
   const { data: coberturasDisponiveis = [], isLoading: loadingDisponiveis } = useQuery({
-    queryKey: ['coberturas-disponiveis'],
+    queryKey: ['coberturas-disponiveis-all', planId],
     queryFn: async () => {
-      // Get all cobertura_ids already assigned to any plan
-      const { data: assigned } = await supabase
-        .from('planos_coberturas')
-        .select('cobertura_id');
-      const assignedIds = (assigned || []).map((a: any) => a.cobertura_id);
+      // Fetch all active coberturas
+      const { data: allCoberturas, error: errCob } = await supabase
+        .from('coberturas')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome');
+      if (errCob) throw errCob;
 
-      let query = supabase.from('coberturas').select('*').eq('ativo', true).order('nome');
-      if (assignedIds.length > 0) {
-        // Filter out assigned ones - use NOT IN via filter
-        const { data, error } = await supabase
-          .from('coberturas')
-          .select('*')
-          .eq('ativo', true)
-          .order('nome');
-        if (error) throw error;
-        return (data || []).filter((c: any) => !assignedIds.includes(c.id));
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
+      // Fetch all bindings with plan name
+      const { data: vinculos, error: errVinc } = await supabase
+        .from('planos_coberturas')
+        .select('cobertura_id, plano_id, planos(nome)');
+      if (errVinc) throw errVinc;
+
+      const vinculoMap = new Map((vinculos || []).map((v: any) => [v.cobertura_id, v]));
+
+      // Exclude coberturas already in THIS plan, add binding info for others
+      const currentPlanCobIds = new Set(coberturas.map((c: any) => c.id));
+      return (allCoberturas || [])
+        .filter((c: any) => !currentPlanCobIds.has(c.id))
+        .map((c: any) => ({
+          ...c,
+          vinculadaAo: vinculoMap.get(c.id) || null,
+        }));
     },
     enabled: assignOpen,
   });
