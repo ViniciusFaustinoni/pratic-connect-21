@@ -261,7 +261,7 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       if (placas.length === 0) return true;
       // If no special plate type set (normal vehicle), include rules should pass
       // (the list defines which special plates ARE accepted, not requires one)
-      if (!ctx.tipoPlaca) return isInclude ? true : true;
+      if (!ctx.tipoPlaca) return isInclude ? false : true;
       const match = placas.some(p => p.toLowerCase() === ctx.tipoPlaca!.toLowerCase());
       return isInclude ? match : !match;
     }

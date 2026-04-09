@@ -354,6 +354,13 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         return true;
       });
 
+      // Se todas as coberturas core foram removidas por regras, descartar o plano
+      if (coberturasDoPlano.length === 0 && coberturasDoPlanoRaw.length > 0) {
+        console.log(`[ELEGIBILIDADE] ${plano.nome}: descartado — todas as coberturas removidas por regras`);
+        negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Todas as coberturas foram removidas por regras de elegibilidade' });
+        continue;
+      }
+
       // === NOVO MODELO: Preço = Σ coberturas + Σ benefícios + taxa administrativa ===
       const somaCoberturas = coberturasDoPlano.reduce((acc, pc) => {
         const cobId = (pc as any).cobertura_id;
