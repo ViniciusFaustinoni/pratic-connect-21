@@ -1,35 +1,54 @@
 
 
-## Plano: Remover exibicao "nao cobre" e simplesmente ocultar coberturas/beneficios inelegiveis
+## Plano: Duplicar Beneficios por Plano + Corrigir Combustiveis Diesel + Corrigir Ano Especial
 
-### Situacao atual
+### Contexto
+Coberturas ja foram isoladas (cada plano tem as suas proprias). Beneficios ainda sao compartilhados: 18 registros na tabela `benefits` servem 198 vinculos em `planos_beneficios`. Alterar regra de um beneficio afeta todos os planos que o usam.
 
-O motor de cotacao (`usePlanosCotacao.ts`) ja faz a filtragem corretamente:
-- Linha rejeita veiculo → plano nao aparece (OK)
-- Cobertura/beneficio inelegivel → removido do calculo de preco, mas o nome e guardado em `coberturasRemovidas` e exibido com risco + "(nao cobre)"
+### Parte 1 — Migrar beneficios para exclusivos por plano
 
-### O que mudar
+**Logica (migration SQL):**
+Para cada registro em `planos_beneficios`, clonar o `benefit` original criando um novo registro em `benefits` com:
+- `name`: mesmo nome (sem "(copia)" — sao registros de producao)
+- `slug`: sufixo unico (`-{plano_id_curto}`)
+- Todos os campos copiados (preco_sugerido, carencia_dias, carencia_ativa, etc.)
+- Atualizar `planos_beneficios.benefit_id` para apontar ao novo registro
+- Copiar regras de `entity_eligibility_rules` do beneficio original para o novo ID
+- Copiar exclusoes de `benefit_category_exclusions` do original para o novo ID
 
-Remover a exibicao visual de "nao cobre" em todos os lugares. Coberturas/beneficios inelegiveis devem simplesmente nao aparecer na lista.
+**Resultado:** Cada plano tera seus proprios beneficios exclusivos. Os 18 registros originais ficam orfaos (sem vinculos) e podem ser removidos depois.
+
+### Parte 2 — Atualizar `useDuplicatePlan` para clonar beneficios
+
+Hoje o `useDuplicatePlan` (linha 332-346 de `usePlansAdmin.ts`) apenas copia o `benefit_id` existente. Precisa clonar o registro em `benefits` da mesma forma que ja faz com coberturas:
+1. Buscar dados do beneficio original
+2. Inserir copia com slug unico
+3. Copiar `entity_eligibility_rules` do beneficio original
+4. Copiar `benefit_category_exclusions`
+5. Vincular o novo benefit_id ao plano duplicado
+
+### Parte 3 — Corrigir combustiveis errados nos planos Diesel
+
+Na migration, apos duplicar beneficios, corrigir as regras de combustivel das coberturas de planos Diesel que estao marcadas como `flex`/`gasolina`:
+- Buscar coberturas vinculadas a planos cujo nome contem "Diesel"
+- Para cada uma, verificar se a regra `combustivel` contem `flex` ou `gasolina` (sem `diesel`)
+- Atualizar `rule_config.values` para `["diesel"]`
+
+### Parte 4 — Corrigir ano invertido da Linha Especial
+
+A linha ESPECIAL (id `16820bb0-814a-4fa1-ae02-bf4ad7285e64`) tem `ano_min: 2000, ano_max: 1994` (invertido). Corrigir para `ano_min: 1994, ano_max: null` (sem limite superior, ou o valor correto conforme o manual).
+
+### Parte 5 — Gerar relatorio atualizado
+
+Executar script que consulta o banco apos as correcoes e gera novo relatorio markdown em `/mnt/documents/` comparando estado atual vs manual.
 
 ### Arquivos alterados
+1. **Nova migration SQL** — duplica beneficios, corrige combustiveis diesel, corrige ano Especial
+2. **`src/hooks/usePlansAdmin.ts`** (funcao `useDuplicatePlan`, linhas 332-346) — clonar beneficios ao duplicar plano (mesmo padrao das coberturas)
+3. **Script de relatorio** (execucao unica) — gera `/mnt/documents/relatorio_regras_v2.md`
 
-1. **`src/components/cotacoes/CotacaoFormDialog.tsx`** (linhas ~1975-2015, ~2356-2380)
-   - Filtrar `plano.coberturas` para excluir itens que estao em `plano.coberturasRemovidas` antes de renderizar
-   - Remover toda a logica `isRemovida` / strikethrough / "(nao cobre)"
-
-2. **`src/pages/vendas/Cotador.tsx`** (linha ~1791-1793)
-   - Mesmo tratamento: filtrar coberturas removidas em vez de mostrar com risco
-
-3. **`src/components/cotacoes/PlanoCardComparativo.tsx`**
-   - Remover exibicao de itens removidos
-
-4. **`src/lib/gerarPdfCotacao.ts`** (linhas ~630-637, ~1580-1586, ~1782)
-   - Remover secao "NAO APLICAVEL PARA ESTE VEICULO" do PDF
-   - Na tabela comparativa, nao listar coberturas removidas
-
-### O que NAO muda
-- `usePlanosCotacao.ts` -- o motor continua filtrando corretamente e mantendo `coberturasRemovidas` internamente (util para logs/debug)
-- Logica de descarte de plano quando todas as coberturas sao removidas
-- Filtragem de linha
+### Nao alterado
+- Tabelas do banco (schema) — nenhuma nova tabela ou coluna
+- Motor de cotacao — ja suporta beneficios com regras individuais
+- UI de edicao de plano — ja funciona com beneficios individuais via `PlanBeneficiosList`
 
