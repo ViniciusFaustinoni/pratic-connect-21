@@ -202,11 +202,12 @@ export function PlanBeneficiosList({ planId }: PlanBeneficiosListProps) {
         display_order: benefits.length,
       });
       if (result?.id) {
-        await supabase.from('planos_beneficios').insert({
+        await supabase.from('planos_beneficios').insert([{
           plano_id: planId,
           benefit_id: result.id,
+          beneficio: result.name || '',
           display_order: benefits.length,
-        });
+        }]);
       }
       setNewForm({ name: '', icon: '' });
       setCreating(false);
