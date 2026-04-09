@@ -123,7 +123,8 @@ export function PlanFormModal({
   plan,
   defaultProductLineId,
 }: PlanFormModalProps) {
-  const planId = plan?.id ?? null;
+  const [createdPlanId, setCreatedPlanId] = useState<string | null>(null);
+  const planId = createdPlanId ?? plan?.id ?? null;
   const isEditing = !!planId;
 
   const { data: productLines = [], isLoading: loadingProductLines } = useProductLines();
