@@ -275,34 +275,38 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['plan-coberturas-inline', planId] });
     queryClient.invalidateQueries({ queryKey: ['plan-form-modal-full', planId] });
-    queryClient.invalidateQueries({ queryKey: ['coberturas-disponiveis'] });
+    queryClient.invalidateQueries({ queryKey: ['coberturas-disponiveis-all'] });
     queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
   };
 
-  // Query for unassigned coberturas
+  // Query for ALL active coberturas with their current plan binding
   const { data: coberturasDisponiveis = [], isLoading: loadingDisponiveis } = useQuery({
-    queryKey: ['coberturas-disponiveis'],
+    queryKey: ['coberturas-disponiveis-all', planId],
     queryFn: async () => {
-      // Get all cobertura_ids already assigned to any plan
-      const { data: assigned } = await supabase
-        .from('planos_coberturas')
-        .select('cobertura_id');
-      const assignedIds = (assigned || []).map((a: any) => a.cobertura_id);
+      // Fetch all active coberturas
+      const { data: allCoberturas, error: errCob } = await supabase
+        .from('coberturas')
+        .select('*')
+        .eq('ativo', true)
+        .order('nome');
+      if (errCob) throw errCob;
 
-      let query = supabase.from('coberturas').select('*').eq('ativo', true).order('nome');
-      if (assignedIds.length > 0) {
-        // Filter out assigned ones - use NOT IN via filter
-        const { data, error } = await supabase
-          .from('coberturas')
-          .select('*')
-          .eq('ativo', true)
-          .order('nome');
-        if (error) throw error;
-        return (data || []).filter((c: any) => !assignedIds.includes(c.id));
-      }
-      const { data, error } = await query;
-      if (error) throw error;
-      return data || [];
+      // Fetch all bindings with plan name
+      const { data: vinculos, error: errVinc } = await supabase
+        .from('planos_coberturas')
+        .select('cobertura_id, plano_id, planos(nome)');
+      if (errVinc) throw errVinc;
+
+      const vinculoMap = new Map((vinculos || []).map((v: any) => [v.cobertura_id, v]));
+
+      // Exclude coberturas already in THIS plan, add binding info for others
+      const currentPlanCobIds = new Set(coberturas.map((c: any) => c.id));
+      return (allCoberturas || [])
+        .filter((c: any) => !currentPlanCobIds.has(c.id))
+        .map((c: any) => ({
+          ...c,
+          vinculadaAo: vinculoMap.get(c.id) || null,
+        }));
     },
     enabled: assignOpen,
   });
@@ -315,14 +319,35 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
     if (assignSelected.size === 0) return;
     setAssigning(true);
     try {
-      const inserts = Array.from(assignSelected).map((coberturaId, i) => ({
+      const selectedIds = Array.from(assignSelected);
+      // Find which ones are already bound to another plan
+      const reassigned = selectedIds.filter(id => {
+        const cob = coberturasDisponiveis.find((c: any) => c.id === id);
+        return cob?.vinculadaAo;
+      });
+
+      // Delete old bindings for reassigned ones
+      if (reassigned.length > 0) {
+        const { error: delErr } = await supabase
+          .from('planos_coberturas')
+          .delete()
+          .in('cobertura_id', reassigned);
+        if (delErr) throw delErr;
+      }
+
+      // Insert new bindings
+      const inserts = selectedIds.map((coberturaId, i) => ({
         plano_id: planId,
         cobertura_id: coberturaId,
         display_order: coberturas.length + i,
       }));
       const { error } = await supabase.from('planos_coberturas').insert(inserts);
       if (error) throw error;
-      toast.success(`${assignSelected.size} cobertura(s) vinculada(s) com sucesso`);
+
+      const msg = reassigned.length > 0
+        ? `${assignSelected.size} cobertura(s) vinculada(s) (${reassigned.length} reatribuída(s) de outros planos)`
+        : `${assignSelected.size} cobertura(s) vinculada(s) com sucesso`;
+      toast.success(msg);
       setAssignOpen(false);
       setAssignSelected(new Set());
       setAssignSearch('');
@@ -395,10 +420,15 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
                       checked={assignSelected.has(cob.id)}
                       onCheckedChange={() => toggleAssignItem(cob.id)}
                     />
-                    <div className="flex items-center gap-2 min-w-0">
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
                       {cob.icon && <span className="text-base">{cob.icon}</span>}
                       <span className="text-sm truncate">{cob.nome}</span>
                     </div>
+                    {cob.vinculadaAo && (
+                      <Badge variant="outline" className="text-[10px] shrink-0 bg-muted text-muted-foreground">
+                        {(cob.vinculadaAo as any).planos?.nome || 'Outro plano'}
+                      </Badge>
+                    )}
                   </label>
                 ))
               )}
