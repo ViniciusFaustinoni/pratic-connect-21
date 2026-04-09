@@ -634,7 +634,7 @@ export function MapaVistoriasContent() {
                     </button>
                   )}
                   {/* Botão atribuir no popup */}
-                  {atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && (
+                  {atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.servico_id_unificado && (
                     <button
                       onClick={() => iniciarAtribuicao(v)}
                       className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs hover:bg-amber-600"
