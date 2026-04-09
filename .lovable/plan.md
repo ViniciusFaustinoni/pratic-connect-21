@@ -1,36 +1,38 @@
 
 
-## Plano: Modal de analise e aprovacao ao clicar em associado "Em Analise"
+## Plano: Corrigir exclusao de associado na Base Antiga (FK sem CASCADE)
 
-### Problema
-Quando o analista de cadastro clica num associado com status "em_analise" na lista de Associados, abre o modal generico `AssociadoDetalhe`. O analista precisa de um fluxo direto de analise/aprovacao com acesso ao veiculo para autorizar.
+### Diagnostico
+A funcao `limparSubstituicoes` tenta deletar registros de `substituicoes_veiculo` via client, mas a RLS (`is_funcionario(auth.uid())`) pode estar bloqueando silenciosamente (supabase retorna 0 rows sem erro). Resultado: os registros permanecem e a FK `substituicoes_veiculo_veiculo_novo_id_fkey` bloqueia o DELETE nos veiculos.
 
-### Abordagem
-A pagina `/cadastro/propostas/:contratoId` (`PropostaAnalise`) ja tem todo o fluxo de aprovacao (documentos, vistoria, veiculo, botoes aprovar/reprovar/solicitar docs). Em vez de duplicar essa logica, a solucao e:
+### Solucao
+Alterar as FKs de `substituicoes_veiculo` para `ON DELETE CASCADE`. Assim, ao deletar um veiculo, o banco limpa automaticamente as substituicoes vinculadas — sem depender de RLS no client.
 
-1. Quando o associado clicado tem status `em_analise`, buscar o contrato vinculado (`contratos.associado_id`) e navegar para `/cadastro/propostas/:contratoId`
-2. Se nao houver contrato, abrir o `AssociadoDetalhe` normalmente (fallback)
+### Alteracao
 
-### Alteracoes
+**Migration SQL:**
+```sql
+ALTER TABLE substituicoes_veiculo
+  DROP CONSTRAINT substituicoes_veiculo_veiculo_antigo_id_fkey,
+  ADD CONSTRAINT substituicoes_veiculo_veiculo_antigo_id_fkey
+    FOREIGN KEY (veiculo_antigo_id) REFERENCES veiculos(id) ON DELETE CASCADE;
 
-**`src/pages/cadastro/Associados.tsx`**
+ALTER TABLE substituicoes_veiculo
+  DROP CONSTRAINT substituicoes_veiculo_veiculo_novo_id_fkey,
+  ADD CONSTRAINT substituicoes_veiculo_veiculo_novo_id_fkey
+    FOREIGN KEY (veiculo_novo_id) REFERENCES veiculos(id) ON DELETE CASCADE;
+```
 
-1. Criar funcao `handleAssociadoClick(associado)`:
-   - Se `associado.status === 'em_analise'` ou `pendente_vistoria` ou `documentacao_pendente`:
-     - Buscar contrato: `supabase.from('contratos').select('id').eq('associado_id', associado.id).in('status', ['assinado','ativo']).order('created_at', {ascending: false}).limit(1).maybeSingle()`
-     - Se encontrou contrato: `navigate('/cadastro/propostas/' + contrato.id)`
-     - Se nao encontrou: `setDetalheAssociadoId(associado.id)` (fallback)
-   - Senao: `setDetalheAssociadoId(associado.id)` (comportamento atual)
+**`src/hooks/useDeleteBaseAntiga.ts`** — simplificar removendo `limparSubstituicoes` (agora desnecessaria, o CASCADE faz o trabalho). Manter apenas a checagem de outras FKs sem CASCADE que possam bloquear (como `contratos`, `ordens_servico`, `cobrancas` etc), limpando-as ou setando null antes de deletar os veiculos, ou adicionando CASCADE nessas tambem se fizer sentido para o contexto "Base Antiga".
 
-2. Substituir todos os `onClick={() => setDetalheAssociadoId(associado.id)}` nas TableCells por `onClick={() => handleAssociadoClick(associado)}`
-
-3. Manter o dropdown "Ver detalhes" apontando para `setDetalheAssociadoId` (acesso direto ao detalhe continua disponivel)
+Na pratica, para a Base Antiga (dados importados do SGA), provavelmente nao ha contratos, cobrancas ou ordens de servico vinculadas. Mas para seguranca, o hook pode tentar o delete e, se falhar, exibir a mensagem de erro com contexto.
 
 ### Resultado
-- Analista clica em associado "Em Analise" → vai direto para a tela de analise da proposta com veiculo, documentos e botoes de aprovacao
-- Associados ativos/outros status → abre o detalhe normal como antes
-- Dropdown "Ver detalhes" continua abrindo o modal de detalhe para qualquer status
+- Exclusao de associados da Base Antiga funciona sem erro de FK
+- Nao depende mais de RLS no client para limpar substituicoes
+- Codigo do hook fica mais simples
 
-### Arquivo
-- `src/pages/cadastro/Associados.tsx`
+### Arquivos
+- Migration SQL (nova)
+- `src/hooks/useDeleteBaseAntiga.ts`
 
