@@ -1,34 +1,42 @@
 
 
-## Plano: Aplicar menu lateral agrupado (super-grupos) para todos os perfis
+## Plano: Habilitar filtro de tipo_uso no nivel do plano
 
-### Problema
-O layout consolidado do menu lateral com super-grupos (Comercial, Relacionamento, Administrativo) só aparece quando `permissions.isDiretor` é verdadeiro. Outros perfis como coordenador de monitoramento veem o menu antigo com grupos soltos.
+### Problema raiz
 
-### Alteração
+O plano "Select One Aplicativo" aparece para veiculos particulares porque:
 
-**`src/components/layout/AppSidebar.tsx`**
+1. O motor de cotacao (linha 321 de `usePlanosCotacao.ts`) **pula explicitamente** a verificacao de regras de plano: `"Planos NAO tem restricoes proprias"`
+2. Nao existe NENHUMA regra de plano na tabela `entity_eligibility_rules` (zero registros com `entity_type = 'plano'`)
+3. Das 9 coberturas do plano, 3 (Chuva de Granizo, Alagamento, Perda Total) aceitam `tipo_uso: ["particular"]`, entao nao sao removidas
+4. Como sobram coberturas, o plano permanece visivel
+5. O modal de edicao do plano (`PlanFormModal`) nao inclui `EligibilityRulesEditor`, entao nao e possivel criar regras de plano pela interface
 
-1. Renomear `directorSuperGroups` para `superGroups` e remover a condição `if (!permissions.isDiretor) return []` no `useMemo` (linha 709) — construir super-grupos para todos os usuários baseado nos `visibleGroups` já filtrados por permissão
+### Alteracoes
 
-2. Remover todas as condições `permissions.isDiretor` que gatilham o uso de super-grupos:
-   - Linha 657: estado inicial de `openSuperGroups` — remover check `isDiretor`
-   - Linha 686: auto-open no `useEffect` — remover check `isDiretor`
-   - Linha 761: modo colapsado — trocar `permissions.isDiretor && directorSuperGroups` por `superGroups`
-   - Linha 948: modo expandido — mesma troca
+**1. `src/hooks/usePlanosCotacao.ts` (linha ~321)**
+- Remover o comentario de skip e HABILITAR `checkAllRules` para regras de plano:
+```
+const planoRulesNonMarcaModelo = planoRules.filter(
+  r => r.rule_type !== 'marca_modelo' && r.rule_type !== 'ano_range'
+);
+if (planoRulesNonMarcaModelo.length > 0 && !checkAllRules(planoRulesNonMarcaModelo, vehicleCtx)) {
+  negados.push({ planoId: plano.id, planoNome: plano.nome, linha: linha || '', motivo: 'Bloqueado por regra do plano' });
+  continue;
+}
+```
+- Nota: As regras de `marca_modelo` e `ano_range` do plano ja sao tratadas separadamente (linhas 280-319), entao filtramos para nao duplicar
 
-3. Se o usuário tiver acesso a módulos de apenas um super-grupo, exibir os sub-grupos diretamente sem o nível de super-grupo (para não ter um collapsible desnecessário com um único item)
-
-### Lógica
-- Os `visibleGroups` já são filtrados por permissão do usuário
-- Os super-grupos simplesmente agrupam esses grupos visíveis em categorias
-- Não muda nenhuma permissão, apenas a organização visual
+**2. `src/components/admin/planos/PlanFormModal.tsx`**
+- Adicionar `EligibilityRulesEditor` com `entityType="plano"` na aba de edicao do plano, para que o usuario possa criar regras como `tipo_uso: include ["aplicativo"]`
+- Posicionar apos as secoes de coberturas e beneficios
 
 ### Resultado
-- Coordenador de monitoramento vê: Dashboard + Comercial (com Monitoramento dentro)
-- Diretor vê: Dashboard + Comercial + Relacionamento + Administrativo (como hoje)
-- Qualquer perfil com acesso a múltiplos módulos vê o menu organizado em super-grupos
+- Planos com regra `tipo_uso: include ["aplicativo"]` serao filtrados automaticamente para veiculos particulares
+- O usuario podera configurar regras de elegibilidade diretamente no plano (tipo_uso, regiao, combustivel, etc)
+- Apos o deploy, basta adicionar a regra `tipo_uso: include ["aplicativo"]` ao plano "Select One Aplicativo" pela interface
 
-### Arquivo
-- `src/components/layout/AppSidebar.tsx`
+### Arquivos
+- `src/hooks/usePlanosCotacao.ts`
+- `src/components/admin/planos/PlanFormModal.tsx`
 
