@@ -718,7 +718,7 @@ export function MapaVistoriasContent() {
               } else if (melhorServico) {
                 toast.error(`Serviço mais próximo está a ${melhorDist.toFixed(1)} km. Solte mais perto do pin do serviço.`);
               } else {
-                toast.error('Nenhum serviço atribuível encontrado nesta região. Apenas serviços unificados podem ser atribuídos por este fluxo.');
+                toast.error('Nenhum serviço pendente encontrado nesta região.');
               }
             },
           }}
