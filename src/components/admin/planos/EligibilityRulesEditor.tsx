@@ -91,7 +91,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
           <Shield className="h-4 w-4 text-muted-foreground" />
           <Label className="text-sm font-semibold">Regras de Elegibilidade</Label>
         </div>
-        <Button size="sm" variant="outline" onClick={() => setDialogOpen(true)}>
+        <Button type="button" size="sm" variant="outline" onClick={() => setDialogOpen(true)}>
           <Plus className="h-3 w-3 mr-1" /> Adicionar
         </Button>
       </div>
