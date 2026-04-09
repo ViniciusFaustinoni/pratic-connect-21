@@ -301,7 +301,14 @@ export function useDuplicatePlan() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (id: string) => {
+    mutationFn: async (input: string | { id: string; desconto?: number; sufixo?: string }) => {
+      const { id, desconto = 0, sufixo = '' } = typeof input === 'string' ? { id: input } : input;
+
+      const applyDiscount = (val: number | null | undefined, pct: number): number | null => {
+        if (val == null) return null;
+        return Number((val * (100 - pct) / 100).toFixed(2));
+      };
+
       // Get original plan with benefits and regions
       const { data: original, error: fetchError } = await supabase
         .from('planos')
@@ -315,7 +322,7 @@ export function useDuplicatePlan() {
       const { id: _, created_at, updated_at, planos_beneficios, planos_regioes, ...planData } = original;
       const newPlan = {
         ...planData,
-        nome: `${planData.nome} (cópia)`,
+        nome: `${planData.nome} (cópia)${sufixo}`,
         codigo: `${planData.codigo}-copia-${Date.now()}`,
         slug: `${planData.slug || planData.codigo}-copia-${Date.now()}`,
         ativo: false,
