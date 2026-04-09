@@ -923,6 +923,11 @@ export function ProdutosPlanos() {
           </AlertDialogFooter>
         </AlertDialogContent>
       </AlertDialog>
+      <DuplicarPlanoModal
+        open={duplicarModal.open}
+        onOpenChange={(open) => setDuplicarModal({ open, plano: open ? duplicarModal.plano : null })}
+        plano={duplicarModal.plano}
+      />
     </div>
   );
 }
