@@ -38,6 +38,11 @@ interface PlanBeneficiosListProps {
 
 function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () => void }) {
   const updateBenefit = useUpdateBenefit();
+  const formatCurrency = (v: number | null | undefined) => {
+    if (v == null) return '—';
+    return new Intl.NumberFormat('pt-BR', { style: 'currency', currency: 'BRL' }).format(v);
+  };
+
   const [form, setForm] = useState({
     name: benefit.name || '',
     slug: benefit.slug || '',
@@ -45,7 +50,6 @@ function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () =
     description: benefit.description || '',
     category: benefit.category || '',
     display_order: benefit.display_order?.toString() || '0',
-    preco_sugerido: benefit.preco_sugerido?.toString() || '',
     carencia_ativa: benefit.carencia_ativa ?? false,
     carencia_tipo: benefit.carencia_tipo || '',
     carencia_dias: benefit.carencia_dias?.toString() || '',
@@ -62,7 +66,6 @@ function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () =
       description: form.description || null,
       category: form.category || null,
       display_order: parseInt(form.display_order) || 0,
-      preco_sugerido: form.preco_sugerido ? parseFloat(form.preco_sugerido) : null,
       carencia_dias: form.carencia_dias ? parseInt(form.carencia_dias) : null,
       carencia_ativa: form.carencia_ativa,
       carencia_tipo: form.carencia_ativa ? form.carencia_tipo || null : null,
@@ -117,8 +120,8 @@ function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () =
 
       <div className="grid grid-cols-3 gap-3">
         <div className="space-y-1">
-          <Label className="text-xs">Preço Sugerido (R$)</Label>
-          <Input type="number" step="0.01" value={form.preco_sugerido} onChange={(e) => setForm(p => ({ ...p, preco_sugerido: e.target.value }))} placeholder="0,00" />
+          <Label className="text-xs text-muted-foreground">Preço Sugerido (R$)</Label>
+          <div className="rounded-md bg-muted px-3 py-2 text-sm">{formatCurrency(benefit.preco_sugerido)}</div>
         </div>
         <div className="space-y-1">
           <Label className="text-xs">Ordem</Label>
