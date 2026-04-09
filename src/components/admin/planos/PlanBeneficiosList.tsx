@@ -195,6 +195,7 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
     }
   }, [focusItemId, benefits]);
 
+  const toggleItem = (id: string) => {
     setOpenItems(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);

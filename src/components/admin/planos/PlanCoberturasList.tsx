@@ -223,6 +223,7 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
     }
   }, [focusItemId, coberturas]);
 
+  const toggleItem = (id: string) => {
     setOpenItems(prev => {
       const next = new Set(prev);
       next.has(id) ? next.delete(id) : next.add(id);
