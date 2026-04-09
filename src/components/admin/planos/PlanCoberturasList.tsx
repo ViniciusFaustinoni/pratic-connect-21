@@ -261,7 +261,6 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
         await supabase.from('planos_coberturas').insert({
           plano_id: planId,
           cobertura_id: result.id,
-          display_order: coberturas.length,
         });
       }
       setNewForm({ nome: '', icon: '' });
@@ -336,10 +335,9 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
       }
 
       // Insert new bindings
-      const inserts = selectedIds.map((coberturaId, i) => ({
+      const inserts = selectedIds.map((coberturaId) => ({
         plano_id: planId,
         cobertura_id: coberturaId,
-        display_order: coberturas.length + i,
       }));
       const { error } = await supabase.from('planos_coberturas').insert(inserts);
       if (error) throw error;
