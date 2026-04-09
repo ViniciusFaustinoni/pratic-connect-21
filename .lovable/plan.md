@@ -1,74 +1,68 @@
 
 
-## Plano: Coberturas Únicas por Plano + Correção da Duplicação
+## Plano: Edição Inline de Coberturas e Benefícios dentro do Modal de Plano
 
-### Problema Confirmado no Banco
+### Contexto
+Hoje o modal de edição de plano (`PlanFormModal.tsx`) exibe coberturas e benefícios como listas de checkboxes do catálogo global. Com a migração para coberturas únicas por plano, cada cobertura/benefício pertence exclusivamente àquele plano e deve ser editável diretamente ali.
 
-As coberturas são **compartilhadas** entre planos via `planos_coberturas`. Exemplos reais:
+### O que muda
 
-| Cobertura | Planos que usam |
-|-----------|----------------|
-| Colisão - Select | 11 planos (Basic, Deságio 70%, 75%, One, One APP...) |
-| Colisão - Lançamento | 18 planos (todos da linha Lançamento) |
-| Alagamento - Select | 11 planos |
-| Taxa Administrativa Select | 6 planos |
+Substituir as duas seções `SearchableSelectionSection` (linhas 632-654 de `PlanFormModal.tsx`) por duas novas seções colapsáveis que mostram **apenas os itens já vinculados ao plano**, com capacidade de:
 
-A cobertura "Colisão - Select" tem regra `combustivel: include [flex]` e `regiao: include [RJ]`. Quando o plano "Select Basic - Deságio 70%" usa essa MESMA cobertura, ela passa na elegibilidade de um veículo Flex normal — porque a cobertura não tem regra de `tipo_placa`. E não pode ter, porque quebraria o plano normal que também a usa.
+1. **Expandir cada item** (accordion/collapsible) para ver e editar todas as configurações:
+   - Cobertura: nome, código, ícone, subtítulo, descrição, ordem, ativo, carência, regras de elegibilidade
+   - Benefício: nome, slug, ícone, descrição, categoria, ordem, ativo, carência
 
-Além disso, `useDuplicatePlan()` (linha 300 de `usePlansAdmin.ts`) **não duplica coberturas** — só copia benefícios e regiões. Coberturas ficam de fora.
+2. **Criar novo item** — botão "Nova Cobertura" / "Novo Benefício" que abre o modal existente (`CoberturaUnificadaFormModal` / `BeneficioFormModal`), e ao salvar vincula automaticamente ao plano via `planos_coberturas` / `planos_beneficios`
 
-### Regra do Usuário
-> "Não existe cobertura compartilhada entre planos. Se um plano foi duplicado, suas coberturas devem ser duplicadas também, podendo ser configuradas separadamente."
+3. **Excluir item do plano** — botão de lixeira que remove o vínculo em `planos_coberturas`/`planos_beneficios` e, como o item é exclusivo do plano, também exclui o registro da cobertura/benefício
 
-### Solução em 2 Partes
+4. **Salvar edições inline** — cada item editável salva individualmente via `useUpdateCobertura` / `useUpdateBenefit` (já existem), sem depender do botão "Salvar Plano"
 
-#### Parte 1 — Corrigir `useDuplicatePlan` (código)
+### Componentes novos
 
-Alterar `src/hooks/usePlansAdmin.ts`, função `useDuplicatePlan()`:
+**`src/components/admin/planos/PlanCoberturasList.tsx`**
+- Recebe `planId` e carrega coberturas do plano via query em `planos_coberturas` com join em `coberturas`
+- Renderiza lista de `Collapsible` items
+- Cada item expandido mostra formulário inline (campos do `CoberturaUnificadaFormModal` embutidos) + `EligibilityRulesEditor`
+- Botão "Nova Cobertura" abre `CoberturaUnificadaFormModal` em modo criação; ao criar, insere vínculo em `planos_coberturas`
+- Botão de delete por item
 
-1. Buscar `planos_coberturas` do plano original
-2. Para cada cobertura vinculada:
-   - Clonar o registro na tabela `coberturas` (novo ID, nome com sufixo do plano)
-   - Clonar as `entity_eligibility_rules` da cobertura original para o novo ID
-   - Inserir vínculo em `planos_coberturas` com o novo plano e a nova cobertura
-3. Manter a duplicação de benefícios e regiões como já está
+**`src/components/admin/planos/PlanBeneficiosList.tsx`**
+- Mesmo padrão para benefícios
+- Carrega via `planos_beneficios` com join em `benefits`
+- Formulário inline com campos do `BeneficioFormModal`
+- Botão "Novo Benefício" → cria e vincula
+- Botão de delete por item
 
-Isso garante que a partir de agora, todo plano duplicado terá coberturas independentes.
+### Alterações em `PlanFormModal.tsx`
 
-#### Parte 2 — Corrigir dados existentes (script de migração)
+- Remover as duas `SearchableSelectionSection` de coberturas e benefícios (linhas 632-654)
+- Remover imports e states: `useBenefits`, `useCoberturas`, `benefitsSearch`, `coberturasSearch`, `selectedBenefits`, `selectedCoberturas`, `selectedBenefitIds`, `selectedCoberturaIds`, `filteredBenefits`, `filteredCoberturas`, `groupedBenefits`, `groupedCoberturas`, `toggleBenefit`, `toggleCobertura`
+- Renderizar `<PlanCoberturasList planId={planId} />` e `<PlanBeneficiosList planId={planId} />` no lugar (só visíveis em modo edição)
+- Remover `coberturas` e `benefits` do payload de `handleSubmit` (cada item salva individualmente agora)
+- Para modo **criação** de plano: manter um estado temporário ou criar o plano primeiro e depois permitir adicionar itens (exibir mensagem "Salve o plano primeiro para adicionar coberturas e benefícios")
 
-Criar um script que percorre todas as coberturas compartilhadas (as que aparecem em mais de 1 plano):
+### Preview lateral
+- Atualizar contadores no preview para usar dados das queries de cada lista em vez dos estados locais removidos
 
-1. Para cada cobertura compartilhada, manter o original no PRIMEIRO plano encontrado
-2. Para cada plano adicional que usa a mesma cobertura:
-   - Clonar a cobertura (novo registro em `coberturas`)
-   - Clonar as regras de elegibilidade
-   - Atualizar `planos_coberturas` para apontar para a cópia
-3. Após a migração, cada plano terá coberturas exclusivas
+### Hooks existentes reutilizados
+- `useCreateCobertura`, `useUpdateCobertura`, `useDeleteCobertura`
+- `useCreateBenefit`, `useUpdateBenefit`, `useDeleteBenefit`
+- `EligibilityRulesEditor` (já renderiza regras por entity)
+- `CarenciaConfigSection` (já reutilizável)
 
-O nome das cópias seguirá o padrão existente (ex: se "Colisão - Select" é clonada para o plano "Select Basic - Deságio 70%", o nome fica "Colisão - Select Deságio" ou mantém o original — o administrador pode renomear depois).
+### Arquivos alterados
+- `src/components/admin/planos/PlanFormModal.tsx` — reestruturar seções de coberturas/benefícios
+- `src/components/admin/planos/PlanCoberturasList.tsx` — novo componente
+- `src/components/admin/planos/PlanBeneficiosList.tsx` — novo componente
 
-### Impacto nos Motores
-
-Após a migração:
-- Cada cobertura de um plano de deságio pode ter sua própria regra `tipo_placa: include [leilao, chassi_remarcado]`
-- O motor de cotação (`usePlanosCotacao.ts`) funciona corretamente sem precisar de lógica de "remoção estrutural"
-- A correção já feita na linha 264 de `useEntityEligibilityRules.ts` (`isInclude ? false : true`) continua válida
-- O check de `coberturasDoPlano.length === 0` continua como safety net
-
-### Arquivos Alterados
-- `src/hooks/usePlansAdmin.ts` — `useDuplicatePlan()`: adicionar clonagem de coberturas + regras
-- Script de migração (executado via `code--exec`): descompartilhar coberturas existentes
-
-### Não Alterado
-- Motor de cotação (`usePlanosCotacao.ts`) — já funciona com coberturas únicas
-- Motor de regras (`useEntityEligibilityRules.ts`) — já corrigido
-- UI de gestão comercial — já suporta a estrutura
-- `useDuplicateCobertura()` — já existe e funciona bem para duplicação individual no catálogo
-
-### Resultado
-- Cada plano passa a ter coberturas exclusivas e configuráveis individualmente
-- Duplicar um plano clona automaticamente suas coberturas com todas as regras
-- O administrador pode então configurar regras de `tipo_placa`, `combustivel` etc. em cada cobertura sem afetar outros planos
-- O motor de cotação filtra corretamente sem gambiarras de "detecção estrutural"
+### Não alterado
+- `CoberturaUnificadaFormModal.tsx` — reutilizado como modal de criação
+- `BeneficioFormModal.tsx` — reutilizado como modal de criação
+- `EligibilityRulesEditor.tsx` — reutilizado inline
+- `CarenciaConfigSection.tsx` — reutilizado inline
+- Hooks CRUD — já existem
+- Tabelas do banco — nenhuma migração
+- Motor de cotação — não afetado
 
