@@ -651,10 +651,50 @@ export function MapaVistoriasContent() {
           key={`vistoriador-${vistoriador.vistoriador_id}`}
           position={[vistoriador.latitude, vistoriador.longitude]}
           icon={getVistoriadorIcon()}
+          draggable={!!atribuicaoManualAtiva}
           eventHandlers={{
             click: () => {
               if (servicoParaAtribuir) {
                 handleTecnicoClick(vistoriador);
+              }
+            },
+            dragend: (e) => {
+              if (!atribuicaoManualAtiva) return;
+              const marker = e.target as L.Marker;
+              const newPos = marker.getLatLng();
+              
+              // Find nearest unassigned service within 800m
+              const servicosNaoAtribuidos = vistoriasComCoordenadas.filter(v =>
+                !v.vistoriador_id && !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude
+              );
+              
+              let melhorServico: VistoriaMapa | null = null;
+              let melhorDist = Infinity;
+              
+              for (const s of servicosNaoAtribuidos) {
+                const d = distanciaKm(newPos.lat, newPos.lng, s.latitude!, s.longitude!);
+                if (d < melhorDist) {
+                  melhorDist = d;
+                  melhorServico = s;
+                }
+              }
+              
+              // Reset marker to original position
+              marker.setLatLng([vistoriador.latitude, vistoriador.longitude]);
+              
+              if (melhorServico && melhorDist <= 0.8) {
+                setAssignConfirmation({
+                  servico: melhorServico,
+                  profissional: vistoriador,
+                  distanciaKm: distanciaKm(
+                    vistoriador.latitude, vistoriador.longitude,
+                    melhorServico.latitude!, melhorServico.longitude!
+                  ),
+                });
+              } else if (melhorServico) {
+                toast.error(`Serviço mais próximo está a ${melhorDist.toFixed(1)} km. Solte mais perto do pin do serviço.`);
+              } else {
+                toast.error('Nenhum serviço não atribuído encontrado nesta região');
               }
             },
           }}
