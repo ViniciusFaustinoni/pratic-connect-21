@@ -481,13 +481,11 @@ export default function Mapa() {
             <span className="hidden sm:inline">Equipe</span>
             <span className="sm:hidden">Equipe</span>
           </TabsTrigger>
-          {atribuicaoManualAtiva && (
-            <TabsTrigger value="atribuicoes" className="gap-2 text-xs md:text-sm">
-              <GitBranchPlus className="h-4 w-4" />
-              <span className="hidden sm:inline">Atribuições</span>
-              <span className="sm:hidden">Atrib.</span>
-            </TabsTrigger>
-          )}
+          <TabsTrigger value="atribuicoes" className="gap-2 text-xs md:text-sm">
+            <GitBranchPlus className="h-4 w-4" />
+            <span className="hidden sm:inline">Atribuições {atribuicaoManualAtiva ? '(Manual)' : '(Auto)'}</span>
+            <span className="sm:hidden">Atrib.</span>
+          </TabsTrigger>
         </TabsList>
 
         {/* Aba Associados */}
@@ -513,12 +511,10 @@ export default function Mapa() {
           </div>
         </TabsContent>
 
-        {/* Aba Atribuições (condicional) */}
-        {atribuicaoManualAtiva && (
-          <TabsContent value="atribuicoes" className="flex-1 mt-0">
-            <MapaVistoriasContent />
-          </TabsContent>
-        )}
+        {/* Aba Atribuições (sempre visível) */}
+        <TabsContent value="atribuicoes" className="flex-1 mt-0">
+          <MapaVistoriasContent />
+        </TabsContent>
       </Tabs>
     </div>
   );
