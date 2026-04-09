@@ -169,11 +169,17 @@ function useLinhasComPlanos() {
         const allEntityIds = [...allCobIds, ...allBenIds];
 
         if (allEntityIds.length > 0) {
-          const { data: rules } = await supabase
-            .from('entity_eligibility_rules')
-            .select('*')
-            .in('entity_id', allEntityIds)
-            .eq('is_active', true);
+          const CHUNK = 100;
+          const allRules: EligibilityRule[] = [];
+          for (let i = 0; i < allEntityIds.length; i += CHUNK) {
+            const chunk = allEntityIds.slice(i, i + CHUNK);
+            const { data } = await supabase
+              .from('entity_eligibility_rules')
+              .select('*')
+              .in('entity_id', chunk)
+              .eq('is_active', true);
+            if (data) allRules.push(...(data as EligibilityRule[]));
+          }
 
           const rulesMap = new Map<string, EligibilityRule[]>();
           for (const r of (rules || []) as EligibilityRule[]) {
