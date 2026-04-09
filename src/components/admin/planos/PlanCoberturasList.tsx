@@ -30,6 +30,11 @@ function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: 
     icon: cobertura.icon || '',
     subtitle: cobertura.subtitle || '',
     display_order: cobertura.display_order?.toString() || '0',
+    valor: cobertura.valor?.toString() || '',
+    valor_limite: cobertura.valor_limite?.toString() || '',
+    percentual_cobertura: cobertura.percentual_cobertura?.toString() || '',
+    franquia_percentual: cobertura.franquia_percentual?.toString() || '',
+    franquia_valor: cobertura.franquia_valor?.toString() || '',
     carencia_ativa: cobertura.carencia_ativa ?? false,
     carencia_tipo: cobertura.carencia_tipo || '',
     carencia_dias: cobertura.carencia_dias?.toString() || '',
@@ -46,6 +51,11 @@ function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: 
       icon: form.icon || null,
       subtitle: form.subtitle || null,
       display_order: parseInt(form.display_order) || 0,
+      valor: form.valor ? parseFloat(form.valor) : null,
+      valor_limite: form.valor_limite ? parseFloat(form.valor_limite) : null,
+      percentual_cobertura: form.percentual_cobertura ? parseFloat(form.percentual_cobertura) : null,
+      franquia_percentual: form.franquia_percentual ? parseFloat(form.franquia_percentual) : null,
+      franquia_valor: form.franquia_valor ? parseFloat(form.franquia_valor) : null,
       carencia_dias: form.carencia_dias ? parseInt(form.carencia_dias) : null,
       carencia_ativa: form.carencia_ativa,
       carencia_tipo: form.carencia_ativa ? form.carencia_tipo || null : null,
@@ -87,6 +97,32 @@ function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: 
       <div className="space-y-1">
         <Label className="text-xs">Descrição</Label>
         <Textarea value={form.descricao} onChange={(e) => setForm(p => ({ ...p, descricao: e.target.value }))} rows={2} />
+      </div>
+
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Valor (R$)</Label>
+          <Input type="number" step="0.01" value={form.valor} onChange={(e) => setForm(p => ({ ...p, valor: e.target.value }))} placeholder="0,00" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Valor Limite (R$)</Label>
+          <Input type="number" step="0.01" value={form.valor_limite} onChange={(e) => setForm(p => ({ ...p, valor_limite: e.target.value }))} placeholder="0,00" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">% Cobertura</Label>
+          <Input type="number" step="0.1" value={form.percentual_cobertura} onChange={(e) => setForm(p => ({ ...p, percentual_cobertura: e.target.value }))} placeholder="100" />
+        </div>
+      </div>
+
+      <div className="grid grid-cols-2 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Franquia (%)</Label>
+          <Input type="number" step="0.1" value={form.franquia_percentual} onChange={(e) => setForm(p => ({ ...p, franquia_percentual: e.target.value }))} placeholder="0" />
+        </div>
+        <div className="space-y-1">
+          <Label className="text-xs">Franquia (R$)</Label>
+          <Input type="number" step="0.01" value={form.franquia_valor} onChange={(e) => setForm(p => ({ ...p, franquia_valor: e.target.value }))} placeholder="0,00" />
+        </div>
       </div>
 
       <div className="grid grid-cols-2 gap-3">

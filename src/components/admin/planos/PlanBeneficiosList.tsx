@@ -45,6 +45,7 @@ function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () =
     description: benefit.description || '',
     category: benefit.category || '',
     display_order: benefit.display_order?.toString() || '0',
+    preco_sugerido: benefit.preco_sugerido?.toString() || '',
     carencia_ativa: benefit.carencia_ativa ?? false,
     carencia_tipo: benefit.carencia_tipo || '',
     carencia_dias: benefit.carencia_dias?.toString() || '',
@@ -61,6 +62,7 @@ function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () =
       description: form.description || null,
       category: form.category || null,
       display_order: parseInt(form.display_order) || 0,
+      preco_sugerido: form.preco_sugerido ? parseFloat(form.preco_sugerido) : null,
       carencia_dias: form.carencia_dias ? parseInt(form.carencia_dias) : null,
       carencia_ativa: form.carencia_ativa,
       carencia_tipo: form.carencia_ativa ? form.carencia_tipo || null : null,
@@ -113,7 +115,11 @@ function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () =
         <Textarea value={form.description} onChange={(e) => setForm(p => ({ ...p, description: e.target.value }))} rows={2} />
       </div>
 
-      <div className="grid grid-cols-2 gap-3">
+      <div className="grid grid-cols-3 gap-3">
+        <div className="space-y-1">
+          <Label className="text-xs">Preço Sugerido (R$)</Label>
+          <Input type="number" step="0.01" value={form.preco_sugerido} onChange={(e) => setForm(p => ({ ...p, preco_sugerido: e.target.value }))} placeholder="0,00" />
+        </div>
         <div className="space-y-1">
           <Label className="text-xs">Ordem</Label>
           <Input type="number" value={form.display_order} onChange={(e) => setForm(p => ({ ...p, display_order: e.target.value }))} />
