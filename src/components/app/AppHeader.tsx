@@ -18,7 +18,7 @@ export function AppHeader() {
   const navigate = useNavigate();
 
   return (
-    <header className="sticky top-0 z-50 flex h-[60px] items-center justify-between bg-background px-4 shadow-sm">
+    <header className="sticky top-0 z-50 flex h-[60px] items-center justify-between bg-background px-4 shadow-sm pt-safe">
       {/* Mobile: Menu hamburger | Desktop: Spacer */}
       <div className="flex w-10 md:hidden">
         <AppMobileMenu />
