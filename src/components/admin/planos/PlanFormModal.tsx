@@ -237,9 +237,7 @@ export function PlanFormModal({
       footer_note: formData.footer_note || null,
       display_order: parseInt(formData.display_order, 10) || 0,
       is_active: formData.is_active,
-      // Coberturas e benefícios são gerenciados inline, não mais aqui
-      benefits: [],
-      coberturas: [],
+      // Don't pass benefits/coberturas — they're managed inline now
     };
 
     try {
