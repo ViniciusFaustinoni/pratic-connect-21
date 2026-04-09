@@ -1,95 +1,46 @@
 
 
-## Revisao Completa: Areas Duplicadas no Sistema
+## Plano: Substituir alertas de categoria hardcoded por dados reais
 
-### 1. DUPLICACAO FUNCIONAL: `/oficinas` vs `/oficina` (ATIVA)
+### Problema
 
-Ha dois diretórios de paginas para oficinas com funcionalidades sobrepostas:
+O alerta "Veículo de leilão: sem cobertura de incêndio" exibido na Cotação Rápida vem de um texto estático gravado na tabela `configuracoes` (chave `observacoes_categoria`). Não é baseado em coberturas ou benefícios reais. A tabela `benefit_category_exclusions` está vazia. As restrições reais estão em `entity_eligibility_rules`.
 
-| Rota no Sidebar (usada) | Pagina | Rota duplicada (morta) | Pagina duplicada |
-|---|---|---|---|
-| `/oficinas` | `oficinas/Oficinas.tsx` (191L) | `/oficina/credenciadas` | `oficina/OficinasList.tsx` (362L) |
-| `/ordens-servico` | `oficinas/OrdensServico.tsx` (128L) | `/oficina/ordens-servico` | `oficina/OrdensServicoList.tsx` (390L) |
-| N/A | `oficinas/OrdemServicoDetalhe.tsx` (221L) | `/oficina/ordens-servico/:id` | `oficina/OrdemServicoDetalhe.tsx` (545L) |
+### Solução
 
-O sidebar do diretor aponta para `/oficinas` e `/ordens-servico`. As rotas `/oficina/*` sao acessiveis mas nao linkadas — sao duplicatas orfas.
-
-**Acao**: Remover as 4 rotas `/oficina/*` do App.tsx e os 4 arquivos em `src/pages/oficina/`.
-
----
-
-### 2. LAZY IMPORTS SEM ROTA (codigo morto)
-
-19 componentes sao importados via `lazy()` no App.tsx mas nunca usados em nenhuma `<Route>`:
-
-| Import | Arquivo | Motivo |
-|---|---|---|
-| `VendasDashboard` | `vendas/VendasDashboard.tsx` | Substituido pelo Dashboard geral |
-| `Cotacao` | `vendas/Cotacao.tsx` | Rota redireciona para `/vendas/cotacoes` |
-| `Cotador` | `vendas/Cotador.tsx` | Rota redireciona para `/vendas/cotacoes` |
-| `Metas` | `vendas/Metas.tsx` | Sem rota |
-| `ContratoDetalhe` | `vendas/ContratoDetalhe.tsx` | Sem rota |
-| `Configuracoes` | `Configuracoes.tsx` | Substituido pelo layout |
-| `SolicitacoesMigracao` | — | Sem rota |
-| `InstalacoesList` | `monitoramento/InstalacoesList.tsx` | Rota redireciona |
-| `MonitoramentoEncaixes` | `monitoramento/Encaixes.tsx` | Embutido em VistoriasInstalacoesMon |
-| `ConfigPlataformas` | `monitoramento/ConfigPlataformas.tsx` | Rota redireciona para integracoes |
-| `FilaVistorias` | `monitoramento/FilaVistorias.tsx` | Sem rota |
-| `RetiradasPage` | `monitoramento/RetiradasPage.tsx` | Rota redireciona |
-| `GestaoRotas` | `monitoramento/GestaoRotas.tsx` | Embutido em Rotas.tsx |
-| `ProdutosGestao` | `diretoria/ProdutosGestao.tsx` | Rota redireciona para gestao-comercial |
-| `TabelaPrecos` | `diretoria/TabelaPrecos.tsx` | Rota redireciona para gestao-comercial |
-| `PerfisAcesso` | `diretoria/PerfisAcesso.tsx` | Rota redireciona para configuracoes |
-| `Usuarios` | configuracoes/Usuarios | Diferente do diretoria/Usuarios |
-| `Perfis` | configuracoes/Perfis | Redireciona |
-| `Logs` | configuracoes/Logs | Redireciona |
-| `RateioConfig` | configuracoes/RateioConfig | Redireciona |
-
-**Acao**: Remover os `lazy()` imports nao utilizados do App.tsx. Arquivos de pagina podem ser mantidos temporariamente (nao aumentam bundle por serem lazy e nunca carregados).
-
----
-
-### 3. ROTAS REDIRECT EXCESSIVAS
-
-Ha ~15 rotas que sao apenas `<Navigate to="..." replace />`. Estas nao sao duplicacao funcional, mas poluem o roteador. Exemplos:
-
-- `/vendas/cotacao` → `/vendas/cotacoes`
-- `/vendas/cotador` → `/vendas/cotacoes`
-- `/vendas/propostas` → `/vendas/equipe-comercial`
-- `/diretoria/regras-venda` → `/diretoria/gestao-comercial`
-- `/diretoria/produtos` → `/diretoria/gestao-comercial`
-- `/diretoria/planos-beneficios` → `/diretoria/gestao-comercial`
-- `/diretoria/rotas` → `/diretoria/vistorias-instalacoes`
-- `/monitoramento/instalacoes` → `/monitoramento/vistorias-instalacoes-mon`
-- `/monitoramento/encaixes` → `/monitoramento/vistorias-instalacoes-mon`
-- `/monitoramento/estoque` → `/monitoramento/rastreadores`
-
-**Acao**: Manter por agora (podem existir links externos/bookmarks), mas marcar com comentario `// DEPRECATED REDIRECT`.
-
----
-
-### 4. MONITORAMENTO: `VistoriasInstalacoes` vs `VistoriasInstalacoesMon`
-
-Nao sao duplicatas — sao paginas diferentes:
-- `VistoriasInstalacoes.tsx` (677L): Tabela detalhada com filtros avancados, usada em `/monitoramento/vistorias-instalacoes`
-- `VistoriasInstalacoesMon.tsx` (108L): Hub com tabs que agrega Instalacoes, Vistorias, Encaixes, etc. Usada em `/monitoramento/vistorias-instalacoes-mon`
-
-Ambas tem rotas ativas e propositos distintos. **Nenhuma acao necessaria**.
-
----
-
-### Resumo de acoes
-
-1. **Remover 4 rotas `/oficina/*`** do App.tsx e os 4 arquivos em `src/pages/oficina/`
-2. **Remover ~19 lazy imports orfaos** do App.tsx (linhas de import apenas)
-3. **Opcionalmente deletar arquivos de pagina mortos** (vendas/Cotador.tsx, vendas/VendasDashboard.tsx, diretoria/ProdutosGestao.tsx, diretoria/TabelaPrecos.tsx, etc.)
+Remover o alerta estático e gerar a mensagem dinamicamente a partir das regras de elegibilidade reais. Quando o usuário seleciona uma categoria (ex: leilão), o sistema identifica quais coberturas/benefícios seriam filtrados para aquele tipo de placa e exibe a lista real.
 
 ### Arquivos alterados
-- `src/App.tsx` — remover imports e rotas duplicadas
-- `src/pages/oficina/` — deletar diretorio inteiro (4 arquivos)
 
-### Nao alterado
-- Sidebar (AppSidebar.tsx) — ja aponta para as rotas corretas
-- Paginas ativas e funcionalidades
-- Rotas redirect (mantidas para compatibilidade)
+**1. `src/components/cotacoes/CotacaoFormDialog.tsx`**
+- Remover uso de `useObservacoesCategoria` para o alerta
+- Substituir `alertaCategoria` por lógica que consulta as regras de elegibilidade carregadas (via `useAllEligibilityRules`) e identifica coberturas que excluem o tipo de placa selecionado
+- Cruzar coberturas dos planos visíveis com regras `tipo_placa` para listar nomes reais de itens não cobertos
+
+**2. `src/components/cotacao/EtapaCategoriaVeiculo.tsx`** (cotação multi-step)
+- Mesmo ajuste: substituir `getRestricaoCategoria` (que já retorna `null`) por lógica dinâmica baseada nas regras reais
+
+**3. Criar utilitário `src/utils/alertaCategoriaElegibilidade.ts`**
+- Função reutilizável que recebe: categoria selecionada, regras de elegibilidade, lista de coberturas/benefícios
+- Retorna lista de nomes de itens inelegíveis para aquela categoria
+- Gera mensagem formatada: "Veículo de leilão: sem [Incêndio], [Alagamento]" (nomes reais do banco)
+
+### Lógica do utilitário
+
+```text
+Para cada cobertura/benefício no catálogo:
+  1. Buscar regras tipo_placa do item em entity_eligibility_rules
+  2. Se o item TEM regra tipo_placa E a categoria selecionada NÃO está na lista de values → item é inelegível
+  3. Coletar nomes dos itens inelegíveis
+  4. Gerar mensagem: "{Label da categoria}: sem {lista de itens}"
+```
+
+### Não alterado
+- Tabela `configuracoes` (campo `observacoes_categoria` pode ser mantido para outros usos futuros)
+- Motor de cotação (`usePlanosCotacao`) — já filtra corretamente
+- `benefit_category_exclusions` — não é usada neste fluxo
+- Alertas de depreciação (bloco separado, já correto)
+
+### Resultado esperado
+O alerta exibirá dinamicamente os nomes reais de coberturas/benefícios excluídos para a categoria selecionada, baseado nas regras de elegibilidade do banco.
 
