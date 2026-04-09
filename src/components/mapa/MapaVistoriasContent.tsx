@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo, useCallback } from "react";
+import { useState, useEffect, useMemo, useCallback, useRef } from "react";
 import { MapContainer, TileLayer, Marker, Popup, Tooltip, useMap } from "react-leaflet";
 import { RotaPolyline } from "@/components/mapa/RotaPolyline";
 import L from "leaflet";
@@ -651,10 +651,50 @@ export function MapaVistoriasContent() {
           key={`vistoriador-${vistoriador.vistoriador_id}`}
           position={[vistoriador.latitude, vistoriador.longitude]}
           icon={getVistoriadorIcon()}
+          draggable={!!atribuicaoManualAtiva}
           eventHandlers={{
             click: () => {
               if (servicoParaAtribuir) {
                 handleTecnicoClick(vistoriador);
+              }
+            },
+            dragend: (e) => {
+              if (!atribuicaoManualAtiva) return;
+              const marker = e.target as L.Marker;
+              const newPos = marker.getLatLng();
+              
+              // Find nearest unassigned service within 800m
+              const servicosNaoAtribuidos = vistoriasComCoordenadas.filter(v =>
+                !v.vistoriador_id && !STATUS_REALIZADOS.includes(v.status) && v.latitude && v.longitude
+              );
+              
+              let melhorServico: VistoriaMapa | null = null;
+              let melhorDist = Infinity;
+              
+              for (const s of servicosNaoAtribuidos) {
+                const d = distanciaKm(newPos.lat, newPos.lng, s.latitude!, s.longitude!);
+                if (d < melhorDist) {
+                  melhorDist = d;
+                  melhorServico = s;
+                }
+              }
+              
+              // Reset marker to original position
+              marker.setLatLng([vistoriador.latitude, vistoriador.longitude]);
+              
+              if (melhorServico && melhorDist <= 0.8) {
+                setAssignConfirmation({
+                  servico: melhorServico,
+                  profissional: vistoriador,
+                  distanciaKm: distanciaKm(
+                    vistoriador.latitude, vistoriador.longitude,
+                    melhorServico.latitude!, melhorServico.longitude!
+                  ),
+                });
+              } else if (melhorServico) {
+                toast.error(`Serviço mais próximo está a ${melhorDist.toFixed(1)} km. Solte mais perto do pin do serviço.`);
+              } else {
+                toast.error('Nenhum serviço não atribuído encontrado nesta região');
               }
             },
           }}
@@ -762,7 +802,7 @@ export function MapaVistoriasContent() {
             <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
               <MousePointerClick className="h-4 w-4 text-amber-600 flex-shrink-0" />
               <span className="flex-1 text-left text-amber-700 dark:text-amber-400 text-xs">
-                Clique em "Atribuir" e depois no técnico
+                Arraste o técnico até o serviço ou clique em "Atribuir"
               </span>
             </div>
           </>
