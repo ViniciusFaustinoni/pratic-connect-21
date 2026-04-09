@@ -59,7 +59,7 @@ const ResetPassword = lazy(() => import("./pages/auth/ResetPassword"));
 const Dashboard = lazy(() => import("./pages/Dashboard"));
 const Perfil = lazy(() => import("./pages/Perfil"));
 const Notificacoes = lazy(() => import("./pages/Notificacoes"));
-const Configuracoes = lazy(() => import("./pages/Configuracoes"));
+
 const NotFound = lazy(() => import("./pages/NotFound"));
 const AcessoNegado = lazy(() => import("./pages/AcessoNegado"));
 const ReagendarVistoria = lazy(() => import("./pages/ReagendarVistoria"));
@@ -77,12 +77,7 @@ const CotacaoDetalhe = lazy(() => import("./pages/vendas/CotacaoDetalhe"));
 const Contratos = lazy(() => import("./pages/vendas/Contratos"));
 const Propostas = lazy(() => import("./pages/vendas/Propostas"));
 const Consultores = lazy(() => import("./pages/vendas/Consultores"));
-const ContratoDetalhe = lazy(() => import("./pages/vendas/ContratoDetalhe"));
-const VendasDashboard = lazy(() => import("./pages/vendas/VendasDashboard"));
 const RelatoriosVendas = lazy(() => import("./pages/vendas/RelatoriosVendas"));
-const Metas = lazy(() => import("./pages/vendas/Metas"));
-const Cotacao = lazy(() => import("./pages/vendas/Cotacao"));
-const Cotador = lazy(() => import("./pages/vendas/Cotador"));
 const Vendedores = lazy(() => import("./pages/vendas/Vendedores"));
 const AprovacoesFipeMenor = lazy(() => import("./pages/vendas/AprovacoesFipeMenor"));
 const VendedorHistorico = lazy(() => import("./pages/vendas/VendedorHistorico"));
@@ -108,7 +103,7 @@ const VistoriaCompletaAnalise = lazy(() => import("./pages/cadastro/VistoriaComp
 const RecusasInstalador = lazy(() => import("./pages/cadastro/RecusasInstalador"));
 const BaseAntiga = lazy(() => import("./pages/cadastro/BaseAntiga"));
 const ProcessosOperacionais = lazy(() => import("./pages/cadastro/ProcessosOperacionais"));
-const SolicitacoesMigracao = lazy(() => import("./pages/cadastro/SolicitacoesMigracao"));
+
 
 // Eventos
 const SinistrosList = lazy(() => import("./pages/eventos/SinistrosList"));
@@ -125,12 +120,12 @@ const SindicantesAdmin = lazy(() => import("./pages/eventos/SindicantesAdmin"));
 const EventosChatIA = lazy(() => import("./pages/eventos/EventosChatIA"));
 
 // Monitoramento
-const InstalacoesList = lazy(() => import("./pages/monitoramento/InstalacoesList"));
+
 const InstalacaoDetalhe = lazy(() => import("./pages/monitoramento/InstalacaoDetalhe"));
 const Rotas = lazy(() => import("./pages/monitoramento/Rotas"));
-const MonitoramentoEncaixes = lazy(() => import("./pages/monitoramento/Encaixes"));
+
 const Rastreadores = lazy(() => import("./pages/monitoramento/Rastreadores"));
-const ConfigPlataformas = lazy(() => import("./pages/monitoramento/ConfigPlataformas"));
+
 const AlertasMonitoramento = lazy(() => import("./pages/monitoramento/AlertasMonitoramento"));
 const Mapa = lazy(() => import("./pages/monitoramento/Mapa"));
 const CalendarioInstalacoes = lazy(() => import("./pages/monitoramento/CalendarioInstalacoes"));
@@ -139,10 +134,8 @@ const VistoriasInstalacoes = lazy(() => import("./pages/monitoramento/VistoriasI
 const VistoriasInstalacoesMon = lazy(() => import("./pages/monitoramento/VistoriasInstalacoesMon"));
 const DashboardCoordenador = lazy(() => import("./pages/monitoramento/DashboardCoordenador"));
 const Equipe = lazy(() => import("./pages/monitoramento/Equipe"));
-const FilaVistorias = lazy(() => import("./pages/monitoramento/FilaVistorias"));
-const RetiradasPage = lazy(() => import("./pages/monitoramento/RetiradasPage"));
 const VistoriasManutencao = lazy(() => import("./pages/monitoramento/VistoriasManutencao"));
-const GestaoRotas = lazy(() => import("./pages/monitoramento/GestaoRotas"));
+
 const RessalvasPendentes = lazy(() => import("./pages/monitoramento/RessalvasPendentes"));
 const AprovacaoAssociadosMonitoramento = lazy(() => import("./pages/monitoramento/AcionamentosRouboFurto"));
 const AprovacaoInstalacaoDetalhe = lazy(() => import("./pages/monitoramento/AprovacaoInstalacaoDetalhe"));
@@ -158,10 +151,6 @@ const AutoCenters = lazy(() => import("./pages/oficinas/AutoCenters"));
 const OficinasRelatorios = lazy(() => import("./pages/oficinas/OficinasRelatorios"));
 const OrdensServico = lazy(() => import("./pages/oficinas/OrdensServico"));
 const OrdemServicoDetalhe = lazy(() => import("./pages/oficinas/OrdemServicoDetalhe"));
-const OficinasList = lazy(() => import("./pages/oficina/OficinasList"));
-const OficinaDetalhe = lazy(() => import("./pages/oficina/OficinaDetalhe"));
-const OrdensServicoList = lazy(() => import("./pages/oficina/OrdensServicoList"));
-const OrdemServicoDetalhePage = lazy(() => import("./pages/oficina/OrdemServicoDetalhe"));
 
 
 // Configurações
@@ -297,14 +286,14 @@ const CotacaoPdfConfig = lazy(() => import("./pages/documentos/CotacaoPdfConfig"
 
 // Diretoria
 const DiretoriaDashboard = lazy(() => import("./pages/diretoria/DiretoriaDashboard"));
-const ProdutosGestao = lazy(() => import("./pages/diretoria/ProdutosGestao"));
+
 const ProdutoDetalhe = lazy(() => import("./pages/diretoria/ProdutoDetalhe"));
-const TabelaPrecos = lazy(() => import("./pages/diretoria/TabelaPrecos"));
+
 const RateioSinistros = lazy(() => import("./pages/diretoria/RateioSinistros"));
 const GestaoComercial = lazy(() => import("./pages/diretoria/GestaoComercial"));
 const IndicadoresAtuariais = lazy(() => import("./pages/diretoria/IndicadoresAtuariais"));
 const ConfiguracoesSistema = lazy(() => import("./pages/diretoria/Configuracoes"));
-const PerfisAcesso = lazy(() => import("./pages/diretoria/PerfisAcesso"));
+
 const UsuariosPage = lazy(() => import("./pages/diretoria/Usuarios"));
 const UsuarioDetalhePage = lazy(() => import("./pages/diretoria/UsuarioDetalhe"));
 const UsuarioEditarPage = lazy(() => import("./pages/diretoria/UsuarioEditar"));
@@ -740,10 +729,6 @@ const App = () => (
               <Route path="/oficinas" element={<Oficinas />} />
               <Route path="/oficinas/auto-centers" element={<AutoCenters />} />
               <Route path="/oficinas/relatorios" element={<OficinasRelatorios />} />
-              <Route path="/oficina/credenciadas" element={<OficinasList />} />
-              <Route path="/oficina/credenciadas/:id" element={<OficinaDetalhe />} />
-              <Route path="/oficina/ordens-servico" element={<OrdensServicoList />} />
-              <Route path="/oficina/ordens-servico/:id" element={<OrdemServicoDetalhePage />} />
               <Route path="/ordens-servico" element={<OrdensServico />} />
               <Route path="/oficinas/ordens/:id" element={<OrdemServicoDetalhe />} />
               
