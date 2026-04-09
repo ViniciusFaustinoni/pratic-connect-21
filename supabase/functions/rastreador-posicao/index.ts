@@ -111,14 +111,14 @@ async function getPosicaoSoftruckComRetry(
         throw new Error(`Token inválido após ${maxRetries} tentativas`);
       }
 
-      // Erro 503 - serviço temporariamente indisponível, tentar novamente
-      if (response.status === 503 || response.status === 502 || response.status === 504) {
+      // Erro 5xx ou 404 com "Internal Service Error" - serviço temporariamente indisponível, tentar novamente
+      if (response.status === 503 || response.status === 502 || response.status === 504 || response.status === 404) {
         const errorText = await response.text();
-        console.warn(`[Softruck] Erro ${response.status} na tentativa ${tentativa}/${maxRetries}: API temporariamente indisponível`);
+        console.warn(`[Softruck] Erro ${response.status} na tentativa ${tentativa}/${maxRetries}: API temporariamente indisponível. Body: ${errorText.slice(0, 200)}`);
         lastError = new Error(`API Softruck temporariamente indisponível (${response.status})`);
         
         if (tentativa < maxRetries) {
-          const delayMs = tentativa * 1000; // Backoff: 1s, 2s, 3s
+          const delayMs = tentativa * 1000;
           console.log(`[Softruck] Aguardando ${delayMs}ms antes de nova tentativa...`);
           await delay(delayMs);
           continue;
