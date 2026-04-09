@@ -143,6 +143,19 @@ function getPeriodoLabel(periodo?: string | null): string {
   return '';
 }
 
+function safeParseDate(dateStr: string | null | undefined): Date | null {
+  if (!dateStr) return null;
+  const d = new Date(dateStr);
+  return isNaN(d.getTime()) ? null : d;
+}
+
+function safeFormat(dateStr: string | null | undefined, fmt: string): string {
+  if (!dateStr) return '';
+  const d = safeParseDate(dateStr);
+  if (!d) return '';
+  try { return format(d, fmt, { locale: ptBR }); } catch { return ''; }
+}
+
 function getConfirmacaoLabel(confirmacao_whatsapp?: string | null, permite_encaixe?: boolean): string {
   if (permite_encaixe) return 'Encaixe';
   if (confirmacao_whatsapp === 'confirmada') return '✅ Confirmado';
@@ -545,7 +558,7 @@ export function MapaVistoriasContent() {
         const isSelectedForAssign = servicoParaAtribuir?.id === v.id;
         const tooltipColor = getTooltipColor(v.confirmacao_whatsapp, v.permite_encaixe);
         const periodoStr = getPeriodoLabel(v.periodo);
-        const dataLabel = v.data_agendada ? format(new Date(v.data_agendada + 'T00:00:00'), "dd/MM", { locale: ptBR }) : '';
+        const dataLabel = safeFormat(v.data_agendada ? v.data_agendada + 'T00:00:00' : null, "dd/MM");
         const tooltipText = [dataLabel, periodoStr].filter(Boolean).join(' ');
 
         return (
@@ -586,7 +599,7 @@ export function MapaVistoriasContent() {
                   <p><strong>Tipo:</strong> {TIPO_VISTORIA_LABELS[v.tipo_vistoria as keyof typeof TIPO_VISTORIA_LABELS] || v.tipo_vistoria}</p>
                   <p><strong>Associado:</strong> {v.associado_nome || "-"}</p>
                   <p><strong>Veículo:</strong> {v.veiculo_marca} {v.veiculo_modelo}</p>
-                  {v.data_agendada && <p><strong>Agendada:</strong> {format(new Date(v.data_agendada), "dd/MM/yyyy", { locale: ptBR })}</p>}
+                  {v.data_agendada && <p><strong>Agendada:</strong> {safeFormat(v.data_agendada, "dd/MM/yyyy") || v.data_agendada}</p>}
                   <p><strong>Local:</strong> {v.endereco_bairro}, {v.endereco_cidade}</p>
                   <p><strong>Status:</strong> {v.status}</p>
                   {!isRealizada && !v.permite_encaixe && (
@@ -732,7 +745,7 @@ export function MapaVistoriasContent() {
                    vistoriador.status_operacional === 'em_contato' ? 'Em Contato com Associado' : 'Aguardando Atribuição'}
                 </p>
                 <p className="text-muted-foreground">
-                  Atualizado: {formatDistanceToNow(new Date(vistoriador.updated_at), { addSuffix: true, locale: ptBR })}
+                  Atualizado: {safeParseDate(vistoriador.updated_at) ? formatDistanceToNow(safeParseDate(vistoriador.updated_at)!, { addSuffix: true, locale: ptBR }) : 'desconhecido'}
                 </p>
               </div>
               {vistoriador.telefone && (
