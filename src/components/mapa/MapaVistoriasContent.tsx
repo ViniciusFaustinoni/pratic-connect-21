@@ -802,7 +802,7 @@ export function MapaVistoriasContent() {
             <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
               <MousePointerClick className="h-4 w-4 text-amber-600 flex-shrink-0" />
               <span className="flex-1 text-left text-amber-700 dark:text-amber-400 text-xs">
-                Clique em "Atribuir" e depois no técnico
+                Arraste o técnico até o serviço ou clique em "Atribuir"
               </span>
             </div>
           </>
