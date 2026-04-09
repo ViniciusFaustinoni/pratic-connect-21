@@ -72,36 +72,34 @@ function useLinhasComPlanos() {
       if (plansError) throw plansError;
 
       const planoIds = (planos || []).map((plan) => plan.id);
-      const coberturaValores = new Map<string, number>();
-      const beneficioValores = new Map<string, number>();
-      const coberturaContagens = new Map<string, number>();
-      const beneficioContagens = new Map<string, number>();
+      const coberturasMap = new Map<string, { id: string; nome: string; valor: number }[]>();
+      const beneficiosMap = new Map<string, { id: string; name: string; preco_sugerido: number }[]>();
 
       if (planoIds.length > 0) {
         const { data: coberturas } = await supabase
           .from('planos_coberturas')
-          .select('plano_id, coberturas(valor)')
+          .select('plano_id, cobertura_id, coberturas(id, nome, valor)')
           .in('plano_id', planoIds);
 
-        for (const cobertura of coberturas || []) {
-          coberturaValores.set(
-            cobertura.plano_id,
-            (coberturaValores.get(cobertura.plano_id) || 0) + (((cobertura.coberturas as any)?.valor as number) || 0),
-          );
-          coberturaContagens.set(cobertura.plano_id, (coberturaContagens.get(cobertura.plano_id) || 0) + 1);
+        for (const c of coberturas || []) {
+          const cob = c.coberturas as any;
+          if (!cob) continue;
+          const list = coberturasMap.get(c.plano_id) || [];
+          list.push({ id: cob.id, nome: cob.nome, valor: cob.valor || 0 });
+          coberturasMap.set(c.plano_id, list);
         }
 
         const { data: beneficios } = await supabase
           .from('planos_beneficios')
-          .select('plano_id, benefits:benefit_id(preco_sugerido)')
+          .select('plano_id, benefit_id, benefits:benefit_id(id, name, preco_sugerido)')
           .in('plano_id', planoIds);
 
-        for (const beneficio of beneficios || []) {
-          beneficioValores.set(
-            beneficio.plano_id,
-            (beneficioValores.get(beneficio.plano_id) || 0) + (((beneficio.benefits as any)?.preco_sugerido as number) || 0),
-          );
-          beneficioContagens.set(beneficio.plano_id, (beneficioContagens.get(beneficio.plano_id) || 0) + 1);
+        for (const b of beneficios || []) {
+          const ben = b.benefits as any;
+          if (!ben) continue;
+          const list = beneficiosMap.get(b.plano_id) || [];
+          list.push({ id: ben.id, name: ben.name, preco_sugerido: ben.preco_sugerido || 0 });
+          beneficiosMap.set(b.plano_id, list);
         }
       }
 
@@ -109,12 +107,18 @@ function useLinhasComPlanos() {
         ...line,
         plans: (planos || [])
           .filter((plan) => plan.product_line_id === line.id)
-          .map((plan) => ({
-            ...plan,
-            valor_mensal: (coberturaValores.get(plan.id) || 0) + (beneficioValores.get(plan.id) || 0),
-            coberturas_count: coberturaContagens.get(plan.id) || 0,
-            beneficios_count: beneficioContagens.get(plan.id) || 0,
-          })),
+          .map((plan) => {
+            const cobs = coberturasMap.get(plan.id) || [];
+            const bens = beneficiosMap.get(plan.id) || [];
+            return {
+              ...plan,
+              coberturas_list: cobs,
+              beneficios_list: bens,
+              valor_mensal: cobs.reduce((s, c) => s + c.valor, 0) + bens.reduce((s, b) => s + b.preco_sugerido, 0),
+              coberturas_count: cobs.length,
+              beneficios_count: bens.length,
+            };
+          }),
       }));
     },
   });
