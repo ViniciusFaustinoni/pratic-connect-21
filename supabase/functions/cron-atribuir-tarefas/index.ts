@@ -392,7 +392,7 @@ serve(async (req) => {
         .or('local_vistoria.is.null,local_vistoria.eq.cliente')
         .is('latitude', null)
         .not('logradouro', 'is', null)
-        .eq('confirmacao_whatsapp', 'confirmada');
+        .or('confirmacao_whatsapp.eq.confirmada,confirmacao_whatsapp.is.null');
 
       // Geocodificar on-the-fly os serviços sem coordenadas
       const servicosGeocodificados: any[] = [];
