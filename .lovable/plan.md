@@ -1,38 +1,39 @@
 
 
-## Plano: Corrigir exclusao de associado na Base Antiga (FK sem CASCADE)
+## Plano: Duplicar plano com desconto e sufixo
 
-### Diagnostico
-A funcao `limparSubstituicoes` tenta deletar registros de `substituicoes_veiculo` via client, mas a RLS (`is_funcionario(auth.uid())`) pode estar bloqueando silenciosamente (supabase retorna 0 rows sem erro). Resultado: os registros permanecem e a FK `substituicoes_veiculo_veiculo_novo_id_fkey` bloqueia o DELETE nos veiculos.
+### Contexto
+A funcao `useDuplicatePlan` ja clona coberturas, beneficios, regras de elegibilidade e exclusoes. Falta a possibilidade de aplicar desconto percentual nos valores e sufixo nos nomes ao duplicar.
 
-### Solucao
-Alterar as FKs de `substituicoes_veiculo` para `ON DELETE CASCADE`. Assim, ao deletar um veiculo, o banco limpa automaticamente as substituicoes vinculadas — sem depender de RLS no client.
+### Alteracoes
 
-### Alteracao
+**1. Novo componente `DuplicarPlanoModal`** (`src/components/admin/planos/DuplicarPlanoModal.tsx`)
+- Modal com campos:
+  - **Desconto (%)**: input numerico (0-100), default 0
+  - **Sufixo**: input texto (ex: "- SP"), default vazio
+- Botao "Duplicar" que chama a mutation com os parametros
+- Preview do nome resultante: `{nomeOriginal} (cópia){sufixo}`
 
-**Migration SQL:**
-```sql
-ALTER TABLE substituicoes_veiculo
-  DROP CONSTRAINT substituicoes_veiculo_veiculo_antigo_id_fkey,
-  ADD CONSTRAINT substituicoes_veiculo_veiculo_antigo_id_fkey
-    FOREIGN KEY (veiculo_antigo_id) REFERENCES veiculos(id) ON DELETE CASCADE;
+**2. Atualizar `useDuplicatePlan`** (`src/hooks/usePlansAdmin.ts`)
+- Mudar assinatura para receber `{ id, desconto?, sufixo? }`
+- No nome do plano: `nome (cópia){sufixo}`
+- Ao clonar cada **cobertura**: aplicar sufixo no `nome`, aplicar desconto em `valor`, `valor_limite`, `franquia_valor` (multiplicar por `(100 - desconto) / 100`, arredondar 2 casas)
+- Ao clonar cada **beneficio**: aplicar sufixo no `name`, aplicar desconto em `preco_sugerido`
+- Valores nulos permanecem nulos
 
-ALTER TABLE substituicoes_veiculo
-  DROP CONSTRAINT substituicoes_veiculo_veiculo_novo_id_fkey,
-  ADD CONSTRAINT substituicoes_veiculo_veiculo_novo_id_fkey
-    FOREIGN KEY (veiculo_novo_id) REFERENCES veiculos(id) ON DELETE CASCADE;
-```
-
-**`src/hooks/useDeleteBaseAntiga.ts`** — simplificar removendo `limparSubstituicoes` (agora desnecessaria, o CASCADE faz o trabalho). Manter apenas a checagem de outras FKs sem CASCADE que possam bloquear (como `contratos`, `ordens_servico`, `cobrancas` etc), limpando-as ou setando null antes de deletar os veiculos, ou adicionando CASCADE nessas tambem se fizer sentido para o contexto "Base Antiga".
-
-Na pratica, para a Base Antiga (dados importados do SGA), provavelmente nao ha contratos, cobrancas ou ordens de servico vinculadas. Mas para seguranca, o hook pode tentar o delete e, se falhar, exibir a mensagem de erro com contexto.
+**3. Atualizar chamadas em `LinhasPlanos.tsx` e `ProdutosPlanos.tsx`**
+- Em vez de `duplicatePlan.mutate(plano.id)`, abrir o `DuplicarPlanoModal` passando o plano
+- O modal chama `duplicatePlan.mutateAsync({ id, desconto, sufixo })`
 
 ### Resultado
-- Exclusao de associados da Base Antiga funciona sem erro de FK
-- Nao depende mais de RLS no client para limpar substituicoes
-- Codigo do hook fica mais simples
+- Ao clicar em "Duplicar", abre modal com opcoes de desconto e sufixo
+- Desconto 0% e sufixo vazio = comportamento identico ao atual
+- Desconto e sufixo aplicados automaticamente em todas as coberturas e beneficios clonados
+- Cada item clonado continua independente para edicao posterior
 
 ### Arquivos
-- Migration SQL (nova)
-- `src/hooks/useDeleteBaseAntiga.ts`
+- `src/components/admin/planos/DuplicarPlanoModal.tsx` (novo)
+- `src/hooks/usePlansAdmin.ts`
+- `src/components/gestao-comercial/LinhasPlanos.tsx`
+- `src/components/gestao-comercial/ProdutosPlanos.tsx`
 
