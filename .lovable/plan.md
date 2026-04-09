@@ -1,37 +1,34 @@
 
 
-## Plano: Corrigir responsividade da TabsList em Serviços de Campo
+## Plano: Aplicar menu lateral agrupado (super-grupos) para todos os perfis
 
 ### Problema
-A `TabsList` tem 7-8 abas (Instalações, Vistorias, Retiradas, Encaixes, Viagens, Manutenção, Histórico + opcionalmente Atribuição Manual). Em telas mobile, as abas não cabem e ficam cortadas, impossibilitando o acesso a todas.
+O layout consolidado do menu lateral com super-grupos (Comercial, Relacionamento, Administrativo) só aparece quando `permissions.isDiretor` é verdadeiro. Outros perfis como coordenador de monitoramento veem o menu antigo com grupos soltos.
 
 ### Alteração
 
-**`src/pages/monitoramento/VistoriasInstalacoesMon.tsx`**
+**`src/components/layout/AppSidebar.tsx`**
 
-1. Aplicar `overflow-x-auto` na `TabsList` para permitir scroll horizontal
-2. Adicionar `flex-nowrap w-auto inline-flex` para que as abas não quebrem linha
-3. Em mobile, esconder o texto das abas e mostrar apenas ícones (padrão já usado em `Estoque.tsx`)
-4. Envolver a `TabsList` num container com `overflow-x-auto` e estilo de scroll suave
+1. Renomear `directorSuperGroups` para `superGroups` e remover a condição `if (!permissions.isDiretor) return []` no `useMemo` (linha 709) — construir super-grupos para todos os usuários baseado nos `visibleGroups` já filtrados por permissão
 
-Estrutura resultante:
-```tsx
-<div className="overflow-x-auto -mx-4 px-4">
-  <TabsList className="w-auto inline-flex">
-    <TabsTrigger value="instalacoes" className="gap-2 shrink-0">
-      <Wrench className="h-4 w-4" />
-      <span className="hidden sm:inline">Instalações</span>
-    </TabsTrigger>
-    {/* ... demais abas com mesmo padrão */}
-  </TabsList>
-</div>
-```
+2. Remover todas as condições `permissions.isDiretor` que gatilham o uso de super-grupos:
+   - Linha 657: estado inicial de `openSuperGroups` — remover check `isDiretor`
+   - Linha 686: auto-open no `useEffect` — remover check `isDiretor`
+   - Linha 761: modo colapsado — trocar `permissions.isDiretor && directorSuperGroups` por `superGroups`
+   - Linha 948: modo expandido — mesma troca
+
+3. Se o usuário tiver acesso a módulos de apenas um super-grupo, exibir os sub-grupos diretamente sem o nível de super-grupo (para não ter um collapsible desnecessário com um único item)
+
+### Lógica
+- Os `visibleGroups` já são filtrados por permissão do usuário
+- Os super-grupos simplesmente agrupam esses grupos visíveis em categorias
+- Não muda nenhuma permissão, apenas a organização visual
 
 ### Resultado
-- Em mobile: abas mostram apenas ícones, com scroll horizontal se necessário
-- Em tablet/desktop: abas completas com ícone + texto
-- Todas as abas acessíveis em qualquer dispositivo
+- Coordenador de monitoramento vê: Dashboard + Comercial (com Monitoramento dentro)
+- Diretor vê: Dashboard + Comercial + Relacionamento + Administrativo (como hoje)
+- Qualquer perfil com acesso a múltiplos módulos vê o menu organizado em super-grupos
 
 ### Arquivo
-- `src/pages/monitoramento/VistoriasInstalacoesMon.tsx`
+- `src/components/layout/AppSidebar.tsx`
 
