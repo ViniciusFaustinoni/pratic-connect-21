@@ -1,53 +1,37 @@
 
 
-## Plano: Corrigir visibilidade do "Select One Aplicativo" para veiculos particulares
+## Plano: Clicar em cobertura/beneficio abre modal com item expandido + criar coberturas no modal
 
-### Diagnostico
-
-O plano "Select One Aplicativo" NAO tem nenhuma regra de nivel de plano na tabela `entity_eligibility_rules`. O codigo do motor (linha 327 de `usePlanosCotacao.ts`) verifica regras do plano corretamente, mas como nao existem regras, o plano passa.
-
-As coberturas individuais tem regras `tipo_uso`, porem 3 delas incluem "particular":
-- Chuva de Granizo: `include [particular]`
-- Alagamento: `include [particular]`
-- Perda Total: `include [particular, aplicativo]`
-
-Os 8 beneficios nao tem nenhuma regra `tipo_uso`.
-
-Resultado: para um veiculo particular, 3 coberturas + 8 beneficios passam. O plano so e descartado se TODAS as coberturas forem removidas (linha 367). Como 3 sobrevivem, o plano aparece.
-
-### Solucao
-
-Duas acoes necessarias:
-
-**1. Inserir regra de plano no banco de dados (migration)**
-- Adicionar uma regra `tipo_uso: include ["aplicativo"]` na `entity_eligibility_rules` com `entity_type = 'plano'` e `entity_id = 'd3a61bfd-5b40-4503-949d-cfc71dbfabb2'`
-- Isso faz o motor bloquear o plano inteiro na linha 327 antes de avaliar coberturas/beneficios
-
-**2. Verificar e corrigir coberturas com tipo_uso inconsistente**
-- "Chuva de Granizo - Select One Passeio" e "Alagamento - Select One Passeio" tem `include [particular]` mas estao vinculadas a um plano de Aplicativo
-- Estes itens parecem ser coberturas da versao Passeio reutilizadas incorretamente. Devem ser corrigidos para `include [aplicativo]` ou substituidos por coberturas especificas de APP
-- "Perda Total (PT) - Select" tem `include [particular, aplicativo]` — esta correto se e compartilhada
+### Problema
+1. Clicar numa cobertura ou beneficio na lista expandida do plano abre o modal de edicao do plano, mas sem indicar qual item deve estar aberto para edicao
+2. Ja e possivel criar coberturas no modal (botao "Nova Cobertura" existe em PlanCoberturasList), entao esse ponto ja esta resolvido
 
 ### Alteracoes
 
-**Migration SQL**
-```sql
--- Regra de plano: Select One Aplicativo = apenas aplicativo
-INSERT INTO entity_eligibility_rules (entity_id, entity_type, rule_type, rule_mode, rule_config, is_active)
-VALUES ('d3a61bfd-5b40-4503-949d-cfc71dbfabb2', 'plano', 'tipo_uso', 'include', '{"values":["aplicativo"]}', true);
+**1. `src/components/gestao-comercial/LinhasPlanos.tsx`**
+- Adicionar campo `focusItemId` ao estado `planoModal`: `{ open: boolean; planId?: string; defaultLineId?: string; focusItemId?: string }`
+- Nos clicks de cobertura (linha 540) e beneficio (linha 585), passar `focusItemId: cob.id` ou `focusItemId: ben.id`
+- Propagar `focusItemId` como nova prop do `PlanFormModal`
 
--- Corrigir coberturas com tipo_uso inconsistente
-UPDATE entity_eligibility_rules 
-SET rule_config = '{"values":["aplicativo"]}'
-WHERE entity_id IN ('b2000001-0000-0000-0000-000000000005', 'b2000001-0000-0000-0000-000000000007')
-  AND rule_type = 'tipo_uso';
-```
+**2. `src/components/admin/planos/PlanFormModal.tsx`**
+- Adicionar prop `focusItemId?: string` na interface `PlanFormModalProps`
+- Repassar `focusItemId` para `PlanCoberturasList` e `PlanBeneficiosList`
+
+**3. `src/components/admin/planos/PlanCoberturasList.tsx`**
+- Adicionar prop `focusItemId?: string` na interface
+- No `useEffect`, se `focusItemId` estiver presente e corresponder a uma cobertura carregada, adicionar o ID ao `openItems` automaticamente (expandir o item)
+- Fazer scroll ate o item com `scrollIntoView`
+
+**4. `src/components/admin/planos/PlanBeneficiosList.tsx`**
+- Mesma logica: prop `focusItemId`, auto-expandir e scroll ate o item
 
 ### Resultado
-- O plano "Select One Aplicativo" sera bloqueado pelo motor na etapa de regras do plano para veiculos particulares
-- As coberturas Granizo e Alagamento ficarao consistentes com o plano APP
-- Nenhuma alteracao de codigo necessaria — o motor ja suporta regras de plano (linha 327)
+- Clicar em "Colisao - Select One Aplicativo" na lista abre o modal com o formulario dessa cobertura ja expandido
+- Criar coberturas/beneficios ja funciona (botao existente)
 
 ### Arquivos
-- Nova migration SQL
+- `src/components/gestao-comercial/LinhasPlanos.tsx`
+- `src/components/admin/planos/PlanFormModal.tsx`
+- `src/components/admin/planos/PlanCoberturasList.tsx`
+- `src/components/admin/planos/PlanBeneficiosList.tsx`
 
