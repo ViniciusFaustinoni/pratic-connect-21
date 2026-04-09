@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Plus, Save, Trash2, Loader2 } from 'lucide-react';
+import { ChevronDown, Plus, Save, Trash2, Loader2, Link2, Search } from 'lucide-react';
 import { Shield } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
