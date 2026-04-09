@@ -350,6 +350,25 @@ export default function Associados() {
     });
   };
 
+  const handleAssociadoClick = async (associado: any) => {
+    const statusAnalise = ['em_analise', 'pendente_vistoria', 'documentacao_pendente'];
+    if (statusAnalise.includes(associado.status)) {
+      const { data: contrato } = await supabase
+        .from('contratos')
+        .select('id')
+        .eq('associado_id', associado.id)
+        .order('created_at', { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (contrato) {
+        navigate(`/cadastro/propostas/${contrato.id}`);
+        return;
+      }
+    }
+    setDetalheAssociadoId(associado.id);
+  };
+
   const exportToExcel = useCallback((format: 'xlsx' | 'csv') => {
     const dataToExport = filteredAssociados.map((a) => ({
       'Nome': a.nome,
@@ -666,7 +685,7 @@ export default function Associados() {
                     >
                       <TableCell 
                         className="font-medium"
-                        onClick={() => setDetalheAssociadoId(associado.id)}
+                        onClick={() => handleAssociadoClick(associado)}
                       >
                         <div className="flex items-center gap-2.5">
                           <div className="flex items-center justify-center h-8 w-8 rounded-full bg-primary/10 text-primary text-xs font-semibold shrink-0">
@@ -675,14 +694,14 @@ export default function Associados() {
                           <span className="truncate max-w-[180px]">{associado.nome}</span>
                         </div>
                       </TableCell>
-                      <TableCell onClick={() => setDetalheAssociadoId(associado.id)} className="text-muted-foreground">
+                      <TableCell onClick={() => handleAssociadoClick(associado)} className="text-muted-foreground">
                         {formatCpf(associado.cpf)}
                       </TableCell>
                       <TableCell>
                         <div className="flex items-center gap-1.5">
                           <span 
                             className="text-muted-foreground cursor-pointer"
-                            onClick={() => setDetalheAssociadoId(associado.id)}
+                            onClick={() => handleAssociadoClick(associado)}
                           >
                             {formatTelefone(associado.telefone)}
                           </span>
@@ -701,7 +720,7 @@ export default function Associados() {
                           </Tooltip>
                         </div>
                       </TableCell>
-                      <TableCell onClick={() => setDetalheAssociadoId(associado.id)}>
+                      <TableCell onClick={() => handleAssociadoClick(associado)}>
                         {associado.veiculos && associado.veiculos.length > 0 ? (
                           <div className="flex items-center gap-2">
                             <span className="font-mono text-xs bg-muted px-2 py-0.5 rounded border border-border">
@@ -725,10 +744,10 @@ export default function Associados() {
                           <span className="text-muted-foreground">—</span>
                         )}
                       </TableCell>
-                      <TableCell onClick={() => setDetalheAssociadoId(associado.id)} className="text-muted-foreground">
+                      <TableCell onClick={() => handleAssociadoClick(associado)} className="text-muted-foreground">
                         {associado.planos?.nome || '—'}
                       </TableCell>
-                      <TableCell onClick={() => setDetalheAssociadoId(associado.id)}>
+                      <TableCell onClick={() => handleAssociadoClick(associado)}>
                         <div className="flex flex-col gap-1">
                           <Badge className={`${statusColors[associado.status]} border-0 gap-1.5`}>
                             <span className={`h-1.5 w-1.5 rounded-full ${statusDotColors[associado.status]}`} />
@@ -752,7 +771,7 @@ export default function Associados() {
                           })()}
                         </div>
                       </TableCell>
-                      <TableCell onClick={() => setDetalheAssociadoId(associado.id)} className="text-muted-foreground text-sm">
+                      <TableCell onClick={() => handleAssociadoClick(associado)} className="text-muted-foreground text-sm">
                         {formatDate(associado.data_adesao)}
                       </TableCell>
                       <TableCell>
