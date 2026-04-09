@@ -932,7 +932,7 @@ export function MapaVistoriasContent() {
     <>
       {renderDialogs()}
       <div className="flex h-full gap-4">
-        <Card className="w-80 flex-shrink-0 flex flex-col">
+        <Card className="w-72 flex-shrink-0 flex flex-col overflow-hidden">
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
