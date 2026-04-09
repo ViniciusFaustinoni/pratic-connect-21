@@ -319,14 +319,35 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
     if (assignSelected.size === 0) return;
     setAssigning(true);
     try {
-      const inserts = Array.from(assignSelected).map((coberturaId, i) => ({
+      const selectedIds = Array.from(assignSelected);
+      // Find which ones are already bound to another plan
+      const reassigned = selectedIds.filter(id => {
+        const cob = coberturasDisponiveis.find((c: any) => c.id === id);
+        return cob?.vinculadaAo;
+      });
+
+      // Delete old bindings for reassigned ones
+      if (reassigned.length > 0) {
+        const { error: delErr } = await supabase
+          .from('planos_coberturas')
+          .delete()
+          .in('cobertura_id', reassigned);
+        if (delErr) throw delErr;
+      }
+
+      // Insert new bindings
+      const inserts = selectedIds.map((coberturaId, i) => ({
         plano_id: planId,
         cobertura_id: coberturaId,
         display_order: coberturas.length + i,
       }));
       const { error } = await supabase.from('planos_coberturas').insert(inserts);
       if (error) throw error;
-      toast.success(`${assignSelected.size} cobertura(s) vinculada(s) com sucesso`);
+
+      const msg = reassigned.length > 0
+        ? `${assignSelected.size} cobertura(s) vinculada(s) (${reassigned.length} reatribuída(s) de outros planos)`
+        : `${assignSelected.size} cobertura(s) vinculada(s) com sucesso`;
+      toast.success(msg);
       setAssignOpen(false);
       setAssignSelected(new Set());
       setAssignSearch('');
