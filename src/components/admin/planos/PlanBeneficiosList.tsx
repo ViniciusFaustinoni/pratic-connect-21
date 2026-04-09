@@ -135,7 +135,7 @@ function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () =
       />
 
       <div className="border-t pt-3">
-        <EligibilityRulesEditor entityType="benefit" entityId={benefit.id} />
+        <EligibilityRulesEditor entityType="beneficio" entityId={benefit.id} />
       </div>
 
       <div className="flex justify-end">
