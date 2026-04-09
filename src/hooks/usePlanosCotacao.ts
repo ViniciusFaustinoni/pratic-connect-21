@@ -329,6 +329,11 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         continue;
       }
 
+      // Tipos de regra já validados no nível do plano sobrescrevem os mesmos tipos nas coberturas/benefícios
+      const planoRuleTypes = new Set(
+        planoRulesNonMarcaModelo.map(r => r.rule_type)
+      );
+
       // ── Filtrar coberturas e benefícios individualmente ──
       const coberturasDoPlanoRaw = (planoCoberturasData || []).filter(pc => pc.plano_id === plano.id);
       const beneficiosDoPlanoRaw = plano.planos_beneficios || [];
@@ -338,7 +343,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       const beneficiosDoPlano = beneficiosDoPlanoRaw.filter((pb: any) => {
         const benefitRules = allEligibilityRules
           .filter(r => r.entity_type === 'beneficio' && r.entity_id === pb.benefit_id)
-          .filter(r => r.rule_type !== 'fipe_range');
+          .filter(r => r.rule_type !== 'fipe_range')
+          .filter(r => !planoRuleTypes.has(r.rule_type)); // sobrescrita pelo plano
         if (benefitRules.length > 0 && !checkAllRules(benefitRules, vehicleCtx)) {
           const benefitName = pb.benefits?.name || pb.custom_text || 'Benefício';
           coberturasRemovidas.push(benefitName);
@@ -353,7 +359,8 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
         const cobId = pc.cobertura_id;
         const cobRules = allEligibilityRules
           .filter(r => r.entity_type === 'cobertura' && r.entity_id === cobId)
-          .filter(r => r.rule_type !== 'fipe_range');
+          .filter(r => r.rule_type !== 'fipe_range')
+          .filter(r => !planoRuleTypes.has(r.rule_type)); // sobrescrita pelo plano
         if (cobRules.length > 0 && !checkAllRules(cobRules, vehicleCtx)) {
           const cobNome = pc.coberturas?.nome || 'Cobertura';
           coberturasRemovidas.push(cobNome);
