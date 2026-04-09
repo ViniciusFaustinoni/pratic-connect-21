@@ -30,6 +30,9 @@ export interface VistoriaMapa {
   rota_regiao: string | null;
   rota_cor: string | null;
   vistoriador_nome: string | null;
+  confirmacao_whatsapp: string | null;
+  permite_encaixe: boolean;
+  periodo: string | null;
 }
 
 export interface RotaAgrupada {
