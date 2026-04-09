@@ -146,7 +146,7 @@ Bem-vindo à família PRATIC! 💙`,
 
 👤 *Técnico:* {tecnico_nome}
 📞 *Contato:* {tecnico_telefone}
-💬 *WhatsApp:* {tecnico_whatsapp_link}
+📱 *WhatsApp:* {tecnico_telefone}
 📍 *Endereço:* {endereco}
 ⏰ *Período:* {periodo}
 
@@ -463,7 +463,7 @@ serve(async (req) => {
               primeiroNome,
               (dados?.tecnico_nome as string) || 'Técnico PRATIC',
               (dados?.tecnico_telefone as string) || '',
-              (dados?.tecnico_whatsapp_link as string) || '',
+              (dados?.tecnico_telefone as string) || 'Não informado',
               (dados?.endereco as string) || 'Endereço a confirmar',
               (dados?.periodo as string) || 'A confirmar',
             ],
