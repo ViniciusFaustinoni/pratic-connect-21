@@ -35,8 +35,7 @@ export function VincularCoberturaModal({ open, onClose, planoId }: VincularCober
     queryFn: async () => {
       const { data: vinculadas } = await supabase
         .from('planos_coberturas')
-        .select('cobertura_id')
-        .eq('plano_id', planoId);
+        .select('cobertura_id');
       
       const idsVinculados = vinculadas?.map(v => v.cobertura_id) || [];
       
