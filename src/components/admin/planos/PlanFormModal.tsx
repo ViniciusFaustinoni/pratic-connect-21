@@ -389,6 +389,13 @@ export function PlanFormModal({
                       <>
                         <PlanCoberturasList planId={planId} />
                         <PlanBeneficiosList planId={planId} />
+                        <section className="space-y-3 border-t pt-4">
+                          <h3 className="text-sm font-semibold text-foreground">Regras de Elegibilidade do Plano</h3>
+                          <p className="text-xs text-muted-foreground">
+                            Defina restrições no nível do plano (tipo de uso, região, combustível, etc.). Se o veículo não atender, o plano inteiro será ocultado.
+                          </p>
+                          <EligibilityRulesEditor entityType="plano" entityId={planId} />
+                        </section>
                       </>
                     ) : (
                       <div className="rounded-3xl border border-dashed border-border/60 bg-card/40 px-6 py-8 text-center text-sm text-muted-foreground">
