@@ -13,7 +13,7 @@ import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/component
 import { cn } from '@/lib/utils';
 import { supabase } from '@/integrations/supabase/client';
 import { useCreateCobertura, useUpdateCobertura, useDeleteCobertura } from '@/hooks/usePlansAdmin';
-import { EligibilityRulesEditor } from './EligibilityRulesEditor';
+import { EligibilityConfigSection, useEligibilityState, saveEligibilityRules } from '@/components/gestao-comercial/EligibilityConfigSection';
 import { CarenciaConfigSection } from './CarenciaConfigSection';
 import { toast } from 'sonner';
 
