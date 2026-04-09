@@ -41,6 +41,8 @@ import {
   MousePointerClick,
   MessageSquare,
   Send,
+  ChevronDown,
+  ChevronUp,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
@@ -760,67 +762,77 @@ export function MapaVistoriasContent() {
     </MapContainer>
   );
 
+  const [legendaAberta, setLegendaAberta] = useState(true);
+
   const renderLegenda = () => (
     <div className={cn(
-      "absolute z-[400] bg-background/95 backdrop-blur-sm rounded-lg shadow-lg border p-3",
+      "absolute z-[400] bg-background/95 backdrop-blur-sm rounded-lg shadow-lg border",
       isMobile ? "top-2 right-2 text-xs" : "top-4 right-4"
     )}>
-      <h4 className="font-semibold text-sm mb-3">Legenda</h4>
-      <div className="space-y-2">
-        <div className="flex items-center gap-2 text-sm p-2 rounded-md">
-          <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_REALIZADA }} />
-          <span className="flex-1 text-left">Realizadas</span>
-          <Badge variant="secondary" className="text-xs">{contadores.realizadas}</Badge>
-        </div>
-        <div className="flex items-center gap-2 text-sm p-2 rounded-md">
-          <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_NAO_CONFIRMADO }} />
-          <span className="flex-1 text-left">Não confirmado</span>
-          <Badge variant="secondary" className="text-xs">{contadores.naoConfirmados}</Badge>
-        </div>
-        <div className="flex items-center gap-2 text-sm p-2 rounded-md">
-          <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_AGUARDANDO }} />
-          <span className="flex-1 text-left">Aguardando</span>
-        </div>
-        <div className="flex items-center gap-2 text-sm p-2 rounded-md">
-          <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_CONFIRMADO }} />
-          <span className="flex-1 text-left">Confirmado</span>
-          <Badge variant="secondary" className="text-xs">{contadores.confirmados}</Badge>
-        </div>
-        <div className="flex items-center gap-2 text-sm p-2 rounded-md">
-          <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_A_REALIZAR }} />
-          <span className="flex-1 text-left">A Realizar</span>
-          <Badge variant="secondary" className="text-xs">{contadores.aRealizar}</Badge>
-        </div>
-        <div className="border-t my-2" />
-        <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50">
-          <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: COR_VISTORIADOR }}>
-            <User className="h-2.5 w-2.5 text-white" />
-          </span>
-          <span className="flex-1 text-left">Profissionais</span>
-          <Badge variant="secondary" className="text-xs gap-1">
-            <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
-            {vistoriadoresEmServico.length}
-          </Badge>
-        </div>
-        {linhasDeRota.length > 0 && (
+      <button
+        onClick={() => setLegendaAberta(!legendaAberta)}
+        className="w-full flex items-center justify-between p-3 hover:bg-muted/50 transition-colors rounded-lg"
+      >
+        <h4 className="font-semibold text-sm">Legenda</h4>
+        {legendaAberta ? <ChevronUp className="h-4 w-4 text-muted-foreground" /> : <ChevronDown className="h-4 w-4 text-muted-foreground" />}
+      </button>
+      {legendaAberta && (
+        <div className="space-y-2 px-3 pb-3">
           <div className="flex items-center gap-2 text-sm p-2 rounded-md">
-            <div className="w-4 h-0.5 flex-shrink-0" style={{ backgroundColor: COR_VISTORIADOR, borderStyle: 'dashed', borderWidth: '1px', borderColor: COR_VISTORIADOR }} />
-            <span className="flex-1 text-left text-muted-foreground">Rotas ativas</span>
-            <Badge variant="outline" className="text-xs">{linhasDeRota.length}</Badge>
+            <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_REALIZADA }} />
+            <span className="flex-1 text-left">Realizadas</span>
+            <Badge variant="secondary" className="text-xs">{contadores.realizadas}</Badge>
           </div>
-        )}
-        {atribuicaoManualAtiva && (
-          <>
-            <div className="border-t my-2" />
-            <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
-              <MousePointerClick className="h-4 w-4 text-amber-600 flex-shrink-0" />
-              <span className="flex-1 text-left text-amber-700 dark:text-amber-400 text-xs">
-                Arraste o técnico até o serviço ou clique em "Atribuir"
-              </span>
+          <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+            <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_NAO_CONFIRMADO }} />
+            <span className="flex-1 text-left">Não confirmado</span>
+            <Badge variant="secondary" className="text-xs">{contadores.naoConfirmados}</Badge>
+          </div>
+          <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+            <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_AGUARDANDO }} />
+            <span className="flex-1 text-left">Aguardando</span>
+          </div>
+          <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+            <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_CONFIRMADO }} />
+            <span className="flex-1 text-left">Confirmado</span>
+            <Badge variant="secondary" className="text-xs">{contadores.confirmados}</Badge>
+          </div>
+          <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+            <span className="w-4 h-4 rounded-full flex-shrink-0" style={{ backgroundColor: COR_A_REALIZAR }} />
+            <span className="flex-1 text-left">A Realizar</span>
+            <Badge variant="secondary" className="text-xs">{contadores.aRealizar}</Badge>
+          </div>
+          <div className="border-t my-2" />
+          <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-muted/50">
+            <span className="w-4 h-4 rounded-full flex-shrink-0 flex items-center justify-center" style={{ backgroundColor: COR_VISTORIADOR }}>
+              <User className="h-2.5 w-2.5 text-white" />
+            </span>
+            <span className="flex-1 text-left">Profissionais</span>
+            <Badge variant="secondary" className="text-xs gap-1">
+              <span className="w-1.5 h-1.5 rounded-full bg-green-500 animate-pulse" />
+              {vistoriadoresEmServico.length}
+            </Badge>
+          </div>
+          {linhasDeRota.length > 0 && (
+            <div className="flex items-center gap-2 text-sm p-2 rounded-md">
+              <div className="w-4 h-0.5 flex-shrink-0" style={{ backgroundColor: COR_VISTORIADOR, borderStyle: 'dashed', borderWidth: '1px', borderColor: COR_VISTORIADOR }} />
+              <span className="flex-1 text-left text-muted-foreground">Rotas ativas</span>
+              <Badge variant="outline" className="text-xs">{linhasDeRota.length}</Badge>
             </div>
-          </>
-        )}
-      </div>
+          )}
+          {atribuicaoManualAtiva && (
+            <>
+              <div className="border-t my-2" />
+              <div className="flex items-center gap-2 text-sm p-2 rounded-md bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-800">
+                <MousePointerClick className="h-4 w-4 text-amber-600 flex-shrink-0" />
+                <span className="flex-1 text-left text-amber-700 dark:text-amber-400 text-xs">
+                  Arraste o técnico até o serviço ou clique em "Atribuir"
+                </span>
+              </div>
+            </>
+          )}
+        </div>
+      )}
     </div>
   );
 
