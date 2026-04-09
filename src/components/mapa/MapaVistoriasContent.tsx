@@ -745,7 +745,7 @@ export function MapaVistoriasContent() {
                    vistoriador.status_operacional === 'em_contato' ? 'Em Contato com Associado' : 'Aguardando Atribuição'}
                 </p>
                 <p className="text-muted-foreground">
-                  Atualizado: {formatDistanceToNow(new Date(vistoriador.updated_at), { addSuffix: true, locale: ptBR })}
+                  Atualizado: {safeParseDate(vistoriador.updated_at) ? formatDistanceToNow(safeParseDate(vistoriador.updated_at)!, { addSuffix: true, locale: ptBR }) : 'desconhecido'}
                 </p>
               </div>
               {vistoriador.telefone && (
