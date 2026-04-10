@@ -679,7 +679,7 @@ serve(async (req) => {
       await supabaseForFallback
         .from('rastreadores_logs')
         .insert({
-          rastreador_id: body.rastreador_id || null,
+          rastreador_id: rastreadorIdForFallback || null,
           plataforma: 'unknown',
           operacao: 'posicao_tempo_real',
           status: 'erro',
