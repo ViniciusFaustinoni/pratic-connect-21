@@ -1,25 +1,30 @@
 
 
-## Plano: Exigir fotos antes de permitir recusa do veículo (Vistoria de Instalação)
+## Plano: Fluxo de fotos sequencial automático em todas as áreas
 
 ### Problema
-Hoje o técnico pode recusar/negar um veículo sem tirar nenhuma foto. Isso impede análises futuras, já que muitos associados tentam entrar várias vezes e as fotos são evidências importantes.
+Atualmente, em `ExecutarVistoriaCompleta.tsx`, `ExecutarRetirada.tsx` e `VistoriaPrestador.tsx`, as fotos são exibidas em grid (3 colunas) usando `FotoCapture`. O técnico precisa clicar manualmente em cada slot para tirar a próxima foto. O componente `VistoriaFotoSequencial` (já existente e usado em `InstaladorChecklist.tsx`) resolve isso com avanço automático.
 
-### Correção
+### Solução
+Substituir o grid de `FotoCapture` pelo `VistoriaFotoSequencial` nos 3 arquivos restantes. O componente já possui: barra de progresso, thumbnails, instruções, auto-avanço para a próxima foto pendente após upload.
 
-**Dois arquivos afetados** (os dois fluxos de vistoria de instalação):
+### Alterações
 
 #### 1. `src/pages/instalador/ExecutarVistoriaCompleta.tsx`
-- O botão "Reprovar" (linha 565) atualmente só verifica `processando`
-- Adicionar condição: desabilitar o botão se `!todasFotosEnviadas`
-- Mostrar mensagem informativa abaixo do botão quando fotos faltam, ex: "Tire todas as fotos obrigatórias antes de reprovar"
+- Substituir o grid de `FotoCapture` dentro de cada categoria pelo `VistoriaFotoSequencial`
+- Remover as categorias colapsáveis (Collapsible) de fotos, já que o sequencial mostra uma foto por vez com thumbnails
+- Passar a lista completa de fotos (excluindo instalação se necessário) ao componente sequencial
+- Adaptar `handleUploadFoto` para ser compatível com a interface `onUpload(fotoId, file)`
 
-#### 2. `src/pages/instalador/InstaladorChecklist.tsx`
-- O botão "Registrar Recusa do Veículo" (linha 1889) aparece quando `decisaoInstalador === 'negado'`
-- Verificar quantas fotos obrigatórias da etapa de fotos foram tiradas
-- Desabilitar o botão se as fotos obrigatórias não estiverem completas
-- Mostrar mensagem informativa indicando que as fotos são necessárias mesmo para recusa
+#### 2. `src/pages/instalador/ExecutarRetirada.tsx`
+- Converter `FOTOS_RETIRADA` para o formato `VistoriaFotoConfig` (adicionar `icone`, `categoria`, `ordem`)
+- Substituir o grid de `FotoCapture` pelo `VistoriaFotoSequencial`
+
+#### 3. `src/pages/public/VistoriaPrestador.tsx`
+- As fotos já usam `VistoriaFotoConfig` do `vistoriaConfigCompleta`
+- Substituir o grid de `FotoCapture` pelo `VistoriaFotoSequencial`
+- Adaptar `handleFotoCapture` para a interface `onUpload(fotoId, file)`
 
 ### Resultado
-O técnico será obrigado a tirar todas as fotos obrigatórias do veículo antes de poder registrar uma recusa, garantindo evidências fotográficas para análises futuras.
+Todas as telas de captura de fotos passarão a usar o fluxo sequencial: o técnico tira uma foto e automaticamente avança para a próxima pendente, sem precisar navegar manualmente.
 
