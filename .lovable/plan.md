@@ -1,37 +1,28 @@
 
 
-## Plano: Adicionar "Atribuir Existente" na lista de Benefícios do plano
+## Plano: Badges de atribuição e filtros no catálogo de Coberturas e Benefícios
 
-### Problema
-A lista de coberturas dentro da edição do plano possui dois botões: "Atribuir Existente" e "Nova Cobertura". A lista de benefícios possui apenas "Novo Benefício", sem opção de atribuir benefícios já existentes no catálogo.
+### O que muda
+Na lista do catálogo global (aba Coberturas e aba Benefícios), cada item mostrará um badge com o nome do plano ao qual está atribuído (ou "Sem plano" se não estiver vinculado). Além disso, um filtro de atribuição será adicionado para mostrar apenas itens atribuídos, não atribuídos, ou de um plano específico.
 
-### Alteração
+### Detalhes técnicos
 
-**`src/components/admin/planos/PlanBeneficiosList.tsx`**
+**`src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx`**
 
-Replicar o padrão já implementado em `PlanCoberturasList.tsx`:
+1. **Buscar vínculos**: Adicionar duas queries:
+   - `planos_coberturas` com `select('cobertura_id, plano_id, planos(nome)')` → mapa `coberturaId → nomePlano`
+   - `planos_beneficios` com `select('benefit_id, plano_id, planos(nome)')` → mapa `benefitId → nomePlano`
 
-1. **Novos estados**: `assignOpen`, `assignSelected`, `assignSearch`, `assigning`
+2. **Novos estados de filtro**: `cobAttrFilter` e `benAttrFilter` com valores `'todos' | 'atribuidos' | 'nao_atribuidos'`
 
-2. **Nova query** `beneficios-disponiveis-all`: Buscar todos os benefícios ativos com seus vínculos atuais (`planos_beneficios` + nome do plano), excluindo os já vinculados ao plano atual
+3. **Select de filtro**: Adicionar um `<Select>` ao lado do ordenação em cada aba com opções: "Todos", "Atribuídos", "Não atribuídos"
 
-3. **Função `handleAssign`**: 
-   - Remover vínculos anteriores dos benefícios selecionados que já pertencem a outro plano
-   - Inserir novos vínculos em `planos_beneficios` para o plano atual
-   - Toast informando quantos foram vinculados/reatribuídos
+4. **Filtro na função `filterAndSort`**: Aplicar filtro de atribuição antes da ordenação, consultando o mapa de vínculos
 
-4. **Botão "Atribuir Existente"** ao lado do "Novo Benefício" no header da seção
+5. **Badge no `ItemList`**: Receber prop `attrMap` (Record de id → nome do plano). Ao lado do nome do item, exibir:
+   - Badge verde com nome do plano se atribuído
+   - Badge cinza "Sem plano" se não atribuído
 
-5. **Dialog de seleção** com:
-   - Campo de busca por nome
-   - Lista com checkboxes
-   - Badge indicando plano atual para benefícios já vinculados a outro plano
-   - Botão de confirmação com contador
-
-### Resultado
-- Benefícios existentes no catálogo podem ser atribuídos a um plano, igual às coberturas
-- Benefícios de outros planos podem ser reatribuídos com indicação visual
-
-### Arquivo
-- `src/components/admin/planos/PlanBeneficiosList.tsx`
+### Arquivos
+- `src/components/gestao-comercial/CatalogoCoberturasBeneficios.tsx` (único arquivo alterado)
 
