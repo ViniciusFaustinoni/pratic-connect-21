@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Dialog,
   DialogContent,
@@ -41,15 +41,17 @@ export function DuplicarLinhaModal({ open, onOpenChange, linha }: DuplicarLinhaM
   const duplicateLine = useDuplicateProductLine();
   const { data: regioes } = useRegioes();
 
-  // Initialize name when linha changes
-  useState(() => {
-    if (linha) setNomeLinha(`${linha.name} (cópia)`);
-  });
+  useEffect(() => {
+    if (linha && open) {
+      setNomeLinha(`${linha.name} (cópia)`);
+    }
+  }, [linha, open]);
 
   const handleDuplicate = async () => {
     if (!linha) return;
     await duplicateLine.mutateAsync({
       id: linha.id,
+      nome: nomeLinha,
       desconto,
       sufixo,
       regiao: regiao !== KEEP_ORIGINAL ? regiao : undefined,
@@ -81,10 +83,13 @@ export function DuplicarLinhaModal({ open, onOpenChange, linha }: DuplicarLinhaM
 
         <div className="space-y-4 py-2">
           <div className="space-y-2">
-            <Label>Nome resultante da linha</Label>
-            <p className="text-sm font-medium text-foreground bg-muted rounded-md px-3 py-2">
-              {nomeResultante}
-            </p>
+            <Label htmlFor="nome-linha">Nome da linha</Label>
+            <Input
+              id="nome-linha"
+              value={nomeLinha}
+              onChange={(e) => setNomeLinha(e.target.value)}
+              placeholder="Nome da nova linha"
+            />
           </div>
 
           <div className="grid grid-cols-2 gap-4">
