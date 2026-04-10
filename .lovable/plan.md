@@ -1,19 +1,37 @@
 
 
-## Plano: Ordenar coberturas e benefícios em ordem alfabética
+## Plano: Adicionar "Atribuir Existente" na lista de Benefícios do plano
+
+### Problema
+A lista de coberturas dentro da edição do plano possui dois botões: "Atribuir Existente" e "Nova Cobertura". A lista de benefícios possui apenas "Novo Benefício", sem opção de atribuir benefícios já existentes no catálogo.
 
 ### Alteração
-Mudar a ordenação das queries de `display_order` para `nome`/`name` no arquivo `src/hooks/usePlans.ts`.
 
-### Detalhes técnicos
+**`src/components/admin/planos/PlanBeneficiosList.tsx`**
 
-**`src/hooks/usePlans.ts`**
+Replicar o padrão já implementado em `PlanCoberturasList.tsx`:
 
-1. **useCoberturas** (linha 442): Trocar `.order('display_order', ...)` por `.order('nome')` 
-2. **useBenefits** (linha 382): Trocar `.order('display_order')` por `.order('name')`
+1. **Novos estados**: `assignOpen`, `assignSelected`, `assignSearch`, `assigning`
+
+2. **Nova query** `beneficios-disponiveis-all`: Buscar todos os benefícios ativos com seus vínculos atuais (`planos_beneficios` + nome do plano), excluindo os já vinculados ao plano atual
+
+3. **Função `handleAssign`**: 
+   - Remover vínculos anteriores dos benefícios selecionados que já pertencem a outro plano
+   - Inserir novos vínculos em `planos_beneficios` para o plano atual
+   - Toast informando quantos foram vinculados/reatribuídos
+
+4. **Botão "Atribuir Existente"** ao lado do "Novo Benefício" no header da seção
+
+5. **Dialog de seleção** com:
+   - Campo de busca por nome
+   - Lista com checkboxes
+   - Badge indicando plano atual para benefícios já vinculados a outro plano
+   - Botão de confirmação com contador
 
 ### Resultado
-- Todas as coberturas aparecem em ordem A-Z pelo campo `nome`
-- Todos os benefícios aparecem em ordem A-Z pelo campo `name`
-- Afeta tanto o catálogo global quanto qualquer tela que use esses hooks
+- Benefícios existentes no catálogo podem ser atribuídos a um plano, igual às coberturas
+- Benefícios de outros planos podem ser reatribuídos com indicação visual
+
+### Arquivo
+- `src/components/admin/planos/PlanBeneficiosList.tsx`
 
