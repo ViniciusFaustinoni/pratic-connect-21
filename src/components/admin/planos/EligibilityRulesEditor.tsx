@@ -147,9 +147,20 @@ function RuleCard({ rule, onDelete }: { rule: EligibilityRule; onDelete: (id: st
       descParts.push((cfg.regioes || []).join(', '));
       break;
     case 'marca_modelo':
-      if (cfg.marca) descParts.push(cfg.marca);
-      if (cfg.modelo) descParts.push(cfg.modelo);
-      if (cfg.versao) descParts.push(cfg.versao);
+      if (cfg.marcas && Array.isArray(cfg.marcas)) {
+        descParts.push(
+          (cfg.marcas as MarcaSelection[]).map((m) => {
+            let s = m.marca;
+            if (m.modelos?.length) s += ` (${m.modelos.join(', ')})`;
+            if (m.anos?.length) s += ` · ${m.anos.join(', ')}`;
+            return s;
+          }).join(' | ')
+        );
+      } else {
+        if (cfg.marca) descParts.push(cfg.marca);
+        if (cfg.modelo) descParts.push(cfg.modelo);
+        if (cfg.versao) descParts.push(cfg.versao);
+      }
       break;
     case 'tipo_uso':
       descParts.push((cfg.tipos || []).join(', '));
@@ -349,19 +360,12 @@ function AddRuleDialog({
           )}
 
           {ruleType === 'marca_modelo' && (
-            <div className="space-y-3">
-              <div className="space-y-1">
-                <Label className="text-xs">Marca</Label>
-                <Input value={config.marca || ''} onChange={(e) => setConfig((p) => ({ ...p, marca: e.target.value }))} placeholder="Ex: Toyota" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Modelo</Label>
-                <Input value={config.modelo || ''} onChange={(e) => setConfig((p) => ({ ...p, modelo: e.target.value }))} placeholder="Ex: Corolla" />
-              </div>
-              <div className="space-y-1">
-                <Label className="text-xs">Versão (opcional)</Label>
-                <Input value={config.versao || ''} onChange={(e) => setConfig((p) => ({ ...p, versao: e.target.value }))} placeholder="Ex: XEI" />
-              </div>
+            <div className="space-y-2">
+              <Label className="text-xs">Marcas e Modelos</Label>
+              <MarcaModeloRuleSelector
+                value={(config.marcas as MarcaSelection[]) || []}
+                onChange={(marcas) => setConfig((p) => ({ ...p, marcas }))}
+              />
             </div>
           )}
 
