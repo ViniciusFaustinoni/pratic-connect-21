@@ -1,29 +1,22 @@
 
 
-## Plano: Adicionar WhatsApp e endereço ao modal de manutenção
+## Plano: Atribuir rastreador avariado ao porte do tecnico na substituição
 
-### Situação atual
-O modal `AgendarManutencaoUnificadoModal` já:
-- Busca dados completos do associado (telefone, whatsapp, endereço)
-- Tem calendário com agendamento, período e encaixe
-- Cria serviço tipo `vistoria_manutencao` que já aparece no mapa (seção "SERVICOS DIRETOS" da view) e nas atribuições
-
-O problema é que a seção de dados do associado (linhas 322-327) mostra apenas nome e telefone em texto simples, sem botão WhatsApp e sem endereço.
+### Problema
+Na substituição (manutenção com resultado "avariado/substituição"), o rastreador antigo é marcado como `retorno_base` ou `baixado` com `veiculo_id: null`, mas **não recebe o `portador_id` do técnico** que realizou o serviço. Isso significa que o rastreador avariado fica "solto" no sistema em vez de ficar no inventário do técnico para devolução à base.
 
 ### Mudança (1 arquivo)
 
-**`src/components/monitoramento/rastreadores/AgendarManutencaoUnificadoModal.tsx`**
+**`src/hooks/useVistoriaManutencao.ts`** — função `useRegistrarResultadoManutencao`
 
-Expandir a seção do associado (linhas 322-327) para incluir:
-- Telefone clicável (`tel:`) com ícone `Phone`
-- Botão WhatsApp verde (abrindo `wa.me/55{whatsapp||telefone}`)
-- WhatsApp separado se diferente do telefone
-- Endereço completo com ícone `MapPin` (logradouro, numero, bairro, cidade/UF, CEP)
+1. Incluir `tecnico_id` no select do serviço (linha 488): `select('rastreador_id, veiculo_id, tecnico_id')`
 
-Adicionar imports: `Phone`, `MapPin` (já importa `MessageCircle`)
+2. No cenário "substituicao" (linha 594), ao atualizar o rastreador antigo, adicionar `portador_id: servico.tecnico_id` junto com `veiculo_id: null` e o novo status. Assim o rastreador avariado fica atribuído ao porte do técnico.
 
-Padrão idêntico ao já implementado no `AbrirRetiradaModal.tsx` (linhas 348-406).
+3. Na movimentação de estoque do rastreador antigo (linha 609), incluir `portador_id: servico.tecnico_id` se o campo existir na tabela `estoque_movimentacoes`, ou adicionar na observação.
 
 ### Resultado
-O coordenador ao clicar "Enviar para Manutenção" verá o mesmo nível de informação do modal de retirada: contatos com WhatsApp direto, endereço completo, e calendário de agendamento. O serviço criado já aparece automaticamente no mapa, atribuições automáticas/manuais e serviços de campo.
+- **Consertado (resolvido)**: rastreador continua no veículo normalmente (já funciona)
+- **Avariado (substituicao)**: rastreador antigo vai para o porte do técnico (`portador_id = tecnico_id`), novo rastreador do porte é instalado no veículo (já funciona)
+- **Retirada**: apenas atribui rastreador ao técnico e retira do veículo (já funciona)
 
