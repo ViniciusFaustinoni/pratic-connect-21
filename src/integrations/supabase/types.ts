@@ -26409,6 +26409,9 @@ export type Database = {
           chassi: string | null
           cobertura_assistencia: boolean | null
           cobertura_roubo_furto: boolean | null
+          cobertura_suspensa: boolean | null
+          cobertura_suspensa_em: string | null
+          cobertura_suspensa_motivo: string | null
           cobertura_terceiros: boolean | null
           cobertura_total: boolean | null
           cobertura_vidros: boolean | null
@@ -26463,6 +26466,9 @@ export type Database = {
           chassi?: string | null
           cobertura_assistencia?: boolean | null
           cobertura_roubo_furto?: boolean | null
+          cobertura_suspensa?: boolean | null
+          cobertura_suspensa_em?: string | null
+          cobertura_suspensa_motivo?: string | null
           cobertura_terceiros?: boolean | null
           cobertura_total?: boolean | null
           cobertura_vidros?: boolean | null
@@ -26517,6 +26523,9 @@ export type Database = {
           chassi?: string | null
           cobertura_assistencia?: boolean | null
           cobertura_roubo_furto?: boolean | null
+          cobertura_suspensa?: boolean | null
+          cobertura_suspensa_em?: string | null
+          cobertura_suspensa_motivo?: string | null
           cobertura_terceiros?: boolean | null
           cobertura_total?: boolean | null
           cobertura_vidros?: boolean | null
