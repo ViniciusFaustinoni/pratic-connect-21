@@ -7,11 +7,28 @@ import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Dialog, DialogContent, DialogDescription, DialogFooter, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import { Button } from '@/components/ui/button';
-import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation } from 'lucide-react';
+import { Loader2, GripVertical, MapPin, User, Car, Clock, Wrench, ClipboardCheck, Search, Calendar, Navigation, FileText } from 'lucide-react';
 import { formatDistanceToNow } from 'date-fns';
 import { cn } from '@/lib/utils';
 import { format, parseISO, isToday, isTomorrow } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
+import { TIPO_SERVICO_LABELS } from '@/hooks/useServicos';
+
+function getTipoLabel(tipo: string) {
+  return (TIPO_SERVICO_LABELS as Record<string, string>)[tipo] || tipo;
+}
+
+function getTipoBadgeClass(tipo: string) {
+  if (tipo === 'instalacao') return 'border-blue-300 text-blue-700 dark:text-blue-300';
+  if (tipo === 'revistoria') return 'border-teal-300 text-teal-700 dark:text-teal-300';
+  return 'border-amber-300 text-amber-700 dark:text-amber-300';
+}
+
+function getTipoIcon(tipo: string) {
+  if (tipo === 'instalacao') return <Wrench className="h-3 w-3 text-blue-500" />;
+  if (tipo === 'revistoria') return <FileText className="h-3 w-3 text-teal-500" />;
+  return <ClipboardCheck className="h-3 w-3 text-amber-500" />;
+}
 
 // ── Draggable Service Card ──
 function DraggableServico({ servico }: { servico: any }) {
