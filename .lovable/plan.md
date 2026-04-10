@@ -1,45 +1,36 @@
 
 
-## Plano: Edição em massa de regras ao duplicar plano
+## Plano: Aplicar desconto nas faixas FIPE ao duplicar plano
 
-### Contexto
-Ao duplicar um plano, o modal já permite aplicar desconto (%) e sufixo. O usuário quer também poder configurar **Região**, **Tipo de Uso** e **Combustível** em massa, aplicando essas regras a todas as coberturas e benefícios clonados.
+### Problema
+O desconto na duplicação só é aplicado aos campos estáticos (`coberturas.valor`, `benefits.preco_sugerido`). Porém, o motor de cotação prioriza os valores das **faixas FIPE** armazenadas em `entity_eligibility_rules` (`rule_type = 'fipe_range'`, campo `rule_config.faixas[].valor`). Como esses valores não são descontados, o preço final do plano duplicado permanece idêntico ao original.
 
-### Mudanças
+### Solução
+No hook `useDuplicatePlan` (`src/hooks/usePlansAdmin.ts`), após clonar as regras de elegibilidade de cada cobertura e benefício, aplicar o desconto a todas as faixas FIPE antes de inserir no banco.
 
-#### 1. Modal `DuplicarPlanoModal.tsx`
-- Adicionar 3 campos opcionais:
-  - **Região**: Select com as regiões do banco (`regioes` table) + opção "Manter original"
-  - **Tipo de Uso**: Select com opções "Manter original", "Particular", "Aplicativo"
-  - **Combustível**: Select com opções "Manter original", "Gasolina", "Diesel"
-- Passar os novos valores para `duplicatePlan.mutateAsync()`
+### Mudança (1 arquivo)
 
-#### 2. Hook `useDuplicatePlan` em `usePlansAdmin.ts`
-- Expandir o tipo de input para aceitar `regiao?: string | null`, `tipoUso?: string | null`, `combustivel?: string | null`
-- Após clonar as regras de elegibilidade de cada cobertura/benefício, aplicar a lógica de substituição em massa:
-  - Se `regiao` foi informado: remover regras `rule_type = 'regiao'` clonadas e inserir uma nova regra de região com o valor selecionado (usando o UUID da região)
-  - Se `tipoUso` foi informado: remover regras `rule_type = 'tipo_uso'` clonadas e inserir nova regra
-  - Se `combustivel` foi informado: remover regras `rule_type = 'combustivel'` clonadas e inserir nova regra
-- Também aplicar regra de região no nível do **plano** (`entity_type = 'plano'`) quando região for selecionada
+**`src/hooks/usePlansAdmin.ts`** — na função `useDuplicatePlan`:
 
-#### 3. Busca de regiões
-- Usar query simples à tabela `regioes` para popular o select do modal
-
-### Detalhes técnicos
-
-**Formato das regras inseridas** (baseado no padrão existente em `entity_eligibility_rules`):
-```json
-// Região (usando UUID)
-{ "entity_id": "<id>", "entity_type": "cobertura", "rule_type": "regiao", "rule_config": { "values": ["<regiao_uuid>"] }, "is_active": true }
-
-// Tipo de uso
-{ "entity_id": "<id>", "entity_type": "cobertura", "rule_type": "tipo_uso", "rule_config": { "tipos_uso": ["particular"] }, "is_active": true }
-
-// Combustível
-{ "entity_id": "<id>", "entity_type": "cobertura", "rule_type": "combustivel", "rule_config": { "combustiveis": ["gasolina"] }, "is_active": true }
+1. Criar helper `applyDiscountToFipeRanges`:
+```typescript
+const applyDiscountToFipeRanges = (rules: any[], pct: number) => {
+  if (pct <= 0) return rules;
+  return rules.map(r => {
+    if (r.rule_type !== 'fipe_range') return r;
+    const faixas = (r.rule_config?.faixas || []).map((f: any) => ({
+      ...f,
+      valor: Number((f.valor * (100 - pct) / 100).toFixed(2)),
+    }));
+    return { ...r, rule_config: { ...r.rule_config, faixas } };
+  });
+};
 ```
 
-**Arquivos modificados:**
-- `src/components/admin/planos/DuplicarPlanoModal.tsx` — adicionar campos de região, tipo de uso e combustível
-- `src/hooks/usePlansAdmin.ts` — expandir `useDuplicatePlan` com lógica de substituição de regras em massa
+2. Aplicar nos 3 pontos onde regras são clonadas:
+   - Regras de **coberturas** (linha ~557): `applyDiscountToFipeRanges(clonedRules, desconto)` antes de `applyBulkRuleOverrides`
+   - Regras de **benefícios** (linha ~478): `applyDiscountToFipeRanges(clonedBRules, desconto)` antes de `applyBulkRuleOverrides`
+   - Regras de **plano** (linha ~415): não necessário (planos não têm fipe_range)
+
+Isso garante que ao duplicar com 10% de desconto, cada `faixa.valor` (ex: R$ 13,75 → R$ 12,38; R$ 108,20 → R$ 97,38) será reduzido, resultando no valor mensal correto.
 
