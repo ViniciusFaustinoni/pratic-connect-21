@@ -1,36 +1,32 @@
 
 
-## Plano: Corrigir preço incorreto em planos duplicados com desconto
+## Plano: Mostrar valor real do tipo de uso em vez de "tipo_uso"
 
-### Problema raiz
-
-Após duplicar um plano com 10% de desconto, o desconto é aplicado **duas vezes** em partes diferentes:
-
-1. **Na duplicação**: Os valores estáticos (`coberturas.valor`, `benefits.preco_sugerido`) e os valores das faixas FIPE (`fipe_range`) são todos reduzidos em 10% no banco de dados.
-2. **Na cotação**: O motor `usePlanosCotacao.ts` usa os valores de `fipe_range` (já descontados) para coberturas, mas para benefícios usa `preco_sugerido` (também já descontado). Até aqui tudo correto.
-
-**O bug real**: A mutation `useDuplicatePlan` **não invalida** o cache `['entity_eligibility_rules', 'all']` (staleTime de 5 minutos). Isso significa que ao fazer a cotação logo após duplicar, o motor não encontra as `fipe_range` rules dos novos IDs de coberturas e faz fallback para `coberturas.valor` (estático). O resultado é uma mistura de valores estáticos (com desconto) e valores de cache antigo, produzindo um preço incorreto.
-
-Adicionalmente, a invalidação do cache de coberturas/benefícios/planos também pode estar incompleta.
+### Problema
+Na listagem de coberturas/benefícios do plano, os badges de regras de elegibilidade mostram o texto cru `tipo_uso` quando o array `values` na `rule_config` está vazio ou ausente. O código atual (linha 115 de `LinhasPlanos.tsx`) usa `rule.rule_type` como fallback, que é o nome técnico do campo.
 
 ### Correção (1 arquivo)
 
-**`src/hooks/usePlansAdmin.ts`** — No `onSuccess` de `useDuplicatePlan` (linha ~592), adicionar invalidação de:
-- `['entity_eligibility_rules', 'all']`
-- `['planos_coberturas']` e `['planos_beneficios']` (se existirem como query keys)
+**`src/components/gestao-comercial/LinhasPlanos.tsx`** — Alterar a lógica de fallback do label (linhas 115-127):
 
+1. Adicionar um mapa de nomes amigáveis para os `rule_type`:
 ```typescript
-onSuccess: () => {
-  queryClient.invalidateQueries({ queryKey: ['plans'] });
-  queryClient.invalidateQueries({ queryKey: ['planos'] });
-  queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
-  queryClient.invalidateQueries({ queryKey: ['entity_eligibility_rules'] }); // NOVO
-  toast.success('Plano duplicado!');
-},
+const RULE_TYPE_LABELS: Record<string, string> = {
+  tipo_uso: 'Tipo de Uso',
+  combustivel: 'Combustível',
+  regiao: 'Região',
+  tipo_placa: 'Tipo de Placa',
+  fipe_range: 'Faixa FIPE',
+};
 ```
 
-Usar `{ queryKey: ['entity_eligibility_rules'] }` sem `'all'` para invalidar todas as sub-queries desse grupo.
+2. Quando `values` existir e tiver itens, mostrar os valores resolvidos (como já faz para região).
+3. Quando `values` estiver vazio ou ausente, usar o nome amigável do `RULE_TYPE_LABELS` em vez do nome técnico cru.
+
+Mudança na lógica (linhas 115-127):
+- Trocar `let label = rule.rule_type` por `let label = RULE_TYPE_LABELS[rule.rule_type] || rule.rule_type`
+- Manter o resto da lógica que sobrescreve `label` quando há valores.
 
 ### Resultado
-Após duplicar um plano, o cache de regras de elegibilidade será atualizado imediatamente, garantindo que as novas fipe_range (com desconto aplicado) sejam usadas na cotação seguinte sem precisar de F5.
+Em vez de mostrar `tipo_uso`, o badge mostrará `Particular`, `APP`, etc. quando houver valores configurados, ou `Tipo de Uso` como fallback legível quando não houver.
 
