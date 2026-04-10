@@ -1,22 +1,38 @@
 
 
-## Plano: Atribuir rastreador avariado ao porte do tecnico na substituição
+## Plano: Ações de status para rastreadores em manutenção (retorno_base / em_garantia)
 
-### Problema
-Na substituição (manutenção com resultado "avariado/substituição"), o rastreador antigo é marcado como `retorno_base` ou `baixado` com `veiculo_id: null`, mas **não recebe o `portador_id` do técnico** que realizou o serviço. Isso significa que o rastreador avariado fica "solto" no sistema em vez de ficar no inventário do técnico para devolução à base.
+### Contexto
+Rastreadores avariados ficam com status `retorno_base` e `portador_id` do técnico. O coordenador precisa poder:
+1. **Retorno base** → "Disponível" (`estoque`) ou "Enviado para Fornecedor" (`em_garantia`)
+2. **Em garantia** → "Disponível" (`estoque`)
 
-### Mudança (1 arquivo)
+Atualmente a UI não oferece ações para esses status — só mostra portador para `estoque`.
 
-**`src/hooks/useVistoriaManutencao.ts`** — função `useRegistrarResultadoManutencao`
+### Mudanças
 
-1. Incluir `tecnico_id` no select do serviço (linha 488): `select('rastreador_id, veiculo_id, tecnico_id')`
+**1. `src/components/rastreadores/RastreadorCard.tsx`**
+- Mostrar portador também para status `retorno_base` e `em_garantia` (não só `estoque`)
+- Adicionar botões de ação rápida:
+  - Status `retorno_base`: botão "Disponível" (→ estoque) e "Enviar Fornecedor" (→ em_garantia)
+  - Status `em_garantia`: botão "Disponível" (→ estoque)
 
-2. No cenário "substituicao" (linha 594), ao atualizar o rastreador antigo, adicionar `portador_id: servico.tecnico_id` junto com `veiculo_id: null` e o novo status. Assim o rastreador avariado fica atribuído ao porte do técnico.
+**2. `src/components/rastreadores/RastreadorTableView.tsx`**
+- No dropdown de ações, adicionar as mesmas opções para rastreadores com status `retorno_base` e `em_garantia`
+- Mostrar portador na coluna associado/portador para esses status
 
-3. Na movimentação de estoque do rastreador antigo (linha 609), incluir `portador_id: servico.tecnico_id` se o campo existir na tabela `estoque_movimentacoes`, ou adicionar na observação.
+**3. `src/components/rastreadores/RastreadorGridView.tsx`**
+- Passar novo callback `onChangeStatus` para os cards
+
+**4. `src/hooks/useRastreadores.ts`** (ou novo hook)
+- Criar mutation `useAlterarStatusRastreador` que:
+  - Atualiza `status` do rastreador
+  - Limpa `portador_id` quando volta para `estoque`
+  - Registra movimentação em `estoque_movimentacoes`
+
+**5. Página principal de rastreadores** (onde monta grid/table)
+- Conectar o novo callback de mudança de status
 
 ### Resultado
-- **Consertado (resolvido)**: rastreador continua no veículo normalmente (já funciona)
-- **Avariado (substituicao)**: rastreador antigo vai para o porte do técnico (`portador_id = tecnico_id`), novo rastreador do porte é instalado no veículo (já funciona)
-- **Retirada**: apenas atribui rastreador ao técnico e retira do veículo (já funciona)
+O coordenador verá botões claros nos cards e menus de rastreadores em manutenção para movê-los entre "Disponível" e "Enviado para Fornecedor", com registro automático de movimentação.
 
