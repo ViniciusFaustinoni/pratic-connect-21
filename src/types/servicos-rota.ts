@@ -1,7 +1,7 @@
 // Tipos para o sistema unificado de serviços em rotas (instalações + vistorias)
 
 // Tipo de serviço: instalacao ou qualquer origem de vistoria
-export type TipoServico = 'instalacao' | 'vistoria' | 'cotacao' | 'contrato' | 'manutencao';
+export type TipoServico = 'instalacao' | 'revistoria' | 'vistoria' | 'cotacao' | 'contrato' | 'manutencao';
 
 export type TipoVistoria = 'saida' | 'sinistro' | 'periodica' | 'cancelamento' | 'manutencao';
 
@@ -52,6 +52,7 @@ export const TIPO_VISTORIA_LABELS: Record<TipoVistoria, string> = {
 // Labels para tipo de serviço (origem da vistoria)
 export const TIPO_SERVICO_LABELS: Record<TipoServico, string> = {
   instalacao: 'Instalação',
+  revistoria: 'Revistoria',
   vistoria: 'Vistoria',
   cotacao: 'Vistoria (Cotação)',
   contrato: 'Vistoria (Contrato)',
@@ -61,6 +62,7 @@ export const TIPO_SERVICO_LABELS: Record<TipoServico, string> = {
 // Cores para tipo de serviço
 export const TIPO_SERVICO_COLORS: Record<TipoServico, string> = {
   instalacao: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
+  revistoria: 'bg-teal-100 text-teal-800 dark:bg-teal-900 dark:text-teal-300',
   vistoria: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300',
   cotacao: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
   contrato: 'bg-emerald-100 text-emerald-800 dark:bg-emerald-900 dark:text-emerald-300',
@@ -70,6 +72,7 @@ export const TIPO_SERVICO_COLORS: Record<TipoServico, string> = {
 // Ícones para tipo de serviço (usar com lucide-react)
 export const TIPO_SERVICO_ICONS: Record<TipoServico, string> = {
   instalacao: 'Wrench',
+  revistoria: 'ClipboardCheck',
   vistoria: 'ClipboardCheck',
   cotacao: 'FileSearch',
   contrato: 'FileText',

@@ -118,6 +118,7 @@ const RESULTADO_MANUTENCAO_COLORS: Record<string, string> = {
 
 const TIPO_SERVICO_LABELS: Record<string, { label: string; icon: React.ElementType; color: string }> = {
   instalacao: { label: 'Instalação', icon: Car, color: 'text-blue-600 bg-blue-500/10 border-blue-500/30' },
+  revistoria: { label: 'Revistoria', icon: FileText, color: 'text-teal-600 bg-teal-500/10 border-teal-500/30' },
   vistoria_manutencao: { label: 'Manutenção de Campo', icon: Wrench, color: 'text-amber-600 bg-amber-500/10 border-amber-500/30' },
   vistoria_retirada: { label: 'Retirada', icon: Package, color: 'text-red-600 bg-red-500/10 border-red-500/30' },
 };

@@ -1,0 +1,1 @@
+ALTER TYPE tipo_servico ADD VALUE IF NOT EXISTS 'revistoria';

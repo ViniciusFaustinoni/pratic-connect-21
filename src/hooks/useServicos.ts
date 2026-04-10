@@ -10,6 +10,7 @@ import { useRef, useEffect } from 'react';
 
 export type TipoServico = 
   | 'instalacao' 
+  | 'revistoria'
   | 'vistoria_entrada' 
   | 'vistoria_saida' 
   | 'vistoria_sinistro'
@@ -213,6 +214,7 @@ export interface ServicoFilters {
 
 export const TIPO_SERVICO_LABELS: Record<TipoServico, string> = {
   instalacao: 'Instalação',
+  revistoria: 'Revistoria',
   vistoria_entrada: 'Vistoria de Entrada',
   vistoria_saida: 'Vistoria de Saída',
   vistoria_sinistro: 'Vistoria de Sinistro',
@@ -1426,9 +1428,14 @@ export function isInstalacao(tipo: TipoServico): boolean {
   return tipo === 'instalacao';
 }
 
+// Helper para verificar se é uma revistoria
+export function isRevistoria(tipo: TipoServico): boolean {
+  return tipo === 'revistoria';
+}
+
 // Helper para verificar se é uma vistoria
 export function isVistoria(tipo: TipoServico): boolean {
-  return tipo.startsWith('vistoria_');
+  return tipo.startsWith('vistoria_') || tipo === 'revistoria';
 }
 
 // Helper para obter label amigável
