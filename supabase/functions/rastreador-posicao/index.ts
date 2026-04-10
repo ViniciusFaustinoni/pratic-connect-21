@@ -656,12 +656,11 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
-      const body = await req.clone().json().catch(() => ({}));
-      if (body.rastreador_id) {
+      if (rastreadorIdForFallback) {
         const { data: rast } = await supabaseForFallback
           .from('rastreadores')
           .select('ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao')
-          .eq('id', body.rastreador_id)
+          .eq('id', rastreadorIdForFallback)
           .single();
 
         if (rast?.ultima_posicao_lat && rast?.ultima_posicao_lng) {
