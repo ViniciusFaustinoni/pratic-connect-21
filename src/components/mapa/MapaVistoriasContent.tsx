@@ -216,7 +216,8 @@ export function MapaVistoriasContent() {
       hojeNorm.setHours(0, 0, 0, 0);
       const isHoje = isSameDay(dataVistoria, hojeNorm);
       const isAtrasada = dataVistoria < hojeNorm && v.status !== 'concluida' && v.status !== 'cancelada';
-      if (!isHoje && !isAtrasada) return false;
+      const isEncaixe = v.permite_encaixe === true;
+      if (!isHoje && !isAtrasada && !isEncaixe) return false;
 
       if (filtroBusca) {
         const termo = filtroBusca.toLowerCase();
