@@ -112,7 +112,14 @@ function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
       {visibleRules.map((rule) => {
         const style = RULE_BADGE_STYLES[rule.rule_type] || RULE_BADGE_STYLES.tipo_uso;
         const values = rule.rule_config?.values as string[] | undefined;
-        let label = rule.rule_type;
+        const RULE_TYPE_LABELS: Record<string, string> = {
+          tipo_uso: 'Tipo de Uso',
+          combustivel: 'Combustível',
+          regiao: 'Região',
+          tipo_placa: 'Tipo de Placa',
+          fipe_range: 'Faixa FIPE',
+        };
+        let label = RULE_TYPE_LABELS[rule.rule_type] || rule.rule_type;
 
         if (rule.rule_type === 'regiao') {
           if (regioesMap && values) {
@@ -120,7 +127,7 @@ function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
           } else {
             label = `Região (${values?.length || 0})`;
           }
-        } else if (values && RULE_LABELS[rule.rule_type]) {
+        } else if (values && values.length > 0 && RULE_LABELS[rule.rule_type]) {
           label = values
             .map((v) => RULE_LABELS[rule.rule_type]?.[v] || v)
             .join(', ');
