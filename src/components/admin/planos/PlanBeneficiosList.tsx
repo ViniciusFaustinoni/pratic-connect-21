@@ -389,11 +389,6 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
                       {ben.icon && <span className="text-base">{ben.icon}</span>}
                       <span className="text-sm truncate">{ben.name}</span>
                     </div>
-                    {ben.vinculadoAo && (
-                      <Badge variant="outline" className="text-[10px] shrink-0 bg-muted text-muted-foreground">
-                        {(ben.vinculadoAo as any).planos?.nome || 'Outro plano'}
-                      </Badge>
-                    )}
                   </label>
                 ))
               )}
