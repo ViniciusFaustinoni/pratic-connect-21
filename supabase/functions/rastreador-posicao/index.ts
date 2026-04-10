@@ -426,6 +426,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { rastreador_id } = await req.json();
+    rastreadorIdForFallback = rastreador_id;
 
     if (!rastreador_id) {
       throw new Error('rastreador_id é obrigatório');
