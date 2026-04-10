@@ -23,6 +23,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useDuplicateProductLine, useDuplicatePlan, useTogglePlanStatus } from '@/hooks/usePlansAdmin';
 import { ImportarLinhasModal } from './ImportarLinhasModal';
 import { DuplicarPlanoModal } from '@/components/admin/planos/DuplicarPlanoModal';
+import { DuplicarLinhaModal } from '@/components/admin/planos/DuplicarLinhaModal';
 import {
   ChevronDown,
   Copy,
@@ -271,21 +272,45 @@ function useDeleteLinha() {
       const { data: planos } = await supabase.from('planos').select('id').eq('product_line_id', id);
 
       for (const plano of planos || []) {
+        // Collect cobertura IDs and benefit IDs for this plan
+        const { data: pcLinks } = await supabase.from('planos_coberturas').select('cobertura_id').eq('plano_id', plano.id);
+        const coberturaIds = (pcLinks || []).map((l) => l.cobertura_id);
+
+        const { data: pbLinks } = await supabase.from('planos_beneficios').select('benefit_id').eq('plano_id', plano.id);
+        const benefitIds = (pbLinks || []).map((l) => l.benefit_id);
+
+        // Delete join tables
         await supabase.from('planos_coberturas').delete().eq('plano_id', plano.id);
         await supabase.from('planos_beneficios').delete().eq('plano_id', plano.id);
         await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'plano').eq('entity_id', plano.id);
+
+        // Delete coberturas + their rules
+        if (coberturaIds.length > 0) {
+          await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'cobertura').in('entity_id', coberturaIds);
+          await supabase.from('coberturas').delete().in('id', coberturaIds);
+        }
+
+        // Delete benefits + their rules + exclusions
+        if (benefitIds.length > 0) {
+          await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'beneficio').in('entity_id', benefitIds);
+          await supabase.from('benefit_category_exclusions').delete().in('benefit_id', benefitIds);
+          await supabase.from('benefits').delete().in('id', benefitIds);
+        }
       }
 
       if (planos && planos.length > 0) {
         await supabase.from('planos').delete().in('id', planos.map((plano) => plano.id));
       }
 
+      // Delete line-level eligibility rules
+      await supabase.from('entity_eligibility_rules' as any).delete().eq('entity_type', 'linha').eq('entity_id', id);
+
       const { error } = await supabase.from('product_lines').delete().eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
-      toast.success('Linha excluída');
+      toast.success('Linha excluída com todos os planos, coberturas e benefícios');
     },
     onError: (error: Error) => toast.error(`Erro ao excluir linha: ${error.message}`),
   });
@@ -319,6 +344,7 @@ export function LinhasPlanos() {
   const [importModal, setImportModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
   const [duplicarModal, setDuplicarModal] = useState<{ open: boolean; plano: { id: string; nome: string } | null }>({ open: false, plano: null });
+  const [duplicarLinhaModal, setDuplicarLinhaModal] = useState<{ open: boolean; linha: { id: string; name: string } | null }>({ open: false, linha: null });
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
   const selectedPlan = useMemo(
@@ -461,7 +487,7 @@ export function LinhasPlanos() {
                         <Button size="icon" variant="outline" onClick={() => setLinhaModal({ open: true, productLine: linha })}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="outline" onClick={() => duplicateLine.mutate(linha.id)}>
+                        <Button size="icon" variant="outline" onClick={() => setDuplicarLinhaModal({ open: true, linha: { id: linha.id, name: linha.name } })}>
                           <Copy className="h-4 w-4" />
                         </Button>
                         {canDelete ? (
@@ -740,6 +766,11 @@ export function LinhasPlanos() {
         open={duplicarModal.open}
         onOpenChange={(open) => setDuplicarModal({ open, plano: open ? duplicarModal.plano : null })}
         plano={duplicarModal.plano}
+      />
+      <DuplicarLinhaModal
+        open={duplicarLinhaModal.open}
+        onOpenChange={(open) => setDuplicarLinhaModal({ open, linha: open ? duplicarLinhaModal.linha : null })}
+        linha={duplicarLinhaModal.linha}
       />
     </>
   );
