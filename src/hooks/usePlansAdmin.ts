@@ -326,7 +326,7 @@ function applyBulkRuleOverrides(
       entity_id: entityId,
       entity_type: entityType,
       rule_type: 'regiao',
-      rule_action: 'include',
+      rule_mode: 'include',
       rule_config: { values: [overrides.regiao] },
       is_active: true,
     });
@@ -337,7 +337,7 @@ function applyBulkRuleOverrides(
       entity_id: entityId,
       entity_type: entityType,
       rule_type: 'tipo_uso',
-      rule_action: 'include',
+      rule_mode: 'include',
       rule_config: { tipos_uso: [overrides.tipoUso] },
       is_active: true,
     });
@@ -348,7 +348,7 @@ function applyBulkRuleOverrides(
       entity_id: entityId,
       entity_type: entityType,
       rule_type: 'combustivel',
-      rule_action: 'include',
+      rule_mode: 'include',
       rule_config: { combustiveis: [overrides.combustivel] },
       is_active: true,
     });
@@ -430,13 +430,15 @@ export function useDuplicatePlan() {
         });
         const finalPlanRules = applyBulkRuleOverrides(clonedPlanRules, createdPlan.id, 'plano', bulkOverrides);
         if (finalPlanRules.length > 0) {
-          await supabase.from('entity_eligibility_rules').insert(finalPlanRules);
+          const { error: planRulesErr } = await supabase.from('entity_eligibility_rules').insert(finalPlanRules);
+          if (planRulesErr) { console.error('Erro ao inserir regras do plano:', planRulesErr); throw planRulesErr; }
         }
       } else if (hasBulkOverrides) {
         // No original plan rules — create new ones from overrides
         const newPlanRules = applyBulkRuleOverrides([], createdPlan.id, 'plano', bulkOverrides);
         if (newPlanRules.length > 0) {
-          await supabase.from('entity_eligibility_rules').insert(newPlanRules);
+          const { error: newPlanRulesErr } = await supabase.from('entity_eligibility_rules').insert(newPlanRules);
+          if (newPlanRulesErr) { console.error('Erro ao inserir regras do plano:', newPlanRulesErr); throw newPlanRulesErr; }
         }
       }
 
@@ -494,7 +496,8 @@ export function useDuplicatePlan() {
           const discountedBRules = applyDiscountToFipeRanges(clonedBRules, desconto);
           const finalBRules = applyBulkRuleOverrides(discountedBRules, newBenefit.id, 'beneficio', bulkOverrides);
           if (finalBRules.length > 0) {
-            await supabase.from('entity_eligibility_rules').insert(finalBRules);
+            const { error: bRulesErr } = await supabase.from('entity_eligibility_rules').insert(finalBRules);
+            if (bRulesErr) { console.error('Erro ao inserir regras do benefício:', bRulesErr); throw bRulesErr; }
           }
 
           // Clone category exclusions
@@ -574,7 +577,8 @@ export function useDuplicatePlan() {
           const discountedRules = applyDiscountToFipeRanges(clonedRules, desconto);
           const finalRules = applyBulkRuleOverrides(discountedRules, newCob.id, 'cobertura', bulkOverrides);
           if (finalRules.length > 0) {
-            await supabase.from('entity_eligibility_rules').insert(finalRules);
+            const { error: cobRulesErr } = await supabase.from('entity_eligibility_rules').insert(finalRules);
+            if (cobRulesErr) { console.error('Erro ao inserir regras da cobertura:', cobRulesErr); throw cobRulesErr; }
           }
         }
       }
