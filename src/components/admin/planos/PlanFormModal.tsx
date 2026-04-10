@@ -269,7 +269,7 @@ export function PlanFormModal({
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="flex h-[92vh] max-w-7xl flex-col overflow-hidden p-0" onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
-        <DialogHeader className="border-b border-border/60 px-6 py-5">
+        <DialogHeader className="shrink-0 border-b border-border/60 px-6 py-5">
           <DialogTitle className="flex items-center gap-2 text-left">
             <Sparkles className="h-5 w-5 text-primary" />
             {isEditing ? 'Editar Plano' : 'Novo Plano'}
