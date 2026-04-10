@@ -277,7 +277,7 @@ export function PlanFormModal({
         </DialogHeader>
 
         <div className="grid h-[calc(92vh-77px)] min-h-0 xl:grid-cols-[minmax(0,1fr)_320px]">
-          <div className="relative min-h-0 border-b border-border/60 xl:border-b-0 xl:border-r xl:border-r-border/60">
+          <div className="relative min-h-0 overflow-hidden border-b border-border/60 xl:border-b-0 xl:border-r xl:border-r-border/60">
             {isEditing && (!fullPlanData || !canRenderEditingForm) && (
               <div className="absolute inset-0 z-20 flex items-center justify-center gap-3 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
                 <Loader2 className="h-4 w-4 animate-spin" />
