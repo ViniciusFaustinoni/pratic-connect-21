@@ -219,14 +219,10 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
         vinculoMap.set(v.benefit_id, v);
       });
 
-      // Exclude benefits already in THIS plan
-      const currentPlanBenIds = new Set(benefits.map((b: any) => b.id));
+      // Exclude benefits already assigned to ANY plan
+      const assignedIds = new Set(Array.from(vinculoMap.keys()));
       return (allBenefits || [])
-        .filter((b: any) => !currentPlanBenIds.has(b.id))
-        .map((b: any) => ({
-          ...b,
-          vinculadoAo: vinculoMap.get(b.id) || null,
-        }));
+        .filter((b: any) => !assignedIds.has(b.id));
     },
     enabled: assignOpen,
   });

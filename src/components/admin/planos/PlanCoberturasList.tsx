@@ -298,14 +298,10 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
 
       const vinculoMap = new Map((vinculos || []).map((v: any) => [v.cobertura_id, v]));
 
-      // Exclude coberturas already in THIS plan, add binding info for others
-      const currentPlanCobIds = new Set(coberturas.map((c: any) => c.id));
+      // Exclude coberturas already assigned to ANY plan
+      const assignedIds = new Set((vinculos || []).map((v: any) => v.cobertura_id));
       return (allCoberturas || [])
-        .filter((c: any) => !currentPlanCobIds.has(c.id))
-        .map((c: any) => ({
-          ...c,
-          vinculadaAo: vinculoMap.get(c.id) || null,
-        }));
+        .filter((c: any) => !assignedIds.has(c.id));
     },
     enabled: assignOpen,
   });
