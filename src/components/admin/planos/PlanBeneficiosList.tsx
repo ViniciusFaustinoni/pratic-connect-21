@@ -246,10 +246,7 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
       const { error } = await supabase.from('planos_beneficios').insert(inserts);
       if (error) throw error;
 
-      const msg = reassigned.length > 0
-        ? `${assignSelected.size} benefício(s) vinculado(s) (${reassigned.length} reatribuído(s) de outros planos)`
-        : `${assignSelected.size} benefício(s) vinculado(s) com sucesso`;
-      toast.success(msg);
+      toast.success(`${assignSelected.size} benefício(s) vinculado(s) com sucesso`);
       setAssignOpen(false);
       setAssignSelected(new Set());
       setAssignSearch('');

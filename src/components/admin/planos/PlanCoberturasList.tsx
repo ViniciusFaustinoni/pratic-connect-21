@@ -324,10 +324,7 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
       const { error } = await supabase.from('planos_coberturas').insert(inserts);
       if (error) throw error;
 
-      const msg = reassigned.length > 0
-        ? `${assignSelected.size} cobertura(s) vinculada(s) (${reassigned.length} reatribuída(s) de outros planos)`
-        : `${assignSelected.size} cobertura(s) vinculada(s) com sucesso`;
-      toast.success(msg);
+      toast.success(`${assignSelected.size} cobertura(s) vinculada(s) com sucesso`);
       setAssignOpen(false);
       setAssignSelected(new Set());
       setAssignSearch('');
