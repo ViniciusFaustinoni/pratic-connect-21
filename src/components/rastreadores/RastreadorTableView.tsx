@@ -129,6 +129,9 @@ export function RastreadorTableView({
           {rastreadores.map((rastreador) => {
             const isInstalled = rastreador.status === 'instalado';
             const isEstoque = rastreador.status === 'estoque';
+            const isRetornoBase = rastreador.status === 'retorno_base';
+            const isEmGarantia = rastreador.status === 'em_garantia';
+            const showPortador = (isEstoque || isRetornoBase || isEmGarantia) && !rastreador.veiculos;
 
             return (
               <TableRow 
