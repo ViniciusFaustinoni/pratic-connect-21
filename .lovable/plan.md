@@ -1,37 +1,49 @@
 
 
-## Plano: Corrigir clonagem de regras na duplicacao de linha
+## Plano: Melhorar editor de regra Marca/Modelo/Versao com dropdown hierarquico e anos
 
-### Problema raiz
+### Problema atual
+Ao adicionar uma regra de elegibilidade do tipo "Marca / Modelo / Versao" no plano, o formulario mostra 3 campos de texto livre (Marca, Modelo, Versao). O usuario precisa digitar manualmente, sem validacao nem sugestoes.
 
-A funcao `useDuplicateProductLine` tem dois bugs criticos:
+### Solucao
+Substituir os campos de texto por um seletor hierarquico alimentado pela tabela `marcas_modelos`, com:
+- Dropdown de marcas (dados do banco)
+- Lista colapsavel de modelos ao expandir uma marca
+- Multi-selecao (checkboxes) para marcas e modelos
+- Campo de anos com multi-selecao (range ou lista)
 
-1. **Regras truncadas pelo limite de 1000 linhas do Supabase**: As queries nas linhas 1088-1089 buscam TODAS as regras de beneficio (759) e cobertura (2297) do banco inteiro sem filtrar pelos IDs relevantes. Como o Supabase retorna no maximo 1000 linhas por padrao, a maioria das regras (tipo_uso, combustivel, fipe_range) nao e encontrada e portanto nao e clonada.
+### Alteracoes
 
-2. **Ordem de execucao errada**: As queries de regras sao disparadas em paralelo (linha 1084) ANTES de coletar os IDs de beneficios e coberturas (linhas 1097-1106), impossibilitando o uso de filtro `.in('entity_id', ids)`.
+**Arquivo: `src/components/admin/planos/EligibilityRulesEditor.tsx`**
 
-### Consequencias visíveis
+1. Substituir o bloco `ruleType === 'marca_modelo'` (linhas 350-365) por um componente inline que:
+   - Usa `useMarcasDistintas()` para listar marcas
+   - Ao expandir uma marca, carrega modelos via `useModelosPorMarca(marca)`
+   - Permite marcar multiplas marcas e modelos via checkboxes
+   - Inclui campo de busca/filtro
+   - Adiciona seletor de anos (input numerico com botao "+ Ano" para adicionar multiplos anos a lista)
+   - Persiste no `config` como: `{ marcas: [{ marca: "TOYOTA", modelos: ["COROLLA", "HILUX"], anos: [2020, 2021, 2022] }] }`
 
-- Coberturas clonadas mostram apenas a regra de regiao (criada pelo override) — perdem tipo_uso (APP), combustivel (Flex, Gasolina, Etanol)
-- Preco exibido como valor fixo (R$ 2,25) em vez de faixa FIPE (R$ 2,50 ~ R$ 45,00) porque as regras `fipe_range` nao foram clonadas
+2. Criar componente `MarcaModeloRuleSelector` (novo arquivo ou inline) que encapsula:
+   - ScrollArea com lista de marcas colapsaveis
+   - Checkboxes para marca inteira ou modelos especificos
+   - Input de busca
+   - Seletor de anos (chips removiveis, input para adicionar)
 
-### Correcao
+3. Atualizar o `RuleCard` (linhas 148-153) para exibir o resumo do novo formato (ex: "TOYOTA (COROLLA, HILUX) · 2020-2022")
 
-**Arquivo: `src/hooks/usePlansAdmin.ts`**
+**Arquivo: nenhum outro** — os hooks `useMarcasDistintas` e `useModelosPorMarca` ja existem em `src/hooks/useMarcasModelos.ts`.
 
-Reestruturar o fluxo de fetch na funcao `useDuplicateProductLine`:
+### Formato do rule_config salvo
 
-1. Remover as queries de `benefit_rules`, `cob_rules` e `benefit_category_exclusions` do bloco paralelo inicial (linhas 1084-1091)
-2. Mover essas queries para DEPOIS da coleta dos IDs (apos linha 1106), filtrando por `.in('entity_id', benefitIdsArr)` e `.in('entity_id', coberturaIdsArr)`
-3. Para listas maiores que 1000 IDs, dividir em chunks de 500 e concatenar resultados (paginacao manual)
-
-```text
-Fluxo corrigido:
-  1. Fetch line + plans + planos_coberturas + plan_rules  (paralelo)
-  2. Coletar benefitIds e coberturaIds dos resultados
-  3. Fetch benefit_rules, cob_rules, exclusions filtrados por IDs  (paralelo)
-  4. Batch-insert plans, rules, benefits, coberturas  (como hoje)
+```json
+{
+  "marcas": [
+    { "marca": "TOYOTA", "modelos": ["COROLLA"], "anos": [2020, 2021] },
+    { "marca": "HONDA", "modelos": [], "anos": [] }
+  ]
+}
 ```
 
-Nenhuma outra alteracao necessaria — a logica de `applyBulkRuleOverrides` ja preserva corretamente as regras de tipos nao sobrescritos.
+Marcas com `modelos: []` significam "todos os modelos". Anos com `[]` significam "todos os anos".
 
