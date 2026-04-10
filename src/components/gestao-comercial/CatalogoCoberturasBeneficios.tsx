@@ -390,6 +390,34 @@ export function CatalogoCoberturasBeneficios() {
   const duplicateCob = useDuplicateCobertura();
   const duplicateBen = useDuplicateBenefit();
 
+  // Attribution maps
+  const { data: cobAttrData = [] } = useQuery({
+    queryKey: ['planos_coberturas_attr'],
+    queryFn: async () => {
+      const { data } = await supabase.from('planos_coberturas').select('cobertura_id, planos(nome)');
+      return data || [];
+    },
+  });
+  const { data: benAttrData = [] } = useQuery({
+    queryKey: ['planos_beneficios_attr'],
+    queryFn: async () => {
+      const { data } = await supabase.from('planos_beneficios').select('benefit_id, planos(nome)');
+      return data || [];
+    },
+  });
+
+  const cobAttrMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    cobAttrData.forEach((r: any) => { if (r.cobertura_id && r.planos?.nome) map[r.cobertura_id] = r.planos.nome; });
+    return map;
+  }, [cobAttrData]);
+
+  const benAttrMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    benAttrData.forEach((r: any) => { if (r.benefit_id && r.planos?.nome) map[r.benefit_id] = r.planos.nome; });
+    return map;
+  }, [benAttrData]);
+
   const [cobSheet, setCobSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [benSheet, setBenSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item?: any; type?: 'cobertura' | 'beneficio' }>({ open: false });
@@ -397,9 +425,17 @@ export function CatalogoCoberturasBeneficios() {
   const [benSearch, setBenSearch] = useState('');
   const [cobSort, setCobSort] = useState<'default' | 'az' | 'za'>('default');
   const [benSort, setBenSort] = useState<'default' | 'az' | 'za'>('default');
+  const [cobAttrFilter, setCobAttrFilter] = useState<'todos' | 'atribuidos' | 'nao_atribuidos'>('todos');
+  const [benAttrFilter, setBenAttrFilter] = useState<'todos' | 'atribuidos' | 'nao_atribuidos'>('todos');
 
-  const filterAndSort = (items: any[], search: string, sort: 'default' | 'az' | 'za', type: 'cobertura' | 'beneficio') => {
+  const filterAndSort = (items: any[], search: string, sort: 'default' | 'az' | 'za', type: 'cobertura' | 'beneficio', attrFilter: 'todos' | 'atribuidos' | 'nao_atribuidos', attrMap: Record<string, string>) => {
     let filtered = items;
+    // Attribution filter
+    if (attrFilter === 'atribuidos') {
+      filtered = filtered.filter(item => !!attrMap[item.id]);
+    } else if (attrFilter === 'nao_atribuidos') {
+      filtered = filtered.filter(item => !attrMap[item.id]);
+    }
     if (search.trim()) {
       const term = search.toLowerCase();
       filtered = items.filter(item => {
