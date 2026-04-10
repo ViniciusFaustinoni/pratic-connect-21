@@ -1,30 +1,48 @@
 
 
-## Plano: Fluxo de fotos sequencial automático em todas as áreas
+## Revisão: Duplicação de Planos com Desconto
 
-### Problema
-Atualmente, em `ExecutarVistoriaCompleta.tsx`, `ExecutarRetirada.tsx` e `VistoriaPrestador.tsx`, as fotos são exibidas em grid (3 colunas) usando `FotoCapture`. O técnico precisa clicar manualmente em cada slot para tirar a próxima foto. O componente `VistoriaFotoSequencial` (já existente e usado em `InstaladorChecklist.tsx`) resolve isso com avanço automático.
+### Status atual
 
-### Solução
-Substituir o grid de `FotoCapture` pelo `VistoriaFotoSequencial` nos 3 arquivos restantes. O componente já possui: barra de progresso, thumbnails, instruções, auto-avanço para a próxima foto pendente após upload.
+**Regra 1 - Clonar tudo**: Parcialmente OK
+- Benefícios (`benefits` + `planos_beneficios`): copiados corretamente
+- Coberturas (`coberturas`): copiadas corretamente
+- **BUG**: A tabela de vínculo `planos_coberturas` NÃO clona os campos financeiros. Só insere `plano_id` e `cobertura_id`, perdendo: `franquia_valor`, `franquia_percentual`, `valor_limite`, `percentual_cobertura`, `carencia_dias`, `obrigatoria`.
 
-### Alterações
+**Regra 2 - Desconto em todos os valores**: Parcialmente OK
+- Coberturas: desconto aplicado em `valor`, `valor_limite`, `franquia_valor` na tabela `coberturas`
+- Benefícios: desconto aplicado em `preco_sugerido` na tabela `benefits`
+- Faixas FIPE: desconto aplicado nas regras de elegibilidade
+- **BUG**: Os campos financeiros da tabela `planos_coberturas` (`franquia_valor`, `valor_limite`) não recebem desconto porque nem sequer são copiados
 
-#### 1. `src/pages/instalador/ExecutarVistoriaCompleta.tsx`
-- Substituir o grid de `FotoCapture` dentro de cada categoria pelo `VistoriaFotoSequencial`
-- Remover as categorias colapsáveis (Collapsible) de fotos, já que o sequencial mostra uma foto por vez com thumbnails
-- Passar a lista completa de fotos (excluindo instalação se necessário) ao componente sequencial
-- Adaptar `handleUploadFoto` para ser compatível com a interface `onUpload(fotoId, file)`
+### Correção necessária
 
-#### 2. `src/pages/instalador/ExecutarRetirada.tsx`
-- Converter `FOTOS_RETIRADA` para o formato `VistoriaFotoConfig` (adicionar `icone`, `categoria`, `ordem`)
-- Substituir o grid de `FotoCapture` pelo `VistoriaFotoSequencial`
+**Arquivo**: `src/hooks/usePlansAdmin.ts` (linhas 565-568)
 
-#### 3. `src/pages/public/VistoriaPrestador.tsx`
-- As fotos já usam `VistoriaFotoConfig` do `vistoriaConfigCompleta`
-- Substituir o grid de `FotoCapture` pelo `VistoriaFotoSequencial`
-- Adaptar `handleFotoCapture` para a interface `onUpload(fotoId, file)`
+Alterar a inserção em `planos_coberturas` para copiar todos os campos do vínculo original e aplicar desconto nos campos financeiros:
 
-### Resultado
-Todas as telas de captura de fotos passarão a usar o fluxo sequencial: o técnico tira uma foto e automaticamente avança para a próxima pendente, sem precisar navegar manualmente.
+```
+// Buscar dados completos do vínculo original
+const { data: origPC } = await supabase
+  .from('planos_coberturas')
+  .select('*')
+  .eq('plano_id', id)
+  .eq('cobertura_id', pc.cobertura_id)
+  .single();
+
+// Inserir com todos os campos + desconto
+await supabase.from('planos_coberturas').insert({
+  plano_id: createdPlan.id,
+  cobertura_id: newCob.id,
+  carencia_dias: origPC?.carencia_dias,
+  franquia_percentual: origPC?.franquia_percentual,
+  franquia_valor: applyDiscount(origPC?.franquia_valor, desconto),
+  obrigatoria: origPC?.obrigatoria,
+  percentual_cobertura: origPC?.percentual_cobertura,
+  valor_limite: applyDiscount(origPC?.valor_limite, desconto),
+});
+```
+
+### Resumo
+Uma correção de ~15 linhas que garante que a duplicação copia e desconta **todos** os campos financeiros da relação plano-cobertura.
 
