@@ -1,36 +1,44 @@
 
 
-## Plano: Aplicar desconto nas faixas FIPE ao duplicar plano
+## Plano: Garantir que o link de assinatura apareça no link público
 
-### Problema
-O desconto na duplicação só é aplicado aos campos estáticos (`coberturas.valor`, `benefits.preco_sugerido`). Porém, o motor de cotação prioriza os valores das **faixas FIPE** armazenadas em `entity_eligibility_rules` (`rule_type = 'fipe_range'`, campo `rule_config.faixas[].valor`). Como esses valores não são descontados, o preço final do plano duplicado permanece idêntico ao original.
+### Diagnóstico
 
-### Solução
-No hook `useDuplicatePlan` (`src/hooks/usePlansAdmin.ts`), após clonar as regras de elegibilidade de cada cobertura e benefício, aplicar o desconto a todas as faixas FIPE antes de inserir no banco.
+O componente `EtapaAssinaturaContrato.tsx` já possui:
+- Estado "Aguarde..." quando `contrato?.linkAssinatura` é null (linhas 692-705)
+- Polling leve a cada 3s para buscar `autentique_url` do banco (linhas 270-291)
 
-### Mudança (1 arquivo)
+O problema provável é que o link retornado pela edge function `autentique-create` pode não ser capturado (linha 243 tenta 3 campos diferentes: `signatureLink`, `link_assinatura`, `autentique_url`), e o polling subsequente pode falhar silenciosamente se a RLS bloquear.
 
-**`src/hooks/usePlansAdmin.ts`** — na função `useDuplicatePlan`:
+### Mudanças (1 arquivo)
 
-1. Criar helper `applyDiscountToFipeRanges`:
+**`src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`**
+
+1. **Adicionar log no polling** para identificar se a query retorna dados ou null (debug)
+2. **Incluir `cotacao_id` e `token_publico` como filtro adicional** no polling de link (linhas 275-279) para garantir que a RLS anon permita a leitura — buscar via `cotacao_id` com join ou query direta que satisfaça a policy `cotacao_token_publico IS NOT NULL`
+3. **Fallback**: se após 30 segundos o link não aparecer, mostrar mensagem com botão "Tentar novamente" em vez de ficar no loading infinito
+4. **Buscar link também na verificação manual** (linha 370 já faz isso, mas garantir que o estado `contrato` seja atualizado corretamente)
+
+### Detalhes técnicos
+
+A query de polling atual:
 ```typescript
-const applyDiscountToFipeRanges = (rules: any[], pct: number) => {
-  if (pct <= 0) return rules;
-  return rules.map(r => {
-    if (r.rule_type !== 'fipe_range') return r;
-    const faixas = (r.rule_config?.faixas || []).map((f: any) => ({
-      ...f,
-      valor: Number((f.valor * (100 - pct) / 100).toFixed(2)),
-    }));
-    return { ...r, rule_config: { ...r.rule_config, faixas } };
-  });
-};
+publicSupabase.from('contratos').select('autentique_url').eq('id', contrato.id).maybeSingle()
 ```
 
-2. Aplicar nos 3 pontos onde regras são clonadas:
-   - Regras de **coberturas** (linha ~557): `applyDiscountToFipeRanges(clonedRules, desconto)` antes de `applyBulkRuleOverrides`
-   - Regras de **benefícios** (linha ~478): `applyDiscountToFipeRanges(clonedBRules, desconto)` antes de `applyBulkRuleOverrides`
-   - Regras de **plano** (linha ~415): não necessário (planos não têm fipe_range)
+Funciona porque a RLS policy `anon_select_contratos_by_cotacao_token` permite SELECT quando `cotacao_token_publico IS NOT NULL` — e o campo é preenchido na criação. Porém, para robustez, adicionar tratamento de timeout:
 
-Isso garante que ao duplicar com 10% de desconto, cada `faixa.valor` (ex: R$ 13,75 → R$ 12,38; R$ 108,20 → R$ 97,38) será reduzido, resultando no valor mensal correto.
+```typescript
+// Adicionar estado de timeout
+const [linkTimeout, setLinkTimeout] = useState(false);
+
+// No polling useEffect, após 30s sem link:
+useEffect(() => {
+  if (etapaInterna !== 'aguardando_assinatura' || contrato?.linkAssinatura) return;
+  const timeout = setTimeout(() => setLinkTimeout(true), 30000);
+  return () => clearTimeout(timeout);
+}, [etapaInterna, contrato?.linkAssinatura]);
+```
+
+E no JSX, quando `linkTimeout && !contrato?.linkAssinatura`, mostrar botão "Tentar gerar novamente" que chama `enviarParaAutentique(contrato.id)`.
 
