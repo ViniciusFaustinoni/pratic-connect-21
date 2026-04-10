@@ -1,13 +1,17 @@
 
 
-## Plano: Legenda do mapa fechada por padrão
+## Plano: Remover aba "Associados" do mapa de monitoramento
 
-Alterar o estado inicial da legenda no mapa de atribuições para começar colapsada (fechada) em vez de expandida.
+### O que muda
+Remover a aba "Associados" (mapa de veículos rastreados) da página `/monitoramento/mapa`, mantendo apenas "Equipe" e "Atribuições".
 
-### Correção
+### Correção em `src/pages/monitoramento/Mapa.tsx`
 
-Localizar o componente da legenda e mudar o estado inicial de `true` para `false`.
+1. Mudar o estado inicial `abaAtiva` de `"associados"` para `"atribuicoes"` (linha 105)
+2. Remover o `TabsTrigger` de "associados" (linhas 474-478)
+3. Remover o `TabsContent` de "associados" (linhas 491-499)
+4. Opcionalmente, remover código morto: `renderMapaVeiculos`, `renderSearchBar`, `renderTrajetoBadge`, `renderVeiculoInfo`, e estados/variáveis relacionados (busca de veículos, trajeto, etc.) — reduz ~300 linhas
 
-### Arquivo
-- Componente da legenda do mapa (preciso identificar o arquivo exato)
+### Resultado
+A página abrirá direto na aba "Atribuições", com apenas duas abas visíveis: Equipe e Atribuições.
 
