@@ -37,6 +37,9 @@ import {
   PackageMinus,
   AlertTriangle,
   Search,
+  Phone,
+  MessageCircle,
+  MapPin,
 } from 'lucide-react';
 import { useAbrirRetirada } from '@/hooks/useRetiradaRastreador';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
