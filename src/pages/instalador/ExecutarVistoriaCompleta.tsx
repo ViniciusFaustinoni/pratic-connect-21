@@ -14,7 +14,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { FotoCapture } from '@/components/instalador/FotoCapture';
+import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { ModalRecusaVeiculoComFotos } from '@/components/instalador/ModalRecusaVeiculoComFotos';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
@@ -466,56 +466,26 @@ export default function ExecutarVistoriaCompleta() {
           </CardContent>
         </Card>
 
-        {/* Fotos por categoria */}
-        {categorias.map(cat => {
-          const stats = fotosPorCategoria[cat.id];
-          const isComplete = stats.enviadas === stats.total;
-          const isOpen = openCategories.includes(cat.id);
-
-          return (
-            <Collapsible key={cat.id} open={isOpen} onOpenChange={() => toggleCategory(cat.id)}>
-              <Card className="border-slate-700 bg-slate-800">
-                <CollapsibleTrigger asChild>
-                  <CardHeader className="cursor-pointer pb-2">
-                    <CardTitle className="flex items-center justify-between text-base text-white">
-                      <div className="flex items-center gap-2">
-                        {cat.id === 'instalacao' ? <MapPin className="h-5 w-5 text-amber-400" /> : <Camera className="h-5 w-5 text-blue-400" />}
-                        <span>{cat.nome}</span>
-                      </div>
-                      <div className="flex items-center gap-2">
-                        <span className={cn('text-sm', isComplete ? 'text-green-400' : 'text-slate-400')}>
-                          {stats.enviadas}/{stats.total}
-                        </span>
-                        {isComplete && <CheckCircle2 className="h-4 w-4 text-green-400" />}
-                        {isOpen ? <ChevronUp className="h-4 w-4 text-slate-400" /> : <ChevronDown className="h-4 w-4 text-slate-400" />}
-                      </div>
-                    </CardTitle>
-                    {cat.id === 'instalacao' && (
-                      <p className="text-xs text-amber-400">⚠️ Esta foto não será visível ao cliente</p>
-                    )}
-                  </CardHeader>
-                </CollapsibleTrigger>
-                <CollapsibleContent>
-                  <CardContent>
-                    <div className="grid grid-cols-3 gap-2">
-                      {cat.fotos.map(foto => (
-                        <FotoCapture
-                          key={foto.id}
-                          tipo={foto.id}
-                          label={foto.nome}
-                          obrigatoria={cat.id !== 'instalacao'}
-                          fotoUrl={fotosMap[foto.id]}
-                          uploading={uploadingFoto === foto.id}
-                          onCapture={(file) => handleUploadFoto(foto.id, file, foto.visivelCliente !== false)}
-                        />
-                      ))}
-                    </div>
-                  </CardContent>
-                </CollapsibleContent>
-              </Card>
-            </Collapsible>
-          );
-        })}
+        {/* Fotos sequenciais */}
+        <Card className="border-slate-700 bg-slate-800">
+          <CardHeader className="pb-2">
+            <CardTitle className="flex items-center gap-2 text-base text-white">
+              <Camera className="h-5 w-5 text-blue-400" />
+              Fotos da Vistoria
+            </CardTitle>
+          </CardHeader>
+          <CardContent>
+            <VistoriaFotoSequencial
+              fotos={categorias.flatMap(c => c.fotos)}
+              fotosEnviadas={fotosEnviadas}
+              uploadingFoto={uploadingFoto}
+              onUpload={(fotoId, file) => {
+                const foto = categorias.flatMap(c => c.fotos).find(f => f.id === fotoId);
+                handleUploadFoto(fotoId, file, foto?.visivelCliente !== false);
+              }}
+            />
+          </CardContent>
+        </Card>
 
         {/* Observações do Vistoriador (opcional) */}
         <Card className="border-slate-700 bg-slate-800">

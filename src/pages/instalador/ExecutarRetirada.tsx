@@ -19,7 +19,7 @@ import { Textarea } from '@/components/ui/textarea';
 import { Alert, AlertDescription, AlertTitle } from '@/components/ui/alert';
 import { RadioGroup, RadioGroupItem } from '@/components/ui/radio-group';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
-import { FotoCapture } from '@/components/instalador/FotoCapture';
+import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 import { VideoCapture } from '@/components/instalador/VideoCapture';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { TemporizadorExecucao } from '@/components/vistoriador/TemporizadorExecucao';
@@ -45,13 +45,27 @@ import {
 } from '@/types/retirada';
 
 // Fotos obrigatórias específicas de retirada
-const FOTOS_RETIRADA = [
+import { Camera as CameraIcon } from 'lucide-react';
+import type { VistoriaFotoConfig } from '@/data/vistoriaConfigCompleta';
+
+const FOTOS_RETIRADA_ORIGINAL = [
   { id: 'rastreador_removido', nome: 'Rastreador Removido', obrigatoria: true, descricao: 'Foto do aparelho na mão' },
   { id: 'fios_isolados', nome: 'Fios Isolados', obrigatoria: true, descricao: 'Foto dos fios cortados e isolados' },
   { id: 'acabamento_recolocado', nome: 'Acabamento Recolocado', obrigatoria: true, descricao: 'Foto do painel remontado' },
   { id: 'estado_aparelho', nome: 'Estado do Aparelho', obrigatoria: false, descricao: 'Foto geral do aparelho' },
   { id: 'dano_aparelho', nome: 'Dano (se houver)', obrigatoria: false, descricao: 'Foto de qualquer dano visível' },
 ];
+
+const FOTOS_RETIRADA: VistoriaFotoConfig[] = FOTOS_RETIRADA_ORIGINAL.map((f, i) => ({
+  id: f.id,
+  nome: f.nome,
+  descricao: f.descricao,
+  categoria: 'retirada',
+  ordem: i + 1,
+  icone: CameraIcon,
+}));
+
+const FOTOS_RETIRADA_OBRIGATORIAS = FOTOS_RETIRADA_ORIGINAL.filter(f => f.obrigatoria);
 
 const MOTIVO_COLORS: Record<string, string> = {
   cancelamento_voluntario: 'bg-gray-600 text-white',
@@ -232,14 +246,18 @@ export default function ExecutarRetirada() {
 
   // Contagem de fotos obrigatórias
   const fotosObrigatoriasEnviadas = useMemo(() => {
-    return FOTOS_RETIRADA
-      .filter(f => f.obrigatoria)
+    return FOTOS_RETIRADA_OBRIGATORIAS
       .filter(f => fotosEnviadas[f.id])
       .length;
   }, [fotosEnviadas]);
 
-  const totalFotosObrigatorias = FOTOS_RETIRADA.filter(f => f.obrigatoria).length;
+  const totalFotosObrigatorias = FOTOS_RETIRADA_OBRIGATORIAS.length;
   const todasFotosObrigatoriasEnviadas = fotosObrigatoriasEnviadas >= totalFotosObrigatorias;
+
+  // Convert fotosEnviadas Record to array format for VistoriaFotoSequencial
+  const fotosEnviadasArray = useMemo(() => {
+    return Object.entries(fotosEnviadas).map(([tipo, arquivo_url]) => ({ tipo, arquivo_url }));
+  }, [fotosEnviadas]);
 
   // Validação
   const conferenciaCompleta = Object.values(conferencia).every(Boolean) && hodometro.length > 0;
@@ -714,30 +732,18 @@ export default function ExecutarRetirada() {
             {/* Fotos de Retirada */}
             <Card className="border-slate-700 bg-slate-800">
               <CardHeader className="pb-2">
-                <CardTitle className="flex items-center justify-between text-base text-white">
-                  <div className="flex items-center gap-2">
-                    <Camera className="h-5 w-5 text-blue-400" />
-                    Fotos da Retirada
-                  </div>
-                  <span className={cn("text-sm", todasFotosObrigatoriasEnviadas ? "text-green-400" : "text-slate-400")}>
-                    {fotosObrigatoriasEnviadas}/{totalFotosObrigatorias} obrigatórias
-                  </span>
+                <CardTitle className="flex items-center gap-2 text-base text-white">
+                  <Camera className="h-5 w-5 text-blue-400" />
+                  Fotos da Retirada
                 </CardTitle>
               </CardHeader>
               <CardContent>
-                <div className="grid grid-cols-3 gap-2">
-                  {FOTOS_RETIRADA.map(foto => (
-                    <FotoCapture
-                      key={foto.id}
-                      tipo={foto.id}
-                      label={foto.nome}
-                      obrigatoria={foto.obrigatoria}
-                      fotoUrl={fotosEnviadas[foto.id]}
-                      uploading={uploadingFoto === foto.id}
-                      onCapture={(file) => handleUploadFoto(foto.id, file)}
-                    />
-                  ))}
-                </div>
+                <VistoriaFotoSequencial
+                  fotos={FOTOS_RETIRADA}
+                  fotosEnviadas={fotosEnviadasArray}
+                  uploadingFoto={uploadingFoto}
+                  onUpload={(fotoId, file) => handleUploadFoto(fotoId, file)}
+                />
               </CardContent>
             </Card>
 
