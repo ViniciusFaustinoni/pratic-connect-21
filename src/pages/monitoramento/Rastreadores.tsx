@@ -34,6 +34,7 @@ import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import {
   useRastreadores,
   useRastreadoresMetricas,
+  useAlterarStatusRastreador,
   type RastreadorFilters as Filters,
   type RastreadorWithRelations,
 } from '@/hooks/useRastreadores';
@@ -326,6 +327,11 @@ function RastreadoresContent({
   onMetricFilterClick,
 }: RastreadoresContentProps) {
   const queryClient = useQueryClient();
+  const alterarStatusMutation = useAlterarStatusRastreador();
+
+  const handleChangeStatus = (rastreadorId: string, novoStatus: 'estoque' | 'em_garantia') => {
+    alterarStatusMutation.mutate({ rastreadorId, statusNovo: novoStatus });
+  };
   const [portadorDialogOpen, setPortadorDialogOpen] = useState(false);
   const [loteDialogOpen, setLoteDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
@@ -433,6 +439,7 @@ function RastreadoresContent({
           onNewRastreador={onNewRastreador}
           getPlataformaLabel={getPlataformaLabel}
           onViewMap={onViewMap}
+          onChangeStatus={handleChangeStatus}
         />
       ) : (
         <RastreadorTableView
@@ -452,6 +459,7 @@ function RastreadoresContent({
           isDiretor={isDiretor}
           canManageEquipe={canManageEquipe}
           onViewMap={onViewMap}
+          onChangeStatus={handleChangeStatus}
         />
       )}
 

@@ -16,6 +16,8 @@ import {
   User,
   Radio,
   PackageMinus,
+  PackageCheck,
+  Truck,
 } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { type RastreadorWithRelations } from '@/hooks/useRastreadores';
@@ -31,6 +33,7 @@ interface RastreadorCardProps {
   onMaintenance?: () => void;
   onWithdraw?: () => void;
   onViewMap?: () => void;
+  onChangeStatus?: (rastreadorId: string, novoStatus: 'estoque' | 'em_garantia') => void;
 }
 
 export function RastreadorCard({
@@ -42,9 +45,14 @@ export function RastreadorCard({
   onMaintenance,
   onWithdraw,
   onViewMap,
+  onChangeStatus,
 }: RastreadorCardProps) {
   const isInstalled = rastreador.status === 'instalado';
   const isEstoque = rastreador.status === 'estoque';
+  const isRetornoBase = rastreador.status === 'retorno_base';
+  const isEmGarantia = rastreador.status === 'em_garantia';
+  const isTriagem = rastreador.status === 'triagem';
+  const showPortador = (isEstoque || isRetornoBase || isEmGarantia || isTriagem) && rastreador.portador;
 
   return (
     <motion.div
@@ -147,20 +155,19 @@ export function RastreadorCard({
             </div>
           )}
 
-          {/* Portador (para estoque) */}
-          {isEstoque && rastreador.portador && (
+          {/* Portador (para estoque, retorno_base, em_garantia, triagem) */}
+          {showPortador && (
             <div className="space-y-2 pt-2 border-t">
               <div className="flex items-center gap-2 text-sm">
                 <User className="h-4 w-4 text-muted-foreground flex-shrink-0" />
                 <span className="text-muted-foreground">Portador:</span>
-                <span className="font-medium truncate">{rastreador.portador.nome}</span>
+                <span className="font-medium truncate">{rastreador.portador!.nome}</span>
               </div>
             </div>
           )}
 
-
           {/* Ações rápidas */}
-          <div className="flex gap-2 pt-3 border-t" onClick={(e) => e.stopPropagation()}>
+          <div className="flex gap-2 pt-3 border-t flex-wrap" onClick={(e) => e.stopPropagation()}>
             <Button
               variant="outline"
               size="sm"
@@ -221,6 +228,64 @@ export function RastreadorCard({
                     </Button>
                   </TooltipTrigger>
                   <TooltipContent>Ver no Mapa</TooltipContent>
+                </Tooltip>
+              </TooltipProvider>
+            )}
+
+            {/* Ações para rastreadores em retorno_base */}
+            {isRetornoBase && onChangeStatus && (
+              <>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-green-600 hover:text-green-700 hover:bg-green-50"
+                        onClick={() => onChangeStatus(rastreador.id, 'estoque')}
+                      >
+                        <PackageCheck className="h-4 w-4" />
+                        Disponível
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Devolver ao estoque</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+                <TooltipProvider>
+                  <Tooltip>
+                    <TooltipTrigger asChild>
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="gap-1.5 text-indigo-600 hover:text-indigo-700 hover:bg-indigo-50"
+                        onClick={() => onChangeStatus(rastreador.id, 'em_garantia')}
+                      >
+                        <Truck className="h-4 w-4" />
+                        Fornecedor
+                      </Button>
+                    </TooltipTrigger>
+                    <TooltipContent>Enviar para fornecedor/garantia</TooltipContent>
+                  </Tooltip>
+                </TooltipProvider>
+              </>
+            )}
+
+            {/* Ações para rastreadores em garantia */}
+            {isEmGarantia && onChangeStatus && (
+              <TooltipProvider>
+                <Tooltip>
+                  <TooltipTrigger asChild>
+                    <Button
+                      variant="outline"
+                      size="sm"
+                      className="gap-1.5 text-green-600 hover:text-green-700 hover:bg-green-50"
+                      onClick={() => onChangeStatus(rastreador.id, 'estoque')}
+                    >
+                      <PackageCheck className="h-4 w-4" />
+                      Disponível
+                    </Button>
+                  </TooltipTrigger>
+                  <TooltipContent>Devolver ao estoque</TooltipContent>
                 </Tooltip>
               </TooltipProvider>
             )}

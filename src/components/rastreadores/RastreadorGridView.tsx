@@ -15,6 +15,7 @@ interface RastreadorGridViewProps {
   onNewRastreador: () => void;
   getPlataformaLabel: (codigo: string) => string;
   onViewMap?: (rastreadorId: string) => void;
+  onChangeStatus?: (rastreadorId: string, novoStatus: 'estoque' | 'em_garantia') => void;
 }
 
 export function RastreadorGridView({
@@ -28,6 +29,7 @@ export function RastreadorGridView({
   onNewRastreador,
   getPlataformaLabel,
   onViewMap,
+  onChangeStatus,
 }: RastreadorGridViewProps) {
   if (isLoading) {
     return (
@@ -85,6 +87,7 @@ export function RastreadorGridView({
                 ? () => onViewMap(rastreador.id)
                 : undefined
             }
+            onChangeStatus={onChangeStatus}
           />
         ))}
       </AnimatePresence>

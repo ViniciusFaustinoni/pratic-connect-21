@@ -1,4 +1,4 @@
-import { Radio, Loader2, Plus, MoreHorizontal, Eye, Pencil, Wrench, PackageMinus, Trash2, UserPlus, Package, MapPin } from 'lucide-react';
+import { Radio, Loader2, Plus, MoreHorizontal, Eye, Pencil, Wrench, PackageMinus, Trash2, UserPlus, Package, MapPin, PackageCheck, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';
@@ -46,6 +46,7 @@ interface RastreadorTableViewProps {
   isDiretor: boolean;
   canManageEquipe: boolean;
   onViewMap?: (rastreadorId: string) => void;
+  onChangeStatus?: (rastreadorId: string, novoStatus: 'estoque' | 'em_garantia') => void;
 }
 
 export function RastreadorTableView({
@@ -65,6 +66,7 @@ export function RastreadorTableView({
   isDiretor,
   canManageEquipe,
   onViewMap,
+  onChangeStatus,
 }: RastreadorTableViewProps) {
   const rastreadoresEstoque = rastreadores?.filter(r => r.status === 'estoque') || [];
 
@@ -127,6 +129,9 @@ export function RastreadorTableView({
           {rastreadores.map((rastreador) => {
             const isInstalled = rastreador.status === 'instalado';
             const isEstoque = rastreador.status === 'estoque';
+            const isRetornoBase = rastreador.status === 'retorno_base';
+            const isEmGarantia = rastreador.status === 'em_garantia';
+            const showPortador = (isEstoque || isRetornoBase || isEmGarantia) && !rastreador.veiculos;
 
             return (
               <TableRow 
@@ -201,12 +206,12 @@ export function RastreadorTableView({
                         </span>
                       )}
                     </div>
-                  ) : isEstoque ? (
+                  ) : showPortador ? (
                     <div className="flex items-center gap-1">
                       {rastreador.portador?.nome ? (
                         <>
                           <span className="text-sm">{rastreador.portador.nome}</span>
-                          {canManageEquipe ? (
+                          {isEstoque && canManageEquipe && (
                             <Button
                               variant="ghost"
                               size="icon"
@@ -218,52 +223,27 @@ export function RastreadorTableView({
                             >
                               <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
                             </Button>
-                          ) : (
-                            <TooltipProvider>
-                              <Tooltip>
-                                <TooltipTrigger asChild>
-                                  <span>
-                                    <Button variant="ghost" size="icon" className="h-6 w-6" disabled>
-                                      <UserPlus className="h-3.5 w-3.5 text-muted-foreground" />
-                                    </Button>
-                                  </span>
-                                </TooltipTrigger>
-                                <TooltipContent>
-                                  <p>Sem permissão para atribuir portador</p>
-                                </TooltipContent>
-                              </Tooltip>
-                            </TooltipProvider>
                           )}
                         </>
-                      ) : canManageEquipe ? (
-                        <Button
-                          variant="ghost"
-                          size="sm"
-                          className="h-7 text-xs text-primary"
-                          onClick={(e) => {
-                            e.stopPropagation();
-                            onAssignPortador(rastreador);
-                          }}
-                        >
-                          <UserPlus className="h-3.5 w-3.5 mr-1" />
-                          Atribuir
-                        </Button>
+                      ) : isEstoque ? (
+                        canManageEquipe ? (
+                          <Button
+                            variant="ghost"
+                            size="sm"
+                            className="h-7 text-xs text-primary"
+                            onClick={(e) => {
+                              e.stopPropagation();
+                              onAssignPortador(rastreador);
+                            }}
+                          >
+                            <UserPlus className="h-3.5 w-3.5 mr-1" />
+                            Atribuir
+                          </Button>
+                        ) : (
+                          <span className="text-muted-foreground">-</span>
+                        )
                       ) : (
-                        <TooltipProvider>
-                          <Tooltip>
-                            <TooltipTrigger asChild>
-                              <span>
-                                <Button variant="ghost" size="sm" className="h-7 text-xs" disabled>
-                                  <UserPlus className="h-3.5 w-3.5 mr-1" />
-                                  Atribuir
-                                </Button>
-                              </span>
-                            </TooltipTrigger>
-                            <TooltipContent>
-                              <p>Sem permissão para atribuir portador</p>
-                            </TooltipContent>
-                          </Tooltip>
-                        </TooltipProvider>
+                        <span className="text-muted-foreground">-</span>
                       )}
                     </div>
                   ) : (
@@ -316,6 +296,27 @@ export function RastreadorTableView({
                             <PackageMinus className="mr-2 h-4 w-4" />
                             Retirar Rastreador
                           </DropdownMenuItem>
+                        </>
+                      )}
+                      {(isRetornoBase || isEmGarantia) && onChangeStatus && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-green-600"
+                            onClick={() => onChangeStatus(rastreador.id, 'estoque')}
+                          >
+                            <PackageCheck className="mr-2 h-4 w-4" />
+                            Marcar Disponível
+                          </DropdownMenuItem>
+                          {isRetornoBase && (
+                            <DropdownMenuItem
+                              className="text-indigo-600"
+                              onClick={() => onChangeStatus(rastreador.id, 'em_garantia')}
+                            >
+                              <Truck className="mr-2 h-4 w-4" />
+                              Enviar para Fornecedor
+                            </DropdownMenuItem>
+                          )}
                         </>
                       )}
                       {isDiretor && (
