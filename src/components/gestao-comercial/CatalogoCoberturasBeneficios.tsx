@@ -499,11 +499,22 @@ export function CatalogoCoberturasBeneficios() {
                 <SelectItem value="za">Z → A</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={cobAttrFilter} onValueChange={(v: any) => setCobAttrFilter(v)}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Atribuição" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="atribuidos">Atribuídos</SelectItem>
+                <SelectItem value="nao_atribuidos">Não atribuídos</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="sm" onClick={() => setCobSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Cobertura</Button>
           </div>
           <ItemList
-            items={filterAndSort(coberturas, cobSearch, cobSort, 'cobertura')}
+            items={filterAndSort(coberturas, cobSearch, cobSort, 'cobertura', cobAttrFilter, cobAttrMap)}
             type="cobertura"
+            attrMap={cobAttrMap}
             onEdit={(item) => setCobSheet({ open: true, item })}
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'cobertura' })}
@@ -527,11 +538,22 @@ export function CatalogoCoberturasBeneficios() {
                 <SelectItem value="za">Z → A</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={benAttrFilter} onValueChange={(v: any) => setBenAttrFilter(v)}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Atribuição" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="atribuidos">Atribuídos</SelectItem>
+                <SelectItem value="nao_atribuidos">Não atribuídos</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="sm" onClick={() => setBenSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Novo Benefício</Button>
           </div>
           <ItemList
-            items={filterAndSort(benefits, benSearch, benSort, 'beneficio')}
+            items={filterAndSort(benefits, benSearch, benSort, 'beneficio', benAttrFilter, benAttrMap)}
             type="beneficio"
+            attrMap={benAttrMap}
             onEdit={(item) => setBenSheet({ open: true, item })}
             onToggle={(id, is_active) => toggleBen.mutate({ id, is_active })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'beneficio' })}
