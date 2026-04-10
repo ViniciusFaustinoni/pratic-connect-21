@@ -485,7 +485,7 @@ export function useRegistrarResultadoManutencao() {
       // Buscar dados do serviço
       const { data: servico, error: servicoError } = await supabase
         .from('servicos')
-        .select('rastreador_id, veiculo_id, tecnico_id')
+        .select('rastreador_id, veiculo_id, profissional_id')
         .eq('id', params.servicoId)
         .single();
 
