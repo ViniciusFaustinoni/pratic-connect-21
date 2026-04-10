@@ -566,7 +566,7 @@ export default function ExecutarVistoriaCompleta() {
             variant="destructive"
             onClick={() => setShowRecusaModal(true)}
             className="flex-1"
-            disabled={processando}
+            disabled={processando || !todasFotosEnviadas}
           >
             <XCircle className="mr-2 h-4 w-4" />
             Reprovar
@@ -580,10 +580,10 @@ export default function ExecutarVistoriaCompleta() {
             Aprovar
           </Button>
         </div>
-        {!podeAprovar && (
+        {(!podeAprovar || !todasFotosEnviadas) && (
           <p className="mt-2 text-center text-xs text-amber-400">
             {!conferenciaCompleta && 'Confirme os dados e hodômetro. '}
-            {!todasFotosEnviadas && `Faltam ${TOTAL_FOTOS_OBRIGATORIAS - totalFotosEnviadas} fotos. `}
+            {!todasFotosEnviadas && `📸 Tire todas as fotos obrigatórias (faltam ${TOTAL_FOTOS_OBRIGATORIAS - totalFotosEnviadas}). `}
             {!videoEnviado && 'Envie o vídeo 360°.'}
           </p>
         )}
