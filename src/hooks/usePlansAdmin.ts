@@ -562,9 +562,23 @@ export function useDuplicatePlan() {
 
           if (cobError || !newCob) continue;
 
+          // Fetch original planos_coberturas data to preserve all fields
+          const { data: origPC } = await supabase
+            .from('planos_coberturas')
+            .select('*')
+            .eq('plano_id', id)
+            .eq('cobertura_id', pc.cobertura_id)
+            .single();
+
           await supabase.from('planos_coberturas').insert({
             plano_id: createdPlan.id,
             cobertura_id: newCob.id,
+            carencia_dias: origPC?.carencia_dias,
+            franquia_percentual: origPC?.franquia_percentual,
+            franquia_valor: applyDiscount(origPC?.franquia_valor, desconto),
+            obrigatoria: origPC?.obrigatoria,
+            percentual_cobertura: origPC?.percentual_cobertura,
+            valor_limite: applyDiscount(origPC?.valor_limite, desconto),
           });
 
           // Clone eligibility rules for this coverage (with overrides)
