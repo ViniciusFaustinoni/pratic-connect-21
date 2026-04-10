@@ -1,4 +1,4 @@
-import { Radio, Loader2, Plus, MoreHorizontal, Eye, Pencil, Wrench, PackageMinus, Trash2, UserPlus, Package, MapPin } from 'lucide-react';
+import { Radio, Loader2, Plus, MoreHorizontal, Eye, Pencil, Wrench, PackageMinus, Trash2, UserPlus, Package, MapPin, PackageCheck, Truck } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Checkbox } from '@/components/ui/checkbox';

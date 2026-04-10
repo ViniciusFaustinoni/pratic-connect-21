@@ -87,6 +87,7 @@ export function RastreadorGridView({
                 ? () => onViewMap(rastreador.id)
                 : undefined
             }
+            onChangeStatus={onChangeStatus}
           />
         ))}
       </AnimatePresence>
