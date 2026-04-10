@@ -332,6 +332,11 @@ function RastreadoresContent({
   onMetricFilterClick,
 }: RastreadoresContentProps) {
   const queryClient = useQueryClient();
+  const alterarStatusMutation = useAlterarStatusRastreador();
+
+  const handleChangeStatus = (rastreadorId: string, novoStatus: 'estoque' | 'em_garantia') => {
+    alterarStatusMutation.mutate({ rastreadorId, statusNovo: novoStatus });
+  };
   const [portadorDialogOpen, setPortadorDialogOpen] = useState(false);
   const [loteDialogOpen, setLoteDialogOpen] = useState(false);
   const [selectedIds, setSelectedIds] = useState<Set<string>>(new Set());
