@@ -417,6 +417,7 @@ serve(async (req) => {
   }
 
   const startTime = Date.now();
+  let rastreadorIdForFallback: string | null = null;
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
@@ -425,6 +426,7 @@ serve(async (req) => {
     const supabase = createClient(supabaseUrl, supabaseKey);
 
     const { rastreador_id } = await req.json();
+    rastreadorIdForFallback = rastreador_id;
 
     if (!rastreador_id) {
       throw new Error('rastreador_id é obrigatório');
@@ -654,12 +656,11 @@ serve(async (req) => {
         Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
       );
 
-      const body = await req.clone().json().catch(() => ({}));
-      if (body.rastreador_id) {
+      if (rastreadorIdForFallback) {
         const { data: rast } = await supabaseForFallback
           .from('rastreadores')
           .select('ultima_posicao_lat, ultima_posicao_lng, ultima_velocidade, ultima_ignicao, ultima_comunicacao')
-          .eq('id', body.rastreador_id)
+          .eq('id', rastreadorIdForFallback)
           .single();
 
         if (rast?.ultima_posicao_lat && rast?.ultima_posicao_lng) {
@@ -678,7 +679,7 @@ serve(async (req) => {
       await supabaseForFallback
         .from('rastreadores_logs')
         .insert({
-          rastreador_id: body.rastreador_id || null,
+          rastreador_id: rastreadorIdForFallback || null,
           plataforma: 'unknown',
           operacao: 'posicao_tempo_real',
           status: 'erro',
