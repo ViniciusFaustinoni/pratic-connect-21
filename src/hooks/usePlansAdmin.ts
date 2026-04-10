@@ -128,6 +128,7 @@ export function useCreatePlan() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planos'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Plano criado com sucesso!');
     },
     onError: (error: Error) => {
@@ -241,6 +242,7 @@ export function useUpdatePlan() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planos'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Plano atualizado!');
     },
     onError: (error: Error) => {
@@ -267,6 +269,7 @@ export function useTogglePlanStatus() {
     onSuccess: (data) => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planos'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success(`Plano ${data.is_active ? 'ativado' : 'desativado'}`);
     },
     onError: (error: Error) => {
@@ -289,6 +292,7 @@ export function useDeletePlan() {
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planos'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Plano excluído!');
     },
     onError: (error: Error) => {
