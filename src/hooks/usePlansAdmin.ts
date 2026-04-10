@@ -1015,6 +1015,7 @@ export function useDeleteProductLine() {
 
 interface DuplicateLineInput {
   id: string;
+  nome?: string;
   desconto?: number;
   sufixo?: string;
   regiao?: string;
@@ -1028,7 +1029,7 @@ export function useDuplicateProductLine() {
 
   return useMutation({
     mutationFn: async (input: DuplicateLineInput) => {
-      const { id, desconto = 0, sufixo = '', regiao, tipoUso, tipoVeiculo, combustivel } = input;
+      const { id, nome, desconto = 0, sufixo = '', regiao, tipoUso, tipoVeiculo, combustivel } = input;
 
       // 1. Fetch original line
       const { data: original, error: fetchError } = await supabase
@@ -1043,7 +1044,7 @@ export function useDuplicateProductLine() {
       const { id: _, created_at, ...lineData } = original;
       const newLine = {
         ...lineData,
-        name: sufixo ? `${lineData.name}${sufixo}` : `${lineData.name} (cópia)`,
+        name: nome || (sufixo ? `${lineData.name}${sufixo}` : `${lineData.name} (cópia)`),
         slug: `${lineData.slug}-copia-${Date.now()}`,
         is_active: false,
         vehicle_type: tipoVeiculo || lineData.vehicle_type,
