@@ -1,49 +1,39 @@
 
 
-## Plano: Melhorar editor de regra Marca/Modelo/Versao com dropdown hierarquico e anos
+## Plano: Adicionar tipo de servico REVISTORIA ao sistema de campo
 
-### Problema atual
-Ao adicionar uma regra de elegibilidade do tipo "Marca / Modelo / Versao" no plano, o formulario mostra 3 campos de texto livre (Marca, Modelo, Versao). O usuario precisa digitar manualmente, sem validacao nem sugestoes.
-
-### Solucao
-Substituir os campos de texto por um seletor hierarquico alimentado pela tabela `marcas_modelos`, com:
-- Dropdown de marcas (dados do banco)
-- Lista colapsavel de modelos ao expandir uma marca
-- Multi-selecao (checkboxes) para marcas e modelos
-- Campo de anos com multi-selecao (range ou lista)
+### Contexto
+O sistema possui um enum `tipo_servico` no Postgres com 7 valores. Precisamos adicionar `revistoria` como novo tipo. Na visao do tecnico, a revistoria segue o mesmo fluxo da vistoria de instalacao (mesmas fotos, checklist), mas SEM instalar rastreador. O coordenador de monitoramento agenda manualmente, como qualquer outro servico de campo.
 
 ### Alteracoes
 
-**Arquivo: `src/components/admin/planos/EligibilityRulesEditor.tsx`**
-
-1. Substituir o bloco `ruleType === 'marca_modelo'` (linhas 350-365) por um componente inline que:
-   - Usa `useMarcasDistintas()` para listar marcas
-   - Ao expandir uma marca, carrega modelos via `useModelosPorMarca(marca)`
-   - Permite marcar multiplas marcas e modelos via checkboxes
-   - Inclui campo de busca/filtro
-   - Adiciona seletor de anos (input numerico com botao "+ Ano" para adicionar multiplos anos a lista)
-   - Persiste no `config` como: `{ marcas: [{ marca: "TOYOTA", modelos: ["COROLLA", "HILUX"], anos: [2020, 2021, 2022] }] }`
-
-2. Criar componente `MarcaModeloRuleSelector` (novo arquivo ou inline) que encapsula:
-   - ScrollArea com lista de marcas colapsaveis
-   - Checkboxes para marca inteira ou modelos especificos
-   - Input de busca
-   - Seletor de anos (chips removiveis, input para adicionar)
-
-3. Atualizar o `RuleCard` (linhas 148-153) para exibir o resumo do novo formato (ex: "TOYOTA (COROLLA, HILUX) · 2020-2022")
-
-**Arquivo: nenhum outro** — os hooks `useMarcasDistintas` e `useModelosPorMarca` ja existem em `src/hooks/useMarcasModelos.ts`.
-
-### Formato do rule_config salvo
-
-```json
-{
-  "marcas": [
-    { "marca": "TOYOTA", "modelos": ["COROLLA"], "anos": [2020, 2021] },
-    { "marca": "HONDA", "modelos": [], "anos": [] }
-  ]
-}
+**1. Migracao SQL** — Adicionar valor ao enum
+```sql
+ALTER TYPE tipo_servico ADD VALUE 'revistoria';
 ```
 
-Marcas com `modelos: []` significam "todos os modelos". Anos com `[]` significam "todos os anos".
+**2. `src/hooks/useServicos.ts`** — Registrar tipo no TypeScript
+- Adicionar `'revistoria'` ao union type `TipoServico`
+- Adicionar label: `revistoria: 'Revistoria'` em `TIPO_SERVICO_LABELS`
+- Criar helper `isRevistoria(tipo)` que retorna `tipo === 'revistoria'`
+
+**3. `src/components/vistoriador/TarefaAtualCard.tsx`** — Roteamento do tecnico
+- No `handleExecutar`, tratar `isRevistoria` redirecionando para `/instalador/vistoria/:id` (fluxo de vistoria completa, mesmas fotos, sem instalar rastreador)
+
+**4. `src/types/servicos-rota.ts`** — Adicionar ao tipo de servico de rotas
+- Incluir `'revistoria'` no union `TipoServico` e nos maps de labels/cores/icones
+
+**5. `src/components/monitoramento/AtribuicaoManualTab.tsx`** e demais listagens
+- Atualizar condicoes que fazem `tipo === 'instalacao' ? ... : 'Vistoria'` para incluir revistoria com label proprio
+
+**6. Demais pontos de referencia** (labels, badges, filtros):
+- `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx` — adicionar revistoria ao map de labels
+- Views de mapa e filtros que referenciam tipos — incluir revistoria como tipo valido
+- `src/components/ui/SlaIndicador.tsx` — mapear SLA da revistoria (mesmo prazo de instalacao)
+
+### Na visao do tecnico
+A revistoria usa o fluxo `/instalador/vistoria/:id` (ExecutarVistoriaCompleta) — mesmas fotos e checklist de uma vistoria de instalacao. A diferenca e que NAO ha etapa de instalar rastreador (que ja e tratada apenas no fluxo `/instalador/instalacao/:id`).
+
+### Criacao manual pelo coordenador
+O coordenador ja possui mecanismos para criar servicos de outros tipos (manutencao, retirada). A revistoria seguira o mesmo padrao — sera incluida como opcao nos modais/formularios de criacao manual de servico no modulo de monitoramento.
 
