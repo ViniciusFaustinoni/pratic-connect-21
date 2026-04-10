@@ -379,7 +379,7 @@ export function useBenefits() {
       const { data, error } = await supabase
         .from('benefits')
         .select('*')
-        .order('display_order');
+        .order('name');
       
       if (error) throw error;
       return data as Benefit[];
@@ -439,7 +439,7 @@ export function useCoberturas(onlyActive = false) {
       let query = supabase
         .from('coberturas')
         .select('*')
-        .order('display_order', { ascending: true, nullsFirst: false });
+        .order('nome');
       
       if (onlyActive) {
         query = query.eq('ativo', true);
