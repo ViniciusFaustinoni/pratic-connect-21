@@ -88,8 +88,13 @@ export default function Rastreadores() {
   const { data: metricas, isLoading: isLoadingMetricas } = useRastreadoresMetricas();
   const { data: plataformasLabels } = usePlataformasLabels();
   const { isDiretor, isDesenvolvedor, canManageEquipeEstoque } = usePermissions();
+  const alterarStatus = useAlterarStatusRastreador();
 
   const canManagePlataformas = isDiretor || isDesenvolvedor;
+
+  const handleChangeStatus = (rastreadorId: string, novoStatus: 'estoque' | 'em_garantia') => {
+    alterarStatus.mutate({ rastreadorId, statusNovo: novoStatus });
+  };
 
   useEffect(() => {
     localStorage.setItem('rastreadores-view-mode', viewMode);
