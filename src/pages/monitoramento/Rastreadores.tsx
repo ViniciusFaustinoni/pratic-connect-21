@@ -34,6 +34,7 @@ import { MapaRastreador } from '@/components/rastreadores/MapaRastreador';
 import {
   useRastreadores,
   useRastreadoresMetricas,
+  useAlterarStatusRastreador,
   type RastreadorFilters as Filters,
   type RastreadorWithRelations,
 } from '@/hooks/useRastreadores';
