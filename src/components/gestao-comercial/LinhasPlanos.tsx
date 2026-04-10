@@ -76,6 +76,35 @@ const RULE_LABELS: Record<string, Record<string, string>> = {
 
 function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
   const visibleRules = rules.filter((r) => r.rule_type !== 'fipe_range');
+
+  // Fetch region names for region rules
+  const regionIds = useMemo(() => {
+    const ids = new Set<string>();
+    visibleRules.forEach((r) => {
+      if (r.rule_type === 'regiao') {
+        const values = r.rule_config?.values as string[] | undefined;
+        values?.forEach((v) => ids.add(v));
+      }
+    });
+    return Array.from(ids);
+  }, [visibleRules]);
+
+  const { data: regioesMap } = useQuery({
+    queryKey: ['regioes-names', regionIds],
+    queryFn: async () => {
+      if (regionIds.length === 0) return {} as Record<string, string>;
+      const { data } = await supabase
+        .from('regioes')
+        .select('id, nome')
+        .in('id', regionIds);
+      const map: Record<string, string> = {};
+      data?.forEach((r) => { map[r.id] = r.nome; });
+      return map;
+    },
+    enabled: regionIds.length > 0,
+    staleTime: Infinity,
+  });
+
   if (visibleRules.length === 0) return null;
 
   return (
@@ -86,7 +115,11 @@ function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
         let label = rule.rule_type;
 
         if (rule.rule_type === 'regiao') {
-          label = `Região (${values?.length || 0})`;
+          if (regioesMap && values) {
+            label = values.map((v) => regioesMap[v] || v).join(', ');
+          } else {
+            label = `Região (${values?.length || 0})`;
+          }
         } else if (values && RULE_LABELS[rule.rule_type]) {
           label = values
             .map((v) => RULE_LABELS[rule.rule_type]?.[v] || v)
