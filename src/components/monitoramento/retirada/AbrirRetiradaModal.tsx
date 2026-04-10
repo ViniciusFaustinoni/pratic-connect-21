@@ -354,15 +354,52 @@ export function AbrirRetiradaModal({
                 <User className="h-4 w-4 text-muted-foreground" />
                 <span className="font-medium">{associado.nome}</span>
               </div>
-              <div className="flex items-center gap-4 text-sm text-muted-foreground">
+              <div className="flex items-center gap-2 text-sm text-muted-foreground">
                 <span>CPF: {associado.cpf}</span>
-                <span>Tel: {associado.telefone}</span>
               </div>
+              <div className="flex items-center gap-2 text-sm">
+                <Phone className="h-4 w-4 text-muted-foreground" />
+                <a href={`tel:${associado.telefone}`} className="text-primary hover:underline">
+                  {associado.telefone}
+                </a>
+                <Button
+                  type="button"
+                  variant="ghost"
+                  size="sm"
+                  className="h-7 px-2 text-green-600 hover:text-green-700 hover:bg-green-50"
+                  onClick={() => {
+                    const phone = (associado.whatsapp || associado.telefone).replace(/\D/g, '');
+                    window.open(`https://wa.me/55${phone}`, '_blank');
+                  }}
+                >
+                  <MessageCircle className="h-4 w-4 mr-1" />
+                  WhatsApp
+                </Button>
+              </div>
+              {associado.whatsapp && associado.whatsapp !== associado.telefone && (
+                <div className="flex items-center gap-2 text-sm text-muted-foreground">
+                  <MessageCircle className="h-4 w-4" />
+                  <span>WhatsApp: {associado.whatsapp}</span>
+                </div>
+              )}
               {veiculo && (
                 <div className="flex items-center gap-2">
                   <Car className="h-4 w-4 text-muted-foreground" />
                   <span>
                     {veiculo.marca} {veiculo.modelo} • <span className="font-mono">{veiculo.placa}</span>
+                  </span>
+                </div>
+              )}
+              {(associado.logradouro || associado.bairro || associado.cidade) && (
+                <div className="flex items-start gap-2 text-sm text-muted-foreground mt-1">
+                  <MapPin className="h-4 w-4 mt-0.5 shrink-0" />
+                  <span>
+                    {[
+                      [associado.logradouro, associado.numero].filter(Boolean).join(', '),
+                      associado.bairro,
+                      [associado.cidade, associado.uf].filter(Boolean).join('/'),
+                      associado.cep,
+                    ].filter(Boolean).join(' — ')}
                   </span>
                 </div>
               )}
