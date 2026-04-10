@@ -566,7 +566,7 @@ export default function ExecutarVistoriaCompleta() {
             variant="destructive"
             onClick={() => setShowRecusaModal(true)}
             className="flex-1"
-            disabled={processando}
+            disabled={processando || !todasFotosEnviadas}
           >
             <XCircle className="mr-2 h-4 w-4" />
             Reprovar

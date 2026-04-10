@@ -1886,15 +1886,22 @@ export default function InstaladorChecklist() {
             {/* Botões de ação */}
             <div className="space-y-3 mt-6">
               {decisaoInstalador === 'negado' ? (
-                <Button
-                  variant="destructive"
-                  onClick={() => setShowModalRecusa(true)}
-                  disabled={aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending}
-                  className="w-full py-6 text-lg font-semibold"
-                >
-                  <XCircle className="mr-2 h-5 w-5" />
-                  Registrar Recusa do Veículo
-                </Button>
+                <div className="space-y-2">
+                  <Button
+                    variant="destructive"
+                    onClick={() => setShowModalRecusa(true)}
+                    disabled={aprovarVeiculoMutation.isPending || recusarVeiculoMutation.isPending || !fotosObrigatoriasCompletas}
+                    className="w-full py-6 text-lg font-semibold"
+                  >
+                    <XCircle className="mr-2 h-5 w-5" />
+                    Registrar Recusa do Veículo
+                  </Button>
+                  {!fotosObrigatoriasCompletas && (
+                    <p className="text-center text-xs text-amber-400">
+                      📸 Tire todas as fotos obrigatórias antes de registrar a recusa ({totalFotosEnviadas}/{totalObrigatorias})
+                    </p>
+                  )}
+                </div>
               ) : (
                 <Button
                   onClick={handleConcluirInstalacao}
