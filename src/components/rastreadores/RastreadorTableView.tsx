@@ -298,6 +298,27 @@ export function RastreadorTableView({
                           </DropdownMenuItem>
                         </>
                       )}
+                      {(isRetornoBase || isEmGarantia) && onChangeStatus && (
+                        <>
+                          <DropdownMenuSeparator />
+                          <DropdownMenuItem
+                            className="text-green-600"
+                            onClick={() => onChangeStatus(rastreador.id, 'estoque')}
+                          >
+                            <PackageCheck className="mr-2 h-4 w-4" />
+                            Marcar Disponível
+                          </DropdownMenuItem>
+                          {isRetornoBase && (
+                            <DropdownMenuItem
+                              className="text-indigo-600"
+                              onClick={() => onChangeStatus(rastreador.id, 'em_garantia')}
+                            >
+                              <Truck className="mr-2 h-4 w-4" />
+                              Enviar para Fornecedor
+                            </DropdownMenuItem>
+                          )}
+                        </>
+                      )
                       {isDiretor && (
                         <>
                           <DropdownMenuSeparator />
