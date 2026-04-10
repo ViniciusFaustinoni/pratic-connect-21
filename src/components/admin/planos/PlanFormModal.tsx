@@ -268,7 +268,7 @@ export function PlanFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="h-[92vh] max-w-7xl overflow-hidden p-0" onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
+      <DialogContent className="flex h-[92vh] max-w-7xl flex-col overflow-hidden p-0" onInteractOutside={(e) => e.preventDefault()} onPointerDownOutside={(e) => e.preventDefault()}>
         <DialogHeader className="border-b border-border/60 px-6 py-5">
           <DialogTitle className="flex items-center gap-2 text-left">
             <Sparkles className="h-5 w-5 text-primary" />
@@ -276,7 +276,7 @@ export function PlanFormModal({
           </DialogTitle>
         </DialogHeader>
 
-        <div className="grid h-[calc(92vh-77px)] min-h-0 xl:grid-cols-[minmax(0,1fr)_320px]">
+        <div className="grid min-h-0 flex-1 xl:grid-cols-[minmax(0,1fr)_320px]">
           <div className="relative min-h-0 overflow-hidden border-b border-border/60 xl:border-b-0 xl:border-r xl:border-r-border/60">
             {isEditing && (!fullPlanData || !canRenderEditingForm) && (
               <div className="absolute inset-0 z-20 flex items-center justify-center gap-3 bg-background/80 text-sm text-muted-foreground backdrop-blur-sm">
