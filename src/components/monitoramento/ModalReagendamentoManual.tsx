@@ -69,7 +69,7 @@ export default function ModalReagendamentoManual({
         associado_id: original.associado_id,
         veiculo_id: original.veiculo_id,
         data_agendada: format(date, 'yyyy-MM-dd'),
-        periodo,
+        periodo: periodo as any,
         status: 'pendente' as any,
         observacoes: `Reagendamento manual do serviço anterior. ${original.observacoes || ''}`.trim(),
       }]);
