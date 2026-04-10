@@ -771,7 +771,7 @@ export function MapaVistoriasContent() {
     </MapContainer>
   );
 
-  const [legendaAberta, setLegendaAberta] = useState(true);
+  const [legendaAberta, setLegendaAberta] = useState(false);
 
   const renderLegenda = () => (
     <div className={cn(
