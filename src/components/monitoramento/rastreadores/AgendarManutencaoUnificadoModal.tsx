@@ -322,10 +322,52 @@ export function AgendarManutencaoUnificadoModal({
                 </div>
               )}
               {associado && (
-                <div className="flex items-center gap-2">
-                  <User className="h-4 w-4 text-muted-foreground" />
-                  <span>{associado.nome}</span>
-                  <span className="text-xs text-muted-foreground">{associado.telefone}</span>
+                <div className="space-y-2">
+                  <div className="flex items-center gap-2">
+                    <User className="h-4 w-4 text-muted-foreground" />
+                    <span className="font-medium">{associado.nome}</span>
+                  </div>
+                  
+                  <div className="flex items-center gap-2 flex-wrap">
+                    <Phone className="h-4 w-4 text-muted-foreground" />
+                    <a href={`tel:${associado.telefone}`} className="text-sm hover:underline">
+                      {associado.telefone}
+                    </a>
+                    <Button
+                      type="button"
+                      size="sm"
+                      variant="outline"
+                      className="h-7 gap-1 border-green-500 text-green-600 hover:bg-green-50 hover:text-green-700"
+                      onClick={() => {
+                        const phone = (associado.whatsapp || associado.telefone).replace(/\D/g, '');
+                        window.open(`https://wa.me/55${phone}`, '_blank');
+                      }}
+                    >
+                      <MessageCircle className="h-3.5 w-3.5" />
+                      WhatsApp
+                    </Button>
+                  </div>
+
+                  {associado.whatsapp && associado.whatsapp !== associado.telefone && (
+                    <div className="flex items-center gap-2">
+                      <MessageCircle className="h-4 w-4 text-muted-foreground" />
+                      <span className="text-sm">{associado.whatsapp}</span>
+                    </div>
+                  )}
+
+                  {(associado.logradouro || associado.cidade) && (
+                    <div className="flex items-start gap-2">
+                      <MapPin className="h-4 w-4 text-muted-foreground mt-0.5" />
+                      <span className="text-sm text-muted-foreground">
+                        {[
+                          [associado.logradouro, associado.numero].filter(Boolean).join(', '),
+                          associado.bairro,
+                          [associado.cidade, associado.uf].filter(Boolean).join('/'),
+                          associado.cep
+                        ].filter(Boolean).join(' — ')}
+                      </span>
+                    </div>
+                  )}
                 </div>
               )}
               {rastreadorCompleto.ultima_comunicacao && (
