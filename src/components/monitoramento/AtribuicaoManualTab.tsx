@@ -62,9 +62,9 @@ function DraggableServico({ servico }: { servico: any }) {
           <div className="flex items-center gap-2 flex-wrap">
             <Badge variant="outline" className={cn(
               'text-[10px]',
-              servico.tipo === 'instalacao' ? 'border-blue-300 text-blue-700 dark:text-blue-300' : 'border-amber-300 text-amber-700 dark:text-amber-300'
+              getTipoBadgeClass(servico.tipo)
             )}>
-              {servico.tipo === 'instalacao' ? 'Instalação' : 'Vistoria'}
+              {getTipoLabel(servico.tipo)}
             </Badge>
             {servico.permite_encaixe && (
               <Badge variant="secondary" className="text-[10px]">Encaixe</Badge>
@@ -107,7 +107,7 @@ function DragOverlayCard({ servico }: { servico: any }) {
         <GripVertical className="h-4 w-4 text-muted-foreground" />
         <div>
           <p className="text-sm font-medium">{assoc?.nome || 'Sem nome'}</p>
-          <p className="text-xs text-muted-foreground">{servico.tipo === 'instalacao' ? 'Instalação' : 'Vistoria'} · {servico.bairro}</p>
+          <p className="text-xs text-muted-foreground">{getTipoLabel(servico.tipo)} · {servico.bairro}</p>
         </div>
       </div>
     </div>
@@ -159,7 +159,7 @@ function DroppableVistoriador({ vistoriador }: { vistoriador: any }) {
         <CardContent className="pt-0 space-y-1.5">
           {vistoriador.tarefas.map((t: any) => (
             <div key={t.id} className="flex items-center gap-2 text-xs p-2 rounded bg-muted/50">
-              {t.tipo === 'instalacao' ? <Wrench className="h-3 w-3 text-blue-500" /> : <ClipboardCheck className="h-3 w-3 text-amber-500" />}
+              {getTipoIcon(t.tipo)}
               <span className="truncate">{t.bairro || t.cidade || 'Sem local'}</span>
               <Badge variant="outline" className="ml-auto text-[9px]">{t.status}</Badge>
             </div>
@@ -330,7 +330,7 @@ export default function AtribuicaoManualTab() {
           <DialogHeader>
             <DialogTitle>Confirmar Atribuição</DialogTitle>
             <DialogDescription>
-              Atribuir <strong>{confirmDialog?.servico?.tipo === 'instalacao' ? 'Instalação' : 'Vistoria'}</strong>
+              Atribuir <strong>{getTipoLabel(confirmDialog?.servico?.tipo)}</strong>
               {confirmDialog?.servico?.bairro && <> em <strong>{confirmDialog.servico.bairro}</strong></>}
               {servicoConfirmAssoc?.nome && <> ({servicoConfirmAssoc.nome})</>}
               {' '}para <strong>{vistoriadorConfirm?.nome || 'Vistoriador'}</strong>?
