@@ -944,6 +944,7 @@ export function useCreateProductLine() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['product_lines'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Linha de produto criada!');
     },
     onError: (error: Error) => {
@@ -968,6 +969,7 @@ export function useUpdateProductLine() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['product_lines'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Linha de produto atualizada!');
     },
     onError: (error: Error) => {
@@ -986,6 +988,7 @@ export function useDeleteProductLine() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['product_lines'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Linha de produto excluída!');
     },
     onError: (error: Error) => {
@@ -1028,6 +1031,7 @@ export function useDuplicateProductLine() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['product_lines'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Linha duplicada! (criada como inativa)');
     },
     onError: (error: Error) => {

@@ -266,6 +266,7 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
       setNewForm({ nome: '', icon: '' });
       setCreating(false);
       queryClient.invalidateQueries({ queryKey: ['plan-coberturas-inline', planId] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
     } catch {
       toast.error('Erro ao criar cobertura');
     }
