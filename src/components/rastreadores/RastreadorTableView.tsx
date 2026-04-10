@@ -318,7 +318,7 @@ export function RastreadorTableView({
                             </DropdownMenuItem>
                           )}
                         </>
-                      )
+                      )}
                       {isDiretor && (
                         <>
                           <DropdownMenuSeparator />
