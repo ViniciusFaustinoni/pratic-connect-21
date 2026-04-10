@@ -503,3 +503,80 @@ export function useRastreadoresEmEstoqueBusca(search: string) {
 export function useRastreadoresContagem() {
   return useRastreadoresMetricas();
 }
+
+/**
+ * Altera status de rastreadores em manutenção (retorno_base / em_garantia)
+ * com registro de movimentação de estoque
+ */
+export function useAlterarStatusRastreador() {
+  const queryClient = useQueryClient();
+
+  return useMutation({
+    mutationFn: async ({
+      rastreadorId,
+      statusNovo,
+      observacoes,
+    }: {
+      rastreadorId: string;
+      statusNovo: StatusRastreador;
+      observacoes?: string;
+    }) => {
+      // 1. Buscar rastreador atual
+      const { data: rastreador, error: fetchError } = await supabase
+        .from('rastreadores')
+        .select('id, codigo, status, portador_id')
+        .eq('id', rastreadorId)
+        .single();
+
+      if (fetchError) throw fetchError;
+
+      const statusAnterior = rastreador.status;
+
+      // 2. Montar update
+      const updateData: Record<string, unknown> = {
+        status: statusNovo,
+        updated_at: new Date().toISOString(),
+      };
+
+      // Limpar portador quando volta para estoque
+      if (statusNovo === 'estoque') {
+        updateData.portador_id = null;
+      }
+
+      const { error: updateError } = await supabase
+        .from('rastreadores')
+        .update(updateData)
+        .eq('id', rastreadorId);
+
+      if (updateError) throw updateError;
+
+      // 3. Obter usuário atual
+      const { data: { user } } = await supabase.auth.getUser();
+
+      // 4. Registrar movimentação de estoque
+      const tipoMov = statusNovo === 'estoque' ? 'retorno_estoque' : 'envio_garantia';
+      await supabase.from('estoque_movimentacoes').insert({
+        rastreador_id: rastreadorId,
+        tipo: tipoMov,
+        quantidade: 1,
+        status_anterior: statusAnterior,
+        status_novo: statusNovo,
+        usuario_id: user?.id || null,
+        observacoes: observacoes || `Mudança de status: ${statusAnterior} → ${statusNovo}`,
+      });
+
+      return { rastreadorId, statusNovo, statusAnterior };
+    },
+    onSuccess: (result) => {
+      queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
+      queryClient.invalidateQueries({ queryKey: ['rastreador', result.rastreadorId] });
+      queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
+      const label = statusNovo === 'estoque' ? 'Disponível' : statusNovo === 'em_garantia' ? 'Enviado para Fornecedor' : result.statusNovo;
+      toast.success(`Rastreador marcado como ${label}`);
+    },
+    onError: (error) => {
+      console.error('Erro ao alterar status do rastreador:', error);
+      toast.error('Erro ao alterar status do rastreador');
+    },
+  });
+}

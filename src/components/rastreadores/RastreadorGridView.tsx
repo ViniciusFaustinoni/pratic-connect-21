@@ -15,6 +15,7 @@ interface RastreadorGridViewProps {
   onNewRastreador: () => void;
   getPlataformaLabel: (codigo: string) => string;
   onViewMap?: (rastreadorId: string) => void;
+  onChangeStatus?: (rastreadorId: string, novoStatus: 'estoque' | 'em_garantia') => void;
 }
 
 export function RastreadorGridView({
