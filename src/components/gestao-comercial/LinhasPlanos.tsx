@@ -211,8 +211,8 @@ function useLinhasComPlanos() {
             const bens = beneficiosMap.get(plan.id) || [];
             return {
               ...plan,
-              coberturas_list: cobs,
-              beneficios_list: bens,
+              coberturas_list: [...cobs].sort((a, b) => a.nome.localeCompare(b.nome)),
+              beneficios_list: [...bens].sort((a, b) => a.name.localeCompare(b.name)),
               valor_mensal: cobs.reduce((s, c) => s + c.valor, 0) + bens.reduce((s, b) => s + b.preco_sugerido, 0),
               coberturas_count: cobs.length,
               beneficios_count: bens.length,
