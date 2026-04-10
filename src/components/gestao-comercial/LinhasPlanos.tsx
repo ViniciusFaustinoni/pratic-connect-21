@@ -743,6 +743,11 @@ export function LinhasPlanos() {
         onOpenChange={(open) => setDuplicarModal({ open, plano: open ? duplicarModal.plano : null })}
         plano={duplicarModal.plano}
       />
+      <DuplicarLinhaModal
+        open={duplicarLinhaModal.open}
+        onOpenChange={(open) => setDuplicarLinhaModal({ open, linha: open ? duplicarLinhaModal.linha : null })}
+        linha={duplicarLinhaModal.linha}
+      />
     </>
   );
 }
