@@ -464,6 +464,7 @@ function RastreadoresContent({
           isDiretor={isDiretor}
           canManageEquipe={canManageEquipe}
           onViewMap={onViewMap}
+          onChangeStatus={handleChangeStatus}
         />
       )}
 
