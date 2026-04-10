@@ -1152,7 +1152,7 @@ export function useDuplicateProductLine() {
           codigo: `${planData.codigo}-c-${uid()}`,
           slug: `${planData.slug || planData.codigo}-c-${uid()}`,
           product_line_id: createdLine.id,
-          ativo: false,
+          ativo: true,
           categoria: tipoVeiculo === 'motorcycle' ? 'moto' : tipoVeiculo === 'car' ? 'carro' : planData.categoria,
         };
       });
