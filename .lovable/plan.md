@@ -1,61 +1,62 @@
 
 
-## Plano: Corrigir duplicação no mapa + Simplificar imprevisto + Follow-up automático
+## Plano: Alerta de follow-ups esgotados + Suspensão de cobertura por inativação de rastreador
 
-### Problema 1: Duplicação no mapa
-A `view_vistorias_mapa` filtra instalações por `i.status IN ('agendada', ...)` — o status da tabela `instalacoes`. Quando o técnico marca imprevisto, apenas o `servicos.status` muda para `imprevisto_pendente`/`nao_compareceu`, mas `instalacoes.status` continua `agendada`. Resultado: a instalação original continua aparecendo no mapa mesmo após o imprevisto.
+### Requisito 1: Alerta de imprevistos sem reagendamento (3h-48h)
 
-### Problema 2: Modal de imprevisto complexo
-Atualmente tem 5 motivos com classificação automática de origem. O usuário quer apenas 2 opções diretas: "Imprevisto do Técnico" e "Imprevisto do Associado".
+**Contexto**: Após 3 follow-ups (3h) sem resposta, o serviço fica em `status = 'nao_compareceu'` com `reagendamento_followup_count = 3` e sem nova data agendada. O monitoramento precisa ser alertado para intervir manualmente.
 
-### Problema 3: Sem follow-up de reagendamento
-Após enviar o link de reagendamento, não há lembretes se o associado não reagendar.
+**Mudanças:**
 
----
+1. **Hook `useImprevistosSemResposta`** (novo)
+   - Query em `servicos` onde: `reagendamento_followup_count >= 3`, status em (`nao_compareceu`, `imprevisto_pendente`), `reagendamento_enviado_em` entre 3h e 48h atrás, sem serviço reagendado vinculado
+   - Retorna contagem e dados para o alerta
 
-### Mudanças
+2. **Componente `AlertaImprevistosPendentes`** (novo)
+   - Banner amarelo/laranja no topo de `VistoriasInstalacoesMon.tsx` (acima das tabs)
+   - Exibe: "X imprevistos aguardando contato manual" com botao "Ver imprevistos"
+   - Botão redireciona para `/monitoramento/imprevistos` com filtro pré-aplicado
 
-**1. Migration SQL — Corrigir view + adicionar coluna de follow-up**
+3. **`ImprevistosPainel.tsx` — Adicionar modal de reagendamento manual**
+   - Nova coluna "Ação" na tabela com botão "Reagendar" para imprevistos com follow-ups esgotados
+   - Modal com: seleção de data/horário, período (M/T), e botão confirmar
+   - Ao confirmar: cria novo serviço com os dados do associado, atualiza status do serviço antigo
 
-Recriar `view_vistorias_mapa` adicionando filtro nas seções VISTORIAS e INSTALACOES para excluir registros onde o serviço vinculado (`sv`/`si`) tem status terminal:
-```sql
--- Na seção INSTALACOES, adicionar ao WHERE:
-AND (si.id IS NULL OR si.status NOT IN ('imprevisto_pendente','nao_compareceu','cancelada','concluida'))
+4. **`useImprevistos.ts` — Incluir `reagendamento_followup_count`** no select para filtrar/exibir status de follow-up na tabela
 
--- Mesma lógica para seção VISTORIAS
-AND (sv.id IS NULL OR sv.status NOT IN ('imprevisto_pendente','nao_compareceu','cancelada','concluida'))
-```
+### Requisito 2: Suspensão de cobertura por não ativação do rastreador (48h)
 
-Adicionar coluna para rastrear follow-ups:
-```sql
-ALTER TABLE servicos ADD COLUMN IF NOT EXISTS reagendamento_followup_count int DEFAULT 0;
-ALTER TABLE servicos ADD COLUMN IF NOT EXISTS reagendamento_ultimo_followup_em timestamptz;
-```
+**Contexto**: 48h após `data_assinatura` do contrato, se o rastreador não foi instalado/ativado, a cobertura deve ser suspensa com badge visual.
 
-**2. `ImprevistoBotao.tsx` — Simplificar para 2 opções**
+**Mudanças:**
 
-Substituir o Select de 5 motivos por 2 botões grandes:
-- "Imprevisto do Técnico" → `imprevisto_origem: 'instalador'`
-- "Imprevisto do Associado" → `imprevisto_origem: 'associado'`
+1. **Migration SQL**
+   - Adicionar coluna `cobertura_suspensa boolean DEFAULT false` na tabela `veiculos`
+   - Adicionar coluna `cobertura_suspensa_motivo text` na tabela `veiculos`
+   - Adicionar coluna `cobertura_suspensa_em timestamptz` na tabela `veiculos`
 
-Campo de observações opcional em ambos. Remover `MOTIVOS_IMPREVISTO` e `ORIGEM_POR_MOTIVO`. O motivo salvo será simplesmente "Imprevisto do técnico" ou "Imprevisto do associado" + observações.
+2. **Edge Function `cron-suspender-cobertura-inativacao`** (nova, cron 1x/hora)
+   - Busca contratos com `data_assinatura` > 48h atrás
+   - Verifica se o veículo vinculado tem instalação concluída (serviço tipo `instalacao` com status `concluida`)
+   - Se não: atualiza `veiculos.cobertura_suspensa = true`, motivo = "Rastreador não ativado em 48h"
+   - Se já ativado depois: reverte a suspensão
 
-Manter a pergunta "pode continuar a rota?" para imprevisto do técnico.
+3. **`BadgeCobertura.tsx` e `BadgeCoberturaCompact` — Novo estado "Suspensa"**
+   - Aceitar nova prop `coberturaSuspensa`
+   - Exibir badge vermelho/laranja com ícone `ShieldAlert`: "Cobertura Suspensa"
+   - Tooltip: "Cobertura suspensa por não ativação do rastreador em 48h"
+   - Prioridade: suspensa > total > roubo/furto > sem cobertura
 
-**3. Edge Function `cron-followup-reagendamento` — Follow-ups 1h, 2h, 3h**
-
-Nova edge function que roda via cron (a cada 15min):
-- Busca serviços com `reagendamento_enviado_em IS NOT NULL` e `status = 'nao_compareceu'` e `reagendamento_followup_count < 3`
-- Para cada serviço, calcula tempo desde `reagendamento_enviado_em`
-- Se passou 1h e count=0, ou 2h e count=1, ou 3h e count=2: envia template Meta `reagendamento_servico` (mesmo template, mesmo link) e incrementa o contador
-- Atualiza `reagendamento_followup_count` e `reagendamento_ultimo_followup_em`
-
-**4. Deploy da edge function + configurar cron**
-
----
+4. **Atualizar componentes que usam BadgeCobertura** para passar a nova prop `coberturaSuspensa` do veículo
 
 ### Arquivos afetados
-- `supabase/migrations/nova_migration.sql` (view + colunas)
-- `src/components/vistoriador/ImprevistoBotao.tsx` (simplificar UI)
-- `supabase/functions/cron-followup-reagendamento/index.ts` (nova)
+- `src/hooks/useImprevistosSemResposta.ts` (novo)
+- `src/components/monitoramento/AlertaImprevistosPendentes.tsx` (novo)
+- `src/pages/monitoramento/VistoriasInstalacoesMon.tsx` (adicionar alerta)
+- `src/pages/monitoramento/ImprevistosPainel.tsx` (modal reagendamento + coluna ação)
+- `src/hooks/useImprevistos.ts` (incluir followup_count no select)
+- `supabase/migrations/nova.sql` (colunas cobertura_suspensa)
+- `supabase/functions/cron-suspender-cobertura-inativacao/index.ts` (novo)
+- `src/components/veiculos/BadgeCobertura.tsx` (estado suspensa)
+- `src/pages/cadastro/Associados.tsx` (passar prop suspensa)
 
