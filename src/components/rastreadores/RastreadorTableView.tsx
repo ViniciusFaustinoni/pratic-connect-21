@@ -46,6 +46,7 @@ interface RastreadorTableViewProps {
   isDiretor: boolean;
   canManageEquipe: boolean;
   onViewMap?: (rastreadorId: string) => void;
+  onChangeStatus?: (rastreadorId: string, novoStatus: 'estoque' | 'em_garantia') => void;
 }
 
 export function RastreadorTableView({
@@ -65,6 +66,7 @@ export function RastreadorTableView({
   isDiretor,
   canManageEquipe,
   onViewMap,
+  onChangeStatus,
 }: RastreadorTableViewProps) {
   const rastreadoresEstoque = rastreadores?.filter(r => r.status === 'estoque') || [];
 
