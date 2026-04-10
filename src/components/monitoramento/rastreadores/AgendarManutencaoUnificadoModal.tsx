@@ -37,6 +37,8 @@ import {
   Radio,
   Wifi,
   WifiOff,
+  Phone,
+  MapPin,
 } from 'lucide-react';
 import { useAbrirEAgendarManutencao } from '@/hooks/useVistoriaManutencao';
 import { useProfissionaisEquipe } from '@/hooks/useEquipe';
