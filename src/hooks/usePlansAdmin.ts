@@ -377,6 +377,18 @@ export function useDuplicatePlan() {
         return Number((val * (100 - pct) / 100).toFixed(2));
       };
 
+      const applyDiscountToFipeRanges = (rules: any[], pct: number) => {
+        if (pct <= 0) return rules;
+        return rules.map((r: any) => {
+          if (r.rule_type !== 'fipe_range') return r;
+          const faixas = (r.rule_config?.faixas || []).map((f: any) => ({
+            ...f,
+            valor: Number((f.valor * (100 - pct) / 100).toFixed(2)),
+          }));
+          return { ...r, rule_config: { ...r.rule_config, faixas } };
+        });
+      };
+
       // Get original plan with benefits and regions
       const { data: original, error: fetchError } = await supabase
         .from('planos')
@@ -479,7 +491,8 @@ export function useDuplicatePlan() {
             const { id: rId, created_at: rCreated, ...rData } = r;
             return { ...rData, entity_id: newBenefit.id };
           });
-          const finalBRules = applyBulkRuleOverrides(clonedBRules, newBenefit.id, 'beneficio', bulkOverrides);
+          const discountedBRules = applyDiscountToFipeRanges(clonedBRules, desconto);
+          const finalBRules = applyBulkRuleOverrides(discountedBRules, newBenefit.id, 'beneficio', bulkOverrides);
           if (finalBRules.length > 0) {
             await supabase.from('entity_eligibility_rules').insert(finalBRules);
           }
@@ -558,7 +571,8 @@ export function useDuplicatePlan() {
             const { id: rId, created_at: rCreated, ...rData } = r;
             return { ...rData, entity_id: newCob.id };
           });
-          const finalRules = applyBulkRuleOverrides(clonedRules, newCob.id, 'cobertura', bulkOverrides);
+          const discountedRules = applyDiscountToFipeRanges(clonedRules, desconto);
+          const finalRules = applyBulkRuleOverrides(discountedRules, newCob.id, 'cobertura', bulkOverrides);
           if (finalRules.length > 0) {
             await supabase.from('entity_eligibility_rules').insert(finalRules);
           }
