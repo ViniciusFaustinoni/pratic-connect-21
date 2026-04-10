@@ -66,6 +66,7 @@ export function EtapaAssinaturaContrato({
   const [emailLocal, setEmailLocal] = useState(clienteEmail || '');
   const [emailEfetivo, setEmailEfetivo] = useState(clienteEmail || '');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
+  const [linkTimeout, setLinkTimeout] = useState(false);
 
   // Flag para evitar chamadas duplicadas em re-render
   const [inicializado, setInicializado] = useState(!clienteEmail ? true : false);
@@ -289,6 +290,16 @@ export function EtapaAssinaturaContrato({
     const interval = setInterval(buscarLink, 3000);
     return () => clearInterval(interval);
   }, [etapaInterna, contrato?.id, contrato?.linkAssinatura]);
+
+  // 4b. Timeout para link — após 30s sem link, mostrar botão de retry
+  useEffect(() => {
+    if (etapaInterna !== 'aguardando_assinatura' || contrato?.linkAssinatura) {
+      setLinkTimeout(false);
+      return;
+    }
+    const timeout = setTimeout(() => setLinkTimeout(true), 30000);
+    return () => clearTimeout(timeout);
+  }, [etapaInterna, contrato?.linkAssinatura]);
 
   // 5. Polling para verificar status da assinatura (após link disponível)
   useEffect(() => {
@@ -695,13 +706,35 @@ export function EtapaAssinaturaContrato({
               animate={{ opacity: 1 }}
               className="space-y-3 text-center p-4 bg-amber-50 border border-amber-200 rounded-lg"
             >
-              <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-600" />
-              <p className="text-sm font-medium text-amber-800">
-                Aguarde... estamos gerando seu link de assinatura
-              </p>
-              <p className="text-xs text-amber-600">
-                Isso pode levar alguns segundos
-              </p>
+              {linkTimeout ? (
+                <>
+                  <AlertCircle className="h-6 w-6 mx-auto text-amber-600" />
+                  <p className="text-sm font-medium text-amber-800">
+                    O link está demorando mais que o esperado
+                  </p>
+                  <Button
+                    variant="outline"
+                    size="sm"
+                    onClick={() => {
+                      setLinkTimeout(false);
+                      if (contrato?.id) enviarParaAutentique(contrato.id);
+                    }}
+                  >
+                    <RefreshCw className="h-4 w-4 mr-2" />
+                    Tentar gerar novamente
+                  </Button>
+                </>
+              ) : (
+                <>
+                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-600" />
+                  <p className="text-sm font-medium text-amber-800">
+                    Aguarde... estamos gerando seu link de assinatura
+                  </p>
+                  <p className="text-xs text-amber-600">
+                    Isso pode levar alguns segundos
+                  </p>
+                </>
+              )}
             </motion.div>
           )}
 
