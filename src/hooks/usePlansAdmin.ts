@@ -593,6 +593,7 @@ export function useDuplicatePlan() {
       queryClient.invalidateQueries({ queryKey: ['plans'] });
       queryClient.invalidateQueries({ queryKey: ['planos'] });
       queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+      queryClient.invalidateQueries({ queryKey: ['entity_eligibility_rules'] });
       toast.success('Plano duplicado!');
     },
     onError: (error: Error) => {
