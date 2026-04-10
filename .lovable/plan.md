@@ -1,21 +1,45 @@
 
 
-## Plano: Corrigir bug "Body is unusable" no fallback da edge function
+## Plano: Edição em massa de regras ao duplicar plano
 
-### Problema
-Na edge function `rastreador-posicao`, o body do request é consumido na linha 427 (`await req.json()`). Quando ocorre um erro e o código entra no bloco catch (linha 643), ele tenta `req.clone().json()` na linha 657, mas o body já foi consumido, gerando `TypeError: Body is unusable`. Isso impede que o fallback para a última posição conhecida funcione.
+### Contexto
+Ao duplicar um plano, o modal já permite aplicar desconto (%) e sufixo. O usuário quer também poder configurar **Região**, **Tipo de Uso** e **Combustível** em massa, aplicando essas regras a todas as coberturas e benefícios clonados.
 
-### Solução
-Salvar o `rastreador_id` em uma variável no escopo externo ao try/catch, eliminando a necessidade de re-ler o request body no bloco catch.
+### Mudanças
+
+#### 1. Modal `DuplicarPlanoModal.tsx`
+- Adicionar 3 campos opcionais:
+  - **Região**: Select com as regiões do banco (`regioes` table) + opção "Manter original"
+  - **Tipo de Uso**: Select com opções "Manter original", "Particular", "Aplicativo"
+  - **Combustível**: Select com opções "Manter original", "Gasolina", "Diesel"
+- Passar os novos valores para `duplicatePlan.mutateAsync()`
+
+#### 2. Hook `useDuplicatePlan` em `usePlansAdmin.ts`
+- Expandir o tipo de input para aceitar `regiao?: string | null`, `tipoUso?: string | null`, `combustivel?: string | null`
+- Após clonar as regras de elegibilidade de cada cobertura/benefício, aplicar a lógica de substituição em massa:
+  - Se `regiao` foi informado: remover regras `rule_type = 'regiao'` clonadas e inserir uma nova regra de região com o valor selecionado (usando o UUID da região)
+  - Se `tipoUso` foi informado: remover regras `rule_type = 'tipo_uso'` clonadas e inserir nova regra
+  - Se `combustivel` foi informado: remover regras `rule_type = 'combustivel'` clonadas e inserir nova regra
+- Também aplicar regra de região no nível do **plano** (`entity_type = 'plano'`) quando região for selecionada
+
+#### 3. Busca de regiões
+- Usar query simples à tabela `regioes` para popular o select do modal
 
 ### Detalhes técnicos
 
-**Arquivo:** `supabase/functions/rastreador-posicao/index.ts`
+**Formato das regras inseridas** (baseado no padrão existente em `entity_eligibility_rules`):
+```json
+// Região (usando UUID)
+{ "entity_id": "<id>", "entity_type": "cobertura", "rule_type": "regiao", "rule_config": { "values": ["<regiao_uuid>"] }, "is_active": true }
 
-1. Declarar `let rastreadorIdForFallback: string | null = null;` antes do try/catch (antes da linha 421)
-2. Após a linha 427 (`const { rastreador_id } = await req.json();`), atribuir `rastreadorIdForFallback = rastreador_id;`
-3. No bloco catch (linha 657), substituir `const body = await req.clone().json().catch(() => ({}));` por usar diretamente `rastreadorIdForFallback`
-4. Remover a verificação `if (body.rastreador_id)` e usar `if (rastreadorIdForFallback)` diretamente
+// Tipo de uso
+{ "entity_id": "<id>", "entity_type": "cobertura", "rule_type": "tipo_uso", "rule_config": { "tipos_uso": ["particular"] }, "is_active": true }
 
-Mudança mínima, sem alteração de lógica - apenas corrige o acesso ao body já consumido.
+// Combustível
+{ "entity_id": "<id>", "entity_type": "cobertura", "rule_type": "combustivel", "rule_config": { "combustiveis": ["gasolina"] }, "is_active": true }
+```
+
+**Arquivos modificados:**
+- `src/components/admin/planos/DuplicarPlanoModal.tsx` — adicionar campos de região, tipo de uso e combustível
+- `src/hooks/usePlansAdmin.ts` — expandir `useDuplicatePlan` com lógica de substituição de regras em massa
 
