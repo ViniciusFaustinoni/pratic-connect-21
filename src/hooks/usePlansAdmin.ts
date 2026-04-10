@@ -406,7 +406,7 @@ export function useDuplicatePlan() {
       const { id: _, created_at, updated_at, planos_beneficios, planos_regioes, ...planData } = original;
       const newPlan = {
         ...planData,
-        nome: `${planData.nome} (cópia)${sufixo}`,
+        nome: sufixo ? `${planData.nome}${sufixo}` : planData.nome,
         codigo: `${planData.codigo}-copia-${Date.now()}`,
         slug: `${planData.slug || planData.codigo}-copia-${Date.now()}`,
         ativo: false,
