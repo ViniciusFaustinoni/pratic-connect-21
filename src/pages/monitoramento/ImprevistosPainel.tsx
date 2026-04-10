@@ -1,7 +1,8 @@
 import { useState } from 'react';
+import { useSearchParams } from 'react-router-dom';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { AlertTriangle, CheckCircle2, Clock, Mail, RefreshCw } from 'lucide-react';
+import { AlertTriangle, CalendarPlus, CheckCircle2, Clock, Mail, RefreshCw } from 'lucide-react';
 import type { DateRange } from 'react-day-picker';
 
 import { useImprevistos, type ImprevistoFilters } from '@/hooks/useImprevistos';
@@ -25,19 +26,21 @@ import {
   TableRow,
 } from '@/components/ui/table';
 import { Skeleton } from '@/components/ui/skeleton';
+import ModalReagendamentoManual from '@/components/monitoramento/ModalReagendamentoManual';
 
 const MOTIVOS_IMPREVISTO = [
-  'Associado ausente',
-  'Endereço incorreto',
-  'Problema no veículo',
-  'Desistência do associado',
-  'Outro',
+  'Imprevisto do técnico',
+  'Imprevisto do associado',
 ];
 
 export default function ImprevistosPainel() {
+  const [searchParams] = useSearchParams();
+  const showPendentes = searchParams.get('pendentes') === 'true';
+
   const [motivo, setMotivo] = useState<string>('');
   const [dateRange, setDateRange] = useState<DateRange | undefined>();
   const [instaladorId, setInstaladorId] = useState<string>('');
+  const [reagendarServico, setReagendarServico] = useState<any>(null);
 
   const filters: ImprevistoFilters = {
     motivo: motivo || undefined,
@@ -56,13 +59,20 @@ export default function ImprevistosPainel() {
 
   const hasFilters = motivo || dateRange || instaladorId;
 
+  // Filter for pending follow-ups if URL param is set
+  const filteredImprevistos = showPendentes
+    ? imprevistos?.filter((item: any) => (item.reagendamento_followup_count ?? 0) >= 3)
+    : imprevistos;
+
   return (
     <div className="space-y-6">
       <div className="flex items-center justify-between">
         <div>
           <h1 className="text-2xl font-bold tracking-tight">Imprevistos</h1>
           <p className="text-muted-foreground text-sm">
-            Gerencie todos os imprevistos registrados nos serviços
+            {showPendentes
+              ? 'Imprevistos aguardando contato manual (follow-ups esgotados)'
+              : 'Gerencie todos os imprevistos registrados nos serviços'}
           </p>
         </div>
         <Button variant="outline" size="sm" onClick={() => refetch()}>
@@ -124,26 +134,27 @@ export default function ImprevistosPainel() {
               <TableHead>Motivo</TableHead>
               <TableHead>Status</TableHead>
               <TableHead className="text-center">Duplo Check</TableHead>
-              <TableHead className="text-center">Reagendamento</TableHead>
+              <TableHead className="text-center">Follow-ups</TableHead>
+              <TableHead className="text-center">Ação</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             {isLoading ? (
               Array.from({ length: 5 }).map((_, i) => (
                 <TableRow key={i}>
-                  {Array.from({ length: 7 }).map((_, j) => (
+                  {Array.from({ length: 8 }).map((_, j) => (
                     <TableCell key={j}><Skeleton className="h-4 w-full" /></TableCell>
                   ))}
                 </TableRow>
               ))
-            ) : !imprevistos?.length ? (
+            ) : !filteredImprevistos?.length ? (
               <TableRow>
-                <TableCell colSpan={7} className="h-32 text-center text-muted-foreground">
+                <TableCell colSpan={8} className="h-32 text-center text-muted-foreground">
                   Nenhum imprevisto encontrado
                 </TableCell>
               </TableRow>
             ) : (
-              imprevistos.map((item) => (
+              filteredImprevistos.map((item: any) => (
                 <TableRow key={item.id}>
                   <TableCell className="whitespace-nowrap text-sm">
                     {item.imprevisto_registrado_em
@@ -151,10 +162,10 @@ export default function ImprevistosPainel() {
                       : '—'}
                   </TableCell>
                   <TableCell className="text-sm font-medium">
-                    {(item.associado as any)?.nome ?? '—'}
+                    {item.associado?.nome ?? '—'}
                   </TableCell>
                   <TableCell className="text-sm">
-                    {(item.profissional as any)?.nome ?? '—'}
+                    {item.profissional?.nome ?? '—'}
                   </TableCell>
                   <TableCell className="text-sm">
                     {item.imprevisto_motivo ?? '—'}
@@ -182,10 +193,27 @@ export default function ImprevistosPainel() {
                     )}
                   </TableCell>
                   <TableCell className="text-center">
-                    {item.reagendamento_enviado_em ? (
+                    {item.reagendamento_followup_count > 0 ? (
+                      <Badge variant={item.reagendamento_followup_count >= 3 ? 'destructive' : 'outline'} className="text-xs">
+                        {item.reagendamento_followup_count}/3
+                      </Badge>
+                    ) : item.reagendamento_enviado_em ? (
                       <Mail className="h-4 w-4 text-blue-500 mx-auto" />
                     ) : (
                       <span className="text-muted-foreground text-xs">—</span>
+                    )}
+                  </TableCell>
+                  <TableCell className="text-center">
+                    {(item.reagendamento_followup_count ?? 0) >= 3 && item.status !== 'reagendada' && (
+                      <Button
+                        variant="outline"
+                        size="sm"
+                        className="h-7 text-xs"
+                        onClick={() => setReagendarServico(item)}
+                      >
+                        <CalendarPlus className="mr-1 h-3 w-3" />
+                        Reagendar
+                      </Button>
                     )}
                   </TableCell>
                 </TableRow>
@@ -195,11 +223,18 @@ export default function ImprevistosPainel() {
         </Table>
       </div>
 
-      {imprevistos && (
+      {filteredImprevistos && (
         <p className="text-xs text-muted-foreground">
-          {imprevistos.length} imprevisto{imprevistos.length !== 1 ? 's' : ''} encontrado{imprevistos.length !== 1 ? 's' : ''}
+          {filteredImprevistos.length} imprevisto{filteredImprevistos.length !== 1 ? 's' : ''} encontrado{filteredImprevistos.length !== 1 ? 's' : ''}
         </p>
       )}
+
+      <ModalReagendamentoManual
+        open={!!reagendarServico}
+        onOpenChange={(open) => !open && setReagendarServico(null)}
+        servico={reagendarServico}
+        onSuccess={() => refetch()}
+      />
     </div>
   );
 }
