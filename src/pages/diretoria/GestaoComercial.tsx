@@ -25,7 +25,7 @@ const sectionBanners: Record<number, { title: string; help: string }> = {
 };
 
 export default function GestaoComercial() {
-  const [activeTab, setActiveTab] = useState(0);
+  const [activeTab, setActiveTab] = useState(1);
   const isMobile = useIsMobile();
   const banner = sectionBanners[activeTab];
 
