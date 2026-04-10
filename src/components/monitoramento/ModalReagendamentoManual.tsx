@@ -64,15 +64,15 @@ export default function ModalReagendamentoManual({
       if (fetchErr || !original) throw fetchErr || new Error('Serviço não encontrado');
 
       // Create new service
-      const { error: insertErr } = await supabase.from('servicos').insert({
-        tipo: original.tipo,
+      const { error: insertErr } = await supabase.from('servicos').insert([{
+        tipo: original.tipo as any,
         associado_id: original.associado_id,
         veiculo_id: original.veiculo_id,
         data_agendada: format(date, 'yyyy-MM-dd'),
         periodo,
-        status: 'pendente',
+        status: 'pendente' as any,
         observacoes: `Reagendamento manual do serviço anterior. ${original.observacoes || ''}`.trim(),
-      });
+      }]);
 
       if (insertErr) throw insertErr;
 
