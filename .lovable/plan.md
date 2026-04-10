@@ -1,38 +1,27 @@
 
 
-## Plano: Ações de status para rastreadores em manutenção (retorno_base / em_garantia)
+## Plano: Corrigir duplicação de planos que perde regras de elegibilidade
 
-### Contexto
-Rastreadores avariados ficam com status `retorno_base` e `portador_id` do técnico. O coordenador precisa poder:
-1. **Retorno base** → "Disponível" (`estoque`) ou "Enviado para Fornecedor" (`em_garantia`)
-2. **Em garantia** → "Disponível" (`estoque`)
+### Problema raiz
 
-Atualmente a UI não oferece ações para esses status — só mostra portador para `estoque`.
+A função `applyBulkRuleOverrides` em `src/hooks/usePlansAdmin.ts` (linhas 325-353) usa o campo **`rule_action`** para criar novas regras de override, mas a coluna real na tabela `entity_eligibility_rules` se chama **`rule_mode`**.
 
-### Mudanças
+Quando o usuário seleciona uma região, tipo de uso ou combustível ao duplicar, o sistema:
+1. Filtra as regras clonadas removendo as do tipo sobrescrito
+2. Adiciona novas regras com `rule_action: 'include'` (campo inexistente)
+3. Insere tudo em batch — **o campo inválido faz a inserção inteira falhar silenciosamente**
+4. Resultado: NENHUMA regra é clonada (nem fipe_range, nem região, nada)
 
-**1. `src/components/rastreadores/RastreadorCard.tsx`**
-- Mostrar portador também para status `retorno_base` e `em_garantia` (não só `estoque`)
-- Adicionar botões de ação rápida:
-  - Status `retorno_base`: botão "Disponível" (→ estoque) e "Enviar Fornecedor" (→ em_garantia)
-  - Status `em_garantia`: botão "Disponível" (→ estoque)
+Confirmado no banco: "Select One Passeio" tem 37+ regras em suas coberturas. "Select One Passeio - SP" (duplicado) tem **zero**.
 
-**2. `src/components/rastreadores/RastreadorTableView.tsx`**
-- No dropdown de ações, adicionar as mesmas opções para rastreadores com status `retorno_base` e `em_garantia`
-- Mostrar portador na coluna associado/portador para esses status
+### Correção (1 arquivo)
 
-**3. `src/components/rastreadores/RastreadorGridView.tsx`**
-- Passar novo callback `onChangeStatus` para os cards
+**`src/hooks/usePlansAdmin.ts`** — função `applyBulkRuleOverrides` (linhas 325-353)
 
-**4. `src/hooks/useRastreadores.ts`** (ou novo hook)
-- Criar mutation `useAlterarStatusRastreador` que:
-  - Atualiza `status` do rastreador
-  - Limpa `portador_id` quando volta para `estoque`
-  - Registra movimentação em `estoque_movimentacoes`
+Trocar `rule_action: 'include'` por `rule_mode: 'include'` nas 3 ocorrências (regiao, tipoUso, combustivel).
 
-**5. Página principal de rastreadores** (onde monta grid/table)
-- Conectar o novo callback de mudança de status
+Adicionalmente, adicionar tratamento de erro nos inserts de regras (linhas 433, 439, 497, 577) para logar e lançar erro caso a inserção falhe, evitando falhas silenciosas futuras.
 
 ### Resultado
-O coordenador verá botões claros nos cards e menus de rastreadores em manutenção para movê-los entre "Disponível" e "Enviado para Fornecedor", com registro automático de movimentação.
+A duplicação de planos clonará corretamente todas as regras de elegibilidade (incluindo fipe_range), e os badges de valor variável aparecerão corretamente no plano duplicado.
 
