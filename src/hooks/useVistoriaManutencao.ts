@@ -485,7 +485,7 @@ export function useRegistrarResultadoManutencao() {
       // Buscar dados do serviço
       const { data: servico, error: servicoError } = await supabase
         .from('servicos')
-        .select('rastreador_id, veiculo_id')
+        .select('rastreador_id, veiculo_id, profissional_id')
         .eq('id', params.servicoId)
         .single();
 
@@ -591,13 +591,19 @@ export function useRegistrarResultadoManutencao() {
         if (rastreadorAntigoId) {
           const statusNovo = destino === 'retorno_base' ? 'retorno_base' : 'baixado';
           
+          const updateAntigoData: Record<string, any> = { 
+            status: statusNovo,
+            veiculo_id: null,
+            updated_at: new Date().toISOString(),
+          };
+          // Atribuir rastreador avariado ao porte do técnico
+          if (servico.profissional_id) {
+            updateAntigoData.portador_id = servico.profissional_id;
+          }
+
           const { error: atualizarAntigoError } = await supabase
             .from('rastreadores')
-            .update({ 
-              status: statusNovo,
-              veiculo_id: null,
-              updated_at: new Date().toISOString()
-            })
+            .update(updateAntigoData)
             .eq('id', rastreadorAntigoId);
 
           if (atualizarAntigoError) {
@@ -613,8 +619,8 @@ export function useRegistrarResultadoManutencao() {
             status_novo: statusNovo,
             rastreador_id: rastreadorAntigoId,
             observacoes: destino === 'retorno_base' 
-              ? 'Enviado para triagem na base após substituição'
-              : 'Baixado por substituição em manutenção',
+              ? `Enviado para triagem na base após substituição — atribuído ao porte do técnico`
+              : `Baixado por substituição em manutenção — atribuído ao porte do técnico`,
           });
 
           // Se for retorno_base, criar registro de manutenção interna
