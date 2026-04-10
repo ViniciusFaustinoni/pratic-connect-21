@@ -23,6 +23,7 @@ import { usePermissions } from '@/hooks/usePermissions';
 import { useDuplicateProductLine, useDuplicatePlan, useTogglePlanStatus } from '@/hooks/usePlansAdmin';
 import { ImportarLinhasModal } from './ImportarLinhasModal';
 import { DuplicarPlanoModal } from '@/components/admin/planos/DuplicarPlanoModal';
+import { DuplicarLinhaModal } from '@/components/admin/planos/DuplicarLinhaModal';
 import {
   ChevronDown,
   Copy,
@@ -319,6 +320,7 @@ export function LinhasPlanos() {
   const [importModal, setImportModal] = useState(false);
   const [deleteConfirm, setDeleteConfirm] = useState<{ type: 'linha' | 'plano'; id: string; name: string; plansCount?: number } | null>(null);
   const [duplicarModal, setDuplicarModal] = useState<{ open: boolean; plano: { id: string; nome: string } | null }>({ open: false, plano: null });
+  const [duplicarLinhaModal, setDuplicarLinhaModal] = useState<{ open: boolean; linha: { id: string; name: string } | null }>({ open: false, linha: null });
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
   const selectedPlan = useMemo(
@@ -461,7 +463,7 @@ export function LinhasPlanos() {
                         <Button size="icon" variant="outline" onClick={() => setLinhaModal({ open: true, productLine: linha })}>
                           <Pencil className="h-4 w-4" />
                         </Button>
-                        <Button size="icon" variant="outline" onClick={() => duplicateLine.mutate(linha.id)}>
+                        <Button size="icon" variant="outline" onClick={() => setDuplicarLinhaModal({ open: true, linha: { id: linha.id, name: linha.name } })}>
                           <Copy className="h-4 w-4" />
                         </Button>
                         {canDelete ? (
