@@ -57,7 +57,7 @@ export default function ModalReagendamentoManual({
       // Get original service data
       const { data: original, error: fetchErr } = await supabase
         .from('servicos')
-        .select('tipo, associado_id, veiculo_id, regiao_id, observacoes')
+        .select('tipo, associado_id, veiculo_id, observacoes')
         .eq('id', servico.id)
         .single();
 
@@ -68,7 +68,6 @@ export default function ModalReagendamentoManual({
         tipo: original.tipo,
         associado_id: original.associado_id,
         veiculo_id: original.veiculo_id,
-        regiao_id: original.regiao_id,
         data_agendada: format(date, 'yyyy-MM-dd'),
         periodo,
         status: 'pendente',
@@ -80,7 +79,7 @@ export default function ModalReagendamentoManual({
       // Update old service status
       await supabase
         .from('servicos')
-        .update({ status: 'reagendado' })
+        .update({ status: 'reagendada' as any })
         .eq('id', servico.id);
 
       toast.success('Serviço reagendado com sucesso');
