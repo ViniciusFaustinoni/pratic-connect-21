@@ -1112,9 +1112,10 @@ export function useDuplicateProductLine() {
         for (let i = 0; i < ids.length; i += CHUNK) {
           const chunk = ids.slice(i, i + CHUNK);
           promises.push(
-            supabase.from('entity_eligibility_rules').select('*')
-              .eq('entity_type', entityType).in('entity_id', chunk)
-              .then(r => r.data || [])
+            Promise.resolve(
+              supabase.from('entity_eligibility_rules').select('*')
+                .eq('entity_type', entityType).in('entity_id', chunk)
+            ).then(r => r.data || [])
           );
         }
         const results = await Promise.all(promises);
@@ -1128,9 +1129,10 @@ export function useDuplicateProductLine() {
         for (let i = 0; i < ids.length; i += CHUNK) {
           const chunk = ids.slice(i, i + CHUNK);
           promises.push(
-            supabase.from('benefit_category_exclusions').select('*')
-              .in('benefit_id', chunk)
-              .then(r => r.data || [])
+            Promise.resolve(
+              supabase.from('benefit_category_exclusions').select('*')
+                .in('benefit_id', chunk)
+            ).then(r => r.data || [])
           );
         }
         const results = await Promise.all(promises);
