@@ -1030,242 +1030,324 @@ export function useDuplicateProductLine() {
   return useMutation({
     mutationFn: async (input: DuplicateLineInput) => {
       const { id, nome, desconto = 0, sufixo = '', regiao, tipoUso, tipoVeiculo, combustivel } = input;
+      const bulkOverrides = { regiao, tipoUso, combustivel };
+      const hasBulkOverrides = !!(regiao || tipoUso || combustivel);
 
-      // 1. Fetch original line
-      const { data: original, error: fetchError } = await supabase
-        .from('product_lines')
-        .select('*')
-        .eq('id', id)
-        .single();
-
-      if (fetchError) throw fetchError;
-
-      // 2. Clone line with modifiers
-      const { id: _, created_at, ...lineData } = original;
-      const newLine = {
-        ...lineData,
-        name: nome || (sufixo ? `${lineData.name}${sufixo}` : `${lineData.name} (cópia)`),
-        slug: `${lineData.slug}-copia-${Date.now()}`,
-        is_active: false,
-        vehicle_type: tipoVeiculo || lineData.vehicle_type,
+      const applyDiscount = (val: number | null | undefined, pct: number): number | null => {
+        if (val == null) return null;
+        return Number((val * (100 - pct) / 100).toFixed(2));
       };
 
+      const applyDiscountToFipeRanges = (rules: any[], pct: number) => {
+        if (pct <= 0) return rules;
+        return rules.map((r: any) => {
+          if (r.rule_type !== 'fipe_range') return r;
+          const faixas = (r.rule_config?.faixas || []).map((f: any) => ({
+            ...f,
+            valor: Number((f.valor * (100 - pct) / 100).toFixed(2)),
+          }));
+          return { ...r, rule_config: { ...r.rule_config, faixas } };
+        });
+      };
+
+      const uid = () => `${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
+
+      // 1. Fetch & clone line
+      const { data: original, error: fetchError } = await supabase
+        .from('product_lines').select('*').eq('id', id).single();
+      if (fetchError) throw fetchError;
+
+      const { id: _, created_at, ...lineData } = original;
       const { data: createdLine, error: lineError } = await supabase
         .from('product_lines')
-        .insert(newLine)
-        .select()
-        .single();
-
+        .insert({
+          ...lineData,
+          name: nome || (sufixo ? `${lineData.name}${sufixo}` : `${lineData.name} (cópia)`),
+          slug: `${lineData.slug}-copia-${Date.now()}`,
+          is_active: false,
+          vehicle_type: tipoVeiculo || lineData.vehicle_type,
+        })
+        .select().single();
       if (lineError) throw lineError;
 
-      // 3. Fetch all plans of the original line
+      // 2. Fetch ALL plans at once
       const { data: plans } = await supabase
         .from('planos')
-        .select('id')
+        .select('*, planos_beneficios(*), planos_regioes(regiao_id)')
         .eq('product_line_id', id);
 
-      if (plans && plans.length > 0) {
-        // 4. Duplicate each plan using the same deep-clone logic as useDuplicatePlan
-        const bulkOverrides = { regiao, tipoUso, combustivel };
-        const hasBulkOverrides = !!(regiao || tipoUso || combustivel);
+      if (!plans || plans.length === 0) return createdLine;
 
-        const applyDiscount = (val: number | null | undefined, pct: number): number | null => {
-          if (val == null) return null;
-          return Number((val * (100 - pct) / 100).toFixed(2));
-        };
+      const planIds = plans.map((p: any) => p.id);
 
-        const applyDiscountToFipeRanges = (rules: any[], pct: number) => {
-          if (pct <= 0) return rules;
-          return rules.map((r: any) => {
-            if (r.rule_type !== 'fipe_range') return r;
-            const faixas = (r.rule_config?.faixas || []).map((f: any) => ({
-              ...f,
-              valor: Number((f.valor * (100 - pct) / 100).toFixed(2)),
-            }));
-            return { ...r, rule_config: { ...r.rule_config, faixas } };
-          });
-        };
+      // 3. Batch-fetch ALL related data in parallel
+      const [coberturas_res, plan_rules_res, benefit_rules_res, cob_rules_res, excl_res] = await Promise.all([
+        supabase.from('planos_coberturas').select('*').in('plano_id', planIds),
+        supabase.from('entity_eligibility_rules').select('*').eq('entity_type', 'plano').in('entity_id', planIds),
+        // We need benefit and coverage IDs first, so fetch all rules for all entity types related to these plans
+        supabase.from('entity_eligibility_rules').select('*').eq('entity_type', 'beneficio'),
+        supabase.from('entity_eligibility_rules').select('*').eq('entity_type', 'cobertura'),
+        supabase.from('benefit_category_exclusions').select('*'),
+      ]);
 
-        for (const plan of plans) {
-          // Fetch full plan data
-          const { data: origPlan, error: planFetchErr } = await supabase
-            .from('planos')
-            .select('*, planos_beneficios(*), planos_regioes(regiao_id)')
-            .eq('id', plan.id)
-            .single();
+      const allPlanoCoberturas = coberturas_res.data || [];
+      const allPlanRules = plan_rules_res.data || [];
 
-          if (planFetchErr || !origPlan) continue;
-
-          const { id: pId, created_at: pCreated, updated_at: pUpdated, planos_beneficios, planos_regioes, ...planData } = origPlan;
-          const newPlan = {
-            ...planData,
-            nome: sufixo ? `${planData.nome}${sufixo}` : planData.nome,
-            codigo: `${planData.codigo}-copia-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-            slug: `${planData.slug || planData.codigo}-copia-${Date.now()}-${Math.random().toString(36).slice(2, 5)}`,
-            product_line_id: createdLine.id,
-            ativo: false,
-            categoria: tipoVeiculo === 'motorcycle' ? 'moto' : tipoVeiculo === 'car' ? 'carro' : planData.categoria,
-          };
-
-          const { data: createdPlan, error: createPlanErr } = await supabase
-            .from('planos')
-            .insert(newPlan)
-            .select()
-            .single();
-
-          if (createPlanErr || !createdPlan) continue;
-
-          // Clone plan-level eligibility rules
-          const { data: planRules } = await supabase
-            .from('entity_eligibility_rules')
-            .select('*')
-            .eq('entity_type', 'plano')
-            .eq('entity_id', plan.id);
-
-          if (planRules && planRules.length > 0) {
-            const clonedPlanRules = planRules.map((r: any) => {
-              const { id: rId, created_at: rCreated, ...rData } = r;
-              return { ...rData, entity_id: createdPlan.id };
-            });
-            const finalPlanRules = applyBulkRuleOverrides(clonedPlanRules, createdPlan.id, 'plano', bulkOverrides);
-            if (finalPlanRules.length > 0) {
-              await supabase.from('entity_eligibility_rules').insert(finalPlanRules);
-            }
-          } else if (hasBulkOverrides) {
-            const newPlanRules = applyBulkRuleOverrides([], createdPlan.id, 'plano', bulkOverrides);
-            if (newPlanRules.length > 0) {
-              await supabase.from('entity_eligibility_rules').insert(newPlanRules);
-            }
-          }
-
-          // Clone benefits
-          if (planos_beneficios && (planos_beneficios as any[]).length > 0) {
-            for (const pb of planos_beneficios as any[]) {
-              if (!pb.benefit_id) continue;
-
-              const { data: origBenefit } = await supabase.from('benefits').select('*').eq('id', pb.benefit_id).single();
-              if (!origBenefit) continue;
-
-              const { id: bId, created_at: bCreated, ...bData } = origBenefit;
-              const uniqueSuffix = `-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-              const { data: newBenefit, error: bError } = await supabase
-                .from('benefits')
-                .insert({
-                  ...bData,
-                  name: sufixo ? `${bData.name}${sufixo}` : bData.name,
-                  slug: ((bData.slug as string) || '').slice(0, 80) + uniqueSuffix,
-                  preco_sugerido: applyDiscount(bData.preco_sugerido, desconto),
-                })
-                .select()
-                .single();
-
-              if (bError || !newBenefit) continue;
-
-              await supabase.from('planos_beneficios').insert({
-                plano_id: createdPlan.id,
-                benefit_id: newBenefit.id,
-                beneficio: pb.beneficio,
-                custom_text: pb.custom_text,
-                custom_value: pb.custom_value,
-                additional_info: pb.additional_info,
-                is_highlighted: pb.is_highlighted,
-                display_order: pb.display_order,
-                incluso: pb.incluso,
-              });
-
-              // Clone benefit eligibility rules
-              const { data: bRules } = await supabase
-                .from('entity_eligibility_rules').select('*')
-                .eq('entity_type', 'beneficio').eq('entity_id', pb.benefit_id);
-
-              const clonedBRules = (bRules || []).map((r: any) => {
-                const { id: rId, created_at: rCreated, ...rData } = r;
-                return { ...rData, entity_id: newBenefit.id };
-              });
-              const discountedBRules = applyDiscountToFipeRanges(clonedBRules, desconto);
-              const finalBRules = applyBulkRuleOverrides(discountedBRules, newBenefit.id, 'beneficio', bulkOverrides);
-              if (finalBRules.length > 0) {
-                await supabase.from('entity_eligibility_rules').insert(finalBRules);
-              }
-
-              // Clone category exclusions
-              const { data: bExcl } = await supabase
-                .from('benefit_category_exclusions').select('*').eq('benefit_id', pb.benefit_id);
-              if (bExcl && bExcl.length > 0) {
-                await supabase.from('benefit_category_exclusions').insert(
-                  bExcl.map((e: any) => ({ benefit_id: newBenefit.id, categoria_veiculo: e.categoria_veiculo }))
-                );
-              }
-            }
-          }
-
-          // Clone region links
-          if (planos_regioes && (planos_regioes as any[]).length > 0) {
-            await supabase.from('planos_regioes').insert(
-              (planos_regioes as any[]).map((pr: any) => ({ plano_id: createdPlan.id, regiao_id: pr.regiao_id }))
-            );
-          }
-
-          // Clone coverages
-          const { data: originalCoberturas } = await supabase
-            .from('planos_coberturas').select('cobertura_id').eq('plano_id', plan.id);
-
-          if (originalCoberturas && originalCoberturas.length > 0) {
-            for (const pc of originalCoberturas) {
-              const { data: origCob } = await supabase.from('coberturas').select('*').eq('id', pc.cobertura_id).single();
-              if (!origCob) continue;
-
-              const { id: cobId, created_at: cobCreated, ...cobData } = origCob;
-              const uniqueSuffix = `-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
-              const { data: newCob, error: cobError } = await supabase
-                .from('coberturas')
-                .insert({
-                  ...cobData,
-                  nome: sufixo ? `${cobData.nome}${sufixo}` : cobData.nome,
-                  codigo: (cobData.codigo || '').slice(0, 80) + uniqueSuffix,
-                  valor: applyDiscount(cobData.valor, desconto),
-                  valor_limite: applyDiscount(cobData.valor_limite, desconto),
-                  franquia_valor: applyDiscount(cobData.franquia_valor, desconto),
-                })
-                .select()
-                .single();
-
-              if (cobError || !newCob) continue;
-
-              // Fetch original planos_coberturas data
-              const { data: origPC } = await supabase
-                .from('planos_coberturas').select('*')
-                .eq('plano_id', plan.id).eq('cobertura_id', pc.cobertura_id).single();
-
-              await supabase.from('planos_coberturas').insert({
-                plano_id: createdPlan.id,
-                cobertura_id: newCob.id,
-                carencia_dias: origPC?.carencia_dias,
-                franquia_percentual: origPC?.franquia_percentual,
-                franquia_valor: applyDiscount(origPC?.franquia_valor, desconto),
-                obrigatoria: origPC?.obrigatoria,
-                percentual_cobertura: origPC?.percentual_cobertura,
-                valor_limite: applyDiscount(origPC?.valor_limite, desconto),
-              });
-
-              // Clone coverage eligibility rules
-              const { data: rules } = await supabase
-                .from('entity_eligibility_rules').select('*')
-                .eq('entity_type', 'cobertura').eq('entity_id', pc.cobertura_id);
-
-              const clonedRules = (rules || []).map((r: any) => {
-                const { id: rId, created_at: rCreated, ...rData } = r;
-                return { ...rData, entity_id: newCob.id };
-              });
-              const discountedRules = applyDiscountToFipeRanges(clonedRules, desconto);
-              const finalRules = applyBulkRuleOverrides(discountedRules, newCob.id, 'cobertura', bulkOverrides);
-              if (finalRules.length > 0) {
-                await supabase.from('entity_eligibility_rules').insert(finalRules);
-              }
-            }
-          }
+      // Collect all unique benefit_ids and cobertura_ids
+      const allBenefitIds = new Set<string>();
+      const allCoberturaIds = new Set<string>();
+      for (const plan of plans) {
+        for (const pb of (plan.planos_beneficios || []) as any[]) {
+          if (pb.benefit_id) allBenefitIds.add(pb.benefit_id);
         }
       }
+      for (const pc of allPlanoCoberturas) {
+        if (pc.cobertura_id) allCoberturaIds.add(pc.cobertura_id);
+      }
+
+      // Batch-fetch all benefits and coberturas
+      const benefitIdsArr = Array.from(allBenefitIds);
+      const coberturaIdsArr = Array.from(allCoberturaIds);
+
+      const [benefits_res, coberturas_data_res] = await Promise.all([
+        benefitIdsArr.length > 0 ? supabase.from('benefits').select('*').in('id', benefitIdsArr) : { data: [] },
+        coberturaIdsArr.length > 0 ? supabase.from('coberturas').select('*').in('id', coberturaIdsArr) : { data: [] },
+      ]);
+
+      const benefitsMap = new Map((benefits_res.data || []).map((b: any) => [b.id, b]));
+      const coberturasMap = new Map((coberturas_data_res.data || []).map((c: any) => [c.id, c]));
+
+      // Index rules by entity_id for fast lookup
+      const benefitRulesMap = new Map<string, any[]>();
+      for (const r of (benefit_rules_res.data || [])) {
+        const arr = benefitRulesMap.get(r.entity_id) || [];
+        arr.push(r);
+        benefitRulesMap.set(r.entity_id, arr);
+      }
+      const cobRulesMap = new Map<string, any[]>();
+      for (const r of (cob_rules_res.data || [])) {
+        const arr = cobRulesMap.get(r.entity_id) || [];
+        arr.push(r);
+        cobRulesMap.set(r.entity_id, arr);
+      }
+      const exclMap = new Map<string, any[]>();
+      for (const e of (excl_res.data || [])) {
+        const arr = exclMap.get(e.benefit_id) || [];
+        arr.push(e);
+        exclMap.set(e.benefit_id, arr);
+      }
+      const planRulesMap = new Map<string, any[]>();
+      for (const r of allPlanRules) {
+        const arr = planRulesMap.get(r.entity_id) || [];
+        arr.push(r);
+        planRulesMap.set(r.entity_id, arr);
+      }
+
+      // 4. Create ALL new plans in batch
+      const newPlansData = plans.map((origPlan: any) => {
+        const { id: pId, created_at: pCreated, updated_at: pUpdated, planos_beneficios, planos_regioes, ...planData } = origPlan;
+        return {
+          ...planData,
+          nome: sufixo ? `${planData.nome}${sufixo}` : planData.nome,
+          codigo: `${planData.codigo}-c-${uid()}`,
+          slug: `${planData.slug || planData.codigo}-c-${uid()}`,
+          product_line_id: createdLine.id,
+          ativo: false,
+          categoria: tipoVeiculo === 'motorcycle' ? 'moto' : tipoVeiculo === 'car' ? 'carro' : planData.categoria,
+        };
+      });
+
+      const { data: createdPlans, error: batchPlanErr } = await supabase
+        .from('planos').insert(newPlansData).select();
+      if (batchPlanErr) throw batchPlanErr;
+
+      // Map old plan IDs to new plan IDs (by index since insert preserves order)
+      const planIdMap = new Map<string, string>();
+      plans.forEach((orig: any, i: number) => {
+        planIdMap.set(orig.id, createdPlans![i].id);
+      });
+
+      // 5. Batch-insert plan eligibility rules
+      const allNewPlanRules: any[] = [];
+      for (const origPlan of plans) {
+        const newPlanId = planIdMap.get(origPlan.id)!;
+        const rules = planRulesMap.get(origPlan.id) || [];
+        const cloned = rules.map((r: any) => {
+          const { id: rId, created_at: rCreated, ...rData } = r;
+          return { ...rData, entity_id: newPlanId };
+        });
+        const final = applyBulkRuleOverrides(cloned, newPlanId, 'plano', bulkOverrides);
+        allNewPlanRules.push(...final);
+        if (cloned.length === 0 && hasBulkOverrides) {
+          allNewPlanRules.push(...applyBulkRuleOverrides([], newPlanId, 'plano', bulkOverrides));
+        }
+      }
+      if (allNewPlanRules.length > 0) {
+        await supabase.from('entity_eligibility_rules').insert(allNewPlanRules);
+      }
+
+      // 6. Batch-insert planos_regioes
+      const allNewRegioes: any[] = [];
+      for (const origPlan of plans) {
+        const newPlanId = planIdMap.get(origPlan.id)!;
+        for (const pr of (origPlan.planos_regioes || []) as any[]) {
+          allNewRegioes.push({ plano_id: newPlanId, regiao_id: pr.regiao_id });
+        }
+      }
+      if (allNewRegioes.length > 0) {
+        await supabase.from('planos_regioes').insert(allNewRegioes);
+      }
+
+      // 7. Batch-clone ALL benefits (insert in one call)
+      const benefitsToInsert: any[] = [];
+      const benefitOriginMap: { origBenefitId: string; origPlanId: string; pb: any; insertIndex: number }[] = [];
+
+      for (const origPlan of plans) {
+        for (const pb of (origPlan.planos_beneficios || []) as any[]) {
+          if (!pb.benefit_id) continue;
+          const origBenefit = benefitsMap.get(pb.benefit_id);
+          if (!origBenefit) continue;
+
+          const { id: bId, created_at: bCreated, ...bData } = origBenefit;
+          benefitsToInsert.push({
+            ...bData,
+            name: sufixo ? `${bData.name}${sufixo}` : bData.name,
+            slug: ((bData.slug as string) || '').slice(0, 80) + `-${uid()}`,
+            preco_sugerido: applyDiscount(bData.preco_sugerido, desconto),
+          });
+          benefitOriginMap.push({
+            origBenefitId: pb.benefit_id,
+            origPlanId: origPlan.id,
+            pb,
+            insertIndex: benefitsToInsert.length - 1,
+          });
+        }
+      }
+
+      let createdBenefits: any[] = [];
+      if (benefitsToInsert.length > 0) {
+        const { data, error } = await supabase.from('benefits').insert(benefitsToInsert).select();
+        if (error) throw error;
+        createdBenefits = data || [];
+      }
+
+      // Batch-insert planos_beneficios
+      const allNewPB: any[] = [];
+      const allNewBenefitRules: any[] = [];
+      const allNewBenefitExcl: any[] = [];
+
+      for (const mapping of benefitOriginMap) {
+        const newBenefit = createdBenefits[mapping.insertIndex];
+        if (!newBenefit) continue;
+        const newPlanId = planIdMap.get(mapping.origPlanId)!;
+        const { pb } = mapping;
+
+        allNewPB.push({
+          plano_id: newPlanId,
+          benefit_id: newBenefit.id,
+          beneficio: pb.beneficio,
+          custom_text: pb.custom_text,
+          custom_value: pb.custom_value,
+          additional_info: pb.additional_info,
+          is_highlighted: pb.is_highlighted,
+          display_order: pb.display_order,
+          incluso: pb.incluso,
+        });
+
+        // Rules
+        const bRules = benefitRulesMap.get(mapping.origBenefitId) || [];
+        const cloned = bRules.map((r: any) => {
+          const { id: rId, created_at: rCreated, ...rData } = r;
+          return { ...rData, entity_id: newBenefit.id };
+        });
+        const discounted = applyDiscountToFipeRanges(cloned, desconto);
+        const final = applyBulkRuleOverrides(discounted, newBenefit.id, 'beneficio', bulkOverrides);
+        allNewBenefitRules.push(...final);
+
+        // Exclusions
+        const excl = exclMap.get(mapping.origBenefitId) || [];
+        for (const e of excl) {
+          allNewBenefitExcl.push({ benefit_id: newBenefit.id, categoria_veiculo: e.categoria_veiculo });
+        }
+      }
+
+      await Promise.all([
+        allNewPB.length > 0 ? supabase.from('planos_beneficios').insert(allNewPB) : Promise.resolve(),
+        allNewBenefitRules.length > 0 ? supabase.from('entity_eligibility_rules').insert(allNewBenefitRules) : Promise.resolve(),
+        allNewBenefitExcl.length > 0 ? supabase.from('benefit_category_exclusions').insert(allNewBenefitExcl) : Promise.resolve(),
+      ]);
+
+      // 8. Batch-clone ALL coverages
+      const cobsToInsert: any[] = [];
+      const cobOriginMap: { origCobId: string; origPlanId: string; insertIndex: number }[] = [];
+
+      for (const pc of allPlanoCoberturas) {
+        const origCob = coberturasMap.get(pc.cobertura_id);
+        if (!origCob) continue;
+
+        const { id: cobId, created_at: cobCreated, ...cobData } = origCob;
+        cobsToInsert.push({
+          ...cobData,
+          nome: sufixo ? `${cobData.nome}${sufixo}` : cobData.nome,
+          codigo: (cobData.codigo || '').slice(0, 80) + `-${uid()}`,
+          valor: applyDiscount(cobData.valor, desconto),
+          valor_limite: applyDiscount(cobData.valor_limite, desconto),
+          franquia_valor: applyDiscount(cobData.franquia_valor, desconto),
+        });
+        cobOriginMap.push({
+          origCobId: pc.cobertura_id,
+          origPlanId: pc.plano_id,
+          insertIndex: cobsToInsert.length - 1,
+        });
+      }
+
+      let createdCobs: any[] = [];
+      if (cobsToInsert.length > 0) {
+        const { data, error } = await supabase.from('coberturas').insert(cobsToInsert).select();
+        if (error) throw error;
+        createdCobs = data || [];
+      }
+
+      // Batch-insert planos_coberturas + rules
+      const allNewPC: any[] = [];
+      const allNewCobRules: any[] = [];
+
+      for (const mapping of cobOriginMap) {
+        const newCob = createdCobs[mapping.insertIndex];
+        if (!newCob) continue;
+        const newPlanId = planIdMap.get(mapping.origPlanId)!;
+
+        // Find original planos_coberturas record for extra fields
+        const origPC = allPlanoCoberturas.find(
+          (pc: any) => pc.plano_id === mapping.origPlanId && pc.cobertura_id === mapping.origCobId
+        );
+
+        allNewPC.push({
+          plano_id: newPlanId,
+          cobertura_id: newCob.id,
+          carencia_dias: origPC?.carencia_dias,
+          franquia_percentual: origPC?.franquia_percentual,
+          franquia_valor: applyDiscount(origPC?.franquia_valor, desconto),
+          obrigatoria: origPC?.obrigatoria,
+          percentual_cobertura: origPC?.percentual_cobertura,
+          valor_limite: applyDiscount(origPC?.valor_limite, desconto),
+        });
+
+        // Rules
+        const cRules = cobRulesMap.get(mapping.origCobId) || [];
+        const cloned = cRules.map((r: any) => {
+          const { id: rId, created_at: rCreated, ...rData } = r;
+          return { ...rData, entity_id: newCob.id };
+        });
+        const discounted = applyDiscountToFipeRanges(cloned, desconto);
+        const final = applyBulkRuleOverrides(discounted, newCob.id, 'cobertura', bulkOverrides);
+        allNewCobRules.push(...final);
+      }
+
+      await Promise.all([
+        allNewPC.length > 0 ? supabase.from('planos_coberturas').insert(allNewPC) : Promise.resolve(),
+        allNewCobRules.length > 0 ? supabase.from('entity_eligibility_rules').insert(allNewCobRules) : Promise.resolve(),
+      ]);
 
       return createdLine;
     },
