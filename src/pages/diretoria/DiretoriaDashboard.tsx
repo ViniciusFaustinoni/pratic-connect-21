@@ -974,6 +974,17 @@ export default function DiretoriaDashboard() {
               <Button
                 variant="outline"
                 className="w-full justify-between"
+                onClick={() => navigate('/diretoria/gestao-comercial')}
+              >
+                <span className="flex items-center gap-2">
+                  <Target className="h-4 w-4" />
+                  Gestão Comercial
+                </span>
+                <ArrowRight className="h-4 w-4" />
+              </Button>
+              <Button
+                variant="outline"
+                className="w-full justify-between"
                 onClick={() => navigate('/diretoria/rateios')}
               >
                 <span className="flex items-center gap-2">
