@@ -30,6 +30,7 @@ interface DuplicarLinhaModalProps {
 const KEEP_ORIGINAL = '__keep__';
 
 export function DuplicarLinhaModal({ open, onOpenChange, linha }: DuplicarLinhaModalProps) {
+  const [nomeLinha, setNomeLinha] = useState('');
   const [desconto, setDesconto] = useState(0);
   const [sufixo, setSufixo] = useState('');
   const [regiao, setRegiao] = useState(KEEP_ORIGINAL);
@@ -40,7 +41,10 @@ export function DuplicarLinhaModal({ open, onOpenChange, linha }: DuplicarLinhaM
   const duplicateLine = useDuplicateProductLine();
   const { data: regioes } = useRegioes();
 
-  const nomeResultante = linha ? `${linha.name}${sufixo || ' (cópia)'}` : '';
+  // Initialize name when linha changes
+  useState(() => {
+    if (linha) setNomeLinha(`${linha.name} (cópia)`);
+  });
 
   const handleDuplicate = async () => {
     if (!linha) return;
