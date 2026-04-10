@@ -219,14 +219,10 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
         vinculoMap.set(v.benefit_id, v);
       });
 
-      // Exclude benefits already in THIS plan
-      const currentPlanBenIds = new Set(benefits.map((b: any) => b.id));
+      // Exclude benefits already assigned to ANY plan
+      const assignedIds = new Set(Array.from(vinculoMap.keys()));
       return (allBenefits || [])
-        .filter((b: any) => !currentPlanBenIds.has(b.id))
-        .map((b: any) => ({
-          ...b,
-          vinculadoAo: vinculoMap.get(b.id) || null,
-        }));
+        .filter((b: any) => !assignedIds.has(b.id));
     },
     enabled: assignOpen,
   });
@@ -240,20 +236,6 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
     setAssigning(true);
     try {
       const selectedIds = Array.from(assignSelected);
-      // Find which ones are already bound to another plan
-      const reassigned = selectedIds.filter(id => {
-        const ben = beneficiosDisponiveis.find((b: any) => b.id === id);
-        return ben?.vinculadoAo;
-      });
-
-      // Delete old bindings for reassigned ones
-      if (reassigned.length > 0) {
-        const { error: delErr } = await supabase
-          .from('planos_beneficios')
-          .delete()
-          .in('benefit_id', reassigned);
-        if (delErr) throw delErr;
-      }
 
       // Insert new bindings
       const inserts = selectedIds.map((benefitId) => ({
@@ -264,10 +246,7 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
       const { error } = await supabase.from('planos_beneficios').insert(inserts);
       if (error) throw error;
 
-      const msg = reassigned.length > 0
-        ? `${assignSelected.size} benefício(s) vinculado(s) (${reassigned.length} reatribuído(s) de outros planos)`
-        : `${assignSelected.size} benefício(s) vinculado(s) com sucesso`;
-      toast.success(msg);
+      toast.success(`${assignSelected.size} benefício(s) vinculado(s) com sucesso`);
       setAssignOpen(false);
       setAssignSelected(new Set());
       setAssignSearch('');
@@ -410,11 +389,6 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
                       {ben.icon && <span className="text-base">{ben.icon}</span>}
                       <span className="text-sm truncate">{ben.name}</span>
                     </div>
-                    {ben.vinculadoAo && (
-                      <Badge variant="outline" className="text-[10px] shrink-0 bg-muted text-muted-foreground">
-                        {(ben.vinculadoAo as any).planos?.nome || 'Outro plano'}
-                      </Badge>
-                    )}
                   </label>
                 ))
               )}

@@ -298,14 +298,10 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
 
       const vinculoMap = new Map((vinculos || []).map((v: any) => [v.cobertura_id, v]));
 
-      // Exclude coberturas already in THIS plan, add binding info for others
-      const currentPlanCobIds = new Set(coberturas.map((c: any) => c.id));
+      // Exclude coberturas already assigned to ANY plan
+      const assignedIds = new Set((vinculos || []).map((v: any) => v.cobertura_id));
       return (allCoberturas || [])
-        .filter((c: any) => !currentPlanCobIds.has(c.id))
-        .map((c: any) => ({
-          ...c,
-          vinculadaAo: vinculoMap.get(c.id) || null,
-        }));
+        .filter((c: any) => !assignedIds.has(c.id));
     },
     enabled: assignOpen,
   });
@@ -319,20 +315,6 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
     setAssigning(true);
     try {
       const selectedIds = Array.from(assignSelected);
-      // Find which ones are already bound to another plan
-      const reassigned = selectedIds.filter(id => {
-        const cob = coberturasDisponiveis.find((c: any) => c.id === id);
-        return cob?.vinculadaAo;
-      });
-
-      // Delete old bindings for reassigned ones
-      if (reassigned.length > 0) {
-        const { error: delErr } = await supabase
-          .from('planos_coberturas')
-          .delete()
-          .in('cobertura_id', reassigned);
-        if (delErr) throw delErr;
-      }
 
       // Insert new bindings
       const inserts = selectedIds.map((coberturaId) => ({
@@ -342,10 +324,7 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
       const { error } = await supabase.from('planos_coberturas').insert(inserts);
       if (error) throw error;
 
-      const msg = reassigned.length > 0
-        ? `${assignSelected.size} cobertura(s) vinculada(s) (${reassigned.length} reatribuída(s) de outros planos)`
-        : `${assignSelected.size} cobertura(s) vinculada(s) com sucesso`;
-      toast.success(msg);
+      toast.success(`${assignSelected.size} cobertura(s) vinculada(s) com sucesso`);
       setAssignOpen(false);
       setAssignSelected(new Set());
       setAssignSearch('');
@@ -422,11 +401,6 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
                       {cob.icon && <span className="text-base">{cob.icon}</span>}
                       <span className="text-sm truncate">{cob.nome}</span>
                     </div>
-                    {cob.vinculadaAo && (
-                      <Badge variant="outline" className="text-[10px] shrink-0 bg-muted text-muted-foreground">
-                        {(cob.vinculadaAo as any).planos?.nome || 'Outro plano'}
-                      </Badge>
-                    )}
                   </label>
                 ))
               )}
