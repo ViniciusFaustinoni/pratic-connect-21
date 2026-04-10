@@ -11,6 +11,8 @@ import {
 interface BadgeCoberturaProps {
   coberturaTotal?: boolean | null;
   coberturaRouboFurto?: boolean | null;
+  coberturaSuspensa?: boolean | null;
+  coberturaSuspensaMotivo?: string | null;
   className?: string;
   showTooltip?: boolean;
 }
@@ -18,11 +20,20 @@ interface BadgeCoberturaProps {
 export function BadgeCobertura({
   coberturaTotal,
   coberturaRouboFurto,
+  coberturaSuspensa,
+  coberturaSuspensaMotivo,
   className,
   showTooltip = true,
 }: BadgeCoberturaProps) {
-  // Determinar o tipo de cobertura
   const getCoberturaInfo = () => {
+    if (coberturaSuspensa) {
+      return {
+        label: 'Suspensa',
+        icon: ShieldAlert,
+        className: 'bg-destructive/20 text-destructive border-destructive/30',
+        tooltip: coberturaSuspensaMotivo || 'Cobertura suspensa por não ativação do rastreador em 48h',
+      };
+    }
     if (coberturaTotal) {
       return {
         label: 'Proteção 360º',
@@ -51,25 +62,18 @@ export function BadgeCobertura({
   const Icon = info.icon;
 
   const badge = (
-    <Badge 
-      variant="outline" 
-      className={cn(info.className, 'font-medium', className)}
-    >
+    <Badge variant="outline" className={cn(info.className, 'font-medium', className)}>
       <Icon className="h-3 w-3 mr-1" />
       {info.label}
     </Badge>
   );
 
-  if (!showTooltip) {
-    return badge;
-  }
+  if (!showTooltip) return badge;
 
   return (
     <TooltipProvider>
       <Tooltip>
-        <TooltipTrigger asChild>
-          {badge}
-        </TooltipTrigger>
+        <TooltipTrigger asChild>{badge}</TooltipTrigger>
         <TooltipContent>
           <p className="text-sm">{info.tooltip}</p>
         </TooltipContent>
@@ -78,10 +82,10 @@ export function BadgeCobertura({
   );
 }
 
-// Badge compacto para uso em listas/cards
 interface BadgeCoberturaCompactProps {
   coberturaTotal?: boolean | null;
   coberturaRouboFurto?: boolean | null;
+  coberturaSuspensa?: boolean | null;
   veiculoStatus?: string | null;
   className?: string;
 }
@@ -89,11 +93,28 @@ interface BadgeCoberturaCompactProps {
 export function BadgeCoberturaCompact({
   coberturaTotal,
   coberturaRouboFurto,
+  coberturaSuspensa,
   veiculoStatus,
   className,
 }: BadgeCoberturaCompactProps) {
-  // Se veículo cancelado/inativo, sempre mostrar sem cobertura
   const isCancelado = veiculoStatus === 'cancelado' || veiculoStatus === 'inativo';
+
+  if (!isCancelado && coberturaSuspensa) {
+    return (
+      <TooltipProvider>
+        <Tooltip>
+          <TooltipTrigger asChild>
+            <div className={cn('flex items-center justify-center w-6 h-6 rounded-full bg-destructive/20', className)}>
+              <ShieldAlert className="h-3.5 w-3.5 text-destructive" />
+            </div>
+          </TooltipTrigger>
+          <TooltipContent>
+            <p>Cobertura Suspensa - Rastreador não ativado</p>
+          </TooltipContent>
+        </Tooltip>
+      </TooltipProvider>
+    );
+  }
 
   if (!isCancelado && coberturaTotal) {
     return (

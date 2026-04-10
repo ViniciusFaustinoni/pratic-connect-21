@@ -23,6 +23,7 @@ export function useImprevistos(filters: ImprevistoFilters) {
           imprevisto_duplo_check,
           imprevisto_duplo_check_em,
           reagendamento_enviado_em,
+          reagendamento_followup_count,
           profissional_id,
           associado:associados!servicos_associado_id_fkey(id, nome, telefone),
           profissional:profiles!servicos_profissional_id_fkey(id, nome)

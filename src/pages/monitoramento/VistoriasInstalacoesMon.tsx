@@ -8,6 +8,7 @@ import RetiradasContent from './RetiradasContent';
 import { useConfigAtribuicaoManual } from '@/hooks/useAtribuicaoManual';
 import { lazy, Suspense } from 'react';
 import { Loader2 } from 'lucide-react';
+import AlertaImprevistosPendentes from '@/components/monitoramento/AlertaImprevistosPendentes';
 
 const AtribuicaoManualTab = lazy(() => import('@/components/monitoramento/AtribuicaoManualTab'));
 const HistoricoAtribuicoesTab = lazy(() => import('@/components/monitoramento/HistoricoAtribuicoesTab'));
@@ -24,6 +25,8 @@ export default function VistoriasInstalacoesMon() {
           Acompanhe instalações, vistorias, retiradas e encaixes em um único painel
         </p>
       </div>
+
+      <AlertaImprevistosPendentes />
 
       <Tabs defaultValue={manualAtiva ? 'atribuicao-manual' : 'instalacoes'} className="w-full">
         <div className="overflow-x-auto -mx-4 px-4">
