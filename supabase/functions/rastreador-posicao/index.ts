@@ -417,6 +417,7 @@ serve(async (req) => {
   }
 
   const startTime = Date.now();
+  let rastreadorIdForFallback: string | null = null;
 
   try {
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
