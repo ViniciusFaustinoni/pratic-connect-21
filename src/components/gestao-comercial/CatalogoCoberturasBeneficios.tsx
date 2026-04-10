@@ -1,17 +1,18 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
+import { Badge } from '@/components/ui/badge';
 import { Sheet, SheetContent, SheetHeader, SheetTitle } from '@/components/ui/sheet';
 import { AlertDialog, AlertDialogAction, AlertDialogCancel, AlertDialogContent, AlertDialogDescription, AlertDialogFooter, AlertDialogHeader, AlertDialogTitle } from '@/components/ui/alert-dialog';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Plus, Pencil, Trash2, Loader2, Filter, Copy, Search, ArrowDownAZ, ArrowUpAZ } from 'lucide-react';
 import { useCoberturas, useBenefits } from '@/hooks/usePlans';
 import { useDuplicateCobertura, useDuplicateBenefit } from '@/hooks/usePlansAdmin';
-import { useMutation, useQueryClient } from '@tanstack/react-query';
+import { useMutation, useQueryClient, useQuery } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { EligibilityConfigSection, useEligibilityState, saveEligibilityRules, hasEligibilityRules } from './EligibilityConfigSection';
@@ -319,13 +320,14 @@ function RulesIndicator({ entityType, entityId }: { entityType: 'cobertura' | 'b
 
 // ── Item List ──
 
-function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type }: {
+function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type, attrMap }: {
   items: any[];
   onEdit: (item: any) => void;
   onToggle: (id: string, active: boolean) => void;
   onDelete: (item: any) => void;
   onDuplicate: (id: string) => void;
   type: 'cobertura' | 'beneficio';
+  attrMap: Record<string, string>;
 }) {
   const getActive = (item: any) => type === 'cobertura' ? item.ativo !== false : item.is_active !== false;
   const getValor = (item: any) => type === 'cobertura' ? (item.valor || 0) : (item.preco_sugerido || 0);
@@ -336,34 +338,42 @@ function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type }: {
 
   return (
     <div className="space-y-1">
-      {items.map(item => (
-        <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors group">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="text-sm font-medium truncate">{getNome(item)}</p>
-              <RulesIndicator entityType={type} entityId={item.id} />
+      {items.map(item => {
+        const planoNome = attrMap[item.id];
+        return (
+          <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors group">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="text-sm font-medium truncate">{getNome(item)}</p>
+                <RulesIndicator entityType={type} entityId={item.id} />
+                {planoNome ? (
+                  <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-600 hover:bg-emerald-600 text-white">{planoNome}</Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground">Sem plano</Badge>
+                )}
+              </div>
+              {getDesc(item) && <p className="text-xs text-muted-foreground truncate">{getDesc(item)}</p>}
             </div>
-            {getDesc(item) && <p className="text-xs text-muted-foreground truncate">{getDesc(item)}</p>}
+            <span className="text-sm font-semibold text-primary shrink-0">
+              R$ {getValor(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+            <Switch
+              checked={getActive(item)}
+              onCheckedChange={(checked) => onToggle(item.id, checked)}
+              className="shrink-0"
+            />
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onEdit(item)}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onDuplicate(item.id)} title="Duplicar">
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
-          <span className="text-sm font-semibold text-primary shrink-0">
-            R$ {getValor(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </span>
-          <Switch
-            checked={getActive(item)}
-            onCheckedChange={(checked) => onToggle(item.id, checked)}
-            className="shrink-0"
-          />
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onEdit(item)}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onDuplicate(item.id)} title="Duplicar">
-            <Copy className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
@@ -380,6 +390,34 @@ export function CatalogoCoberturasBeneficios() {
   const duplicateCob = useDuplicateCobertura();
   const duplicateBen = useDuplicateBenefit();
 
+  // Attribution maps
+  const { data: cobAttrData = [] } = useQuery({
+    queryKey: ['planos_coberturas_attr'],
+    queryFn: async () => {
+      const { data } = await supabase.from('planos_coberturas').select('cobertura_id, planos(nome)');
+      return data || [];
+    },
+  });
+  const { data: benAttrData = [] } = useQuery({
+    queryKey: ['planos_beneficios_attr'],
+    queryFn: async () => {
+      const { data } = await supabase.from('planos_beneficios').select('benefit_id, planos(nome)');
+      return data || [];
+    },
+  });
+
+  const cobAttrMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    cobAttrData.forEach((r: any) => { if (r.cobertura_id && r.planos?.nome) map[r.cobertura_id] = r.planos.nome; });
+    return map;
+  }, [cobAttrData]);
+
+  const benAttrMap = useMemo(() => {
+    const map: Record<string, string> = {};
+    benAttrData.forEach((r: any) => { if (r.benefit_id && r.planos?.nome) map[r.benefit_id] = r.planos.nome; });
+    return map;
+  }, [benAttrData]);
+
   const [cobSheet, setCobSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [benSheet, setBenSheet] = useState<{ open: boolean; item?: any }>({ open: false });
   const [deleteDialog, setDeleteDialog] = useState<{ open: boolean; item?: any; type?: 'cobertura' | 'beneficio' }>({ open: false });
@@ -387,9 +425,17 @@ export function CatalogoCoberturasBeneficios() {
   const [benSearch, setBenSearch] = useState('');
   const [cobSort, setCobSort] = useState<'default' | 'az' | 'za'>('default');
   const [benSort, setBenSort] = useState<'default' | 'az' | 'za'>('default');
+  const [cobAttrFilter, setCobAttrFilter] = useState<'todos' | 'atribuidos' | 'nao_atribuidos'>('todos');
+  const [benAttrFilter, setBenAttrFilter] = useState<'todos' | 'atribuidos' | 'nao_atribuidos'>('todos');
 
-  const filterAndSort = (items: any[], search: string, sort: 'default' | 'az' | 'za', type: 'cobertura' | 'beneficio') => {
+  const filterAndSort = (items: any[], search: string, sort: 'default' | 'az' | 'za', type: 'cobertura' | 'beneficio', attrFilter: 'todos' | 'atribuidos' | 'nao_atribuidos', attrMap: Record<string, string>) => {
     let filtered = items;
+    // Attribution filter
+    if (attrFilter === 'atribuidos') {
+      filtered = filtered.filter(item => !!attrMap[item.id]);
+    } else if (attrFilter === 'nao_atribuidos') {
+      filtered = filtered.filter(item => !attrMap[item.id]);
+    }
     if (search.trim()) {
       const term = search.toLowerCase();
       filtered = items.filter(item => {
@@ -453,11 +499,22 @@ export function CatalogoCoberturasBeneficios() {
                 <SelectItem value="za">Z → A</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={cobAttrFilter} onValueChange={(v: any) => setCobAttrFilter(v)}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Atribuição" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="atribuidos">Atribuídos</SelectItem>
+                <SelectItem value="nao_atribuidos">Não atribuídos</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="sm" onClick={() => setCobSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Nova Cobertura</Button>
           </div>
           <ItemList
-            items={filterAndSort(coberturas, cobSearch, cobSort, 'cobertura')}
+            items={filterAndSort(coberturas, cobSearch, cobSort, 'cobertura', cobAttrFilter, cobAttrMap)}
             type="cobertura"
+            attrMap={cobAttrMap}
             onEdit={(item) => setCobSheet({ open: true, item })}
             onToggle={(id, ativo) => toggleCob.mutate({ id, ativo })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'cobertura' })}
@@ -481,11 +538,22 @@ export function CatalogoCoberturasBeneficios() {
                 <SelectItem value="za">Z → A</SelectItem>
               </SelectContent>
             </Select>
+            <Select value={benAttrFilter} onValueChange={(v: any) => setBenAttrFilter(v)}>
+              <SelectTrigger className="w-[160px] h-9">
+                <SelectValue placeholder="Atribuição" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="todos">Todos</SelectItem>
+                <SelectItem value="atribuidos">Atribuídos</SelectItem>
+                <SelectItem value="nao_atribuidos">Não atribuídos</SelectItem>
+              </SelectContent>
+            </Select>
             <Button size="sm" onClick={() => setBenSheet({ open: true })}><Plus className="h-4 w-4 mr-1" />Novo Benefício</Button>
           </div>
           <ItemList
-            items={filterAndSort(benefits, benSearch, benSort, 'beneficio')}
+            items={filterAndSort(benefits, benSearch, benSort, 'beneficio', benAttrFilter, benAttrMap)}
             type="beneficio"
+            attrMap={benAttrMap}
             onEdit={(item) => setBenSheet({ open: true, item })}
             onToggle={(id, is_active) => toggleBen.mutate({ id, is_active })}
             onDelete={(item) => setDeleteDialog({ open: true, item, type: 'beneficio' })}
