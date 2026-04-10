@@ -320,13 +320,14 @@ function RulesIndicator({ entityType, entityId }: { entityType: 'cobertura' | 'b
 
 // ── Item List ──
 
-function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type }: {
+function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type, attrMap }: {
   items: any[];
   onEdit: (item: any) => void;
   onToggle: (id: string, active: boolean) => void;
   onDelete: (item: any) => void;
   onDuplicate: (id: string) => void;
   type: 'cobertura' | 'beneficio';
+  attrMap: Record<string, string>;
 }) {
   const getActive = (item: any) => type === 'cobertura' ? item.ativo !== false : item.is_active !== false;
   const getValor = (item: any) => type === 'cobertura' ? (item.valor || 0) : (item.preco_sugerido || 0);
@@ -337,34 +338,42 @@ function ItemList({ items, onEdit, onToggle, onDelete, onDuplicate, type }: {
 
   return (
     <div className="space-y-1">
-      {items.map(item => (
-        <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors group">
-          <div className="flex-1 min-w-0">
-            <div className="flex items-center gap-1.5">
-              <p className="text-sm font-medium truncate">{getNome(item)}</p>
-              <RulesIndicator entityType={type} entityId={item.id} />
+      {items.map(item => {
+        const planoNome = attrMap[item.id];
+        return (
+          <div key={item.id} className="flex items-center gap-3 px-3 py-2.5 rounded-lg hover:bg-muted/50 transition-colors group">
+            <div className="flex-1 min-w-0">
+              <div className="flex items-center gap-1.5 flex-wrap">
+                <p className="text-sm font-medium truncate">{getNome(item)}</p>
+                <RulesIndicator entityType={type} entityId={item.id} />
+                {planoNome ? (
+                  <Badge variant="default" className="text-[10px] px-1.5 py-0 h-4 bg-emerald-600 hover:bg-emerald-600 text-white">{planoNome}</Badge>
+                ) : (
+                  <Badge variant="outline" className="text-[10px] px-1.5 py-0 h-4 text-muted-foreground">Sem plano</Badge>
+                )}
+              </div>
+              {getDesc(item) && <p className="text-xs text-muted-foreground truncate">{getDesc(item)}</p>}
             </div>
-            {getDesc(item) && <p className="text-xs text-muted-foreground truncate">{getDesc(item)}</p>}
+            <span className="text-sm font-semibold text-primary shrink-0">
+              R$ {getValor(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
+            </span>
+            <Switch
+              checked={getActive(item)}
+              onCheckedChange={(checked) => onToggle(item.id, checked)}
+              className="shrink-0"
+            />
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onEdit(item)}>
+              <Pencil className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onDuplicate(item.id)} title="Duplicar">
+              <Copy className="h-3.5 w-3.5" />
+            </Button>
+            <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
+              <Trash2 className="h-3.5 w-3.5" />
+            </Button>
           </div>
-          <span className="text-sm font-semibold text-primary shrink-0">
-            R$ {getValor(item).toLocaleString('pt-BR', { minimumFractionDigits: 2 })}
-          </span>
-          <Switch
-            checked={getActive(item)}
-            onCheckedChange={(checked) => onToggle(item.id, checked)}
-            className="shrink-0"
-          />
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onEdit(item)}>
-            <Pencil className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100" onClick={() => onDuplicate(item.id)} title="Duplicar">
-            <Copy className="h-3.5 w-3.5" />
-          </Button>
-          <Button variant="ghost" size="icon" className="h-7 w-7 shrink-0 opacity-0 group-hover:opacity-100 text-destructive hover:text-destructive" onClick={() => onDelete(item)}>
-            <Trash2 className="h-3.5 w-3.5" />
-          </Button>
-        </div>
-      ))}
+        );
+      })}
     </div>
   );
 }
