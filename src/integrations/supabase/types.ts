@@ -22318,7 +22318,9 @@ export type Database = {
           rastreador_id: string | null
           rastreador_substituto_id: string | null
           reagendamento_enviado_em: string | null
+          reagendamento_followup_count: number | null
           reagendamento_token: string | null
+          reagendamento_ultimo_followup_em: string | null
           ressalvas: string | null
           ressalvas_instalador: string | null
           resultado_manutencao: string | null
@@ -22430,7 +22432,9 @@ export type Database = {
           rastreador_id?: string | null
           rastreador_substituto_id?: string | null
           reagendamento_enviado_em?: string | null
+          reagendamento_followup_count?: number | null
           reagendamento_token?: string | null
+          reagendamento_ultimo_followup_em?: string | null
           ressalvas?: string | null
           ressalvas_instalador?: string | null
           resultado_manutencao?: string | null
@@ -22542,7 +22546,9 @@ export type Database = {
           rastreador_id?: string | null
           rastreador_substituto_id?: string | null
           reagendamento_enviado_em?: string | null
+          reagendamento_followup_count?: number | null
           reagendamento_token?: string | null
+          reagendamento_ultimo_followup_em?: string | null
           ressalvas?: string | null
           ressalvas_instalador?: string | null
           resultado_manutencao?: string | null
