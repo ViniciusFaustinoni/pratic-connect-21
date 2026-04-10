@@ -1080,14 +1080,10 @@ export function useDuplicateProductLine() {
 
       const planIds = plans.map((p: any) => p.id);
 
-      // 3. Batch-fetch ALL related data in parallel
-      const [coberturas_res, plan_rules_res, benefit_rules_res, cob_rules_res, excl_res] = await Promise.all([
+      // 3. Fetch planos_coberturas + plan rules in parallel (no ID dependency)
+      const [coberturas_res, plan_rules_res] = await Promise.all([
         supabase.from('planos_coberturas').select('*').in('plano_id', planIds),
         supabase.from('entity_eligibility_rules').select('*').eq('entity_type', 'plano').in('entity_id', planIds),
-        // We need benefit and coverage IDs first, so fetch all rules for all entity types related to these plans
-        supabase.from('entity_eligibility_rules').select('*').eq('entity_type', 'beneficio'),
-        supabase.from('entity_eligibility_rules').select('*').eq('entity_type', 'cobertura'),
-        supabase.from('benefit_category_exclusions').select('*'),
       ]);
 
       const allPlanoCoberturas = coberturas_res.data || [];
@@ -1105,11 +1101,47 @@ export function useDuplicateProductLine() {
         if (pc.cobertura_id) allCoberturaIds.add(pc.cobertura_id);
       }
 
-      // Batch-fetch all benefits and coberturas
       const benefitIdsArr = Array.from(allBenefitIds);
       const coberturaIdsArr = Array.from(allCoberturaIds);
 
-      const [benefits_res, coberturas_data_res] = await Promise.all([
+      // Helper: fetch paginated rules in chunks of 500 to avoid Supabase 1000-row limit
+      const fetchRulesChunked = async (entityType: string, ids: string[]) => {
+        if (ids.length === 0) return [] as any[];
+        const CHUNK = 500;
+        const promises: Promise<any>[] = [];
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const chunk = ids.slice(i, i + CHUNK);
+          promises.push(
+            supabase.from('entity_eligibility_rules').select('*')
+              .eq('entity_type', entityType).in('entity_id', chunk)
+              .then(r => r.data || [])
+          );
+        }
+        const results = await Promise.all(promises);
+        return results.flat();
+      };
+
+      const fetchExclusionsChunked = async (ids: string[]) => {
+        if (ids.length === 0) return [] as any[];
+        const CHUNK = 500;
+        const promises: Promise<any>[] = [];
+        for (let i = 0; i < ids.length; i += CHUNK) {
+          const chunk = ids.slice(i, i + CHUNK);
+          promises.push(
+            supabase.from('benefit_category_exclusions').select('*')
+              .in('benefit_id', chunk)
+              .then(r => r.data || [])
+          );
+        }
+        const results = await Promise.all(promises);
+        return results.flat();
+      };
+
+      // 3b. Now fetch benefit/cobertura rules + exclusions FILTERED by collected IDs
+      const [benefitRulesAll, cobRulesAll, exclAll, benefits_res, coberturas_data_res] = await Promise.all([
+        fetchRulesChunked('beneficio', benefitIdsArr),
+        fetchRulesChunked('cobertura', coberturaIdsArr),
+        fetchExclusionsChunked(benefitIdsArr),
         benefitIdsArr.length > 0 ? supabase.from('benefits').select('*').in('id', benefitIdsArr) : { data: [] },
         coberturaIdsArr.length > 0 ? supabase.from('coberturas').select('*').in('id', coberturaIdsArr) : { data: [] },
       ]);
@@ -1119,19 +1151,19 @@ export function useDuplicateProductLine() {
 
       // Index rules by entity_id for fast lookup
       const benefitRulesMap = new Map<string, any[]>();
-      for (const r of (benefit_rules_res.data || [])) {
+      for (const r of benefitRulesAll) {
         const arr = benefitRulesMap.get(r.entity_id) || [];
         arr.push(r);
         benefitRulesMap.set(r.entity_id, arr);
       }
       const cobRulesMap = new Map<string, any[]>();
-      for (const r of (cob_rules_res.data || [])) {
+      for (const r of cobRulesAll) {
         const arr = cobRulesMap.get(r.entity_id) || [];
         arr.push(r);
         cobRulesMap.set(r.entity_id, arr);
       }
       const exclMap = new Map<string, any[]>();
-      for (const e of (excl_res.data || [])) {
+      for (const e of exclAll) {
         const arr = exclMap.get(e.benefit_id) || [];
         arr.push(e);
         exclMap.set(e.benefit_id, arr);
