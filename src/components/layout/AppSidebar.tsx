@@ -452,14 +452,14 @@ const SUPER_GROUPS: SuperGroup[] = [
     label: 'Comercial',
     icon: ShoppingCart,
     color: '#10b981',
-    moduleIds: ['vendas', 'cadastro', 'monitoramento'],
+    moduleIds: ['vendas', 'cadastro'],
   },
   {
     id: 'relacionamento',
     label: 'Relacionamento',
     icon: Users,
     color: '#ef4444',
-    moduleIds: ['eventos', 'assistencia', 'oficinas', 'cobranca'],
+    moduleIds: ['monitoramento', 'eventos', 'assistencia', 'oficinas', 'cobranca'],
   },
   {
     id: 'administrativo',
