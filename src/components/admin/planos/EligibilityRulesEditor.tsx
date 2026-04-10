@@ -5,6 +5,7 @@ import { Input } from '@/components/ui/input';
 import { Label } from '@/components/ui/label';
 import { Switch } from '@/components/ui/switch';
 import { Checkbox } from '@/components/ui/checkbox';
+import { MarcaModeloRuleSelector, type MarcaSelection } from './MarcaModeloRuleSelector';
 import { Badge } from '@/components/ui/badge';
 import {
   Dialog,
