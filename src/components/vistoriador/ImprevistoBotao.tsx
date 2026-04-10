@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import { AlertTriangle, Loader2 } from 'lucide-react';
+import { AlertTriangle, Loader2, User, Wrench } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import {
   Dialog,
@@ -9,36 +9,12 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Textarea } from '@/components/ui/textarea';
 import { Label } from '@/components/ui/label';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 import { useQueryClient } from '@tanstack/react-query';
 import { DuploCheckImprevisto } from './DuploCheckImprevisto';
-
-const MOTIVOS_IMPREVISTO = [
-  'Associado ausente',
-  'Endereço incorreto',
-  'Problema no veículo',
-  'Desistência do associado',
-  'Outro',
-];
-
-// Classificação automática da origem do imprevisto
-const ORIGEM_POR_MOTIVO: Record<string, 'associado' | 'instalador'> = {
-  'Associado ausente': 'associado',
-  'Endereço incorreto': 'associado',
-  'Desistência do associado': 'associado',
-  'Problema no veículo': 'instalador',
-  'Outro': 'instalador',
-};
 
 interface ImprevistoBotaoProps {
   tarefaId: string;
@@ -47,41 +23,42 @@ interface ImprevistoBotaoProps {
   clienteWhatsapp?: string | null;
 }
 
+type OrigemImprevisto = 'instalador' | 'associado';
+
 export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, clienteWhatsapp }: ImprevistoBotaoProps) {
   const [open, setOpen] = useState(false);
-  const [motivo, setMotivo] = useState('');
+  const [origem, setOrigem] = useState<OrigemImprevisto | null>(null);
   const [observacoes, setObservacoes] = useState('');
   const [salvando, setSalvando] = useState(false);
   const [showDuploCheck, setShowDuploCheck] = useState(false);
   const [podeContinuar, setPodeContinuar] = useState<boolean | null>(null);
   const queryClient = useQueryClient();
 
-  const origemAtual = motivo ? ORIGEM_POR_MOTIVO[motivo] : null;
-  const mostrarPerguntaContinuar = origemAtual === 'instalador';
+  const motivoLabel = origem === 'instalador' ? 'Imprevisto do técnico' : origem === 'associado' ? 'Imprevisto do associado' : '';
 
   const handleRegistrar = async () => {
-    if (!motivo) {
-      toast.error('Selecione o motivo do imprevisto');
+    if (!origem) {
+      toast.error('Selecione o tipo do imprevisto');
       return;
     }
 
-    if (mostrarPerguntaContinuar && podeContinuar === null) {
+    if (origem === 'instalador' && podeContinuar === null) {
       toast.error('Informe se consegue continuar a rota');
       return;
     }
 
     setSalvando(true);
     try {
-      const motivoCompleto = observacoes 
-        ? `${motivo} - ${observacoes}` 
-        : motivo;
+      const motivoCompleto = observacoes
+        ? `${motivoLabel} - ${observacoes}`
+        : motivoLabel;
 
       const { error } = await supabase
         .from('servicos')
         .update({
           imprevisto_registrado_em: new Date().toISOString(),
           imprevisto_motivo: motivoCompleto,
-          imprevisto_origem: origemAtual,
+          imprevisto_origem: origem,
           status: 'imprevisto_pendente',
           updated_at: new Date().toISOString(),
         } as any)
@@ -90,11 +67,11 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
       if (error) throw error;
 
       // Se imprevisto do instalador e NÃO pode continuar, marcar indisponível no dia
-      if (origemAtual === 'instalador' && podeContinuar === false) {
+      if (origem === 'instalador' && podeContinuar === false) {
         const hoje = new Date().toISOString().split('T')[0];
         await supabase
           .from('turnos_profissionais')
-          .update({ 
+          .update({
             status: 'encerrado',
             fim_turno: new Date().toISOString(),
           } as any)
@@ -102,22 +79,22 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
           .eq('status', 'ativo');
       }
 
-      // PONTO A: Disparar link de reagendamento com retry (não bloqueia o fluxo)
+      // Disparar link de reagendamento com retry (não bloqueia o fluxo)
       const triggerLink = async (tentativa: number) => {
         const { error: linkErr } = await supabase.functions.invoke('enviar-link-reagendamento', {
           body: { servico_id: tarefaId },
         });
         if (linkErr) {
-          console.warn(`[ImprevistoBotao] Erro Ponto A tentativa ${tentativa}:`, linkErr);
+          console.warn(`[ImprevistoBotao] Erro tentativa ${tentativa}:`, linkErr);
           if (tentativa < 2) {
             await new Promise(r => setTimeout(r, 3000));
             return triggerLink(tentativa + 1);
           }
         } else {
-          console.log('[ImprevistoBotao] Link de reagendamento disparado (Ponto A)');
+          console.log('[ImprevistoBotao] Link de reagendamento disparado');
         }
       };
-      triggerLink(1).catch(e => console.warn('[ImprevistoBotao] Falha final Ponto A:', e));
+      triggerLink(1).catch(e => console.warn('[ImprevistoBotao] Falha final:', e));
 
       toast.success('Imprevisto registrado');
       setOpen(false);
@@ -131,23 +108,24 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
     }
   };
 
-  const handleMotivoChange = (value: string) => {
-    setMotivo(value);
-    setPodeContinuar(null); // Reset ao trocar motivo
+  const handleOpen = () => {
+    setOrigem(null);
+    setObservacoes('');
+    setPodeContinuar(null);
+    setOpen(true);
   };
 
   return (
     <>
       <Button
         variant="outline"
-        onClick={() => setOpen(true)}
+        onClick={handleOpen}
         className="w-full gap-2 border-amber-500/50 text-amber-600 hover:bg-amber-50 hover:text-amber-700 dark:text-amber-400 dark:hover:bg-amber-950"
       >
         <AlertTriangle className="h-4 w-4" />
         Comunicar Imprevisto
       </Button>
 
-      {/* Modal de registro do imprevisto */}
       <Dialog open={open} onOpenChange={setOpen}>
         <DialogContent>
           <DialogHeader>
@@ -156,27 +134,48 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
               Registrar Imprevisto
             </DialogTitle>
             <DialogDescription>
-              Informe o motivo pelo qual não foi possível realizar o serviço.
+              Selecione o tipo de imprevisto que ocorreu.
             </DialogDescription>
           </DialogHeader>
 
           <div className="space-y-4">
+            {/* Seleção de tipo */}
             <div className="space-y-2">
-              <Label>Motivo do imprevisto *</Label>
-              <Select value={motivo} onValueChange={handleMotivoChange}>
-                <SelectTrigger>
-                  <SelectValue placeholder="Selecione o motivo" />
-                </SelectTrigger>
-                <SelectContent>
-                  {MOTIVOS_IMPREVISTO.map((m) => (
-                    <SelectItem key={m} value={m}>{m}</SelectItem>
-                  ))}
-                </SelectContent>
-              </Select>
+              <Label>Tipo do imprevisto *</Label>
+              <div className="grid grid-cols-2 gap-3">
+                <button
+                  type="button"
+                  onClick={() => { setOrigem('instalador'); setPodeContinuar(null); }}
+                  className={`flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all ${
+                    origem === 'instalador'
+                      ? 'border-blue-500 bg-blue-50 dark:bg-blue-950/40'
+                      : 'border-muted hover:border-blue-300'
+                  }`}
+                >
+                  <Wrench className={`h-6 w-6 ${origem === 'instalador' ? 'text-blue-600' : 'text-muted-foreground'}`} />
+                  <span className={`text-sm font-medium ${origem === 'instalador' ? 'text-blue-700 dark:text-blue-300' : 'text-foreground'}`}>
+                    Imprevisto do Técnico
+                  </span>
+                </button>
+                <button
+                  type="button"
+                  onClick={() => { setOrigem('associado'); setPodeContinuar(null); }}
+                  className={`flex flex-col items-center gap-2 rounded-lg border-2 p-4 transition-all ${
+                    origem === 'associado'
+                      ? 'border-orange-500 bg-orange-50 dark:bg-orange-950/40'
+                      : 'border-muted hover:border-orange-300'
+                  }`}
+                >
+                  <User className={`h-6 w-6 ${origem === 'associado' ? 'text-orange-600' : 'text-muted-foreground'}`} />
+                  <span className={`text-sm font-medium ${origem === 'associado' ? 'text-orange-700 dark:text-orange-300' : 'text-foreground'}`}>
+                    Imprevisto do Associado
+                  </span>
+                </button>
+              </div>
             </div>
 
             {/* Pergunta extra para imprevistos do instalador */}
-            {mostrarPerguntaContinuar && (
+            {origem === 'instalador' && (
               <div className="space-y-2 rounded-lg border border-amber-200 bg-amber-50 p-3 dark:border-amber-800 dark:bg-amber-950/50">
                 <Label className="text-sm font-medium">Você consegue continuar a rota?</Label>
                 <div className="flex gap-2">
@@ -208,7 +207,7 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
             )}
 
             <div className="space-y-2">
-              <Label>Observações</Label>
+              <Label>Observações (opcional)</Label>
               <Textarea
                 value={observacoes}
                 onChange={(e) => setObservacoes(e.target.value)}
@@ -222,9 +221,9 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
             <Button variant="outline" onClick={() => setOpen(false)} disabled={salvando}>
               Cancelar
             </Button>
-            <Button 
-              onClick={handleRegistrar} 
-              disabled={salvando || !motivo || (mostrarPerguntaContinuar && podeContinuar === null)}
+            <Button
+              onClick={handleRegistrar}
+              disabled={salvando || !origem || (origem === 'instalador' && podeContinuar === null)}
             >
               {salvando ? (
                 <><Loader2 className="h-4 w-4 animate-spin mr-2" /> Salvando...</>
@@ -236,7 +235,6 @@ export function ImprevistoBotao({ tarefaId, clienteNome, clienteTelefone, client
         </DialogContent>
       </Dialog>
 
-      {/* Duplo Check */}
       <DuploCheckImprevisto
         open={showDuploCheck}
         onOpenChange={setShowDuploCheck}
