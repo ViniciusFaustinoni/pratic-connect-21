@@ -297,12 +297,80 @@ export function useDeletePlan() {
   });
 }
 
+interface DuplicatePlanInput {
+  id: string;
+  desconto?: number;
+  sufixo?: string;
+  regiao?: string;
+  tipoUso?: string;
+  combustivel?: string;
+}
+
+/**
+ * Apply bulk rule overrides to a list of cloned eligibility rules.
+ * Returns the final list of rules to insert, with old rules of the overridden
+ * types removed and new ones appended.
+ */
+function applyBulkRuleOverrides(
+  clonedRules: any[],
+  entityId: string,
+  entityType: string,
+  overrides: { regiao?: string; tipoUso?: string; combustivel?: string },
+) {
+  const typesToReplace: string[] = [];
+  const newRules: any[] = [];
+
+  if (overrides.regiao) {
+    typesToReplace.push('regiao');
+    newRules.push({
+      entity_id: entityId,
+      entity_type: entityType,
+      rule_type: 'regiao',
+      rule_action: 'include',
+      rule_config: { values: [overrides.regiao] },
+      is_active: true,
+    });
+  }
+  if (overrides.tipoUso) {
+    typesToReplace.push('tipo_uso');
+    newRules.push({
+      entity_id: entityId,
+      entity_type: entityType,
+      rule_type: 'tipo_uso',
+      rule_action: 'include',
+      rule_config: { tipos_uso: [overrides.tipoUso] },
+      is_active: true,
+    });
+  }
+  if (overrides.combustivel) {
+    typesToReplace.push('combustivel');
+    newRules.push({
+      entity_id: entityId,
+      entity_type: entityType,
+      rule_type: 'combustivel',
+      rule_action: 'include',
+      rule_config: { combustiveis: [overrides.combustivel] },
+      is_active: true,
+    });
+  }
+
+  const filtered = typesToReplace.length > 0
+    ? clonedRules.filter((r: any) => !typesToReplace.includes(r.rule_type))
+    : clonedRules;
+
+  return [...filtered, ...newRules];
+}
+
 export function useDuplicatePlan() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: string | { id: string; desconto?: number; sufixo?: string }) => {
-      const { id, desconto = 0, sufixo = '' } = typeof input === 'string' ? { id: input } : input;
+    mutationFn: async (input: string | DuplicatePlanInput) => {
+      const { id, desconto = 0, sufixo = '', regiao, tipoUso, combustivel } =
+        typeof input === 'string' ? { id: input } as DuplicatePlanInput : input;
+
+      const bulkOverrides = { regiao, tipoUso, combustivel };
+      const hasBulkOverrides = !!(regiao || tipoUso || combustivel);
 
       const applyDiscount = (val: number | null | undefined, pct: number): number | null => {
         if (val == null) return null;
@@ -336,12 +404,35 @@ export function useDuplicatePlan() {
 
       if (createError) throw createError;
 
-      // Duplicate benefits — clone each benefit record (same pattern as coverages)
+      // Clone plan-level eligibility rules
+      const { data: planRules } = await supabase
+        .from('entity_eligibility_rules')
+        .select('*')
+        .eq('entity_type', 'plano')
+        .eq('entity_id', id);
+
+      if (planRules && planRules.length > 0) {
+        const clonedPlanRules = planRules.map((r: any) => {
+          const { id: rId, created_at: rCreated, ...rData } = r;
+          return { ...rData, entity_id: createdPlan.id };
+        });
+        const finalPlanRules = applyBulkRuleOverrides(clonedPlanRules, createdPlan.id, 'plano', bulkOverrides);
+        if (finalPlanRules.length > 0) {
+          await supabase.from('entity_eligibility_rules').insert(finalPlanRules);
+        }
+      } else if (hasBulkOverrides) {
+        // No original plan rules — create new ones from overrides
+        const newPlanRules = applyBulkRuleOverrides([], createdPlan.id, 'plano', bulkOverrides);
+        if (newPlanRules.length > 0) {
+          await supabase.from('entity_eligibility_rules').insert(newPlanRules);
+        }
+      }
+
+      // Duplicate benefits — clone each benefit record
       if (planos_beneficios && planos_beneficios.length > 0) {
         for (const pb of planos_beneficios as any[]) {
           if (!pb.benefit_id) continue;
 
-          // Fetch original benefit
           const { data: origBenefit } = await supabase
             .from('benefits')
             .select('*')
@@ -350,7 +441,6 @@ export function useDuplicatePlan() {
 
           if (!origBenefit) continue;
 
-          // Clone benefit record with suffix and discount
           const { id: bId, created_at: bCreated, ...bData } = origBenefit;
           const uniqueSuffix = `-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
           const { data: newBenefit, error: bError } = await supabase
@@ -366,7 +456,6 @@ export function useDuplicatePlan() {
 
           if (bError || !newBenefit) continue;
 
-          // Link cloned benefit to new plan
           await supabase.from('planos_beneficios').insert({
             plano_id: createdPlan.id,
             benefit_id: newBenefit.id,
@@ -379,19 +468,20 @@ export function useDuplicatePlan() {
             incluso: pb.incluso,
           });
 
-          // Clone eligibility rules for this benefit
+          // Clone eligibility rules for this benefit (with overrides)
           const { data: bRules } = await supabase
             .from('entity_eligibility_rules')
             .select('*')
             .eq('entity_type', 'beneficio')
             .eq('entity_id', pb.benefit_id);
 
-          if (bRules && bRules.length > 0) {
-            const clonedBRules = bRules.map((r: any) => {
-              const { id: rId, created_at: rCreated, ...rData } = r;
-              return { ...rData, entity_id: newBenefit.id };
-            });
-            await supabase.from('entity_eligibility_rules').insert(clonedBRules);
+          const clonedBRules = (bRules || []).map((r: any) => {
+            const { id: rId, created_at: rCreated, ...rData } = r;
+            return { ...rData, entity_id: newBenefit.id };
+          });
+          const finalBRules = applyBulkRuleOverrides(clonedBRules, newBenefit.id, 'beneficio', bulkOverrides);
+          if (finalBRules.length > 0) {
+            await supabase.from('entity_eligibility_rules').insert(finalBRules);
           }
 
           // Clone category exclusions
@@ -427,7 +517,6 @@ export function useDuplicatePlan() {
 
       if (originalCoberturas && originalCoberturas.length > 0) {
         for (const pc of originalCoberturas) {
-          // Fetch original coverage
           const { data: origCob } = await supabase
             .from('coberturas')
             .select('*')
@@ -436,7 +525,6 @@ export function useDuplicatePlan() {
 
           if (!origCob) continue;
 
-          // Clone the coverage record with suffix and discount
           const { id: cobId, created_at: cobCreated, ...cobData } = origCob;
           const uniqueSuffix = `-${Date.now()}-${Math.random().toString(36).slice(2, 6)}`;
           const { data: newCob, error: cobError } = await supabase
@@ -454,25 +542,25 @@ export function useDuplicatePlan() {
 
           if (cobError || !newCob) continue;
 
-          // Link cloned coverage to new plan
           await supabase.from('planos_coberturas').insert({
             plano_id: createdPlan.id,
             cobertura_id: newCob.id,
           });
 
-          // Clone eligibility rules for this coverage
+          // Clone eligibility rules for this coverage (with overrides)
           const { data: rules } = await supabase
             .from('entity_eligibility_rules')
             .select('*')
             .eq('entity_type', 'cobertura')
             .eq('entity_id', pc.cobertura_id);
 
-          if (rules && rules.length > 0) {
-            const clonedRules = rules.map((r: any) => {
-              const { id: rId, created_at: rCreated, ...rData } = r;
-              return { ...rData, entity_id: newCob.id };
-            });
-            await supabase.from('entity_eligibility_rules').insert(clonedRules);
+          const clonedRules = (rules || []).map((r: any) => {
+            const { id: rId, created_at: rCreated, ...rData } = r;
+            return { ...rData, entity_id: newCob.id };
+          });
+          const finalRules = applyBulkRuleOverrides(clonedRules, newCob.id, 'cobertura', bulkOverrides);
+          if (finalRules.length > 0) {
+            await supabase.from('entity_eligibility_rules').insert(finalRules);
           }
         }
       }
