@@ -944,6 +944,7 @@ export function useCreateProductLine() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['product_lines'] });
+      queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
       toast.success('Linha de produto criada!');
     },
     onError: (error: Error) => {
