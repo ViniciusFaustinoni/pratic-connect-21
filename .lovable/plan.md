@@ -1,48 +1,49 @@
 
 
-## Revisão: Duplicação de Planos com Desconto
+## Plano: Duplicar Linha completa com modificadores + Excluir linha em cascata
 
-### Status atual
+### Situacao atual
 
-**Regra 1 - Clonar tudo**: Parcialmente OK
-- Benefícios (`benefits` + `planos_beneficios`): copiados corretamente
-- Coberturas (`coberturas`): copiadas corretamente
-- **BUG**: A tabela de vínculo `planos_coberturas` NÃO clona os campos financeiros. Só insere `plano_id` e `cobertura_id`, perdendo: `franquia_valor`, `franquia_percentual`, `valor_limite`, `percentual_cobertura`, `carencia_dias`, `obrigatoria`.
+- **Duplicar Linha**: `useDuplicateProductLine` apenas clona a linha (metadata), sem copiar nenhum plano.
+- **Excluir Linha**: `useDeleteLinha` apaga planos_coberturas, planos_beneficios, regras do plano, mas NAO apaga as coberturas e benefits criados para cada plano (ficam orfaos no banco).
 
-**Regra 2 - Desconto em todos os valores**: Parcialmente OK
-- Coberturas: desconto aplicado em `valor`, `valor_limite`, `franquia_valor` na tabela `coberturas`
-- Benefícios: desconto aplicado em `preco_sugerido` na tabela `benefits`
-- Faixas FIPE: desconto aplicado nas regras de elegibilidade
-- **BUG**: Os campos financeiros da tabela `planos_coberturas` (`franquia_valor`, `valor_limite`) não recebem desconto porque nem sequer são copiados
+### O que sera feito
 
-### Correção necessária
+#### 1. Modal `DuplicarLinhaModal` (novo componente)
 
-**Arquivo**: `src/hooks/usePlansAdmin.ts` (linhas 565-568)
+Semelhante ao `DuplicarPlanoModal`, com os campos:
+- **Desconto (%)** - aplicado a todos os valores financeiros de todas as coberturas e beneficios de todos os planos
+- **Sufixo** - aplicado ao nome da linha e de todos os planos, coberturas e beneficios
+- **Regiao** - manter original ou substituir em todos os planos/coberturas/beneficios
+- **Tipo de Uso** - manter original ou substituir (particular/aplicativo)
+- **Tipo de Veiculo** - manter original ou substituir (carro/moto) — seta o `vehicle_type` da linha e `categorias_veiculo` dos planos
+- **Combustivel** - manter original ou substituir (gasolina/diesel)
 
-Alterar a inserção em `planos_coberturas` para copiar todos os campos do vínculo original e aplicar desconto nos campos financeiros:
+#### 2. Hook `useDuplicateProductLine` reescrito em `usePlansAdmin.ts`
 
-```
-// Buscar dados completos do vínculo original
-const { data: origPC } = await supabase
-  .from('planos_coberturas')
-  .select('*')
-  .eq('plano_id', id)
-  .eq('cobertura_id', pc.cobertura_id)
-  .single();
+Logica:
+1. Clonar a linha (`product_lines`) com sufixo e vehicle_type
+2. Para cada plano da linha original, reutilizar a logica existente de `useDuplicatePlan` (que ja clona coberturas, beneficios, regras, exclusoes, planos_coberturas com todos os campos financeiros e desconto)
+3. Cada plano clonado aponta para a nova linha
 
-// Inserir com todos os campos + desconto
-await supabase.from('planos_coberturas').insert({
-  plano_id: createdPlan.id,
-  cobertura_id: newCob.id,
-  carencia_dias: origPC?.carencia_dias,
-  franquia_percentual: origPC?.franquia_percentual,
-  franquia_valor: applyDiscount(origPC?.franquia_valor, desconto),
-  obrigatoria: origPC?.obrigatoria,
-  percentual_cobertura: origPC?.percentual_cobertura,
-  valor_limite: applyDiscount(origPC?.valor_limite, desconto),
-});
-```
+#### 3. Excluir Linha em cascata completa
 
-### Resumo
-Uma correção de ~15 linhas que garante que a duplicação copia e desconta **todos** os campos financeiros da relação plano-cobertura.
+Alterar `useDeleteLinha` em `LinhasPlanos.tsx` para tambem excluir:
+- Coberturas (`coberturas`) vinculadas via `planos_coberturas`
+- Benefits (`benefits`) vinculados via `planos_beneficios`
+- Regras de elegibilidade de coberturas e beneficios (entity_eligibility_rules)
+- Exclusoes de categoria (benefit_category_exclusions)
+
+#### 4. UI em `LinhasPlanos.tsx`
+
+- Trocar o botao de duplicar linha (que hoje faz `duplicateLine.mutate(linha.id)` direto) para abrir o novo `DuplicarLinhaModal`
+- Adicionar estado para controlar o modal
+
+### Arquivos alterados
+
+| Arquivo | Alteracao |
+|---------|-----------|
+| `src/components/admin/planos/DuplicarLinhaModal.tsx` | Novo componente (modal com campos de configuracao) |
+| `src/hooks/usePlansAdmin.ts` | Reescrever `useDuplicateProductLine` para aceitar modificadores e iterar sobre todos os planos usando a logica de `useDuplicatePlan` |
+| `src/components/gestao-comercial/LinhasPlanos.tsx` | Abrir modal ao duplicar linha; completar cascata no delete (coberturas, benefits, regras, exclusoes) |
 
