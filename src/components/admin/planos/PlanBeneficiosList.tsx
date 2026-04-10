@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from 'react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { ChevronDown, Plus, Save, Trash2, Loader2, Sparkles } from 'lucide-react';
+import { ChevronDown, Plus, Save, Trash2, Loader2, Sparkles, Link2, Search } from 'lucide-react';
 
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -8,6 +8,13 @@ import { Label } from '@/components/ui/label';
 import { Textarea } from '@/components/ui/textarea';
 import { Switch } from '@/components/ui/switch';
 import { Badge } from '@/components/ui/badge';
+import { Checkbox } from '@/components/ui/checkbox';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import {
   Select,
   SelectContent,
@@ -168,6 +175,12 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
   const focusRef = useRef<HTMLDivElement>(null);
   const hasFocused = useRef(false);
 
+  // Assign existing states
+  const [assignOpen, setAssignOpen] = useState(false);
+  const [assignSelected, setAssignSelected] = useState<Set<string>>(new Set());
+  const [assignSearch, setAssignSearch] = useState('');
+  const [assigning, setAssigning] = useState(false);
+
   const { data: benefits = [], isLoading } = useQuery({
     queryKey: ['plan-benefits-inline', planId],
     queryFn: async () => {
@@ -181,6 +194,98 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
     },
     enabled: !!planId,
   });
+
+  // Query all available benefits for assignment dialog
+  const { data: beneficiosDisponiveis = [], isLoading: loadingDisponiveis } = useQuery({
+    queryKey: ['beneficios-disponiveis-all', planId],
+    queryFn: async () => {
+      // Get all active benefits
+      const { data: allBenefits, error: bErr } = await supabase
+        .from('benefits')
+        .select('*')
+        .eq('is_active', true)
+        .order('name');
+      if (bErr) throw bErr;
+
+      // Get all existing bindings with plan names
+      const { data: allBindings, error: vErr } = await supabase
+        .from('planos_beneficios')
+        .select('benefit_id, planos:plano_id(nome)');
+      if (vErr) throw vErr;
+
+      // Build a map: benefit_id -> binding info
+      const vinculoMap = new Map<string, any>();
+      (allBindings || []).forEach((v: any) => {
+        vinculoMap.set(v.benefit_id, v);
+      });
+
+      // Exclude benefits already in THIS plan
+      const currentPlanBenIds = new Set(benefits.map((b: any) => b.id));
+      return (allBenefits || [])
+        .filter((b: any) => !currentPlanBenIds.has(b.id))
+        .map((b: any) => ({
+          ...b,
+          vinculadoAo: vinculoMap.get(b.id) || null,
+        }));
+    },
+    enabled: assignOpen,
+  });
+
+  const filteredDisponiveis = beneficiosDisponiveis.filter((b: any) =>
+    b.name.toLowerCase().includes(assignSearch.toLowerCase())
+  );
+
+  const handleAssign = async () => {
+    if (assignSelected.size === 0) return;
+    setAssigning(true);
+    try {
+      const selectedIds = Array.from(assignSelected);
+      // Find which ones are already bound to another plan
+      const reassigned = selectedIds.filter(id => {
+        const ben = beneficiosDisponiveis.find((b: any) => b.id === id);
+        return ben?.vinculadoAo;
+      });
+
+      // Delete old bindings for reassigned ones
+      if (reassigned.length > 0) {
+        const { error: delErr } = await supabase
+          .from('planos_beneficios')
+          .delete()
+          .in('benefit_id', reassigned);
+        if (delErr) throw delErr;
+      }
+
+      // Insert new bindings
+      const inserts = selectedIds.map((benefitId) => ({
+        plano_id: planId,
+        benefit_id: benefitId,
+        beneficio: beneficiosDisponiveis.find((b: any) => b.id === benefitId)?.name || '',
+      }));
+      const { error } = await supabase.from('planos_beneficios').insert(inserts);
+      if (error) throw error;
+
+      const msg = reassigned.length > 0
+        ? `${assignSelected.size} benefício(s) vinculado(s) (${reassigned.length} reatribuído(s) de outros planos)`
+        : `${assignSelected.size} benefício(s) vinculado(s) com sucesso`;
+      toast.success(msg);
+      setAssignOpen(false);
+      setAssignSelected(new Set());
+      setAssignSearch('');
+      invalidate();
+    } catch {
+      toast.error('Erro ao vincular benefícios');
+    } finally {
+      setAssigning(false);
+    }
+  };
+
+  const toggleAssignItem = (id: string) => {
+    setAssignSelected(prev => {
+      const next = new Set(prev);
+      next.has(id) ? next.delete(id) : next.add(id);
+      return next;
+    });
+  };
 
   useEffect(() => {
     if (focusItemId && benefits.length > 0 && !hasFocused.current) {
@@ -245,6 +350,7 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
   const invalidate = () => {
     queryClient.invalidateQueries({ queryKey: ['plan-benefits-inline', planId] });
     queryClient.invalidateQueries({ queryKey: ['plan-form-modal-full', planId] });
+    queryClient.invalidateQueries({ queryKey: ['beneficios-disponiveis-all', planId] });
   };
 
   return (
@@ -255,10 +361,81 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
           <h3 className="text-sm font-semibold text-foreground">Benefícios</h3>
           <Badge variant="secondary" className="text-[11px]">{benefits.length}</Badge>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={() => setCreating(true)}>
-          <Plus className="mr-1 h-3 w-3" /> Novo Benefício
-        </Button>
+        <div className="flex items-center gap-2">
+          <Button type="button" size="sm" variant="outline" onClick={() => { setAssignOpen(true); setAssignSelected(new Set()); setAssignSearch(''); }}>
+            <Link2 className="mr-1 h-3 w-3" /> Atribuir Existente
+          </Button>
+          <Button type="button" size="sm" variant="outline" onClick={() => setCreating(true)}>
+            <Plus className="mr-1 h-3 w-3" /> Novo Benefício
+          </Button>
+        </div>
       </div>
+
+      {/* Dialog de atribuição de benefícios existentes */}
+      <Dialog open={assignOpen} onOpenChange={setAssignOpen}>
+        <DialogContent className="max-w-md max-h-[80vh]" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Atribuir Benefícios Existentes</DialogTitle>
+          </DialogHeader>
+          <div className="space-y-3">
+            <div className="relative">
+              <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Buscar benefício..."
+                value={assignSearch}
+                onChange={(e) => setAssignSearch(e.target.value)}
+                className="pl-9"
+              />
+            </div>
+            <div className="max-h-[40vh] overflow-y-auto space-y-1 border rounded-lg p-2">
+              {loadingDisponiveis ? (
+                <div className="flex items-center justify-center py-6 text-muted-foreground text-sm">
+                  <Loader2 className="mr-2 h-4 w-4 animate-spin" /> Carregando...
+                </div>
+              ) : filteredDisponiveis.length === 0 ? (
+                <div className="py-6 text-center text-sm text-muted-foreground">
+                  Nenhum benefício disponível para atribuição.
+                </div>
+              ) : (
+                filteredDisponiveis.map((ben: any) => (
+                  <label
+                    key={ben.id}
+                    className="flex items-center gap-3 px-3 py-2 rounded-lg cursor-pointer hover:bg-accent/50 transition-colors"
+                  >
+                    <Checkbox
+                      checked={assignSelected.has(ben.id)}
+                      onCheckedChange={() => toggleAssignItem(ben.id)}
+                    />
+                    <div className="flex items-center gap-2 min-w-0 flex-1">
+                      {ben.icon && <span className="text-base">{ben.icon}</span>}
+                      <span className="text-sm truncate">{ben.name}</span>
+                    </div>
+                    {ben.vinculadoAo && (
+                      <Badge variant="outline" className="text-[10px] shrink-0 bg-muted text-muted-foreground">
+                        {(ben.vinculadoAo as any).planos?.nome || 'Outro plano'}
+                      </Badge>
+                    )}
+                  </label>
+                ))
+              )}
+            </div>
+            <div className="flex items-center justify-between pt-1">
+              <span className="text-xs text-muted-foreground">
+                {assignSelected.size} selecionado(s)
+              </span>
+              <div className="flex gap-2">
+                <Button type="button" size="sm" variant="ghost" onClick={() => setAssignOpen(false)}>
+                  Cancelar
+                </Button>
+                <Button type="button" size="sm" onClick={handleAssign} disabled={assignSelected.size === 0 || assigning}>
+                  {assigning ? <Loader2 className="mr-1 h-3 w-3 animate-spin" /> : <Link2 className="mr-1 h-3 w-3" />}
+                  Vincular Selecionados
+                </Button>
+              </div>
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
 
       {creating && (
         <div className="rounded-2xl border border-primary/30 bg-primary/5 p-3 space-y-3">
