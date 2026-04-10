@@ -1,27 +1,21 @@
 
 
-## Plano: Corrigir duplicação de planos que perde regras de elegibilidade
+## Plano: Corrigir falta de atualização da lista de planos após alterações
 
-### Problema raiz
-
-A função `applyBulkRuleOverrides` em `src/hooks/usePlansAdmin.ts` (linhas 325-353) usa o campo **`rule_action`** para criar novas regras de override, mas a coluna real na tabela `entity_eligibility_rules` se chama **`rule_mode`**.
-
-Quando o usuário seleciona uma região, tipo de uso ou combustível ao duplicar, o sistema:
-1. Filtra as regras clonadas removendo as do tipo sobrescrito
-2. Adiciona novas regras com `rule_action: 'include'` (campo inexistente)
-3. Insere tudo em batch — **o campo inválido faz a inserção inteira falhar silenciosamente**
-4. Resultado: NENHUMA regra é clonada (nem fipe_range, nem região, nada)
-
-Confirmado no banco: "Select One Passeio" tem 37+ regras em suas coberturas. "Select One Passeio - SP" (duplicado) tem **zero**.
+### Problema
+A página de gestão comercial (`/diretoria/gestao-comercial`) usa a query key `linhas_com_planos_clean` para carregar os dados. Porém, as mutations em `usePlansAdmin.ts` (criar, atualizar, toggle status, excluir) só invalidam `plans` e `planos` — nunca `linhas_com_planos_clean`. Apenas a duplicação faz a invalidação correta.
 
 ### Correção (1 arquivo)
 
-**`src/hooks/usePlansAdmin.ts`** — função `applyBulkRuleOverrides` (linhas 325-353)
+**`src/hooks/usePlansAdmin.ts`** — adicionar `queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] })` nos `onSuccess` de:
 
-Trocar `rule_action: 'include'` por `rule_mode: 'include'` nas 3 ocorrências (regiao, tipoUso, combustivel).
+1. `useCreatePlan` (linha ~129)
+2. `useUpdatePlan` (linha ~242)
+3. `useTogglePlanStatus` (linha ~268)
+4. `useDeletePlan` (linha ~290)
 
-Adicionalmente, adicionar tratamento de erro nos inserts de regras (linhas 433, 439, 497, 577) para logar e lançar erro caso a inserção falhe, evitando falhas silenciosas futuras.
+Também adicionar em `PlanoFormSheet.tsx` se já não estiver (já tem na linha 228).
 
 ### Resultado
-A duplicação de planos clonará corretamente todas as regras de elegibilidade (incluindo fipe_range), e os badges de valor variável aparecerão corretamente no plano duplicado.
+Qualquer alteração (criar, editar, ativar/desativar, excluir) atualizará a lista automaticamente sem precisar de F5.
 
