@@ -29,6 +29,7 @@ export function RastreadorGridView({
   onNewRastreador,
   getPlataformaLabel,
   onViewMap,
+  onChangeStatus,
 }: RastreadorGridViewProps) {
   if (isLoading) {
     return (

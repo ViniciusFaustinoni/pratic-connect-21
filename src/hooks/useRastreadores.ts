@@ -571,7 +571,7 @@ export function useAlterarStatusRastreador() {
       queryClient.invalidateQueries({ queryKey: ['rastreadores'] });
       queryClient.invalidateQueries({ queryKey: ['rastreador', result.rastreadorId] });
       queryClient.invalidateQueries({ queryKey: ['rastreadores-metricas'] });
-      const label = statusNovo === 'estoque' ? 'Disponível' : statusNovo === 'em_garantia' ? 'Enviado para Fornecedor' : result.statusNovo;
+      const label = result.statusNovo === 'estoque' ? 'Disponível' : result.statusNovo === 'em_garantia' ? 'Enviado para Fornecedor' : result.statusNovo;
       toast.success(`Rastreador marcado como ${label}`);
     },
     onError: (error) => {
