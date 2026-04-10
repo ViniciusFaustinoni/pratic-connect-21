@@ -597,8 +597,8 @@ export function useRegistrarResultadoManutencao() {
             updated_at: new Date().toISOString(),
           };
           // Atribuir rastreador avariado ao porte do técnico
-          if (servico.tecnico_id) {
-            updateAntigoData.portador_id = servico.tecnico_id;
+          if (servico.profissional_id) {
+            updateAntigoData.portador_id = servico.profissional_id;
           }
 
           const { error: atualizarAntigoError } = await supabase
