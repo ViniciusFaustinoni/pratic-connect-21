@@ -1,32 +1,46 @@
 
 
-## Plano: Mostrar valor real do tipo de uso em vez de "tipo_uso"
+## Plano: Eliminar serviços duplicados no mapa
 
-### Problema
-Na listagem de coberturas/benefícios do plano, os badges de regras de elegibilidade mostram o texto cru `tipo_uso` quando o array `values` na `rule_config` está vazio ou ausente. O código atual (linha 115 de `LinhasPlanos.tsx`) usa `rule.rule_type` como fallback, que é o nome técnico do campo.
+### Problema raiz
 
-### Correção (1 arquivo)
+A view `view_vistorias_mapa` faz `UNION ALL` de 3 fontes: `vistorias`, `instalacoes` e `servicos`. Quando um registro legado (`instalacoes`) tem um `servico` vinculado via `instalacao_origem_id`, E existe também um segundo `servico` standalone (encaixe) para o mesmo veículo/associado/data, ambos aparecem na view — gerando duplicata visual.
 
-**`src/components/gestao-comercial/LinhasPlanos.tsx`** — Alterar a lógica de fallback do label (linhas 115-127):
+No caso atual:
+- `instalacoes.13e5722e` → vinculado ao `servicos.eaaba0bf` (com profissional atribuído)
+- `servicos.48f28d2a` → standalone encaixe, sem profissional, mesmo veículo/data
 
-1. Adicionar um mapa de nomes amigáveis para os `rule_type`:
-```typescript
-const RULE_TYPE_LABELS: Record<string, string> = {
-  tipo_uso: 'Tipo de Uso',
-  combustivel: 'Combustível',
-  regiao: 'Região',
-  tipo_placa: 'Tipo de Placa',
-  fipe_range: 'Faixa FIPE',
-};
+Ambos aparecem porque a view não tem lógica de deduplicação.
+
+### Correção (2 frentes)
+
+**1. View `view_vistorias_mapa` — Deduplicar nos blocos legados (migration)**
+
+Nos blocos de `instalacoes` e `vistorias`, adicionar filtro para excluir registros legados quando já existe um serviço canonical standalone (`servicos` sem `origem_id`) para o mesmo `veiculo_id`, `tipo` e `data_agendada`:
+
+```sql
+-- No bloco de instalacoes, adicionar ao WHERE:
+AND NOT EXISTS (
+  SELECT 1 FROM servicos s2
+  WHERE s2.veiculo_id = i.veiculo_id
+    AND s2.tipo = 'instalacao'
+    AND s2.data_agendada = i.data_agendada
+    AND s2.instalacao_origem_id IS NULL
+    AND s2.vistoria_origem_id IS NULL
+    AND s2.status NOT IN ('cancelada', 'concluida')
+)
 ```
 
-2. Quando `values` existir e tiver itens, mostrar os valores resolvidos (como já faz para região).
-3. Quando `values` estiver vazio ou ausente, usar o nome amigável do `RULE_TYPE_LABELS` em vez do nome técnico cru.
+Mesma lógica no bloco de `vistorias`.
 
-Mudança na lógica (linhas 115-127):
-- Trocar `let label = rule.rule_type` por `let label = RULE_TYPE_LABELS[rule.rule_type] || rule.rule_type`
-- Manter o resto da lógica que sobrescreve `label` quando há valores.
+**2. Prevenção futura — Validação ao criar encaixe**
+
+Nos hooks que criam serviços de encaixe (ex: `useCriarRetirada`, `useVistoriaManutencao`, `agendar-vistoria-evento`), verificar se já existe um serviço ativo para o mesmo veículo+tipo+data antes de inserir. Se existir, bloquear ou avisar.
+
+### Arquivos alterados
+- Nova migration SQL para recriar `view_vistorias_mapa` com filtro NOT EXISTS
+- (Opcional) Hooks de criação de encaixe para prevenção
 
 ### Resultado
-Em vez de mostrar `tipo_uso`, o badge mostrará `Particular`, `APP`, etc. quando houver valores configurados, ou `Tipo de Uso` como fallback legível quando não houver.
+Serviços duplicados para o mesmo veículo/data não aparecerão mais na lista lateral nem no mapa.
 
