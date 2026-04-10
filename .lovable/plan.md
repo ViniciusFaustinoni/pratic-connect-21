@@ -1,17 +1,25 @@
 
 
-## Plano: Remover aba "Associados" do mapa de monitoramento
+## Plano: Exigir fotos antes de permitir recusa do veículo (Vistoria de Instalação)
 
-### O que muda
-Remover a aba "Associados" (mapa de veículos rastreados) da página `/monitoramento/mapa`, mantendo apenas "Equipe" e "Atribuições".
+### Problema
+Hoje o técnico pode recusar/negar um veículo sem tirar nenhuma foto. Isso impede análises futuras, já que muitos associados tentam entrar várias vezes e as fotos são evidências importantes.
 
-### Correção em `src/pages/monitoramento/Mapa.tsx`
+### Correção
 
-1. Mudar o estado inicial `abaAtiva` de `"associados"` para `"atribuicoes"` (linha 105)
-2. Remover o `TabsTrigger` de "associados" (linhas 474-478)
-3. Remover o `TabsContent` de "associados" (linhas 491-499)
-4. Opcionalmente, remover código morto: `renderMapaVeiculos`, `renderSearchBar`, `renderTrajetoBadge`, `renderVeiculoInfo`, e estados/variáveis relacionados (busca de veículos, trajeto, etc.) — reduz ~300 linhas
+**Dois arquivos afetados** (os dois fluxos de vistoria de instalação):
+
+#### 1. `src/pages/instalador/ExecutarVistoriaCompleta.tsx`
+- O botão "Reprovar" (linha 565) atualmente só verifica `processando`
+- Adicionar condição: desabilitar o botão se `!todasFotosEnviadas`
+- Mostrar mensagem informativa abaixo do botão quando fotos faltam, ex: "Tire todas as fotos obrigatórias antes de reprovar"
+
+#### 2. `src/pages/instalador/InstaladorChecklist.tsx`
+- O botão "Registrar Recusa do Veículo" (linha 1889) aparece quando `decisaoInstalador === 'negado'`
+- Verificar quantas fotos obrigatórias da etapa de fotos foram tiradas
+- Desabilitar o botão se as fotos obrigatórias não estiverem completas
+- Mostrar mensagem informativa indicando que as fotos são necessárias mesmo para recusa
 
 ### Resultado
-A página abrirá direto na aba "Atribuições", com apenas duas abas visíveis: Equipe e Atribuições.
+O técnico será obrigado a tirar todas as fotos obrigatórias do veículo antes de poder registrar uma recusa, garantindo evidências fotográficas para análises futuras.
 
