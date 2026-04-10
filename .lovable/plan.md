@@ -1,21 +1,28 @@
 
 
-## Plano: Aba Manutenção — Usar serviços criados pelo coordenador + coluna Plataforma
+## Plano: Atualização local automática em todas as áreas de Linhas e Planos
 
 ### Problema
-A aba "Manutenção" em Serviços de Campo (`ManutencaoRastreadoresTab`) busca veículos da view `view_rastreadores_posicao` com >= 72h sem comunicação. O correto é mostrar apenas os serviços `tipo = 'vistoria_manutencao'` criados pelo coordenador na tabela `servicos` — mesma fonte da página `VistoriasManutencao`. Além disso, falta a coluna "Plataforma" (já disponível no join `rastreadores.plataforma`).
+Ao salvar alterações (criar/editar/excluir linhas, duplicar linhas, criar coberturas inline), a listagem de "Linhas e Planos" não atualiza automaticamente porque vários hooks de mutação não invalidam a query key `linhas_com_planos_clean`.
 
-### Correção (1 arquivo)
+### Hooks que faltam invalidar `linhas_com_planos_clean`
 
-**`src/components/monitoramento/manutencao-rastreadores/ManutencaoRastreadoresTab.tsx`** — Reescrever para usar o hook `useVistoriasManutencao` (já existente) em vez de `useManutencaoRastreadores`:
+**`src/hooks/usePlansAdmin.ts`** — 4 hooks de product_line:
+1. `useCreateProductLine` (linha 945) — só invalida `['product_lines']`
+2. `useUpdateProductLine` (linha 969) — só invalida `['product_lines']`
+3. `useDeleteProductLine` (linha 987) — só invalida `['product_lines']`
+4. `useDuplicateProductLine` (linha 1029) — só invalida `['product_lines']`
 
-1. Trocar o import de `useManutencaoRastreadores` por `useVistoriasManutencao` e `useVistoriasManutencaoMetricas`
-2. Usar a mesma estrutura de tabela da `ManutencaoTabela`, mas adaptada para a aba embutida
-3. Adicionar coluna **Plataforma** exibindo `vistoria.rastreador?.plataforma`
-4. Remover referências a "veículos sem pontuar" / 72h — o subtítulo passa a ser "Serviços de manutenção solicitados pelo monitoramento"
-5. Manter filtros de busca e status, usando os filtros do tipo `ManutencaoFiltros`
-6. Manter os modais existentes (agendar, registrar resultado, tratar ausência) via `TratativaDrawer` ou os modais já usados em `VistoriasManutencao`
+**`src/components/admin/planos/PlanCoberturasList.tsx`** — criação inline de cobertura (linha 268) invalida apenas `['plan-coberturas-inline']` mas não `linhas_com_planos_clean` (o `invalidate()` da linha 274 faz, mas não é chamado no `handleCreateNew`).
+
+### Correção
+
+Adicionar `queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] })` no `onSuccess` dos 4 hooks de product_line em `usePlansAdmin.ts`, e no `handleCreateNew` de `PlanCoberturasList.tsx`.
+
+### Arquivos alterados
+- `src/hooks/usePlansAdmin.ts` — 4 edições pontuais nos `onSuccess`
+- `src/components/admin/planos/PlanCoberturasList.tsx` — 1 edição no `handleCreateNew`
 
 ### Resultado
-A aba mostrará apenas manutenções criadas pelo coordenador, com coluna de Plataforma visível.
+Qualquer operação (criar, editar, excluir, duplicar linha ou plano; criar cobertura inline) atualizará automaticamente a listagem sem necessidade de refresh manual.
 
