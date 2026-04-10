@@ -236,20 +236,6 @@ export function PlanBeneficiosList({ planId, focusItemId }: PlanBeneficiosListPr
     setAssigning(true);
     try {
       const selectedIds = Array.from(assignSelected);
-      // Find which ones are already bound to another plan
-      const reassigned = selectedIds.filter(id => {
-        const ben = beneficiosDisponiveis.find((b: any) => b.id === id);
-        return ben?.vinculadoAo;
-      });
-
-      // Delete old bindings for reassigned ones
-      if (reassigned.length > 0) {
-        const { error: delErr } = await supabase
-          .from('planos_beneficios')
-          .delete()
-          .in('benefit_id', reassigned);
-        if (delErr) throw delErr;
-      }
 
       // Insert new bindings
       const inserts = selectedIds.map((benefitId) => ({

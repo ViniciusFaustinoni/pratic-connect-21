@@ -315,20 +315,6 @@ export function PlanCoberturasList({ planId, focusItemId }: PlanCoberturasListPr
     setAssigning(true);
     try {
       const selectedIds = Array.from(assignSelected);
-      // Find which ones are already bound to another plan
-      const reassigned = selectedIds.filter(id => {
-        const cob = coberturasDisponiveis.find((c: any) => c.id === id);
-        return cob?.vinculadaAo;
-      });
-
-      // Delete old bindings for reassigned ones
-      if (reassigned.length > 0) {
-        const { error: delErr } = await supabase
-          .from('planos_coberturas')
-          .delete()
-          .in('cobertura_id', reassigned);
-        if (delErr) throw delErr;
-      }
 
       // Insert new bindings
       const inserts = selectedIds.map((coberturaId) => ({
