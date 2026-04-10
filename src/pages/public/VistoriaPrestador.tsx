@@ -9,7 +9,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
-import { FotoCapture } from '@/components/instalador/FotoCapture';
+import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { toast } from 'sonner';
 import {
@@ -61,6 +61,11 @@ export default function VistoriaPrestador() {
   const [fotosMap, setFotosMap] = useState<Record<string, string>>({});
   const [uploadingFoto, setUploadingFoto] = useState<string | null>(null);
   const [fotoErrors, setFotoErrors] = useState<Record<string, boolean>>({});
+
+  // Convert fotosMap to array format for VistoriaFotoSequencial
+  const fotosEnviadasArray = useMemo(() => {
+    return Object.entries(fotosMap).map(([tipo, arquivo_url]) => ({ tipo, arquivo_url }));
+  }, [fotosMap]);
 
   // ── Assinatura state ──
   const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
@@ -485,30 +490,16 @@ export default function VistoriaPrestador() {
               </Badge>
             </div>
           </CardHeader>
-          <CardContent className="space-y-5">
-            {fotosCategorias.map(categoria => (
-              <div key={categoria.id}>
-                <p className="text-sm font-semibold text-slate-700 mb-2">{categoria.nome}</p>
-                {categoria.descricao && (
-                  <p className="text-xs text-slate-400 mb-2">{categoria.descricao}</p>
-                )}
-                <div className="grid grid-cols-3 gap-2">
-                  {categoria.fotos.map(foto => (
-                    <FotoCapture
-                      key={foto.id}
-                      tipo={foto.id}
-                      label={foto.nome}
-                      obrigatoria={true}
-                      fotoUrl={fotosMap[foto.id]}
-                      uploading={uploadingFoto === foto.id}
-                      hasError={fotoErrors[foto.id]}
-                      onCapture={(file) => handleFotoCapture(foto, file)}
-                      onRemove={() => handleFotoRemove(foto.id)}
-                    />
-                  ))}
-                </div>
-              </div>
-            ))}
+          <CardContent>
+            <VistoriaFotoSequencial
+              fotos={todasFotos}
+              fotosEnviadas={fotosEnviadasArray}
+              uploadingFoto={uploadingFoto}
+              onUpload={(fotoId, file) => {
+                const foto = todasFotos.find(f => f.id === fotoId);
+                if (foto) handleFotoCapture(foto, file);
+              }}
+            />
           </CardContent>
         </Card>
 
