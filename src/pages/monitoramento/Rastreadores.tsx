@@ -439,6 +439,7 @@ function RastreadoresContent({
           onNewRastreador={onNewRastreador}
           getPlataformaLabel={getPlataformaLabel}
           onViewMap={onViewMap}
+          onChangeStatus={handleChangeStatus}
         />
       ) : (
         <RastreadorTableView
