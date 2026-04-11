@@ -62,9 +62,11 @@ interface EligibilityRulesEditorProps {
   entityType: EntityType;
   entityId: string | undefined;
   compact?: boolean;
+  onAfterSave?: () => void;
+  onAfterDelete?: () => void;
 }
 
-export function EligibilityRulesEditor({ entityType, entityId, compact }: EligibilityRulesEditorProps) {
+export function EligibilityRulesEditor({ entityType, entityId, compact, onAfterSave, onAfterDelete }: EligibilityRulesEditorProps) {
   const { data: rules = [], isLoading } = useRulesForEntity(entityType, entityId);
   const saveRule = useSaveRule();
   const deleteRule = useDeleteRule();
