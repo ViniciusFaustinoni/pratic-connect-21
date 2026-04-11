@@ -1,43 +1,50 @@
 
+## Diagnóstico
+- O backend já está funcionando: o link é gerado e salvo no banco. A evidência é que o contrato mais recente já possui `autentique_url` e os logs de `autentique-create` confirmam o salvamento do link. Portanto, o problema atual é de sincronização da UI, não da Autentique.
+- O componente `EtapaAssinaturaContrato` ainda pode entrar em `aguardando_assinatura` sem consolidar um `contratoId` local estável. Quando isso acontece, os dois pollings retornam cedo porque dependem de `contrato?.id`, e a tela fica presa em “Aguarde...”.
+- Há corrida de inicialização: os logs mostram chamadas duplicadas de `contrato-gerar` e `autentique-create`, inclusive com erro de unicidade. Isso aumenta a chance de estado local inconsistente.
+- A página pública não escuta `contratos` em realtime; hoje ela escuta `cotacoes`, `vistorias`, `documentos_solicitados` e `associados`. Então, quando só `contratos.autentique_url` muda, a página não se atualiza sozinha.
 
-## Plano: Correção definitiva dos templates e posicionamento de assinatura Autentique
+## Plano definitivo de correção
+1. `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`
+   - Separar o estado mínimo crítico em variáveis independentes: `contratoId`, `contratoNumero`, `autentiqueDocumentoId`, `linkAssinatura`, `statusContrato`.
+   - Garantir que `contratoId` seja preenchido imediatamente a partir de `contrato_gerado_id`, `contratoData.id` ou resposta do `contrato-gerar`, antes de entrar em `aguardando_assinatura`.
+   - Trocar todos os guards e pollings que usam `contrato?.id` para usar `contratoId`.
+   - Em `enviarParaAutentique`, atualizar `linkAssinatura` local assim que a edge function retornar `signatureLink`, sem depender do objeto `contrato`.
 
-### Sobre a Autentique e posicionamento de assinaturas
+2. Eliminar chamadas duplicadas
+   - Adicionar refs de trava (`initRef`, `processingRef`, `sendingRef`) para impedir dupla execução em StrictMode/re-render/retry.
+   - Fazer `verificarOuGerarContrato` e `enviarParaAutentique` respeitarem essas travas e só liberarem nova execução quando o fluxo terminar ou falhar.
 
-A Autentique **usa coordenadas percentuais (x%, y%, página)** para posicionar assinaturas. Ela NÃO tem detecção automática de "campos de assinatura" no HTML. O que temos hoje (INITIALS em cada página intermediária + SIGNATURE na última página) é a arquitetura correta. O problema é a estimativa incorreta do número de páginas e resquícios de blocos manuais.
+3. Realtime verdadeiro para o link
+   - No próprio `EtapaAssinaturaContrato`, abrir um `publicSupabase.channel(...)` para a tabela `contratos`, filtrado pelo `contratoId`.
+   - Em cada `UPDATE`, atualizar imediatamente `linkAssinatura`, `autentiqueDocumentoId` e `statusContrato`.
+   - Se o status virar `assinado`/`ativo`, avançar a etapa na hora com `onContratoAssinado`.
+   - Manter o polling de 3s/15s apenas como fallback, não como mecanismo principal.
 
-### Problemas identificados no PDF assinado (30 páginas)
+4. `src/hooks/useCotacaoContratacao.ts`
+   - Adicionar `contratos` às subscriptions realtime do fluxo público.
+   - Invalidar `['contrato-publico-fallback', token]` e `['cotacao-contratacao', token]` quando o contrato mudar.
+   - Ampliar `contratoFallback` para buscar também `numero`, `autentique_url` e `autentique_documento_id`, não só `status` e `link_token`.
 
-1. **Estimativa de páginas errada**: O documento tem 29 páginas de conteúdo + 1 de auditoria Autentique = 30. Mas a heurística de `~3000 chars = 1 página` subestimou, e a SIGNATURE caiu na página 20, sobrepondo o texto do regulamento.
+5. `src/pages/public/CotacaoContratacao.tsx`
+   - Passar para `EtapaAssinaturaContrato` os dados iniciais do contrato já conhecidos pela página.
+   - Se necessário, usar uma `key` estável baseada em `cotacao.id` + `contratoId` para remontar com segurança quando o contrato aparecer.
 
-2. **Blocos manuais de assinatura remanescentes**:
-   - Páginas 3 e 5: Linhas como `RIO DE JANEIRO, 11 de abril de 2026.` seguida de `**MARCUS VINICIUS FAUSTINONI DE FREITAS - CPF: 124.936.497-37**` — são blocos manuais de assinatura que o `sanitizeSignatureBlocks` não capturou porque o nome real (não variável `{{associado.nome}}`) foi substituído antes da sanitização.
-   - Página 6: Cabeçalho "### ASSINATURA" no Termo de Rastreador (vem do template gerado programaticamente).
+## Resultado esperado
+- O link/botão “Assinar Contrato Agora” aparece automaticamente assim que `autentique_url` for gravada.
+- A atualização acontece em dois níveis: local imediato (resposta da edge function) e realtime real (update em `contratos`).
+- A tela deixa de travar em “Aguarde...” por falta de estado local consistente.
+- O fluxo para de disparar `contrato-gerar` / `autentique-create` em duplicidade.
 
-3. **Posição Y da SIGNATURE (85%)**: Em uma página A4 com margens de 20mm, y=85% coloca a assinatura sobre o conteúdo textual. Para a última página, que geralmente tem pouco conteúdo na parte inferior, 90-92% seria mais adequado.
+## Observação técnica importante
+- Não é necessária nova correção na Autentique para este problema.
+- Também não há indicação de nova migration obrigatória para o link; o foco agora é consolidar o estado no frontend e escutar `contratos` em tempo real.
 
-### Alterações propostas
-
-**1. `supabase/functions/_shared/autentique-positions.ts`** — Melhorar heurística de estimativa
-- Reduzir de 3000 para **2000 chars/página** (mais conservador, garante nunca subestimar)
-- Adicionar margem de **+2 páginas** em vez de +1
-- Resultado: um documento que antes estimava 20 páginas passará a estimar ~30+, garantindo que a SIGNATURE fique na última página real (páginas excedentes são ignoradas pela Autentique)
-
-**2. `supabase/functions/_shared/template-utils.ts`** — Fortalecer sanitização
-- Adicionar regras para capturar blocos com nome real + CPF formatado (não variável):
-  - `<p><strong>NOME COMPLETO - CPF: 123.456.789-00</strong></p>` (padrão bold nome-CPF)
-  - Parágrafos com cidade + data por extenso no padrão `CIDADE, dd de mês de yyyy.`
-- Adicionar captura de `### ASSINATURA` (heading h3 markdown-convertido)
-
-**3. `supabase/functions/_shared/termo-afiliacao-template.ts`** — Remover heading "ASSINATURA" do rastreador
-- Remover o trecho que gera o bloco com heading "ASSINATURA" e local/data dentro da seção do rastreador (ainda resta no template, como visto na página 6)
-
-**4. Fluxos de criação** — Garantir ordem sanitização → estimativa
-- Nos edge functions `autentique-create` e `autentique-create-by-token`: chamar `sanitizeSignatureBlocks()` no HTML final **antes** de chamar `estimarPaginasHTML()`, para que os blocos removidos não inflem a contagem de páginas
-
-### Resultado esperado
-- A SIGNATURE será posicionada corretamente na última página real (~página 29), não na 20
-- Todas as linhas manuais de "Local/Data" e "Nome - CPF" serão removidas do corpo do documento
-- O heading "ASSINATURA" no Termo de Rastreador desaparecerá
-- A rubrica (INITIALS) continuará funcionando corretamente em todas as páginas intermediárias (como já está)
-
+## Validação obrigatória
+- Testar ponta a ponta estes cenários:
+  1. cotação sem contrato prévio;
+  2. contrato existente sem link;
+  3. link gerado alguns segundos depois;
+  4. contrato assinado avançando automaticamente para a próxima etapa.
+- Confirmar nos logs que existe apenas 1 chamada de `contrato-gerar` e 1 de `autentique-create` no fluxo normal.
