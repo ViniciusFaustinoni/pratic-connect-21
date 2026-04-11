@@ -1,81 +1,54 @@
 
 
-## Plano: Assinatura do Laudo via Autentique como pre-requisito para aprovacao
+## Plano: Tela Publica de Assinatura do Checklist
 
 ### Contexto
-Atualmente, quando o tecnico conclui a instalacao (`useAprovarVeiculoServico`), o sistema envia um link de assinatura simples via WhatsApp. O usuario quer que:
-1. O sistema gere o Laudo PDF (ja existe: `gerar-laudo-vistoria`)
-2. Envie esse PDF para assinatura via Autentique (nova funcionalidade)
-3. Envie o link de assinatura do Autentique via WhatsApp ao associado
-4. Somente apos o associado assinar o laudo no Autentique, o veiculo possa ser aprovado pelo tecnico ou analista
+Atualmente, apos a conclusao da instalacao, o sistema envia o laudo PDF diretamente para o Autentique e o link de assinatura via WhatsApp. Porem, o associado nao tem a oportunidade de **revisar** o que foi feito (checklist, avarias, fotos) antes de assinar. A pagina `/acompanhar/:token` tem apenas um SignaturePad simples, sem conteudo informativo.
 
-### Alteracoes
+O objetivo e criar uma pagina publica dedicada onde o associado possa visualizar tudo o que foi registrado na instalacao antes de ser redirecionado para assinar o laudo no Autentique.
 
-**1. Migracao SQL** — Adicionar colunas na tabela `servicos`
-```sql
-ALTER TABLE servicos ADD COLUMN laudo_autentique_id text;
-ALTER TABLE servicos ADD COLUMN laudo_autentique_url text;
-ALTER TABLE servicos ADD COLUMN laudo_assinado boolean DEFAULT false;
-ALTER TABLE servicos ADD COLUMN laudo_assinado_em timestamptz;
-ALTER TABLE servicos ADD COLUMN laudo_pdf_url text;
-ALTER TABLE servicos ADD COLUMN laudo_pdf_assinado_url text;
-```
+### O que sera feito
 
-**2. Nova Edge Function: `autentique-create-laudo`**
-- Recebe: `servicoId`, `associadoId`, `veiculoId`, `laudoPdfUrl`
-- Cria documento no Autentique com o PDF do laudo como anexo
-- Signatario: associado (nome, email, telefone)
-- Salva `laudo_autentique_id` e `laudo_autentique_url` no servico
-- Retorna o link de assinatura
+**1. Nova pagina publica: `/checklist-instalacao/:token`**
+- Arquivo: `src/pages/public/ChecklistInstalacaoPublica.tsx`
+- Busca dados do servico via `link_token` do contrato (mesmo token ja usado no `/acompanhar/:token`)
+- Exibe 3 secoes:
+  - **Checklist de Servicos**: Renderiza `checklist_data` do servico com status de cada item (OK/NOK/ressalva)
+  - **Avarias Identificadas**: Exibe `ressalvas_instalador` e fotos de ressalva (`fotos_ressalva`) se houver
+  - **Midia Visual**: Galeria de fotos da vistoria (`vistoria_fotos`) filtradas por `visivel_cliente = true` (exclui fotos da categoria `instalacao` — local fisico do rastreador). Inclui video 360 se existir
+- Ao final, botao "Assinar Laudo de Instalacao" que redireciona para o link do Autentique (`laudo_autentique_url` do servico)
+- Se o laudo ja foi assinado (`laudo_assinado = true`), exibe mensagem de confirmacao
 
-**3. Atualizar `autentique-webhook/index.ts`**
-- Apos os fallbacks de contratos e sinistros, adicionar fallback para servicos
-- Buscar `servicos` por `laudo_autentique_id = documento_id`
-- Quando assinado: atualizar `laudo_assinado = true`, `laudo_assinado_em`, e `laudo_pdf_assinado_url`
+**2. Rota em `App.tsx`**
+- Adicionar rota `/checklist-instalacao/:token` com lazy import
 
-**4. Atualizar `useAprovarVeiculoServico` em `src/hooks/useServicos.ts`**
-- Apos concluir a instalacao (status `concluida`), invocar:
-  1. `gerar-laudo-vistoria` para gerar o PDF
-  2. `autentique-create-laudo` para enviar o PDF ao Autentique
-- Enviar o link de assinatura do Autentique via WhatsApp (substituir o link atual `/acompanhar/:token` pelo link do Autentique)
-- O servico fica com status `concluida` mas `laudo_assinado = false`
+**3. Alterar link do WhatsApp pos-instalacao**
+- Em `src/hooks/useServicos.ts` (`useAprovarVeiculoServico`), alterar a mensagem enviada via WhatsApp:
+  - Em vez de enviar diretamente o link do Autentique, enviar o link para `/checklist-instalacao/:token`
+  - O associado primeiro visualiza o checklist na pagina publica, depois clica para assinar no Autentique
+  - Manter o template `assinatura_documento_v2` com o novo link
 
-**5. Bloquear aprovacao ate laudo assinado**
-- Em `src/hooks/useAprovacaoMonitoramento.ts` — ao listar servicos pendentes, exibir status "Pendente Assinatura do Laudo" quando `laudo_assinado = false`
-- Em `src/pages/cadastro/PropostaAnalise.tsx` — se `laudo_assinado = false`, mostrar badge "Aguardando Assinatura do Laudo" e desabilitar botao de aprovacao
-- Em `src/hooks/usePropostasPendentes.ts` — incluir `laudo_assinado` nos dados retornados
-- Na interface `InstalacaoInfo`, adicionar campos `laudo_assinado`, `laudo_autentique_url`
+**4. Envio do laudo por email apos assinatura**
+- No `autentique-webhook/index.ts`, quando detectar que o laudo foi assinado, alem de atualizar `laudo_assinado`, enviar email ao associado com link para download do PDF assinado
+- Usar `send-email` (edge function existente) com template `generico`
 
-**6. Polling para detectar assinatura do laudo**
-- Em `AcompanhamentoProposta.tsx` e/ou na tela do tecnico: polling a cada 15s para verificar se `laudo_assinado` mudou para `true`
-- Quando assinado, liberar fluxo de aprovacao
-
-**7. UI na tela de propostas pendentes (cadastro)**
-- Badge "Pendente Assinatura Laudo" em amarelo quando `laudo_assinado = false`
-- Badge "Laudo Assinado" em verde quando `laudo_assinado = true`
-- Botao "Aprovar" desabilitado enquanto laudo nao assinado, com tooltip explicativo
-
-### Fluxo resumido
+### Fluxo
 ```text
 Tecnico conclui instalacao
-  → Sistema gera Laudo PDF (gerar-laudo-vistoria)
-  → Sistema envia PDF ao Autentique (autentique-create-laudo)
-  → WhatsApp enviado com link de assinatura Autentique
-    → Associado abre link Autentique
-      → Assina o laudo digitalmente
-        → Webhook Autentique dispara
-          → servicos.laudo_assinado = true
-            → Fluxo de aprovacao liberado
-              → Tecnico aprova OU analista de cadastro processa
+  → Laudo PDF gerado + enviado ao Autentique
+  → WhatsApp com link /checklist-instalacao/:token
+    → Associado abre link
+      → Ve checklist, avarias, fotos/videos
+      → Clica "Assinar Laudo"
+        → Redirecionado ao Autentique
+          → Assina digitalmente
+            → Webhook atualiza laudo_assinado
+            → Email com PDF assinado enviado ao associado
 ```
 
-### Arquivos criados/editados
-- **Criar**: `supabase/functions/autentique-create-laudo/index.ts`
-- **Criar**: Migracao SQL (colunas em servicos)
-- **Editar**: `supabase/functions/autentique-webhook/index.ts` (fallback para servicos/laudo)
-- **Editar**: `src/hooks/useServicos.ts` (gerar laudo + enviar Autentique pos-instalacao)
-- **Editar**: `src/hooks/usePropostasPendentes.ts` (incluir laudo_assinado)
-- **Editar**: `src/pages/cadastro/PropostaAnalise.tsx` (bloquear aprovacao)
-- **Editar**: `src/pages/cadastro/PropostasPendentes.tsx` (badge de status)
-- **Editar**: `src/pages/public/AcompanhamentoProposta.tsx` (mostrar status do laudo)
+### Arquivos
+- **Criar**: `src/pages/public/ChecklistInstalacaoPublica.tsx`
+- **Editar**: `src/App.tsx` (nova rota)
+- **Editar**: `src/hooks/useServicos.ts` (link do WhatsApp)
+- **Editar**: `supabase/functions/autentique-webhook/index.ts` (envio de email)
 
