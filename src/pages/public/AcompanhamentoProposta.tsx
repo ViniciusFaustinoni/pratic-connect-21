@@ -1,8 +1,9 @@
 import { useParams } from 'react-router-dom';
-import { useEffect, useState } from 'react';
-import { Card, CardContent } from '@/components/ui/card';
+import { useEffect, useState, useMemo } from 'react';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Badge } from '@/components/ui/badge';
+import { Button } from '@/components/ui/button';
 import { 
   AlertTriangle, 
   Car, 
@@ -21,7 +22,14 @@ import {
   Bell,
   FileWarning,
   PenTool,
-  Loader2
+  Loader2,
+  ClipboardCheck,
+  Camera,
+  Video,
+  ExternalLink,
+  ShieldCheck,
+  FileText,
+  Play
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
@@ -34,10 +42,33 @@ import { getOrientacoesRecusa } from '@/utils/orientacoesRecusa';
 import { SignaturePad } from '@/components/instalador/SignaturePad';
 import { toast } from 'sonner';
 
+interface ChecklistItemData {
+  id: string;
+  label: string;
+  status: 'ok' | 'nok' | 'pendente';
+  observacao?: string;
+  fotos?: string[];
+}
+
+interface VistoriaFotoData {
+  arquivo_url: string;
+  tipo: string;
+  visivel_cliente: boolean;
+}
+
 interface ServicoInstalacao {
   id: string;
   status: string;
   assinatura_cliente_url: string | null;
+  laudo_autentique_url: string | null;
+  laudo_assinado: boolean;
+  laudo_assinado_em: string | null;
+  checklist_data: any;
+  ressalvas_instalador: string | null;
+  fotos_ressalva: string[] | null;
+  video_360_url: string | null;
+  quilometragem: number | null;
+  vistoriaFotos: VistoriaFotoData[];
 }
 
 interface AssociadoData {
@@ -85,7 +116,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
       // Buscar contrato pelo link_token
       const { data: contrato, error: contratoError } = await supabase
         .from('contratos')
-        .select('id, associado_id, status')
+        .select('id, associado_id, status, veiculo_id')
         .eq('link_token', token)
         .maybeSingle();
 
@@ -156,11 +187,16 @@ function useAcompanhamentoProposta(token: string | undefined) {
         confirmacaoWhatsapp = servico?.confirmacao_whatsapp || null;
       }
 
-      // Buscar serviço de instalação vinculado ao contrato (para assinatura)
+      // Buscar serviço de instalação vinculado ao contrato (para assinatura + checklist/laudo)
       let servicoInstalacao: ServicoInstalacao | null = null;
       const { data: servicoData } = await supabase
         .from('servicos')
-        .select('id, status, assinatura_cliente_url')
+        .select(`
+          id, status, assinatura_cliente_url,
+          laudo_autentique_url, laudo_assinado, laudo_assinado_em,
+          checklist_data, ressalvas_instalador, fotos_ressalva,
+          video_360_url, quilometragem
+        `)
         .eq('contrato_id', contrato.id)
         .eq('tipo', 'instalacao')
         .in('status', ['concluida', 'em_analise'])
@@ -169,7 +205,39 @@ function useAcompanhamentoProposta(token: string | undefined) {
         .maybeSingle();
 
       if (servicoData) {
-        servicoInstalacao = servicoData as ServicoInstalacao;
+        // Buscar fotos da vistoria
+        let vistoriaFotos: VistoriaFotoData[] = [];
+        if (contrato.veiculo_id) {
+          const { data: vistoria } = await supabase
+            .from('vistorias')
+            .select('id')
+            .eq('veiculo_id', contrato.veiculo_id)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+
+          if (vistoria?.id) {
+            const { data: fotos } = await supabase
+              .from('vistoria_fotos')
+              .select('arquivo_url, tipo, visivel_cliente')
+              .eq('vistoria_id', vistoria.id)
+              .eq('visivel_cliente', true);
+            vistoriaFotos = (fotos || []) as VistoriaFotoData[];
+          }
+        }
+
+        servicoInstalacao = {
+          ...servicoData,
+          laudo_assinado: servicoData.laudo_assinado ?? false,
+          laudo_assinado_em: servicoData.laudo_assinado_em ?? null,
+          laudo_autentique_url: servicoData.laudo_autentique_url ?? null,
+          checklist_data: servicoData.checklist_data ?? null,
+          ressalvas_instalador: servicoData.ressalvas_instalador ?? null,
+          fotos_ressalva: servicoData.fotos_ressalva ?? null,
+          video_360_url: servicoData.video_360_url ?? null,
+          quilometragem: servicoData.quilometragem ?? null,
+          vistoriaFotos,
+        } as ServicoInstalacao;
       }
 
       return {
@@ -186,7 +254,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
       };
     },
     enabled: !!token,
-    refetchInterval: 30000, // Atualiza a cada 30s
+    refetchInterval: 30000,
   });
 }
 
@@ -194,8 +262,43 @@ function getStatusInfo(associado: AssociadoData) {
   const veiculo = associado.veiculos[0];
   const instalacao = associado.instalacoes[0];
   const contrato = associado.contrato;
+  const servico = associado.servicoInstalacao;
 
-  // PRIORIDADE 0: Veículo recusado pelo instalador/vistoriador
+  // PRIORIDADE 0: Pendente assinatura do laudo
+  if (servico?.status === 'concluida' && servico?.laudo_autentique_url && !servico?.laudo_assinado) {
+    return {
+      status: 'pendente_assinatura_laudo',
+      icon: FileText,
+      color: 'warning',
+      title: 'Assine o Laudo de Instalação',
+      description: 'A instalação foi concluída! Revise o checklist abaixo e assine o laudo para finalizar.',
+      showDetails: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+      showAtribuidaRota: false,
+      showChecklist: true,
+    };
+  }
+
+  // Laudo já assinado - mostrar checklist como confirmação
+  if (servico?.laudo_assinado) {
+    return {
+      status: 'laudo_assinado',
+      icon: ShieldCheck,
+      color: 'success',
+      title: 'Laudo Assinado com Sucesso!',
+      description: 'Obrigado! O laudo de instalação foi assinado. Confira os detalhes abaixo.',
+      showDetails: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+      showAtribuidaRota: false,
+      showChecklist: true,
+    };
+  }
+
+  // PRIORIDADE 1: Veículo recusado pelo instalador/vistoriador
   if (veiculo?.status === 'recusado') {
     return {
       status: 'veiculo_recusado',
@@ -228,7 +331,7 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // PRIORIDADE 1: Instalação em andamento
+  // PRIORIDADE 2: Instalação em andamento
   if (instalacao?.status === 'em_andamento') {
     return {
       status: 'em_andamento',
@@ -244,7 +347,7 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // PRIORIDADE 2: Técnico a caminho (em_rota)
+  // PRIORIDADE 3: Técnico a caminho (em_rota)
   if (instalacao?.status === 'em_rota') {
     const nomeVistoriador = instalacao.instalador_responsavel?.nome || 'Técnico';
     return {
@@ -263,7 +366,7 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // PRIORIDADE 3: Instalação atribuída a uma rota (aguardando vistoriador iniciar)
+  // PRIORIDADE 4: Instalação atribuída a uma rota
   if (instalacao?.rota_id && instalacao?.status === 'agendada') {
     const nomeVistoriador = instalacao.instalador_responsavel?.nome || 'Técnico';
     return {
@@ -282,8 +385,7 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // ATIVO MAS SEM CONTA CRIADA OU PRIMEIRO ACESSO → Mostrar formulário de criação
-  // Permite criar conta independente da ativação do rastreador (cobertura_total)
+  // ATIVO MAS SEM CONTA CRIADA OU PRIMEIRO ACESSO
   if (associado.status === 'ativo' && (!associado.user_id || associado.primeiro_acesso === true)) {
     return {
       status: 'criar_conta',
@@ -299,8 +401,7 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // ATIVO COM COBERTURA PARCIAL (roubo/furto) - já tem conta criada, aguardando instalação física
-  // Nota: showCriarConta = false porque a conta já foi criada no bloco acima (linha 211-223)
+  // ATIVO COM COBERTURA PARCIAL
   if (associado.status === 'ativo' && veiculo?.cobertura_roubo_furto && !veiculo?.cobertura_total && associado.user_id) {
     return {
       status: 'cobertura_parcial',
@@ -317,7 +418,7 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // Verificar se está ativo com cobertura total (já tem conta)
+  // Ativo com cobertura total
   if (associado.status === 'ativo' && veiculo?.cobertura_total) {
     return {
       status: 'ativo_total',
@@ -333,7 +434,7 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // Verificar se tem cobertura roubo/furto ativa (aguardando instalação)
+  // Cobertura roubo/furto ativa
   if (veiculo?.cobertura_roubo_furto && !veiculo?.cobertura_total) {
     return {
       status: 'roubo_furto',
@@ -350,7 +451,7 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // Verificar se está aguardando instalação
+  // Aguardando instalação
   if (associado.status === 'aguardando_instalacao') {
     return {
       status: 'aguardando_instalacao',
@@ -367,7 +468,7 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // Documentação pendente - cliente deve enviar documentos solicitados
+  // Documentação pendente
   if (associado.status === 'documentacao_pendente') {
     return {
       status: 'documentacao_pendente',
@@ -400,7 +501,7 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
-  // Default - pendente
+  // Default
   return {
     status: 'pendente',
     icon: FileCheck,
@@ -413,6 +514,26 @@ function getStatusInfo(associado: AssociadoData) {
     showEmAndamento: false,
     showAtribuidaRota: false,
   };
+}
+
+function formatTipoFoto(tipo: string): string {
+  const map: Record<string, string> = {
+    frente: 'Frente',
+    traseira: 'Traseira',
+    lateral_esquerda: 'Lat. Esquerda',
+    lateral_direita: 'Lat. Direita',
+    painel: 'Painel',
+    chassi: 'Chassi',
+    motor: 'Motor',
+    documento: 'Documento',
+    placa: 'Placa',
+    vidro: 'Vidro',
+    pneu: 'Pneu',
+    interior: 'Interior',
+    teto: 'Teto',
+    avaria: 'Avaria',
+  };
+  return map[tipo] || tipo.replace(/_/g, ' ');
 }
 
 export default function AcompanhamentoProposta() {
@@ -453,72 +574,78 @@ export default function AcompanhamentoProposta() {
     }
   };
 
-  // Realtime subscription para atualização instantânea quando status mudar
+  // Checklist items parsed
+  const checklistItems = useMemo<ChecklistItemData[]>(() => {
+    if (!associado?.servicoInstalacao?.checklist_data) return [];
+    const data = associado.servicoInstalacao.checklist_data;
+    if (data.items && Array.isArray(data.items)) {
+      return data.items;
+    }
+    return Object.entries(data)
+      .filter(([key]) => key !== 'items')
+      .map(([id, val]: [string, any]) => ({
+        id,
+        label: val.label || id.replace(/_/g, ' '),
+        status: val.status || 'pendente',
+        observacao: val.observacao,
+        fotos: val.fotos,
+      }));
+  }, [associado?.servicoInstalacao?.checklist_data]);
+
+  // Fotos galeria (excluindo tipos internos)
+  const fotosGaleria = useMemo(() => {
+    if (!associado?.servicoInstalacao?.vistoriaFotos) return [];
+    const tiposExcluidos = ['instalacao', 'local_rastreador', 'assinatura_cliente'];
+    return associado.servicoInstalacao.vistoriaFotos
+      .filter(f => !tiposExcluidos.includes(f.tipo))
+      .map((f) => ({
+        url: f.arquivo_url,
+        label: formatTipoFoto(f.tipo),
+        tipo: f.tipo,
+      }));
+  }, [associado?.servicoInstalacao?.vistoriaFotos]);
+
+  // Realtime subscription
   useEffect(() => {
     if (!associado?.id) return;
 
     const channel = supabase
       .channel(`acompanhamento-cliente-${associado.id}`)
-      // Escutar mudanças nas instalações
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'instalacoes',
-          filter: `associado_id=eq.${associado.id}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
-        }
+        { event: 'UPDATE', schema: 'public', table: 'instalacoes', filter: `associado_id=eq.${associado.id}` },
+        () => { queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] }); }
       )
-      // Escutar mudanças no status do associado (para análise cadastral e ativação)
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'associados',
-          filter: `id=eq.${associado.id}`,
-        },
-        () => {
-          queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
-        }
+        { event: 'UPDATE', schema: 'public', table: 'associados', filter: `id=eq.${associado.id}` },
+        () => { queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] }); }
       )
-      // Escutar mudanças nos veículos (para liberação de cobertura_total após ativação)
       .on(
         'postgres_changes',
-        {
-          event: 'UPDATE',
-          schema: 'public',
-          table: 'veiculos',
-          filter: `associado_id=eq.${associado.id}`,
-        },
-        () => {
-          console.log('[Acompanhamento] Veículo atualizado - invalidando query');
-          queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
-        }
+        { event: 'UPDATE', schema: 'public', table: 'veiculos', filter: `associado_id=eq.${associado.id}` },
+        () => { queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] }); }
       )
-      // Escutar mudanças em documentos_solicitados (para pendências)
       .on(
         'postgres_changes',
-        {
-          event: '*',
-          schema: 'public',
-          table: 'documentos_solicitados',
-          filter: `associado_id=eq.${associado.id}`,
-        },
+        { event: '*', schema: 'public', table: 'documentos_solicitados', filter: `associado_id=eq.${associado.id}` },
         () => {
           queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
           queryClient.invalidateQueries({ queryKey: ['docs-solicitados-pendentes', associado.id] });
         }
+      )
+      // Escutar mudanças no serviço (laudo_assinado)
+      .on(
+        'postgres_changes',
+        { event: 'UPDATE', schema: 'public', table: 'servicos', filter: `contrato_id=eq.${associado.contrato?.id}` },
+        () => { queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] }); }
       )
       .subscribe();
 
     return () => {
       supabase.removeChannel(channel);
     };
-  }, [associado?.id, token, queryClient]);
+  }, [associado?.id, associado?.contrato?.id, token, queryClient]);
 
   if (isLoading) {
     return (
@@ -564,6 +691,11 @@ export default function AcompanhamentoProposta() {
   const veiculo = associado.veiculos[0];
   const instalacao = associado.instalacoes[0];
   const StatusIcon = statusInfo.icon;
+  const servico = associado.servicoInstalacao;
+
+  const showChecklistSection = !!(statusInfo as any).showChecklist && servico;
+  const itensOk = checklistItems.filter(i => i.status === 'ok').length;
+  const itensNok = checklistItems.filter(i => i.status === 'nok').length;
 
   const colorClasses = {
     success: {
@@ -636,7 +768,9 @@ export default function AcompanhamentoProposta() {
       </motion.header>
 
       {/* Main Content */}
-      <main className="max-w-2xl mx-auto px-4 py-8 relative z-10">
+      <main className={`max-w-2xl mx-auto px-4 py-8 relative z-10 ${
+        showChecklistSection && servico && !servico.laudo_assinado && servico.laudo_autentique_url ? 'pb-28' : ''
+      }`}>
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -669,13 +803,9 @@ export default function AcompanhamentoProposta() {
             </CardContent>
           </Card>
 
-          {/* Formulário de Criação de Conta (quando ativo sem user_id) */}
+          {/* Formulário de Criação de Conta */}
           {statusInfo.showCriarConta && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.4 }}
-            >
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
               <CriarContaAssociadoForm 
                 associadoId={associado.id}
                 nomeAssociado={associado.nome}
@@ -684,13 +814,9 @@ export default function AcompanhamentoProposta() {
             </motion.div>
           )}
 
-          {/* Card de Documentos Pendentes */}
-          {(statusInfo.showDocumentosPendentes || associado.status === 'documentacao_pendente') && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.3 }}
-            >
+          {/* Documentos Pendentes */}
+          {((statusInfo as any).showDocumentosPendentes || associado.status === 'documentacao_pendente') && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
               <DocumentosPendentes 
                 associadoId={associado.id}
                 onTodosEnviados={() => {
@@ -700,13 +826,9 @@ export default function AcompanhamentoProposta() {
             </motion.div>
           )}
 
-          {/* Card de Orientações pós-Recusa */}
-          {statusInfo.showRecusaOrientacoes && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
-            >
+          {/* Orientações pós-Recusa */}
+          {(statusInfo as any).showRecusaOrientacoes && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
               <Card className="bg-amber-500/5 border-amber-500/30">
                 <CardContent className="py-6 space-y-4">
                   <div className="flex items-center gap-3">
@@ -718,13 +840,11 @@ export default function AcompanhamentoProposta() {
                       <p className="text-sm text-muted-foreground">Siga as orientações abaixo para regularizar</p>
                     </div>
                   </div>
-
                   <div className="p-4 bg-muted/30 rounded-lg">
                     <p className="text-sm text-foreground leading-relaxed">
-                      {getOrientacoesRecusa(statusInfo.motivoRecusa || 'outro')}
+                      {getOrientacoesRecusa((statusInfo as any).motivoRecusa || 'outro')}
                     </p>
                   </div>
-
                   <div className="p-4 bg-primary/5 border border-primary/20 rounded-lg space-y-3">
                     <h4 className="text-sm font-semibold text-primary flex items-center gap-2">
                       <CheckCircle2 className="h-4 w-4" />
@@ -739,7 +859,6 @@ export default function AcompanhamentoProposta() {
                       💡 Como os valores de proteção são atualizados mensalmente com base na tabela FIPE, será necessário gerar uma nova cotação — e pode ser até mais vantajoso!
                     </p>
                   </div>
-
                   <div className="text-center pt-2">
                     <p className="text-sm text-muted-foreground">
                       Dúvidas? Entre em contato pelo WhatsApp ou ligue para nossa central 💙
@@ -750,24 +869,18 @@ export default function AcompanhamentoProposta() {
             </motion.div>
           )}
 
-          {/* Card de Técnico a Caminho */}
+          {/* Técnico a Caminho */}
           {statusInfo.showEmRota && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 }}
-            >
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }}>
               <Card className="bg-primary/5 border-primary/30 overflow-hidden">
                 <CardContent className="py-6">
                   <div className="flex items-center gap-4">
-                    {/* Ícone pulsante */}
                     <div className="relative flex-shrink-0">
                       <div className="absolute inset-0 bg-primary/30 rounded-full animate-ping" />
                       <div className="relative w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center">
                         <Navigation className="h-7 w-7 text-primary animate-pulse" />
                       </div>
                     </div>
-                    
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-foreground flex items-center gap-2">
                         <MapPin className="h-4 w-4 text-primary" />
@@ -778,8 +891,6 @@ export default function AcompanhamentoProposta() {
                       </p>
                     </div>
                   </div>
-                  
-                  {/* Dicas para o cliente */}
                   <div className="mt-4 p-4 bg-muted/50 rounded-lg space-y-2">
                     <p className="text-xs font-medium text-foreground">Prepare-se para a chegada:</p>
                     <ul className="text-sm text-muted-foreground space-y-2">
@@ -802,39 +913,27 @@ export default function AcompanhamentoProposta() {
             </motion.div>
           )}
 
-          {/* Card de Vistoriador Designado (Atribuído à Rota) */}
-          {statusInfo.showAtribuidaRota && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 }}
-            >
+          {/* Vistoriador Designado */}
+          {(statusInfo as any).showAtribuidaRota && (
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }}>
               <Card className="bg-primary/5 border-primary/30 overflow-hidden">
                 <CardContent className="py-6">
                   <div className="flex items-center gap-4">
-                    {/* Ícone do vistoriador */}
                     <div className="relative flex-shrink-0">
                       <div className="w-14 h-14 rounded-full bg-primary/20 flex items-center justify-center">
                         <UserCheck className="h-7 w-7 text-primary" />
                       </div>
                     </div>
-                    
                     <div className="flex-1 min-w-0">
-                      <h3 className="font-semibold text-foreground">
-                        Vistoriador Designado
-                      </h3>
+                      <h3 className="font-semibold text-foreground">Vistoriador Designado</h3>
                       <p className="text-sm text-muted-foreground">
-                        <span className="font-medium text-primary">{statusInfo.nomeVistoriador}</span> 
+                        <span className="font-medium text-primary">{(statusInfo as any).nomeVistoriador}</span> 
                         {' '}irá realizar sua instalação
                       </p>
                     </div>
                   </div>
-                  
-                  {/* Informações adicionais */}
                   <div className="mt-4 p-4 bg-muted/50 rounded-lg space-y-2">
-                    <p className="text-xs font-medium text-foreground">
-                      Próximos passos:
-                    </p>
+                    <p className="text-xs font-medium text-foreground">Próximos passos:</p>
                     <ul className="text-sm text-muted-foreground space-y-2">
                       <li className="flex items-center gap-2">
                         <Clock className="h-4 w-4 text-primary flex-shrink-0" />
@@ -851,13 +950,9 @@ export default function AcompanhamentoProposta() {
             </motion.div>
           )}
 
-          {/* Card de Instalação em Andamento */}
-          {statusInfo.showEmAndamento && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-              transition={{ delay: 0.3 }}
-            >
+          {/* Instalação em Andamento */}
+          {(statusInfo as any).showEmAndamento && (
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }} transition={{ delay: 0.3 }}>
               <Card className="bg-success/5 border-success/30">
                 <CardContent className="py-6">
                   <div className="flex items-center gap-4">
@@ -867,7 +962,6 @@ export default function AcompanhamentoProposta() {
                         <Wrench className="h-7 w-7 text-success" />
                       </div>
                     </div>
-                    
                     <div className="flex-1 min-w-0">
                       <h3 className="font-semibold text-foreground">Instalação em Andamento</h3>
                       <p className="text-sm text-muted-foreground">
@@ -875,7 +969,6 @@ export default function AcompanhamentoProposta() {
                       </p>
                     </div>
                   </div>
-                  
                   <div className="mt-4 p-3 bg-success/10 rounded-lg">
                     <p className="text-sm text-success text-center font-medium">
                       ⏱️ Tempo estimado: 30-60 minutos
@@ -886,20 +979,15 @@ export default function AcompanhamentoProposta() {
             </motion.div>
           )}
 
+          {/* Detalhes do Veículo */}
           {statusInfo.showDetails && veiculo && (
             <Card className="bg-card/80 backdrop-blur-xl border-border/50">
               <CardContent className="py-6 space-y-4">
                 <div className="flex items-center gap-3 text-foreground">
                   <Car className="h-5 w-5 text-primary" />
-                  <span className="font-medium">
-                    {veiculo.marca} {veiculo.modelo}
-                  </span>
-                  <Badge variant="secondary" className="text-xs">
-                    {veiculo.placa}
-                  </Badge>
+                  <span className="font-medium">{veiculo.marca} {veiculo.modelo}</span>
+                  <Badge variant="secondary" className="text-xs">{veiculo.placa}</Badge>
                 </div>
-
-                {/* Status das Coberturas */}
                 <div className="space-y-3 pt-2">
                   <div className="flex items-center gap-3">
                     {veiculo.cobertura_roubo_furto ? (
@@ -911,12 +999,9 @@ export default function AcompanhamentoProposta() {
                       Cobertura Roubo e Furto
                     </span>
                     {veiculo.cobertura_roubo_furto && (
-                      <Badge className="bg-success/20 text-success border-success/30 text-xs">
-                        Ativa
-                      </Badge>
+                      <Badge className="bg-success/20 text-success border-success/30 text-xs">Ativa</Badge>
                     )}
                   </div>
-
                   <div className="flex items-center gap-3">
                     {veiculo.cobertura_total ? (
                       <CheckCircle2 className="h-5 w-5 text-success" />
@@ -927,9 +1012,7 @@ export default function AcompanhamentoProposta() {
                       Proteção 360º (após instalação)
                     </span>
                     {veiculo.cobertura_total && (
-                      <Badge className="bg-success/20 text-success border-success/30 text-xs">
-                        Ativa
-                      </Badge>
+                      <Badge className="bg-success/20 text-success border-success/30 text-xs">Ativa</Badge>
                     )}
                   </div>
                 </div>
@@ -938,14 +1021,13 @@ export default function AcompanhamentoProposta() {
           )}
 
           {/* Info de Instalação */}
-          {statusInfo.showInstalacao && instalacao && (
+          {(statusInfo as any).showInstalacao && instalacao && (
             <Card className="bg-card/80 backdrop-blur-xl border-border/50">
               <CardContent className="py-6 space-y-4">
                 <div className="flex items-center gap-3 text-foreground">
                   <Wrench className="h-5 w-5 text-primary" />
                   <span className="font-medium">Instalação do Rastreador</span>
                 </div>
-
                 {instalacao.status === 'concluida' ? (
                   <div className="flex items-center gap-2">
                     <CheckCircle2 className="h-5 w-5 text-success" />
@@ -971,27 +1053,19 @@ export default function AcompanhamentoProposta() {
             </Card>
           )}
 
-          {/* Card de Assinatura da Instalação */}
-          {associado.servicoInstalacao && !assinaturaSalva && (
-            <motion.div
-              initial={{ opacity: 0, y: 20 }}
-              animate={{ opacity: 1, y: 0 }}
-              transition={{ delay: 0.35 }}
-            >
+          {/* Card de Assinatura da Instalação (SignaturePad) */}
+          {associado.servicoInstalacao && !assinaturaSalva && !(statusInfo as any).showChecklist && (
+            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
               <Card className={`border-primary/30 bg-card/80 backdrop-blur-xl ${
                 associado.servicoInstalacao.assinatura_cliente_url ? 'border-success/30' : ''
               }`}>
                 <CardContent className="py-6 space-y-4">
                   <div className="flex items-center gap-3">
                     <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      associado.servicoInstalacao.assinatura_cliente_url 
-                        ? 'bg-success/20' 
-                        : 'bg-primary/20'
+                      associado.servicoInstalacao.assinatura_cliente_url ? 'bg-success/20' : 'bg-primary/20'
                     }`}>
                       <PenTool className={`h-5 w-5 ${
-                        associado.servicoInstalacao.assinatura_cliente_url 
-                          ? 'text-success' 
-                          : 'text-primary'
+                        associado.servicoInstalacao.assinatura_cliente_url ? 'text-success' : 'text-primary'
                       }`} />
                     </div>
                     <div>
@@ -1003,7 +1077,6 @@ export default function AcompanhamentoProposta() {
                       </p>
                     </div>
                   </div>
-
                   {associado.servicoInstalacao.assinatura_cliente_url ? (
                     <div className="rounded-lg border border-success/30 bg-success/5 p-4">
                       <div className="flex items-center gap-2 text-success mb-3">
@@ -1022,10 +1095,7 @@ export default function AcompanhamentoProposta() {
                         O técnico finalizou a instalação do rastreador no seu veículo. 
                         Por favor, assine abaixo para confirmar que a instalação foi realizada.
                       </p>
-                      <SignaturePad 
-                        onSave={handleSalvarAssinatura}
-                        disabled={salvandoAssinatura}
-                      />
+                      <SignaturePad onSave={handleSalvarAssinatura} disabled={salvandoAssinatura} />
                       {salvandoAssinatura && (
                         <div className="flex items-center justify-center gap-2 text-primary">
                           <Loader2 className="h-4 w-4 animate-spin" />
@@ -1040,11 +1110,8 @@ export default function AcompanhamentoProposta() {
           )}
 
           {/* Assinatura já salva nesta sessão */}
-          {assinaturaSalva && (
-            <motion.div
-              initial={{ opacity: 0, scale: 0.95 }}
-              animate={{ opacity: 1, scale: 1 }}
-            >
+          {assinaturaSalva && !(statusInfo as any).showChecklist && (
+            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
               <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
                 <CardContent className="py-6 text-center space-y-3">
                   <div className="w-12 h-12 mx-auto rounded-full bg-success/20 flex items-center justify-center">
@@ -1057,6 +1124,213 @@ export default function AcompanhamentoProposta() {
                 </CardContent>
               </Card>
             </motion.div>
+          )}
+
+          {/* ============================================ */}
+          {/* SEÇÃO: Checklist + Avarias + Mídia + Laudo   */}
+          {/* ============================================ */}
+          {showChecklistSection && servico && (
+            <>
+              {/* Laudo Assinado Badge */}
+              {servico.laudo_assinado && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
+                  <Card className="border-success/30 bg-success/5">
+                    <CardContent className="pt-4 pb-4">
+                      <div className="flex items-center gap-3">
+                        <ShieldCheck className="h-8 w-8 text-success" />
+                        <div>
+                          <h3 className="font-semibold text-success">Laudo Assinado ✅</h3>
+                          <p className="text-xs text-muted-foreground">
+                            Assinado em {servico.laudo_assinado_em 
+                              ? new Date(servico.laudo_assinado_em).toLocaleDateString('pt-BR', { 
+                                  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
+                                })
+                              : ''}
+                          </p>
+                        </div>
+                      </div>
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* Quilometragem */}
+              {servico.quilometragem && (
+                <div className="text-center">
+                  <Badge variant="outline" className="text-xs">
+                    Quilometragem: {servico.quilometragem.toLocaleString('pt-BR')} km
+                  </Badge>
+                </div>
+              )}
+
+              {/* Checklist de Serviços */}
+              {checklistItems.length > 0 && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
+                  <Card className="bg-card/80 backdrop-blur-xl border-border/50">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center justify-between text-base">
+                        <span className="flex items-center gap-2 text-foreground">
+                          <ClipboardCheck className="h-5 w-5 text-primary" />
+                          Checklist de Serviços
+                        </span>
+                        <div className="flex gap-1.5">
+                          {itensOk > 0 && (
+                            <Badge variant="outline" className="bg-success/10 text-success border-success/30 text-xs">
+                              {itensOk} OK
+                            </Badge>
+                          )}
+                          {itensNok > 0 && (
+                            <Badge variant="outline" className="bg-destructive/10 text-destructive border-destructive/30 text-xs">
+                              {itensNok} Ressalva
+                            </Badge>
+                          )}
+                        </div>
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-2">
+                      {checklistItems.map((item) => (
+                        <div
+                          key={item.id}
+                          className="flex items-start gap-3 p-3 rounded-lg border border-border bg-muted/30"
+                        >
+                          {item.status === 'ok' ? (
+                            <CheckCircle2 className="h-5 w-5 text-success mt-0.5 shrink-0" />
+                          ) : item.status === 'nok' ? (
+                            <XCircle className="h-5 w-5 text-destructive mt-0.5 shrink-0" />
+                          ) : (
+                            <div className="h-5 w-5 rounded-full border-2 border-muted-foreground/30 mt-0.5 shrink-0" />
+                          )}
+                          <div className="flex-1 min-w-0">
+                            <p className="text-sm font-medium text-foreground">{item.label}</p>
+                            {item.observacao && (
+                              <p className="text-xs text-muted-foreground mt-1">{item.observacao}</p>
+                            )}
+                            {item.fotos && item.fotos.length > 0 && (
+                              <div className="flex gap-2 mt-2">
+                                {item.fotos.map((url, i) => (
+                                  <img
+                                    key={i}
+                                    src={url}
+                                    alt={`Evidência ${i + 1}`}
+                                    className="h-12 w-12 rounded object-cover border border-border cursor-pointer"
+                                    onClick={() => window.open(url, '_blank')}
+                                  />
+                                ))}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      ))}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* Avarias Identificadas */}
+              {(servico.ressalvas_instalador || (servico.fotos_ressalva && servico.fotos_ressalva.length > 0)) && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.4 }}>
+                  <Card className="bg-card/80 backdrop-blur-xl border-amber-500/30">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-base text-foreground">
+                        <AlertTriangle className="h-5 w-5 text-amber-500" />
+                        Avarias Identificadas
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {servico.ressalvas_instalador && (
+                        <div className="p-3 rounded-lg bg-amber-500/5 border border-amber-500/20">
+                          <p className="text-sm text-foreground whitespace-pre-wrap">{servico.ressalvas_instalador}</p>
+                        </div>
+                      )}
+                      {servico.fotos_ressalva && servico.fotos_ressalva.length > 0 && (
+                        <div>
+                          <p className="text-xs text-muted-foreground mb-2">Fotos de evidência:</p>
+                          <div className="grid grid-cols-3 gap-2">
+                            {servico.fotos_ressalva.map((url, i) => (
+                              <img
+                                key={i}
+                                src={url}
+                                alt={`Avaria ${i + 1}`}
+                                className="aspect-square rounded-lg object-cover border border-border cursor-pointer hover:opacity-90 transition-opacity"
+                                onClick={() => window.open(url, '_blank')}
+                              />
+                            ))}
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* Mídia Visual */}
+              {(fotosGaleria.length > 0 || servico.video_360_url) && (
+                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.45 }}>
+                  <Card className="bg-card/80 backdrop-blur-xl border-border/50">
+                    <CardHeader className="pb-3">
+                      <CardTitle className="flex items-center gap-2 text-base text-foreground">
+                        <Camera className="h-5 w-5 text-primary" />
+                        Registro Fotográfico
+                      </CardTitle>
+                    </CardHeader>
+                    <CardContent className="space-y-3">
+                      {fotosGaleria.length > 0 && (
+                        <div className="grid grid-cols-3 gap-2">
+                          {fotosGaleria.map((foto, i) => (
+                            <div
+                              key={i}
+                              className="relative aspect-square cursor-pointer group"
+                              onClick={() => window.open(foto.url, '_blank')}
+                            >
+                              <img
+                                src={foto.url}
+                                alt={foto.label}
+                                className="h-full w-full rounded-lg object-cover border border-border group-hover:opacity-90 transition-opacity"
+                              />
+                              <div className="absolute bottom-0 left-0 right-0 bg-black/60 rounded-b-lg px-1.5 py-1">
+                                <p className="text-[10px] text-white truncate">{foto.label}</p>
+                              </div>
+                            </div>
+                          ))}
+                        </div>
+                      )}
+
+                      {servico.video_360_url && (
+                        <div className="mt-3">
+                          <div className="flex items-center gap-2 mb-2">
+                            <Video className="h-4 w-4 text-purple-500" />
+                            <span className="text-sm font-medium text-foreground">Vídeo 360°</span>
+                            <Badge variant="outline" className="bg-purple-500/10 text-purple-500 border-purple-500/30 text-xs">
+                              <Play className="h-3 w-3 mr-1" />
+                              360°
+                            </Badge>
+                          </div>
+                          <div className="rounded-lg overflow-hidden border border-border">
+                            <video
+                              src={servico.video_360_url}
+                              controls
+                              playsInline
+                              preload="metadata"
+                              className="w-full aspect-video object-contain bg-black"
+                            >
+                              Seu navegador não suporta vídeos.
+                            </video>
+                          </div>
+                        </div>
+                      )}
+                    </CardContent>
+                  </Card>
+                </motion.div>
+              )}
+
+              {/* Disclaimer */}
+              <div className="p-3 rounded-lg bg-muted/50 border border-border">
+                <p className="text-xs text-muted-foreground text-center">
+                  Ao assinar o laudo, você confirma que está ciente de todas as atividades 
+                  e condições registradas durante a instalação do rastreador.
+                </p>
+              </div>
+            </>
           )}
 
           {/* Plano */}
@@ -1073,6 +1347,22 @@ export default function AcompanhamentoProposta() {
           )}
         </motion.div>
       </main>
+
+      {/* Botão fixo: Assinar Laudo */}
+      {showChecklistSection && servico && !servico.laudo_assinado && servico.laudo_autentique_url && (
+        <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-lg border-t border-border p-4 shadow-lg z-20">
+          <div className="max-w-2xl mx-auto">
+            <Button
+              className="w-full h-12 text-base font-semibold gap-2"
+              onClick={() => window.open(servico.laudo_autentique_url!, '_blank')}
+            >
+              <FileText className="h-5 w-5" />
+              Assinar Laudo de Instalação
+              <ExternalLink className="h-4 w-4" />
+            </Button>
+          </div>
+        </div>
+      )}
 
       {/* Footer */}
       <footer className="border-t border-border/30 mt-auto relative z-10 bg-card/30 backdrop-blur-sm">

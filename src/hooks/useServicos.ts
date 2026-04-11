@@ -1187,7 +1187,7 @@ export function useAprovarVeiculoServico() {
                   .single();
 
                 if (contratoLink?.link_token) {
-                  checklistLink = `${window.location.origin}/checklist-instalacao/${contratoLink.link_token}`;
+                  checklistLink = `${window.location.origin}/acompanhar/${contratoLink.link_token}`;
                 }
               }
 
