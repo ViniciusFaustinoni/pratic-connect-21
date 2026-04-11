@@ -74,6 +74,7 @@ export default function CotacaoContratacao() {
     associadoId,
     associadoStatus,
     contratoLinkToken,
+    contratoFallback,
     docsPendentes,
     refetch,
     refetchDocs,
@@ -472,6 +473,13 @@ export default function CotacaoContratacao() {
                     clienteEmail={cotacao.email_solicitante || ''}
                     onContratoAssinado={() => setEtapaAtual(3)}
                     readOnly={isEtapaConcluida(2)}
+                    contratoInicial={contratoFallback ? {
+                      id: contratoFallback.id,
+                      numero: (contratoFallback as any).numero,
+                      autentique_url: (contratoFallback as any).autentique_url,
+                      autentique_documento_id: (contratoFallback as any).autentique_documento_id,
+                      status: (contratoFallback as any).status,
+                    } : undefined}
                   />
                   <NavegacaoEtapas
                     etapaAtual={etapaAtual}

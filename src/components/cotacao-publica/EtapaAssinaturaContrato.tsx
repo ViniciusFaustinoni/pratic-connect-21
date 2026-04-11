@@ -1,4 +1,4 @@
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { FileSignature, Loader2, AlertCircle, ExternalLink, RefreshCw, CheckCircle2, Shield, Clock, Mail, MousePointer, PenTool, ArrowRight, Copy, Check } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
@@ -12,22 +12,22 @@ import { Separator } from '@/components/ui/separator';
 
 interface EtapaAssinaturaContratoProps {
   cotacaoId: string;
-  tokenPublico: string; // Necessário para satisfazer RLS
+  tokenPublico: string;
   clienteNome: string;
   clienteEmail: string;
   onContratoAssinado: () => void;
   readOnly?: boolean;
+  // Dados iniciais do contrato (vindos do hook pai)
+  contratoInicial?: {
+    id: string;
+    numero?: string;
+    autentique_url?: string;
+    autentique_documento_id?: string;
+    status?: string;
+  } | null;
 }
 
 type EtapaInterna = 'coletar_email' | 'verificando' | 'gerando_contrato' | 'enviando_autentique' | 'aguardando_assinatura' | 'assinado' | 'erro';
-
-interface ContratoInfo {
-  id: string;
-  numero: string;
-  autentiqueDocumentoId?: string;
-  linkAssinatura?: string;
-  status?: string;
-}
 
 function CopyLinkButton({ link }: { link: string }) {
   const [copied, setCopied] = useState(false);
@@ -56,31 +56,57 @@ export function EtapaAssinaturaContrato({
   clienteEmail,
   onContratoAssinado,
   readOnly = false,
+  contratoInicial,
 }: EtapaAssinaturaContratoProps) {
+  // ═══ ESTADOS ATÔMICOS INDEPENDENTES ═══
+  const [contratoId, setContratoId] = useState<string | null>(contratoInicial?.id || null);
+  const [contratoNumero, setContratoNumero] = useState<string | null>(contratoInicial?.numero || null);
+  const [linkAssinatura, setLinkAssinatura] = useState<string | null>(contratoInicial?.autentique_url || null);
+  const [autentiqueDocId, setAutentiqueDocId] = useState<string | null>(contratoInicial?.autentique_documento_id || null);
+  const [statusContrato, setStatusContrato] = useState<string | null>(contratoInicial?.status || null);
+
   const [etapaInterna, setEtapaInterna] = useState<EtapaInterna>(
     !clienteEmail ? 'coletar_email' : 'verificando'
   );
-  const [contrato, setContrato] = useState<ContratoInfo | null>(null);
   const [erro, setErro] = useState<string | null>(null);
   const [verificando, setVerificando] = useState(false);
   const [emailLocal, setEmailLocal] = useState(clienteEmail || '');
   const [emailEfetivo, setEmailEfetivo] = useState(clienteEmail || '');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
   const [linkTimeout, setLinkTimeout] = useState(false);
-  const [linkAssinatura, setLinkAssinatura] = useState<string | null>(null);
-  const linkEfetivo = linkAssinatura || contrato?.linkAssinatura || null;
 
-  // Flag para evitar chamadas duplicadas em re-render
-  const [inicializado, setInicializado] = useState(!clienteEmail ? true : false);
+  // ═══ REFS DE TRAVA — impedir dupla execução ═══
+  const initRef = useRef(false);
+  const processingRef = useRef(false);
+  const sendingRef = useRef(false);
 
-  // 1. Verificar/gerar contrato
+  // Se já temos dados iniciais suficientes, pular para o estado correto
+  useEffect(() => {
+    if (!contratoInicial) return;
+    if (contratoInicial.status === 'assinado' || contratoInicial.status === 'ativo') {
+      setEtapaInterna('assinado');
+      onContratoAssinado();
+      return;
+    }
+    if (contratoInicial.autentique_url) {
+      setLinkAssinatura(contratoInicial.autentique_url);
+      setEtapaInterna('aguardando_assinatura');
+    }
+  }, []); // só na montagem
+
+  // ═══ 1. Verificar/gerar contrato ═══
   const verificarOuGerarContrato = useCallback(async () => {
+    if (processingRef.current) {
+      console.log('[EtapaAssinatura] Já processando, ignorando chamada duplicada');
+      return null;
+    }
+    processingRef.current = true;
+
     try {
       setEtapaInterna('verificando');
       setErro(null);
       console.log('[EtapaAssinatura] Verificando contrato para cotação:', cotacaoId);
 
-      // Buscar cotação com contrato vinculado (incluir token_publico para satisfazer RLS)
       const { data: cotacao, error: cotacaoError } = await publicSupabase
         .from('cotacoes')
         .select('contrato_gerado_id')
@@ -88,36 +114,26 @@ export function EtapaAssinaturaContrato({
         .eq('token_publico', tokenPublico)
         .maybeSingle();
 
-      if (cotacaoError) {
-        console.error('[EtapaAssinatura] Erro ao buscar cotação:', cotacaoError);
-        throw cotacaoError;
-      }
-      
-      if (!cotacao) {
-        throw new Error('Cotação não encontrada ou acesso negado');
-      }
+      if (cotacaoError) throw cotacaoError;
+      if (!cotacao) throw new Error('Cotação não encontrada ou acesso negado');
 
-      // ═══ NOVO: Buscar TODOS os contratos da cotação para priorizar assinado ═══
+      // Buscar TODOS os contratos da cotação
       const { data: todosContratos } = await publicSupabase
         .from('contratos')
         .select('id, numero, autentique_documento_id, autentique_url, status')
         .eq('cotacao_id', cotacaoId)
         .order('created_at', { ascending: false });
 
-      // Priorizar contrato assinado/ativo
       const contratoAssinado = todosContratos?.find(
         (c: any) => c.status === 'assinado' || c.status === 'ativo'
       );
-      
-      let contratoId = cotacao?.contrato_gerado_id;
-      let contratoData = contratoAssinado || todosContratos?.find((c: any) => c.id === contratoId) || todosContratos?.[0];
 
-      // Se encontrou um contrato assinado que não é o vinculado, corrigir
-      if (contratoAssinado && contratoAssinado.id !== contratoId) {
-        console.log('[EtapaAssinatura] Corrigindo: cotação aponta para contrato errado. Assinado:', contratoAssinado.id);
-        contratoId = contratoAssinado.id;
+      let cId = cotacao?.contrato_gerado_id;
+      let contratoData = contratoAssinado || todosContratos?.find((c: any) => c.id === cId) || todosContratos?.[0];
+
+      if (contratoAssinado && contratoAssinado.id !== cId) {
+        cId = contratoAssinado.id;
         contratoData = contratoAssinado;
-        // Corrigir na base
         await publicSupabase
           .from('cotacoes')
           .update({ contrato_gerado_id: contratoAssinado.id, status_contratacao: 'contrato_assinado' })
@@ -125,26 +141,26 @@ export function EtapaAssinaturaContrato({
           .eq('token_publico', tokenPublico);
       }
 
-      // Se já existe contrato, processar
       if (contratoData) {
         console.log('[EtapaAssinatura] Contrato encontrado:', contratoData.id, 'status:', contratoData.status);
+        
+        // Atualizar estados atômicos imediatamente
+        setContratoId(contratoData.id);
+        setContratoNumero(contratoData.numero);
+        setStatusContrato(contratoData.status);
 
-        // Se já foi assinado, ir direto para próxima etapa
         if (contratoData.status === 'assinado' || contratoData.status === 'ativo') {
-          console.log('[EtapaAssinatura] Contrato já assinado!');
-          setContrato({
-            id: contratoData.id,
-            numero: contratoData.numero,
-            autentiqueDocumentoId: contratoData.autentique_documento_id || undefined,
-            status: contratoData.status,
-          });
           setEtapaInterna('assinado');
           onContratoAssinado();
+          processingRef.current = false;
           return contratoData.id;
         }
 
-        // Se já tem link do Autentique, ir para aguardar
         if (contratoData.autentique_url) {
+          setLinkAssinatura(contratoData.autentique_url);
+          setAutentiqueDocId(contratoData.autentique_documento_id || null);
+          setEtapaInterna('aguardando_assinatura');
+          
           await publicSupabase
             .from('cotacoes')
             .update({ status_contratacao: 'documentos_ok' })
@@ -152,28 +168,14 @@ export function EtapaAssinaturaContrato({
             .eq('token_publico', tokenPublico)
             .in('status_contratacao', ['dados_preenchidos']);
 
-          setLinkAssinatura(contratoData.autentique_url);
-          setContrato({
-            id: contratoData.id,
-            numero: contratoData.numero,
-            autentiqueDocumentoId: contratoData.autentique_documento_id || undefined,
-            linkAssinatura: contratoData.autentique_url,
-            status: contratoData.status,
-          });
-          setEtapaInterna('aguardando_assinatura');
+          processingRef.current = false;
           return contratoData.id;
         }
 
-        contratoId = contratoData.id;
-        setContrato({
-          id: contratoData.id,
-          numero: contratoData.numero,
-          status: contratoData.status,
-        });
+        cId = contratoData.id;
       }
-      
-      if (!contratoId) {
-        // Gerar contrato (idempotente via edge function)
+
+      if (!cId) {
         setEtapaInterna('gerando_contrato');
         console.log('[EtapaAssinatura] Gerando novo contrato...');
 
@@ -184,60 +186,58 @@ export function EtapaAssinaturaContrato({
         if (error) throw error;
         if (!data?.success) throw new Error(data?.error || 'Erro ao gerar contrato');
 
-        contratoId = data.contrato.id;
-        console.log('[EtapaAssinatura] Contrato gerado:', data.contrato.numero);
+        cId = data.contrato.id;
+        setContratoId(data.contrato.id);
+        setContratoNumero(data.contrato.numero);
+        setStatusContrato(data.contrato.status);
 
         await publicSupabase
           .from('cotacoes')
-          .update({ contrato_gerado_id: contratoId, status_contratacao: 'documentos_ok' })
+          .update({ contrato_gerado_id: cId, status_contratacao: 'documentos_ok' })
           .eq('id', cotacaoId);
-
-        setContrato({
-          id: data.contrato.id,
-          numero: data.contrato.numero,
-          status: data.contrato.status,
-        });
       }
 
-      // Enviar para Autentique
-      await enviarParaAutentique(contratoId);
-      return contratoId;
+      await enviarParaAutentique(cId!);
+      processingRef.current = false;
+      return cId;
     } catch (error: any) {
       console.error('[EtapaAssinatura] Erro:', error);
       setErro(error.message || 'Erro ao processar contrato');
       setEtapaInterna('erro');
+      processingRef.current = false;
       return null;
     }
-  }, [cotacaoId, onContratoAssinado]);
+  }, [cotacaoId, tokenPublico, onContratoAssinado]);
 
-  // 2. Enviar contrato para Autentique
-  const enviarParaAutentique = async (contratoId: string) => {
+  // ═══ 2. Enviar para Autentique ═══
+  const enviarParaAutentique = async (cId: string) => {
+    if (sendingRef.current) {
+      console.log('[EtapaAssinatura] Já enviando para Autentique, ignorando');
+      return;
+    }
+    sendingRef.current = true;
+
     try {
       setEtapaInterna('enviando_autentique');
       console.log('[EtapaAssinatura] Enviando para Autentique...');
 
-      // Buscar contrato atualizado para verificar se já foi enviado
+      // Verificar se já tem link
       const { data: contratoData } = await publicSupabase
         .from('contratos')
         .select('autentique_url, autentique_documento_id')
-        .eq('id', contratoId)
+        .eq('id', cId)
         .maybeSingle();
 
-      // Se já tem link, usar ele
       if (contratoData?.autentique_url) {
         setLinkAssinatura(contratoData.autentique_url);
-        setContrato(prev => prev ? {
-          ...prev,
-          linkAssinatura: contratoData.autentique_url || undefined,
-          autentiqueDocumentoId: contratoData.autentique_documento_id || undefined,
-        } : null);
+        setAutentiqueDocId(contratoData.autentique_documento_id || null);
         setEtapaInterna('aguardando_assinatura');
+        sendingRef.current = false;
         return;
       }
 
-      // Chamar edge function para criar documento no Autentique usando o ID do contrato
       const { data, error } = await publicSupabase.functions.invoke('autentique-create', {
-        body: { contrato_id: contratoId },
+        body: { contrato_id: cId },
       });
 
       if (error) throw error;
@@ -246,171 +246,210 @@ export function EtapaAssinaturaContrato({
       console.log('[EtapaAssinatura] Enviado para Autentique:', data);
 
       const linkResp = data.signatureLink || data.link_assinatura || data.autentique_url;
-      if (linkResp) setLinkAssinatura(linkResp);
-
-      setContrato(prev => prev ? {
-        ...prev,
-        linkAssinatura: linkResp,
-        autentiqueDocumentoId: data.documentId || data.autentique_documento_id,
-      } : null);
+      if (linkResp) {
+        setLinkAssinatura(linkResp);
+      }
+      if (data.documentId || data.autentique_documento_id) {
+        setAutentiqueDocId(data.documentId || data.autentique_documento_id);
+      }
 
       setEtapaInterna('aguardando_assinatura');
-
-      // O polling leve dedicado (useEffect abaixo) cuidará de buscar o link do banco
     } catch (error: any) {
       console.error('[EtapaAssinatura] Erro no Autentique:', error);
       setErro(error.message || 'Erro ao enviar para assinatura digital');
       setEtapaInterna('erro');
+    } finally {
+      sendingRef.current = false;
     }
   };
 
-  // 3. Inicializar fluxo (proteger contra múltiplas chamadas)
+  // ═══ 3. Inicializar (uma única vez) ═══
   useEffect(() => {
-    if (!inicializado) {
-      setInicializado(true);
-      verificarOuGerarContrato();
-    }
-  }, [inicializado, verificarOuGerarContrato]);
+    if (initRef.current) return;
+    if (etapaInterna !== 'verificando') return; // esperar email se necessário
+    
+    // Se já temos link do contratoInicial, não precisa verificar
+    if (contratoInicial?.autentique_url) return;
+    // Se já temos contrato assinado, não precisa verificar
+    if (contratoInicial?.status === 'assinado' || contratoInicial?.status === 'ativo') return;
 
-  // 4. Polling leve dedicado para capturar o link de assinatura rapidamente
+    initRef.current = true;
+    verificarOuGerarContrato();
+  }, [etapaInterna, verificarOuGerarContrato, contratoInicial]);
+
+  // ═══ 4. REALTIME: Escutar mudanças no contrato ═══
   useEffect(() => {
-    if (etapaInterna !== 'aguardando_assinatura' || !contrato?.id || linkEfetivo) return;
+    if (!contratoId) return;
+
+    console.log('[EtapaAssinatura] Abrindo realtime para contrato:', contratoId);
+    
+    const channel = publicSupabase
+      .channel(`contrato-assinatura-${contratoId}`)
+      .on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'contratos',
+          filter: `id=eq.${contratoId}`,
+        },
+        (payload) => {
+          const newData = payload.new as any;
+          console.log('[EtapaAssinatura] Realtime update:', newData.status, 'url:', !!newData.autentique_url);
+
+          // Atualizar link imediatamente
+          if (newData.autentique_url && !linkAssinatura) {
+            console.log('[EtapaAssinatura] ✅ Link recebido via realtime!');
+            setLinkAssinatura(newData.autentique_url);
+            setLinkTimeout(false);
+          }
+
+          if (newData.autentique_documento_id) {
+            setAutentiqueDocId(newData.autentique_documento_id);
+          }
+
+          // Detectar assinatura
+          if (newData.status === 'assinado' || newData.status === 'ativo') {
+            console.log('[EtapaAssinatura] ✅ Contrato assinado via realtime!');
+            setStatusContrato(newData.status);
+            toast.success('Contrato assinado com sucesso!');
+            
+            publicSupabase
+              .from('cotacoes')
+              .update({ status_contratacao: 'contrato_assinado' })
+              .eq('id', cotacaoId);
+
+            setEtapaInterna('assinado');
+            onContratoAssinado();
+          }
+        }
+      )
+      .subscribe((status) => {
+        console.log('[EtapaAssinatura] Realtime status:', status);
+      });
+
+    return () => {
+      console.log('[EtapaAssinatura] Removendo realtime');
+      publicSupabase.removeChannel(channel);
+    };
+  }, [contratoId, cotacaoId, onContratoAssinado]); // linkAssinatura removido intencionalmente
+
+  // ═══ 5. Polling FALLBACK para link (3s) — só quando realtime não entregou ═══
+  useEffect(() => {
+    if (etapaInterna !== 'aguardando_assinatura' || !contratoId || linkAssinatura) return;
 
     const buscarLink = async () => {
       try {
         const { data } = await publicSupabase
           .from('contratos')
           .select('autentique_url')
-          .eq('id', contrato.id)
+          .eq('id', contratoId)
           .maybeSingle();
+        
+        console.log('[EtapaAssinatura] Polling link result:', data?.autentique_url ? 'FOUND' : 'null');
+        
         if (data?.autentique_url) {
-          console.log('[EtapaAssinatura] Link encontrado via polling leve:', data.autentique_url);
           setLinkAssinatura(data.autentique_url);
+          setLinkTimeout(false);
         }
       } catch (e) {
-        console.error('[EtapaAssinatura] Erro ao buscar link:', e);
+        console.error('[EtapaAssinatura] Erro polling link:', e);
       }
     };
 
-    buscarLink(); // imediato
+    buscarLink();
     const interval = setInterval(buscarLink, 3000);
     return () => clearInterval(interval);
-  }, [etapaInterna, contrato?.id, linkEfetivo]);
+  }, [etapaInterna, contratoId, linkAssinatura]);
 
-  // 4b. Timeout para link — após 30s sem link, mostrar botão de retry
+  // ═══ 5b. Timeout para link ═══
   useEffect(() => {
-    if (etapaInterna !== 'aguardando_assinatura' || linkEfetivo) {
+    if (etapaInterna !== 'aguardando_assinatura' || linkAssinatura) {
       setLinkTimeout(false);
       return;
     }
     const timeout = setTimeout(() => setLinkTimeout(true), 90000);
     return () => clearTimeout(timeout);
-  }, [etapaInterna, linkEfetivo]);
+  }, [etapaInterna, linkAssinatura]);
 
-  // 5. Polling para verificar status da assinatura (após link disponível)
+  // ═══ 6. Polling FALLBACK para status (15s) ═══
   useEffect(() => {
-    if (etapaInterna !== 'aguardando_assinatura' || !contrato?.id) return;
+    if (etapaInterna !== 'aguardando_assinatura' || !contratoId) return;
 
     const verificarAssinatura = async () => {
       try {
-        // Sincronizar status com Autentique
         const { data: syncResult } = await publicSupabase.functions.invoke('autentique-sync-contrato', {
-          body: { contratoId: contrato.id },
+          body: { contratoId },
         });
 
-        console.log('[EtapaAssinatura] Polling sync result:', syncResult);
+        console.log('[EtapaAssinatura] Polling sync:', syncResult?.status);
 
-        // Atualizar link se recuperado pelo sync mas ausente no estado local
-        if (syncResult?.autentique_url && !linkEfetivo) {
-          console.log('[EtapaAssinatura] Link recuperado via sync:', syncResult.autentique_url);
+        if (syncResult?.autentique_url && !linkAssinatura) {
           setLinkAssinatura(syncResult.autentique_url);
           setLinkTimeout(false);
         }
 
-        // Verificar resposta da sync diretamente (campo 'status')
         if (syncResult?.status === 'assinado') {
-          console.log('[EtapaAssinatura] Contrato assinado detectado via sync!');
           toast.success('Contrato assinado com sucesso!');
-          
-          // Atualizar status da cotação
           await publicSupabase
             .from('cotacoes')
             .update({ status_contratacao: 'contrato_assinado' })
             .eq('id', cotacaoId);
-
           setEtapaInterna('assinado');
           onContratoAssinado();
           return;
         }
 
-        // Fallback: verificar diretamente no banco
-        const { data, error } = await publicSupabase
+        // Fallback direto no banco
+        const { data } = await publicSupabase
           .from('contratos')
           .select('status, autentique_url')
-          .eq('id', contrato.id)
+          .eq('id', contratoId)
           .maybeSingle();
 
-        if (error || !data) return;
-
-        // Atualizar link se encontrado no banco mas ausente no estado local
-        if (data?.autentique_url && !linkEfetivo) {
-          console.log('[EtapaAssinatura] Link recuperado via banco:', data.autentique_url);
+        if (data?.autentique_url && !linkAssinatura) {
           setLinkAssinatura(data.autentique_url);
           setLinkTimeout(false);
         }
 
         if (data?.status === 'assinado' || data?.status === 'ativo') {
-          console.log('[EtapaAssinatura] Contrato assinado detectado via banco!');
           toast.success('Contrato assinado com sucesso!');
-          
           await publicSupabase
             .from('cotacoes')
             .update({ status_contratacao: 'contrato_assinado' })
             .eq('id', cotacaoId);
-
           setEtapaInterna('assinado');
           onContratoAssinado();
         }
       } catch (error) {
-        console.error('[EtapaAssinatura] Erro no polling:', error);
+        console.error('[EtapaAssinatura] Erro polling status:', error);
       }
     };
 
-    // Verificar imediatamente e depois a cada 15 segundos
     verificarAssinatura();
     const interval = setInterval(verificarAssinatura, 15000);
-
     return () => clearInterval(interval);
-  }, [etapaInterna, contrato?.id, linkEfetivo, cotacaoId, onContratoAssinado]);
+  }, [etapaInterna, contratoId, cotacaoId, onContratoAssinado]);
 
-  // Verificar manualmente
+  // ═══ Verificar manualmente ═══
   const verificarManualmente = async () => {
-    if (!contrato?.id) return;
-
+    if (!contratoId) return;
     try {
       setVerificando(true);
-
-      // Sincronizar com Autentique
       const { data: syncResult } = await publicSupabase.functions.invoke('autentique-sync-contrato', {
-        body: { contratoId: contrato.id },
+        body: { contratoId },
       });
 
-      console.log('[EtapaAssinatura] Resultado sync manual:', syncResult);
-
-      // Atualizar link se veio na sync
-      if (syncResult?.autentique_url && !linkEfetivo) {
+      if (syncResult?.autentique_url && !linkAssinatura) {
         setLinkAssinatura(syncResult.autentique_url);
       }
 
-      // CORRIGIDO: Verificar campo 'status' em vez de 'novoStatus'
       if (syncResult?.status === 'assinado') {
         toast.success('Contrato assinado com sucesso!');
-        
         await publicSupabase
           .from('cotacoes')
           .update({ status_contratacao: 'contrato_assinado' })
           .eq('id', cotacaoId);
-
         setEtapaInterna('assinado');
         onContratoAssinado();
       } else if (syncResult?.status === 'rejeitado') {
@@ -426,13 +465,15 @@ export function EtapaAssinaturaContrato({
     }
   };
 
-  // Tentar novamente
   const tentarNovamente = () => {
     setErro(null);
-    verificarOuGerarContrato();
+    processingRef.current = false;
+    sendingRef.current = false;
+    initRef.current = false;
+    setEtapaInterna('verificando');
   };
 
-  // Salvar email coletado e iniciar fluxo
+  // Salvar email e iniciar
   const handleSalvarEmail = async () => {
     const emailRegex = /^[^\s@]+@[^\s@]+\.[^\s@]+$/;
     if (!emailRegex.test(emailLocal)) {
@@ -447,14 +488,19 @@ export function EtapaAssinaturaContrato({
         .eq('id', cotacaoId)
         .eq('token_publico', tokenPublico);
       setEmailEfetivo(emailLocal);
+      initRef.current = false;
+      processingRef.current = false;
       setEtapaInterna('verificando');
-      verificarOuGerarContrato();
     } catch (e: any) {
       toast.error('Erro ao salvar email');
     } finally {
       setSalvandoEmail(false);
     }
   };
+
+  // ═══════════════════════════════════════════════
+  // RENDER
+  // ═══════════════════════════════════════════════
 
   // Tela de coleta de email
   if (etapaInterna === 'coletar_email') {
@@ -571,9 +617,9 @@ export function EtapaAssinaturaContrato({
             <p className="text-muted-foreground mb-4">
               Seu contrato foi assinado digitalmente com sucesso.
             </p>
-            {contrato?.numero && (
+            {contratoNumero && (
               <Badge variant="outline" className="text-lg px-4 py-1 border-success/30 text-success">
-                {contrato.numero}
+                {contratoNumero}
               </Badge>
             )}
           </motion.div>
@@ -596,7 +642,7 @@ export function EtapaAssinaturaContrato({
           </div>
           <CardTitle className="text-xl">Assinatura Digital do Contrato</CardTitle>
           <CardDescription>
-            Contrato {contrato?.numero && <span className="font-medium text-foreground">{contrato.numero}</span>}
+            Contrato {contratoNumero && <span className="font-medium text-foreground">{contratoNumero}</span>}
           </CardDescription>
         </CardHeader>
 
@@ -621,13 +667,7 @@ export function EtapaAssinaturaContrato({
             </h4>
             
             <div className="space-y-4">
-              {/* Passo 1 */}
-              <motion.div 
-                className="flex items-start gap-3"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.1 }}
-              >
+              <motion.div className="flex items-start gap-3" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.1 }}>
                 <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <span className="text-xs font-bold text-primary">1</span>
                 </div>
@@ -639,13 +679,7 @@ export function EtapaAssinaturaContrato({
                 </div>
               </motion.div>
 
-              {/* Passo 2 */}
-              <motion.div 
-                className="flex items-start gap-3"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.2 }}
-              >
+              <motion.div className="flex items-start gap-3" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.2 }}>
                 <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <span className="text-xs font-bold text-primary">2</span>
                 </div>
@@ -657,13 +691,7 @@ export function EtapaAssinaturaContrato({
                 </div>
               </motion.div>
 
-              {/* Passo 3 */}
-              <motion.div 
-                className="flex items-start gap-3"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.3 }}
-              >
+              <motion.div className="flex items-start gap-3" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.3 }}>
                 <div className="w-7 h-7 rounded-full bg-primary/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <span className="text-xs font-bold text-primary">3</span>
                 </div>
@@ -675,13 +703,7 @@ export function EtapaAssinaturaContrato({
                 </div>
               </motion.div>
 
-              {/* Passo 4 */}
-              <motion.div 
-                className="flex items-start gap-3"
-                initial={{ opacity: 0, x: -10 }}
-                animate={{ opacity: 1, x: 0 }}
-                transition={{ delay: 0.4 }}
-              >
+              <motion.div className="flex items-start gap-3" initial={{ opacity: 0, x: -10 }} animate={{ opacity: 1, x: 0 }} transition={{ delay: 0.4 }}>
                 <div className="w-7 h-7 rounded-full bg-success/20 flex items-center justify-center flex-shrink-0 mt-0.5">
                   <CheckCircle2 className="h-3.5 w-3.5 text-success" />
                 </div>
@@ -698,7 +720,7 @@ export function EtapaAssinaturaContrato({
           <Separator className="my-2" />
 
           {/* Botão de assinatura direta ou loading */}
-          {linkEfetivo ? (
+          {linkAssinatura ? (
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -712,13 +734,13 @@ export function EtapaAssinaturaContrato({
                 className="w-full h-14 text-lg gap-3" 
                 asChild
               >
-                <a href={linkEfetivo} target="_blank" rel="noopener noreferrer">
+                <a href={linkAssinatura} target="_blank" rel="noopener noreferrer">
                   <FileSignature className="h-5 w-5" />
                   Assinar Contrato Agora
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </Button>
-              <CopyLinkButton link={linkEfetivo} />
+              <CopyLinkButton link={linkAssinatura} />
             </motion.div>
           ) : (
             <motion.div
@@ -737,7 +759,8 @@ export function EtapaAssinaturaContrato({
                     size="sm"
                     onClick={() => {
                       setLinkTimeout(false);
-                      if (contrato?.id) enviarParaAutentique(contrato.id);
+                      sendingRef.current = false;
+                      if (contratoId) enviarParaAutentique(contratoId);
                     }}
                   >
                     <RefreshCw className="h-4 w-4 mr-2" />

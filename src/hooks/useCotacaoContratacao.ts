@@ -131,7 +131,6 @@ export function useCotacaoContratacao(token: string | undefined) {
       
       console.log('[CotacaoContratacao] Buscando contrato via cotacao_token_publico...');
       
-      // Buscar TODOS os contratos para priorizar assinado/ativo
       const { data: contratos, error } = await publicSupabase
         .from('contratos')
         .select(`
@@ -139,6 +138,9 @@ export function useCotacaoContratacao(token: string | undefined) {
           associado_id,
           link_token,
           status,
+          numero,
+          autentique_url,
+          autentique_documento_id,
           associados:associados!fk_contratos_associado(
             id,
             status
@@ -154,11 +156,10 @@ export function useCotacaoContratacao(token: string | undefined) {
       
       if (!contratos || contratos.length === 0) return null;
       
-      // Priorizar contrato assinado/ativo sobre pendente
       const contratoAssinado = contratos.find((c: any) => c.status === 'assinado' || c.status === 'ativo');
       const result = contratoAssinado || contratos[0];
       
-      console.log('[CotacaoContratacao] Contrato fallback:', result?.id, 'status:', result?.status, 'link_token:', result?.link_token);
+      console.log('[CotacaoContratacao] Contrato fallback:', result?.id, 'status:', result?.status, 'url:', !!(result as any)?.autentique_url);
       return result;
     },
     enabled: !!token,
@@ -283,6 +284,24 @@ export function useCotacaoContratacao(token: string | undefined) {
           
           // Forçar refetch imediato (não apenas invalidar) para garantir atualização instantânea
           await queryClient.refetchQueries({ queryKey: ['contrato-publico-fallback', token] });
+          refetch();
+        }
+      );
+    }
+
+    // 5. Subscrição para contratos (detecta autentique_url, status assinado)
+    if (cotacao?.id) {
+      channel = channel.on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'contratos',
+          filter: `cotacao_id=eq.${cotacao.id}`,
+        },
+        (payload) => {
+          console.log('[CotacaoContratacao] Realtime: contrato atualizado:', payload);
+          queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
           refetch();
         }
       );
@@ -612,6 +631,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     associadoId,
     associadoStatus,
     contratoLinkToken,
+    contratoFallback,
     docsPendentes: docsPendentes || [],
     refetch,
     refetchDocs,
