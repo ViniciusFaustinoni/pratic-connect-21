@@ -67,6 +67,8 @@ export function EtapaAssinaturaContrato({
   const [emailEfetivo, setEmailEfetivo] = useState(clienteEmail || '');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
   const [linkTimeout, setLinkTimeout] = useState(false);
+  const [linkAssinatura, setLinkAssinatura] = useState<string | null>(null);
+  const linkEfetivo = linkAssinatura || contrato?.linkAssinatura || null;
 
   // Flag para evitar chamadas duplicadas em re-render
   const [inicializado, setInicializado] = useState(!clienteEmail ? true : false);
