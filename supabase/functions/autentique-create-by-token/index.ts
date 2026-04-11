@@ -599,6 +599,8 @@ serve(async (req) => {
       for (let t = 9; t < 11; t++) { let d = 0; for (let c = 0; c < t; c++) d += parseInt(cpfRaw[c]) * ((t+1)-c); d = ((10*d)%11)%10; if (parseInt(cpfRaw[t]) !== d) return false; } return true;
     })();
     console.log(`[autentique-create-by-token] CPF: ${cpfRaw} (válido: ${cpfOk})`);
+    // Sanitização final de blocos de assinatura manual no HTML completo (antes de estimar páginas)
+    contratoHTML = sanitizeSignatureBlocks(contratoHTML);
     // Estimar páginas reais do HTML para posicionar SIGNATURE na última página
     const posConfig = await buscarPosicoesConfig(supabase);
     const paginasEstimadas = estimarPaginasHTML(contratoHTML);
