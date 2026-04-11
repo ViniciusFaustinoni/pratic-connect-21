@@ -1099,7 +1099,6 @@ export default function AcompanhamentoProposta() {
           {/* ============================================ */}
           {showChecklistSection && servico && (
             <>
-              )}
 
               {/* Quilometragem */}
               {servico.quilometragem && (
