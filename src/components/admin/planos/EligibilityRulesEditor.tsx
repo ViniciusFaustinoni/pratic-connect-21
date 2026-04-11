@@ -217,6 +217,7 @@ function AddRuleDialog({
   const { data: categoriasEspeciais = [] } = useCategoriasVeiculo();
   const { data: tiposUso = [] } = useConfiguracaoJson<{ value: string; label: string }[]>('tipos_uso', []);
   const { data: combustiveis = [] } = useCombustiveis();
+  const { data: tiposPlaca = [] } = useConfiguracaoJson<{ value: string; label: string; ativo?: boolean }[]>('tipos_placa', []);
   const { data: regioes = [] } = useRegioes();
 
   const handleSave = async () => {
@@ -397,6 +398,23 @@ function AddRuleDialog({
                       onCheckedChange={() => toggleArrayItem('combustiveis', c.value)}
                     />
                     {c.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
+          {ruleType === 'tipo_placa' && (
+            <div className="space-y-2">
+              <Label className="text-xs">Tipos de Placa</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {tiposPlaca.filter(t => t.ativo !== false).map((t) => (
+                  <label key={t.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={(config.values || []).includes(t.value)}
+                      onCheckedChange={() => toggleArrayItem('values', t.value)}
+                    />
+                    {t.label}
                   </label>
                 ))}
               </div>
