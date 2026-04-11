@@ -32,7 +32,7 @@ import {
   Play
 } from 'lucide-react';
 import { useQuery, useQueryClient } from '@tanstack/react-query';
-import { publicSupabase } from '@/integrations/supabase/publicClient';
+import { publicSupabase as supabase } from '@/integrations/supabase/publicClient';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import { motion } from 'framer-motion';
