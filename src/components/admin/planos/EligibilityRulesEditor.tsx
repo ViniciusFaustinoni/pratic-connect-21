@@ -217,6 +217,7 @@ function AddRuleDialog({
   const { data: categoriasEspeciais = [] } = useCategoriasVeiculo();
   const { data: tiposUso = [] } = useConfiguracaoJson<{ value: string; label: string }[]>('tipos_uso', []);
   const { data: combustiveis = [] } = useCombustiveis();
+  const { data: tiposPlaca = [] } = useConfiguracaoJson<{ value: string; label: string; ativo?: boolean }[]>('tipos_placa', []);
   const { data: regioes = [] } = useRegioes();
 
   const handleSave = async () => {
