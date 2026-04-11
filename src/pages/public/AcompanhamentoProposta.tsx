@@ -451,6 +451,22 @@ function getStatusInfo(associado: AssociadoData) {
     };
   }
 
+  // Pendente vistoria
+  if (associado.status === 'pendente_vistoria') {
+    return {
+      status: 'pendente_vistoria',
+      icon: Camera,
+      color: 'warning',
+      title: 'Aguardando Vistoria',
+      description: 'Sua proposta foi recebida! Aguardando a realização da vistoria do veículo.',
+      showDetails: true,
+      showCriarConta: false,
+      showEmRota: false,
+      showEmAndamento: false,
+      showAtribuidaRota: false,
+    };
+  }
+
   // Aguardando instalação
   if (associado.status === 'aguardando_instalacao') {
     return {
