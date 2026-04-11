@@ -248,12 +248,16 @@ export function EtapaAssinaturaContrato({
       const linkResp = data.signatureLink || data.link_assinatura || data.autentique_url;
       if (linkResp) {
         setLinkAssinatura(linkResp);
+        setEtapaInterna('aguardando_assinatura');
       }
       if (data.documentId || data.autentique_documento_id) {
         setAutentiqueDocId(data.documentId || data.autentique_documento_id);
       }
 
-      setEtapaInterna('aguardando_assinatura');
+      // Se não temos link ainda, ficamos em 'enviando_autentique' até o polling/realtime entregar
+      if (!linkResp) {
+        console.log('[EtapaAssinatura] Link não retornado imediatamente, aguardando via polling/realtime...');
+      }
     } catch (error: any) {
       console.error('[EtapaAssinatura] Erro no Autentique:', error);
       setErro(error.message || 'Erro ao enviar para assinatura digital');
@@ -297,11 +301,12 @@ export function EtapaAssinaturaContrato({
           const newData = payload.new as any;
           console.log('[EtapaAssinatura] Realtime update:', newData.status, 'url:', !!newData.autentique_url);
 
-          // Atualizar link imediatamente
+          // Atualizar link imediatamente e transicionar para aguardando_assinatura
           if (newData.autentique_url && !linkAssinatura) {
             console.log('[EtapaAssinatura] ✅ Link recebido via realtime!');
             setLinkAssinatura(newData.autentique_url);
             setLinkTimeout(false);
+            setEtapaInterna((prev) => prev === 'enviando_autentique' ? 'aguardando_assinatura' : prev);
           }
 
           if (newData.autentique_documento_id) {
@@ -334,9 +339,10 @@ export function EtapaAssinaturaContrato({
     };
   }, [contratoId, cotacaoId, onContratoAssinado]); // linkAssinatura removido intencionalmente
 
-  // ═══ 5. Polling FALLBACK para link (3s) — só quando realtime não entregou ═══
+  // ═══ 5. Polling FALLBACK para link (3s) — roda em enviando_autentique e aguardando_assinatura ═══
   useEffect(() => {
-    if (etapaInterna !== 'aguardando_assinatura' || !contratoId || linkAssinatura) return;
+    if (!contratoId || linkAssinatura) return;
+    if (etapaInterna !== 'enviando_autentique' && etapaInterna !== 'aguardando_assinatura') return;
 
     const buscarLink = async () => {
       try {
@@ -351,6 +357,7 @@ export function EtapaAssinaturaContrato({
         if (data?.autentique_url) {
           setLinkAssinatura(data.autentique_url);
           setLinkTimeout(false);
+          setEtapaInterna('aguardando_assinatura');
         }
       } catch (e) {
         console.error('[EtapaAssinatura] Erro polling link:', e);
@@ -719,67 +726,28 @@ export function EtapaAssinaturaContrato({
 
           <Separator className="my-2" />
 
-          {/* Botão de assinatura direta ou loading */}
-          {linkAssinatura ? (
-            <motion.div
-              initial={{ scale: 0.9, opacity: 0 }}
-              animate={{ scale: 1, opacity: 1 }}
-              transition={{ delay: 0.1 }}
-              className="space-y-3"
+          {/* Botão de assinatura direta — link sempre presente neste estado */}
+          <motion.div
+            initial={{ scale: 0.9, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ delay: 0.1 }}
+            className="space-y-3"
+          >
+            <p className="text-xs text-center text-muted-foreground">
+              Ou clique abaixo para assinar diretamente:
+            </p>
+            <Button 
+              className="w-full h-14 text-lg gap-3" 
+              asChild
             >
-              <p className="text-xs text-center text-muted-foreground">
-                Ou clique abaixo para assinar diretamente:
-              </p>
-              <Button 
-                className="w-full h-14 text-lg gap-3" 
-                asChild
-              >
-                <a href={linkAssinatura} target="_blank" rel="noopener noreferrer">
-                  <FileSignature className="h-5 w-5" />
-                  Assinar Contrato Agora
-                  <ExternalLink className="h-4 w-4" />
-                </a>
-              </Button>
-              <CopyLinkButton link={linkAssinatura} />
-            </motion.div>
-          ) : (
-            <motion.div
-              initial={{ opacity: 0 }}
-              animate={{ opacity: 1 }}
-              className="space-y-3 text-center p-4 bg-amber-50 border border-amber-200 rounded-lg"
-            >
-              {linkTimeout ? (
-                <>
-                  <AlertCircle className="h-6 w-6 mx-auto text-amber-600" />
-                  <p className="text-sm font-medium text-amber-800">
-                    O link está demorando mais que o esperado
-                  </p>
-                  <Button
-                    variant="outline"
-                    size="sm"
-                    onClick={() => {
-                      setLinkTimeout(false);
-                      sendingRef.current = false;
-                      if (contratoId) enviarParaAutentique(contratoId);
-                    }}
-                  >
-                    <RefreshCw className="h-4 w-4 mr-2" />
-                    Tentar gerar novamente
-                  </Button>
-                </>
-              ) : (
-                <>
-                  <Loader2 className="h-6 w-6 animate-spin mx-auto text-amber-600" />
-                  <p className="text-sm font-medium text-amber-800">
-                    Aguarde... estamos gerando seu link de assinatura
-                  </p>
-                  <p className="text-xs text-amber-600">
-                    Isso pode levar alguns segundos
-                  </p>
-                </>
-              )}
-            </motion.div>
-          )}
+              <a href={linkAssinatura!} target="_blank" rel="noopener noreferrer">
+                <FileSignature className="h-5 w-5" />
+                Assinar Contrato Agora
+                <ExternalLink className="h-4 w-4" />
+              </a>
+            </Button>
+            <CopyLinkButton link={linkAssinatura!} />
+          </motion.div>
 
           {/* Alerta sobre segurança */}
           <Alert className="border-primary/30 bg-primary/5">
