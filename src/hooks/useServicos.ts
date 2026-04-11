@@ -1172,15 +1172,24 @@ export function useAprovarVeiculoServico() {
               const veiculoDesc = veiculoDados ? `${veiculoDados.modelo} - ${veiculoDados.placa}` : 'seu veículo';
 
               // Buscar link_token do contrato para gerar URL do checklist público
-              const { data: contratoLink } = await supabase
-                .from('contratos')
-                .select('link_token')
-                .eq('id', data.contratoId)
+              const { data: servicoContrato } = await supabase
+                .from('servicos')
+                .select('contrato_id')
+                .eq('id', data.servicoId)
                 .single();
 
-              const checklistLink = contratoLink?.link_token
-                ? `${window.location.origin}/checklist-instalacao/${contratoLink.link_token}`
-                : autentiqueResult.signatureLink; // fallback para link direto do Autentique
+              let checklistLink = autentiqueResult.signatureLink;
+              if (servicoContrato?.contrato_id) {
+                const { data: contratoLink } = await supabase
+                  .from('contratos')
+                  .select('link_token')
+                  .eq('id', servicoContrato.contrato_id)
+                  .single();
+
+                if (contratoLink?.link_token) {
+                  checklistLink = `${window.location.origin}/checklist-instalacao/${contratoLink.link_token}`;
+                }
+              }
 
               // Buscar template Meta
               const { data: metaTemplate } = await supabase
