@@ -5,7 +5,7 @@
 // ============================================
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { gerarPosicoesAssinatura, buscarPosicoesConfig } from "../_shared/autentique-positions.ts";
+import { gerarPosicoesAssinatura, buscarPosicoesConfig, estimarPaginasHTML } from "../_shared/autentique-positions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/termo-afiliacao-template.ts";
 import { filterEligibleItems } from "../_shared/eligibility-filter.ts";
@@ -759,11 +759,17 @@ serve(async (req) => {
     console.log(`[autentique-create] CPF extraído: ${cpfRaw} (válido: ${cpfValido})`);
 
     // Montar signer: só incluir configs.cpf se for válido
+    // Estimar páginas reais do HTML para posicionar SIGNATURE na última página
+    const posConfig = await buscarPosicoesConfig(supabase);
+    const paginasEstimadas = estimarPaginasHTML(contratoHTML);
+    posConfig.totalPaginas = paginasEstimadas;
+    console.log(`[autentique-create] Usando ${paginasEstimadas} páginas estimadas para posições de assinatura`);
+
     const signerObj: any = {
       name: signerName || undefined,
       email: signerEmail,
       action: "SIGN",
-      positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)),
+      positions: gerarPosicoesAssinatura(posConfig),
     };
     if (cpfValido) {
       signerObj.configs = { cpf: cpfRaw };

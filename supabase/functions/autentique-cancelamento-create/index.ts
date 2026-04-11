@@ -1,5 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { gerarPosicoesAssinatura, buscarPosicoesConfig } from "../_shared/autentique-positions.ts";
+import { gerarPosicoesAssinatura, buscarPosicoesConfig, estimarPaginasHTML } from "../_shared/autentique-positions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import {
   substituirVariaveisEvento,
@@ -141,10 +141,9 @@ serve(async (req) => {
   <div class="header-titulo">TERMO DE CANCELAMENTO DE FILIAÇÃO</div>
 </div>
 ${conteudoHTML}
-<div class="signature-area">
-  <h2 class="section-title">ASSINATURA</h2>
-  <br><br>
-  <p class="signature-local-data">${associado.cidade || ""}/${associado.uf || ""}, ${variaveis["sistema.data_extenso"]}</p>
+<div style="margin-top: 20pt; text-align: center; font-size: 9pt;">
+  <p>${associado.cidade || ""}/${associado.uf || ""}, ${variaveis["sistema.data_extenso"]}</p>
+  <p style="font-size: 8pt; color: #666; margin-top: 8pt;">Documento assinado eletronicamente.</p>
 </div>
 <div class="footer">PRATICCAR | Termo de Cancelamento</div>
 </div></body></html>`;
@@ -192,10 +191,9 @@ ${conteudoHTML}
     <li>Após a efetivação do cancelamento, o veículo deixará de contar com a proteção da associação.</li>
   </ul>
 </div>
-<div class="signature-area">
-  <h2 class="section-title">ASSINATURA</h2>
-  <br><br>
-  <p class="signature-local-data">${associado.cidade || ""}/${associado.uf || ""}, ${variaveis["sistema.data_extenso"]}</p>
+<div style="margin-top: 20pt; text-align: center; font-size: 9pt;">
+  <p>${associado.cidade || ""}/${associado.uf || ""}, ${variaveis["sistema.data_extenso"]}</p>
+  <p style="font-size: 8pt; color: #666; margin-top: 8pt;">Documento assinado eletronicamente.</p>
 </div>
 <div class="footer">PRATICCAR | Termo de Cancelamento</div>
 </div></body></html>`;
@@ -214,7 +212,10 @@ ${conteudoHTML}
       for (let t = 9; t < 11; t++) { let d = 0; for (let c = 0; c < t; c++) d += parseInt(cpfRaw[c]) * ((t+1)-c); d = ((10*d)%11)%10; if (parseInt(cpfRaw[t]) !== d) return false; } return true;
     })();
     console.log(`[autentique-cancelamento-create] CPF: ${cpfRaw} (válido: ${cpfOk})`);
-    const signerObj: any = { name: associado.nome, email: associado.email, action: "SIGN", positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)) };
+    const posConfigCanc = await buscarPosicoesConfig(supabase);
+    posConfigCanc.totalPaginas = estimarPaginasHTML(htmlContent);
+    console.log(`[autentique-cancelamento-create] Usando ${posConfigCanc.totalPaginas} páginas estimadas`);
+    const signerObj: any = { name: associado.nome, email: associado.email, action: "SIGN", positions: gerarPosicoesAssinatura(posConfigCanc) };
     if (cpfOk) signerObj.configs = { cpf: cpfRaw };
 
     const operations = {

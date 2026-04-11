@@ -4,7 +4,7 @@
 // ============================================
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
-import { gerarPosicoesAssinatura, buscarPosicoesConfig } from "../_shared/autentique-positions.ts";
+import { gerarPosicoesAssinatura, buscarPosicoesConfig, estimarPaginasHTML } from "../_shared/autentique-positions.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import {
   generateStyles,
@@ -380,7 +380,10 @@ serve(async (req) => {
       for (let t = 9; t < 11; t++) { let d = 0; for (let c = 0; c < t; c++) d += parseInt(cpfRaw[c]) * ((t+1)-c); d = ((10*d)%11)%10; if (parseInt(cpfRaw[t]) !== d) return false; } return true;
     })();
     console.log(`[autentique-os-saida-create] CPF: ${cpfRaw} (válido: ${cpfOk})`);
-    const signerObj: any = { name: signerName, email: signerEmail, action: "SIGN", positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)) };
+    const posConfigOS = await buscarPosicoesConfig(supabase);
+    posConfigOS.totalPaginas = estimarPaginasHTML(htmlContent);
+    console.log(`[autentique-os-saida-create] Usando ${posConfigOS.totalPaginas} páginas estimadas`);
+    const signerObj: any = { name: signerName, email: signerEmail, action: "SIGN", positions: gerarPosicoesAssinatura(posConfigOS) };
     if (cpfOk) signerObj.configs = { cpf: cpfRaw };
 
     const operations = {

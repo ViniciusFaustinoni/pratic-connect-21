@@ -790,9 +790,9 @@ export function sanitizeSignatureBlocks(html: string): string {
   if (!html) return html;
   let result = html;
 
-  // 1. Blocos com classes CSS
-  result = result.replace(/<div[^>]*class\s*=\s*["'][^"']*signature-(?:block|area|labels)[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '');
-  result = result.replace(/<p[^>]*class\s*=\s*["'][^"']*signature-line[^"']*["'][^>]*>[\s\S]*?<\/p>/gi, '');
+  // 1. Blocos com classes CSS de assinatura
+  result = result.replace(/<div[^>]*class\s*=\s*["'][^"']*signature-(?:block|area|labels|local-data)[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '');
+  result = result.replace(/<p[^>]*class\s*=\s*["'][^"']*signature-(?:line|local-data)[^"']*["'][^>]*>[\s\S]*?<\/p>/gi, '');
 
   // 2. Bordas decorativas ━━━
   result = result.replace(/<p[^>]*>\s*[━]{5,}\s*<\/p>/gi, '');
@@ -804,16 +804,16 @@ export function sanitizeSignatureBlocks(html: string): string {
   result = result.replace(/<p[^>]*>[^<]*_{3,}[^<]*<\/p>/gi, '');
 
   // 5. Texto "ASSINATURA DO ASSOCIADO" / variantes
-  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*(?:ASSINATURA|Assinatura)\s+(?:DO|do|da)\s+(?:ASSOCIADO|Associado)[^<]*(?:<\/strong>)?\s*<\/p>/gi, '');
+  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*(?:ASSINATURA|Assinatura)\s+(?:DO|do|da|DE|de)\s+(?:ASSOCIADO|Associado|CONTRATANTE|Contratante)[^<]*(?:<\/strong>)?\s*<\/p>/gi, '');
 
   // 6. Label "ASSOCIADO" sozinha
   result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*ASSOCIADO\s*(?:<\/strong>)?\s*<\/p>/gi, '');
 
   // 7. Label "ASSOCIAÇÃO" sozinha
-  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*ASSOCIAÇÃO\s*(?:<\/strong>)?\s*<\/p>/gi, '');
+  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*ASSOCIA[ÇC][ÃA]O\s*(?:<\/strong>)?\s*<\/p>/gi, '');
 
   // 8. Label "AUTORIZAÇÃO" sozinha (TEV01)
-  result = result.replace(/<p[^>]*>\s*AUTORIZAÇÃO\s*<\/p>/gi, '');
+  result = result.replace(/<p[^>]*>\s*AUTORIZA[ÇC][ÃA]O\s*<\/p>/gi, '');
 
   // 9. Sintaxe legada !{Associado}, !{Associacao}, ${local}, #{data_de_emissao}
   result = result.replace(/<p[^>]*>[^<]*!\{(?:Associado|Associacao)\}[^<]*<\/p>/gi, '');
@@ -822,16 +822,34 @@ export function sanitizeSignatureBlocks(html: string): string {
   // 10. Tabela de assinatura legada (Leilão) com !{Associado}
   result = result.replace(/<table[^>]*>[\s\S]*?!\{(?:Associado|Associacao)\}[\s\S]*?<\/table>/gi, '');
 
-  // 11. Parágrafos finais com nome+CPF do associado
+  // 11. Parágrafos finais com nome+CPF do associado (variáveis)
   result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*\{\{associado\.nome\}\}[\s\S]{0,30}(?:CPF|cpf)[:\s]*\{\{associado\.cpf\}\}\s*(?:<\/strong>)?\s*<\/p>/gi, '');
 
-  // 12. Parágrafos com dados da empresa em contexto de assinatura
+  // 12. Parágrafos com dados da empresa em contexto de assinatura (variáveis)
   result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*\{\{empresa\.nome\}\}[\s\S]{0,30}(?:CNPJ|cnpj)[:\s]*\{\{empresa\.cnpj\}\}\s*(?:<\/strong>)?\s*<\/p>/gi, '');
 
   // 13. Parágrafo "Dados da Agencia" (Leilão)
   result = result.replace(/<p[^>]*>\s*Dados da Agencia\s*<\/p>/gi, '');
 
-  // 14. Limpar <p><br></p> consecutivos que sobraram
+  // 14. "Local / Data" ou "Local e Data" em contexto de assinatura
+  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*(?:Local\s*[\/e]\s*Data|LOCAL\s*[\/E]\s*DATA)\s*(?::)?\s*(?:<\/strong>)?\s*<\/p>/gi, '');
+
+  // 15. Parágrafos com "Local, data" seguido de data por extenso
+  result = result.replace(/<p[^>]*>[^<]*(?:Local|LOCAL)\s*,?\s*(?:\d{1,2}\s+de\s+\w+\s+de\s+\d{4}|—)[^<]*<\/p>/gi, '');
+
+  // 16. Seção inteira "8. ASSINATURA" ou "ASSINATURA" como título de seção
+  result = result.replace(/<(?:h[1-6]|div)[^>]*(?:class\s*=\s*["'][^"']*section-title[^"']*["'])?[^>]*>\s*(?:\d+\.\s*)?ASSINATURA\s*<\/(?:h[1-6]|div)>/gi, '');
+
+  // 17. Divs com border-top que contêm nome/CPF ou ASSOCIADO/PRATICCAR (blocos de assinatura visual)
+  result = result.replace(/<div[^>]*style\s*=\s*["'][^"']*border-top[^"']*["'][^>]*>[\s\S]{0,500}?(?:ASSOCIADO|PRATICCAR|CPF\s*:|CNPJ\s*:)[\s\S]*?<\/div>/gi, '');
+
+  // 18. Parágrafos com nome real do associado + CPF formatado em contexto de assinatura (dados já substituídos)
+  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*CPF\s*:\s*\d{3}\.\d{3}\.\d{3}-\d{2}\s*(?:<\/strong>)?\s*<\/p>/gi, '');
+
+  // 19. Div "signature-area" completa (com todo conteúdo interno)
+  result = result.replace(/<div[^>]*class\s*=\s*["']signature-area["'][^>]*>[\s\S]*?<\/div>\s*(?:<\/div>\s*)*(?=<div[^>]*class\s*=\s*["']footer["']|<\/div>\s*<\/body>|$)/gi, '');
+
+  // 20. Limpar <p><br></p> consecutivos que sobraram
   result = result.replace(/(?:<p[^>]*>\s*(?:<br\s*\/?>)?\s*<\/p>\s*){3,}/gi, '<p><br></p>');
 
   return result;
