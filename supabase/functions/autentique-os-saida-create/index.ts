@@ -386,7 +386,7 @@ serve(async (req) => {
     const operations = {
       query: mutation,
       variables: {
-        document: { name: documentName },
+        document: { name: documentName, new_signature_style: true },
         signers: [signerObj],
         file: null,
       },
