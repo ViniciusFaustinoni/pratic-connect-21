@@ -232,6 +232,7 @@ export function usePermissions() {
     isAnalistaMarketing: hasRole('analista_marketing'),
     isAnalistaJuridico: hasRole('analista_juridico'),
     isAnalistaMonitoramento,
+    isAnalistaMonitoramentoOnly,
 
     // Compostos
     isVendedor: isVendedor(),
