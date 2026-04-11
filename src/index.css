@@ -491,6 +491,21 @@
   display: none !important;
 }
 
+/* Route info overlay tooltip */
+.route-info-tooltip {
+  background: transparent !important;
+  border: none !important;
+  box-shadow: none !important;
+  padding: 0 !important;
+}
+.route-info-tooltip::before {
+  display: none !important;
+}
+.route-info-overlay {
+  background: transparent !important;
+  border: none !important;
+}
+
 /* Logo PRATIC styles */
 .pratic-logo-text {
   font-weight: 700;

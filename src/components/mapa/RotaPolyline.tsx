@@ -1,6 +1,13 @@
-import { useMemo } from 'react';
+import { useMemo, useEffect } from 'react';
 import { Polyline, Popup } from 'react-leaflet';
 import { useRotaReal } from '@/hooks/useRotaReal';
+import { RotaInfoOverlay } from './RotaInfoOverlay';
+
+interface RouteInfo {
+  distanciaKm: number;
+  tempoMinutos: number;
+  coordenadas: [number, number][];
+}
 
 interface RotaPolylineProps {
   origem: [number, number];
@@ -10,6 +17,8 @@ interface RotaPolylineProps {
   opacidade?: number;
   mostrarPopup?: boolean;
   popupContent?: React.ReactNode;
+  mostrarInfoOverlay?: boolean;
+  onRouteInfo?: (info: RouteInfo) => void;
 }
 
 /**
@@ -24,11 +33,22 @@ export function RotaPolyline({
   opacidade = 0.8,
   mostrarPopup = false,
   popupContent,
+  mostrarInfoOverlay = false,
+  onRouteInfo,
 }: RotaPolylineProps) {
-  const { coordenadas, distanciaKm, tempoMinutos, isLoading } = useRotaReal(origem, destino);
+  const { coordenadas, distanciaKm, isLoading } = useRotaReal(origem, destino);
   
-  // Se ainda está carregando ou não tem coordenadas, mostrar linha tracejada
   const isFallback = isLoading || coordenadas.length < 2;
+  
+  // Tempo estimado: 1 km = 1 min
+  const tempoEstimado = Math.ceil(distanciaKm);
+
+  // Notify parent of route info changes
+  useEffect(() => {
+    if (onRouteInfo && distanciaKm > 0) {
+      onRouteInfo({ distanciaKm, tempoMinutos: tempoEstimado, coordenadas });
+    }
+  }, [distanciaKm, tempoEstimado, coordenadas, onRouteInfo]);
   
   const pathOptions = useMemo(() => ({
     color: cor,
@@ -42,28 +62,31 @@ export function RotaPolyline({
   if (!origem || !destino) return null;
   
   return (
-    <Polyline positions={positions} pathOptions={pathOptions}>
-      {mostrarPopup && (
-        <Popup>
-          <div className="text-xs">
-            {popupContent || (
-              <>
-                <p className="font-semibold">
-                  {distanciaKm > 0 ? `${distanciaKm.toFixed(1)} km` : 'Calculando...'}
-                </p>
-                {tempoMinutos > 0 && (
-                  <p className="text-muted-foreground">~{tempoMinutos} min</p>
-                )}
-              </>
-            )}
-          </div>
-        </Popup>
+    <>
+      <Polyline positions={positions} pathOptions={pathOptions}>
+        {mostrarPopup && (
+          <Popup>
+            <div className="text-xs">
+              {popupContent || (
+                <>
+                  <p className="font-semibold">
+                    {distanciaKm > 0 ? `${distanciaKm.toFixed(1)} km • ~${tempoEstimado} min` : 'Calculando...'}
+                  </p>
+                </>
+              )}
+            </div>
+          </Popup>
+        )}
+      </Polyline>
+      {mostrarInfoOverlay && !isFallback && distanciaKm > 0 && (
+        <RotaInfoOverlay
+          coordenadas={coordenadas}
+          distanciaKm={distanciaKm}
+          cor={cor}
+        />
       )}
-    </Polyline>
+    </>
   );
 }
 
-/**
- * Hook utilitário para usar dados da rota em outros componentes
- */
 export { useRotaReal } from '@/hooks/useRotaReal';

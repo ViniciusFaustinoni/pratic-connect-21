@@ -553,6 +553,7 @@ export function MapaVistoriasContent() {
           peso={4}
           opacidade={0.7}
           mostrarPopup
+          mostrarInfoOverlay
           popupContent={
             <div className="text-xs">
               <p className="font-semibold">{linha.profissionalNome}</p>
