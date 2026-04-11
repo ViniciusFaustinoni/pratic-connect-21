@@ -1,32 +1,45 @@
 
 
-## Plano: Ativar `new_signature_style` e posicionamento de rubricas em todos os documentos Autentique
+## Plano: Remover etapa de assinatura do laudo de vistoria
 
-### Diagnóstico
+### Resumo
 
-O código em `autentique-positions.ts` já gera corretamente as posições com `INITIALS` em todas as páginas e `SIGNATURE` na última. Porém, **nenhuma** edge function envia `new_signature_style: true` no objeto `document`. Conforme a documentação oficial da Autentique, essa flag é necessária para que os campos posicionados (INITIALS, SIGNATURE) sejam habilitados. Sem ela, o Autentique ignora as posições e usa o fluxo padrão de assinatura simples.
+O laudo de vistoria/instalação deixa de depender de assinatura via Autentique. Quando gerado, é anexado diretamente aos documentos do associado com status "aprovado". Toda a UI e lógica de "pendente assinatura do laudo" será removida.
 
-### Alteração
+### Alterações
 
-Adicionar `new_signature_style: true` ao objeto `document` em **todas** as 7 edge functions que criam documentos:
+**1. `src/hooks/useServicos.ts`** (useAprovarVeiculoServico)
+- Remover todo o bloco de envio para Autentique (linhas ~1143-1225): chamada a `autentique-create-laudo`, busca de associado/veículo para WhatsApp, envio de link de assinatura
+- Manter apenas a geração do laudo PDF via `gerar-laudo-vistoria` (linhas 1132-1141) — o laudo já é anexado automaticamente pela edge function
+- Alterar mensagem WhatsApp: em vez de "revise e assine", enviar "instalação concluída com sucesso"
 
-| Edge Function | Linha (approx) | Alteração |
-|---|---|---|
-| `autentique-create` | 776-778 | `{ name: documentName }` → `{ name: documentName, new_signature_style: true }` |
-| `autentique-create-by-token` | 609 | idem |
-| `autentique-evento-create` | 410 | idem |
-| `autentique-cancelamento-create` | 223 | idem |
-| `autentique-os-saida-create` | 389 | idem |
-| `autentique-create-laudo` | 124-126 | idem |
-| `autentique-vistoria-create` | 293-295 | idem |
+**2. `src/pages/public/AcompanhamentoProposta.tsx`**
+- Remover PRIORIDADE 0 "pendente_assinatura_laudo" (linhas 267-282)
+- Remover status "laudo_assinado" com badge verde (linhas 284-298)
+- Remover botão fixo "Assinar Laudo de Instalação" (linhas 1367-1381)
+- Remover badge "Laudo Assinado ✅" (linhas ~1149-1165)
+- Remover condição de padding extra baseada em `laudo_autentique_url` (linha 788)
+- Limpar referências a `laudo_autentique_url`, `laudo_assinado`, `laudo_assinado_em` do interface e query
 
-**Nota**: `autentique-documento` (linha 51) usa inline GraphQL sem variáveis — será atualizado para incluir `new_signature_style: true` no objeto document inline.
+**3. `src/pages/cadastro/PropostasPendentes.tsx`**
+- Remover badge "Pend. Laudo" (linhas 60-63)
+- Alterar badge "Laudo ✅" para mostrar quando o laudo PDF existe (sem depender de `laudo_assinado`)
 
-### Resultado
-- O Autentique exibirá campos de rubrica (INITIALS) em todas as páginas do documento
-- Na última página, exibirá o campo de assinatura completa (SIGNATURE)
-- O signatário será solicitado a fornecer tanto a rubrica quanto a assinatura ao assinar
+**4. `src/hooks/usePropostasPendentes.ts`**
+- Remover campos `laudo_assinado`, `laudo_autentique_url`, `laudo_pdf_assinado_url` da query e interface
 
-### Deploy
-Todas as 7+ edge functions serão redeployadas após a alteração.
+**5. `supabase/functions/autentique-webhook/index.ts`**
+- Remover bloco de tratamento de laudo (linhas ~790-860) que processa `laudo_autentique_id` — não haverá mais documentos de laudo no Autentique
+
+**6. Edge function `autentique-create-laudo`**
+- Pode ser mantida sem deploy (dead code) ou removida — nenhum caller a invocará mais
+
+**7. `supabase/functions/gerar-laudo-vistoria/index.ts`**
+- Sem alterações — já salva o PDF no storage e insere na tabela `documentos` com tipo `laudo_vistoria` e status `aprovado`
+
+### O que NÃO muda
+- A geração do laudo PDF continua funcionando normalmente
+- O laudo continua sendo anexado aos documentos do associado automaticamente
+- A edge function `gerar-laudo-vistoria` permanece intacta
+- Os campos `laudo_assinado`/`laudo_autentique_id` no banco permanecem (não precisa de migration), apenas não serão mais usados
 
