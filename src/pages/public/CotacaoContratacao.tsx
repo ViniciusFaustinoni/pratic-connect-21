@@ -550,6 +550,7 @@ export default function CotacaoContratacao() {
                     <EtapaVistoria
                       cotacaoId={cotacao.id}
                       tipoVeiculo={detectarTipoVeiculoDaCotacao(cotacao)}
+                      tipoInstalacao={(cotacao as any).tipo_instalacao as 'rota' | 'base' | null}
                       clienteNome={cotacao.nome_solicitante || ''}
                       clienteTelefone={cotacao.telefone1_solicitante || undefined}
                       clienteEmail={cotacao.email_solicitante || undefined}
@@ -859,6 +860,7 @@ export default function CotacaoContratacao() {
                       <AgendamentoVistoriaCompleta
                         cotacaoId={cotacao.id}
                         tipoVistoria="autovistoria"
+                        tipoInstalacao={(cotacao as any).tipo_instalacao as 'rota' | 'base' | null}
                         clienteNome={cotacao?.vistoria_completa_responsavel_nome || cotacao?.nome_solicitante || ''}
                         clienteTelefone={cotacao?.vistoria_completa_responsavel_telefone || cotacao?.telefone1_solicitante}
                         clienteEmail={cotacao?.email_solicitante}
