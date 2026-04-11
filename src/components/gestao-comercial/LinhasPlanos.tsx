@@ -545,6 +545,7 @@ export function LinhasPlanos() {
                                           {plano.badge_text}
                                         </Badge>
                                       ) : null}
+                                      {plano.plan_rules?.length > 0 && <RuleBadges rules={plano.plan_rules} />}
                                     </div>
                                   </div>
 
