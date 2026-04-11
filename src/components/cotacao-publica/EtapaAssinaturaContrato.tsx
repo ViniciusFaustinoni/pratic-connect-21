@@ -254,9 +254,10 @@ export function EtapaAssinaturaContrato({
         setAutentiqueDocId(data.documentId || data.autentique_documento_id);
       }
 
-      // Se não temos link ainda, ficamos em 'enviando_autentique' até o polling/realtime entregar
+      // Se não temos link ainda, ir direto para aguardando_assinatura com botão "Gerar Link"
       if (!linkResp) {
-        console.log('[EtapaAssinatura] Link não retornado imediatamente, aguardando via polling/realtime...');
+        console.log('[EtapaAssinatura] Link não retornado imediatamente, mostrando botão Gerar Link...');
+        setEtapaInterna('aguardando_assinatura');
       }
     } catch (error: any) {
       console.error('[EtapaAssinatura] Erro no Autentique:', error);
@@ -554,7 +555,7 @@ export function EtapaAssinaturaContrato({
   }
 
   // Estados de carregamento
-  if (etapaInterna === 'verificando' || etapaInterna === 'gerando_contrato' || etapaInterna === 'enviando_autentique') {
+  if (etapaInterna === 'verificando' || etapaInterna === 'gerando_contrato') {
     return (
       <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
         <CardContent className="py-16 text-center">
@@ -567,12 +568,10 @@ export function EtapaAssinaturaContrato({
             <h3 className="text-lg font-semibold mb-2">
               {etapaInterna === 'verificando' && 'Verificando contrato...'}
               {etapaInterna === 'gerando_contrato' && 'Gerando seu contrato...'}
-              {etapaInterna === 'enviando_autentique' && 'Preparando assinatura digital...'}
             </h3>
             <p className="text-muted-foreground text-sm">
               {etapaInterna === 'verificando' && 'Verificando se já existe um contrato para sua cotação.'}
               {etapaInterna === 'gerando_contrato' && 'Estamos gerando seu contrato com base nos dados informados.'}
-              {etapaInterna === 'enviando_autentique' && 'Preparando o documento para assinatura digital segura.'}
             </p>
           </motion.div>
         </CardContent>
@@ -726,27 +725,90 @@ export function EtapaAssinaturaContrato({
 
           <Separator className="my-2" />
 
-          {/* Botão de assinatura direta — link sempre presente neste estado */}
+          {/* Botão de assinatura direta ou Gerar Link */}
           <motion.div
             initial={{ scale: 0.9, opacity: 0 }}
             animate={{ scale: 1, opacity: 1 }}
             transition={{ delay: 0.1 }}
             className="space-y-3"
           >
-            <p className="text-xs text-center text-muted-foreground">
-              Ou clique abaixo para assinar diretamente:
-            </p>
-            <Button 
-              className="w-full h-14 text-lg gap-3" 
-              asChild
-            >
-              <a href={linkAssinatura!} target="_blank" rel="noopener noreferrer">
-                <FileSignature className="h-5 w-5" />
-                Assinar Contrato Agora
-                <ExternalLink className="h-4 w-4" />
-              </a>
-            </Button>
-            <CopyLinkButton link={linkAssinatura!} />
+            {linkAssinatura ? (
+              <>
+                <p className="text-xs text-center text-muted-foreground">
+                  Ou clique abaixo para assinar diretamente:
+                </p>
+                <Button 
+                  className="w-full h-14 text-lg gap-3" 
+                  asChild
+                >
+                  <a href={linkAssinatura} target="_blank" rel="noopener noreferrer">
+                    <FileSignature className="h-5 w-5" />
+                    Assinar Contrato Agora
+                    <ExternalLink className="h-4 w-4" />
+                  </a>
+                </Button>
+                <CopyLinkButton link={linkAssinatura} />
+              </>
+            ) : (
+              <>
+                <p className="text-xs text-center text-muted-foreground">
+                  O link de assinatura está sendo preparado. Clique abaixo para gerar:
+                </p>
+                <Button
+                  className="w-full h-14 text-lg gap-3"
+                  onClick={async () => {
+                    if (!contratoId) return;
+                    setVerificando(true);
+                    try {
+                      // Tentar buscar link existente primeiro
+                      const { data } = await publicSupabase
+                        .from('contratos')
+                        .select('autentique_url, autentique_documento_id')
+                        .eq('id', contratoId)
+                        .maybeSingle();
+                      
+                      if (data?.autentique_url) {
+                        setLinkAssinatura(data.autentique_url);
+                        if (data.autentique_documento_id) setAutentiqueDocId(data.autentique_documento_id);
+                        toast.success('Link gerado!');
+                        return;
+                      }
+
+                      // Se não tem, re-invocar autentique-create
+                      const { data: result, error } = await publicSupabase.functions.invoke('autentique-create', {
+                        body: { contrato_id: contratoId },
+                      });
+
+                      if (error) throw error;
+                      
+                      const linkResp = result?.signatureLink || result?.link_assinatura || result?.autentique_url;
+                      if (linkResp) {
+                        setLinkAssinatura(linkResp);
+                        toast.success('Link gerado!');
+                      } else {
+                        toast.info('Link está sendo gerado, aguarde alguns segundos...');
+                      }
+
+                      if (result?.documentId || result?.autentique_documento_id) {
+                        setAutentiqueDocId(result.documentId || result.autentique_documento_id);
+                      }
+                    } catch (e: any) {
+                      toast.error('Erro ao gerar link: ' + (e.message || 'Tente novamente'));
+                    } finally {
+                      setVerificando(false);
+                    }
+                  }}
+                  disabled={verificando}
+                >
+                  {verificando ? (
+                    <Loader2 className="h-5 w-5 animate-spin" />
+                  ) : (
+                    <RefreshCw className="h-5 w-5" />
+                  )}
+                  {verificando ? 'Gerando...' : 'Gerar Link'}
+                </Button>
+              </>
+            )}
           </motion.div>
 
           {/* Alerta sobre segurança */}
