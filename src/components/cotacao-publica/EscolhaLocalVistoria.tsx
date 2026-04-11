@@ -32,6 +32,7 @@ export function EscolhaLocalVistoria({ onEscolher, tipoInstalacao }: EscolhaLoca
       <div className="grid gap-4">
         {/* Filtrar opções conforme tipo_instalacao definido pelo consultor */}
         {/* Opção 1: Técnico vai até o cliente */}
+        {tipoInstalacao !== 'base' && (
         <Card 
           className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
           onClick={() => onEscolher('cliente')}
@@ -56,8 +57,10 @@ export function EscolhaLocalVistoria({ onEscolher, tipoInstalacao }: EscolhaLoca
             </div>
           </CardContent>
         </Card>
+        )}
 
         {/* Opção 2: Cliente vai até a base */}
+        {tipoInstalacao !== 'rota' && (
         <Card 
           className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
           onClick={() => onEscolher('base')}
@@ -106,6 +109,7 @@ export function EscolhaLocalVistoria({ onEscolher, tipoInstalacao }: EscolhaLoca
             </div>
           </CardContent>
         </Card>
+        )}
       </div>
 
       <p className="text-xs text-center text-muted-foreground">
