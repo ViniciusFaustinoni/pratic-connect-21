@@ -121,6 +121,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact, onAfterS
         entityType={entityType}
         entityId={entityId}
         onSave={saveRule}
+        onAfterSave={onAfterSave}
       />
     </div>
   );
@@ -205,12 +206,14 @@ function AddRuleDialog({
   entityType,
   entityId,
   onSave,
+  onAfterSave,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   entityType: EntityType;
   entityId: string;
   onSave: ReturnType<typeof useSaveRule>;
+  onAfterSave?: () => void;
 }) {
   const [ruleType, setRuleType] = useState<RuleType>('fipe_range');
   const [ruleMode, setRuleMode] = useState<RuleMode>('include');
