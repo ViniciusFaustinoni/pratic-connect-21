@@ -11,7 +11,9 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Code, Eye, FileText, Info } from 'lucide-react';
+import { Code, Eye, FileText, Info, PenTool } from 'lucide-react';
+import { Switch } from '@/components/ui/switch';
+import { Label } from '@/components/ui/label';
 import { EditorToolbar } from './tiptap/EditorToolbar';
 import { VariableChipExtension, convertPlainTextToHTML, convertHTMLToStorage } from './tiptap/VariableChip';
 import { substituirVariaveisPreview } from './templatePreviewData';
@@ -86,6 +88,7 @@ export function getTemplateEditor(): Editor | null {
 export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, rodapeHtml }: TemplateEditorProps) {
   const [tab, setTab] = useState<string>('editor');
   const isExternalUpdate = useRef(false);
+  const [showSignatureOverlay, setShowSignatureOverlay] = useState(false);
   const { data: empresaConfig } = useEmpresaConfig();
 
   const editor = useEditor({
@@ -233,18 +236,57 @@ export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, ro
 
         <TabsContent value="preview" className="m-0">
           <ScrollArea className="h-[500px] bg-muted/30">
-            {/* Badge de aviso */}
-            <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground bg-muted/50 border-b">
-              <Info className="h-3.5 w-3.5" />
-              Preview com dados fictícios — simula o documento final
+            {/* Badge de aviso + toggle assinatura */}
+            <div className="flex items-center justify-between gap-2 py-2 px-4 text-xs text-muted-foreground bg-muted/50 border-b">
+              <div className="flex items-center gap-2">
+                <Info className="h-3.5 w-3.5" />
+                Preview com dados fictícios — simula o documento final
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="signature-overlay"
+                  checked={showSignatureOverlay}
+                  onCheckedChange={setShowSignatureOverlay}
+                  className="h-4 w-8 data-[state=checked]:bg-primary [&>span]:h-3 [&>span]:w-3"
+                />
+                <Label htmlFor="signature-overlay" className="text-xs cursor-pointer flex items-center gap-1">
+                  <PenTool className="h-3 w-3" />
+                  Assinatura Autentique
+                </Label>
+              </div>
             </div>
 
             {/* A4-style document container */}
             <div className="flex justify-center py-6 px-4">
               <div
-                className="bg-white text-black shadow-xl border rounded-sm w-full"
+                className="bg-white text-black shadow-xl border rounded-sm w-full relative"
                 style={{ maxWidth: '210mm', minHeight: '297mm' }}
               >
+                {/* Overlay de posição da assinatura Autentique */}
+                {showSignatureOverlay && (
+                  <div
+                    className="absolute pointer-events-none z-10"
+                    style={{
+                      left: '65%',
+                      top: '85%',
+                      transform: 'translate(-50%, -50%)',
+                      width: '30%',
+                      padding: '8px 12px',
+                      border: '2px dashed hsl(var(--primary))',
+                      borderRadius: '6px',
+                      backgroundColor: 'hsl(var(--primary) / 0.08)',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div className="flex items-center justify-center gap-1.5 text-primary" style={{ fontSize: '10px', fontWeight: 600 }}>
+                      <PenTool className="h-3.5 w-3.5" />
+                      Assinatura Autentique
+                    </div>
+                    <div className="text-primary/60" style={{ fontSize: '8px', marginTop: '2px' }}>
+                      Posição: x=65% y=85% (em cada página)
+                    </div>
+                  </div>
+                )}
                 {/* === Cabeçalho === */}
                 <div
                   className="px-12 pt-10 pb-4 border-b-2"
