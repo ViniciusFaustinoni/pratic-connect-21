@@ -849,7 +849,16 @@ export function sanitizeSignatureBlocks(html: string): string {
   // 19. Div "signature-area" completa (com todo conteúdo interno)
   result = result.replace(/<div[^>]*class\s*=\s*["']signature-area["'][^>]*>[\s\S]*?<\/div>\s*(?:<\/div>\s*)*(?=<div[^>]*class\s*=\s*["']footer["']|<\/div>\s*<\/body>|$)/gi, '');
 
-  // 20. Limpar <p><br></p> consecutivos que sobraram
+  // 20. Parágrafos com nome real (em bold) seguido de " - CPF: 123.456.789-00" (dados já substituídos)
+  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÜÇ][A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÜÇ\s]+\s*-\s*CPF\s*:\s*\d{3}\.\d{3}\.\d{3}-\d{2}\s*(?:<\/strong>)?\s*<\/p>/gi, '');
+
+  // 21. Parágrafos com cidade + data por extenso: "CIDADE, dd de mês de yyyy." (blocos de local/data já substituídos)
+  result = result.replace(/<p[^>]*>\s*[A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÜÇ][A-ZÁÀÂÃÉÈÊÍÏÓÔÕÖÚÜÇ\s]*,\s*\d{1,2}\s+de\s+\w+\s+de\s+\d{4}\.?\s*<\/p>/gi, '');
+
+  // 22. Heading h3 "ASSINATURA" (gerado por markdown ### ASSINATURA)
+  result = result.replace(/<h3[^>]*>\s*ASSINATURA\s*<\/h3>/gi, '');
+
+  // 23. Limpar <p><br></p> consecutivos que sobraram
   result = result.replace(/(?:<p[^>]*>\s*(?:<br\s*\/?>)?\s*<\/p>\s*){3,}/gi, '<p><br></p>');
 
   return result;

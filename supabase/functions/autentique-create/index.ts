@@ -759,6 +759,8 @@ serve(async (req) => {
     console.log(`[autentique-create] CPF extraído: ${cpfRaw} (válido: ${cpfValido})`);
 
     // Montar signer: só incluir configs.cpf se for válido
+    // Sanitização final de blocos de assinatura manual no HTML completo (antes de estimar páginas)
+    contratoHTML = sanitizeSignatureBlocks(contratoHTML);
     // Estimar páginas reais do HTML para posicionar SIGNATURE na última página
     const posConfig = await buscarPosicoesConfig(supabase);
     const paginasEstimadas = estimarPaginasHTML(contratoHTML);

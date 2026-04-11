@@ -18,8 +18,9 @@ export interface PosicoesConfig {
 
 /**
  * Estima o número de páginas de um HTML A4 baseado no tamanho do conteúdo.
- * Heurística: ~3000 caracteres de HTML = ~1 página A4 (com margens, tabelas, etc.)
- * Retorna no mínimo 1 e adiciona 1 página de margem para segurança.
+ * Heurística conservadora: ~2000 caracteres de HTML = ~1 página A4.
+ * Adiciona margem de +2 páginas para garantir que SIGNATURE fique na última página real.
+ * Páginas excedentes são ignoradas pela API da Autentique.
  */
 export function estimarPaginasHTML(html: string): number {
   if (!html) return 1;
@@ -33,14 +34,14 @@ export function estimarPaginasHTML(html: string): number {
   // Contar page-breaks explícitos
   const pageBreaks = (html.match(/page-break-before\s*:\s*always/gi) || []).length;
   
-  // Estimar pela quantidade de conteúdo (~3000 chars HTML = 1 página A4)
-  const paginasPorConteudo = Math.ceil(semEstilos.length / 3000);
+  // Estimar pela quantidade de conteúdo (~2000 chars HTML = 1 página A4 — conservador)
+  const paginasPorConteudo = Math.ceil(semEstilos.length / 2000);
   
   // Usar o maior entre os dois métodos
   const estimativa = Math.max(paginasPorConteudo, pageBreaks + 1);
   
-  // Adicionar 1 de margem, mínimo 2 (para ter ao menos 1 página de rubrica + 1 de assinatura)
-  const total = Math.max(2, estimativa + 1);
+  // Adicionar 2 de margem, mínimo 2 (para ter ao menos 1 página de rubrica + 1 de assinatura)
+  const total = Math.max(2, estimativa + 2);
   
   console.log(`[autentique-positions] Estimativa de páginas: ${total} (conteúdo: ${paginasPorConteudo}, page-breaks: ${pageBreaks}, HTML: ${html.length} bytes)`);
   
