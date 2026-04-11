@@ -307,6 +307,7 @@ const menuConfig: {
         { title: 'Acordos', url: '/cobranca/acordos', icon: Handshake },
         { title: 'Negativação', url: '/cobranca/negativacao', icon: AlertTriangle },
         { title: 'Régua', url: '/cobranca/regua', icon: List },
+        { title: 'Chat', url: '/cobranca/chat', icon: MessageCircle },
       ],
     },
     {
