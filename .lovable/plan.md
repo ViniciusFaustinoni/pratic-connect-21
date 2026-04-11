@@ -1,50 +1,40 @@
 
-## Diagnóstico
-- O backend já está funcionando: o link é gerado e salvo no banco. A evidência é que o contrato mais recente já possui `autentique_url` e os logs de `autentique-create` confirmam o salvamento do link. Portanto, o problema atual é de sincronização da UI, não da Autentique.
-- O componente `EtapaAssinaturaContrato` ainda pode entrar em `aguardando_assinatura` sem consolidar um `contratoId` local estável. Quando isso acontece, os dois pollings retornam cedo porque dependem de `contrato?.id`, e a tela fica presa em “Aguarde...”.
-- Há corrida de inicialização: os logs mostram chamadas duplicadas de `contrato-gerar` e `autentique-create`, inclusive com erro de unicidade. Isso aumenta a chance de estado local inconsistente.
-- A página pública não escuta `contratos` em realtime; hoje ela escuta `cotacoes`, `vistorias`, `documentos_solicitados` e `associados`. Então, quando só `contratos.autentique_url` muda, a página não se atualiza sozinha.
 
-## Plano definitivo de correção
-1. `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`
-   - Separar o estado mínimo crítico em variáveis independentes: `contratoId`, `contratoNumero`, `autentiqueDocumentoId`, `linkAssinatura`, `statusContrato`.
-   - Garantir que `contratoId` seja preenchido imediatamente a partir de `contrato_gerado_id`, `contratoData.id` ou resposta do `contrato-gerar`, antes de entrar em `aguardando_assinatura`.
-   - Trocar todos os guards e pollings que usam `contrato?.id` para usar `contratoId`.
-   - Em `enviarParaAutentique`, atualizar `linkAssinatura` local assim que a edge function retornar `signatureLink`, sem depender do objeto `contrato`.
+## Plano: Correção definitiva dos templates e deploy das funções
 
-2. Eliminar chamadas duplicadas
-   - Adicionar refs de trava (`initRef`, `processingRef`, `sendingRef`) para impedir dupla execução em StrictMode/re-render/retry.
-   - Fazer `verificarOuGerarContrato` e `enviarParaAutentique` respeitarem essas travas e só liberarem nova execução quando o fluxo terminar ou falhar.
+### Causa raiz
 
-3. Realtime verdadeiro para o link
-   - No próprio `EtapaAssinaturaContrato`, abrir um `publicSupabase.channel(...)` para a tabela `contratos`, filtrado pelo `contratoId`.
-   - Em cada `UPDATE`, atualizar imediatamente `linkAssinatura`, `autentiqueDocumentoId` e `statusContrato`.
-   - Se o status virar `assinado`/`ativo`, avançar a etapa na hora com `onContratoAssinado`.
-   - Manter o polling de 3s/15s apenas como fallback, não como mecanismo principal.
+As correções feitas nas mensagens anteriores (sanitização reforçada, estimativa de páginas com 2000 chars/página + margem de +2, remoção do bloco ASSINATURA do rastreador) **não foram deployadas**. Os edge functions logs estão vazios, confirmando que `autentique-create` e `autentique-create-by-token` rodam ainda com o código antigo. O documento assinado que você enviou foi gerado com o código antigo.
 
-4. `src/hooks/useCotacaoContratacao.ts`
-   - Adicionar `contratos` às subscriptions realtime do fluxo público.
-   - Invalidar `['contrato-publico-fallback', token]` e `['cotacao-contratacao', token]` quando o contrato mudar.
-   - Ampliar `contratoFallback` para buscar também `numero`, `autentique_url` e `autentique_documento_id`, não só `status` e `link_token`.
+Além disso, **3 templates no banco de dados** ainda contêm blocos manuais de assinatura que precisam ser removidos diretamente no banco (a sanitização por regex é um fallback, mas o ideal é limpar na fonte):
 
-5. `src/pages/public/CotacaoContratacao.tsx`
-   - Passar para `EtapaAssinaturaContrato` os dados iniciais do contrato já conhecidos pela página.
-   - Se necessário, usar uma `key` estável baseada em `cotacao.id` + `contratoId` para remontar com segurança quando o contrato aparecer.
+1. **Proposta de Filiação** (`eb09759f`): termina com `{{associado.cidade}}, {{sistema.data_extenso}}.` + `{{associado.nome}} - CPF: {{associado.cpf}}`
+2. **REGULAMENTO** (`34e1e572`): termina com linha de underscores + `ASSINATURA DO ASSOCIADO` + `{{associado.nome}} — CPF: {{associado.cpf}}`
+3. **TERMO DE RESPONSABILIDADE DO RASTREADOR** (`a644ab91`): termina com `{{empresa.cidade}} - {{empresa.uf}}, {{sistema.data_extenso}}.` + `{{associado.nome}}` + `CPF: {{associado.cpf}}`
 
-## Resultado esperado
-- O link/botão “Assinar Contrato Agora” aparece automaticamente assim que `autentique_url` for gravada.
-- A atualização acontece em dois níveis: local imediato (resposta da edge function) e realtime real (update em `contratos`).
-- A tela deixa de travar em “Aguarde...” por falta de estado local consistente.
-- O fluxo para de disparar `contrato-gerar` / `autentique-create` em duplicidade.
+E há um valor obsoleto no banco: `configuracoes.assinatura_total_paginas = 20` que, embora já seja sobrescrito pelo código, deve ser removido para evitar confusão.
 
-## Observação técnica importante
-- Não é necessária nova correção na Autentique para este problema.
-- Também não há indicação de nova migration obrigatória para o link; o foco agora é consolidar o estado no frontend e escutar `contratos` em tempo real.
+### Alterações
 
-## Validação obrigatória
-- Testar ponta a ponta estes cenários:
-  1. cotação sem contrato prévio;
-  2. contrato existente sem link;
-  3. link gerado alguns segundos depois;
-  4. contrato assinado avançando automaticamente para a próxima etapa.
-- Confirmar nos logs que existe apenas 1 chamada de `contrato-gerar` e 1 de `autentique-create` no fluxo normal.
+**1. Migration SQL — limpar blocos de assinatura dos 3 templates no banco**
+
+Usar `regexp_replace` para remover os blocos finais de assinatura (local/data, underscores, nome/CPF) dos 3 templates identificados. Também deletar `assinatura_total_paginas` da tabela `configuracoes` (já é calculado dinamicamente).
+
+**2. Deploy dos edge functions**
+
+Forçar o deploy de `autentique-create`, `autentique-create-by-token` e `_shared` para que as correções já implementadas (sanitização reforçada, estimativa de páginas, remoção do bloco ASSINATURA do rastreador) entrem em produção.
+
+**3. Nenhuma alteração de código necessária**
+
+As correções de código já foram feitas nas mensagens anteriores:
+- `sanitizeSignatureBlocks` já tem 23 regras que cobrem todos os padrões
+- `estimarPaginasHTML` já usa 2000 chars/página + margem de +2
+- `generateSecaoRastreador` já não gera bloco de assinatura
+- Os edge functions já chamam `sanitizeSignatureBlocks` antes de `estimarPaginasHTML`
+
+### Resultado esperado
+- Templates limpos na fonte (sem blocos manuais de assinatura)
+- Funções deployadas com sanitização reforçada como fallback de segurança
+- SIGNATURE posicionada corretamente na última página real
+- Nenhum bloco manual de "Nome - CPF" ou "Local, data" no documento final
+
