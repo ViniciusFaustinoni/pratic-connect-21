@@ -265,7 +265,7 @@ function AddRuleDialog({
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[9999]" position="popper" sideOffset={4}>
                 {(Object.keys(RULE_TYPE_LABELS) as RuleType[]).map((rt) => (
                   <SelectItem key={rt} value={rt}>
                     {RULE_TYPE_ICONS[rt]} {RULE_TYPE_LABELS[rt]}
