@@ -35,6 +35,7 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { EligibilityRulesEditor } from '@/components/admin/planos/EligibilityRulesEditor';
+import { useReplicateEligibilityToItems } from '@/hooks/useReplicateEligibilityToItems';
 import {
   ChevronDown,
   Copy,
@@ -414,6 +415,7 @@ export function LinhasPlanos() {
   const duplicateLine = useDuplicateProductLine();
   const duplicatePlan = useDuplicatePlan();
   const toggleStatus = useTogglePlanStatus();
+  const replicateEligibility = useReplicateEligibilityToItems();
 
   const totalPlanos = linhas.reduce((accumulator, linha) => accumulator + linha.plans.length, 0);
   const totalAtivos = linhas.reduce(
@@ -868,7 +870,12 @@ export function LinhasPlanos() {
             <DialogTitle>Elegibilidade: {eligibilityModal.planName}</DialogTitle>
           </DialogHeader>
           {eligibilityModal.planId && (
-            <EligibilityRulesEditor entityType="plano" entityId={eligibilityModal.planId} />
+            <EligibilityRulesEditor
+              entityType="plano"
+              entityId={eligibilityModal.planId}
+              onAfterSave={() => replicateEligibility.mutate(eligibilityModal.planId!)}
+              onAfterDelete={() => replicateEligibility.mutate(eligibilityModal.planId!)}
+            />
           )}
         </DialogContent>
       </Dialog>

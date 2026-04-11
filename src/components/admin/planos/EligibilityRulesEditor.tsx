@@ -62,9 +62,11 @@ interface EligibilityRulesEditorProps {
   entityType: EntityType;
   entityId: string | undefined;
   compact?: boolean;
+  onAfterSave?: () => void;
+  onAfterDelete?: () => void;
 }
 
-export function EligibilityRulesEditor({ entityType, entityId, compact }: EligibilityRulesEditorProps) {
+export function EligibilityRulesEditor({ entityType, entityId, compact, onAfterSave, onAfterDelete }: EligibilityRulesEditorProps) {
   const { data: rules = [], isLoading } = useRulesForEntity(entityType, entityId);
   const saveRule = useSaveRule();
   const deleteRule = useDeleteRule();
@@ -81,7 +83,9 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
 
   const handleDelete = (id: string) => {
     if (confirm('Remover esta regra?')) {
-      deleteRule.mutate(id);
+      deleteRule.mutate(id, {
+        onSuccess: () => onAfterDelete?.(),
+      });
     }
   };
 
@@ -117,6 +121,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
         entityType={entityType}
         entityId={entityId}
         onSave={saveRule}
+        onAfterSave={onAfterSave}
       />
     </div>
   );
@@ -201,12 +206,14 @@ function AddRuleDialog({
   entityType,
   entityId,
   onSave,
+  onAfterSave,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   entityType: EntityType;
   entityId: string;
   onSave: ReturnType<typeof useSaveRule>;
+  onAfterSave?: () => void;
 }) {
   const [ruleType, setRuleType] = useState<RuleType>('fipe_range');
   const [ruleMode, setRuleMode] = useState<RuleMode>('include');
@@ -230,6 +237,7 @@ function AddRuleDialog({
     });
     setConfig({});
     onOpenChange(false);
+    onAfterSave?.();
   };
 
   const toggleArrayItem = (key: string, value: string) => {
