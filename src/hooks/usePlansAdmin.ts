@@ -641,7 +641,7 @@ export function useReorderPlans() {
 
 export interface BenefitInput {
   name: string;
-  slug: string;
+  slug?: string;
   icon?: string | null;
   description?: string | null;
   category?: string | null;
