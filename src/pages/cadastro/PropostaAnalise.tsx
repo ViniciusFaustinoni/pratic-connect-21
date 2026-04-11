@@ -93,24 +93,11 @@ export default function PropostaAnalise() {
     setShowConfirmAprovar(false);
     
     try {
-      // Salvar RENAVAM/CHASSI no veículo antes de aprovar (se preenchidos)
-      if (proposta?.veiculo_id && (veiculoRenavam || veiculoChassi)) {
-        const updateData: Record<string, string | null> = {};
-        if (veiculoRenavam) updateData.renavam = veiculoRenavam;
-        if (veiculoChassi) updateData.chassi = veiculoChassi;
-        
-        const { error: updateError } = await supabase
-          .from('veiculos')
-          .update(updateData)
-          .eq('id', proposta.veiculo_id);
-        
-        if (updateError) {
-          toast.error('Erro ao salvar dados do veículo', { description: updateError.message });
-          return;
-        }
-      }
-      
-      await aprovarMutation.mutateAsync(id);
+      await aprovarMutation.mutateAsync({
+        contratoId: id,
+        veiculoRenavam: veiculoRenavam || undefined,
+        veiculoChassi: veiculoChassi || undefined,
+      });
       // Navegar para próxima ou voltar para lista
       if (nextProposta) {
         navigate(`/cadastro/propostas/${nextProposta.id}`);
