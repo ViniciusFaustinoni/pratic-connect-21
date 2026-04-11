@@ -291,7 +291,7 @@ export default function Dashboard() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { profile } = useAuth();
-  const { isAnalistaCadastroOnly, isAnalistaEventosOnly, isCoordenadorMonitoramentoOnly, isCoordenadorMonitoramento, isInstaladorVistoriador, isInstaladorVistoriadorOnly, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
+  const { isAnalistaCadastroOnly, isAnalistaEventosOnly, isCoordenadorMonitoramentoOnly, isAnalistaMonitoramentoOnly, isCoordenadorMonitoramento, isAnalistaMonitoramento, isInstaladorVistoriador, isInstaladorVistoriadorOnly, isVistoriadorBase, isGerencia, isDiretor, isDesenvolvedor, isAdminMaster, isVendedorOnly, userId } = usePermissions();
 
   // Se é APENAS instalador/vistoriador (sem perfis de gestão), redirecionar
   useEffect(() => {
@@ -310,8 +310,8 @@ export default function Dashboard() {
     return <AnalistaEventosHome />;
   }
 
-  // Se é coordenador de monitoramento, mostrar dashboard específico
-  if (isCoordenadorMonitoramentoOnly) {
+  // Se é coordenador ou analista de monitoramento, mostrar dashboard específico
+  if (isCoordenadorMonitoramentoOnly || isAnalistaMonitoramentoOnly) {
     return <DashboardCoordenador />;
   }
 
@@ -536,7 +536,7 @@ export default function Dashboard() {
         {/* COLUNA 3: Widgets */}
         <div className="space-y-6">
           {/* INSTALAÇÕES HOJE - Apenas coordenador e vistoriadores */}
-          {(isCoordenadorMonitoramento || isInstaladorVistoriador || isVistoriadorBase) && (
+          {(isCoordenadorMonitoramento || isAnalistaMonitoramento || isInstaladorVistoriador || isVistoriadorBase) && (
             <Card className="border-border bg-card">
               <CardHeader>
                 <div className="flex items-center justify-between">
