@@ -1,39 +1,31 @@
 
 
-## Plano: Adicionar tipo de servico REVISTORIA ao sistema de campo
+## Plano: Exibir cenario de adesao para consultores internos
 
-### Contexto
-O sistema possui um enum `tipo_servico` no Postgres com 7 valores. Precisamos adicionar `revistoria` como novo tipo. Na visao do tecnico, a revistoria segue o mesmo fluxo da vistoria de instalacao (mesmas fotos, checklist), mas SEM instalar rastreador. O coordenador de monitoramento agenda manualmente, como qualquer outro servico de campo.
+### Problema
+Atualmente, o bloco de "Cenario de Adesao e Instalacao" (4 opcoes) so aparece para vendedores externos (`isVendedorExterno`). Consultores internos nao conseguem isentar adesao nem escolher tipo de instalacao.
 
 ### Alteracoes
 
-**1. Migracao SQL** — Adicionar valor ao enum
-```sql
-ALTER TYPE tipo_servico ADD VALUE 'revistoria';
-```
+**Arquivo: `src/components/cotacoes/CotacaoFormDialog.tsx`**
 
-**2. `src/hooks/useServicos.ts`** — Registrar tipo no TypeScript
-- Adicionar `'revistoria'` ao union type `TipoServico`
-- Adicionar label: `revistoria: 'Revistoria'` em `TIPO_SERVICO_LABELS`
-- Criar helper `isRevistoria(tipo)` que retorna `tipo === 'revistoria'`
+1. **Linha 169** — Remover a condicao `isVendedorExterno` do calculo de `isCenarioIsento`:
+   - De: `isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base')`
+   - Para: `cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base'`
 
-**3. `src/components/vistoriador/TarefaAtualCard.tsx`** — Roteamento do tecnico
-- No `handleExecutar`, tratar `isRevistoria` redirecionando para `/instalador/vistoria/:id` (fluxo de vistoria completa, mesmas fotos, sem instalar rastreador)
+2. **Linha 2098** — Remover o gate `{isVendedorExterno && (` para que o bloco de cenario apareca para todos os usuarios
 
-**4. `src/types/servicos-rota.ts`** — Adicionar ao tipo de servico de rotas
-- Incluir `'revistoria'` no union `TipoServico` e nos maps de labels/cores/icones
+3. **Linha 1114** — Remover a condicao `isVendedorExterno` da validacao de cenario obrigatorio:
+   - De: `if (isVendedorExterno && !cenarioExterno)`
+   - Para: `if (!cenarioExterno)`
 
-**5. `src/components/monitoramento/AtribuicaoManualTab.tsx`** e demais listagens
-- Atualizar condicoes que fazem `tipo === 'instalacao' ? ... : 'Vistoria'` para incluir revistoria com label proprio
+4. **Linha 1149** — Ajustar a condicao de exibicao da taxa de filiacao:
+   - De: `(!isVendedorExterno || (cenarioExterno && cenarioExterno.startsWith('cobra')))`
+   - Para: `cenarioExterno && cenarioExterno.startsWith('cobra')`
 
-**6. Demais pontos de referencia** (labels, badges, filtros):
-- `src/components/monitoramento/estoque/DetalhesRastreadorDialog.tsx` — adicionar revistoria ao map de labels
-- Views de mapa e filtros que referenciam tipos — incluir revistoria como tipo valido
-- `src/components/ui/SlaIndicador.tsx` — mapear SLA da revistoria (mesmo prazo de instalacao)
+5. **Linha 1197** — Remover a condicao `isVendedorExterno` do spread de `tipo_instalacao` para que o tipo de instalacao seja salvo para todos
 
-### Na visao do tecnico
-A revistoria usa o fluxo `/instalador/vistoria/:id` (ExecutarVistoriaCompleta) — mesmas fotos e checklist de uma vistoria de instalacao. A diferenca e que NAO ha etapa de instalar rastreador (que ja e tratada apenas no fluxo `/instalador/instalacao/:id`).
+6. **Linha 172** — Ajustar `minimoAdesaoVolante` para usar o valor interno para consultores internos (manter logica atual que ja diferencia por tipo)
 
-### Criacao manual pelo coordenador
-O coordenador ja possui mecanismos para criar servicos de outros tipos (manutencao, retirada). A revistoria seguira o mesmo padrao — sera incluida como opcao nos modais/formularios de criacao manual de servico no modulo de monitoramento.
+Nenhuma migracao necessaria. Apenas mudancas de UI/logica no formulario de cotacao.
 
