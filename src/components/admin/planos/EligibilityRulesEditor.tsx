@@ -83,7 +83,9 @@ export function EligibilityRulesEditor({ entityType, entityId, compact, onAfterS
 
   const handleDelete = (id: string) => {
     if (confirm('Remover esta regra?')) {
-      deleteRule.mutate(id);
+      deleteRule.mutate(id, {
+        onSuccess: () => onAfterDelete?.(),
+      });
     }
   };
 
@@ -232,6 +234,7 @@ function AddRuleDialog({
     });
     setConfig({});
     onOpenChange(false);
+    onAfterSave?.();
   };
 
   const toggleArrayItem = (key: string, value: string) => {
