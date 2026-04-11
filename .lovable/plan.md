@@ -1,38 +1,32 @@
 
 
-## Plano: Mostrar distância e tempo estimado na rota técnico → serviço (com atualização em tempo real)
+## Plano: Painel lateral recolhível na aba Atribuições
 
-### Contexto Atual
-- O `RotaPolyline` já usa OSRM para desenhar a rota real entre técnico e serviço
-- O popup da rota mostra apenas nome do técnico e placa, sem distância/tempo
-- O `useRotaReal` já retorna `distanciaKm` e `tempoMinutos` do OSRM
-- As posições dos técnicos já atualizam em tempo real via Supabase Realtime (`vistoriadores_localizacao`)
-- Quando a posição muda, o `linhasDeRota` recalcula e o `useRotaReal` refaz a chamada OSRM automaticamente
+### Alteração
 
-### Alterações
+**`src/components/mapa/MapaVistoriasContent.tsx`** (apenas desktop, linhas 933-981)
 
-**1. `src/components/mapa/RotaPolyline.tsx`** - Expor distância/tempo via callback + mostrar badge no mapa
-- Adicionar prop `onRouteInfo?: (info: { distanciaKm: number; tempoMinutos: number }) => void` para comunicar dados ao pai
-- Calcular tempo estimado usando regra 1km/min (em vez do OSRM duration)
-- Renderizar um Tooltip permanente no ponto médio da rota com distância e tempo restante
+- Adicionar estado `painelAberto` (default `true`)
+- Quando recolhido, esconder o `Card` da lista de serviços (w-72) e mostrar um botão flutuante no canto esquerdo do mapa para reabrir
+- Quando aberto, mostrar um botão de fechar (chevron) no header do Card
+- Transição suave com `transition-all duration-300`
 
-**2. `src/components/mapa/MapaVistoriasContent.tsx`** - Exibir info de distância/tempo sobre cada rota
-- Alterar o `popupContent` do `RotaPolyline` para incluir distância em km e tempo estimado (1km/min)
-- Adicionar estado `rotasInfo` para armazenar distância/tempo por técnico
-- Mostrar badge flutuante sobre cada rota com "X.X km • ~X min"
+### Layout
 
-**3. `src/components/mapa/RotaInfoOverlay.tsx`** (novo) - Componente de overlay sobre a rota
-- Marker invisível no ponto médio da polyline com Tooltip permanente mostrando distância e tempo
-- Atualiza automaticamente quando OSRM retorna novos dados
+```text
+Aberto:                          Recolhido:
+┌──────────┬──────────────┐      ┌──────────────────────┐
+│ Serviços │              │      │[▶]                   │
+│  w-72    │    Mapa      │      │         Mapa         │
+│          │              │      │                      │
+└──────────┴──────────────┘      └──────────────────────┘
+```
 
-### Comportamento
-- Cada rota técnico→serviço mostra um badge no ponto médio: "3.2 km • ~3 min"
-- O popup ao clicar na rota mostra: nome do técnico, placa destino, distância e tempo
-- Quando o técnico se move (realtime), a rota redesenha e distância/tempo atualizam
-- Regra de tempo: `distanciaKm` arredondado para cima = minutos (1 km/min)
+### Detalhes
+- Botão `ChevronLeft`/`ChevronRight` no header do Card para fechar/abrir
+- Quando fechado: botão flutuante `z-[400]` com ícone `List` + contagem no canto superior esquerdo do mapa
+- Mobile: sem alteração (já usa Drawer)
 
-### Arquivos
-- **Editar**: `src/components/mapa/RotaPolyline.tsx`
+### Arquivo
 - **Editar**: `src/components/mapa/MapaVistoriasContent.tsx`
-- **Criar**: `src/components/mapa/RotaInfoOverlay.tsx`
 
