@@ -88,6 +88,7 @@ export function getTemplateEditor(): Editor | null {
 export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, rodapeHtml }: TemplateEditorProps) {
   const [tab, setTab] = useState<string>('editor');
   const isExternalUpdate = useRef(false);
+  const [showSignatureOverlay, setShowSignatureOverlay] = useState(false);
   const { data: empresaConfig } = useEmpresaConfig();
 
   const editor = useEditor({
