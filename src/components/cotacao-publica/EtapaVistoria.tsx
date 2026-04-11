@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 interface EtapaVistoriaProps {
   cotacaoId: string;
   tipoVeiculo: TipoVeiculo;
+  tipoInstalacao?: 'rota' | 'base' | null;
   clienteNome?: string;
   clienteTelefone?: string;
   clienteEmail?: string;
@@ -38,6 +39,7 @@ type ModoVistoria = 'escolha' | 'escolha-local' | 'autovistoria' | 'agendada' | 
 export function EtapaVistoria({ 
   cotacaoId, 
   tipoVeiculo, 
+  tipoInstalacao,
   clienteNome = '',
   clienteTelefone,
   clienteEmail,
