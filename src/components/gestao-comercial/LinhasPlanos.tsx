@@ -815,6 +815,33 @@ export function LinhasPlanos() {
         onOpenChange={(open) => setDuplicarLinhaModal({ open, linha: open ? duplicarLinhaModal.linha : null })}
         linha={duplicarLinhaModal.linha}
       />
+      <Dialog open={editItemModal.open} onOpenChange={(open) => { if (!open) setEditItemModal({ open: false }); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>
+              {editItemModal.type === 'cobertura' ? `Editar Cobertura: ${editItemModal.item?.nome || ''}` : `Editar Benefício: ${editItemModal.item?.name || ''}`}
+            </DialogTitle>
+          </DialogHeader>
+          {editItemModal.type === 'cobertura' && editItemModal.item && (
+            <CoberturaInlineForm
+              cobertura={editItemModal.item}
+              onSaved={() => {
+                setEditItemModal({ open: false });
+                queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+              }}
+            />
+          )}
+          {editItemModal.type === 'beneficio' && editItemModal.item && (
+            <BeneficioInlineForm
+              benefit={editItemModal.item}
+              onSaved={() => {
+                setEditItemModal({ open: false });
+                queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
