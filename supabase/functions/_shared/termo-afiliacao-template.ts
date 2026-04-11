@@ -1061,13 +1061,7 @@ const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
     </p>
   </div>
   
-  <div class="signature-area" style="margin-top: 30pt; padding-top: 15pt; border-top: 1px solid #e5e7eb;">
-    <h2 class="section-title">ASSINATURA</h2>
-    <br><br>
-    <p style="text-align: center;">
-      ${localAssinatura}, ${dataAssinatura}
-    </p>
-  </div>
+  <!-- Assinatura via Autentique -->
 </div>
 `;
 };
