@@ -29,7 +29,7 @@ import {
 } from '@/components/ui/alert-dialog';
 
 export default function VistoriasManutencao() {
-  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
+  const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
 
   const [filtros, setFiltros] = useState<FiltrosType>({});
   const [modalAgendar, setModalAgendar] = useState(false);

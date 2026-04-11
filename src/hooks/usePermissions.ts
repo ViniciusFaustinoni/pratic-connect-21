@@ -20,6 +20,7 @@ export type PermissionKey =
   | 'isAnalistaMarketing'
   | 'isAnalistaJuridico'
   | 'isAnalistaMonitoramento'
+  | 'isAnalistaMonitoramentoOnly'
   | 'isVendedor'
   | 'isGerencia'
   | 'isDesenvolvedor'
@@ -138,6 +139,7 @@ export function usePermissions() {
   const isSindicanteOnly = userIsOnlyOperational && isSindicante;
   const isAnalistaEventosOnly = userIsOnlyOperational && isAnalistaEventos;
   const isCoordenadorMonitoramentoOnly = userIsOnlyOperational && isCoordenadorMonitoramento;
+  const isAnalistaMonitoramentoOnly = userIsOnlyOperational && isAnalistaMonitoramento;
 
   // Flags não-operacionais que mantém lógica especial
   const isAnalistaCadastroOnly = isAnalistaCadastro && !hasPrivilegedRole;
@@ -148,7 +150,7 @@ export function usePermissions() {
   const isVistoriadorBaseOnly = false;
 
   const isPerfilLimitado = isAnalistaCadastroOnly || isVendedorCltOnly ||
-    isCoordenadorMonitoramentoOnly || isInstaladorVistoriadorOnly ||
+    isCoordenadorMonitoramentoOnly || isAnalistaMonitoramentoOnly || isInstaladorVistoriadorOnly ||
     isVistoriadorBaseOnly || isReguladorOnly || isAnalistaEventosOnly || isSindicanteOnly;
 
   /** Redirect path para roles operacionais — obtido do banco */
@@ -231,6 +233,7 @@ export function usePermissions() {
     isAnalistaMarketing: hasRole('analista_marketing'),
     isAnalistaJuridico: hasRole('analista_juridico'),
     isAnalistaMonitoramento,
+    isAnalistaMonitoramentoOnly,
 
     // Compostos
     isVendedor: isVendedor(),

@@ -174,9 +174,9 @@ export function MapaVistoriasContent() {
   const atribuirMutation = useAtribuirServicoManual();
   const desatribuirMutation = useDesatribuirServico();
   const enviarConfirmacaoMutation = useEnviarConfirmacaoWhatsApp();
-  const { isDiretor, isCoordenadorMonitoramento, isAdminMaster, isDesenvolvedor } = usePermissions();
+  const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento, isAdminMaster, isDesenvolvedor } = usePermissions();
 
-  const podeCancelarAtribuicao = isDiretor || isCoordenadorMonitoramento || isAdminMaster || isDesenvolvedor;
+  const podeCancelarAtribuicao = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isAdminMaster || isDesenvolvedor;
 
   const [filtroBusca, setFiltroBusca] = useState("");
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);

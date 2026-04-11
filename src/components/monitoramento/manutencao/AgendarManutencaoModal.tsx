@@ -74,8 +74,8 @@ export function AgendarManutencaoModal({
   const agendarMutation = useAgendarVistoriaManutencao();
   
   // Permissões para encaixe
-  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
-  const podeHabilitarEncaixe = isDiretor || isCoordenadorMonitoramento;
+  const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
+  const podeHabilitarEncaixe = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento;
 
   // Configuração de datas - hoje + próximos 2 dias (excluindo domingos)
   const dataMinima = startOfDay(new Date());
