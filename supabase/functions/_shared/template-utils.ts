@@ -841,7 +841,7 @@ export function sanitizeSignatureBlocks(html: string): string {
 // As funções generateAssinaturaAnexo e generateSecaoAssinatura foram removidas.
 // A assinatura agora é feita exclusivamente via Autentique (rubrica + assinatura digital).
 
-}
+
 
 // ============= SUBSTITUIÇÃO DE VARIÁVEIS PARA EVENTO =============
 
