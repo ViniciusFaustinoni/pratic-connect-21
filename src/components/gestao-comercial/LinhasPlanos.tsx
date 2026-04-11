@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -24,6 +24,9 @@ import { useDuplicateProductLine, useDuplicatePlan, useTogglePlanStatus } from '
 import { ImportarLinhasModal } from './ImportarLinhasModal';
 import { DuplicarPlanoModal } from '@/components/admin/planos/DuplicarPlanoModal';
 import { DuplicarLinhaModal } from '@/components/admin/planos/DuplicarLinhaModal';
+import { CoberturaInlineForm } from '@/components/admin/planos/PlanCoberturasList';
+import { BeneficioInlineForm } from '@/components/admin/planos/PlanBeneficiosList';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   ChevronDown,
   Copy,

@@ -24,7 +24,7 @@ interface PlanCoberturasListProps {
   focusItemId?: string;
 }
 
-function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: () => void }) {
+export function CoberturaInlineForm({ cobertura, onSaved }: { cobertura: any; onSaved: () => void }) {
   const updateCobertura = useUpdateCobertura();
   const eligibility = useEligibilityState('cobertura', cobertura.id);
 
