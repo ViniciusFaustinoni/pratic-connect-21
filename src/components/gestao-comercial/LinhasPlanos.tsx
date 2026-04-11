@@ -28,12 +28,22 @@ import { CoberturaInlineForm } from '@/components/admin/planos/PlanCoberturasLis
 import { BeneficioInlineForm } from '@/components/admin/planos/PlanBeneficiosList';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { EligibilityRulesEditor } from '@/components/admin/planos/EligibilityRulesEditor';
+import {
   ChevronDown,
   Copy,
   Layers3,
   Loader2,
+  MoreVertical,
   Pencil,
   Plus,
+  Settings2,
   Shield,
   Sparkles,
   Trash2,
