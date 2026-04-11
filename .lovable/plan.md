@@ -1,91 +1,73 @@
 
 
-## Plano: Reescrever sanitizeSignatureBlocks para cobrir todos os padrões
+## Plano: Remover blocos de assinatura dos templates e usar rubricas + assinatura padrão Autentique
 
-### Padrões encontrados nos templates reais
+### Contexto
 
-Analisei os 7 templates e 4 aditivos ativos. Encontrei 6 padrões distintos de assinatura que a função atual **não** remove:
+O Autentique já gera uma **página separada de assinaturas** automaticamente. O que precisamos é apenas:
+- **INITIALS (rubrica)** em todas as páginas exceto a última
+- **SIGNATURE (assinatura)** apenas na última página
 
-| Padrão | Onde aparece | Exemplo |
-|--------|-------------|---------|
-| Linhas de underscores `___` | Regulamento, TEV01, V_QR0, Aditivos | `____________` |
-| Texto "ASSINATURA DO ASSOCIADO" | Regulamento | `<p><strong>ASSINATURA DO ASSOCIADO</strong></p>` |
-| Bordas decorativas `━━━` | TEV01, Aditivos 0Km/Blindado/Microperfurado | `━━━━━━━━━━━━━━━` |
-| Blocos "Local: ___  Data:" | Regulamento | `Local: ___... Data: {{sistema.data_atual}}` |
-| Sintaxe legada `!{Associado}` / `!{Associacao}` | Aditivo Leilão | `!{Associado}` em tabela |
-| Nome+CPF solto no final | AF1, Rastreador, todos | `{{associado.nome}} - CPF: {{associado.cpf}}` como últimos parágrafos |
+Hoje o sistema injeta blocos visuais de assinatura (local/data/linha/nome/CPF) no HTML, o que é redundante e causa sobreposição com a página de assinaturas do Autentique.
 
-A função atual só remove 3 classes CSS (`signature-block`, `signature-line`, `signature-labels`) que **nenhum** template real usa.
+### Alterações
 
-### Implementação
+**1. `supabase/functions/_shared/autentique-positions.ts`** — Corrigir `gerarPosicoesAssinatura`
 
-**Arquivo**: `supabase/functions/_shared/template-utils.ts` — função `sanitizeSignatureBlocks` (linhas 781-791)
-
-A nova função será uma sequência de regexes ordenadas do mais específico ao mais genérico:
+Hoje só gera SIGNATURE em todas as páginas. Corrigir para:
+- Páginas 1 a (N-1): `element: "INITIALS"` (rubrica)
+- Página N (última): `element: "SIGNATURE"` (assinatura completa)
 
 ```typescript
-export function sanitizeSignatureBlocks(html: string): string {
-  if (!html) return html;
-  let result = html;
+export function gerarPosicoesAssinatura(config: PosicoesConfig = {}) {
+  const {
+    rubricaX = "78.0",
+    rubricaY = "95.0",
+    assinaturaX = "65.0",
+    assinaturaY = "85.0",
+    totalPaginas = 20,
+  } = config;
 
-  // 1. Blocos com classes CSS (existente)
-  result = result.replace(/<div[^>]*class\s*=\s*["'][^"']*signature-(?:block|area|labels)[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '');
-  result = result.replace(/<p[^>]*class\s*=\s*["'][^"']*signature-line[^"']*["'][^>]*>[\s\S]*?<\/p>/gi, '');
+  const positions = [];
 
-  // 2. Bordas decorativas ━━━ (linhas inteiras de ━)
-  result = result.replace(/<p[^>]*>\s*[━]{5,}\s*<\/p>/gi, '');
+  // INITIALS em todas as páginas exceto a última
+  for (let p = 1; p < totalPaginas; p++) {
+    positions.push({ x: rubricaX, y: rubricaY, z: String(p), element: "INITIALS" });
+  }
 
-  // 3. Bordas decorativas ──── (linhas inteiras de ─)
-  result = result.replace(/<p[^>]*>\s*[─]{5,}\s*<\/p>/gi, '');
+  // SIGNATURE apenas na última página
+  positions.push({ x: assinaturaX, y: assinaturaY, z: String(totalPaginas), element: "SIGNATURE" });
 
-  // 4. Parágrafos com linhas de underscores (3+ underscores seguidos)
-  //    que apareçam em contexto de assinatura (perto de nome/CPF/ASSOCIADO)
-  //    Remove: <p>_______________</p> e <p>Local: ___ Data: ...</p>
-  result = result.replace(/<p[^>]*>[^<]*_{3,}[^<]*<\/p>/gi, '');
-
-  // 5. Texto "ASSINATURA DO ASSOCIADO" / "Assinatura do Associado / Terceiro"
-  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*(?:ASSINATURA|Assinatura)\s+(?:DO|do|da)\s+(?:ASSOCIADO|Associado)[^<]*(?:<\/strong>)?\s*<\/p>/gi, '');
-
-  // 6. Texto "ASSOCIADO" sozinho (label de bloco de assinatura)
-  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*ASSOCIADO\s*(?:<\/strong>)?\s*<\/p>/gi, '');
-
-  // 7. Texto "ASSOCIAÇÃO" sozinho (label de bloco de assinatura)
-  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*ASSOCIAÇÃO\s*(?:<\/strong>)?\s*<\/p>/gi, '');
-
-  // 8. Texto "AUTORIZAÇÃO" sozinho (TEV01)
-  result = result.replace(/<p[^>]*>\s*AUTORIZAÇÃO\s*<\/p>/gi, '');
-
-  // 9. Sintaxe legada !{Associado}, !{Associacao}, ${local}, #{data_de_emissao}
-  result = result.replace(/<p[^>]*>[^<]*!\{(?:Associado|Associacao)\}[^<]*<\/p>/gi, '');
-  result = result.replace(/<p[^>]*>[^<]*\$\{local\}[^<]*#\{data_de_emissao\}[^<]*<\/p>/gi, '');
-
-  // 10. Tabela de assinatura legada (Leilão) — tabela com !{Associado}
-  result = result.replace(/<table[^>]*>[\s\S]*?!\{(?:Associado|Associacao)\}[\s\S]*?<\/table>/gi, '');
-
-  // 11. Parágrafos finais com só nome+CPF do associado (últimos blocos)
-  //     Match: <p>{{associado.nome}} - CPF: {{associado.cpf}}</p>
-  //     ou variantes com <strong>, — etc.
-  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*\{\{associado\.nome\}\}[\s\S]{0,30}(?:CPF|cpf)[:\s]*\{\{associado\.cpf\}\}\s*(?:<\/strong>)?\s*<\/p>/gi, '');
-
-  // 12. Parágrafos com dados da empresa em contexto de assinatura
-  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*\{\{empresa\.nome\}\}[\s\S]{0,30}(?:CNPJ|cnpj)[:\s]*\{\{empresa\.cnpj\}\}\s*(?:<\/strong>)?\s*<\/p>/gi, '');
-
-  // 13. Parágrafo "Dados da Agencia" (Leilão)
-  result = result.replace(/<p[^>]*>\s*Dados da Agencia\s*<\/p>/gi, '');
-
-  // 14. Limpar <p><br></p> e <p></p> consecutivos que sobraram
-  result = result.replace(/(?:<p[^>]*>\s*(?:<br\s*\/?>)?\s*<\/p>\s*){3,}/gi, '<p><br></p>');
-
-  return result;
+  return positions;
 }
 ```
 
-### O que NÃO será tocado
-- `hasSignatureArea` — permanece igual
-- `generateAssinaturaAnexo` / `generateSecaoAssinatura` — sem alterações
-- Nenhum outro arquivo — apenas a função `sanitizeSignatureBlocks` em `template-utils.ts`
-- A lógica de injeção de assinaturas nos callers (`autentique-create`, `autentique-create-by-token`) não muda
+**2. `supabase/functions/autentique-create/index.ts`** — Remover injeção de blocos visuais de assinatura
 
-### Resultado esperado
-Após a sanitização, o HTML sai completamente limpo de qualquer bloco de assinatura original, permitindo que `generateAssinaturaAnexo` ou `generateSecaoAssinatura` injete um bloco padronizado único e correto.
+- Remover chamada a `generateSecaoAssinatura` (linha ~133) e a variável `assinaturaHTML`
+- Remover chamada a `generateAssinaturaAnexo` nos anexos (linha ~685)
+- Manter `sanitizeSignatureBlocks` para limpar templates do banco
+
+**3. `supabase/functions/autentique-create-by-token/index.ts`** — Mesmas remoções
+
+- Remover `generateSecaoAssinatura` (linha ~482) e `generateAssinaturaAnexo` (linha ~543)
+
+**4. `supabase/functions/_shared/template-utils.ts`** — Limpar funções obsoletas
+
+- Remover (ou marcar como deprecated) `generateAssinaturaAnexo` e `generateSecaoAssinatura` — já não serão chamadas
+- Manter `sanitizeSignatureBlocks` ativo para continuar limpando templates do banco que tenham blocos manuais
+
+### Resultado
+
+- Templates ficam limpos: sem nenhum bloco visual de assinatura no HTML final
+- Autentique posiciona rubrica em todas as páginas e assinatura na última
+- A página de assinaturas do Autentique aparece normalmente no final do documento
+- Comportamento padronizado para todos os tipos de termo
+
+### Arquivos
+- `supabase/functions/_shared/autentique-positions.ts`
+- `supabase/functions/_shared/template-utils.ts`
+- `supabase/functions/autentique-create/index.ts`
+- `supabase/functions/autentique-create-by-token/index.ts`
+- Deploy das edge functions afetadas
 
