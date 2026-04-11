@@ -3,8 +3,9 @@
  * - INITIALS (rubrica) em todas as páginas exceto a última
  * - SIGNATURE (assinatura completa) na última página
  * 
+ * O total de páginas é estimado dinamicamente a partir do HTML.
  * Páginas inexistentes são ignoradas pela API da Autentique,
- * então é seguro usar um número alto como máximo.
+ * então é seguro usar um número ligeiramente acima do real.
  */
 
 export interface PosicoesConfig {
@@ -13,6 +14,37 @@ export interface PosicoesConfig {
   assinaturaX?: string;
   assinaturaY?: string;
   totalPaginas?: number;
+}
+
+/**
+ * Estima o número de páginas de um HTML A4 baseado no tamanho do conteúdo.
+ * Heurística: ~3000 caracteres de HTML = ~1 página A4 (com margens, tabelas, etc.)
+ * Retorna no mínimo 1 e adiciona 1 página de margem para segurança.
+ */
+export function estimarPaginasHTML(html: string): number {
+  if (!html) return 1;
+  
+  // Remover tags de estilo/script para contar apenas conteúdo visual
+  const semEstilos = html
+    .replace(/<style[^>]*>[\s\S]*?<\/style>/gi, '')
+    .replace(/<script[^>]*>[\s\S]*?<\/script>/gi, '')
+    .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '');
+  
+  // Contar page-breaks explícitos
+  const pageBreaks = (html.match(/page-break-before\s*:\s*always/gi) || []).length;
+  
+  // Estimar pela quantidade de conteúdo (~3000 chars HTML = 1 página A4)
+  const paginasPorConteudo = Math.ceil(semEstilos.length / 3000);
+  
+  // Usar o maior entre os dois métodos
+  const estimativa = Math.max(paginasPorConteudo, pageBreaks + 1);
+  
+  // Adicionar 1 de margem, mínimo 2 (para ter ao menos 1 página de rubrica + 1 de assinatura)
+  const total = Math.max(2, estimativa + 1);
+  
+  console.log(`[autentique-positions] Estimativa de páginas: ${total} (conteúdo: ${paginasPorConteudo}, page-breaks: ${pageBreaks}, HTML: ${html.length} bytes)`);
+  
+  return total;
 }
 
 export function gerarPosicoesAssinatura(config: PosicoesConfig = {}) {
