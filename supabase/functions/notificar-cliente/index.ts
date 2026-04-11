@@ -456,17 +456,21 @@ serve(async (req) => {
             },
             getButtonParams: () => linkToken ? [linkToken] : null,
           },
-          // Técnico a caminho → tecnico_a_caminho (7 params)
+          // Técnico a caminho → tecnico_a_caminho_1 (6 body params)
+          // {{1}} nome, {{2}} técnico, {{3}} telefone, {{4}} telefone formatado, {{5}} endereço, {{6}} período
           tecnico_em_rota: {
             template_name: 'tecnico_a_caminho_1',
-            getParams: () => [
-              primeiroNome,
-              (dados?.tecnico_nome as string) || 'Técnico PRATIC',
-              (dados?.tecnico_telefone as string) || '',
-              (dados?.tecnico_telefone as string) || 'Não informado',
-              (dados?.endereco as string) || 'Endereço a confirmar',
-              (dados?.periodo as string) || 'A confirmar',
-            ],
+            getParams: () => {
+              const tel = (dados?.tecnico_telefone as string) || 'Não informado';
+              return [
+                primeiroNome,
+                (dados?.tecnico_nome as string) || 'Técnico PRATIC',
+                tel,
+                tel,
+                (dados?.endereco as string) || 'Endereço a confirmar',
+                (dados?.periodo as string) || 'A confirmar',
+              ];
+            },
           },
           instalacao_agendada: {
             template_name: 'notificacao_geral_v1',

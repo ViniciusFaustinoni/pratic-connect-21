@@ -117,7 +117,33 @@ serve(async (req) => {
     // 2. Notificar o CLIENTE que o técnico está a caminho
     // Esta é a ÚNICA origem desta notificação (disparada pelo botão "Iniciar Tarefa")
     const clienteTelefone = associado.whatsapp || associado.telefone;
-    const profissionalTelefone = profissional.whatsapp || profissional.telefone;
+    let profissionalTelefone = profissional.whatsapp || profissional.telefone;
+
+    // Fallback: se profissional não tem telefone, buscar telefone da empresa
+    if (!profissionalTelefone) {
+      console.warn("[notificar-inicio-rota] Profissional sem telefone, buscando fallback da empresa...");
+      const { data: cfgTel } = await supabase
+        .from('configuracoes')
+        .select('valor')
+        .eq('chave', 'empresa_telefone')
+        .maybeSingle();
+      if (cfgTel?.valor) {
+        profissionalTelefone = cfgTel.valor;
+        console.log(`[notificar-inicio-rota] Usando telefone da empresa como fallback: ${profissionalTelefone}`);
+      } else {
+        // Segundo fallback: assistencia_telefone_central (0800)
+        const { data: cfg0800 } = await supabase
+          .from('configuracoes')
+          .select('valor')
+          .eq('chave', 'assistencia_telefone_central')
+          .maybeSingle();
+        if (cfg0800?.valor) {
+          profissionalTelefone = cfg0800.valor;
+          console.log(`[notificar-inicio-rota] Usando 0800 como fallback: ${profissionalTelefone}`);
+        }
+      }
+    }
+
     const profissionalTelefoneFormatado = profissionalTelefone 
       ? profissionalTelefone.replace(/(\d{2})(\d{5})(\d{4})/, '($1) $2-$3')
       : 'Não informado';
