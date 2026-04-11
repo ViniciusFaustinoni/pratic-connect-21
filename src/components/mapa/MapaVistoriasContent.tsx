@@ -64,17 +64,16 @@ const COR_SELECIONADO = '#F59E0B';
 const COR_NAO_CONFIRMADO = '#F97316'; // Orange
 const COR_CONFIRMADO = '#10B981'; // Green
 const COR_AGUARDANDO = '#EAB308'; // Yellow
+const COR_EM_EXECUCAO = '#3B82F6'; // Blue
 const STATUS_REALIZADOS = ['concluida', 'aprovada', 'reprovada', 'em_analise'];
+const STATUS_EM_EXECUCAO = ['em_andamento', 'em_rota'];
 
 function getCorPorStatus(status: string, confirmacao_whatsapp?: string | null, permite_encaixe?: boolean): string {
+  if (STATUS_EM_EXECUCAO.includes(status)) return COR_EM_EXECUCAO;
   if (STATUS_REALIZADOS.includes(status)) return COR_REALIZADA;
-  // Encaixe: always red (normal treatment)
   if (permite_encaixe) return COR_A_REALIZAR;
-  // Confirmed
   if (confirmacao_whatsapp === 'confirmada') return COR_CONFIRMADO;
-  // Awaiting confirmation
   if (confirmacao_whatsapp?.startsWith('aguardando')) return COR_AGUARDANDO;
-  // Not sent or null
   if (!confirmacao_whatsapp) return COR_NAO_CONFIRMADO;
   return COR_A_REALIZAR;
 }
@@ -568,13 +567,23 @@ export function MapaVistoriasContent() {
 
       {/* Marcadores de vistorias */}
       {vistoriasComCoordenadas.map((v) => {
+        const isEmExecucao = STATUS_EM_EXECUCAO.includes(v.status);
         const markerColor = getCorPorStatus(v.status, v.confirmacao_whatsapp, v.permite_encaixe);
         const isRealizada = STATUS_REALIZADOS.includes(v.status);
         const isSelectedForAssign = servicoParaAtribuir?.id === v.id;
-        const tooltipColor = getTooltipColor(v.confirmacao_whatsapp, v.permite_encaixe);
+        const tooltipColor = isEmExecucao ? COR_EM_EXECUCAO : getTooltipColor(v.confirmacao_whatsapp, v.permite_encaixe);
         const periodoStr = getPeriodoLabel(v.periodo);
         const dataLabel = safeFormat(v.data_agendada ? v.data_agendada + 'T00:00:00' : null, "dd/MM");
-        const tooltipText = [dataLabel, periodoStr].filter(Boolean).join(' ');
+        
+        // Tooltip text: show execution time if em_andamento
+        let tooltipText: string;
+        if (isEmExecucao) {
+          const updatedDate = safeParseDate(v.horario_agendado ? `${v.data_agendada}T${v.horario_agendado}` : null) || safeParseDate(v.data_agendada);
+          const tempoDecorrido = updatedDate ? formatDistanceToNow(updatedDate, { locale: ptBR }) : '';
+          tooltipText = `🔧 ${tempoDecorrido ? `há ${tempoDecorrido}` : 'Em execução'}`;
+        } else {
+          tooltipText = [dataLabel, periodoStr].filter(Boolean).join(' ');
+        }
 
         return (
           <Marker
@@ -607,7 +616,7 @@ export function MapaVistoriasContent() {
                 <div className="flex items-center justify-between mb-2">
                   <h3 className="font-bold text-sm">{v.veiculo_placa || "Sem placa"}</h3>
                   <span className="text-xs px-2 py-0.5 rounded text-white" style={{ backgroundColor: isSelectedForAssign ? COR_SELECIONADO : markerColor }}>
-                    {isSelectedForAssign ? "Selecionado" : isRealizada ? "Realizada" : v.permite_encaixe ? "Encaixe" : v.confirmacao_whatsapp === 'confirmada' ? "Confirmado" : "A Realizar"}
+                    {isSelectedForAssign ? "Selecionado" : isEmExecucao ? "Em Execução" : isRealizada ? "Realizada" : v.permite_encaixe ? "Encaixe" : v.confirmacao_whatsapp === 'confirmada' ? "Confirmado" : "A Realizar"}
                   </span>
                 </div>
                 <div className="text-xs space-y-1 mb-2">
@@ -617,7 +626,13 @@ export function MapaVistoriasContent() {
                   {v.data_agendada && <p><strong>Agendada:</strong> {safeFormat(v.data_agendada, "dd/MM/yyyy") || v.data_agendada}</p>}
                   <p><strong>Local:</strong> {v.endereco_bairro}, {v.endereco_cidade}</p>
                   <p><strong>Status:</strong> {v.status}</p>
-                  {!isRealizada && !v.permite_encaixe && (
+                  {isEmExecucao && (
+                    <p className="text-blue-600 font-semibold flex items-center gap-1">
+                      <span className="w-2 h-2 rounded-full bg-blue-500 animate-pulse" />
+                      🔧 Serviço em execução
+                    </p>
+                  )}
+                  {!isRealizada && !v.permite_encaixe && !isEmExecucao && (
                     <p style={{ color: tooltipColor }}><strong>Confirmação:</strong> {getConfirmacaoLabel(v.confirmacao_whatsapp, v.permite_encaixe)}</p>
                   )}
                   {v.vistoriador_nome ? (
@@ -626,47 +641,48 @@ export function MapaVistoriasContent() {
                     <p className="text-orange-600"><strong>Vistoriador:</strong> Não atribuído</p>
                   )}
                 </div>
-                <div className="flex gap-2 flex-wrap">
-                  {/* Botão enviar confirmação no popup */}
-                  {podeEnviarConfirmacao(v) && (
-                    <button
-                      onClick={() => enviarConfirmacaoMutation.mutate(v.servico_id_unificado!)}
-                      disabled={enviarConfirmacaoMutation.isPending}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50"
-                    >
-                      <Send className="h-3 w-3" />Enviar Confirmação
+                {/* Hide action buttons when service is in execution */}
+                {!isEmExecucao && (
+                  <div className="flex gap-2 flex-wrap">
+                    {podeEnviarConfirmacao(v) && (
+                      <button
+                        onClick={() => enviarConfirmacaoMutation.mutate(v.servico_id_unificado!)}
+                        disabled={enviarConfirmacaoMutation.isPending}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700 disabled:opacity-50"
+                      >
+                        <Send className="h-3 w-3" />Enviar Confirmação
+                      </button>
+                    )}
+                    {atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.servico_id_unificado && (
+                      <button
+                        onClick={() => iniciarAtribuicao(v)}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs hover:bg-amber-600"
+                      >
+                        <MousePointerClick className="h-3 w-3" />Atribuir
+                      </button>
+                    )}
+                    {v.associado_telefone && (
+                      <button onClick={() => abrirWhatsApp(v.associado_telefone)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
+                        <Phone className="h-3 w-3" />WhatsApp
+                      </button>
+                    )}
+                    <button onClick={() => abrirGoogleMaps(v.latitude!, v.longitude!)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
+                      <Navigation className="h-3 w-3" />Google Maps
                     </button>
-                  )}
-                  {/* Botão atribuir no popup */}
-                  {atribuicaoManualAtiva && !v.vistoriador_id && !isRealizada && !!v.servico_id_unificado && (
-                    <button
-                      onClick={() => iniciarAtribuicao(v)}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs hover:bg-amber-600"
-                    >
-                      <MousePointerClick className="h-3 w-3" />Atribuir
-                    </button>
-                  )}
-                  {v.associado_telefone && (
-                    <button onClick={() => abrirWhatsApp(v.associado_telefone)} className="flex items-center gap-1 px-3 py-1.5 bg-green-600 text-white rounded text-xs hover:bg-green-700">
-                      <Phone className="h-3 w-3" />WhatsApp
-                    </button>
-                  )}
-                  <button onClick={() => abrirGoogleMaps(v.latitude!, v.longitude!)} className="flex items-center gap-1 px-3 py-1.5 bg-blue-600 text-white rounded text-xs hover:bg-blue-700">
-                    <Navigation className="h-3 w-3" />Google Maps
-                  </button>
-                  {podeCancelarAtribuicao && v.vistoriador_id && !isRealizada && v.servico_id_unificado && (
-                    <button
-                      onClick={() => setCancelConfirmation({
-                        servicoId: v.servico_id_unificado!,
-                        servicoPlaca: v.veiculo_placa,
-                        profissionalNome: v.vistoriador_nome,
-                      })}
-                      className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded text-xs hover:bg-red-700"
-                    >
-                      <XIcon className="h-3 w-3" />Cancelar Rota
-                    </button>
-                  )}
-                </div>
+                    {podeCancelarAtribuicao && v.vistoriador_id && !isRealizada && v.servico_id_unificado && (
+                      <button
+                        onClick={() => setCancelConfirmation({
+                          servicoId: v.servico_id_unificado!,
+                          servicoPlaca: v.veiculo_placa,
+                          profissionalNome: v.vistoriador_nome,
+                        })}
+                        className="flex items-center gap-1 px-3 py-1.5 bg-red-600 text-white rounded text-xs hover:bg-red-700"
+                      >
+                        <XIcon className="h-3 w-3" />Cancelar Rota
+                      </button>
+                    )}
+                  </div>
+                )}
               </div>
             </Popup>
           </Marker>
