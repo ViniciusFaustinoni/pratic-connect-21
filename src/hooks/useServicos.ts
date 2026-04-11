@@ -1127,9 +1127,8 @@ export function useAprovarVeiculoServico() {
         usuario_id: profile?.id,
       });
 
-      // 7. Gerar Laudo PDF e enviar para assinatura via Autentique
+      // 7. Gerar Laudo PDF (anexado automaticamente aos documentos do associado)
       try {
-        // Gerar laudo PDF
         console.log('[useAprovarVeiculoServico] Gerando laudo PDF...');
         const { data: laudoResult, error: laudoError } = await supabase.functions.invoke('gerar-laudo-vistoria', {
           body: { servicoId: data.servicoId },
@@ -1138,94 +1137,10 @@ export function useAprovarVeiculoServico() {
         if (laudoError) {
           console.warn('[useAprovarVeiculoServico] Erro ao gerar laudo (não bloqueia):', laudoError);
         } else if (laudoResult?.url) {
-          console.log('[useAprovarVeiculoServico] ✓ Laudo PDF gerado:', laudoResult.url);
-
-          // Enviar para assinatura via Autentique
-          console.log('[useAprovarVeiculoServico] Enviando laudo para Autentique...');
-          const { data: autentiqueResult, error: autentiqueError } = await supabase.functions.invoke('autentique-create-laudo', {
-            body: {
-              servicoId: data.servicoId,
-              laudoPdfUrl: laudoResult.url,
-            },
-          });
-
-          if (autentiqueError) {
-            console.warn('[useAprovarVeiculoServico] Erro ao enviar para Autentique (não bloqueia):', autentiqueError);
-          } else if (autentiqueResult?.signatureLink) {
-            console.log('[useAprovarVeiculoServico] ✓ Laudo enviado para Autentique, link:', autentiqueResult.signatureLink);
-
-            // Enviar link do checklist público via WhatsApp (associado revisa antes de assinar)
-            const { data: assocDados } = await supabase
-              .from('associados')
-              .select('telefone, whatsapp, nome')
-              .eq('id', data.associadoId)
-              .single();
-
-            const telefoneEnvio = assocDados?.whatsapp || assocDados?.telefone;
-            if (telefoneEnvio) {
-              const nomeAssociado = assocDados?.nome?.split(' ')[0] || 'Associado';
-              const { data: veiculoDados } = await supabase
-                .from('veiculos')
-                .select('modelo, placa')
-                .eq('id', data.veiculoId)
-                .single();
-              const veiculoDesc = veiculoDados ? `${veiculoDados.modelo} - ${veiculoDados.placa}` : 'seu veículo';
-
-              // Buscar link_token do contrato para gerar URL do checklist público
-              const { data: servicoContrato } = await supabase
-                .from('servicos')
-                .select('contrato_id')
-                .eq('id', data.servicoId)
-                .single();
-
-              let checklistLink = autentiqueResult.signatureLink;
-              if (servicoContrato?.contrato_id) {
-                const { data: contratoLink } = await supabase
-                  .from('contratos')
-                  .select('link_token')
-                  .eq('id', servicoContrato.contrato_id)
-                  .single();
-
-                if (contratoLink?.link_token) {
-                  checklistLink = `${window.location.origin}/acompanhar/${contratoLink.link_token}`;
-                }
-              }
-
-              // Buscar template Meta
-              const { data: metaTemplate } = await supabase
-                .from('whatsapp_meta_templates')
-                .select('id, nome, status')
-                .eq('nome', 'assinatura_documento_v2')
-                .single();
-
-              if (metaTemplate && metaTemplate.status === 'APPROVED') {
-                await supabase.functions.invoke('whatsapp-send-text', {
-                  body: {
-                    telefone: telefoneEnvio,
-                    mensagem: `Olá ${nomeAssociado}! A instalação no seu veículo ${veiculoDesc} foi concluída. Revise o laudo e assine: ${checklistLink}`,
-                    template_name: metaTemplate.nome,
-                    template_params: [nomeAssociado, 'Laudo de Instalação'],
-                    referencia_tipo: 'assinatura_laudo',
-                    referencia_id: data.servicoId,
-                  },
-                });
-              } else {
-                const mensagem = `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso. ✅\n\nRevise os detalhes e assine o Laudo de Instalação:\n\n${checklistLink}`;
-                await supabase.functions.invoke('whatsapp-send-text', {
-                  body: {
-                    telefone: telefoneEnvio,
-                    mensagem,
-                    referencia_tipo: 'assinatura_laudo',
-                    referencia_id: data.servicoId,
-                  },
-                });
-              }
-              console.log('[useAprovarVeiculoServico] ✓ WhatsApp com link do checklist público enviado');
-            }
-          }
+          console.log('[useAprovarVeiculoServico] ✓ Laudo PDF gerado e anexado:', laudoResult.url);
         }
-      } catch (laudoWhatsErr) {
-        console.warn('[useAprovarVeiculoServico] Erro ao gerar laudo/enviar WhatsApp (não bloqueia):', laudoWhatsErr);
+      } catch (laudoErr) {
+        console.warn('[useAprovarVeiculoServico] Erro ao gerar laudo (não bloqueia):', laudoErr);
       }
 
       // 8. Notificação de boas-vindas removida daqui — enviada apenas pelo fluxo de aprovação do analista (ativar-associado)

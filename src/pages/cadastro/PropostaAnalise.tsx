@@ -81,11 +81,8 @@ export default function PropostaAnalise() {
     proposta?.vistoria?.tipo === 'autovistoria'
   ) && !proposta?.instalacao_info && !isVistoriaBase;
 
-  // Verificar se laudo foi assinado (quando há instalação com laudo pendente)
-  const laudoPendente = proposta?.instalacao_info && proposta.instalacao_info.laudo_autentique_url && !proposta.instalacao_info.laudo_assinado;
-  
   // Verificar se pode aprovar
-  const podeAprovar = proposta?.status === 'assinado' && !proposta?.tem_documento_pendente && !laudoPendente;
+  const podeAprovar = proposta?.status === 'assinado' && !proposta?.tem_documento_pendente;
 
   const handleAprovar = () => {
     setShowConfirmAprovar(true);
