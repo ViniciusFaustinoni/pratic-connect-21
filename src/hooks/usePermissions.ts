@@ -20,6 +20,7 @@ export type PermissionKey =
   | 'isAnalistaMarketing'
   | 'isAnalistaJuridico'
   | 'isAnalistaMonitoramento'
+  | 'isAnalistaMonitoramentoOnly'
   | 'isVendedor'
   | 'isGerencia'
   | 'isDesenvolvedor'
