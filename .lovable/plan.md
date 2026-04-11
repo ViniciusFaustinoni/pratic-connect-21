@@ -1,26 +1,69 @@
 
 
-## Plano: Chat IA no menu Relacionamento
+## Plano: Melhorar Layout Visual do Laudo de Vistoria PDF
 
 ### Contexto
-A pagina `EventosChatIA` ja existe com layout WhatsApp (conversas a esquerda, chat a direita), usando `whatsapp_mensagens` e mostrando todas as conversas com a Maya IA. O usuario quer essa mesma funcionalidade acessivel via menu "Relacionamento" (grupo `cobranca`).
+O PDF atual ja contem cabecalho, dados do associado/veiculo/vistoriador e fotos por categoria, porem com layout basico (texto simples, fotos em coluna unica de 350px). O objetivo e tornar o documento mais profissional e visual.
 
-### Alteracoes
+### Alteracoes em `supabase/functions/gerar-laudo-vistoria/index.ts`
 
-**1. `src/components/layout/AppSidebar.tsx`**
-- Adicionar item `{ title: 'Chat', url: '/cobranca/chat', icon: MessageCircle }` no grupo `cobranca` (Relacionamento)
+**1. Cabecalho visual com faixa colorida**
+- Faixa azul no topo com titulo "LAUDO DE VISTORIA VEICULAR" em branco
+- Subtitulo "PRATICCAR Protecao Veicular" abaixo
+- Protocolo e data na mesma faixa, alinhados a direita
 
-**2. `src/App.tsx`**
-- Adicionar rota `/cobranca/chat` apontando para `EventosChatIA` (reutilizar o mesmo componente)
+**2. Secoes de dados em cards com fundo e bordas**
+- Cada secao (Associado, Veiculo, Vistoria) dentro de um retangulo com fundo cinza claro e borda
+- Labels em negrito e valores em fonte normal, organizados em 2 colunas lado a lado
+- Icone simulado (quadrado colorido) antes do titulo de cada secao
 
-**3. `src/components/layout/GlobalBreadcrumb.tsx`**
-- Adicionar entrada `'/cobranca/chat': { label: 'Chat' }`
+**3. Grid de fotos em 2 colunas**
+- Alterar `COLS` de 1 para 2
+- Reduzir `IMG_WIDTH` para ~240px e `IMG_HEIGHT` para ~170px
+- Isso permite 2 fotos por linha, aproveitando melhor o espaco e cabendo mais fotos por pagina
+- Aumentar `MAX_FOTOS_TOTAL` de 12 para 20
 
-### Resultado
-O mesmo componente de chat ja funcional (conversas agrupadas por telefone, mensagens enviadas/recebidas, audios, imagens, markdown, realtime) ficara acessivel tanto em `/eventos/chat-ia` quanto em `/cobranca/chat`.
+**4. Dados do vistoriador mais destaque**
+- Mover secao "Vistoriador" para o cabecalho, ao lado do protocolo
+- Incluir nome do vistoriador de forma visivel no topo
+
+**5. Linha separadora entre secoes**
+- Adicionar linhas horizontais finas entre cada bloco de dados
+
+### Resultado visual esperado
+```text
+┌──────────────────────────────────────────┐
+│  ██ LAUDO DE VISTORIA VEICULAR           │  (faixa azul)
+│     PRATICCAR Protecao Veicular          │
+│  Protocolo: VIST-XXX    Data: dd/mm/yyyy │
+│  Vistoriador: Fulano                     │
+├──────────────────────────────────────────┤
+│  ┌─ DADOS DO ASSOCIADO ────────────────┐ │
+│  │ Nome: Joao        CPF: 123.456...   │ │
+│  │ Endereco: Rua...                    │ │
+│  └─────────────────────────────────────┘ │
+│  ┌─ DADOS DO VEICULO ─────────────────┐ │
+│  │ Marca: Toyota     Ano: 2023/2023   │ │
+│  │ Placa: ABC1D23    Chassi: 9BR...   │ │
+│  │ Cor: Prata        KM: 45.000 km    │ │
+│  └─────────────────────────────────────┘ │
+│  [APROVADO]                              │
+├──────────────────────────────────────────┤
+│  IDENTIFICACAO E MOTOR (3 fotos)         │
+│  ┌──────────┐  ┌──────────┐             │
+│  │  Motor   │  │  Chassi  │             │
+│  └──────────┘  └──────────┘             │
+│  ┌──────────┐                            │
+│  │  Placa   │                            │
+│  └──────────┘                            │
+│  EXTERIOR 360 (4 fotos)                  │
+│  ┌──────────┐  ┌──────────┐             │
+│  │  Frente  │  │ Traseira │             │
+│  └──────────┘  └──────────┘             │
+└──────────────────────────────────────────┘
+```
 
 ### Arquivos
-- **Editar**: `src/components/layout/AppSidebar.tsx` (1 linha)
-- **Editar**: `src/App.tsx` (1 rota)
-- **Editar**: `src/components/layout/GlobalBreadcrumb.tsx` (1 linha)
+- **Editar**: `supabase/functions/gerar-laudo-vistoria/index.ts` (layout visual)
+- **Deploy**: edge function `gerar-laudo-vistoria`
 
