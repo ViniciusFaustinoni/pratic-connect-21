@@ -175,6 +175,8 @@ function useLinhasComPlanos() {
       const coberturasMap = new Map<string, { id: string; nome: string; valor: number; rules: EligibilityRule[] }[]>();
       const beneficiosMap = new Map<string, { id: string; name: string; preco_sugerido: number; rules: EligibilityRule[] }[]>();
 
+      let planRulesMapRef = new Map<string, EligibilityRule[]>();
+
       if (planoIds.length > 0) {
         const { data: coberturas } = await supabase
           .from('planos_coberturas')
