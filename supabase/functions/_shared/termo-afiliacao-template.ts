@@ -1060,7 +1060,6 @@ const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
     </p>
   </div>
   
-  <!-- Assinatura via Autentique -->
 </div>
 `;
 };
