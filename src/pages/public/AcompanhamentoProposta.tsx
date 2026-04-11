@@ -60,9 +60,6 @@ interface ServicoInstalacao {
   id: string;
   status: string;
   assinatura_cliente_url: string | null;
-  laudo_autentique_url: string | null;
-  laudo_assinado: boolean;
-  laudo_assinado_em: string | null;
   checklist_data: any;
   ressalvas_instalador: string | null;
   fotos_ressalva: string[] | null;
@@ -193,7 +190,6 @@ function useAcompanhamentoProposta(token: string | undefined) {
         .from('servicos')
         .select(`
           id, status, assinatura_cliente_url,
-          laudo_autentique_url, laudo_assinado, laudo_assinado_em,
           checklist_data, ressalvas_instalador, fotos_ressalva,
           video_360_url, quilometragem
         `)
@@ -228,9 +224,6 @@ function useAcompanhamentoProposta(token: string | undefined) {
 
         servicoInstalacao = {
           ...servicoData,
-          laudo_assinado: servicoData.laudo_assinado ?? false,
-          laudo_assinado_em: servicoData.laudo_assinado_em ?? null,
-          laudo_autentique_url: servicoData.laudo_autentique_url ?? null,
           checklist_data: servicoData.checklist_data ?? null,
           ressalvas_instalador: servicoData.ressalvas_instalador ?? null,
           fotos_ressalva: servicoData.fotos_ressalva ?? null,
@@ -264,39 +257,6 @@ function getStatusInfo(associado: AssociadoData) {
   const contrato = associado.contrato;
   const servico = associado.servicoInstalacao;
 
-  // PRIORIDADE 0: Pendente assinatura do laudo
-  if (servico?.status === 'concluida' && servico?.laudo_autentique_url && !servico?.laudo_assinado) {
-    return {
-      status: 'pendente_assinatura_laudo',
-      icon: FileText,
-      color: 'warning',
-      title: 'Assine o Laudo de Instalação',
-      description: 'A instalação foi concluída! Revise o checklist abaixo e assine o laudo para finalizar.',
-      showDetails: true,
-      showCriarConta: false,
-      showEmRota: false,
-      showEmAndamento: false,
-      showAtribuidaRota: false,
-      showChecklist: true,
-    };
-  }
-
-  // Laudo já assinado - mostrar checklist como confirmação
-  if (servico?.laudo_assinado) {
-    return {
-      status: 'laudo_assinado',
-      icon: ShieldCheck,
-      color: 'success',
-      title: 'Laudo Assinado com Sucesso!',
-      description: 'Obrigado! O laudo de instalação foi assinado. Confira os detalhes abaixo.',
-      showDetails: true,
-      showCriarConta: false,
-      showEmRota: false,
-      showEmAndamento: false,
-      showAtribuidaRota: false,
-      showChecklist: true,
-    };
-  }
 
   // PRIORIDADE 1: Veículo recusado pelo instalador/vistoriador
   if (veiculo?.status === 'recusado') {
@@ -650,12 +610,6 @@ export default function AcompanhamentoProposta() {
           queryClient.invalidateQueries({ queryKey: ['docs-solicitados-pendentes', associado.id] });
         }
       )
-      // Escutar mudanças no serviço (laudo_assinado)
-      .on(
-        'postgres_changes',
-        { event: 'UPDATE', schema: 'public', table: 'servicos', filter: `contrato_id=eq.${associado.contrato?.id}` },
-        () => { queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] }); }
-      )
       .subscribe();
 
     return () => {
@@ -784,9 +738,7 @@ export default function AcompanhamentoProposta() {
       </motion.header>
 
       {/* Main Content */}
-      <main className={`max-w-2xl mx-auto px-4 py-8 relative z-10 ${
-        showChecklistSection && servico && !servico.laudo_assinado && servico.laudo_autentique_url ? 'pb-28' : ''
-      }`}>
+      <main className="max-w-2xl mx-auto px-4 py-8 relative z-10">
         <motion.div
           initial={{ opacity: 0, y: 20 }}
           animate={{ opacity: 1, y: 0 }}
@@ -1147,27 +1099,6 @@ export default function AcompanhamentoProposta() {
           {/* ============================================ */}
           {showChecklistSection && servico && (
             <>
-              {/* Laudo Assinado Badge */}
-              {servico.laudo_assinado && (
-                <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.3 }}>
-                  <Card className="border-success/30 bg-success/5">
-                    <CardContent className="pt-4 pb-4">
-                      <div className="flex items-center gap-3">
-                        <ShieldCheck className="h-8 w-8 text-success" />
-                        <div>
-                          <h3 className="font-semibold text-success">Laudo Assinado ✅</h3>
-                          <p className="text-xs text-muted-foreground">
-                            Assinado em {servico.laudo_assinado_em 
-                              ? new Date(servico.laudo_assinado_em).toLocaleDateString('pt-BR', { 
-                                  day: '2-digit', month: '2-digit', year: 'numeric', hour: '2-digit', minute: '2-digit' 
-                                })
-                              : ''}
-                          </p>
-                        </div>
-                      </div>
-                    </CardContent>
-                  </Card>
-                </motion.div>
               )}
 
               {/* Quilometragem */}
@@ -1364,21 +1295,6 @@ export default function AcompanhamentoProposta() {
         </motion.div>
       </main>
 
-      {/* Botão fixo: Assinar Laudo */}
-      {showChecklistSection && servico && !servico.laudo_assinado && servico.laudo_autentique_url && (
-        <div className="fixed bottom-0 left-0 right-0 bg-card/95 backdrop-blur-lg border-t border-border p-4 shadow-lg z-20">
-          <div className="max-w-2xl mx-auto">
-            <Button
-              className="w-full h-12 text-base font-semibold gap-2"
-              onClick={() => window.open(servico.laudo_autentique_url!, '_blank')}
-            >
-              <FileText className="h-5 w-5" />
-              Assinar Laudo de Instalação
-              <ExternalLink className="h-4 w-4" />
-            </Button>
-          </div>
-        </div>
-      )}
 
       {/* Footer */}
       <footer className="border-t border-border/30 mt-auto relative z-10 bg-card/30 backdrop-blur-sm">
