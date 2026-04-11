@@ -152,6 +152,7 @@ export function EtapaAssinaturaContrato({
             .eq('token_publico', tokenPublico)
             .in('status_contratacao', ['dados_preenchidos']);
 
+          setLinkAssinatura(contratoData.autentique_url);
           setContrato({
             id: contratoData.id,
             numero: contratoData.numero,
@@ -224,6 +225,7 @@ export function EtapaAssinaturaContrato({
 
       // Se já tem link, usar ele
       if (contratoData?.autentique_url) {
+        setLinkAssinatura(contratoData.autentique_url);
         setContrato(prev => prev ? {
           ...prev,
           linkAssinatura: contratoData.autentique_url || undefined,
@@ -243,11 +245,12 @@ export function EtapaAssinaturaContrato({
 
       console.log('[EtapaAssinatura] Enviado para Autentique:', data);
 
-      const linkAssinatura = data.signatureLink || data.link_assinatura || data.autentique_url;
+      const linkResp = data.signatureLink || data.link_assinatura || data.autentique_url;
+      if (linkResp) setLinkAssinatura(linkResp);
 
       setContrato(prev => prev ? {
         ...prev,
-        linkAssinatura,
+        linkAssinatura: linkResp,
         autentiqueDocumentoId: data.documentId || data.autentique_documento_id,
       } : null);
 
@@ -271,7 +274,7 @@ export function EtapaAssinaturaContrato({
 
   // 4. Polling leve dedicado para capturar o link de assinatura rapidamente
   useEffect(() => {
-    if (etapaInterna !== 'aguardando_assinatura' || !contrato?.id || contrato?.linkAssinatura) return;
+    if (etapaInterna !== 'aguardando_assinatura' || !contrato?.id || linkEfetivo) return;
 
     const buscarLink = async () => {
       try {
@@ -281,7 +284,8 @@ export function EtapaAssinaturaContrato({
           .eq('id', contrato.id)
           .maybeSingle();
         if (data?.autentique_url) {
-          setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
+          console.log('[EtapaAssinatura] Link encontrado via polling leve:', data.autentique_url);
+          setLinkAssinatura(data.autentique_url);
         }
       } catch (e) {
         console.error('[EtapaAssinatura] Erro ao buscar link:', e);
@@ -291,17 +295,17 @@ export function EtapaAssinaturaContrato({
     buscarLink(); // imediato
     const interval = setInterval(buscarLink, 3000);
     return () => clearInterval(interval);
-  }, [etapaInterna, contrato?.id, contrato?.linkAssinatura]);
+  }, [etapaInterna, contrato?.id, linkEfetivo]);
 
   // 4b. Timeout para link — após 30s sem link, mostrar botão de retry
   useEffect(() => {
-    if (etapaInterna !== 'aguardando_assinatura' || contrato?.linkAssinatura) {
+    if (etapaInterna !== 'aguardando_assinatura' || linkEfetivo) {
       setLinkTimeout(false);
       return;
     }
     const timeout = setTimeout(() => setLinkTimeout(true), 90000);
     return () => clearTimeout(timeout);
-  }, [etapaInterna, contrato?.linkAssinatura]);
+  }, [etapaInterna, linkEfetivo]);
 
   // 5. Polling para verificar status da assinatura (após link disponível)
   useEffect(() => {
@@ -317,9 +321,9 @@ export function EtapaAssinaturaContrato({
         console.log('[EtapaAssinatura] Polling sync result:', syncResult);
 
         // Atualizar link se recuperado pelo sync mas ausente no estado local
-        if (syncResult?.autentique_url && !contrato?.linkAssinatura) {
+        if (syncResult?.autentique_url && !linkEfetivo) {
           console.log('[EtapaAssinatura] Link recuperado via sync:', syncResult.autentique_url);
-          setContrato(prev => prev ? { ...prev, linkAssinatura: syncResult.autentique_url } : prev);
+          setLinkAssinatura(syncResult.autentique_url);
           setLinkTimeout(false);
         }
 
@@ -349,9 +353,9 @@ export function EtapaAssinaturaContrato({
         if (error || !data) return;
 
         // Atualizar link se encontrado no banco mas ausente no estado local
-        if (data?.autentique_url && !contrato?.linkAssinatura) {
+        if (data?.autentique_url && !linkEfetivo) {
           console.log('[EtapaAssinatura] Link recuperado via banco:', data.autentique_url);
-          setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
+          setLinkAssinatura(data.autentique_url);
           setLinkTimeout(false);
         }
 
@@ -377,7 +381,7 @@ export function EtapaAssinaturaContrato({
     const interval = setInterval(verificarAssinatura, 15000);
 
     return () => clearInterval(interval);
-  }, [etapaInterna, contrato?.id, contrato?.linkAssinatura, cotacaoId, onContratoAssinado]);
+  }, [etapaInterna, contrato?.id, linkEfetivo, cotacaoId, onContratoAssinado]);
 
   // Verificar manualmente
   const verificarManualmente = async () => {
@@ -394,8 +398,8 @@ export function EtapaAssinaturaContrato({
       console.log('[EtapaAssinatura] Resultado sync manual:', syncResult);
 
       // Atualizar link se veio na sync
-      if (syncResult?.autentique_url && !contrato?.linkAssinatura) {
-        setContrato(prev => prev ? { ...prev, linkAssinatura: syncResult.autentique_url } : prev);
+      if (syncResult?.autentique_url && !linkEfetivo) {
+        setLinkAssinatura(syncResult.autentique_url);
       }
 
       // CORRIGIDO: Verificar campo 'status' em vez de 'novoStatus'
@@ -694,7 +698,7 @@ export function EtapaAssinaturaContrato({
           <Separator className="my-2" />
 
           {/* Botão de assinatura direta ou loading */}
-          {contrato?.linkAssinatura ? (
+          {linkEfetivo ? (
             <motion.div
               initial={{ scale: 0.9, opacity: 0 }}
               animate={{ scale: 1, opacity: 1 }}
@@ -708,13 +712,13 @@ export function EtapaAssinaturaContrato({
                 className="w-full h-14 text-lg gap-3" 
                 asChild
               >
-                <a href={contrato.linkAssinatura} target="_blank" rel="noopener noreferrer">
+                <a href={linkEfetivo} target="_blank" rel="noopener noreferrer">
                   <FileSignature className="h-5 w-5" />
                   Assinar Contrato Agora
                   <ExternalLink className="h-4 w-4" />
                 </a>
               </Button>
-              <CopyLinkButton link={contrato.linkAssinatura} />
+              <CopyLinkButton link={linkEfetivo} />
             </motion.div>
           ) : (
             <motion.div
