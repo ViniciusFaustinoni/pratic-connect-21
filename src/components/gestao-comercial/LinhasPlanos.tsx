@@ -119,25 +119,38 @@ function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
       {visibleRules.map((rule) => {
         const style = RULE_BADGE_STYLES[rule.rule_type] || RULE_BADGE_STYLES.tipo_uso;
         const values = rule.rule_config?.values as string[] | undefined;
-        const RULE_TYPE_LABELS: Record<string, string> = {
-          tipo_uso: 'Tipo de Uso',
-          combustivel: 'Combustível',
-          regiao: 'Região',
-          tipo_placa: 'Tipo de Placa',
-          fipe_range: 'Faixa FIPE',
-        };
-        let label = RULE_TYPE_LABELS[rule.rule_type] || rule.rule_type;
+        const mode = rule.rule_mode === 'exclude' ? '✕ ' : '';
+        let label = '';
 
         if (rule.rule_type === 'regiao') {
-          if (regioesMap && values) {
-            label = values.map((v) => regioesMap[v] || v).join(', ');
+          if (regioesMap && values && values.length > 0) {
+            label = mode + values.map((v) => regioesMap[v] || v).join(', ');
+          } else if (values && values.length > 0) {
+            label = `${mode}Regiões (${values.length})`;
           } else {
-            label = `Região (${values?.length || 0})`;
+            label = `${mode}Todas as regiões`;
+          }
+        } else if (rule.rule_type === 'ano_range') {
+          const min = rule.rule_config?.ano_min;
+          const max = rule.rule_config?.ano_max;
+          label = `${mode}Ano ${min || '?'}–${max || '?'}`;
+        } else if (rule.rule_type === 'marca_modelo') {
+          const modelos = rule.rule_config?.modelos as any[] | undefined;
+          if (modelos && modelos.length > 0) {
+            const marcas = [...new Set(modelos.map((m: any) => m.marca))];
+            label = `${mode}${marcas.slice(0, 3).join(', ')}${marcas.length > 3 ? ` +${marcas.length - 3}` : ''}`;
+          } else {
+            label = `${mode}Marca/Modelo`;
           }
         } else if (values && values.length > 0 && RULE_LABELS[rule.rule_type]) {
-          label = values
+          label = mode + values
             .map((v) => RULE_LABELS[rule.rule_type]?.[v] || v)
             .join(', ');
+        } else if (values && values.length > 0) {
+          label = mode + values.join(', ');
+        } else {
+          // Skip rules with no meaningful display value
+          return null;
         }
 
         return (
