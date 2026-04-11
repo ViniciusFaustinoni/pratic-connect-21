@@ -59,10 +59,14 @@ export interface InstalacaoInfo {
   rastreador_imei: string | null;
   rastreador_codigo: string | null;
   rastreador_id: string | null;
-  rastreador_plataforma: string | null; // 'softruck', 'rede_veiculos', etc
-  rastreador_ativado: boolean; // true se plataforma_device_id existe
+  rastreador_plataforma: string | null;
+  rastreador_ativado: boolean;
   instalador_nome: string | null;
   assinatura_cliente_url: string | null;
+  // Campos do laudo via Autentique
+  laudo_assinado: boolean;
+  laudo_autentique_url: string | null;
+  laudo_pdf_assinado_url: string | null;
 }
 
 // Informações da instalação agendada (antes da execução)
@@ -464,6 +468,27 @@ export function usePropostasPendentes() {
           }
         }
         
+        // Buscar dados do laudo do serviço vinculado
+        let laudoAssinado = false;
+        let laudoAutentiqueUrl: string | null = null;
+        let laudoPdfAssinadoUrl: string | null = null;
+        {
+          const { data: servicoLaudo } = await supabase
+            .from('servicos')
+            .select('laudo_assinado, laudo_autentique_url, laudo_pdf_assinado_url')
+            .eq('contrato_id', contrato.id)
+            .in('tipo', ['instalacao'])
+            .not('laudo_autentique_id', 'is', null)
+            .order('concluida_em', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (servicoLaudo) {
+            laudoAssinado = servicoLaudo.laudo_assinado || false;
+            laudoAutentiqueUrl = servicoLaudo.laudo_autentique_url;
+            laudoPdfAssinadoUrl = servicoLaudo.laudo_pdf_assinado_url;
+          }
+        }
+
         instalacaoInfo = {
           id: instalacaoData.id,
           status: instalacaoData.status,
@@ -475,6 +500,9 @@ export function usePropostasPendentes() {
           rastreador_ativado: rastreadorAtivado,
           instalador_nome: instaladorNome,
           assinatura_cliente_url: assinaturaUrl,
+          laudo_assinado: laudoAssinado,
+          laudo_autentique_url: laudoAutentiqueUrl,
+          laudo_pdf_assinado_url: laudoPdfAssinadoUrl,
         };
       }
 
@@ -955,6 +983,27 @@ export function useProposta(contratoId: string | undefined) {
           }
         }
         
+        // Buscar dados do laudo do serviço vinculado
+        let laudoAssinado2 = false;
+        let laudoAutentiqueUrl2: string | null = null;
+        let laudoPdfAssinadoUrl2: string | null = null;
+        {
+          const { data: servicoLaudo } = await supabase
+            .from('servicos')
+            .select('laudo_assinado, laudo_autentique_url, laudo_pdf_assinado_url')
+            .eq('contrato_id', contrato.id)
+            .in('tipo', ['instalacao'])
+            .not('laudo_autentique_id', 'is', null)
+            .order('concluida_em', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          if (servicoLaudo) {
+            laudoAssinado2 = servicoLaudo.laudo_assinado || false;
+            laudoAutentiqueUrl2 = servicoLaudo.laudo_autentique_url;
+            laudoPdfAssinadoUrl2 = servicoLaudo.laudo_pdf_assinado_url;
+          }
+        }
+
         instalacaoInfo = {
           id: instalacaoData.id,
           status: instalacaoData.status,
@@ -966,6 +1015,9 @@ export function useProposta(contratoId: string | undefined) {
           rastreador_ativado: rastreadorAtivado,
           instalador_nome: instaladorNome,
           assinatura_cliente_url: assinaturaUrl,
+          laudo_assinado: laudoAssinado2,
+          laudo_autentique_url: laudoAutentiqueUrl2,
+          laudo_pdf_assinado_url: laudoPdfAssinadoUrl2,
         };
       }
       
@@ -979,7 +1031,10 @@ export function useProposta(contratoId: string | undefined) {
             rastreador_id,
             profissional_id,
             concluida_em,
-            assinatura_cliente_url
+            assinatura_cliente_url,
+            laudo_assinado,
+            laudo_autentique_url,
+            laudo_pdf_assinado_url
           `)
           .eq('contrato_id', contrato.id)
           .eq('status', 'concluida')
@@ -1050,6 +1105,9 @@ export function useProposta(contratoId: string | undefined) {
             rastreador_ativado: rastreadorAtivado,
             instalador_nome: instaladorNome,
             assinatura_cliente_url: assinaturaUrl,
+            laudo_assinado: servicoCompleto.laudo_assinado || false,
+            laudo_autentique_url: servicoCompleto.laudo_autentique_url || null,
+            laudo_pdf_assinado_url: servicoCompleto.laudo_pdf_assinado_url || null,
           };
         }
       }

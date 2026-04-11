@@ -1127,82 +1127,87 @@ export function useAprovarVeiculoServico() {
         usuario_id: profile?.id,
       });
 
-      // Nota: O laudo de vistoria é gerado no momento da assinatura do cliente (useAssinatura.ts)
-      // Isso garante que o laudo só é gerado após fotos + assinatura estarem completos
-
-      // 7. Enviar WhatsApp ao associado com link para assinatura digital
+      // 7. Gerar Laudo PDF e enviar para assinatura via Autentique
       try {
-        // Buscar telefone do associado e link_token do contrato
-        const { data: assocDados } = await supabase
-          .from('associados')
-          .select('telefone, whatsapp, nome, contrato_id')
-          .eq('id', data.associadoId)
-          .single();
+        // Gerar laudo PDF
+        console.log('[useAprovarVeiculoServico] Gerando laudo PDF...');
+        const { data: laudoResult, error: laudoError } = await supabase.functions.invoke('gerar-laudo-vistoria', {
+          body: { servicoId: data.servicoId },
+        });
 
-        const telefoneEnvio = assocDados?.whatsapp || assocDados?.telefone;
-        
-        if (telefoneEnvio && assocDados?.contrato_id) {
-          const { data: contratoDados } = await supabase
-            .from('contratos')
-            .select('link_token')
-            .eq('id', assocDados.contrato_id)
-            .single();
+        if (laudoError) {
+          console.warn('[useAprovarVeiculoServico] Erro ao gerar laudo (não bloqueia):', laudoError);
+        } else if (laudoResult?.url) {
+          console.log('[useAprovarVeiculoServico] ✓ Laudo PDF gerado:', laudoResult.url);
 
-          if (contratoDados?.link_token) {
-            // Buscar modelo/placa do veículo para a mensagem
-            const { data: veiculoDados } = await supabase
-              .from('veiculos')
-              .select('modelo, placa')
-              .eq('id', data.veiculoId)
+          // Enviar para assinatura via Autentique
+          console.log('[useAprovarVeiculoServico] Enviando laudo para Autentique...');
+          const { data: autentiqueResult, error: autentiqueError } = await supabase.functions.invoke('autentique-create-laudo', {
+            body: {
+              servicoId: data.servicoId,
+              laudoPdfUrl: laudoResult.url,
+            },
+          });
+
+          if (autentiqueError) {
+            console.warn('[useAprovarVeiculoServico] Erro ao enviar para Autentique (não bloqueia):', autentiqueError);
+          } else if (autentiqueResult?.signatureLink) {
+            console.log('[useAprovarVeiculoServico] ✓ Laudo enviado para Autentique, link:', autentiqueResult.signatureLink);
+
+            // Enviar link de assinatura do Autentique via WhatsApp
+            const { data: assocDados } = await supabase
+              .from('associados')
+              .select('telefone, whatsapp, nome')
+              .eq('id', data.associadoId)
               .single();
 
-            const nomeAssociado = assocDados.nome?.split(' ')[0] || 'Associado';
-            const veiculoDesc = veiculoDados ? `${veiculoDados.modelo} - ${veiculoDados.placa}` : 'seu veículo';
-            const linkPublico = `${window.location.origin}/acompanhar/${contratoDados.link_token}`;
+            const telefoneEnvio = assocDados?.whatsapp || assocDados?.telefone;
+            if (telefoneEnvio) {
+              const nomeAssociado = assocDados?.nome?.split(' ')[0] || 'Associado';
+              const { data: veiculoDados } = await supabase
+                .from('veiculos')
+                .select('modelo, placa')
+                .eq('id', data.veiculoId)
+                .single();
+              const veiculoDesc = veiculoDados ? `${veiculoDados.modelo} - ${veiculoDados.placa}` : 'seu veículo';
 
-            // Buscar template Meta para envio oficial
-            const { data: metaTemplate } = await supabase
-              .from('whatsapp_meta_templates')
-              .select('id, nome, status')
-              .eq('nome', 'assinatura_documento_v2')
-              .single();
+              // Buscar template Meta
+              const { data: metaTemplate } = await supabase
+                .from('whatsapp_meta_templates')
+                .select('id, nome, status')
+                .eq('nome', 'assinatura_documento_v2')
+                .single();
 
-            if (metaTemplate && metaTemplate.status === 'APPROVED') {
-              // Extrair apenas o token do link para a variável do botão
-              // O botão tem URL fixa: https://app.praticprotecao.com.br/acompanhar/{{1}}
-              const tokenAssinatura = contratoDados.link_token;
-
-              // Enviar via template Meta aprovado
-              // Corpo: {{1}} = nome, {{2}} = nome do documento
-              // Botão URL: {{1}} = token (variáveis do botão são numeradas separadamente)
-              await supabase.functions.invoke('whatsapp-send-text', {
-                body: {
-                  telefone: telefoneEnvio,
-                  mensagem: `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso.`,
-                  template_name: metaTemplate.nome,
-                  template_params: [nomeAssociado, 'Termo de Instalação'],
-                  template_button_params: [tokenAssinatura],
-                  referencia_tipo: 'assinatura_instalacao',
-                  referencia_id: data.servicoId,
-                },
-              });
-            } else {
-              // Fallback: enviar como mensagem de texto enquanto template não está aprovado pela Meta
-              const mensagem = `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso. ✅\n\nPara finalizar o processo, acesse o link abaixo e assine digitalmente confirmando a instalação:\n\n${linkPublico}`;
-              await supabase.functions.invoke('whatsapp-send-text', {
-                body: {
-                  telefone: telefoneEnvio,
-                  mensagem,
-                  referencia_tipo: 'assinatura_instalacao',
-                  referencia_id: data.servicoId,
-                },
-              });
+              if (metaTemplate && metaTemplate.status === 'APPROVED') {
+                // Extrair o token da URL do Autentique para o botão
+                // O link do Autentique é enviado como texto na mensagem
+                await supabase.functions.invoke('whatsapp-send-text', {
+                  body: {
+                    telefone: telefoneEnvio,
+                    mensagem: `Olá ${nomeAssociado}! A instalação no seu veículo ${veiculoDesc} foi concluída. Assine o Laudo de Instalação: ${autentiqueResult.signatureLink}`,
+                    template_name: metaTemplate.nome,
+                    template_params: [nomeAssociado, 'Laudo de Instalação'],
+                    referencia_tipo: 'assinatura_laudo',
+                    referencia_id: data.servicoId,
+                  },
+                });
+              } else {
+                const mensagem = `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso. ✅\n\nPara finalizar o processo, assine o Laudo de Instalação no link abaixo:\n\n${autentiqueResult.signatureLink}`;
+                await supabase.functions.invoke('whatsapp-send-text', {
+                  body: {
+                    telefone: telefoneEnvio,
+                    mensagem,
+                    referencia_tipo: 'assinatura_laudo',
+                    referencia_id: data.servicoId,
+                  },
+                });
+              }
+              console.log('[useAprovarVeiculoServico] ✓ WhatsApp com link do Autentique enviado');
             }
-            console.log('[useAprovarVeiculoServico] ✓ WhatsApp de assinatura enviado ao associado');
           }
         }
-      } catch (whatsErr) {
-        console.warn('[useAprovarVeiculoServico] Erro ao enviar WhatsApp de assinatura (não bloqueia):', whatsErr);
+      } catch (laudoWhatsErr) {
+        console.warn('[useAprovarVeiculoServico] Erro ao gerar laudo/enviar WhatsApp (não bloqueia):', laudoWhatsErr);
       }
 
       // 8. Notificação de boas-vindas removida daqui — enviada apenas pelo fluxo de aprovação do analista (ativar-associado)

@@ -782,8 +782,105 @@ serve(async (req) => {
         );
       }
 
-      // ========== FALLBACK 3: Buscar em ordens_servico ==========
-      console.log("[autentique-webhook] Sinistro não encontrado, tentando buscar em ordens_servico...");
+      // ========== FALLBACK 3: Buscar em servicos (laudo de instalação) ==========
+      console.log("[autentique-webhook] Sinistro não encontrado, tentando buscar laudo em servicos...");
+
+      const { data: servicoLaudo, error: servicoLaudoError } = await supabase
+        .from("servicos")
+        .select(`
+          *,
+          associado:associados!servicos_associado_id_fkey(id, nome, cpf, telefone, whatsapp, email)
+        `)
+        .eq("laudo_autentique_id", documentId)
+        .maybeSingle();
+
+      if (!servicoLaudoError && servicoLaudo) {
+        console.log(`[autentique-webhook] ✓ Serviço (laudo) encontrado: ${servicoLaudo.id}`);
+
+        const signerData = payload.event?.data?.user;
+        const signerName = signerData?.name || servicoLaudo.associado?.nome || "Associado";
+
+        if (eventType === "signature.accepted" || (eventType === "signature.updated" && payload.event?.data?.signed)) {
+          console.log(`[autentique-webhook] 🎉 Laudo de Instalação ASSINADO por ${signerName}`);
+
+          // Atualizar serviço
+          const updateData: Record<string, any> = {
+            laudo_assinado: true,
+            laudo_assinado_em: new Date().toISOString(),
+            updated_at: new Date().toISOString(),
+          };
+
+          // Tentar baixar PDF assinado
+          try {
+            const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
+            if (autentiqueApiKey) {
+              const pdfQuery = `query { document(id: "${documentId}") { files { signed } } }`;
+              const pdfResp = await fetch(AUTENTIQUE_API_URL, {
+                method: "POST",
+                headers: { "Authorization": `Bearer ${autentiqueApiKey}`, "Content-Type": "application/json" },
+                body: JSON.stringify({ query: pdfQuery }),
+              });
+              const pdfData = await pdfResp.json();
+              const signedUrl = pdfData.data?.document?.files?.signed;
+
+              if (signedUrl) {
+                const pdfResponse = await fetch(signedUrl);
+                if (pdfResponse.ok) {
+                  const pdfBytes = new Uint8Array(await pdfResponse.arrayBuffer());
+                  const fileName = `laudos/${servicoLaudo.id}/laudo-assinado-${Date.now()}.pdf`;
+
+                  await supabase.storage.from("contratos-assinados").upload(fileName, pdfBytes, {
+                    contentType: "application/pdf",
+                    upsert: false,
+                  });
+
+                  const { data: urlData } = supabase.storage.from("contratos-assinados").getPublicUrl(fileName);
+                  updateData.laudo_pdf_assinado_url = urlData.publicUrl;
+                  console.log("[autentique-webhook] ✓ PDF assinado do laudo salvo");
+                }
+              }
+            }
+          } catch (pdfErr: any) {
+            console.error("[autentique-webhook] Erro ao baixar PDF do laudo:", pdfErr.message);
+          }
+
+          await supabase
+            .from("servicos")
+            .update(updateData)
+            .eq("id", servicoLaudo.id);
+
+          // Registrar histórico
+          if (servicoLaudo.associado_id) {
+            await supabase.from("associados_historico").insert({
+              associado_id: servicoLaudo.associado_id,
+              tipo: "laudo_assinado",
+              descricao: `Laudo de instalação assinado eletronicamente por ${signerName} via Autentique`,
+              metadata: { servico_id: servicoLaudo.id, autentique_id: documentId, via: "autentique" },
+            });
+          }
+
+          // Notificar profissional (técnico)
+          if (servicoLaudo.profissional_id) {
+            await supabase.from("notificacoes").insert({
+              user_id: servicoLaudo.profissional_id,
+              titulo: "Laudo de Instalação Assinado! ✅",
+              mensagem: `O laudo da instalação foi assinado por ${signerName}. Aprovação liberada.`,
+              tipo: "success",
+              link: `/monitoramento`,
+            });
+          }
+        } else if (eventType === "signature.viewed") {
+          console.log(`[autentique-webhook] Laudo de instalação visualizado`);
+        }
+
+        return new Response(
+          JSON.stringify({ received: true, processed: eventType, type: "laudo_servico", documentId }),
+          { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+
+      // ========== FALLBACK 4: Buscar em ordens_servico ==========
+      console.log("[autentique-webhook] Laudo não encontrado, tentando buscar em ordens_servico...");
 
       const { data: osDoc, error: osError } = await supabase
         .from("ordens_servico")

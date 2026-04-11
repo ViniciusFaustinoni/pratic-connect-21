@@ -50,11 +50,21 @@ const statusFilters = [
   { value: 'em_analise', label: 'Em Análise' },
 ];
 
-function getStatusBadge(status: string | null, associadoStatus?: string | null, temDocPendente?: boolean) {
+function getStatusBadge(status: string | null, associadoStatus?: string | null, temDocPendente?: boolean, instalacaoInfo?: any) {
   const aguardandoDoc = (associadoStatus === 'documentacao_pendente' || temDocPendente) && status === 'assinado';
   
   if (aguardandoDoc) {
     return <Badge className="bg-orange-500/15 text-orange-500 border-orange-500/30 text-[10px] px-1.5">Aguard. Doc</Badge>;
+  }
+
+  // Verificar se laudo está pendente de assinatura
+  if (instalacaoInfo?.laudo_autentique_url && !instalacaoInfo?.laudo_assinado) {
+    return <Badge className="bg-amber-500/15 text-amber-600 border-amber-500/30 text-[10px] px-1.5">Pend. Laudo</Badge>;
+  }
+
+  // Laudo assinado
+  if (instalacaoInfo?.laudo_assinado) {
+    return <Badge className="bg-success/15 text-success border-success/30 text-[10px] px-1.5">Laudo ✅</Badge>;
   }
 
   const configs: Record<string, { label: string; className: string }> = {
@@ -348,7 +358,7 @@ export default function PropostasPendentes() {
 
                 {/* Status + Tempo */}
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente)}
+                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente, proposta.instalacao_info)}
                   <span className={cn("text-[10px] font-semibold tabular-nums", getWaitTextColor(proposta.data_assinatura))}>
                     {proposta.data_assinatura
                       ? formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR, addSuffix: false })
