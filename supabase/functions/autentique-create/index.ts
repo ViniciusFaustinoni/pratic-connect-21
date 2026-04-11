@@ -16,11 +16,8 @@ import {
   generateStyles, 
   generateHeader, 
   generateFooter, 
-  generateSecaoAssinatura,
-  generateAssinaturaAnexo,
   markdownParaHTML,
   buscarEGerarAditivos,
-  hasSignatureArea,
   sanitizeSignatureBlocks,
   exigeRastreador,
   extrairCodigosBeneficios,
@@ -128,9 +125,7 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
     console.log('[autentique-create] Seção indicador injetada no HTML do template DB');
   }
 
-  // 5. Só injetar assinatura padrão se o conteúdo + aditivos não contiverem uma
-  const conteudoCompleto = conteudoHTML + (aditivosHTML || '') + rastreadorHTML + indicadorHTML;
-  const assinaturaHTML = hasSignatureArea(conteudoCompleto) ? '' : generateSecaoAssinatura(dados);
+  // 5. Assinatura será feita via Autentique (rubrica + assinatura digital) — sem bloco visual
   
   // 6. Montar HTML completo
   return `
@@ -148,7 +143,6 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
     ${aditivosHTML}
     ${rastreadorHTML}
     ${indicadorHTML}
-    ${assinaturaHTML}
     ${generateFooter(dados)}
   </div>
 </body>
@@ -681,13 +675,10 @@ serve(async (req) => {
           let conteudoSubstituido = substituirVariaveis(tmpl.conteudo, templateData);
           // Remover blocos de assinatura manual do template do anexo
           conteudoSubstituido = sanitizeSignatureBlocks(conteudoSubstituido);
-          // Gerar bloco de assinatura padronizado para o anexo
-          const assinaturaAnexo = generateAssinaturaAnexo(templateData);
           anexosHTML += `
             <div style="page-break-before: always;">
               <h2 style="text-align: center; margin-top: 40px; margin-bottom: 20px; font-size: 16px; text-transform: uppercase;">${tmpl.nome}</h2>
               <div style="font-size: 12px; line-height: 1.6;">${conteudoSubstituido}</div>
-              ${assinaturaAnexo}
             </div>
           `;
         }

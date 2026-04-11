@@ -9,7 +9,7 @@ import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/termo-afiliacao-template.ts";
 import { filterEligibleItems } from "../_shared/eligibility-filter.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa, buscarRegrasVenda, buscarRegrasDepreciacao } from "../_shared/termo-afiliacao-utils.ts";
-import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, generateSecaoAssinatura, generateAssinaturaAnexo, markdownParaHTML, hasSignatureArea, sanitizeSignatureBlocks, exigeRastreador, extrairCodigosBeneficios } from "../_shared/template-utils.ts";
+import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, markdownParaHTML, sanitizeSignatureBlocks, exigeRastreador, extrairCodigosBeneficios } from "../_shared/template-utils.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -477,9 +477,7 @@ serve(async (req) => {
       const rastreadorResult = exigeRastreador(templateData.veiculo, templateData.configRastreador);
       const rastreadorHTML = rastreadorResult.exige ? generateSecaoRastreador(templateData) : '';
 
-      // Só injetar assinatura padrão se o conteúdo + aditivos não contiverem uma
-      const conteudoCompleto = conteudoHTML + (aditivosHTML || '') + rastreadorHTML;
-      const assinaturaHTML = hasSignatureArea(conteudoCompleto) ? '' : generateSecaoAssinatura(templateData);
+      // Assinatura será feita via Autentique (rubrica + assinatura digital) — sem bloco visual
 
       contratoHTML = `
 <!DOCTYPE html>
@@ -495,7 +493,6 @@ serve(async (req) => {
     ${conteudoHTML}
     ${aditivosHTML}
     ${rastreadorHTML}
-    ${assinaturaHTML}
     ${generateFooter(templateData)}
   </div>
 </body>
@@ -539,13 +536,10 @@ serve(async (req) => {
           let conteudoSubstituido = substituirVariaveis(tmpl.conteudo, templateData);
           // Remover blocos de assinatura manual do template do anexo
           conteudoSubstituido = sanitizeSignatureBlocks(conteudoSubstituido);
-          // Gerar bloco de assinatura padronizado para o anexo
-          const assinaturaAnexo = generateAssinaturaAnexo(templateData);
           anexosHTML += `
             <div style="page-break-before: always;">
               <h2 style="text-align: center; margin-top: 40px; margin-bottom: 20px; font-size: 16px; text-transform: uppercase;">${tmpl.nome}</h2>
               <div style="font-size: 12px; line-height: 1.6;">${conteudoSubstituido}</div>
-              ${assinaturaAnexo}
             </div>
           `;
         }
