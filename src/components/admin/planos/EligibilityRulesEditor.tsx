@@ -252,7 +252,7 @@ function AddRuleDialog({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange} modal>
-      <DialogContent className="max-w-lg" aria-describedby={undefined}>
+      <DialogContent className="max-w-lg z-[60]" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Adicionar Regra de Elegibilidade</DialogTitle>
         </DialogHeader>

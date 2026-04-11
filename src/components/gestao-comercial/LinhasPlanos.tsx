@@ -865,7 +865,7 @@ export function LinhasPlanos() {
         </DialogContent>
       </Dialog>
       <Dialog open={eligibilityModal.open} onOpenChange={(open) => { if (!open) setEligibilityModal({ open: false }); }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
+        <DialogContent className="max-w-4xl min-h-[70vh] max-h-[95vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()} aria-describedby={undefined}>
           <DialogHeader>
             <DialogTitle>Elegibilidade: {eligibilityModal.planName}</DialogTitle>
           </DialogHeader>
