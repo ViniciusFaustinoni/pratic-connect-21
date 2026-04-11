@@ -1,29 +1,58 @@
 
 
-## Plano: Pin "Em Execução" no mapa de atribuições
+## Plano: Mover aprovação para Edge Function (eliminar lentidão)
 
-### Problema
-Quando um serviço está com status `em_andamento` (técnico executando), o pin no mapa:
-1. Mostra botões de ação (Enviar Confirmação, WhatsApp, Google Maps, Cancelar Rota) que não fazem sentido
-2. Tooltip mostra data/período em vez de indicar que está em execução
-3. Cor do pin não diferencia dos demais
+### Diagnóstico
 
-### Alterações em `MapaVistoriasContent.tsx`
+A função `useAprovarProposta` em `src/hooks/usePropostasPendentes.ts` (linhas 1257-1826) executa **~18 chamadas sequenciais ao banco/edge functions a partir do navegador do analista**. Cada chamada tem latência de rede (browser → Supabase → DB → browser), totalizando 10-30 segundos dependendo da conexão.
 
-**1. Nova cor para "em execução"**
-- Adicionar constante `COR_EM_EXECUCAO = '#3B82F6'` (azul, consistente com a cor de `em_andamento` usada nos vistoriadores)
-- Incluir `em_andamento` e `em_rota` no `getCorPorStatus` como primeiro check (antes de `STATUS_REALIZADOS`), retornando a cor azul
+Operações sequenciais atuais:
+1. Buscar contrato (select)
+2. Verificar idempotência
+3. Atualizar contrato → ativo (update)
+4. Verificar instalação concluída (select)
+5. Buscar veículo do contrato (select)
+6. Verificar instalação ativa (select)
+7. Atualizar associado → ativo (update)
+8. Buscar valor_fipe do veículo (select)
+9. Buscar configurações de rastreador (select)
+10. Atualizar veículo (update)
+11. Se instalação concluída: buscar rastreador + ativar plataforma + criar acesso + notificar (4 calls)
+12. Se precisa instalação: buscar cotação + geocodificar + inserir instalação (3 calls)
+13. Registrar histórico (insert)
+14. Atualizar documentos (update)
+15. Atualizar documentos_solicitados (update)
+16. Atualizar contratos_documentos (update)
+17. Buscar link_token (select)
+18. SGA Hinova sync (invoke)
 
-**2. Tooltip diferenciado**
-- Na renderização do tooltip (linhas 585-603), quando `v.status === 'em_andamento'`, mostrar "🔧 Em execução" com tempo decorrido calculado a partir de `v.updated_at` (usando `formatDistanceToNow`)
-- Cor de fundo do tooltip será azul (`COR_EM_EXECUCAO`)
+### Solução
 
-**3. Remover botões do popup quando em execução**
-- No bloco de botões (linhas 629-668), envolver com condição: só mostrar os botões se `v.status !== 'em_andamento'`
-- No popup, substituir os campos normais por uma mensagem de "Serviço em execução" com tempo decorrido e nome do técnico
+Criar uma **edge function `aprovar-proposta`** que executa toda essa lógica **server-side** (latência DB ~1ms vs ~100ms do browser). O hook no frontend fará uma única chamada.
 
-### Resultado
-- Pin azul pulsante para serviços em execução
-- Tooltip mostra "Em execução" + tempo decorrido
-- Popup mostra apenas informações (sem botões de ação)
+### Alterações
+
+**1. Criar `supabase/functions/aprovar-proposta/index.ts`**
+- Mover toda a lógica de `mutationFn` (linhas 1262-1826) para a edge function
+- Receber `{ contrato_id, aprovado_por, veiculo_renavam?, veiculo_chassi? }` no body
+- Usar `supabaseClient` com service role para evitar problemas de RLS
+- Paralelizar queries independentes (ex: buscar veículo + verificar instalação ao mesmo tempo)
+- Retornar `{ success, mensagem, jaAprovado? }`
+
+**2. Simplificar `useAprovarProposta` no hook**
+- Reduzir `mutationFn` a uma única chamada: `supabase.functions.invoke('aprovar-proposta', { body })`
+- Manter `onSuccess` / `onError` existentes (toast, invalidação, navegação)
+
+**3. Mover atualização de RENAVAM/CHASSI para dentro da edge function**
+- O `handleConfirmarAprovacao` em `PropostaAnalise.tsx` (linhas 97-111) atualmente salva renavam/chassi antes de chamar `aprovarMutation`. Passar esses dados como parâmetros da edge function para eliminar outra round-trip.
+
+### Ganho esperado
+
+- **De ~15-30s para ~2-4s** (todas as queries executam com latência local no servidor Supabase)
+- Queries independentes podem ser paralelizadas com `Promise.all`
+- Edge functions rodam no mesmo datacenter que o banco
+
+### Deploy
+
+Deploy da edge function `aprovar-proposta` após criação.
 
