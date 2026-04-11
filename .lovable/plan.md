@@ -1,32 +1,40 @@
 
 
-## Plano: Indicador visual de posição da assinatura Autentique no preview
+## Plano: Corrigir tela "travada" no Acompanhamento de Proposta
 
-### Objetivo
-Adicionar ao preview do TemplateEditor um overlay visual mostrando onde o Autentique vai posicionar a assinatura digital em cada página, para que o editor de templates saiba exatamente onde a assinatura cairá.
+### Diagnóstico
 
-### Alteração
+A cotação não travou — ela foi processada corretamente. O problema é que a edge function `contrato-gerar` cria o associado com status `pendente_vistoria`, mas a página de acompanhamento (`AcompanhamentoProposta.tsx`) **não tem tratamento para esse status** na função `getStatusInfo`. Resultado: cai no caso default "Proposta Recebida / Aguardando processamento", dando a impressão de que nada aconteceu.
 
-**Editar**: `src/components/documentos/TemplateEditor.tsx`
+### Correção
 
-1. **Adicionar toggle "Mostrar assinatura Autentique"** — um botão/switch na barra de preview que ativa/desativa a visualização da posição da assinatura
+**Editar**: `src/pages/public/AcompanhamentoProposta.tsx`
 
-2. **Renderizar overlay de assinatura** — quando ativo, exibir um elemento posicionado com `position: absolute` dentro do container A4, nas coordenadas equivalentes a x=65%, y=85% (os valores padrão do `autentique-positions.ts`):
-   - Retângulo tracejado semi-transparente com ícone de caneta e texto "Assinatura Autentique"
-   - Posicionado via CSS `left: 65%; top: 85%` dentro do container A4 (que precisa de `position: relative`)
+Adicionar tratamento para o status `pendente_vistoria` na função `getStatusInfo`, antes do bloco de `documentacao_pendente` (por volta da linha 454):
 
-3. **Estilo do indicador**:
-   - Borda tracejada azul/roxa
-   - Background semi-transparente
-   - Texto pequeno "📝 Assinatura digital aqui"
-   - Dimensões aproximadas de como o Autentique renderiza (cerca de 25% largura × 8% altura)
+```typescript
+// Pendente vistoria
+if (associado.status === 'pendente_vistoria') {
+  return {
+    status: 'pendente_vistoria',
+    icon: Camera, // já importado
+    color: 'warning',
+    title: 'Aguardando Vistoria',
+    description: 'Sua proposta foi recebida! Aguardando a realização da vistoria do veículo.',
+    showDetails: true,
+    showCriarConta: false,
+    showEmRota: false,
+    showEmAndamento: false,
+    showAtribuidaRota: false,
+  };
+}
+```
 
-### Detalhes técnicos
-- O container A4 (div com `maxWidth: 210mm`) recebe `position: relative`
-- O overlay é um `div` com `position: absolute`, `left: 65%`, `top: 85%`, `transform: translate(-50%, -50%)`
-- Estado local `showSignatureOverlay` controlado por um botão na barra de info do preview
-- Não depende de dados do banco — usa os valores padrão hardcoded (65%, 85%) que são os mesmos usados pela edge function
+Também verificar se existem outros status possíveis do associado que não estão cobertos (ex: `pendente_documentacao`, `pendente_pagamento`) e adicionar tratamento similar para evitar que caiam no default genérico.
+
+### Resultado
+O cliente verá "Aguardando Vistoria" em vez de "Aguardando processamento", com orientação clara sobre o próximo passo.
 
 ### Arquivo
-- **Editar**: `src/components/documentos/TemplateEditor.tsx`
+- **Editar**: `src/pages/public/AcompanhamentoProposta.tsx` (adicionar case `pendente_vistoria` em `getStatusInfo`)
 
