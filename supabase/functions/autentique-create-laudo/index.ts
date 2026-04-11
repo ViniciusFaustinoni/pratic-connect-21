@@ -123,6 +123,7 @@ serve(async (req) => {
     const variables = {
       document: {
         name: nomeDocumento,
+        new_signature_style: true,
       },
       signers: [
         {

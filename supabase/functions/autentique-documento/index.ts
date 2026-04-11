@@ -50,6 +50,7 @@ async function criarDocumentoAutentique(
       createDocument(
         document: {
           name: "${nomeDocumento}"
+          new_signature_style: true
         }
         signers: [${signersGraphQL}]
         file: {

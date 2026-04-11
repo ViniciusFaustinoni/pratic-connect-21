@@ -775,6 +775,7 @@ serve(async (req) => {
       variables: {
         document: {
           name: documentName,
+          new_signature_style: true,
         },
         signers: [signerObj],
         file: null,
