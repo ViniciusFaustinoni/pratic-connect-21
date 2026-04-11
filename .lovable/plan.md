@@ -1,48 +1,34 @@
 
 
-## Plano: Corrigir template "Técnico a Caminho" — contato real e remoção do link
+## Plano: Mostrar etapa de assinatura apenas quando o link estiver pronto
 
-### Diagnóstico
+### Problema atual
+O componente entra no estado `aguardando_assinatura` **antes** de ter o link da Autentique. Isso mostra a tela completa (instruções, área de "gerando link...") e os botões só aparecem depois via polling/realtime — exigindo que o usuário atualize a página.
 
-1. **Contato "Não informado"**: O profissional "[TESTE 2] VISTORIADOR" (id `05b67f5f`) tem `telefone = NULL` e `whatsapp = NULL` no banco. O código já tenta buscar `profissional.whatsapp || profissional.telefone`, mas ambos são nulos. A solução é garantir que o telefone seja preenchido no perfil OU buscar um fallback (telefone da empresa/base).
+### Solução
+Manter o estado de **loading** (`enviando_autentique`) até que o `linkAssinatura` esteja efetivamente disponível. Só transicionar para `aguardando_assinatura` quando o link existir.
 
-2. **"Link de contato" no corpo da mensagem**: O template Meta `tecnico_a_caminho_1` tem 6 variáveis, sendo que a variável `{{4}}` mapeia para "Link de contato" no corpo do template aprovado na Meta. O código envia o telefone formatado nesse campo, mas o label "Link de contato" vem do template Meta. Para remover essa linha, seria necessário criar um novo template na Meta sem esse campo — ou reaproveitar o campo `{{4}}` com o telefone formatado e atualizar o `variaveis_exemplo`.
+### Alterações em `EtapaAssinaturaContrato.tsx`
 
-### Alterações propostas
+1. **`enviarParaAutentique`** (linha 256): Não mudar para `aguardando_assinatura` se não tiver link. Manter em `enviando_autentique` e iniciar polling interno até o link chegar.
 
-**1. `supabase/functions/notificar-inicio-rota/index.ts` — fallback para telefone da empresa**
+2. **Polling de link (linhas 338-363)**: Mudar a condição para rodar também quando `etapaInterna === 'enviando_autentique'` e não só `aguardando_assinatura`. Quando o link chegar via polling, aí sim mudar para `aguardando_assinatura`.
 
-Quando `profissional.whatsapp` e `profissional.telefone` forem nulos, buscar o telefone da empresa na tabela `configuracoes` (chave `empresa_telefone` ou similar) como fallback, em vez de enviar "Não informado".
+3. **Realtime (linhas 280-335)**: Quando receber `autentique_url` via realtime e a etapa for `enviando_autentique`, transicionar para `aguardando_assinatura`.
 
-**2. `supabase/functions/notificar-cliente/index.ts` — remover param 4 (link)**
+4. **Remover o bloco condicional de "link loading"** (linhas 745-781) — como a etapa só será `aguardando_assinatura` quando o link existir, o `linkAssinatura` estará sempre presente nessa tela.
 
-Alterar o `getParams` de `tecnico_em_rota` para enviar apenas 5 params, removendo o param duplicado do link/telefone (posição 4). O template Meta precisa ser atualizado para 5 variáveis.
+### Fluxo revisado
+```
+verificando → gerando_contrato → enviando_autentique (fica aqui até link chegar)
+                                                      ↓ link recebido
+                                               aguardando_assinatura (botões visíveis imediatamente)
+                                                      ↓
+                                                   assinado
+```
 
-**3. Alternativa: criar novo template Meta sem "Link de contato"**
-
-Se não for possível editar o template na Meta, a alternativa é:
-- Criar um novo template `tecnico_a_caminho_2` sem a linha "Link de contato"
-- Atualizar o código para usar o novo template
-- Atualizar `variaveis_exemplo` na tabela `whatsapp_meta_templates`
-
-**4. Migration SQL — atualizar `variaveis_exemplo`**
-
-Atualizar o registro de `tecnico_a_caminho_1` para refletir que param 4 é telefone formatado (não wa.me link), ou remover param 4 se o template Meta for atualizado.
-
-**5. Garantir telefone do profissional**
-
-Adicionar validação na UI de cadastro de profissional para exigir pelo menos um telefone, e/ou adicionar um fallback no código da edge function.
-
-### Decisão necessária
-
-O template `tecnico_a_caminho_1` está aprovado na Meta com 6 variáveis incluindo "Link de contato". As opções são:
-
-- **Opção A**: Manter o template atual, enviar o telefone formatado no campo "Link de contato" (funciona mas o label fica estranho)
-- **Opção B**: Submeter novo template na Meta sem a linha "Link de contato" e atualizar o código
-
-Em ambos os casos, o fallback para telefone da empresa será implementado quando o profissional não tiver telefone cadastrado.
-
-### Resultado esperado
-- O contato do técnico sempre será preenchido (telefone real ou fallback da empresa)
-- A linha "Link de contato" será removida ou substituída por informação útil
+### Resultado
+- O usuário vê um spinner de "Preparando assinatura digital..." até o link estar pronto
+- Quando a tela de assinatura aparecer, os botões "Assinar Contrato Agora" e "Copiar Link" já estarão visíveis
+- Sem necessidade de recarregar a página
 
