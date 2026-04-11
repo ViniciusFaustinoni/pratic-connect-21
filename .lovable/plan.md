@@ -1,28 +1,26 @@
 
 
-## Plano: Modal dedicado para edição de cobertura/benefício na lista de planos
+## Plano: Corrigir erro "duplicate key violates unique constraint benefits_slug_key"
 
 ### Problema
-Ao clicar em uma cobertura ou benefício na lista de planos (LinhasPlanos), abre o PlanFormModal completo. O usuário quer um modal focado apenas no item clicado.
+Ao salvar um benefício no modal de edição, o campo `slug` é enviado no payload de update mesmo estando desabilitado no formulário. Como benefícios duplicados entre planos compartilham o mesmo slug, isso causa conflito de unicidade.
 
-### Solução
+### Correção
 
-Reutilizar os formulários inline já existentes (`CoberturaInlineForm` de `PlanCoberturasList.tsx` e `BeneficioInlineForm` de `PlanBeneficiosList.tsx`) dentro de modais standalone.
+**Editar**: `src/components/admin/planos/PlanBeneficiosList.tsx`
 
-### Alterações
+Remover `slug` do payload em `handleSave` (linha 72), já que o slug não deve ser alterado na edição inline:
 
-**1. Exportar os formulários inline existentes**
-- Em `PlanCoberturasList.tsx`: exportar `CoberturaInlineForm`
-- Em `PlanBeneficiosList.tsx`: exportar `BeneficioInlineForm`
+```typescript
+const payload = {
+  id: benefit.id,
+  name: form.name,
+  // slug removido
+  icon: form.icon || null,
+  ...
+};
+```
 
-**2. Editar `LinhasPlanos.tsx`**
-- Adicionar estado para controlar modal de item: `editItemModal` com `{ open, type: 'cobertura'|'beneficio', item, planId }`
-- No onClick das coberturas/benefícios, ao invés de abrir `PlanFormModal` com `focusItemId`, setar o `editItemModal` com os dados do item
-- Adicionar dois novos `<Dialog>` simples que renderizam `CoberturaInlineForm` ou `BeneficioInlineForm` dentro de um DialogContent
-- Ao salvar/fechar, invalidar queries e fechar modal
-
-### Arquivos
-- **Editar**: `src/components/admin/planos/PlanCoberturasList.tsx` (exportar `CoberturaInlineForm`)
-- **Editar**: `src/components/admin/planos/PlanBeneficiosList.tsx` (exportar `BeneficioInlineForm`)
-- **Editar**: `src/components/gestao-comercial/LinhasPlanos.tsx` (substituir onClick dos itens, adicionar modais dedicados)
+### Arquivo
+- **Editar**: `src/components/admin/planos/PlanBeneficiosList.tsx` (remover 1 linha do payload)
 
