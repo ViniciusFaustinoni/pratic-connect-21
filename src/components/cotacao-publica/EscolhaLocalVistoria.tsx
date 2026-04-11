@@ -6,9 +6,10 @@ import { Skeleton } from '@/components/ui/skeleton';
 
 interface EscolhaLocalVistoriaProps {
   onEscolher: (local: 'cliente' | 'base') => void;
+  tipoInstalacao?: 'rota' | 'base' | null;
 }
 
-export function EscolhaLocalVistoria({ onEscolher }: EscolhaLocalVistoriaProps) {
+export function EscolhaLocalVistoria({ onEscolher, tipoInstalacao }: EscolhaLocalVistoriaProps) {
   const { data: configBase, isLoading } = useConfiguracaoBase();
 
   const enderecoCompleto = configBase?.base_logradouro 
@@ -29,6 +30,7 @@ export function EscolhaLocalVistoria({ onEscolher }: EscolhaLocalVistoriaProps) 
       </div>
 
       <div className="grid gap-4">
+        {/* Filtrar opções conforme tipo_instalacao definido pelo consultor */}
         {/* Opção 1: Técnico vai até o cliente */}
         <Card 
           className="cursor-pointer hover:border-primary/50 hover:shadow-md transition-all group"
