@@ -59,10 +59,14 @@ export interface InstalacaoInfo {
   rastreador_imei: string | null;
   rastreador_codigo: string | null;
   rastreador_id: string | null;
-  rastreador_plataforma: string | null; // 'softruck', 'rede_veiculos', etc
-  rastreador_ativado: boolean; // true se plataforma_device_id existe
+  rastreador_plataforma: string | null;
+  rastreador_ativado: boolean;
   instalador_nome: string | null;
   assinatura_cliente_url: string | null;
+  // Campos do laudo via Autentique
+  laudo_assinado: boolean;
+  laudo_autentique_url: string | null;
+  laudo_pdf_assinado_url: string | null;
 }
 
 // Informações da instalação agendada (antes da execução)
