@@ -1,34 +1,29 @@
 
 
-## Plano: Enviar confirmação WhatsApp imediatamente ao agendar com encaixe
+## Plano: Pin "Em Execução" no mapa de atribuições
 
-### Diagnóstico
+### Problema
+Quando um serviço está com status `em_andamento` (técnico executando), o pin no mapa:
+1. Mostra botões de ação (Enviar Confirmação, WhatsApp, Google Maps, Cancelar Rota) que não fazem sentido
+2. Tooltip mostra data/período em vez de indicar que está em execução
+3. Cor do pin não diferencia dos demais
 
-O fluxo atual:
-1. `agendar-vistoria-completa` — apenas salva os dados na cotação, sem enviar nenhuma mensagem
-2. `criar-instalacao-pos-pagamento` — envia a confirmação de encaixe, mas só roda **após o pagamento**
+### Alterações em `MapaVistoriasContent.tsx`
 
-O associado que habilita encaixe e prossegue **não recebe nenhuma mensagem** até o pagamento ser processado.
+**1. Nova cor para "em execução"**
+- Adicionar constante `COR_EM_EXECUCAO = '#3B82F6'` (azul, consistente com a cor de `em_andamento` usada nos vistoriadores)
+- Incluir `em_andamento` e `em_rota` no `getCorPorStatus` como primeiro check (antes de `STATUS_REALIZADOS`), retornando a cor azul
 
-### Alteração
+**2. Tooltip diferenciado**
+- Na renderização do tooltip (linhas 585-603), quando `v.status === 'em_andamento'`, mostrar "🔧 Em execução" com tempo decorrido calculado a partir de `v.updated_at` (usando `formatDistanceToNow`)
+- Cor de fundo do tooltip será azul (`COR_EM_EXECUCAO`)
 
-**`supabase/functions/agendar-vistoria-completa/index.ts`** — Adicionar envio de confirmação WhatsApp imediata quando `permiteEncaixe = true`.
-
-Após salvar os dados na cotação (linha 145), e antes do return:
-
-1. Buscar dados do lead/associado vinculado à cotação (nome e telefone) usando `cotacao.telefone1_solicitante` e `cotacao.nome_solicitante` (já disponíveis na query da linha 88)
-2. Formatar a mensagem de confirmação com data, período e endereço
-3. Invocar `whatsapp-send-text` com template `confirmacao_agendamento_v1`
-4. NÃO criar registro em `confirmacoes_agendamento` aqui (ainda não há serviço/instalação — será feito no `criar-instalacao-pos-pagamento`)
-
-O envio será feito em try/catch para não bloquear o fluxo se falhar.
-
-### Deploy
-
-Deploy de `agendar-vistoria-completa` após a alteração.
+**3. Remover botões do popup quando em execução**
+- No bloco de botões (linhas 629-668), envolver com condição: só mostrar os botões se `v.status !== 'em_andamento'`
+- No popup, substituir os campos normais por uma mensagem de "Serviço em execução" com tempo decorrido e nome do técnico
 
 ### Resultado
-- O associado que habilitar encaixe receberá a confirmação WhatsApp imediatamente ao agendar
-- O fluxo de pagamento não é afetado
-- Se o envio falhar, o agendamento ainda é salvo normalmente
+- Pin azul pulsante para serviços em execução
+- Tooltip mostra "Em execução" + tempo decorrido
+- Popup mostra apenas informações (sem botões de ação)
 
