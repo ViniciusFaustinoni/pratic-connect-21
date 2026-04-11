@@ -28,12 +28,22 @@ import { CoberturaInlineForm } from '@/components/admin/planos/PlanCoberturasLis
 import { BeneficioInlineForm } from '@/components/admin/planos/PlanBeneficiosList';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
+  DropdownMenu,
+  DropdownMenuContent,
+  DropdownMenuItem,
+  DropdownMenuSeparator,
+  DropdownMenuTrigger,
+} from '@/components/ui/dropdown-menu';
+import { EligibilityRulesEditor } from '@/components/admin/planos/EligibilityRulesEditor';
+import {
   ChevronDown,
   Copy,
   Layers3,
   Loader2,
+  MoreVertical,
   Pencil,
   Plus,
+  Settings2,
   Shield,
   Sparkles,
   Trash2,
@@ -389,6 +399,7 @@ export function LinhasPlanos() {
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
   const [editItemModal, setEditItemModal] = useState<{ open: boolean; type?: 'cobertura' | 'beneficio'; item?: any; planId?: string }>({ open: false });
+  const [eligibilityModal, setEligibilityModal] = useState<{ open: boolean; planId?: string; planName?: string }>({ open: false });
 
   const selectedPlan = useMemo(
     () => (planoModal.planId ? { id: planoModal.planId } : null),
@@ -604,27 +615,35 @@ export function LinhasPlanos() {
                                       onCheckedChange={(checked) => toggleStatus.mutate({ id: plano.id, is_active: checked })}
                                       disabled={toggleStatus.isPending}
                                     />
-                                    <Button
-                                      size="icon"
-                                      variant="ghost"
-                                      className="h-8 w-8"
-                                      onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}
-                                    >
-                                      <Pencil className="h-3.5 w-3.5" />
-                                    </Button>
-                                    <Button size="icon" variant="ghost" className="h-8 w-8" onClick={() => setDuplicarModal({ open: true, plano: { id: plano.id, nome: plano.nome } })}>
-                                      <Copy className="h-3.5 w-3.5" />
-                                    </Button>
-                                    {canDelete ? (
-                                      <Button
-                                        size="icon"
-                                        variant="ghost"
-                                        className="h-8 w-8 text-destructive hover:text-destructive"
-                                        onClick={() => setDeleteConfirm({ type: 'plano', id: plano.id, name: plano.nome })}
-                                      >
-                                        <Trash2 className="h-3.5 w-3.5" />
-                                      </Button>
-                                    ) : null}
+                                    <DropdownMenu>
+                                      <DropdownMenuTrigger asChild>
+                                        <Button size="icon" variant="ghost" className="h-8 w-8">
+                                          <MoreVertical className="h-3.5 w-3.5" />
+                                        </Button>
+                                      </DropdownMenuTrigger>
+                                      <DropdownMenuContent align="end">
+                                        <DropdownMenuItem onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id })}>
+                                          <Pencil className="h-4 w-4 mr-2" /> Editar
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setEligibilityModal({ open: true, planId: plano.id, planName: plano.nome })}>
+                                          <Settings2 className="h-4 w-4 mr-2" /> Configurar Elegibilidade
+                                        </DropdownMenuItem>
+                                        <DropdownMenuItem onClick={() => setDuplicarModal({ open: true, plano: { id: plano.id, nome: plano.nome } })}>
+                                          <Copy className="h-4 w-4 mr-2" /> Duplicar
+                                        </DropdownMenuItem>
+                                        {canDelete && (
+                                          <>
+                                            <DropdownMenuSeparator />
+                                            <DropdownMenuItem
+                                              className="text-destructive focus:text-destructive"
+                                              onClick={() => setDeleteConfirm({ type: 'plano', id: plano.id, name: plano.nome })}
+                                            >
+                                              <Trash2 className="h-4 w-4 mr-2" /> Excluir
+                                            </DropdownMenuItem>
+                                          </>
+                                        )}
+                                      </DropdownMenuContent>
+                                    </DropdownMenu>
                                   </div>
                                 </div>
 
@@ -840,6 +859,16 @@ export function LinhasPlanos() {
                 queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
               }}
             />
+          )}
+        </DialogContent>
+      </Dialog>
+      <Dialog open={eligibilityModal.open} onOpenChange={(open) => { if (!open) setEligibilityModal({ open: false }); }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Elegibilidade: {eligibilityModal.planName}</DialogTitle>
+          </DialogHeader>
+          {eligibilityModal.planId && (
+            <EligibilityRulesEditor entityType="plano" entityId={eligibilityModal.planId} />
           )}
         </DialogContent>
       </Dialog>
