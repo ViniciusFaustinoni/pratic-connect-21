@@ -75,6 +75,28 @@ export function useSaveRule() {
   const queryClient = useQueryClient();
   return useMutation({
     mutationFn: async (payload: CreateRulePayload) => {
+      // Check if a rule of the same type already exists for this entity
+      const { data: existing } = await supabase
+        .from('entity_eligibility_rules' as any)
+        .select('id')
+        .eq('entity_id', payload.entity_id)
+        .eq('entity_type', payload.entity_type)
+        .eq('rule_type', payload.rule_type)
+        .eq('is_active', true)
+        .maybeSingle();
+
+      if (existing?.id) {
+        // Update existing rule
+        const { data, error } = await supabase
+          .from('entity_eligibility_rules' as any)
+          .update({ rule_config: payload.rule_config, rule_mode: payload.rule_mode } as any)
+          .eq('id', existing.id)
+          .select()
+          .single();
+        if (error) throw error;
+        return data;
+      }
+
       const { data, error } = await supabase
         .from('entity_eligibility_rules' as any)
         .insert(payload as any)
