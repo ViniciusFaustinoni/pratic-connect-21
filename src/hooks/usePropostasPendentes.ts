@@ -1055,9 +1055,6 @@ export function useProposta(contratoId: string | undefined) {
             rastreador_ativado: rastreadorAtivado,
             instalador_nome: instaladorNome,
             assinatura_cliente_url: assinaturaUrl,
-            laudo_assinado: servicoCompleto.laudo_assinado || false,
-            laudo_autentique_url: servicoCompleto.laudo_autentique_url || null,
-            laudo_pdf_assinado_url: servicoCompleto.laudo_pdf_assinado_url || null,
           };
         }
       }
