@@ -568,12 +568,10 @@ export function EtapaAssinaturaContrato({
             <h3 className="text-lg font-semibold mb-2">
               {etapaInterna === 'verificando' && 'Verificando contrato...'}
               {etapaInterna === 'gerando_contrato' && 'Gerando seu contrato...'}
-              {etapaInterna === 'enviando_autentique' && 'Preparando assinatura digital...'}
             </h3>
             <p className="text-muted-foreground text-sm">
               {etapaInterna === 'verificando' && 'Verificando se já existe um contrato para sua cotação.'}
               {etapaInterna === 'gerando_contrato' && 'Estamos gerando seu contrato com base nos dados informados.'}
-              {etapaInterna === 'enviando_autentique' && 'Preparando o documento para assinatura digital segura.'}
             </p>
           </motion.div>
         </CardContent>
