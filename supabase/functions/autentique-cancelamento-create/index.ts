@@ -214,7 +214,10 @@ ${conteudoHTML}
       for (let t = 9; t < 11; t++) { let d = 0; for (let c = 0; c < t; c++) d += parseInt(cpfRaw[c]) * ((t+1)-c); d = ((10*d)%11)%10; if (parseInt(cpfRaw[t]) !== d) return false; } return true;
     })();
     console.log(`[autentique-cancelamento-create] CPF: ${cpfRaw} (válido: ${cpfOk})`);
-    const signerObj: any = { name: associado.nome, email: associado.email, action: "SIGN", positions: gerarPosicoesAssinatura(await buscarPosicoesConfig(supabase)) };
+    const posConfigCanc = await buscarPosicoesConfig(supabase);
+    posConfigCanc.totalPaginas = estimarPaginasHTML(htmlContent);
+    console.log(`[autentique-cancelamento-create] Usando ${posConfigCanc.totalPaginas} páginas estimadas`);
+    const signerObj: any = { name: associado.nome, email: associado.email, action: "SIGN", positions: gerarPosicoesAssinatura(posConfigCanc) };
     if (cpfOk) signerObj.configs = { cpf: cpfRaw };
 
     const operations = {
