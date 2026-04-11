@@ -289,6 +289,24 @@ export function useCotacaoContratacao(token: string | undefined) {
       );
     }
 
+    // 5. Subscrição para contratos (detecta autentique_url, status assinado)
+    if (cotacao?.id) {
+      channel = channel.on(
+        'postgres_changes',
+        {
+          event: 'UPDATE',
+          schema: 'public',
+          table: 'contratos',
+          filter: `cotacao_id=eq.${cotacao.id}`,
+        },
+        (payload) => {
+          console.log('[CotacaoContratacao] Realtime: contrato atualizado:', payload);
+          queryClient.invalidateQueries({ queryKey: ['contrato-publico-fallback', token] });
+          refetch();
+        }
+      );
+    }
+
     channel.subscribe((status) => {
       console.log('[CotacaoContratacao] Realtime status:', status);
     });
