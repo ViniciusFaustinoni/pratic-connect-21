@@ -13,6 +13,7 @@ import { cn } from '@/lib/utils';
 interface EtapaVistoriaProps {
   cotacaoId: string;
   tipoVeiculo: TipoVeiculo;
+  tipoInstalacao?: 'rota' | 'base' | null;
   clienteNome?: string;
   clienteTelefone?: string;
   clienteEmail?: string;
@@ -38,6 +39,7 @@ type ModoVistoria = 'escolha' | 'escolha-local' | 'autovistoria' | 'agendada' | 
 export function EtapaVistoria({ 
   cotacaoId, 
   tipoVeiculo, 
+  tipoInstalacao,
   clienteNome = '',
   clienteTelefone,
   clienteEmail,
@@ -153,7 +155,16 @@ export function EtapaVistoria({
 
               {/* Opção Agendar */}
               <button
-                onClick={() => setModo('escolha-local')}
+                onClick={() => {
+                  // Se tipoInstalacao definido, pular escolha-local e ir direto
+                  if (tipoInstalacao === 'rota') {
+                    setModo('agendada');
+                  } else if (tipoInstalacao === 'base') {
+                    setModo('agendada-base');
+                  } else {
+                    setModo('escolha-local');
+                  }
+                }}
                 className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
               >
                 <div className="flex items-start gap-4">
@@ -207,6 +218,7 @@ export function EtapaVistoria({
                 setModo('agendada-base');
               }
             }}
+            tipoInstalacao={tipoInstalacao}
           />
         </motion.div>
       )}
@@ -228,7 +240,7 @@ export function EtapaVistoria({
             veiculoPlaca={veiculoPlaca}
             veiculoDescricao={veiculoDescricao}
             onAgendado={onComplete}
-            onVoltar={() => setModo('escolha-local')}
+            onVoltar={() => setModo(tipoInstalacao ? 'escolha' : 'escolha-local')}
           />
         </motion.div>
       )}
