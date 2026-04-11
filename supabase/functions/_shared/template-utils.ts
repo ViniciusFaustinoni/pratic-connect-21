@@ -837,63 +837,10 @@ export function sanitizeSignatureBlocks(html: string): string {
   return result;
 }
 
-/**
- * Gera um bloco compacto de assinatura para anexos.
- * Inclui Local/Data, linha de assinatura e dados do associado.
- */
-export function generateAssinaturaAnexo(dados: TermoAfiliacaoData): string {
-  const localAssinatura = `${dados.cliente.cidade || '—'}/${dados.cliente.uf || '—'}`;
-  const dataAssinatura = formatDateExtended(new Date().toISOString());
+// ============= SEÇÃO ASSINATURA (REMOVIDA) =============
+// As funções generateAssinaturaAnexo e generateSecaoAssinatura foram removidas.
+// A assinatura agora é feita exclusivamente via Autentique (rubrica + assinatura digital).
 
-  return `
-<div style="margin-top: 40pt; page-break-inside: avoid;">
-  <p style="text-align: center; font-size: 10pt; margin-bottom: 30pt;">
-    ${localAssinatura}, ${dataAssinatura}
-  </p>
-  <div style="display: flex; justify-content: space-around; margin-top: 20pt;">
-    <div style="text-align: center;">
-      <div style="border-top: 1px solid #000; width: 250pt; margin: 0 auto; padding-top: 8pt;">
-        <p style="margin: 0; font-weight: bold;">${dados.cliente.nome}</p>
-        <p style="margin: 4pt 0 0 0; font-size: 9pt;">CPF: ${formatCPF(dados.cliente.cpf)}</p>
-        <p style="margin: 4pt 0 0 0; font-size: 9pt; color: #666;">ASSOCIADO</p>
-      </div>
-    </div>
-  </div>
-</div>
-`;
-}
-
-// ============= SEÇÃO ASSINATURA =============
-
-export function generateSecaoAssinatura(dados: TermoAfiliacaoData): string {
-  const localAssinatura = `${dados.cliente.cidade}/${dados.cliente.uf}`;
-  const dataAssinatura = formatDateExtended(new Date().toISOString());
-  
-  return `
-<div class="signature-area">
-  <h2 class="section-title">ASSINATURA</h2>
-  <br><br>
-  <p class="signature-local-data">
-    ${localAssinatura}, ${dataAssinatura}
-  </p>
-  <div style="display: flex; justify-content: space-around; margin-top: 40pt;">
-    <div style="text-align: center;">
-      <div style="border-top: 1px solid #000; width: 250pt; margin: 0 auto; padding-top: 8pt;">
-        <p style="margin: 0; font-weight: bold;">${dados.cliente.nome}</p>
-        <p style="margin: 4pt 0 0 0; font-size: 9pt;">CPF: ${formatCPF(dados.cliente.cpf)}</p>
-        <p style="margin: 4pt 0 0 0; font-size: 9pt; color: #666;">ASSOCIADO</p>
-      </div>
-    </div>
-    <div style="text-align: center;">
-      <div style="border-top: 1px solid #000; width: 250pt; margin: 0 auto; padding-top: 8pt;">
-        <p style="margin: 0; font-weight: bold;">${dados.empresa.razao_social || dados.empresa.nome}</p>
-        <p style="margin: 4pt 0 0 0; font-size: 9pt;">CNPJ: ${dados.empresa.cnpj}</p>
-        <p style="margin: 4pt 0 0 0; font-size: 9pt; color: #666;">PRATICCAR</p>
-      </div>
-    </div>
-  </div>
-</div>
-`;
 }
 
 // ============= SUBSTITUIÇÃO DE VARIÁVEIS PARA EVENTO =============
