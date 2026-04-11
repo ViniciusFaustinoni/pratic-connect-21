@@ -57,9 +57,6 @@ export const MENU_ITEM_IDS: Record<string, string> = {
   '/cadastro/recusas-instalador': 'recusas_instalador',
   // Monitoramento
   '/monitoramento/equipe': 'equipe',
-  '/monitoramento/instalacoes': 'instalacoes',
-  '/monitoramento/vistorias': 'vistorias',
-  '/monitoramento/retiradas': 'retiradas',
   '/monitoramento/calendario': 'calendario',
   '/monitoramento/rastreadores': 'rastreadores',
   '/monitoramento/mapa': 'mapa',
@@ -136,9 +133,6 @@ export const MENU_ITEM_IDS: Record<string, string> = {
   '/ouvidoria/fila': 'fila',
   // Diretoria
   '/diretoria': 'dashboard',
-  '/diretoria/produtos': 'produtos',
-  '/diretoria/planos-beneficios': 'planos_beneficios',
-  '/diretoria/precos': 'precos',
   '/diretoria/rateios': 'rateio',
   '/diretoria/indicadores': 'atuarial',
   '/diretoria/blacklist': 'blacklist',
