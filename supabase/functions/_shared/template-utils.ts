@@ -775,18 +775,65 @@ export function hasSignatureArea(html: string): boolean {
 }
 
 /**
- * Remove blocos de assinatura manual do conteúdo HTML (signature-block, linhas nome+CPF em contexto de assinatura).
+ * Remove blocos de assinatura manual do conteúdo HTML.
+ * Cobre todos os padrões encontrados nos templates reais:
+ * - Classes CSS (signature-block, signature-line, signature-labels, signature-area)
+ * - Bordas decorativas (━━━, ───)
+ * - Linhas de underscores (_____)
+ * - Labels soltas (ASSOCIADO, ASSOCIAÇÃO, AUTORIZAÇÃO, ASSINATURA DO ASSOCIADO)
+ * - Sintaxe legada (!{Associado}, !{Associacao}, ${local}, #{data_de_emissao})
+ * - Tabelas de assinatura legadas (Leilão)
+ * - Parágrafos finais com nome+CPF do associado ou empresa+CNPJ
  * Preserva o restante do conteúdo intacto.
  */
 export function sanitizeSignatureBlocks(html: string): string {
   if (!html) return html;
   let result = html;
-  // Remove divs com class signature-block (e todo conteúdo interno)
-  result = result.replace(/<div[^>]*class\s*=\s*["'][^"']*signature-block[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '');
-  // Remove parágrafos com class signature-line
+
+  // 1. Blocos com classes CSS
+  result = result.replace(/<div[^>]*class\s*=\s*["'][^"']*signature-(?:block|area|labels)[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '');
   result = result.replace(/<p[^>]*class\s*=\s*["'][^"']*signature-line[^"']*["'][^>]*>[\s\S]*?<\/p>/gi, '');
-  // Remove divs com class signature-labels
-  result = result.replace(/<div[^>]*class\s*=\s*["'][^"']*signature-labels[^"']*["'][^>]*>[\s\S]*?<\/div>/gi, '');
+
+  // 2. Bordas decorativas ━━━
+  result = result.replace(/<p[^>]*>\s*[━]{5,}\s*<\/p>/gi, '');
+
+  // 3. Bordas decorativas ────
+  result = result.replace(/<p[^>]*>\s*[─]{5,}\s*<\/p>/gi, '');
+
+  // 4. Parágrafos com linhas de underscores (3+)
+  result = result.replace(/<p[^>]*>[^<]*_{3,}[^<]*<\/p>/gi, '');
+
+  // 5. Texto "ASSINATURA DO ASSOCIADO" / variantes
+  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*(?:ASSINATURA|Assinatura)\s+(?:DO|do|da)\s+(?:ASSOCIADO|Associado)[^<]*(?:<\/strong>)?\s*<\/p>/gi, '');
+
+  // 6. Label "ASSOCIADO" sozinha
+  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*ASSOCIADO\s*(?:<\/strong>)?\s*<\/p>/gi, '');
+
+  // 7. Label "ASSOCIAÇÃO" sozinha
+  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*ASSOCIAÇÃO\s*(?:<\/strong>)?\s*<\/p>/gi, '');
+
+  // 8. Label "AUTORIZAÇÃO" sozinha (TEV01)
+  result = result.replace(/<p[^>]*>\s*AUTORIZAÇÃO\s*<\/p>/gi, '');
+
+  // 9. Sintaxe legada !{Associado}, !{Associacao}, ${local}, #{data_de_emissao}
+  result = result.replace(/<p[^>]*>[^<]*!\{(?:Associado|Associacao)\}[^<]*<\/p>/gi, '');
+  result = result.replace(/<p[^>]*>[^<]*\$\{local\}[^<]*#\{data_de_emissao\}[^<]*<\/p>/gi, '');
+
+  // 10. Tabela de assinatura legada (Leilão) com !{Associado}
+  result = result.replace(/<table[^>]*>[\s\S]*?!\{(?:Associado|Associacao)\}[\s\S]*?<\/table>/gi, '');
+
+  // 11. Parágrafos finais com nome+CPF do associado
+  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*\{\{associado\.nome\}\}[\s\S]{0,30}(?:CPF|cpf)[:\s]*\{\{associado\.cpf\}\}\s*(?:<\/strong>)?\s*<\/p>/gi, '');
+
+  // 12. Parágrafos com dados da empresa em contexto de assinatura
+  result = result.replace(/<p[^>]*>\s*(?:<strong>)?\s*\{\{empresa\.nome\}\}[\s\S]{0,30}(?:CNPJ|cnpj)[:\s]*\{\{empresa\.cnpj\}\}\s*(?:<\/strong>)?\s*<\/p>/gi, '');
+
+  // 13. Parágrafo "Dados da Agencia" (Leilão)
+  result = result.replace(/<p[^>]*>\s*Dados da Agencia\s*<\/p>/gi, '');
+
+  // 14. Limpar <p><br></p> consecutivos que sobraram
+  result = result.replace(/(?:<p[^>]*>\s*(?:<br\s*\/?>)?\s*<\/p>\s*){3,}/gi, '<p><br></p>');
+
   return result;
 }
 
