@@ -1,35 +1,54 @@
 
-
-## Plano: Corrigir botão de assinatura que não aparece após link ser gerado
+## Plano: consolidar a assinatura completa apenas na última página real do termo
 
 ### Diagnóstico
+Há dois problemas combinados no fluxo atual:
 
-O problema tem duas causas:
+1. O sistema ainda usa `assinatura_total_paginas = 20` na tabela `configuracoes` e envia a `SIGNATURE` fixa para a página 20. Se o documento real tiver menos páginas, a Autentique ignora essa posição e a última página real fica sem assinatura completa.
+2. Ainda existem blocos visuais/manuais de assinatura em alguns geradores/templates. Isso explica:
+   - “token”/carimbo visual aparecendo no meio do texto
+   - locais que parecem pedir assinatura completa, mas não recebem a assinatura Autentique
+   - ausência da consolidação final correta
 
-1. **O polling de sync (15s) recupera o link mas não atualiza o estado local.** O `autentique-sync-contrato` retorna `autentique_url` na resposta e salva no banco, mas o código do polling (step 5, linhas 308-353 de `EtapaAssinaturaContrato.tsx`) nunca usa esse valor para atualizar `contrato.linkAssinatura`. Ele só verifica se o contrato foi *assinado*, não se o *link apareceu*.
+As rubricas estão corretas porque `INITIALS` nas páginas intermediárias está funcionando; o erro está na determinação da última página e na limpeza incompleta dos blocos manuais.
 
-2. **O timeout de 30s mata a mensagem "Aguarde" antes do link chegar.** Após 30s, o componente mostra "Tentar gerar novamente" em vez de continuar buscando. Se o link apareceu no banco após o timeout, o polling leve (step 4) continua rodando mas o visual já mudou para o botão de retry.
+### Alterações
+**1. `supabase/functions/_shared/autentique-positions.ts`**
+- Refatorar para gerar posições com base na **última página real do documento**
+- Manter `INITIALS` nas páginas 1..N-1
+- Colocar `SIGNATURE` apenas na página N
+- Remover a dependência prática do valor fixo `20` como “última página”
 
-### Alteração (1 arquivo)
+**2. `supabase/functions/autentique-create/index.ts`**
+- Ajustar a criação do documento para determinar a página final real antes de montar `positions`
+- Garantir que a posição de assinatura completa use a última página válida do HTML final, incluindo anexos/aditivos
 
-**`src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`**
+**3. `supabase/functions/autentique-create-by-token/index.ts`**
+- Aplicar a mesma correção do item anterior no fluxo público
+- Garantir consistência entre geração interna e pública
 
-- No polling de sync (step 5, ~linha 315): após receber `syncResult`, verificar `syncResult?.autentique_url` e atualizar `contrato.linkAssinatura` se estiver ausente
-- No fallback do mesmo polling (~linha 340): se `data?.autentique_url` existir e `contrato.linkAssinatura` não, atualizar também
-- Aumentar timeout de 30s para 90s (alinhado com o timeout do `useContratoByToken`)
+**4. `supabase/functions/_shared/template-utils.ts`**
+- Fortalecer `sanitizeSignatureBlocks()` para remover mais padrões de assinatura manual/remanescente dos templates ativos
+- Cobrir melhor:
+  - linhas “Local / Data”
+  - blocos com nome + CPF/CNPJ em contexto de assinatura
+  - cabeçalhos “ASSINATURA” sem campos reais
+  - placeholders/estruturas que ainda empurram o carimbo para dentro do texto
 
-```typescript
-// Dentro do polling step 5, após o console.log do syncResult:
-if (syncResult?.autentique_url && !contrato?.linkAssinatura) {
-  setContrato(prev => prev ? { ...prev, linkAssinatura: syncResult.autentique_url } : prev);
-}
+**5. Revisão dos geradores com assinatura visual embutida**
+- Remover/neutralizar blocos finais de assinatura visual onde ainda existem, especialmente nos fluxos que montam HTML manualmente
+- Arquivos já identificados para revisão:
+  - `supabase/functions/_shared/termo-afiliacao-template.ts`
+  - `supabase/functions/autentique-evento-create/index.ts`
+  - `supabase/functions/autentique-os-saida-create/index.ts`
+  - `supabase/functions/autentique-cancelamento-create/index.ts`
+  - verificar se há resquícios similares em outros criadores Autentique
 
-// No fallback DB check:
-if (data?.autentique_url && !contrato?.linkAssinatura) {
-  setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
-}
-```
+### Resultado esperado
+- Todas as rubricas continuam nas páginas intermediárias
+- A assinatura completa aparece somente na **última página real**
+- A última página passa a concentrar corretamente as assinaturas necessárias
+- Não haverá mais blocos manuais concorrendo com a assinatura da Autentique dentro do corpo do texto
 
-### Resultado
-Quando o Autentique demora para gerar o link, o polling de sync o recupera e o botão "Assinar Contrato Agora" aparece automaticamente sem precisar recarregar a página.
-
+### Detalhes técnicos
+Hoje o sistema envia a assinatura final para uma página fixa (`20`). Isso só funciona se o documento realmente tiver 20 páginas. Como o termo varia conforme template, anexos e aditivos, a página final precisa ser calculada dinamicamente no momento da geração. Em paralelo, os blocos HTML de assinatura manual precisam ser removidos de forma mais agressiva para não criar “áreas falsas” de assinatura dentro do documento.
