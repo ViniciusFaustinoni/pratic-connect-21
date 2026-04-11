@@ -35,7 +35,6 @@ import {
   DropdownMenuTrigger,
 } from '@/components/ui/dropdown-menu';
 import { EligibilityRulesEditor } from '@/components/admin/planos/EligibilityRulesEditor';
-import { useReplicateEligibilityToItems } from '@/hooks/useReplicateEligibilityToItems';
 import {
   ChevronDown,
   Copy,
@@ -415,7 +414,6 @@ export function LinhasPlanos() {
   const duplicateLine = useDuplicateProductLine();
   const duplicatePlan = useDuplicatePlan();
   const toggleStatus = useTogglePlanStatus();
-  const replicateEligibility = useReplicateEligibilityToItems();
 
   const totalPlanos = linhas.reduce((accumulator, linha) => accumulator + linha.plans.length, 0);
   const totalAtivos = linhas.reduce(
@@ -865,17 +863,12 @@ export function LinhasPlanos() {
         </DialogContent>
       </Dialog>
       <Dialog open={eligibilityModal.open} onOpenChange={(open) => { if (!open) setEligibilityModal({ open: false }); }}>
-        <DialogContent className="max-w-4xl min-h-[70vh] max-h-[95vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()} aria-describedby={undefined}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
           <DialogHeader>
             <DialogTitle>Elegibilidade: {eligibilityModal.planName}</DialogTitle>
           </DialogHeader>
           {eligibilityModal.planId && (
-            <EligibilityRulesEditor
-              entityType="plano"
-              entityId={eligibilityModal.planId}
-              onAfterSave={() => replicateEligibility.mutate(eligibilityModal.planId!)}
-              onAfterDelete={() => replicateEligibility.mutate(eligibilityModal.planId!)}
-            />
+            <EligibilityRulesEditor entityType="plano" entityId={eligibilityModal.planId} />
           )}
         </DialogContent>
       </Dialog>

@@ -62,11 +62,9 @@ interface EligibilityRulesEditorProps {
   entityType: EntityType;
   entityId: string | undefined;
   compact?: boolean;
-  onAfterSave?: () => void;
-  onAfterDelete?: () => void;
 }
 
-export function EligibilityRulesEditor({ entityType, entityId, compact, onAfterSave, onAfterDelete }: EligibilityRulesEditorProps) {
+export function EligibilityRulesEditor({ entityType, entityId, compact }: EligibilityRulesEditorProps) {
   const { data: rules = [], isLoading } = useRulesForEntity(entityType, entityId);
   const saveRule = useSaveRule();
   const deleteRule = useDeleteRule();
@@ -83,9 +81,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact, onAfterS
 
   const handleDelete = (id: string) => {
     if (confirm('Remover esta regra?')) {
-      deleteRule.mutate(id, {
-        onSuccess: () => onAfterDelete?.(),
-      });
+      deleteRule.mutate(id);
     }
   };
 
@@ -121,7 +117,6 @@ export function EligibilityRulesEditor({ entityType, entityId, compact, onAfterS
         entityType={entityType}
         entityId={entityId}
         onSave={saveRule}
-        onAfterSave={onAfterSave}
       />
     </div>
   );
@@ -206,14 +201,12 @@ function AddRuleDialog({
   entityType,
   entityId,
   onSave,
-  onAfterSave,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   entityType: EntityType;
   entityId: string;
   onSave: ReturnType<typeof useSaveRule>;
-  onAfterSave?: () => void;
 }) {
   const [ruleType, setRuleType] = useState<RuleType>('fipe_range');
   const [ruleMode, setRuleMode] = useState<RuleMode>('include');
@@ -237,7 +230,6 @@ function AddRuleDialog({
     });
     setConfig({});
     onOpenChange(false);
-    onAfterSave?.();
   };
 
   const toggleArrayItem = (key: string, value: string) => {
@@ -251,8 +243,8 @@ function AddRuleDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange} modal>
-      <DialogContent className="max-w-lg z-[60]" aria-describedby={undefined}>
+    <Dialog open={open} onOpenChange={onOpenChange}>
+      <DialogContent className="max-w-lg">
         <DialogHeader>
           <DialogTitle>Adicionar Regra de Elegibilidade</DialogTitle>
         </DialogHeader>
@@ -265,7 +257,7 @@ function AddRuleDialog({
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent className="z-[9999]" position="popper" sideOffset={4}>
+              <SelectContent>
                 {(Object.keys(RULE_TYPE_LABELS) as RuleType[]).map((rt) => (
                   <SelectItem key={rt} value={rt}>
                     {RULE_TYPE_ICONS[rt]} {RULE_TYPE_LABELS[rt]}

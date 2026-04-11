@@ -1,51 +1,27 @@
 
 
-## Plano: Replicar elegibilidade do plano para coberturas e benefícios
+## Plano: Consolidar ações do plano em dropdown e adicionar modal de elegibilidade
 
 ### Problema
-Ao configurar elegibilidade no plano, a regra fica apenas no plano. Precisa ser replicada automaticamente para todas as coberturas e benefícios do plano, **sobrescrevendo** regras existentes do mesmo tipo nos itens filhos.
+Os botões de editar, duplicar e excluir ocupam espaço individualmente na linha do plano. Falta opção rápida para configurar elegibilidade sem abrir o PlanFormModal completo.
 
-### Solução
+### Alterações
 
-**1. Criar hook `src/hooks/useReplicateEligibilityToItems.ts`**
+**Editar**: `src/components/gestao-comercial/LinhasPlanos.tsx`
 
-Hook com mutation que:
-- Recebe `planId`
-- Busca todos os `cobertura_id` de `planos_coberturas` e `beneficio_id` de `planos_beneficios` para o plano
-- Busca todas as regras ativas do plano em `entity_eligibility_rules`
-- Para cada regra do plano, replica via upsert (usando `useSaveRule` logic) para cada cobertura (`entity_type='cobertura'`) e benefício (`entity_type='beneficio'`)
-- Deleta regras de tipos que foram removidos do plano nos itens filhos (sincronização completa)
+1. **Substituir os 3 botões de ação (linhas 607-627)** por um único botão `MoreVertical` (ou `MoreHorizontal`) que abre um `DropdownMenu` com 4 opções:
+   - Editar (abre PlanFormModal)
+   - Configurar Elegibilidade (abre novo modal dedicado)
+   - Duplicar (abre DuplicarPlanoModal)
+   - Excluir (abre confirmação) — visível apenas se `canDelete`
 
-Lógica principal:
-```
-1. Fetch plan rules (entity_type='plano', entity_id=planId)
-2. Fetch cobertura_ids from planos_coberturas WHERE plano_id
-3. Fetch beneficio_ids from planos_beneficios WHERE plano_id
-4. For each child entity:
-   a. Delete ALL existing eligibility rules for that entity
-   b. Insert copies of each plan rule with the child's entity_id/entity_type
-```
+2. **Adicionar estado** `eligibilityModal: { open: boolean; planId?: string; planName?: string }`
 
-Isso garante sobrescrita total: as regras do plano substituem quaisquer regras anteriores nos itens.
+3. **Adicionar Dialog** com `EligibilityRulesEditor entityType="plano" entityId={planId}` — reutilizando o componente já existente
 
-**2. Editar `src/components/admin/planos/EligibilityRulesEditor.tsx`**
+4. **Imports adicionais**: `DropdownMenu*` do shadcn, `MoreVertical` do lucide, `EligibilityRulesEditor`
 
-- Adicionar props opcionais: `onAfterSave?: () => void` e `onAfterDelete?: () => void`
-- Chamar esses callbacks após save/delete com sucesso (nos `onSuccess` existentes)
-
-**3. Editar `src/components/gestao-comercial/LinhasPlanos.tsx`**
-
-- No modal de elegibilidade do plano, usar o novo hook
-- Passar callbacks `onAfterSave` e `onAfterDelete` ao `EligibilityRulesEditor` que disparam a replicação
-- Mostrar toast informando "Regras replicadas para X coberturas e Y benefícios"
-
-### Comportamento esperado
-- Ao salvar/excluir regra no plano → sobrescreve todas as regras de coberturas e benefícios com as do plano
-- Edição individual posterior de cobertura/benefício é possível (modal dedicado já existe)
-- Se usuário remove regra de uma cobertura específica após herdar do plano, na cotação/termo aquele item ficará sem restrição → alerta de não cobertura
-
-### Arquivos
-- **Novo**: `src/hooks/useReplicateEligibilityToItems.ts`
-- **Editar**: `src/components/admin/planos/EligibilityRulesEditor.tsx` (callbacks)
-- **Editar**: `src/components/gestao-comercial/LinhasPlanos.tsx` (integrar replicação)
+### Resultado
+- Interface mais limpa com um único ícone de menu por plano
+- Acesso direto à configuração de elegibilidade sem passar pelo formulário completo do plano
 
