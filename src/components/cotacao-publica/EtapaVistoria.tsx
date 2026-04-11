@@ -240,7 +240,7 @@ export function EtapaVistoria({
             veiculoPlaca={veiculoPlaca}
             veiculoDescricao={veiculoDescricao}
             onAgendado={onComplete}
-            onVoltar={() => setModo('escolha-local')}
+            onVoltar={() => setModo(tipoInstalacao ? 'escolha' : 'escolha-local')}
           />
         </motion.div>
       )}
