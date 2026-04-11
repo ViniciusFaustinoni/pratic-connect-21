@@ -81,6 +81,20 @@ const RULE_LABELS: Record<string, Record<string, string>> = {
   categoria_veiculo: { carro: 'Carro', moto: 'Moto', caminhao: 'Caminhão', van: 'Van' },
 };
 
+/** Extract the effective values array from rule_config regardless of key used */
+function extractRuleValues(rule: EligibilityRule): string[] {
+  const cfg = rule.rule_config;
+  if (!cfg) return [];
+  // Try known keys in order of specificity
+  if (Array.isArray(cfg.values) && cfg.values.length > 0) return cfg.values;
+  if (Array.isArray(cfg.regioes) && cfg.regioes.length > 0) return cfg.regioes;
+  if (Array.isArray(cfg.tipos) && cfg.tipos.length > 0) return cfg.tipos;
+  if (Array.isArray(cfg.tipos_uso) && cfg.tipos_uso.length > 0) return cfg.tipos_uso;
+  if (Array.isArray(cfg.combustiveis) && cfg.combustiveis.length > 0) return cfg.combustiveis;
+  if (Array.isArray(cfg.categorias) && cfg.categorias.length > 0) return cfg.categorias;
+  return [];
+}
+
 function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
   const visibleRules = rules.filter((r) => r.rule_type !== 'fipe_range');
 
@@ -89,8 +103,7 @@ function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
     const ids = new Set<string>();
     visibleRules.forEach((r) => {
       if (r.rule_type === 'regiao') {
-        const values = r.rule_config?.values as string[] | undefined;
-        values?.forEach((v) => ids.add(v));
+        extractRuleValues(r).forEach((v) => ids.add(v));
       }
     });
     return Array.from(ids);
@@ -118,17 +131,17 @@ function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
     <div className="flex flex-wrap gap-1">
       {visibleRules.map((rule) => {
         const style = RULE_BADGE_STYLES[rule.rule_type] || RULE_BADGE_STYLES.tipo_uso;
-        const values = rule.rule_config?.values as string[] | undefined;
+        const values = extractRuleValues(rule);
         const mode = rule.rule_mode === 'exclude' ? '✕ ' : '';
         let label = '';
 
         if (rule.rule_type === 'regiao') {
-          if (regioesMap && values && values.length > 0) {
+          if (regioesMap && values.length > 0) {
             label = mode + values.map((v) => regioesMap[v] || v).join(', ');
-          } else if (values && values.length > 0) {
+          } else if (values.length > 0) {
             label = `${mode}Regiões (${values.length})`;
           } else {
-            label = `${mode}Todas as regiões`;
+            return null;
           }
         } else if (rule.rule_type === 'ano_range') {
           const min = rule.rule_config?.ano_min;
@@ -140,16 +153,15 @@ function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
             const marcas = [...new Set(modelos.map((m: any) => m.marca))];
             label = `${mode}${marcas.slice(0, 3).join(', ')}${marcas.length > 3 ? ` +${marcas.length - 3}` : ''}`;
           } else {
-            label = `${mode}Marca/Modelo`;
+            return null;
           }
-        } else if (values && values.length > 0 && RULE_LABELS[rule.rule_type]) {
+        } else if (values.length > 0 && RULE_LABELS[rule.rule_type]) {
           label = mode + values
             .map((v) => RULE_LABELS[rule.rule_type]?.[v] || v)
             .join(', ');
-        } else if (values && values.length > 0) {
+        } else if (values.length > 0) {
           label = mode + values.join(', ');
         } else {
-          // Skip rules with no meaningful display value
           return null;
         }
 
