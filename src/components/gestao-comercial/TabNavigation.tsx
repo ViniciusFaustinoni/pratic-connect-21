@@ -72,6 +72,8 @@ function getActiveGroupTitle(activeIndex: number): string | null {
 interface TabNavigationProps {
   active: number;
   onChange: (index: number) => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 function NavContent({ active, onChange, onSelect }: TabNavigationProps & { onSelect?: () => void }) {
