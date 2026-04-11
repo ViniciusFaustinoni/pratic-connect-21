@@ -95,6 +95,12 @@ export function useToggleLocalInstalacao() {
       qc.invalidateQueries({ queryKey: ['locais-instalacao'] });
       toast.success('Local atualizado');
     },
-    onError: () => toast.error('Erro ao atualizar local'),
+    onError: (err: any) => {
+      if (err?.code === '42501' || err?.message?.includes('row-level security')) {
+        toast.error('Sem permissão para atualizar locais de instalação');
+      } else {
+        toast.error('Erro ao atualizar local');
+      }
+    },
   });
 }
