@@ -1,41 +1,48 @@
 
 
-## Plano: Remover blocos de assinatura manual dos aditivos
+## Plano: Corrigir template "Técnico a Caminho" — contato real e remoção do link
 
-### Causa raiz
+### Diagnóstico
 
-Em `supabase/functions/_shared/template-utils.ts`, a função `buscarEGerarAditivos` (linhas 1197-1203) injeta um bloco de assinatura manual em **cada aditivo**:
+1. **Contato "Não informado"**: O profissional "[TESTE 2] VISTORIADOR" (id `05b67f5f`) tem `telefone = NULL` e `whatsapp = NULL` no banco. O código já tenta buscar `profissional.whatsapp || profissional.telefone`, mas ambos são nulos. A solução é garantir que o telefone seja preenchido no perfil OU buscar um fallback (telefone da empresa/base).
 
-```
-Local: _________________ Data: ____/____/____
-_________________________________________
-Assinatura do Associado
-```
+2. **"Link de contato" no corpo da mensagem**: O template Meta `tecnico_a_caminho_1` tem 6 variáveis, sendo que a variável `{{4}}` mapeia para "Link de contato" no corpo do template aprovado na Meta. O código envia o telefone formatado nesse campo, mas o label "Link de contato" vem do template Meta. Para remover essa linha, seria necessário criar um novo template na Meta sem esse campo — ou reaproveitar o campo `{{4}}` com o telefone formatado e atualizar o `variaveis_exemplo`.
 
-Este bloco é hardcoded no código, não vem do template do banco. A sanitização parcialmente o remove (underscores e "Assinatura do Associado"), mas a linha `Local: ___ Data: ___` e o `<div>` wrapper sobrevivem. Além disso, os templates do banco ainda podem conter `NOME — CPF:` que aparece depois da substituição de variáveis.
+### Alterações propostas
 
-### Alterações
+**1. `supabase/functions/notificar-inicio-rota/index.ts` — fallback para telefone da empresa**
 
-**1. `supabase/functions/_shared/template-utils.ts` — remover bloco de assinatura dos aditivos**
+Quando `profissional.whatsapp` e `profissional.telefone` forem nulos, buscar o telefone da empresa na tabela `configuracoes` (chave `empresa_telefone` ou similar) como fallback, em vez de enviar "Não informado".
 
-Remover as linhas 1197-1203 (o `<div>` com Local/Data, underscores e "Assinatura do Associado") da função `buscarEGerarAditivos`. A assinatura é feita pela Autentique, não precisa de bloco manual.
+**2. `supabase/functions/notificar-cliente/index.ts` — remover param 4 (link)**
 
-O trecho ficará apenas:
-```
-  ${conteudo}
-</div>
-```
+Alterar o `getParams` de `tecnico_em_rota` para enviar apenas 5 params, removendo o param duplicado do link/telefone (posição 4). O template Meta precisa ser atualizado para 5 variáveis.
 
-**2. `supabase/functions/_shared/template-utils.ts` — reforçar sanitização**
+**3. Alternativa: criar novo template Meta sem "Link de contato"**
 
-Adicionar regra para capturar `<p>` com `Local:` seguido de underscores e `Data:` (padrão `Local: ___ Data: ___`), como fallback caso algum template do banco contenha este padrão.
+Se não for possível editar o template na Meta, a alternativa é:
+- Criar um novo template `tecnico_a_caminho_2` sem a linha "Link de contato"
+- Atualizar o código para usar o novo template
+- Atualizar `variaveis_exemplo` na tabela `whatsapp_meta_templates`
 
-**3. Deploy das edge functions**
+**4. Migration SQL — atualizar `variaveis_exemplo`**
 
-Fazer deploy de `autentique-create` e `autentique-create-by-token` para que a correção entre em produção.
+Atualizar o registro de `tecnico_a_caminho_1` para refletir que param 4 é telefone formatado (não wa.me link), ou remover param 4 se o template Meta for atualizado.
+
+**5. Garantir telefone do profissional**
+
+Adicionar validação na UI de cadastro de profissional para exigir pelo menos um telefone, e/ou adicionar um fallback no código da edge function.
+
+### Decisão necessária
+
+O template `tecnico_a_caminho_1` está aprovado na Meta com 6 variáveis incluindo "Link de contato". As opções são:
+
+- **Opção A**: Manter o template atual, enviar o telefone formatado no campo "Link de contato" (funciona mas o label fica estranho)
+- **Opção B**: Submeter novo template na Meta sem a linha "Link de contato" e atualizar o código
+
+Em ambos os casos, o fallback para telefone da empresa será implementado quando o profissional não tiver telefone cadastrado.
 
 ### Resultado esperado
-- Nenhum bloco manual de assinatura aparecerá nos aditivos
-- A Autentique continua gerenciando rubrica (INITIALS) e assinatura (SIGNATURE) digitalmente
-- O documento final não terá "Local: ___" nem "Nome — CPF" residuais
+- O contato do técnico sempre será preenchido (telefone real ou fallback da empresa)
+- A linha "Link de contato" será removida ou substituída por informação útil
 
