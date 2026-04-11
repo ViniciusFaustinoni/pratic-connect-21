@@ -46,6 +46,7 @@ const RetiradaVeiculo = lazy(() => import("./pages/public/RetiradaVeiculo"));
 const SubstituicaoPublica = lazy(() => import("./pages/public/SubstituicaoPublica"));
 const AcompanhamentoReboquePublico = lazy(() => import("./pages/public/AcompanhamentoReboquePublico"));
 const PortalTerceiro = lazy(() => import("./pages/public/PortalTerceiro"));
+const ChecklistInstalacaoPublica = lazy(() => import("./pages/public/ChecklistInstalacaoPublica"));
 
 // Auth Pages
 const Auth = lazy(() => import("./pages/Auth"));
@@ -423,6 +424,7 @@ const App = () => (
             
             {/* Public Proposal Tracking Page */}
             <Route path="/acompanhar/:token" element={<AcompanhamentoProposta />} />
+            <Route path="/checklist-instalacao/:token" element={<ChecklistInstalacaoPublica />} />
             
             {/* Public Substitution Page */}
             <Route path="/substituicao/:token" element={<SubstituicaoPublica />} />
