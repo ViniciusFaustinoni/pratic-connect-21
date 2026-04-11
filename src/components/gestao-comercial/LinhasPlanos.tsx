@@ -387,6 +387,8 @@ export function LinhasPlanos() {
   const [duplicarLinhaModal, setDuplicarLinhaModal] = useState<{ open: boolean; linha: { id: string; name: string } | null }>({ open: false, linha: null });
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
 
+  const [editItemModal, setEditItemModal] = useState<{ open: boolean; type?: 'cobertura' | 'beneficio'; item?: any; planId?: string }>({ open: false });
+
   const selectedPlan = useMemo(
     () => (planoModal.planId ? { id: planoModal.planId } : null),
     [planoModal.planId],
