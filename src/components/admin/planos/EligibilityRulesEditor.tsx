@@ -251,8 +251,8 @@ function AddRuleDialog({
   };
 
   return (
-    <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-lg">
+    <Dialog open={open} onOpenChange={onOpenChange} modal>
+      <DialogContent className="max-w-lg" aria-describedby={undefined}>
         <DialogHeader>
           <DialogTitle>Adicionar Regra de Elegibilidade</DialogTitle>
         </DialogHeader>
@@ -265,7 +265,7 @@ function AddRuleDialog({
               <SelectTrigger>
                 <SelectValue />
               </SelectTrigger>
-              <SelectContent>
+              <SelectContent className="z-[9999]" position="popper" sideOffset={4}>
                 {(Object.keys(RULE_TYPE_LABELS) as RuleType[]).map((rt) => (
                   <SelectItem key={rt} value={rt}>
                     {RULE_TYPE_ICONS[rt]} {RULE_TYPE_LABELS[rt]}
