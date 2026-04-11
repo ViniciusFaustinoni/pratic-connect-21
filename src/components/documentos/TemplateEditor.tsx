@@ -236,10 +236,24 @@ export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, ro
 
         <TabsContent value="preview" className="m-0">
           <ScrollArea className="h-[500px] bg-muted/30">
-            {/* Badge de aviso */}
-            <div className="flex items-center justify-center gap-2 py-2 text-xs text-muted-foreground bg-muted/50 border-b">
-              <Info className="h-3.5 w-3.5" />
-              Preview com dados fictícios — simula o documento final
+            {/* Badge de aviso + toggle assinatura */}
+            <div className="flex items-center justify-between gap-2 py-2 px-4 text-xs text-muted-foreground bg-muted/50 border-b">
+              <div className="flex items-center gap-2">
+                <Info className="h-3.5 w-3.5" />
+                Preview com dados fictícios — simula o documento final
+              </div>
+              <div className="flex items-center gap-2">
+                <Switch
+                  id="signature-overlay"
+                  checked={showSignatureOverlay}
+                  onCheckedChange={setShowSignatureOverlay}
+                  className="h-4 w-8 data-[state=checked]:bg-primary [&>span]:h-3 [&>span]:w-3"
+                />
+                <Label htmlFor="signature-overlay" className="text-xs cursor-pointer flex items-center gap-1">
+                  <PenTool className="h-3 w-3" />
+                  Assinatura Autentique
+                </Label>
+              </div>
             </div>
 
             {/* A4-style document container */}
