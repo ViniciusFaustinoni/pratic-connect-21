@@ -873,36 +873,22 @@ const generateSecao7 = (): string => `
 `;
 
 // ============= SEÇÃO 8: ASSINATURA =============
+// Removida — a assinatura é feita exclusivamente via Autentique (rubrica + assinatura digital).
+// Apenas mantém local/data para contexto do documento.
 
 const generateSecao8 = (data: TermoAfiliacaoData): string => {
   const localAssinatura = `${data.cliente.cidade}/${data.cliente.uf}`;
   const dataAssinatura = formatDateExtended(new Date().toISOString());
   
   return `
-<div class="signature-area">
-  <h2 class="section-title">8. ASSINATURA</h2>
-  <br><br>
-  <p class="signature-local-data">
-    ${localAssinatura}, ${dataAssinatura}
+<div style="margin-top: 30pt; text-align: center; font-size: 9pt;">
+  <p>${localAssinatura}, ${dataAssinatura}</p>
+  <p style="font-size: 8pt; color: #666; margin-top: 10pt;">
+    Este documento será assinado eletronicamente conforme MP 2.200-2/2001 e Lei 14.063/2020.
   </p>
-  <div style="display: flex; justify-content: space-around; margin-top: 40pt;">
-    <div style="text-align: center;">
-      <div style="border-top: 1px solid #000; width: 250pt; margin: 0 auto; padding-top: 8pt;">
-        <p style="margin: 0; font-weight: bold;">${data.cliente.nome}</p>
-        <p style="margin: 4pt 0 0 0; font-size: 9pt;">CPF: ${formatCPF(data.cliente.cpf)}</p>
-        <p style="margin: 4pt 0 0 0; font-size: 9pt; color: #666;">ASSOCIADO</p>
-      </div>
-    </div>
-    <div style="text-align: center;">
-      <div style="border-top: 1px solid #000; width: 250pt; margin: 0 auto; padding-top: 8pt;">
-        <p style="margin: 0; font-weight: bold;">${data.empresa.razaoSocial}</p>
-        <p style="margin: 4pt 0 0 0; font-size: 9pt;">CNPJ: ${data.empresa.cnpj}</p>
-        <p style="margin: 4pt 0 0 0; font-size: 9pt; color: #666;">PRATICCAR</p>
-      </div>
-    </div>
-  </div>
 </div>
 `;
+};
 };
 
 // ============= RODAPÉ =============
