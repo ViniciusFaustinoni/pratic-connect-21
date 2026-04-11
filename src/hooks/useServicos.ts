@@ -1154,7 +1154,7 @@ export function useAprovarVeiculoServico() {
           } else if (autentiqueResult?.signatureLink) {
             console.log('[useAprovarVeiculoServico] ✓ Laudo enviado para Autentique, link:', autentiqueResult.signatureLink);
 
-            // Enviar link de assinatura do Autentique via WhatsApp
+            // Enviar link do checklist público via WhatsApp (associado revisa antes de assinar)
             const { data: assocDados } = await supabase
               .from('associados')
               .select('telefone, whatsapp, nome')
@@ -1171,6 +1171,17 @@ export function useAprovarVeiculoServico() {
                 .single();
               const veiculoDesc = veiculoDados ? `${veiculoDados.modelo} - ${veiculoDados.placa}` : 'seu veículo';
 
+              // Buscar link_token do contrato para gerar URL do checklist público
+              const { data: contratoLink } = await supabase
+                .from('contratos')
+                .select('link_token')
+                .eq('id', data.contratoId)
+                .single();
+
+              const checklistLink = contratoLink?.link_token
+                ? `${window.location.origin}/checklist-instalacao/${contratoLink.link_token}`
+                : autentiqueResult.signatureLink; // fallback para link direto do Autentique
+
               // Buscar template Meta
               const { data: metaTemplate } = await supabase
                 .from('whatsapp_meta_templates')
@@ -1179,12 +1190,10 @@ export function useAprovarVeiculoServico() {
                 .single();
 
               if (metaTemplate && metaTemplate.status === 'APPROVED') {
-                // Extrair o token da URL do Autentique para o botão
-                // O link do Autentique é enviado como texto na mensagem
                 await supabase.functions.invoke('whatsapp-send-text', {
                   body: {
                     telefone: telefoneEnvio,
-                    mensagem: `Olá ${nomeAssociado}! A instalação no seu veículo ${veiculoDesc} foi concluída. Assine o Laudo de Instalação: ${autentiqueResult.signatureLink}`,
+                    mensagem: `Olá ${nomeAssociado}! A instalação no seu veículo ${veiculoDesc} foi concluída. Revise o laudo e assine: ${checklistLink}`,
                     template_name: metaTemplate.nome,
                     template_params: [nomeAssociado, 'Laudo de Instalação'],
                     referencia_tipo: 'assinatura_laudo',
@@ -1192,7 +1201,7 @@ export function useAprovarVeiculoServico() {
                   },
                 });
               } else {
-                const mensagem = `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso. ✅\n\nPara finalizar o processo, assine o Laudo de Instalação no link abaixo:\n\n${autentiqueResult.signatureLink}`;
+                const mensagem = `Olá ${nomeAssociado}! A instalação do rastreador no seu veículo ${veiculoDesc} foi concluída com sucesso. ✅\n\nRevise os detalhes e assine o Laudo de Instalação:\n\n${checklistLink}`;
                 await supabase.functions.invoke('whatsapp-send-text', {
                   body: {
                     telefone: telefoneEnvio,
@@ -1202,7 +1211,7 @@ export function useAprovarVeiculoServico() {
                   },
                 });
               }
-              console.log('[useAprovarVeiculoServico] ✓ WhatsApp com link do Autentique enviado');
+              console.log('[useAprovarVeiculoServico] ✓ WhatsApp com link do checklist público enviado');
             }
           }
         }
