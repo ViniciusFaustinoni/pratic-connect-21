@@ -111,8 +111,8 @@ export function AbrirRetiradaModal({
   // Hooks
   const { data: equipe, isLoading: loadingEquipe } = useProfissionaisEquipe();
   const abrirRetiradaMutation = useAbrirRetirada();
-  const { isDiretor, isCoordenadorMonitoramento, isDesenvolvedor, isAdminMaster } = usePermissions();
-  const podeHabilitarEncaixe = isDiretor || isCoordenadorMonitoramento || isDesenvolvedor || isAdminMaster;
+  const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento, isDesenvolvedor, isAdminMaster } = usePermissions();
+  const podeHabilitarEncaixe = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento || isDesenvolvedor || isAdminMaster;
 
   // Buscar dados completos do rastreador
   const { data: rastreadorCompleto, isLoading: loadingRastreador } = useQuery({

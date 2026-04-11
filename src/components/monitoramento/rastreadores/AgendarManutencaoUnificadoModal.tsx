@@ -108,8 +108,8 @@ export function AgendarManutencaoUnificadoModal({
   // Hooks
   const { data: equipe, isLoading: loadingEquipe } = useProfissionaisEquipe();
   const abrirEAgendarMutation = useAbrirEAgendarManutencao();
-  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
-  const podeHabilitarEncaixe = isDiretor || isCoordenadorMonitoramento;
+  const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
+  const podeHabilitarEncaixe = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento;
 
   // Buscar dados completos do rastreador (veículo, associado)
   const { data: rastreadorCompleto, isLoading: loadingRastreador } = useQuery({

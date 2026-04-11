@@ -54,8 +54,8 @@ import { STATUS_SERVICO_LABELS, STATUS_SERVICO_COLORS, PERIODO_LABELS, type Stat
 import { usePermissions } from '@/hooks/usePermissions';
 
 export default function ManutencaoRastreadoresTab() {
-  const { isDiretor, isCoordenadorMonitoramento } = usePermissions();
-  const canManage = isDiretor || isCoordenadorMonitoramento;
+  const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento } = usePermissions();
+  const canManage = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento;
 
   const [filtros, setFiltros] = useState<ManutencaoFiltros>({});
   const [modalAgendar, setModalAgendar] = useState(false);

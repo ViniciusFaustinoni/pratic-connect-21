@@ -62,8 +62,8 @@ export function ManutencaoTabela({
   onVerDetalhes,
   onTratarAusencia,
 }: ManutencaoTabelaProps) {
-  const { isDiretor, isCoordenadorMonitoramento, isInstaladorVistoriador } = usePermissions();
-  const canManage = isDiretor || isCoordenadorMonitoramento;
+  const { isDiretor, isCoordenadorMonitoramento, isAnalistaMonitoramento, isInstaladorVistoriador } = usePermissions();
+  const canManage = isDiretor || isCoordenadorMonitoramento || isAnalistaMonitoramento;
 
   if (isLoading) {
     return (

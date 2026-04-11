@@ -140,7 +140,7 @@ export default function PrestadoresParceiros() {
 
   return (
     <PermissionGate
-      permission={['isDiretor', 'isAdminMaster', 'isCoordenadorMonitoramento']}
+      permission={['isDiretor', 'isAdminMaster', 'isCoordenadorMonitoramento', 'isAnalistaMonitoramento']}
       mode="any"
       fallback={
         <div className="flex items-center justify-center h-64">
