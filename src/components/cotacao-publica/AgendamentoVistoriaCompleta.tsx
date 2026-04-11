@@ -9,6 +9,7 @@ import { motion, AnimatePresence } from 'framer-motion';
 interface AgendamentoVistoriaCompletaProps {
   cotacaoId: string;
   tipoVistoria?: 'autovistoria' | 'agendada';
+  tipoInstalacao?: 'rota' | 'base' | null;
   clienteNome?: string;
   clienteTelefone?: string;
   clienteEmail?: string;
@@ -31,6 +32,7 @@ type ModoAgendamento = 'escolha' | 'cliente' | 'base';
 export function AgendamentoVistoriaCompleta({ 
   cotacaoId, 
   tipoVistoria, 
+  tipoInstalacao,
   clienteNome = '',
   clienteTelefone,
   clienteEmail,
@@ -39,7 +41,11 @@ export function AgendamentoVistoriaCompleta({
   enderecoInicial,
   onConfirmar 
 }: AgendamentoVistoriaCompletaProps) {
-  const [modo, setModo] = useState<ModoAgendamento>('escolha');
+  // Se tipoInstalacao definido, pular direto para o modo correspondente
+  const modoInicial: ModoAgendamento = tipoInstalacao === 'rota' ? 'cliente' 
+    : tipoInstalacao === 'base' ? 'base' 
+    : 'escolha';
+  const [modo, setModo] = useState<ModoAgendamento>(modoInicial);
 
   return (
     <AnimatePresence mode="wait">
@@ -52,6 +58,7 @@ export function AgendamentoVistoriaCompleta({
         >
           <EscolhaLocalVistoria 
             onEscolher={(local) => setModo(local)}
+            tipoInstalacao={tipoInstalacao}
           />
         </motion.div>
       )}
