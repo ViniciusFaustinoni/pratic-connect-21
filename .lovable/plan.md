@@ -1,61 +1,32 @@
 
 
-## Plano: Assinatura em todas as páginas do documento Autentique
+## Plano: Indicador visual de posição da assinatura Autentique no preview
 
-### Diagnóstico
+### Objetivo
+Adicionar ao preview do TemplateEditor um overlay visual mostrando onde o Autentique vai posicionar a assinatura digital em cada página, para que o editor de templates saiba exatamente onde a assinatura cairá.
 
-Identifiquei dois problemas no fluxo:
+### Alteração
 
-**1. Anexos sem bloco de assinatura no HTML**
-Os templates anexados (Regulamento, Manual 24h, etc.) são inseridos como `<div>` com conteúdo puro — sem nenhum bloco visual de assinatura (linhas 678-686 em `autentique-create` e 537-544 em `autentique-create-by-token`). O `sanitizeSignatureBlocks` remove blocos de assinatura dos templates, e o `generateSecaoAssinatura` só é chamado uma vez para o documento principal, antes dos anexos.
+**Editar**: `src/components/documentos/TemplateEditor.tsx`
 
-**2. Posição fixa da assinatura Autentique**
-O `gerarPosicoesAssinatura` coloca INITIALS em (78%, 95%) — sempre no rodapé. Nas páginas que têm um bloco visual reservado para assinatura (com linha, nome, CPF), a assinatura digital deveria coincidir com esse bloco, mas aparece deslocada no rodapé.
+1. **Adicionar toggle "Mostrar assinatura Autentique"** — um botão/switch na barra de preview que ativa/desativa a visualização da posição da assinatura
 
-### Correção
+2. **Renderizar overlay de assinatura** — quando ativo, exibir um elemento posicionado com `position: absolute` dentro do container A4, nas coordenadas equivalentes a x=65%, y=85% (os valores padrão do `autentique-positions.ts`):
+   - Retângulo tracejado semi-transparente com ícone de caneta e texto "Assinatura Autentique"
+   - Posicionado via CSS `left: 65%; top: 85%` dentro do container A4 (que precisa de `position: relative`)
 
-**1. `supabase/functions/_shared/template-utils.ts`**
-- Criar função `generateAssinaturaAnexo(dados)` — versão compacta do bloco de assinatura para anexos (Local/Data + linha + Nome/CPF do associado)
+3. **Estilo do indicador**:
+   - Borda tracejada azul/roxa
+   - Background semi-transparente
+   - Texto pequeno "📝 Assinatura digital aqui"
+   - Dimensões aproximadas de como o Autentique renderiza (cerca de 25% largura × 8% altura)
 
-**2. `supabase/functions/autentique-create/index.ts` (linhas 678-686)**
-- No loop de anexos, após substituir variáveis:
-  - Aplicar `sanitizeSignatureBlocks` no conteúdo do anexo
-  - Verificar com `hasSignatureArea` se o conteúdo original tinha área de assinatura
-  - Sempre adicionar `generateAssinaturaAnexo(templateData)` ao final de cada anexo
-- Isso garante que cada anexo tenha seu próprio bloco visual de assinatura
+### Detalhes técnicos
+- O container A4 (div com `maxWidth: 210mm`) recebe `position: relative`
+- O overlay é um `div` com `position: absolute`, `left: 65%`, `top: 85%`, `transform: translate(-50%, -50%)`
+- Estado local `showSignatureOverlay` controlado por um botão na barra de info do preview
+- Não depende de dados do banco — usa os valores padrão hardcoded (65%, 85%) que são os mesmos usados pela edge function
 
-**3. `supabase/functions/autentique-create-by-token/index.ts` (linhas 537-544)**
-- Mesma correção do ponto 2
-
-**4. `supabase/functions/_shared/autentique-positions.ts`**
-- Adicionar suporte a posições diferenciadas por página:
-  - Páginas com bloco de assinatura visual: posicionar INITIALS/SIGNATURE nas coordenadas do bloco (ex: x=65%, y=85%)
-  - Páginas sem bloco: manter posição padrão no rodapé (x=78%, y=95%)
-- Como não é possível saber exatamente quais páginas do PDF terão o bloco, usar a abordagem: colocar **SIGNATURE** (assinatura completa) em **todas** as páginas em vez de INITIALS, posicionada no rodapé. O Autentique garante que cada página é assinada independentemente da posição do bloco visual.
-
-### Resultado esperado
-
-```text
-Documento no Autentique:
-┌──────────────────────┐
-│ Termo de Filiação    │
-│ (conteúdo)           │
-│ _____ ASSINATURA ___ │ ← bloco visual + assinatura digital
-├──────────────────────┤
-│ REGULAMENTO          │
-│ (conteúdo)           │
-│ _____ ASSINATURA ___ │ ← bloco visual adicionado + assinatura digital
-├──────────────────────┤
-│ MANUAL 24H           │
-│ (conteúdo)           │
-│ _____ ASSINATURA ___ │ ← bloco visual adicionado + assinatura digital
-└──────────────────────┘
-```
-
-### Arquivos
-- **Editar**: `supabase/functions/_shared/template-utils.ts` (nova função `generateAssinaturaAnexo`)
-- **Editar**: `supabase/functions/_shared/autentique-positions.ts` (SIGNATURE em todas as páginas)
-- **Editar**: `supabase/functions/autentique-create/index.ts` (inserir assinatura nos anexos)
-- **Editar**: `supabase/functions/autentique-create-by-token/index.ts` (mesma correção)
-- **Deploy**: as 4 edge functions afetadas
+### Arquivo
+- **Editar**: `src/components/documentos/TemplateEditor.tsx`
 
