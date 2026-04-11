@@ -74,6 +74,7 @@ export default function CotacaoContratacao() {
     associadoId,
     associadoStatus,
     contratoLinkToken,
+    contratoFallback,
     docsPendentes,
     refetch,
     refetchDocs,
