@@ -202,12 +202,12 @@ function useLinhasComPlanos() {
           beneficiosMap.set(b.plano_id, list);
         }
 
-        // Collect all entity IDs for rules fetch
+        // Collect all entity IDs for rules fetch (coberturas + beneficios + planos)
         const allCobIds = new Set<string>();
         const allBenIds = new Set<string>();
         coberturasMap.forEach((list) => list.forEach((c) => allCobIds.add(c.id)));
         beneficiosMap.forEach((list) => list.forEach((b) => allBenIds.add(b.id)));
-        const allEntityIds = [...allCobIds, ...allBenIds];
+        const allEntityIds = [...allCobIds, ...allBenIds, ...planoIds];
 
         if (allEntityIds.length > 0) {
           const CHUNK = 100;
@@ -240,8 +240,13 @@ function useLinhasComPlanos() {
               b.rules = rulesMap.get(b.id) || [];
             }
           });
+
+          // Attach rules to planos
+          planRulesMap = rulesMap;
         }
       }
+
+      let planRulesMap_ref = planRulesMap;
 
       return (lines || []).map((line) => ({
         ...line,
