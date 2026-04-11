@@ -297,7 +297,7 @@ export function EtapaAssinaturaContrato({
       setLinkTimeout(false);
       return;
     }
-    const timeout = setTimeout(() => setLinkTimeout(true), 30000);
+    const timeout = setTimeout(() => setLinkTimeout(true), 90000);
     return () => clearTimeout(timeout);
   }, [etapaInterna, contrato?.linkAssinatura]);
 
@@ -313,6 +313,13 @@ export function EtapaAssinaturaContrato({
         });
 
         console.log('[EtapaAssinatura] Polling sync result:', syncResult);
+
+        // Atualizar link se recuperado pelo sync mas ausente no estado local
+        if (syncResult?.autentique_url && !contrato?.linkAssinatura) {
+          console.log('[EtapaAssinatura] Link recuperado via sync:', syncResult.autentique_url);
+          setContrato(prev => prev ? { ...prev, linkAssinatura: syncResult.autentique_url } : prev);
+          setLinkTimeout(false);
+        }
 
         // Verificar resposta da sync diretamente (campo 'status')
         if (syncResult?.status === 'assinado') {
@@ -338,6 +345,13 @@ export function EtapaAssinaturaContrato({
           .maybeSingle();
 
         if (error || !data) return;
+
+        // Atualizar link se encontrado no banco mas ausente no estado local
+        if (data?.autentique_url && !contrato?.linkAssinatura) {
+          console.log('[EtapaAssinatura] Link recuperado via banco:', data.autentique_url);
+          setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
+          setLinkTimeout(false);
+        }
 
         if (data?.status === 'assinado' || data?.status === 'ativo') {
           console.log('[EtapaAssinatura] Contrato assinado detectado via banco!');
