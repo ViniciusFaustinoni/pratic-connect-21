@@ -358,7 +358,7 @@ export default function PropostasPendentes() {
 
                 {/* Status + Tempo */}
                 <div className="flex items-center gap-2 flex-shrink-0">
-                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente)}
+                  {getStatusBadge(proposta.status, proposta.associado_status, proposta.tem_documento_pendente, proposta.instalacao_info)}
                   <span className={cn("text-[10px] font-semibold tabular-nums", getWaitTextColor(proposta.data_assinatura))}>
                     {proposta.data_assinatura
                       ? formatDistanceToNow(new Date(proposta.data_assinatura), { locale: ptBR, addSuffix: false })
