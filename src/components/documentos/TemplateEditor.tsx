@@ -259,9 +259,34 @@ export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, ro
             {/* A4-style document container */}
             <div className="flex justify-center py-6 px-4">
               <div
-                className="bg-white text-black shadow-xl border rounded-sm w-full"
+                className="bg-white text-black shadow-xl border rounded-sm w-full relative"
                 style={{ maxWidth: '210mm', minHeight: '297mm' }}
               >
+                {/* Overlay de posição da assinatura Autentique */}
+                {showSignatureOverlay && (
+                  <div
+                    className="absolute pointer-events-none z-10"
+                    style={{
+                      left: '65%',
+                      top: '85%',
+                      transform: 'translate(-50%, -50%)',
+                      width: '30%',
+                      padding: '8px 12px',
+                      border: '2px dashed hsl(var(--primary))',
+                      borderRadius: '6px',
+                      backgroundColor: 'hsl(var(--primary) / 0.08)',
+                      textAlign: 'center',
+                    }}
+                  >
+                    <div className="flex items-center justify-center gap-1.5 text-primary" style={{ fontSize: '10px', fontWeight: 600 }}>
+                      <PenTool className="h-3.5 w-3.5" />
+                      Assinatura Autentique
+                    </div>
+                    <div className="text-primary/60" style={{ fontSize: '8px', marginTop: '2px' }}>
+                      Posição: x=65% y=85% (em cada página)
+                    </div>
+                  </div>
+                )}
                 {/* === Cabeçalho === */}
                 <div
                   className="px-12 pt-10 pb-4 border-b-2"
