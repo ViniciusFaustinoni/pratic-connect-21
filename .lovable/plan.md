@@ -1,28 +1,30 @@
 
 
-## Plano: Extrair linkAssinatura para estado independente
+## Plano: Corrigir polling do link de assinatura — GRANT SELECT ausente
 
-### Problema
-As closures dos `useEffect` capturam `contrato?.linkAssinatura` no momento da criação. Os guards nas linhas 272, 296, 318, 350 usam o valor da closure (sempre `undefined`), mas o `setContrato` atualiza o objeto inteiro — os effects não re-executam corretamente porque `contrato?.linkAssinatura` na dependency array muda por referência de forma imprevisível.
+### Causa raiz
 
-### Alteração (1 arquivo)
+A tabela `contratos` **não tem `GRANT SELECT ... TO anon`**. Existe a RLS policy `anon_select_contratos_by_cotacao_token` que permite leitura quando `cotacao_token_publico IS NOT NULL`, mas sem o GRANT no nível da tabela, o PostgREST ignora completamente a query do `publicSupabase` (role anon). Resultado: **todo polling que tenta ler `autentique_url` da tabela `contratos` retorna `null`**, mesmo quando o link já existe no banco.
 
-**`src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`**
+Isso explica por que:
+- O edge function (service role) salva o link corretamente
+- O componente nunca consegue lê-lo de volta
+- A página fica presa em "Aguarde... estamos gerando seu link de assinatura"
 
-1. Adicionar estado independente (linha ~69):
+### Alterações
+
+**1. Nova migration SQL**
+```sql
+GRANT SELECT ON public.contratos TO anon;
+```
+Apenas isso. A RLS policy existente (`anon_select_contratos_by_cotacao_token`) já restringe corretamente o acesso apenas a contratos com `cotacao_token_publico IS NOT NULL`.
+
+**2. `EtapaAssinaturaContrato.tsx` — adicionar log de debug no polling**
+Adicionar `console.log` do resultado da query no polling step 4 para facilitar diagnóstico futuro caso o problema persista:
 ```typescript
-const [linkAssinatura, setLinkAssinatura] = useState<string | null>(null);
-const linkEfetivo = linkAssinatura || contrato?.linkAssinatura || null;
+console.log('[EtapaAssinatura] Polling DB result:', data);
 ```
 
-2. **Step 4 polling** (linha 272): guard usa `linkEfetivo`, setter chama `setLinkAssinatura`
-3. **Step 4b timeout** (linha 296): guard usa `linkEfetivo`
-4. **Step 5 polling** (linhas 318, 350): setter chama `setLinkAssinatura` + `setLinkTimeout(false)`
-5. **verificarManualmente** (linha 395): setter chama `setLinkAssinatura`
-6. **enviarParaAutentique** (linha 224-231, 244): adicionar `setLinkAssinatura`
-7. **verificarOuGerarContrato** (linha 157): adicionar `setLinkAssinatura`
-8. **UI** (linha 695, 709, 715): trocar `contrato?.linkAssinatura` por `linkEfetivo`
-
 ### Resultado
-O link tem ciclo de vida independente do objeto `contrato`. Qualquer polling que encontrar a URL a exibe imediatamente.
+O polling de 3s passará a ler `autentique_url` do banco com sucesso, e o botão "Assinar Contrato Agora" aparecerá automaticamente assim que o link for salvo pelo edge function.
 
