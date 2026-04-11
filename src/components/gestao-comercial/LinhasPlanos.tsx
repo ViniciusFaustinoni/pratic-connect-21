@@ -175,6 +175,8 @@ function useLinhasComPlanos() {
       const coberturasMap = new Map<string, { id: string; nome: string; valor: number; rules: EligibilityRule[] }[]>();
       const beneficiosMap = new Map<string, { id: string; name: string; preco_sugerido: number; rules: EligibilityRule[] }[]>();
 
+      let planRulesMapRef = new Map<string, EligibilityRule[]>();
+
       if (planoIds.length > 0) {
         const { data: coberturas } = await supabase
           .from('planos_coberturas')
@@ -202,12 +204,12 @@ function useLinhasComPlanos() {
           beneficiosMap.set(b.plano_id, list);
         }
 
-        // Collect all entity IDs for rules fetch
+        // Collect all entity IDs for rules fetch (coberturas + beneficios + planos)
         const allCobIds = new Set<string>();
         const allBenIds = new Set<string>();
         coberturasMap.forEach((list) => list.forEach((c) => allCobIds.add(c.id)));
         beneficiosMap.forEach((list) => list.forEach((b) => allBenIds.add(b.id)));
-        const allEntityIds = [...allCobIds, ...allBenIds];
+        const allEntityIds = [...allCobIds, ...allBenIds, ...planoIds];
 
         if (allEntityIds.length > 0) {
           const CHUNK = 100;
@@ -240,6 +242,9 @@ function useLinhasComPlanos() {
               b.rules = rulesMap.get(b.id) || [];
             }
           });
+
+          // Store rulesMap for plan-level rules
+          planRulesMapRef = rulesMap;
         }
       }
 
@@ -257,6 +262,7 @@ function useLinhasComPlanos() {
               valor_mensal: cobs.reduce((s, c) => s + c.valor, 0) + bens.reduce((s, b) => s + b.preco_sugerido, 0),
               coberturas_count: cobs.length,
               beneficios_count: bens.length,
+              plan_rules: planRulesMapRef.get(plan.id) || [],
             };
           }),
       }));
@@ -539,6 +545,7 @@ export function LinhasPlanos() {
                                           {plano.badge_text}
                                         </Badge>
                                       ) : null}
+                                      {plano.plan_rules?.length > 0 && <RuleBadges rules={plano.plan_rules} />}
                                     </div>
                                   </div>
 
