@@ -7,19 +7,19 @@ const corsHeaders = {
 };
 
 /**
- * CRON: Confirmação de Serviços via WhatsApp — Duplo disparo
+ * CRON: Confirmação de Serviços via WhatsApp — Baseado em Turno
  *
- * Disparo VÉSPERA (18h Brasília / 21h UTC):
- *   - Busca serviços de AMANHÃ com confirmacao_whatsapp IS NULL
- *   - Envia template confirmacao_vespera_v1
- *   - Marca confirmacao_whatsapp = 'aguardando_confirmacao_vespera'
- *
- * Disparo MANHÃ (08h Brasília / 11h UTC):
- *   - Busca serviços de HOJE com confirmacao_whatsapp = 'aguardando_confirmacao_vespera'
- *   - Envia template confirmacao_manha_v1
+ * Disparo MANHÃ (7h Brasília / 10h UTC):
+ *   - Busca serviços de HOJE com periodo = 'manha', confirmacao_whatsapp IS NULL, permite_encaixe = false
+ *   - Envia template confirmacao_agendamento_v1
  *   - Marca confirmacao_whatsapp = 'aguardando_confirmacao_manha'
  *
- * Quem confirma na véspera NÃO recebe mensagem de manhã.
+ * Disparo TARDE (13h Brasília / 16h UTC):
+ *   - Busca serviços de HOJE com periodo = 'tarde', confirmacao_whatsapp IS NULL, permite_encaixe = false
+ *   - Envia template confirmacao_agendamento_v1
+ *   - Marca confirmacao_whatsapp = 'aguardando_confirmacao_tarde'
+ *
+ * Encaixes (permite_encaixe=true) NÃO são incluídos — já receberam confirmação na criação.
  */
 
 serve(async (req) => {
@@ -42,11 +42,12 @@ serve(async (req) => {
     // Aceitar parâmetro explícito ou detectar pela hora
     let body: any = {};
     try { body = await req.json(); } catch { /* sem body */ }
-    const tipoDisparo: 'vespera' | 'manha' =
-      body.tipo_disparo || (horaAtual >= 17 && horaAtual <= 19 ? 'vespera' : 'manha');
+    
+    const tipoDisparo: 'manha' | 'tarde' =
+      body.tipo_disparo || (horaAtual < 12 ? 'manha' : 'tarde');
 
-    const isVespera = tipoDisparo === 'vespera';
-    const logPrefix = isVespera ? '[confirmar-vespera]' : '[confirmar-manha]';
+    const periodoAlvo = tipoDisparo; // 'manha' ou 'tarde'
+    const logPrefix = `[confirmar-${tipoDisparo}]`;
 
     console.log(`${logPrefix} Iniciando disparo ${tipoDisparo}. Hora Brasília: ${horaAtual}h, Dia: ${diaSemana}`);
 
@@ -55,56 +56,40 @@ serve(async (req) => {
       return jsonResp({ success: true, message: "Domingo", count: 0 });
     }
 
-    // Calcular data-alvo
-    let dataAlvo: string;
-    if (isVespera) {
-      // Amanhã
-      const amanha = new Date(agoraBrasilia);
-      amanha.setDate(amanha.getDate() + 1);
-      dataAlvo = amanha.toISOString().split('T')[0];
-    } else {
-      // Hoje
-      dataAlvo = agoraBrasilia.toISOString().split('T')[0];
-    }
+    // Data-alvo: HOJE
+    const dataAlvo = agoraBrasilia.toISOString().split('T')[0];
+    console.log(`${logPrefix} Data alvo: ${dataAlvo}, período: ${periodoAlvo}`);
 
-    console.log(`${logPrefix} Data alvo: ${dataAlvo}`);
-
-    // Buscar serviços conforme tipo de disparo
-    let query = supabase
+    // Buscar serviços NORMAIS (não-encaixe) do período, sem confirmação enviada ainda
+    const { data: servicos, error: servicosError } = await supabase
       .from('servicos')
       .select(`
         id, tipo, data_agendada, hora_agendada, periodo,
         profissional_id, associado_id, contrato_id, cotacao_id,
-        confirmacao_whatsapp, logradouro, numero, bairro, cidade, uf,
+        confirmacao_whatsapp, permite_encaixe, logradouro, numero, bairro, cidade, uf,
         profissional:profiles!profissional_id(nome),
         associado:associados!associado_id(id, nome, telefone, whatsapp),
         cotacao:cotacoes!cotacao_id(id, lead:leads!cotacoes_lead_id_fkey(nome, telefone))
       `)
       .eq('data_agendada', dataAlvo)
+      .eq('periodo', periodoAlvo)
+      .eq('permite_encaixe', false)
+      .is('confirmacao_whatsapp', null)
       .in('status', ['agendada', 'pendente']);
-
-    if (isVespera) {
-      query = query.is('confirmacao_whatsapp', null);
-    } else {
-      // Manhã: pegar quem não confirmou na véspera + agendamentos novos (encaixes noturnos, última hora)
-      query = query.or('confirmacao_whatsapp.eq.aguardando_confirmacao_vespera,confirmacao_whatsapp.is.null');
-    }
-
-    const { data: servicos, error: servicosError } = await query;
 
     if (servicosError) {
       console.error(`${logPrefix} Erro ao buscar serviços:`, servicosError);
       throw servicosError;
     }
 
-    console.log(`${logPrefix} Encontrados ${servicos?.length || 0} serviços`);
+    console.log(`${logPrefix} Encontrados ${servicos?.length || 0} serviços normais do período ${periodoAlvo}`);
 
     if (!servicos || servicos.length === 0) {
-      return jsonResp({ success: true, message: "Nenhum serviço", count: 0 });
+      return jsonResp({ success: true, message: "Nenhum serviço", tipo_disparo: tipoDisparo, count: 0 });
     }
 
-    const templateName = isVespera ? 'confirmacao_vespera_v1' : 'confirmacao_manha_v1';
-    const statusConfirmacao = isVespera ? 'aguardando_confirmacao_vespera' : 'aguardando_confirmacao_manha';
+    const templateName = 'confirmacao_agendamento_v1';
+    const statusConfirmacao = `aguardando_confirmacao_${tipoDisparo}`;
 
     const resultados: { servicoId: string; tipo: string; sucesso: boolean; erro?: string }[] = [];
 
@@ -138,11 +123,9 @@ serve(async (req) => {
           : servico.tipo === 'remocao' ? 'remoção'
           : servico.tipo === 'manutencao' ? 'manutenção' : 'serviço';
 
-        // Horário / período
-        const horaFormatada = servico.hora_agendada?.slice(0, 5) || servico.periodo || "a confirmar";
-        const periodoLabel = servico.periodo === 'manha' ? 'pela manhã'
-          : servico.periodo === 'tarde' ? 'pela tarde'
-          : horaFormatada !== 'a confirmar' ? `às ${horaFormatada}` : '';
+        // Período
+        const periodoLabel = periodoAlvo === 'manha' ? 'pela manhã' : 'pela tarde';
+        const horaFormatada = servico.hora_agendada?.slice(0, 5) || periodoLabel;
 
         // Data formatada
         const dataObj = new Date(servico.data_agendada + 'T12:00:00');
@@ -153,17 +136,13 @@ serve(async (req) => {
           .filter(Boolean).join(", ") || "endereço agendado";
 
         const nomeAbrev = nomeCliente.split(' ')[0];
-        const param3 = isVespera
-          ? `${dataFormatada} ${periodoLabel}`.trim()
-          : `${periodoLabel || horaFormatada}`.trim();
+        const param3 = `${periodoLabel}`.trim();
 
         // Mensagem fallback
-        const saudacao = isVespera ? `Olá, *${nomeAbrev}*! 👋` : `Bom dia, *${nomeAbrev}*! ☀️`;
-        const quando = isVespera ? `*amanhã* (${dataFormatada})` : `*HOJE*`;
+        const saudacao = periodoAlvo === 'manha' ? `Bom dia, *${nomeAbrev}*! ☀️` : `Boa tarde, *${nomeAbrev}*! 👋`;
         const mensagem = `${saudacao}
 
-Lembramos que seu(sua) *${tipoLabel}* está agendado(a) para ${quando}:
-🕐 ${horaFormatada}
+Lembramos que seu(sua) *${tipoLabel}* está agendado(a) para *HOJE* ${periodoLabel}:
 📍 ${endereco}
 
 ✅ Responda *SIM* para confirmar
@@ -198,7 +177,7 @@ Lembramos que seu(sua) *${tipoLabel}* está agendado(a) para ${quando}:
             hora_agendada: servico.hora_agendada,
             endereco,
             nome_tecnico: (servico.profissional as any)?.nome || 'Técnico',
-            disparo: tipoDisparo,
+            disparo: `turno_${tipoDisparo}`,
           }
         });
 
@@ -220,7 +199,7 @@ Lembramos que seu(sua) *${tipoLabel}* está agendado(a) para ${quando}:
     const falhas = resultados.filter(r => !r.sucesso).length;
     console.log(`${logPrefix} Concluído: ${sucessos} enviadas, ${falhas} falhas`);
 
-    return jsonResp({ success: true, tipo_disparo: tipoDisparo, enviadas: sucessos, falhas, detalhes: resultados });
+    return jsonResp({ success: true, tipo_disparo: tipoDisparo, periodo: periodoAlvo, enviadas: sucessos, falhas, detalhes: resultados });
 
   } catch (error: any) {
     console.error("[confirmar-cron] Erro geral:", error);

@@ -566,23 +566,107 @@ serve(async (req) => {
         console.warn('[CriarInstalacaoPosPagamento] Atribuição imediata falhou:', atribErr);
       }
 
-      // 8. NOTIFICAR ASSOCIADO via WhatsApp
-      try {
-        const periodoValido2 = ['manha', 'tarde'].includes(periodoAgendado || '') ? periodoAgendado : 'manha';
-        const periodoTexto = periodoValido2 === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)';
-        await supabase.functions.invoke('notificar-cliente', {
-          body: {
-            tipo: 'instalacao_agendada',
-            associado_id: contrato.associado_id,
-            dados: {
-              data: dataAgendada,
-              periodo: periodoTexto,
+      // 8. ENVIAR CONFIRMAÇÃO WHATSAPP AO CLIENTE
+      const permiteEncaixe = cotacao.vistoria_permite_encaixe || false;
+
+      if (permiteEncaixe) {
+        // ========== ENCAIXE: Enviar template de confirmação IMEDIATAMENTE ==========
+        console.log('[CriarInstalacaoPosPagamento] 🔔 ENCAIXE detectado — enviando confirmação WhatsApp imediata ao cliente');
+        try {
+          const { data: associadoData } = await supabase
+            .from('associados')
+            .select('nome, telefone, whatsapp')
+            .eq('id', contrato.associado_id)
+            .single();
+
+          const telefoneCliente = (associadoData?.whatsapp || associadoData?.telefone || '').replace(/\D/g, '');
+          const nomeCliente = associadoData?.nome || 'Cliente';
+          const nomeAbrev = nomeCliente.split(' ')[0];
+
+          if (telefoneCliente) {
+            const periodoValido2 = ['manha', 'tarde'].includes(periodoAgendado || '') ? periodoAgendado : 'manha';
+            const periodoTexto = periodoValido2 === 'manha' ? 'pela manhã' : 'pela tarde';
+            const dataObj = new Date((dataAgendada || '') + 'T12:00:00');
+            const dataFormatada = dataObj.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+            const enderecoTexto = [endereco.logradouro, endereco.numero, endereco.bairro, endereco.cidade]
+              .filter(Boolean).join(', ') || 'endereço agendado';
+
+            const mensagem = `Olá, *${nomeAbrev}*! 👋
+
+Seu serviço de *instalação* foi agendado como *encaixe* para:
+📅 ${dataFormatada} ${periodoTexto}
+📍 ${enderecoTexto}
+
+O técnico mais próximo será designado em breve.
+
+✅ Responda *SIM* para confirmar
+📅 Ou informe se precisa *reagendar*
+
+*PRATIC Proteção Veicular*`;
+
+            const { error: sendError } = await supabase.functions.invoke('whatsapp-send-text', {
+              body: {
+                telefone: telefoneCliente,
+                mensagem,
+                template_name: 'confirmacao_agendamento_v1',
+                template_params: [nomeAbrev, 'instalação', `${dataFormatada} ${periodoTexto}`],
+              }
+            });
+
+            if (sendError) {
+              console.error('[CriarInstalacaoPosPagamento] Erro ao enviar confirmação encaixe:', sendError);
+            } else {
+              console.log(`[CriarInstalacaoPosPagamento] ✅ Confirmação encaixe enviada para ${telefoneCliente}`);
+            }
+
+            // Buscar o servico correspondente à instalação
+            const { data: servicoData } = await supabase
+              .from('servicos')
+              .select('id')
+              .eq('instalacao_origem_id', novaInstalacaoId)
+              .maybeSingle();
+
+            if (servicoData) {
+              await supabase.from('confirmacoes_agendamento').insert({
+                servico_id: servicoData.id,
+                telefone: telefoneCliente,
+                status: 'enviada',
+                mensagem_enviada_em: new Date().toISOString(),
+                contexto_ia: {
+                  nome_cliente: nomeCliente,
+                  tipo_servico: 'instalacao',
+                  hora_agendada: null,
+                  endereco: enderecoTexto,
+                  disparo: 'encaixe_imediato',
+                }
+              });
+              console.log('[CriarInstalacaoPosPagamento] ✓ Registro confirmação encaixe criado');
+            }
+          } else {
+            console.warn('[CriarInstalacaoPosPagamento] Telefone não encontrado para confirmação encaixe');
+          }
+        } catch (confErr) {
+          console.error('[CriarInstalacaoPosPagamento] Erro ao processar confirmação encaixe:', confErr);
+        }
+      } else {
+        // ========== NORMAL: Apenas notificar (confirmação será enviada pelo cron 1h antes do turno) ==========
+        try {
+          const periodoValido2 = ['manha', 'tarde'].includes(periodoAgendado || '') ? periodoAgendado : 'manha';
+          const periodoTexto = periodoValido2 === 'manha' ? 'Manhã (08:00-12:00)' : 'Tarde (14:00-18:00)';
+          await supabase.functions.invoke('notificar-cliente', {
+            body: {
+              tipo: 'instalacao_agendada',
+              associado_id: contrato.associado_id,
+              dados: {
+                data: dataAgendada,
+                periodo: periodoTexto,
+              },
             },
-          },
-        });
-        console.log(`[CriarInstalacaoPosPagamento] ✓ Notificação enviada ao associado`);
-      } catch (notifErr) {
-        console.error('[CriarInstalacaoPosPagamento] Erro ao enviar notificação:', notifErr);
+          });
+          console.log(`[CriarInstalacaoPosPagamento] ✓ Notificação enviada (normal — confirmação via cron 1h antes do turno)`);
+        } catch (notifErr) {
+          console.error('[CriarInstalacaoPosPagamento] Erro ao enviar notificação:', notifErr);
+        }
       }
     }
 
