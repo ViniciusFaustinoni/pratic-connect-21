@@ -192,10 +192,9 @@ ${conteudoHTML}
     <li>Após a efetivação do cancelamento, o veículo deixará de contar com a proteção da associação.</li>
   </ul>
 </div>
-<div class="signature-area">
-  <h2 class="section-title">ASSINATURA</h2>
-  <br><br>
-  <p class="signature-local-data">${associado.cidade || ""}/${associado.uf || ""}, ${variaveis["sistema.data_extenso"]}</p>
+<div style="margin-top: 20pt; text-align: center; font-size: 9pt;">
+  <p>${associado.cidade || ""}/${associado.uf || ""}, ${variaveis["sistema.data_extenso"]}</p>
+  <p style="font-size: 8pt; color: #666; margin-top: 8pt;">Documento assinado eletronicamente.</p>
 </div>
 <div class="footer">PRATICCAR | Termo de Cancelamento</div>
 </div></body></html>`;
