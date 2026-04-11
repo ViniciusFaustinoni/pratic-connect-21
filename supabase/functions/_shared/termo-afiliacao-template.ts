@@ -889,7 +889,6 @@ const generateSecao8 = (data: TermoAfiliacaoData): string => {
 </div>
 `;
 };
-};
 
 // ============= RODAPÉ =============
 
