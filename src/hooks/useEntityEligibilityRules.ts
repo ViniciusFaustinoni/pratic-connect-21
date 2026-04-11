@@ -85,12 +85,12 @@ export function useSaveRule() {
         .eq('is_active', true)
         .maybeSingle();
 
-      if (existing?.id) {
+      if ((existing as any)?.id) {
         // Update existing rule
         const { data, error } = await supabase
           .from('entity_eligibility_rules' as any)
           .update({ rule_config: payload.rule_config, rule_mode: payload.rule_mode } as any)
-          .eq('id', existing.id)
+          .eq('id', (existing as any).id)
           .select()
           .single();
         if (error) throw error;
