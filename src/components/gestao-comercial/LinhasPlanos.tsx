@@ -862,6 +862,16 @@ export function LinhasPlanos() {
           )}
         </DialogContent>
       </Dialog>
+      <Dialog open={eligibilityModal.open} onOpenChange={(open) => { if (!open) setEligibilityModal({ open: false }); }}>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>Elegibilidade: {eligibilityModal.planName}</DialogTitle>
+          </DialogHeader>
+          {eligibilityModal.planId && (
+            <EligibilityRulesEditor entityType="plano" entityId={eligibilityModal.planId} />
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }
