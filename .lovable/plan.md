@@ -1,40 +1,40 @@
 
 
-## Plano: Correção definitiva dos templates e deploy das funções
+## Plano: Corrigir RLS do storage para assinaturas em página pública
 
 ### Causa raiz
 
-As correções feitas nas mensagens anteriores (sanitização reforçada, estimativa de páginas com 2000 chars/página + margem de +2, remoção do bloco ASSINATURA do rastreador) **não foram deployadas**. Os edge functions logs estão vazios, confirmando que `autentique-create` e `autentique-create-by-token` rodam ainda com o código antigo. O documento assinado que você enviou foi gerado com o código antigo.
+A página `AcompanhamentoProposta.tsx` é pública (sem login), mas usa o client autenticado (`supabase`) para fazer upload no bucket `assinaturas`. A RLS policy exige `auth.uid()`, que é null para anon, causando o erro "new row violates row-level security policy".
 
-Além disso, **3 templates no banco de dados** ainda contêm blocos manuais de assinatura que precisam ser removidos diretamente no banco (a sanitização por regex é um fallback, mas o ideal é limpar na fonte):
-
-1. **Proposta de Filiação** (`eb09759f`): termina com `{{associado.cidade}}, {{sistema.data_extenso}}.` + `{{associado.nome}} - CPF: {{associado.cpf}}`
-2. **REGULAMENTO** (`34e1e572`): termina com linha de underscores + `ASSINATURA DO ASSOCIADO` + `{{associado.nome}} — CPF: {{associado.cpf}}`
-3. **TERMO DE RESPONSABILIDADE DO RASTREADOR** (`a644ab91`): termina com `{{empresa.cidade}} - {{empresa.uf}}, {{sistema.data_extenso}}.` + `{{associado.nome}}` + `CPF: {{associado.cpf}}`
-
-E há um valor obsoleto no banco: `configuracoes.assinatura_total_paginas = 20` que, embora já seja sobrescrito pelo código, deve ser removido para evitar confusão.
+A mesma página também faz `UPDATE` na tabela `servicos` para salvar `assinatura_cliente_url`. Já existe uma policy anon para update em `servicos` (condicionada a `reagendamento_token IS NOT NULL`), mas o serviço de instalação pode não ter esse token. A solução mais segura é delegar upload + update para uma Edge Function.
 
 ### Alterações
 
-**1. Migration SQL — limpar blocos de assinatura dos 3 templates no banco**
+**1. `src/pages/public/AcompanhamentoProposta.tsx`**
+- Trocar `supabase` por `publicSupabase` no `handleSalvarAssinatura`
+- Ou melhor: invocar uma Edge Function existente ou o hook `useSaveAssinatura` com `publicSupabase`
 
-Usar `regexp_replace` para remover os blocos finais de assinatura (local/data, underscores, nome/CPF) dos 3 templates identificados. Também deletar `assinatura_total_paginas` da tabela `configuracoes` (já é calculado dinamicamente).
+**2. Migration SQL — Permitir anon upload no bucket `assinaturas`**
+- Criar policy `Anon can upload assinaturas` no `storage.objects` para `INSERT TO anon` com `bucket_id = 'assinaturas'`
+- Criar policy `Anon can update assinaturas` para `UPDATE TO anon` (upsert precisa)
 
-**2. Deploy dos edge functions**
+**3. Migration SQL — Permitir anon update de `assinatura_cliente_url` em `servicos`**
+- A policy anon de update existente exige `reagendamento_token IS NOT NULL`. Precisamos ou: (a) ampliar para permitir update quando o serviço está vinculado a um contrato público, ou (b) delegar a operação para uma Edge Function com service_role.
 
-Forçar o deploy de `autentique-create`, `autentique-create-by-token` e `_shared` para que as correções já implementadas (sanitização reforçada, estimativa de páginas, remoção do bloco ASSINATURA do rastreador) entrem em produção.
+A abordagem mais simples e segura: usar `publicSupabase` para o upload (com nova RLS anon) e chamar uma Edge Function para o update do `servicos` (evita abrir RLS de update desnecessariamente).
 
-**3. Nenhuma alteração de código necessária**
+**Abordagem escolhida (mais simples):** Apenas adicionar policies anon no storage + na tabela `servicos` para update limitado, e trocar para `publicSupabase`.
 
-As correções de código já foram feitas nas mensagens anteriores:
-- `sanitizeSignatureBlocks` já tem 23 regras que cobrem todos os padrões
-- `estimarPaginasHTML` já usa 2000 chars/página + margem de +2
-- `generateSecaoRastreador` já não gera bloco de assinatura
-- Os edge functions já chamam `sanitizeSignatureBlocks` antes de `estimarPaginasHTML`
+### Detalhes técnicos
 
-### Resultado esperado
-- Templates limpos na fonte (sem blocos manuais de assinatura)
-- Funções deployadas com sanitização reforçada como fallback de segurança
-- SIGNATURE posicionada corretamente na última página real
-- Nenhum bloco manual de "Nome - CPF" ou "Local, data" no documento final
+1. **Migration**: 
+   - `INSERT TO anon` em `storage.objects` onde `bucket_id = 'assinaturas'`
+   - `UPDATE TO anon` em `storage.objects` onde `bucket_id = 'assinaturas'` (para upsert)
+   - Ampliar policy de update anon em `servicos` para cobrir serviços sem `reagendamento_token`
+
+2. **Código**: Trocar `import { supabase }` por `import { publicSupabase }` e usar `publicSupabase` no `handleSalvarAssinatura`
+
+### Resultado
+- Upload de assinatura na página pública funcionará sem erro de RLS
+- A assinatura será salva corretamente no bucket e o URL atualizado no serviço
 
