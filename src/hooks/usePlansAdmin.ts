@@ -655,7 +655,7 @@ export function useCreateBenefit() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: BenefitInput) => {
+    mutationFn: async (input: BenefitCreateInput) => {
       const { data, error } = await supabase
         .from('benefits')
         .insert(input)
