@@ -46,6 +46,7 @@ const RetiradaVeiculo = lazy(() => import("./pages/public/RetiradaVeiculo"));
 const SubstituicaoPublica = lazy(() => import("./pages/public/SubstituicaoPublica"));
 const AcompanhamentoReboquePublico = lazy(() => import("./pages/public/AcompanhamentoReboquePublico"));
 const PortalTerceiro = lazy(() => import("./pages/public/PortalTerceiro"));
+const ChecklistInstalacaoPublica = lazy(() => import("./pages/public/ChecklistInstalacaoPublica"));
 
 // Auth Pages
 const Auth = lazy(() => import("./pages/Auth"));
