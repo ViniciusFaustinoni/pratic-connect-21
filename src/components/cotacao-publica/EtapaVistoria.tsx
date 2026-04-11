@@ -155,7 +155,16 @@ export function EtapaVistoria({
 
               {/* Opção Agendar */}
               <button
-                onClick={() => setModo('escolha-local')}
+                onClick={() => {
+                  // Se tipoInstalacao definido, pular escolha-local e ir direto
+                  if (tipoInstalacao === 'rota') {
+                    setModo('agendada');
+                  } else if (tipoInstalacao === 'base') {
+                    setModo('agendada-base');
+                  } else {
+                    setModo('escolha-local');
+                  }
+                }}
                 className="w-full p-4 rounded-xl border border-border/50 bg-card/50 hover:bg-accent/10 hover:border-primary/50 transition-all group text-left"
               >
                 <div className="flex items-start gap-4">
@@ -209,6 +218,7 @@ export function EtapaVistoria({
                 setModo('agendada-base');
               }
             }}
+            tipoInstalacao={tipoInstalacao}
           />
         </motion.div>
       )}
