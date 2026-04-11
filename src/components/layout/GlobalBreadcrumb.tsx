@@ -72,6 +72,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/cobranca/negativacao': { label: 'Negativação' },
   '/cobranca/acordos': { label: 'Acordos' },
   '/cobranca/acordos/novo': { label: 'Novo Acordo' },
+  '/cobranca/chat': { label: 'Chat' },
   
   // Contabilidade
   '/contabilidade': { label: 'Contabilidade' },
