@@ -241,12 +241,10 @@ function useLinhasComPlanos() {
             }
           });
 
-          // Attach rules to planos
-          planRulesMap = rulesMap;
+          // Store rulesMap for plan-level rules
+          planRulesMapRef = rulesMap;
         }
       }
-
-      let planRulesMap_ref = planRulesMap;
 
       return (lines || []).map((line) => ({
         ...line,
@@ -262,6 +260,7 @@ function useLinhasComPlanos() {
               valor_mensal: cobs.reduce((s, c) => s + c.valor, 0) + bens.reduce((s, b) => s + b.preco_sugerido, 0),
               coberturas_count: cobs.length,
               beneficios_count: bens.length,
+              plan_rules: planRulesMapRef.get(plan.id) || [],
             };
           }),
       }));
