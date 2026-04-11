@@ -377,6 +377,7 @@ function useDeletePlano() {
 }
 
 export function LinhasPlanos() {
+  const queryClient = useQueryClient();
   const { data: linhas = [], isLoading } = useLinhasComPlanos();
   const [openLines, setOpenLines] = useState<Set<string>>(new Set());
   const [linhaModal, setLinhaModal] = useState<{ open: boolean; productLine?: any }>({ open: false });
