@@ -933,7 +933,7 @@ export function MapaVistoriasContent() {
     );
   }
 
-  const [painelAberto, setPainelAberto] = useState(true);
+
 
   return (
     <>
