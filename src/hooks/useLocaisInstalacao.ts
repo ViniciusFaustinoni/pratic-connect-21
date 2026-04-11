@@ -72,6 +72,8 @@ export function useCreateLocalInstalacao() {
     onError: (err: any) => {
       if (err?.code === '23505') {
         toast.error('Este local já existe');
+      } else if (err?.code === '42501' || err?.message?.includes('row-level security')) {
+        toast.error('Sem permissão para adicionar locais de instalação');
       } else {
         toast.error('Erro ao adicionar local');
       }
