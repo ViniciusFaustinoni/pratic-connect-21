@@ -26,23 +26,15 @@ export function gerarPosicoesAssinatura(config: PosicoesConfig = {}) {
 
   const positions: Array<{ x: string; y: string; z: string; element: string }> = [];
 
-  // Rubrica (INITIALS) em todas as páginas exceto a última
-  for (let p = 1; p < totalPaginas; p++) {
+  // SIGNATURE em todas as páginas para garantir que cada folha seja assinada
+  for (let p = 1; p <= totalPaginas; p++) {
     positions.push({
-      x: rubricaX,
-      y: rubricaY,
+      x: assinaturaX,
+      y: assinaturaY,
       z: String(p),
-      element: "INITIALS",
+      element: "SIGNATURE",
     });
   }
-
-  // Assinatura completa na última página
-  positions.push({
-    x: assinaturaX,
-    y: assinaturaY,
-    z: String(totalPaginas),
-    element: "SIGNATURE",
-  });
 
   return positions;
 }

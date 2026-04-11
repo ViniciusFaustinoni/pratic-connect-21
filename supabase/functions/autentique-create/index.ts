@@ -677,11 +677,16 @@ serve(async (req) => {
         let anexosHTML = '';
         for (const tmpl of templatesFiltrados) {
           // Substituir variáveis no conteúdo do anexo antes de inserir
-          const conteudoSubstituido = substituirVariaveis(tmpl.conteudo, templateData);
+          let conteudoSubstituido = substituirVariaveis(tmpl.conteudo, templateData);
+          // Remover blocos de assinatura manual do template do anexo
+          conteudoSubstituido = sanitizeSignatureBlocks(conteudoSubstituido);
+          // Gerar bloco de assinatura padronizado para o anexo
+          const assinaturaAnexo = generateAssinaturaAnexo(templateData);
           anexosHTML += `
             <div style="page-break-before: always;">
               <h2 style="text-align: center; margin-top: 40px; margin-bottom: 20px; font-size: 16px; text-transform: uppercase;">${tmpl.nome}</h2>
               <div style="font-size: 12px; line-height: 1.6;">${conteudoSubstituido}</div>
+              ${assinaturaAnexo}
             </div>
           `;
         }
