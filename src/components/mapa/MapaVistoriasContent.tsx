@@ -64,17 +64,16 @@ const COR_SELECIONADO = '#F59E0B';
 const COR_NAO_CONFIRMADO = '#F97316'; // Orange
 const COR_CONFIRMADO = '#10B981'; // Green
 const COR_AGUARDANDO = '#EAB308'; // Yellow
+const COR_EM_EXECUCAO = '#3B82F6'; // Blue
 const STATUS_REALIZADOS = ['concluida', 'aprovada', 'reprovada', 'em_analise'];
+const STATUS_EM_EXECUCAO = ['em_andamento', 'em_rota'];
 
 function getCorPorStatus(status: string, confirmacao_whatsapp?: string | null, permite_encaixe?: boolean): string {
+  if (STATUS_EM_EXECUCAO.includes(status)) return COR_EM_EXECUCAO;
   if (STATUS_REALIZADOS.includes(status)) return COR_REALIZADA;
-  // Encaixe: always red (normal treatment)
   if (permite_encaixe) return COR_A_REALIZAR;
-  // Confirmed
   if (confirmacao_whatsapp === 'confirmada') return COR_CONFIRMADO;
-  // Awaiting confirmation
   if (confirmacao_whatsapp?.startsWith('aguardando')) return COR_AGUARDANDO;
-  // Not sent or null
   if (!confirmacao_whatsapp) return COR_NAO_CONFIRMADO;
   return COR_A_REALIZAR;
 }
