@@ -869,6 +869,29 @@ serve(async (req) => {
               link: `/monitoramento`,
             });
           }
+
+          // Enviar email ao associado com o PDF assinado
+          if (servicoLaudo.associado?.email && updateData.laudo_pdf_assinado_url) {
+            try {
+              await supabase.functions.invoke("send-email", {
+                body: {
+                  template: "generico",
+                  to: servicoLaudo.associado.email,
+                  data: {
+                    nome: servicoLaudo.associado.nome || "Associado",
+                    assunto: "Laudo de Instalação Assinado",
+                    titulo: "Seu Laudo de Instalação foi assinado com sucesso! ✅",
+                    mensagem: `O laudo da instalação do seu veículo foi assinado eletronicamente. Você pode baixar o documento assinado pelo link abaixo.`,
+                    link_url: updateData.laudo_pdf_assinado_url,
+                    link_texto: "Baixar Laudo Assinado (PDF)",
+                  },
+                },
+              });
+              console.log("[autentique-webhook] ✓ Email com laudo assinado enviado ao associado");
+            } catch (emailErr: any) {
+              console.error("[autentique-webhook] Erro ao enviar email do laudo:", emailErr.message);
+            }
+          }
         } else if (eventType === "signature.viewed") {
           console.log(`[autentique-webhook] Laudo de instalação visualizado`);
         }
