@@ -837,6 +837,9 @@ export function sanitizeSignatureBlocks(html: string): string {
   // 15. Parágrafos com "Local, data" seguido de data por extenso
   result = result.replace(/<p[^>]*>[^<]*(?:Local|LOCAL)\s*,?\s*(?:\d{1,2}\s+de\s+\w+\s+de\s+\d{4}|—)[^<]*<\/p>/gi, '');
 
+  // 15b. Parágrafos com "Local: ___" e "Data: ___" (underscores como placeholders)
+  result = result.replace(/<p[^>]*>[^<]*Local\s*:\s*_{2,}[^<]*Data\s*:\s*[_/]{2,}[^<]*<\/p>/gi, '');
+
   // 16. Seção inteira "8. ASSINATURA" ou "ASSINATURA" como título de seção
   result = result.replace(/<(?:h[1-6]|div)[^>]*(?:class\s*=\s*["'][^"']*section-title[^"']*["'])?[^>]*>\s*(?:\d+\.\s*)?ASSINATURA\s*<\/(?:h[1-6]|div)>/gi, '');
 
@@ -1194,13 +1197,6 @@ export async function buscarEGerarAditivos(
     (Anexo ao Termo de Afiliação)
   </p>
   ${conteudo}
-  <div style="margin-top: 40pt; text-align: center;">
-    <p>Local: _________________ Data: ____/____/____</p>
-    <div style="margin-top: 30pt;">
-      <p>_________________________________________</p>
-      <p style="font-size: 9pt;">Assinatura do Associado</p>
-    </div>
-  </div>
 </div>
 `;
   }
