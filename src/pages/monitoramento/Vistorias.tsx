@@ -1,22 +1,30 @@
 import { useState } from 'react';
-import { Search, Clock, RefreshCw, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
+import { Plus, Search, Clock, RefreshCw, CheckCircle, XCircle, ClipboardList } from 'lucide-react';
 import { useFilasRealtime } from '@/hooks/useFilasRealtime';
+import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent } from '@/components/ui/card';
+import { ToggleGroup, ToggleGroupItem } from '@/components/ui/toggle-group';
 import { cn } from '@/lib/utils';
-import { useVistorias, useVistoriasMetricas } from '@/hooks/useVistorias';
+import { useVistorias, useVistoriasMetricas, VistoriaStatus } from '@/hooks/useVistorias';
 import { VistoriaListItem } from '@/components/vistorias/VistoriaListItem';
+import { RealizarVistoriaDialog } from '@/components/vistorias/RealizarVistoriaDialog';
 import { VistoriaDetailDrawer } from '@/components/vistorias/VistoriaDetailDrawer';
 import { Loader2 } from 'lucide-react';
 
+type FilterStatus = VistoriaStatus | 'todos';
+
 export default function Vistorias() {
+  // Ativar realtime para atualizações automáticas
   useFilasRealtime();
 
+  const [filter, setFilter] = useState<FilterStatus>('todos');
   const [search, setSearch] = useState('');
+  const [dialogOpen, setDialogOpen] = useState(false);
   const [selectedVistoriaId, setSelectedVistoriaId] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
 
-  const { data: vistorias = [], isLoading } = useVistorias({ status: 'todos', search });
+  const { data: vistorias = [], isLoading } = useVistorias({ status: filter, search });
   const { data: metricas } = useVistoriasMetricas();
 
   const metricasCards = [
@@ -58,11 +66,21 @@ export default function Vistorias() {
   return (
     <div className="container mx-auto py-6 space-y-6">
       {/* Header */}
-      <div>
-        <h1 className="text-2xl font-bold">Vistorias</h1>
-        <p className="text-muted-foreground">
-          Acompanhe vistorias de entrada de veículos
-        </p>
+      <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+        <div>
+          <h1 className="text-2xl font-bold">Vistorias</h1>
+          <p className="text-muted-foreground">
+            Realize e gerencie vistorias de entrada de veículos
+          </p>
+        </div>
+
+        <Button
+          onClick={() => setDialogOpen(true)}
+          className="bg-emerald-600 hover:bg-emerald-700"
+        >
+          <Plus className="h-4 w-4 mr-2" />
+          Realizar Vistoria
+        </Button>
       </div>
 
       {/* Cards de métricas */}
@@ -84,15 +102,37 @@ export default function Vistorias() {
         ))}
       </div>
 
-      {/* Busca */}
-      <div className="relative max-w-sm">
-        <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
-        <Input
-          placeholder="Buscar por placa ou nome..."
-          value={search}
-          onChange={(e) => setSearch(e.target.value)}
-          className="pl-10"
-        />
+      {/* Filtros e busca */}
+      <div className="flex flex-col sm:flex-row gap-4">
+        <ToggleGroup
+          type="single"
+          value={filter}
+          onValueChange={(value) => value && setFilter(value as FilterStatus)}
+          className="justify-start"
+        >
+          <ToggleGroupItem value="todos" aria-label="Todos">
+            Todos
+          </ToggleGroupItem>
+          <ToggleGroupItem value="pendente" aria-label="Pendentes">
+            Pendentes
+          </ToggleGroupItem>
+          <ToggleGroupItem value="em_analise" aria-label="Em Andamento">
+            Em Andamento
+          </ToggleGroupItem>
+          <ToggleGroupItem value="aprovada" aria-label="Concluídas">
+            Concluídas
+          </ToggleGroupItem>
+        </ToggleGroup>
+
+        <div className="relative flex-1 max-w-sm">
+          <Search className="absolute left-3 top-1/2 -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+          <Input
+            placeholder="Buscar por placa ou nome..."
+            value={search}
+            onChange={(e) => setSearch(e.target.value)}
+            className="pl-10"
+          />
+        </div>
       </div>
 
       {/* Lista de vistorias */}
@@ -106,9 +146,15 @@ export default function Vistorias() {
             <CardContent className="flex flex-col items-center justify-center py-12">
               <ClipboardList className="h-12 w-12 text-muted-foreground mb-4" />
               <h3 className="text-lg font-medium mb-1">Nenhuma vistoria encontrada</h3>
-              <p className="text-muted-foreground text-center">
-                Nenhuma vistoria registrada no momento.
+              <p className="text-muted-foreground text-center mb-4">
+                {filter !== 'todos'
+                  ? 'Não há vistorias com este status.'
+                  : 'Comece realizando uma nova vistoria.'}
               </p>
+              <Button onClick={() => setDialogOpen(true)}>
+                <Plus className="h-4 w-4 mr-2" />
+                Realizar Vistoria
+              </Button>
             </CardContent>
           </Card>
         ) : (
@@ -121,6 +167,12 @@ export default function Vistorias() {
           ))
         )}
       </div>
+
+      {/* Dialog de realizar vistoria */}
+      <RealizarVistoriaDialog
+        open={dialogOpen}
+        onOpenChange={setDialogOpen}
+      />
 
       {/* Drawer de detalhes da vistoria */}
       <VistoriaDetailDrawer

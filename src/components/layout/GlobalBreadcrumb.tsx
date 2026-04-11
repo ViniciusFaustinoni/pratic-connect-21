@@ -18,7 +18,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/vendas/dashboard': { label: 'Dashboard' },
   '/vendas/leads': { label: 'Leads' },
   '/vendas/vendedores': { label: 'Histórico de Vendedores' },
-  '/vendas/acompanhamento': { label: 'Acompanhamento' },
+  
   '/vendas/cotacoes': { label: 'Cotações' },
   '/vendas/contratos': { label: 'Contratos' },
   '/vendas/aprovacoes-fipe': { label: 'Aprovações' },
@@ -30,7 +30,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/cadastro': { label: 'Cadastro' }, // No direct route — redirects handled in breadcrumb
   '/cadastro/associados': { label: 'Associados' },
   '/cadastro/veiculos': { label: 'Veículos' },
-  '/cadastro/documentos': { label: 'Documentos' },
+  
   '/cadastro/fila-documentos': { label: 'Fila de Documentos' },
   '/cadastro/processos': { label: 'Processos' },
   '/cadastro/substituicoes': { label: 'Substituições' },
@@ -52,7 +52,7 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   
   // Financeiro
   '/financeiro': { label: 'Financeiro' },
-  '/financeiro/dashboard': { label: 'Dashboard' },
+  
   '/financeiro/cobrancas': { label: 'Cobranças' },
   '/financeiro/faturamento': { label: 'Faturamento Mensal' },
   '/financeiro/contas-pagar': { label: 'Contas a Pagar' },
@@ -111,10 +111,10 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   // Monitoramento
   '/monitoramento': { label: 'Monitoramento' },
   '/monitoramento/equipe': { label: 'Equipe' },
-  '/monitoramento/instalacoes': { label: 'Instalações' },
+  
   '/diretoria/vistorias-instalacoes': { label: 'Vistorias e Instalações' },
   '/monitoramento/rastreadores': { label: 'Rastreadores' },
-  '/monitoramento/retiradas': { label: 'Serviços de Campo' },
+  
   
   
   
@@ -139,8 +139,6 @@ const ROUTE_CONFIG: Record<string, RouteConfig> = {
   '/diretoria/dashboard': { label: 'Dashboard' },
   '/diretoria/gestao-comercial': { label: 'Gestão Comercial' },
   
-  '/diretoria/produtos': { label: 'Produtos' },
-  '/diretoria/precos': { label: 'Tabela de Preços' },
   '/diretoria/rateios': { label: 'Rateios' },
   '/diretoria/indicadores': { label: 'Indicadores' },
   '/diretoria/configuracoes': { label: 'Configurações' },

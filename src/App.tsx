@@ -47,7 +47,6 @@ const SubstituicaoPublica = lazy(() => import("./pages/public/SubstituicaoPublic
 const AcompanhamentoReboquePublico = lazy(() => import("./pages/public/AcompanhamentoReboquePublico"));
 const PortalTerceiro = lazy(() => import("./pages/public/PortalTerceiro"));
 
-
 // Auth Pages
 const Auth = lazy(() => import("./pages/Auth"));
 const AuthCallback = lazy(() => import("./pages/auth/AuthCallback"));
@@ -71,7 +70,6 @@ const DespachoReboquistaPublico = lazy(() => import("./pages/assistencia/Despach
 const LeadsUnificado = lazy(() => import("./pages/vendas/LeadsUnificado"));
 const LeadDetalhe = lazy(() => import("./pages/vendas/LeadDetalhe"));
 const LeadEditar = lazy(() => import("./pages/vendas/LeadEditar"));
-const Acompanhamento = lazy(() => import("./pages/vendas/Acompanhamento"));
 const AtivacoesList = lazy(() => import("./pages/vendas/AtivacoesList"));
 const Cotacoes = lazy(() => import("./pages/vendas/Cotacoes"));
 const CotacaoDetalhe = lazy(() => import("./pages/vendas/CotacaoDetalhe"));
@@ -84,7 +82,6 @@ const AprovacoesFipeMenor = lazy(() => import("./pages/vendas/AprovacoesFipeMeno
 const VendedorHistorico = lazy(() => import("./pages/vendas/VendedorHistorico"));
 const DistribuicaoConfig = lazy(() => import("./pages/vendas/DistribuicaoConfig"));
 const PlanosBeneficios = lazy(() => import("./pages/vendas/PlanosBeneficios"));
-const VendasConfig = lazy(() => import("./pages/vendas/VendasConfig"));
 
 // Cadastro
 const Associados = lazy(() => import("./pages/cadastro/Associados"));
@@ -92,9 +89,7 @@ const SubstituicaoVeiculoPage = lazy(() => import("./pages/cadastro/Substituicao
 const SubstituicoesPendentesPage = lazy(() => import("./pages/cadastro/SubstituicoesPendentesPage"));
 const SubstituicaoDetalhePage = lazy(() => import("./pages/cadastro/SubstituicaoDetalhePage"));
 const AssociadoDetalhe = lazy(() => import("./pages/cadastro/AssociadoDetalhe"));
-const GerarTermo = lazy(() => import("./pages/cadastro/GerarTermo"));
 const Veiculos = lazy(() => import("./pages/cadastro/Veiculos"));
-const Documentos = lazy(() => import("./pages/cadastro/Documentos"));
 const FilaDocumentos = lazy(() => import("./pages/cadastro/FilaDocumentos"));
 const AnaliseDocumento = lazy(() => import("./pages/cadastro/AnaliseDocumento"));
 const AnaliseVistoria = lazy(() => import("./pages/cadastro/AnaliseVistoria"));
@@ -104,7 +99,6 @@ const VistoriaCompletaAnalise = lazy(() => import("./pages/cadastro/VistoriaComp
 const RecusasInstalador = lazy(() => import("./pages/cadastro/RecusasInstalador"));
 const BaseAntiga = lazy(() => import("./pages/cadastro/BaseAntiga"));
 const ProcessosOperacionais = lazy(() => import("./pages/cadastro/ProcessosOperacionais"));
-
 
 // Eventos
 const SinistrosList = lazy(() => import("./pages/eventos/SinistrosList"));
@@ -121,30 +115,21 @@ const SindicantesAdmin = lazy(() => import("./pages/eventos/SindicantesAdmin"));
 const EventosChatIA = lazy(() => import("./pages/eventos/EventosChatIA"));
 
 // Monitoramento
-
 const InstalacaoDetalhe = lazy(() => import("./pages/monitoramento/InstalacaoDetalhe"));
 const Rotas = lazy(() => import("./pages/monitoramento/Rotas"));
-
 const Rastreadores = lazy(() => import("./pages/monitoramento/Rastreadores"));
-
 const AlertasMonitoramento = lazy(() => import("./pages/monitoramento/AlertasMonitoramento"));
 const Mapa = lazy(() => import("./pages/monitoramento/Mapa"));
 const CalendarioInstalacoes = lazy(() => import("./pages/monitoramento/CalendarioInstalacoes"));
-const Vistorias = lazy(() => import("./pages/monitoramento/Vistorias"));
-const VistoriasInstalacoes = lazy(() => import("./pages/monitoramento/VistoriasInstalacoes"));
 const VistoriasInstalacoesMon = lazy(() => import("./pages/monitoramento/VistoriasInstalacoesMon"));
 const DashboardCoordenador = lazy(() => import("./pages/monitoramento/DashboardCoordenador"));
 const Equipe = lazy(() => import("./pages/monitoramento/Equipe"));
-const VistoriasManutencao = lazy(() => import("./pages/monitoramento/VistoriasManutencao"));
-
 const RessalvasPendentes = lazy(() => import("./pages/monitoramento/RessalvasPendentes"));
 const AprovacaoAssociadosMonitoramento = lazy(() => import("./pages/monitoramento/AcionamentosRouboFurto"));
 const AprovacaoInstalacaoDetalhe = lazy(() => import("./pages/monitoramento/AprovacaoInstalacaoDetalhe"));
 const ImprevistosPainel = lazy(() => import("./pages/monitoramento/ImprevistosPainel"));
 const PrestadoresParceiros = lazy(() => import("./pages/monitoramento/PrestadoresParceiros"));
-const RegioesAtendimento = lazy(() => import("./pages/monitoramento/RegioesAtendimento"));
 const MapaAtendimentoPage = lazy(() => import("./pages/monitoramento/MapaAtendimentoPage"));
-const VistoriasPrestadoresDashboard = lazy(() => import("./pages/monitoramento/VistoriasPrestadoresDashboard"));
 
 // Oficinas
 const Oficinas = lazy(() => import("./pages/oficinas/Oficinas"));
@@ -153,9 +138,7 @@ const OficinasRelatorios = lazy(() => import("./pages/oficinas/OficinasRelatorio
 const OrdensServico = lazy(() => import("./pages/oficinas/OrdensServico"));
 const OrdemServicoDetalhe = lazy(() => import("./pages/oficinas/OrdemServicoDetalhe"));
 
-
 // Configurações
-// ConfiguracoesLayout handled via LazyConfiguracoesLayout below
 const MeuPerfil = lazy(() => import("./pages/configuracoes/MeuPerfil"));
 const Seguranca = lazy(() => import("./pages/configuracoes/Seguranca"));
 const NotificacoesConfig = lazy(() => import("./pages/configuracoes/Notificacoes"));
@@ -196,7 +179,6 @@ const Extrato = lazy(() => import("./pages/financeiro/Extrato"));
 const ExtratosBancarios = lazy(() => import("./pages/financeiro/ExtratosBancarios"));
 const ExtratoDetalhe = lazy(() => import("./pages/financeiro/ExtratoDetalhe"));
 const ContasBancarias = lazy(() => import("./pages/financeiro/ContasBancarias"));
-const ExtratoAssociado = lazy(() => import("./pages/financeiro/ExtratoAssociado"));
 const ComissionamentoExternoConfig = lazy(() => import("./pages/financeiro/ComissionamentoExternoConfig"));
 const ContaCorrenteVendedor = lazy(() => import("./pages/financeiro/ContaCorrenteVendedor"));
 const GestaoContaVendedor = lazy(() => import("./pages/financeiro/GestaoContaVendedor"));
@@ -287,14 +269,11 @@ const CotacaoPdfConfig = lazy(() => import("./pages/documentos/CotacaoPdfConfig"
 
 // Diretoria
 const DiretoriaDashboard = lazy(() => import("./pages/diretoria/DiretoriaDashboard"));
-
 const ProdutoDetalhe = lazy(() => import("./pages/diretoria/ProdutoDetalhe"));
-
 const RateioSinistros = lazy(() => import("./pages/diretoria/RateioSinistros"));
 const GestaoComercial = lazy(() => import("./pages/diretoria/GestaoComercial"));
 const IndicadoresAtuariais = lazy(() => import("./pages/diretoria/IndicadoresAtuariais"));
 const ConfiguracoesSistema = lazy(() => import("./pages/diretoria/Configuracoes"));
-
 const UsuariosPage = lazy(() => import("./pages/diretoria/Usuarios"));
 const UsuarioDetalhePage = lazy(() => import("./pages/diretoria/UsuarioDetalhe"));
 const UsuarioEditarPage = lazy(() => import("./pages/diretoria/UsuarioEditar"));
@@ -425,7 +404,6 @@ const App = () => (
             {/* Public Proposal Tracking Page */}
             <Route path="/acompanhar/:token" element={<AcompanhamentoProposta />} />
             
-            
             {/* Public Substitution Page */}
             <Route path="/substituicao/:token" element={<SubstituicaoPublica />} />
             
@@ -491,20 +469,15 @@ const App = () => (
               <Route path="/vendas/leads/:id" element={<LeadDetalhe />} />
               <Route path="/vendas/leads/:id/editar" element={<LeadEditar />} />
               <Route path="/vendas/ativacoes" element={<AtivacoesList />} />
-              <Route path="/vendas/acompanhamento" element={<Acompanhamento />} />
-              <Route path="/vendas/cotacao" element={<Navigate to="/vendas/cotacoes" replace />} />
-              <Route path="/vendas/cotador" element={<Navigate to="/vendas/cotacoes" replace />} />
               <Route path="/vendas/cotacoes" element={<Cotacoes />} />
               <Route path="/vendas/cotacoes/:id" element={<CotacaoDetalhe />} />
               <Route path="/vendas/contratos" element={<Contratos />} />
               <Route path="/vendas/equipe-comercial" element={<Propostas />} />
-              <Route path="/vendas/propostas" element={<Navigate to="/vendas/equipe-comercial" replace />} />
               <Route path="/vendas/consultores" element={<Consultores />} />
               <Route path="/vendas/contratos/:id" element={<ContratoRedirect />} />
               <Route path="/vendas/planos-beneficios" element={<PlanosBeneficios />} />
               <Route path="/vendas/vendedores" element={<Vendedores />} />
               <Route path="/vendas/vendedores/:id" element={<VendedorHistorico />} />
-              <Route path="/vendas/configuracoes" element={<VendasConfig />} />
               <Route path="/vendas/aprovacoes-fipe" element={<AprovacoesFipeMenor />} />
               <Route path="/vendas/relatorios" element={<RelatoriosVendas />} />
               <Route path="/vendas/substituicao/:associadoId" element={<SubstituicaoVeiculoPage />} />
@@ -520,7 +493,6 @@ const App = () => (
               <Route path="/cadastro/substituicoes" element={<SubstituicoesPendentesPage />} />
               <Route path="/cadastro/substituicoes/:id" element={<SubstituicaoDetalhePage />} />
               <Route path="/cadastro/veiculos" element={<Veiculos />} />
-              <Route path="/cadastro/documentos" element={<Documentos />} />
               <Route path="/cadastro/fila-documentos" element={<FilaDocumentos />} />
               <Route path="/cadastro/documentos/:id" element={<AnaliseDocumento />} />
               <Route path="/cadastro/vistorias/:id/analise" element={<AnaliseVistoria />} />
@@ -530,8 +502,6 @@ const App = () => (
               <Route path="/cadastro/processos" element={<ProcessosOperacionais />} />
               <Route path="/cadastro/recusas-instalador" element={<RecusasInstalador />} />
               <Route path="/cadastro/base-antiga" element={<BaseAntiga />} />
-              <Route path="/cadastro/gerar-termo" element={<GerarTermo />} />
-              <Route path="/cadastro/migracoes" element={<ProcessosOperacionais />} />
               
               {/* Eventos */}
               <Route path="/eventos/dashboard" element={<SinistrosDashboard />} />
@@ -551,8 +521,6 @@ const App = () => (
               
               {/* Sindicantes (admin) */}
               <Route path="/eventos/sindicantes" element={<SindicantesAdmin />} />
-              <Route path="/configuracoes/empresas-sindicancia" element={<Navigate to="/eventos/sindicantes" replace />} />
-              <Route path="/eventos/pre-analise" element={<EventosPreAnalise />} />
               
               {/* Assistência 24h */}
               <Route path="/assistencia" element={<AssistenciaDashboard />} />
@@ -564,7 +532,6 @@ const App = () => (
               
               {/* Financeiro */}
               <Route path="/financeiro" element={<FinanceiroDashboard />} />
-              <Route path="/financeiro/dashboard" element={<FinanceiroDashboard />} />
               <Route path="/financeiro/cobrancas" element={<CobrancasList />} />
               <Route path="/financeiro/cobrancas/:id" element={<CobrancaDetalhe />} />
               <Route path="/financeiro/faturamento" element={<FaturamentoMensal />} />
@@ -575,7 +542,6 @@ const App = () => (
               <Route path="/financeiro/extratos-bancarios" element={<ExtratosBancarios />} />
               <Route path="/financeiro/extratos/:id" element={<ExtratoDetalhe />} />
               <Route path="/financeiro/contas-bancarias" element={<ContasBancarias />} />
-              <Route path="/financeiro/extrato-associado" element={<ExtratoAssociado />} />
               <Route path="/financeiro/configuracoes/comissionamento-externo" element={<ComissionamentoExternoConfig />} />
               <Route path="/financeiro/venda-externa" element={<DashboardVendaExterna />} />
               <Route path="/financeiro/venda-externa/:vendedorId" element={<GestaoContaVendedor />} />
@@ -641,35 +607,19 @@ const App = () => (
               {/* Monitoramento */}
               <Route path="/monitoramento/dashboard" element={<DashboardCoordenador />} />
               <Route path="/monitoramento/equipe" element={<Equipe />} />
-              <Route path="/monitoramento/instalacoes" element={<Navigate to="/monitoramento/vistorias-instalacoes-mon" replace />} />
               <Route path="/monitoramento/instalacoes/:id" element={<InstalacaoDetalhe />} />
-              <Route path="/monitoramento/rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
-              <Route path="/monitoramento/encaixes" element={<Navigate to="/monitoramento/vistorias-instalacoes-mon" replace />} />
-              <Route path="/monitoramento/gestao-rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
-              <Route path="/diretoria/rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
-              <Route path="/diretoria/gestao-rotas" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
               <Route path="/diretoria/vistorias-instalacoes" element={<Rotas />} />
-              <Route path="/diretoria/gestao-vistorias-instalacoes" element={<Navigate to="/diretoria/vistorias-instalacoes" replace />} />
-              <Route path="/monitoramento/estoque" element={<Navigate to="/monitoramento/rastreadores" replace />} />
               <Route path="/monitoramento/mapa" element={<Mapa />} />
               <Route path="/monitoramento/rastreadores" element={<Rastreadores />} />
-              <Route path="/monitoramento/config-plataformas" element={<Navigate to="/configuracoes/integracoes" replace />} />
               <Route path="/monitoramento/alertas" element={<AlertasMonitoramento />} />
               <Route path="/monitoramento/calendario" element={<CalendarioInstalacoes />} />
-              <Route path="/monitoramento/vistorias" element={<Navigate to="/monitoramento/vistorias-instalacoes-mon" replace />} />
-              <Route path="/monitoramento/vistorias-manutencao" element={<VistoriasManutencao />} />
-              <Route path="/monitoramento/vistorias-instalacoes" element={<VistoriasInstalacoes />} />
               <Route path="/monitoramento/vistorias-instalacoes-mon" element={<VistoriasInstalacoesMon />} />
-              <Route path="/monitoramento/retiradas" element={<Navigate to="/monitoramento/vistorias-instalacoes-mon" replace />} />
-              <Route path="/monitoramento/realizar-vistoria" element={<Vistorias />} />
               <Route path="/monitoramento/ressalvas-pendentes" element={<RessalvasPendentes />} />
               <Route path="/monitoramento/aprovacao-associados" element={<AprovacaoAssociadosMonitoramento />} />
               <Route path="/monitoramento/aprovacao-associados/:id" element={<AprovacaoInstalacaoDetalhe />} />
               <Route path="/monitoramento/imprevistos" element={<ImprevistosPainel />} />
               <Route path="/monitoramento/prestadores-parceiros" element={<PrestadoresParceiros />} />
-              <Route path="/monitoramento/configuracoes/regioes" element={<RegioesAtendimento />} />
               <Route path="/monitoramento/mapa-atendimento" element={<MapaAtendimentoPage />} />
-              <Route path="/monitoramento/vistorias-prestadores" element={<VistoriasPrestadoresDashboard />} />
               
               {/* Marketing */}
               <Route path="/marketing" element={<MarketingDashboard />} />
@@ -689,7 +639,6 @@ const App = () => (
               <Route path="/marketing/redes-sociais" element={<RedesSociais />} />
               <Route path="/marketing/origens" element={<OrigensLead />} />
               
-              
               {/* Documentos */}
               <Route path="/documentos" element={<Navigate to="/documentos/gerar" replace />} />
               <Route path="/documentos/gerar" element={<GerarDocumento />} />
@@ -705,10 +654,6 @@ const App = () => (
               {/* Diretoria */}
               <Route path="/diretoria" element={<DiretoriaDashboard />} />
               <Route path="/diretoria/gestao-comercial" element={<GestaoComercial />} />
-              <Route path="/diretoria/regras-venda" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
-              <Route path="/diretoria/produtos" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
-              <Route path="/diretoria/planos-beneficios" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
-              <Route path="/diretoria/precos" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
               <Route path="/diretoria/produtos/:id" element={<ProdutoDetalhe />} />
               <Route path="/diretoria/rateios" element={<RateioSinistros />} />
               <Route path="/diretoria/indicadores" element={<IndicadoresAtuariais />} />
@@ -742,17 +687,13 @@ const App = () => (
                 <Route path="seguranca" element={<Seguranca />} />
                 <Route path="notificacoes" element={<NotificacoesConfig />} />
                 <Route path="usuarios-acessos" element={<UsuariosAcessos />} />
-                <Route path="usuarios" element={<Navigate to="/configuracoes/usuarios-acessos" replace />} />
                 <Route path="usuarios/novo" element={<UsuarioForm />} />
                 <Route path="usuarios/:id" element={<UsuarioForm />} />
-                <Route path="perfis" element={<Navigate to="/configuracoes/usuarios-acessos?tab=perfis" replace />} />
-                <Route path="logs" element={<Navigate to="/configuracoes/usuarios-acessos?tab=logs" replace />} />
                 <Route path="integracoes" element={<Integracoes />} />
                 <Route path="integracoes/whatsapp" element={<IntegracaoWhatsApp />} />
                 <Route path="integracoes/api-keys" element={<IntegracaoApiKeys />} />
                 <Route path="integracoes/fontes-leads" element={<IntegracaoFontesLeads />} />
                 <Route path="integracoes/sga-hinova" element={<IntegracaoSGAHinova />} />
-                <Route path="rateio" element={<Navigate to="/diretoria/gestao-comercial" replace />} />
                 <Route path="grades-comissao" element={<GradesComissao />} />
                 <Route path="grades-comissao/nova" element={<GradeComissaoForm />} />
                 <Route path="grades-comissao/:id" element={<GradeComissaoForm />} />
