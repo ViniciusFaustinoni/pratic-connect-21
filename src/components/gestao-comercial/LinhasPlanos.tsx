@@ -652,7 +652,7 @@ export function LinhasPlanos() {
                                                 key={cob.id}
                                                 type="button"
                                                 className="w-full flex flex-col gap-1 px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
-                                                onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id, focusItemId: cob.id })}
+                                                onClick={() => setEditItemModal({ open: true, type: 'cobertura', item: cob, planId: plano.id })}
                                               >
                                                 <div className="flex items-center justify-between w-full">
                                                   <span className="text-foreground">{cob.nome}</span>
@@ -697,7 +697,7 @@ export function LinhasPlanos() {
                                                 key={ben.id}
                                                 type="button"
                                                 className="w-full flex flex-col gap-1 px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
-                                                onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id, focusItemId: ben.id })}
+                                                onClick={() => setEditItemModal({ open: true, type: 'beneficio', item: ben, planId: plano.id })}
                                               >
                                                 <div className="flex items-center justify-between w-full">
                                                   <span className="text-foreground">{ben.name}</span>
