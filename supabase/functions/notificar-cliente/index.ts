@@ -456,13 +456,12 @@ serve(async (req) => {
             },
             getButtonParams: () => linkToken ? [linkToken] : null,
           },
-          // Técnico a caminho → tecnico_a_caminho (7 params)
+          // Técnico a caminho → tecnico_a_caminho_1 (5 body params, sem link)
           tecnico_em_rota: {
             template_name: 'tecnico_a_caminho_1',
             getParams: () => [
               primeiroNome,
               (dados?.tecnico_nome as string) || 'Técnico PRATIC',
-              (dados?.tecnico_telefone as string) || '',
               (dados?.tecnico_telefone as string) || 'Não informado',
               (dados?.endereco as string) || 'Endereço a confirmar',
               (dados?.periodo as string) || 'A confirmar',
