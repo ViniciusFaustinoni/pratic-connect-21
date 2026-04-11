@@ -29,13 +29,13 @@ const SEPARATOR_COLOR = rgb(0.88, 0.88, 0.88);
 const WHITE = rgb(1, 1, 1);
 
 // Image grid settings - 2 columns
-const IMG_WIDTH = 240;
-const IMG_HEIGHT = 170;
-const IMG_GAP = 15;
-const COLS = 2;
+const IMG_WIDTH = 160;
+const IMG_HEIGHT = 115;
+const IMG_GAP = 10;
+const COLS = 3;
 
 // Memory limits
-const MAX_FOTOS_TOTAL = 20;
+const MAX_FOTOS_TOTAL = 50;
 const MAX_BYTES_PER_IMAGE = 6 * 1024 * 1024;
 
 // Priority order for photos
