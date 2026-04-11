@@ -404,6 +404,23 @@ function AddRuleDialog({
             </div>
           )}
 
+          {ruleType === 'tipo_placa' && (
+            <div className="space-y-2">
+              <Label className="text-xs">Tipos de Placa</Label>
+              <div className="grid grid-cols-2 gap-2">
+                {tiposPlaca.filter(t => t.ativo !== false).map((t) => (
+                  <label key={t.value} className="flex items-center gap-2 text-sm cursor-pointer">
+                    <Checkbox
+                      checked={(config.values || []).includes(t.value)}
+                      onCheckedChange={() => toggleArrayItem('values', t.value)}
+                    />
+                    {t.label}
+                  </label>
+                ))}
+              </div>
+            </div>
+          )}
+
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="button" onClick={handleSave} disabled={onSave.isPending}>
