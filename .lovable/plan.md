@@ -1,58 +1,32 @@
 
 
-## Plano: Mover aprovação para Edge Function (eliminar lentidão)
+## Plano: Botão "Gerar Link" em vez de bloquear a página
 
-### Diagnóstico
+### Problema
+A abordagem anterior de manter a tela em loading até o link chegar faz com que a página não abra. O sistema fica preso no spinner de "Preparando assinatura digital...".
 
-A função `useAprovarProposta` em `src/hooks/usePropostasPendentes.ts` (linhas 1257-1826) executa **~18 chamadas sequenciais ao banco/edge functions a partir do navegador do analista**. Cada chamada tem latência de rede (browser → Supabase → DB → browser), totalizando 10-30 segundos dependendo da conexão.
+### Nova abordagem
+Mostrar sempre a tela de `aguardando_assinatura` (com informações do contrato, instruções, etc.), mas:
+- **Sem link**: mostrar um botão "Gerar Link" no lugar dos botões "Assinar Contrato Agora" e "Copiar Link"
+- **Com link**: mostrar os botões normais de assinatura
 
-Operações sequenciais atuais:
-1. Buscar contrato (select)
-2. Verificar idempotência
-3. Atualizar contrato → ativo (update)
-4. Verificar instalação concluída (select)
-5. Buscar veículo do contrato (select)
-6. Verificar instalação ativa (select)
-7. Atualizar associado → ativo (update)
-8. Buscar valor_fipe do veículo (select)
-9. Buscar configurações de rastreador (select)
-10. Atualizar veículo (update)
-11. Se instalação concluída: buscar rastreador + ativar plataforma + criar acesso + notificar (4 calls)
-12. Se precisa instalação: buscar cotação + geocodificar + inserir instalação (3 calls)
-13. Registrar histórico (insert)
-14. Atualizar documentos (update)
-15. Atualizar documentos_solicitados (update)
-16. Atualizar contratos_documentos (update)
-17. Buscar link_token (select)
-18. SGA Hinova sync (invoke)
+### Alteração em `EtapaAssinaturaContrato.tsx`
 
-### Solução
+**1. Mudar estado `enviando_autentique` para ir direto a `aguardando_assinatura`**
+- Na função `enviarParaAutentique` (linha 258), quando o link não é retornado imediatamente, setar `setEtapaInterna('aguardando_assinatura')` em vez de ficar em `enviando_autentique`
+- O polling de 3s já existente (linha 342) continuará buscando o link em background
 
-Criar uma **edge function `aprovar-proposta`** que executa toda essa lógica **server-side** (latência DB ~1ms vs ~100ms do browser). O hook no frontend fará uma única chamada.
+**2. Ajustar o render do estado `aguardando_assinatura` (linhas 729-750)**
+- Envolver os botões "Assinar Contrato Agora" e "Copiar Link" em condição `{linkAssinatura ? (...botões...) : (...botão Gerar Link...)}`
+- O botão "Gerar Link" chamará a mesma lógica de polling manual (buscar `autentique_url` do contrato) e, se não encontrar, invocar `autentique-create` novamente
+- Mostrar spinner no botão enquanto busca
 
-### Alterações
+**3. Remover o bloco `enviando_autentique` do render de loading (linha 557)**
+- Manter apenas `verificando` e `gerando_contrato` como estados de loading (spinner fullscreen)
+- `enviando_autentique` não precisa mais de render próprio pois transiciona direto para `aguardando_assinatura`
 
-**1. Criar `supabase/functions/aprovar-proposta/index.ts`**
-- Mover toda a lógica de `mutationFn` (linhas 1262-1826) para a edge function
-- Receber `{ contrato_id, aprovado_por, veiculo_renavam?, veiculo_chassi? }` no body
-- Usar `supabaseClient` com service role para evitar problemas de RLS
-- Paralelizar queries independentes (ex: buscar veículo + verificar instalação ao mesmo tempo)
-- Retornar `{ success, mensagem, jaAprovado? }`
-
-**2. Simplificar `useAprovarProposta` no hook**
-- Reduzir `mutationFn` a uma única chamada: `supabase.functions.invoke('aprovar-proposta', { body })`
-- Manter `onSuccess` / `onError` existentes (toast, invalidação, navegação)
-
-**3. Mover atualização de RENAVAM/CHASSI para dentro da edge function**
-- O `handleConfirmarAprovacao` em `PropostaAnalise.tsx` (linhas 97-111) atualmente salva renavam/chassi antes de chamar `aprovarMutation`. Passar esses dados como parâmetros da edge function para eliminar outra round-trip.
-
-### Ganho esperado
-
-- **De ~15-30s para ~2-4s** (todas as queries executam com latência local no servidor Supabase)
-- Queries independentes podem ser paralelizadas com `Promise.all`
-- Edge functions rodam no mesmo datacenter que o banco
-
-### Deploy
-
-Deploy da edge function `aprovar-proposta` após criação.
+### Resultado
+- A página sempre abre mostrando as instruções e informações do contrato
+- Se o link não estiver pronto, aparece o botão "Gerar Link" para o usuário clicar
+- Quando o link chega (via polling automático ou clique manual), os botões de assinatura aparecem automaticamente
 
