@@ -1,73 +1,32 @@
 
 
-## Plano: Remover blocos de assinatura dos templates e usar rubricas + assinatura padrão Autentique
+## Plano: Ativar `new_signature_style` e posicionamento de rubricas em todos os documentos Autentique
 
-### Contexto
+### Diagnóstico
 
-O Autentique já gera uma **página separada de assinaturas** automaticamente. O que precisamos é apenas:
-- **INITIALS (rubrica)** em todas as páginas exceto a última
-- **SIGNATURE (assinatura)** apenas na última página
+O código em `autentique-positions.ts` já gera corretamente as posições com `INITIALS` em todas as páginas e `SIGNATURE` na última. Porém, **nenhuma** edge function envia `new_signature_style: true` no objeto `document`. Conforme a documentação oficial da Autentique, essa flag é necessária para que os campos posicionados (INITIALS, SIGNATURE) sejam habilitados. Sem ela, o Autentique ignora as posições e usa o fluxo padrão de assinatura simples.
 
-Hoje o sistema injeta blocos visuais de assinatura (local/data/linha/nome/CPF) no HTML, o que é redundante e causa sobreposição com a página de assinaturas do Autentique.
+### Alteração
 
-### Alterações
+Adicionar `new_signature_style: true` ao objeto `document` em **todas** as 7 edge functions que criam documentos:
 
-**1. `supabase/functions/_shared/autentique-positions.ts`** — Corrigir `gerarPosicoesAssinatura`
+| Edge Function | Linha (approx) | Alteração |
+|---|---|---|
+| `autentique-create` | 776-778 | `{ name: documentName }` → `{ name: documentName, new_signature_style: true }` |
+| `autentique-create-by-token` | 609 | idem |
+| `autentique-evento-create` | 410 | idem |
+| `autentique-cancelamento-create` | 223 | idem |
+| `autentique-os-saida-create` | 389 | idem |
+| `autentique-create-laudo` | 124-126 | idem |
+| `autentique-vistoria-create` | 293-295 | idem |
 
-Hoje só gera SIGNATURE em todas as páginas. Corrigir para:
-- Páginas 1 a (N-1): `element: "INITIALS"` (rubrica)
-- Página N (última): `element: "SIGNATURE"` (assinatura completa)
-
-```typescript
-export function gerarPosicoesAssinatura(config: PosicoesConfig = {}) {
-  const {
-    rubricaX = "78.0",
-    rubricaY = "95.0",
-    assinaturaX = "65.0",
-    assinaturaY = "85.0",
-    totalPaginas = 20,
-  } = config;
-
-  const positions = [];
-
-  // INITIALS em todas as páginas exceto a última
-  for (let p = 1; p < totalPaginas; p++) {
-    positions.push({ x: rubricaX, y: rubricaY, z: String(p), element: "INITIALS" });
-  }
-
-  // SIGNATURE apenas na última página
-  positions.push({ x: assinaturaX, y: assinaturaY, z: String(totalPaginas), element: "SIGNATURE" });
-
-  return positions;
-}
-```
-
-**2. `supabase/functions/autentique-create/index.ts`** — Remover injeção de blocos visuais de assinatura
-
-- Remover chamada a `generateSecaoAssinatura` (linha ~133) e a variável `assinaturaHTML`
-- Remover chamada a `generateAssinaturaAnexo` nos anexos (linha ~685)
-- Manter `sanitizeSignatureBlocks` para limpar templates do banco
-
-**3. `supabase/functions/autentique-create-by-token/index.ts`** — Mesmas remoções
-
-- Remover `generateSecaoAssinatura` (linha ~482) e `generateAssinaturaAnexo` (linha ~543)
-
-**4. `supabase/functions/_shared/template-utils.ts`** — Limpar funções obsoletas
-
-- Remover (ou marcar como deprecated) `generateAssinaturaAnexo` e `generateSecaoAssinatura` — já não serão chamadas
-- Manter `sanitizeSignatureBlocks` ativo para continuar limpando templates do banco que tenham blocos manuais
+**Nota**: `autentique-documento` (linha 51) usa inline GraphQL sem variáveis — será atualizado para incluir `new_signature_style: true` no objeto document inline.
 
 ### Resultado
+- O Autentique exibirá campos de rubrica (INITIALS) em todas as páginas do documento
+- Na última página, exibirá o campo de assinatura completa (SIGNATURE)
+- O signatário será solicitado a fornecer tanto a rubrica quanto a assinatura ao assinar
 
-- Templates ficam limpos: sem nenhum bloco visual de assinatura no HTML final
-- Autentique posiciona rubrica em todas as páginas e assinatura na última
-- A página de assinaturas do Autentique aparece normalmente no final do documento
-- Comportamento padronizado para todos os tipos de termo
-
-### Arquivos
-- `supabase/functions/_shared/autentique-positions.ts`
-- `supabase/functions/_shared/template-utils.ts`
-- `supabase/functions/autentique-create/index.ts`
-- `supabase/functions/autentique-create-by-token/index.ts`
-- Deploy das edge functions afetadas
+### Deploy
+Todas as 7+ edge functions serão redeployadas após a alteração.
 
