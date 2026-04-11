@@ -1,4 +1,4 @@
-import { useMemo, useState } from 'react';
+import { useMemo, useState, useCallback } from 'react';
 import { useMutation, useQuery, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
@@ -24,6 +24,9 @@ import { useDuplicateProductLine, useDuplicatePlan, useTogglePlanStatus } from '
 import { ImportarLinhasModal } from './ImportarLinhasModal';
 import { DuplicarPlanoModal } from '@/components/admin/planos/DuplicarPlanoModal';
 import { DuplicarLinhaModal } from '@/components/admin/planos/DuplicarLinhaModal';
+import { CoberturaInlineForm } from '@/components/admin/planos/PlanCoberturasList';
+import { BeneficioInlineForm } from '@/components/admin/planos/PlanBeneficiosList';
+import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
 import {
   ChevronDown,
   Copy,
@@ -374,6 +377,7 @@ function useDeletePlano() {
 }
 
 export function LinhasPlanos() {
+  const queryClient = useQueryClient();
   const { data: linhas = [], isLoading } = useLinhasComPlanos();
   const [openLines, setOpenLines] = useState<Set<string>>(new Set());
   const [linhaModal, setLinhaModal] = useState<{ open: boolean; productLine?: any }>({ open: false });
@@ -383,6 +387,8 @@ export function LinhasPlanos() {
   const [duplicarModal, setDuplicarModal] = useState<{ open: boolean; plano: { id: string; nome: string } | null }>({ open: false, plano: null });
   const [duplicarLinhaModal, setDuplicarLinhaModal] = useState<{ open: boolean; linha: { id: string; name: string } | null }>({ open: false, linha: null });
   const [expandedPlanId, setExpandedPlanId] = useState<string | null>(null);
+
+  const [editItemModal, setEditItemModal] = useState<{ open: boolean; type?: 'cobertura' | 'beneficio'; item?: any; planId?: string }>({ open: false });
 
   const selectedPlan = useMemo(
     () => (planoModal.planId ? { id: planoModal.planId } : null),
@@ -647,7 +653,7 @@ export function LinhasPlanos() {
                                                 key={cob.id}
                                                 type="button"
                                                 className="w-full flex flex-col gap-1 px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
-                                                onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id, focusItemId: cob.id })}
+                                                onClick={() => setEditItemModal({ open: true, type: 'cobertura', item: cob, planId: plano.id })}
                                               >
                                                 <div className="flex items-center justify-between w-full">
                                                   <span className="text-foreground">{cob.nome}</span>
@@ -692,7 +698,7 @@ export function LinhasPlanos() {
                                                 key={ben.id}
                                                 type="button"
                                                 className="w-full flex flex-col gap-1 px-2.5 py-1.5 rounded-lg text-sm hover:bg-muted/60 transition-colors text-left"
-                                                onClick={() => setPlanoModal({ open: true, planId: plano.id, defaultLineId: linha.id, focusItemId: ben.id })}
+                                                onClick={() => setEditItemModal({ open: true, type: 'beneficio', item: ben, planId: plano.id })}
                                               >
                                                 <div className="flex items-center justify-between w-full">
                                                   <span className="text-foreground">{ben.name}</span>
@@ -810,6 +816,33 @@ export function LinhasPlanos() {
         onOpenChange={(open) => setDuplicarLinhaModal({ open, linha: open ? duplicarLinhaModal.linha : null })}
         linha={duplicarLinhaModal.linha}
       />
+      <Dialog open={editItemModal.open} onOpenChange={(open) => { if (!open) setEditItemModal({ open: false }); }}>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
+          <DialogHeader>
+            <DialogTitle>
+              {editItemModal.type === 'cobertura' ? `Editar Cobertura: ${editItemModal.item?.nome || ''}` : `Editar Benefício: ${editItemModal.item?.name || ''}`}
+            </DialogTitle>
+          </DialogHeader>
+          {editItemModal.type === 'cobertura' && editItemModal.item && (
+            <CoberturaInlineForm
+              cobertura={editItemModal.item}
+              onSaved={() => {
+                setEditItemModal({ open: false });
+                queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+              }}
+            />
+          )}
+          {editItemModal.type === 'beneficio' && editItemModal.item && (
+            <BeneficioInlineForm
+              benefit={editItemModal.item}
+              onSaved={() => {
+                setEditItemModal({ open: false });
+                queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+              }}
+            />
+          )}
+        </DialogContent>
+      </Dialog>
     </>
   );
 }

@@ -44,7 +44,7 @@ interface PlanBeneficiosListProps {
   focusItemId?: string;
 }
 
-function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () => void }) {
+export function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSaved: () => void }) {
   const updateBenefit = useUpdateBenefit();
   const formatCurrency = (v: number | null | undefined) => {
     if (v == null) return '—';
