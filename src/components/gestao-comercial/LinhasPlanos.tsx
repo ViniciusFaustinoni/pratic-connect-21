@@ -868,7 +868,12 @@ export function LinhasPlanos() {
             <DialogTitle>Elegibilidade: {eligibilityModal.planName}</DialogTitle>
           </DialogHeader>
           {eligibilityModal.planId && (
-            <EligibilityRulesEditor entityType="plano" entityId={eligibilityModal.planId} />
+            <EligibilityRulesEditor
+              entityType="plano"
+              entityId={eligibilityModal.planId}
+              onAfterSave={() => replicateEligibility.mutate(eligibilityModal.planId!)}
+              onAfterDelete={() => replicateEligibility.mutate(eligibilityModal.planId!)}
+            />
           )}
         </DialogContent>
       </Dialog>
