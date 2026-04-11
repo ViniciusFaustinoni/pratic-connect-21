@@ -22285,6 +22285,12 @@ export type Database = {
           integridade_aparelho: string | null
           km_atual: number | null
           latitude: number | null
+          laudo_assinado: boolean | null
+          laudo_assinado_em: string | null
+          laudo_autentique_id: string | null
+          laudo_autentique_url: string | null
+          laudo_pdf_assinado_url: string | null
+          laudo_pdf_url: string | null
           lead_id: string | null
           local_tipo_manutencao: string | null
           local_vistoria: string | null
@@ -22399,6 +22405,12 @@ export type Database = {
           integridade_aparelho?: string | null
           km_atual?: number | null
           latitude?: number | null
+          laudo_assinado?: boolean | null
+          laudo_assinado_em?: string | null
+          laudo_autentique_id?: string | null
+          laudo_autentique_url?: string | null
+          laudo_pdf_assinado_url?: string | null
+          laudo_pdf_url?: string | null
           lead_id?: string | null
           local_tipo_manutencao?: string | null
           local_vistoria?: string | null
@@ -22513,6 +22525,12 @@ export type Database = {
           integridade_aparelho?: string | null
           km_atual?: number | null
           latitude?: number | null
+          laudo_assinado?: boolean | null
+          laudo_assinado_em?: string | null
+          laudo_autentique_id?: string | null
+          laudo_autentique_url?: string | null
+          laudo_pdf_assinado_url?: string | null
+          laudo_pdf_url?: string | null
           lead_id?: string | null
           local_tipo_manutencao?: string | null
           local_vistoria?: string | null
