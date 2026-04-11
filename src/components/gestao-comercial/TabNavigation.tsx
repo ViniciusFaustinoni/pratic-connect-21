@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Package, Shield, Calculator, ShieldCheck, Gavel, MapPin, Settings, Globe, LucideIcon, Store, Cog, Menu, ChevronDown, ChevronRight, Layers, Database, Car, Fuel } from 'lucide-react';
+import { Package, Shield, Calculator, ShieldCheck, Gavel, MapPin, Settings, Globe, LucideIcon, Store, Cog, Menu, ChevronDown, ChevronRight, ChevronLeft, Layers, Database, Car, Fuel, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -72,6 +72,8 @@ function getActiveGroupTitle(activeIndex: number): string | null {
 interface TabNavigationProps {
   active: number;
   onChange: (index: number) => void;
+  collapsed?: boolean;
+  onToggleCollapse?: () => void;
 }
 
 function NavContent({ active, onChange, onSelect }: TabNavigationProps & { onSelect?: () => void }) {
@@ -177,7 +179,7 @@ function NavContent({ active, onChange, onSelect }: TabNavigationProps & { onSel
   );
 }
 
-export function TabNavigation({ active, onChange }: TabNavigationProps) {
+export function TabNavigation({ active, onChange, collapsed, onToggleCollapse }: TabNavigationProps) {
   const isMobile = useIsMobile();
   const [sheetOpen, setSheetOpen] = useState(false);
   const currentItem = allItems[active];
@@ -206,8 +208,55 @@ export function TabNavigation({ active, onChange }: TabNavigationProps) {
     );
   }
 
+  // Collapsed: show only icons
+  if (collapsed) {
+    let globalIdx = 0;
+    return (
+      <aside className="w-12 shrink-0 border-r bg-card/30 flex flex-col items-center py-2 gap-1 transition-all duration-300">
+        <button
+          onClick={onToggleCollapse}
+          className="flex items-center justify-center h-8 w-8 rounded-md hover:bg-muted/60 text-muted-foreground mb-1"
+          title="Expandir menu"
+        >
+          <PanelLeftOpen className="h-4 w-4" />
+        </button>
+        {tabGroups.flatMap((group) =>
+          group.items.map((item) => {
+            const idx = globalIdx++;
+            const isActive = active === idx;
+            const Icon = item.icon;
+            return (
+              <button
+                key={item.label}
+                onClick={() => onChange(idx)}
+                title={item.shortLabel}
+                className={cn(
+                  'flex items-center justify-center h-8 w-8 rounded-md transition-colors',
+                  isActive
+                    ? 'bg-primary text-primary-foreground'
+                    : 'text-muted-foreground hover:bg-muted/60 hover:text-foreground'
+                )}
+              >
+                <Icon className="h-4 w-4" />
+              </button>
+            );
+          })
+        )}
+      </aside>
+    );
+  }
+
   return (
-    <aside className="w-64 shrink-0 border-r bg-card/30 overflow-y-auto">
+    <aside className="w-64 shrink-0 border-r bg-card/30 overflow-y-auto flex flex-col transition-all duration-300">
+      <div className="flex items-center justify-end px-3 pt-2">
+        <button
+          onClick={onToggleCollapse}
+          className="flex items-center justify-center h-7 w-7 rounded-md hover:bg-muted/60 text-muted-foreground"
+          title="Recolher menu"
+        >
+          <PanelLeftClose className="h-4 w-4" />
+        </button>
+      </div>
       <NavContent active={active} onChange={onChange} />
     </aside>
   );

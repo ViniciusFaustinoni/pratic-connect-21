@@ -26,6 +26,7 @@ const sectionBanners: Record<number, { title: string; help: string }> = {
 
 export default function GestaoComercial() {
   const [activeTab, setActiveTab] = useState(1);
+  const [painelAberto, setPainelAberto] = useState(true);
   const isMobile = useIsMobile();
   const banner = sectionBanners[activeTab];
 
@@ -38,7 +39,14 @@ export default function GestaoComercial() {
       <div className={cn(
         isMobile ? '' : 'flex border rounded-xl overflow-hidden bg-card shadow-sm min-h-[600px]'
       )}>
-        {!isMobile && <TabNavigation active={activeTab} onChange={setActiveTab} />}
+        {!isMobile && (
+          <TabNavigation
+            active={activeTab}
+            onChange={setActiveTab}
+            collapsed={!painelAberto}
+            onToggleCollapse={() => setPainelAberto(p => !p)}
+          />
+        )}
 
         <div className="flex-1 min-w-0">
           {banner && (
