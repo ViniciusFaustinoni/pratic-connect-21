@@ -1,45 +1,35 @@
 
 
-## Plano: Remover etapa de assinatura do laudo de vistoria
+## Plano: Corrigir botão de assinatura que não aparece após link ser gerado
 
-### Resumo
+### Diagnóstico
 
-O laudo de vistoria/instalação deixa de depender de assinatura via Autentique. Quando gerado, é anexado diretamente aos documentos do associado com status "aprovado". Toda a UI e lógica de "pendente assinatura do laudo" será removida.
+O problema tem duas causas:
 
-### Alterações
+1. **O polling de sync (15s) recupera o link mas não atualiza o estado local.** O `autentique-sync-contrato` retorna `autentique_url` na resposta e salva no banco, mas o código do polling (step 5, linhas 308-353 de `EtapaAssinaturaContrato.tsx`) nunca usa esse valor para atualizar `contrato.linkAssinatura`. Ele só verifica se o contrato foi *assinado*, não se o *link apareceu*.
 
-**1. `src/hooks/useServicos.ts`** (useAprovarVeiculoServico)
-- Remover todo o bloco de envio para Autentique (linhas ~1143-1225): chamada a `autentique-create-laudo`, busca de associado/veículo para WhatsApp, envio de link de assinatura
-- Manter apenas a geração do laudo PDF via `gerar-laudo-vistoria` (linhas 1132-1141) — o laudo já é anexado automaticamente pela edge function
-- Alterar mensagem WhatsApp: em vez de "revise e assine", enviar "instalação concluída com sucesso"
+2. **O timeout de 30s mata a mensagem "Aguarde" antes do link chegar.** Após 30s, o componente mostra "Tentar gerar novamente" em vez de continuar buscando. Se o link apareceu no banco após o timeout, o polling leve (step 4) continua rodando mas o visual já mudou para o botão de retry.
 
-**2. `src/pages/public/AcompanhamentoProposta.tsx`**
-- Remover PRIORIDADE 0 "pendente_assinatura_laudo" (linhas 267-282)
-- Remover status "laudo_assinado" com badge verde (linhas 284-298)
-- Remover botão fixo "Assinar Laudo de Instalação" (linhas 1367-1381)
-- Remover badge "Laudo Assinado ✅" (linhas ~1149-1165)
-- Remover condição de padding extra baseada em `laudo_autentique_url` (linha 788)
-- Limpar referências a `laudo_autentique_url`, `laudo_assinado`, `laudo_assinado_em` do interface e query
+### Alteração (1 arquivo)
 
-**3. `src/pages/cadastro/PropostasPendentes.tsx`**
-- Remover badge "Pend. Laudo" (linhas 60-63)
-- Alterar badge "Laudo ✅" para mostrar quando o laudo PDF existe (sem depender de `laudo_assinado`)
+**`src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`**
 
-**4. `src/hooks/usePropostasPendentes.ts`**
-- Remover campos `laudo_assinado`, `laudo_autentique_url`, `laudo_pdf_assinado_url` da query e interface
+- No polling de sync (step 5, ~linha 315): após receber `syncResult`, verificar `syncResult?.autentique_url` e atualizar `contrato.linkAssinatura` se estiver ausente
+- No fallback do mesmo polling (~linha 340): se `data?.autentique_url` existir e `contrato.linkAssinatura` não, atualizar também
+- Aumentar timeout de 30s para 90s (alinhado com o timeout do `useContratoByToken`)
 
-**5. `supabase/functions/autentique-webhook/index.ts`**
-- Remover bloco de tratamento de laudo (linhas ~790-860) que processa `laudo_autentique_id` — não haverá mais documentos de laudo no Autentique
+```typescript
+// Dentro do polling step 5, após o console.log do syncResult:
+if (syncResult?.autentique_url && !contrato?.linkAssinatura) {
+  setContrato(prev => prev ? { ...prev, linkAssinatura: syncResult.autentique_url } : prev);
+}
 
-**6. Edge function `autentique-create-laudo`**
-- Pode ser mantida sem deploy (dead code) ou removida — nenhum caller a invocará mais
+// No fallback DB check:
+if (data?.autentique_url && !contrato?.linkAssinatura) {
+  setContrato(prev => prev ? { ...prev, linkAssinatura: data.autentique_url } : prev);
+}
+```
 
-**7. `supabase/functions/gerar-laudo-vistoria/index.ts`**
-- Sem alterações — já salva o PDF no storage e insere na tabela `documentos` com tipo `laudo_vistoria` e status `aprovado`
-
-### O que NÃO muda
-- A geração do laudo PDF continua funcionando normalmente
-- O laudo continua sendo anexado aos documentos do associado automaticamente
-- A edge function `gerar-laudo-vistoria` permanece intacta
-- Os campos `laudo_assinado`/`laudo_autentique_id` no banco permanecem (não precisa de migration), apenas não serão mais usados
+### Resultado
+Quando o Autentique demora para gerar o link, o polling de sync o recupera e o botão "Assinar Contrato Agora" aparece automaticamente sem precisar recarregar a página.
 
