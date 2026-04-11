@@ -1,26 +1,27 @@
 
 
-## Plano: Corrigir erro "duplicate key violates unique constraint benefits_slug_key"
+## Plano: Consolidar ações do plano em dropdown e adicionar modal de elegibilidade
 
 ### Problema
-Ao salvar um benefício no modal de edição, o campo `slug` é enviado no payload de update mesmo estando desabilitado no formulário. Como benefícios duplicados entre planos compartilham o mesmo slug, isso causa conflito de unicidade.
+Os botões de editar, duplicar e excluir ocupam espaço individualmente na linha do plano. Falta opção rápida para configurar elegibilidade sem abrir o PlanFormModal completo.
 
-### Correção
+### Alterações
 
-**Editar**: `src/components/admin/planos/PlanBeneficiosList.tsx`
+**Editar**: `src/components/gestao-comercial/LinhasPlanos.tsx`
 
-Remover `slug` do payload em `handleSave` (linha 72), já que o slug não deve ser alterado na edição inline:
+1. **Substituir os 3 botões de ação (linhas 607-627)** por um único botão `MoreVertical` (ou `MoreHorizontal`) que abre um `DropdownMenu` com 4 opções:
+   - Editar (abre PlanFormModal)
+   - Configurar Elegibilidade (abre novo modal dedicado)
+   - Duplicar (abre DuplicarPlanoModal)
+   - Excluir (abre confirmação) — visível apenas se `canDelete`
 
-```typescript
-const payload = {
-  id: benefit.id,
-  name: form.name,
-  // slug removido
-  icon: form.icon || null,
-  ...
-};
-```
+2. **Adicionar estado** `eligibilityModal: { open: boolean; planId?: string; planName?: string }`
 
-### Arquivo
-- **Editar**: `src/components/admin/planos/PlanBeneficiosList.tsx` (remover 1 linha do payload)
+3. **Adicionar Dialog** com `EligibilityRulesEditor entityType="plano" entityId={planId}` — reutilizando o componente já existente
+
+4. **Imports adicionais**: `DropdownMenu*` do shadcn, `MoreVertical` do lucide, `EligibilityRulesEditor`
+
+### Resultado
+- Interface mais limpa com um único ícone de menu por plano
+- Acesso direto à configuração de elegibilidade sem passar pelo formulário completo do plano
 
