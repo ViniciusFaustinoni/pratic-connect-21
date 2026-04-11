@@ -184,6 +184,7 @@ export function MapaVistoriasContent() {
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [painelAberto, setPainelAberto] = useState(true);
 
   // Click-to-assign state
   const [servicoParaAtribuir, setServicoParaAtribuir] = useState<VistoriaMapa | null>(null);
