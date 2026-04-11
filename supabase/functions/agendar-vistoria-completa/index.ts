@@ -161,6 +161,59 @@ serve(async (req) => {
     // NÃO criar vistoria nem instalação aqui
     // A instalação será criada em criar-instalacao-pos-pagamento após o pagamento ser confirmado
 
+    // Enviar confirmação WhatsApp imediata se permiteEncaixe = true
+    if (permiteEncaixe) {
+      try {
+        const telefoneCliente = (cotacao.telefone1_solicitante || '').replace(/\D/g, '');
+        const nomeCliente = cotacao.nome_solicitante || 'Cliente';
+        const nomeAbrev = nomeCliente.split(' ')[0];
+
+        if (telefoneCliente) {
+          // Determinar período pelo horário agendado
+          const horaAgendada = parseInt(horarioAgendado?.split(':')[0] || '8', 10);
+          const periodoTexto = horaAgendada < 12 ? 'pela manhã' : 'pela tarde';
+
+          const dataObj = new Date(dataAgendada + 'T12:00:00');
+          const dataFormatada = dataObj.toLocaleDateString('pt-BR', { weekday: 'long', day: '2-digit', month: '2-digit' });
+
+          const enderecoTexto = [endereco.logradouro, endereco.numero, endereco.bairro, endereco.cidade]
+            .filter(Boolean).join(', ') || 'endereço agendado';
+
+          const mensagem = `Olá, *${nomeAbrev}*! 👋
+
+Seu serviço de *vistoria* foi agendado como *encaixe* para:
+📅 ${dataFormatada} ${periodoTexto}
+📍 ${enderecoTexto}
+
+O técnico mais próximo será designado em breve.
+
+✅ Responda *SIM* para confirmar
+📅 Ou informe se precisa *reagendar*
+
+*PRATIC Proteção Veicular*`;
+
+          const { error: sendError } = await supabase.functions.invoke('whatsapp-send-text', {
+            body: {
+              telefone: telefoneCliente,
+              mensagem,
+              template_name: 'confirmacao_agendamento_v1',
+              template_params: [nomeAbrev, 'vistoria', `${dataFormatada} ${periodoTexto}`],
+            }
+          });
+
+          if (sendError) {
+            console.error('[AgendarVistoriaCompleta] Erro ao enviar confirmação encaixe WhatsApp:', sendError);
+          } else {
+            console.log(`[AgendarVistoriaCompleta] ✅ Confirmação encaixe enviada para ${telefoneCliente}`);
+          }
+        } else {
+          console.warn('[AgendarVistoriaCompleta] Telefone do solicitante não disponível para envio WhatsApp');
+        }
+      } catch (whatsappError) {
+        console.error('[AgendarVistoriaCompleta] Erro não-bloqueante ao enviar WhatsApp:', whatsappError);
+      }
+    }
+
     return new Response(JSON.stringify({
       success: true,
       instalacaoId: null, // Será criada após pagamento
