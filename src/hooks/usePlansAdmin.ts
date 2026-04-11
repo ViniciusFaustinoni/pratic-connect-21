@@ -641,7 +641,7 @@ export function useReorderPlans() {
 
 export interface BenefitInput {
   name: string;
-  slug: string;
+  slug?: string;
   icon?: string | null;
   description?: string | null;
   category?: string | null;
@@ -649,11 +649,13 @@ export interface BenefitInput {
   is_active?: boolean;
 }
 
+export type BenefitCreateInput = BenefitInput & { slug: string };
+
 export function useCreateBenefit() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: async (input: BenefitInput) => {
+    mutationFn: async (input: BenefitCreateInput) => {
       const { data, error } = await supabase
         .from('benefits')
         .insert(input)

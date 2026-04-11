@@ -69,7 +69,7 @@ export function BeneficioInlineForm({ benefit, onSaved }: { benefit: any; onSave
     const payload = {
       id: benefit.id,
       name: form.name,
-      slug: form.slug,
+      
       icon: form.icon || null,
       description: form.description || null,
       category: form.category || null,
