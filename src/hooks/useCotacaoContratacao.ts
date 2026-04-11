@@ -631,6 +631,7 @@ export function useCotacaoContratacao(token: string | undefined) {
     associadoId,
     associadoStatus,
     contratoLinkToken,
+    contratoFallback,
     docsPendentes: docsPendentes || [],
     refetch,
     refetchDocs,
