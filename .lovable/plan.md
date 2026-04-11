@@ -1,31 +1,81 @@
 
 
-## Plano: Exibir cenario de adesao para consultores internos
+## Plano: Assinatura do Laudo via Autentique como pre-requisito para aprovacao
 
-### Problema
-Atualmente, o bloco de "Cenario de Adesao e Instalacao" (4 opcoes) so aparece para vendedores externos (`isVendedorExterno`). Consultores internos nao conseguem isentar adesao nem escolher tipo de instalacao.
+### Contexto
+Atualmente, quando o tecnico conclui a instalacao (`useAprovarVeiculoServico`), o sistema envia um link de assinatura simples via WhatsApp. O usuario quer que:
+1. O sistema gere o Laudo PDF (ja existe: `gerar-laudo-vistoria`)
+2. Envie esse PDF para assinatura via Autentique (nova funcionalidade)
+3. Envie o link de assinatura do Autentique via WhatsApp ao associado
+4. Somente apos o associado assinar o laudo no Autentique, o veiculo possa ser aprovado pelo tecnico ou analista
 
 ### Alteracoes
 
-**Arquivo: `src/components/cotacoes/CotacaoFormDialog.tsx`**
+**1. Migracao SQL** — Adicionar colunas na tabela `servicos`
+```sql
+ALTER TABLE servicos ADD COLUMN laudo_autentique_id text;
+ALTER TABLE servicos ADD COLUMN laudo_autentique_url text;
+ALTER TABLE servicos ADD COLUMN laudo_assinado boolean DEFAULT false;
+ALTER TABLE servicos ADD COLUMN laudo_assinado_em timestamptz;
+ALTER TABLE servicos ADD COLUMN laudo_pdf_url text;
+ALTER TABLE servicos ADD COLUMN laudo_pdf_assinado_url text;
+```
 
-1. **Linha 169** — Remover a condicao `isVendedorExterno` do calculo de `isCenarioIsento`:
-   - De: `isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base')`
-   - Para: `cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base'`
+**2. Nova Edge Function: `autentique-create-laudo`**
+- Recebe: `servicoId`, `associadoId`, `veiculoId`, `laudoPdfUrl`
+- Cria documento no Autentique com o PDF do laudo como anexo
+- Signatario: associado (nome, email, telefone)
+- Salva `laudo_autentique_id` e `laudo_autentique_url` no servico
+- Retorna o link de assinatura
 
-2. **Linha 2098** — Remover o gate `{isVendedorExterno && (` para que o bloco de cenario apareca para todos os usuarios
+**3. Atualizar `autentique-webhook/index.ts`**
+- Apos os fallbacks de contratos e sinistros, adicionar fallback para servicos
+- Buscar `servicos` por `laudo_autentique_id = documento_id`
+- Quando assinado: atualizar `laudo_assinado = true`, `laudo_assinado_em`, e `laudo_pdf_assinado_url`
 
-3. **Linha 1114** — Remover a condicao `isVendedorExterno` da validacao de cenario obrigatorio:
-   - De: `if (isVendedorExterno && !cenarioExterno)`
-   - Para: `if (!cenarioExterno)`
+**4. Atualizar `useAprovarVeiculoServico` em `src/hooks/useServicos.ts`**
+- Apos concluir a instalacao (status `concluida`), invocar:
+  1. `gerar-laudo-vistoria` para gerar o PDF
+  2. `autentique-create-laudo` para enviar o PDF ao Autentique
+- Enviar o link de assinatura do Autentique via WhatsApp (substituir o link atual `/acompanhar/:token` pelo link do Autentique)
+- O servico fica com status `concluida` mas `laudo_assinado = false`
 
-4. **Linha 1149** — Ajustar a condicao de exibicao da taxa de filiacao:
-   - De: `(!isVendedorExterno || (cenarioExterno && cenarioExterno.startsWith('cobra')))`
-   - Para: `cenarioExterno && cenarioExterno.startsWith('cobra')`
+**5. Bloquear aprovacao ate laudo assinado**
+- Em `src/hooks/useAprovacaoMonitoramento.ts` — ao listar servicos pendentes, exibir status "Pendente Assinatura do Laudo" quando `laudo_assinado = false`
+- Em `src/pages/cadastro/PropostaAnalise.tsx` — se `laudo_assinado = false`, mostrar badge "Aguardando Assinatura do Laudo" e desabilitar botao de aprovacao
+- Em `src/hooks/usePropostasPendentes.ts` — incluir `laudo_assinado` nos dados retornados
+- Na interface `InstalacaoInfo`, adicionar campos `laudo_assinado`, `laudo_autentique_url`
 
-5. **Linha 1197** — Remover a condicao `isVendedorExterno` do spread de `tipo_instalacao` para que o tipo de instalacao seja salvo para todos
+**6. Polling para detectar assinatura do laudo**
+- Em `AcompanhamentoProposta.tsx` e/ou na tela do tecnico: polling a cada 15s para verificar se `laudo_assinado` mudou para `true`
+- Quando assinado, liberar fluxo de aprovacao
 
-6. **Linha 172** — Ajustar `minimoAdesaoVolante` para usar o valor interno para consultores internos (manter logica atual que ja diferencia por tipo)
+**7. UI na tela de propostas pendentes (cadastro)**
+- Badge "Pendente Assinatura Laudo" em amarelo quando `laudo_assinado = false`
+- Badge "Laudo Assinado" em verde quando `laudo_assinado = true`
+- Botao "Aprovar" desabilitado enquanto laudo nao assinado, com tooltip explicativo
 
-Nenhuma migracao necessaria. Apenas mudancas de UI/logica no formulario de cotacao.
+### Fluxo resumido
+```text
+Tecnico conclui instalacao
+  → Sistema gera Laudo PDF (gerar-laudo-vistoria)
+  → Sistema envia PDF ao Autentique (autentique-create-laudo)
+  → WhatsApp enviado com link de assinatura Autentique
+    → Associado abre link Autentique
+      → Assina o laudo digitalmente
+        → Webhook Autentique dispara
+          → servicos.laudo_assinado = true
+            → Fluxo de aprovacao liberado
+              → Tecnico aprova OU analista de cadastro processa
+```
+
+### Arquivos criados/editados
+- **Criar**: `supabase/functions/autentique-create-laudo/index.ts`
+- **Criar**: Migracao SQL (colunas em servicos)
+- **Editar**: `supabase/functions/autentique-webhook/index.ts` (fallback para servicos/laudo)
+- **Editar**: `src/hooks/useServicos.ts` (gerar laudo + enviar Autentique pos-instalacao)
+- **Editar**: `src/hooks/usePropostasPendentes.ts` (incluir laudo_assinado)
+- **Editar**: `src/pages/cadastro/PropostaAnalise.tsx` (bloquear aprovacao)
+- **Editar**: `src/pages/cadastro/PropostasPendentes.tsx` (badge de status)
+- **Editar**: `src/pages/public/AcompanhamentoProposta.tsx` (mostrar status do laudo)
 
