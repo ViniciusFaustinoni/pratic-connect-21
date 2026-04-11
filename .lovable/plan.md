@@ -1,34 +1,34 @@
 
 
-## Plano: Mostrar etapa de assinatura apenas quando o link estiver pronto
+## Plano: Enviar confirmação WhatsApp imediatamente ao agendar com encaixe
 
-### Problema atual
-O componente entra no estado `aguardando_assinatura` **antes** de ter o link da Autentique. Isso mostra a tela completa (instruções, área de "gerando link...") e os botões só aparecem depois via polling/realtime — exigindo que o usuário atualize a página.
+### Diagnóstico
 
-### Solução
-Manter o estado de **loading** (`enviando_autentique`) até que o `linkAssinatura` esteja efetivamente disponível. Só transicionar para `aguardando_assinatura` quando o link existir.
+O fluxo atual:
+1. `agendar-vistoria-completa` — apenas salva os dados na cotação, sem enviar nenhuma mensagem
+2. `criar-instalacao-pos-pagamento` — envia a confirmação de encaixe, mas só roda **após o pagamento**
 
-### Alterações em `EtapaAssinaturaContrato.tsx`
+O associado que habilita encaixe e prossegue **não recebe nenhuma mensagem** até o pagamento ser processado.
 
-1. **`enviarParaAutentique`** (linha 256): Não mudar para `aguardando_assinatura` se não tiver link. Manter em `enviando_autentique` e iniciar polling interno até o link chegar.
+### Alteração
 
-2. **Polling de link (linhas 338-363)**: Mudar a condição para rodar também quando `etapaInterna === 'enviando_autentique'` e não só `aguardando_assinatura`. Quando o link chegar via polling, aí sim mudar para `aguardando_assinatura`.
+**`supabase/functions/agendar-vistoria-completa/index.ts`** — Adicionar envio de confirmação WhatsApp imediata quando `permiteEncaixe = true`.
 
-3. **Realtime (linhas 280-335)**: Quando receber `autentique_url` via realtime e a etapa for `enviando_autentique`, transicionar para `aguardando_assinatura`.
+Após salvar os dados na cotação (linha 145), e antes do return:
 
-4. **Remover o bloco condicional de "link loading"** (linhas 745-781) — como a etapa só será `aguardando_assinatura` quando o link existir, o `linkAssinatura` estará sempre presente nessa tela.
+1. Buscar dados do lead/associado vinculado à cotação (nome e telefone) usando `cotacao.telefone1_solicitante` e `cotacao.nome_solicitante` (já disponíveis na query da linha 88)
+2. Formatar a mensagem de confirmação com data, período e endereço
+3. Invocar `whatsapp-send-text` com template `confirmacao_agendamento_v1`
+4. NÃO criar registro em `confirmacoes_agendamento` aqui (ainda não há serviço/instalação — será feito no `criar-instalacao-pos-pagamento`)
 
-### Fluxo revisado
-```
-verificando → gerando_contrato → enviando_autentique (fica aqui até link chegar)
-                                                      ↓ link recebido
-                                               aguardando_assinatura (botões visíveis imediatamente)
-                                                      ↓
-                                                   assinado
-```
+O envio será feito em try/catch para não bloquear o fluxo se falhar.
+
+### Deploy
+
+Deploy de `agendar-vistoria-completa` após a alteração.
 
 ### Resultado
-- O usuário vê um spinner de "Preparando assinatura digital..." até o link estar pronto
-- Quando a tela de assinatura aparecer, os botões "Assinar Contrato Agora" e "Copiar Link" já estarão visíveis
-- Sem necessidade de recarregar a página
+- O associado que habilitar encaixe receberá a confirmação WhatsApp imediatamente ao agendar
+- O fluxo de pagamento não é afetado
+- Se o envio falhar, o agendamento ainda é salvo normalmente
 
