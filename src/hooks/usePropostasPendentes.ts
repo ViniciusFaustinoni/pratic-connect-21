@@ -1031,7 +1031,10 @@ export function useProposta(contratoId: string | undefined) {
             rastreador_id,
             profissional_id,
             concluida_em,
-            assinatura_cliente_url
+            assinatura_cliente_url,
+            laudo_assinado,
+            laudo_autentique_url,
+            laudo_pdf_assinado_url
           `)
           .eq('contrato_id', contrato.id)
           .eq('status', 'concluida')
