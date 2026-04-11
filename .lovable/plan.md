@@ -1,62 +1,38 @@
 
 
-## Plano: Lógica de Atribuição Automática com Confirmação por Tipo
+## Plano: Mostrar distância e tempo estimado na rota técnico → serviço (com atualização em tempo real)
 
 ### Contexto Atual
-- `confirmar-vistorias-manha-cron` envia confirmação em 2 disparos: véspera (18h) e manhã (8h)
-- `cron-atribuir-tarefas` só atribui serviços com `confirmacao_whatsapp = 'confirmada'` (normais) ou `NULL` (encaixes)
-- `criar-instalacao-pos-pagamento` já dispara `cron-atribuir-tarefas` após criar serviço, mas não envia confirmação ao cliente para encaixes
-
-### Regras Solicitadas
-
-| Tipo | Confirmação WhatsApp (cliente) | Atribuição |
-|---|---|---|
-| **Encaixe** (`permite_encaixe=true`) | Enviada IMEDIATAMENTE na criação do serviço | Imediata (fila por proximidade) |
-| **Normal** (`permite_encaixe=false`) | Enviada 1h ANTES do turno (7h manhã / 13h tarde) | Após confirmação do cliente |
+- O `RotaPolyline` já usa OSRM para desenhar a rota real entre técnico e serviço
+- O popup da rota mostra apenas nome do técnico e placa, sem distância/tempo
+- O `useRotaReal` já retorna `distanciaKm` e `tempoMinutos` do OSRM
+- As posições dos técnicos já atualizam em tempo real via Supabase Realtime (`vistoriadores_localizacao`)
+- Quando a posição muda, o `linhasDeRota` recalcula e o `useRotaReal` refaz a chamada OSRM automaticamente
 
 ### Alterações
 
-**1. `supabase/functions/criar-instalacao-pos-pagamento/index.ts`**
-- Após criar a instalação, se `permiteEncaixe=true`: enviar template de confirmação ao cliente imediatamente via `whatsapp-send-text` (template `confirmacao_agendamento_v1`)
-- Criar registro em `confirmacoes_agendamento` com status `enviada`
-- Manter o trigger de `cron-atribuir-tarefas` que já existe (encaixe com confirmação NULL já é aceito)
+**1. `src/components/mapa/RotaPolyline.tsx`** - Expor distância/tempo via callback + mostrar badge no mapa
+- Adicionar prop `onRouteInfo?: (info: { distanciaKm: number; tempoMinutos: number }) => void` para comunicar dados ao pai
+- Calcular tempo estimado usando regra 1km/min (em vez do OSRM duration)
+- Renderizar um Tooltip permanente no ponto médio da rota com distância e tempo restante
 
-**2. `supabase/functions/confirmar-vistorias-manha-cron/index.ts`** (reescrever lógica)
-- Substituir a lógica véspera/manhã por lógica baseada em turno:
-  - **Disparo manhã (7h Brasília / 10h UTC)**: busca serviços de HOJE com `periodo = 'manha'` e `confirmacao_whatsapp IS NULL` e `permite_encaixe = false`
-  - **Disparo tarde (13h Brasília / 16h UTC)**: busca serviços de HOJE com `periodo = 'tarde'` e `confirmacao_whatsapp IS NULL` e `permite_encaixe = false`
-- Excluir encaixes do disparo (já receberam na criação)
-- Manter template e lógica de registro em `confirmacoes_agendamento`
+**2. `src/components/mapa/MapaVistoriasContent.tsx`** - Exibir info de distância/tempo sobre cada rota
+- Alterar o `popupContent` do `RotaPolyline` para incluir distância em km e tempo estimado (1km/min)
+- Adicionar estado `rotasInfo` para armazenar distância/tempo por técnico
+- Mostrar badge flutuante sobre cada rota com "X.X km • ~X min"
 
-**3. Ajustar cron schedule (via SQL)**
-- Atual: 2 disparos (18h e 8h UTC)
-- Novo: 2 disparos (10h UTC = 7h BRT e 16h UTC = 13h BRT)
+**3. `src/components/mapa/RotaInfoOverlay.tsx`** (novo) - Componente de overlay sobre a rota
+- Marker invisível no ponto médio da polyline com Tooltip permanente mostrando distância e tempo
+- Atualiza automaticamente quando OSRM retorna novos dados
 
-**4. `supabase/functions/cron-atribuir-tarefas/index.ts`** (sem mudança funcional)
-- A lógica já trata encaixes com `confirmacao_whatsapp IS NULL` corretamente
-- Apenas adicionar log para rastreabilidade quando encaixe é atribuído imediatamente
-
-### Fluxo Encaixe
-```text
-Serviço criado (permite_encaixe=true)
-  → WhatsApp confirmação enviado ao CLIENTE imediatamente
-  → cron-atribuir-tarefas disparado
-  → Técnico mais próximo recebe a tarefa
-  → Template servico_atribuido_v1 enviado ao TÉCNICO
-```
-
-### Fluxo Normal
-```text
-Serviço criado (permite_encaixe=false, periodo=manha)
-  → 7h: WhatsApp confirmação enviado ao CLIENTE
-  → Cliente responde SIM → confirmacao_whatsapp = 'confirmada'
-  → cron-atribuir-tarefas atribui ao técnico mais próximo
-  → Template servico_atribuido_v1 enviado ao TÉCNICO
-```
+### Comportamento
+- Cada rota técnico→serviço mostra um badge no ponto médio: "3.2 km • ~3 min"
+- O popup ao clicar na rota mostra: nome do técnico, placa destino, distância e tempo
+- Quando o técnico se move (realtime), a rota redesenha e distância/tempo atualizam
+- Regra de tempo: `distanciaKm` arredondado para cima = minutos (1 km/min)
 
 ### Arquivos
-- **Editar**: `supabase/functions/criar-instalacao-pos-pagamento/index.ts`
-- **Editar**: `supabase/functions/confirmar-vistorias-manha-cron/index.ts`
-- **SQL**: Atualizar cron schedule
-- **Deploy**: ambas as Edge Functions
+- **Editar**: `src/components/mapa/RotaPolyline.tsx`
+- **Editar**: `src/components/mapa/MapaVistoriasContent.tsx`
+- **Criar**: `src/components/mapa/RotaInfoOverlay.tsx`
 
