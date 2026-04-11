@@ -649,6 +649,8 @@ export interface BenefitInput {
   is_active?: boolean;
 }
 
+export type BenefitCreateInput = BenefitInput & { slug: string };
+
 export function useCreateBenefit() {
   const queryClient = useQueryClient();
 
