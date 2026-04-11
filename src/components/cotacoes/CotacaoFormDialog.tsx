@@ -166,7 +166,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   // Estado do cenário de adesão para vendedor externo
   type CenarioExterno = 'cobra_rota' | 'isenta_rota' | 'isenta_base' | 'cobra_base';
   const [cenarioExterno, setCenarioExterno] = useState<CenarioExterno | null>(null);
-  const isCenarioIsento = isVendedorExterno && (cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base');
+  const isCenarioIsento = cenarioExterno === 'isenta_rota' || cenarioExterno === 'isenta_base';
 
   // Mínimo efetivo: volante quando cenário inclui rota
   const minimoAdesaoVolante = isVendedorExterno ? minimoVolanteExterno : minimoVolanteInterno;
@@ -1111,7 +1111,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
     }
 
     // Vendedor externo: validar cenário obrigatório
-    if (isVendedorExterno && !cenarioExterno) {
+    if (!cenarioExterno) {
       toast.error('Selecione o cenário de adesão e instalação antes de continuar.');
       return;
     }
@@ -1194,7 +1194,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
         indicador_id: indicadorId || null,
         indicador_nome: indicadorNome || null,
         // Tipo de instalação (somente vendedor externo)
-        ...(isVendedorExterno && cenarioExterno ? {
+        ...(cenarioExterno ? {
           tipo_instalacao: cenarioExterno.includes('rota') ? 'rota' as const : 'base' as const,
         } : {}),
         // Planos para comparação (múltiplos planos selecionados)
@@ -2094,10 +2094,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
               />
             </div>
 
-            {/* Cenário Vendedor Externo */}
-            {isVendedorExterno && (
-              <>
-                <Separator />
+            {/* Cenário de Adesão e Instalação */}
+            <>
+              <Separator />
                 <div className="space-y-2">
                   <Label className="text-sm font-semibold">Cenário de Adesão e Instalação *</Label>
                   <div className="grid grid-cols-2 gap-2">
@@ -2142,11 +2141,10 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     </p>
                   )}
                 </div>
-              </>
-            )}
+            </>
 
             {/* Taxa de Filiação */}
-            {(!isVendedorExterno || (cenarioExterno && cenarioExterno.startsWith('cobra'))) && (
+            {(cenarioExterno && cenarioExterno.startsWith('cobra')) && (
               <>
                 <Separator />
                 <div>
