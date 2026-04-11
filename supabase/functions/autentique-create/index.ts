@@ -17,6 +17,7 @@ import {
   generateHeader, 
   generateFooter, 
   generateSecaoAssinatura,
+  generateAssinaturaAnexo,
   markdownParaHTML,
   buscarEGerarAditivos,
   hasSignatureArea,
