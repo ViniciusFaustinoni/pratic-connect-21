@@ -43,6 +43,8 @@ import {
   Send,
   ChevronDown,
   ChevronUp,
+  ChevronLeft,
+  ChevronRight,
 } from "lucide-react";
 import { toast } from "sonner";
 import { useVistoriasMapa, VistoriaMapa } from "@/hooks/useVistoriasMapa";
@@ -182,6 +184,7 @@ export function MapaVistoriasContent() {
   const [posicaoSelecionada, setPosicaoSelecionada] = useState<[number, number] | null>(null);
   const [vistoriaSelecionada, setVistoriaSelecionada] = useState<string | null>(null);
   const [drawerOpen, setDrawerOpen] = useState(false);
+  const [painelAberto, setPainelAberto] = useState(true);
 
   // Click-to-assign state
   const [servicoParaAtribuir, setServicoParaAtribuir] = useState<VistoriaMapa | null>(null);
@@ -930,18 +933,28 @@ export function MapaVistoriasContent() {
     );
   }
 
+
+
   return (
     <>
       {renderDialogs()}
       <div className="flex h-full gap-4">
-        <Card className="w-72 flex-shrink-0 flex flex-col overflow-hidden">
+        <Card className={cn(
+          "flex-shrink-0 flex flex-col overflow-hidden transition-all duration-300",
+          painelAberto ? "w-72" : "w-0 border-0 p-0 opacity-0 pointer-events-none"
+        )}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
               <div className="flex items-center gap-2">
                 <ClipboardCheck className="h-5 w-5 text-primary" />
                 <CardTitle className="text-base">Serviços de Campo</CardTitle>
               </div>
-              <Badge variant="secondary">{vistoriasFiltradas.length}</Badge>
+              <div className="flex items-center gap-1">
+                <Badge variant="secondary">{vistoriasFiltradas.length}</Badge>
+                <Button variant="ghost" size="icon" className="h-6 w-6" onClick={() => setPainelAberto(false)}>
+                  <ChevronLeft className="h-4 w-4" />
+                </Button>
+              </div>
             </div>
             {renderFilters()}
           </CardHeader>
@@ -971,6 +984,18 @@ export function MapaVistoriasContent() {
             </div>
           </CardHeader>
           <CardContent className="flex-1 p-0 relative">
+            {!painelAberto && (
+              <Button
+                variant="secondary"
+                size="sm"
+                className="absolute top-3 left-3 z-[400] gap-1.5 shadow-md"
+                onClick={() => setPainelAberto(true)}
+              >
+                <List className="h-4 w-4" />
+                <span>{vistoriasFiltradas.length}</span>
+                <ChevronRight className="h-3 w-3" />
+              </Button>
+            )}
             {renderMapa()}
             {renderAssignBar()}
             {renderLegenda()}
