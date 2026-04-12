@@ -479,6 +479,20 @@ serve(async (req) => {
 
       // Assinatura será feita via Autentique (rubrica + assinatura digital) — sem bloco visual
 
+      // Injetar coberturas/benefícios se o template não os continha
+      let coberturasInjetadasHTML = '';
+      const jaTemCoberturas = conteudoHTML.includes('COBERTURAS E BENEF') || 
+        conteudoHTML.includes('plan-details') ||
+        conteudoHTML.includes('tabela_coberturas') ||
+        conteudoHTML.includes('tabela_completa');
+      if (!jaTemCoberturas) {
+        const { gerarSecaoCoberturasInjetavel } = await import("../_shared/template-utils.ts");
+        coberturasInjetadasHTML = gerarSecaoCoberturasInjetavel(templateData);
+        if (coberturasInjetadasHTML) {
+          console.log('[autentique-create-by-token] Seção de coberturas/benefícios injetada automaticamente');
+        }
+      }
+
       contratoHTML = `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -491,6 +505,7 @@ serve(async (req) => {
   <div class="page">
     ${generateHeader(templateData)}
     ${conteudoHTML}
+    ${coberturasInjetadasHTML}
     ${aditivosHTML}
     ${rastreadorHTML}
     ${generateFooter(templateData)}
