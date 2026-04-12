@@ -136,6 +136,9 @@ export function LogRequisicoesTab() {
 
       const fetchers: Promise<LogUnificado[]>[] = [];
 
+      const wrap = <T,>(query: PromiseLike<{ data: T[] | null }>): Promise<T[]> =>
+        Promise.resolve(query).then(r => r.data || []);
+
       for (const p of plataformas) {
         switch (p) {
           case 'whatsapp':
