@@ -1,32 +1,37 @@
 
 
-## Plano: Resolver nomes nos RuleCards do EligibilityRulesEditor
+## Plano: Corrigir modal de edição de cobertura/benefício
 
-### Problema
-O `RuleCard` exibe valores brutos (UUIDs para regiões, IDs internos para tipo de uso/combustível/tipo de placa) em vez de nomes legíveis. Também falta o case `tipo_placa` no switch de descrição.
+### Problemas identificados
+1. **Rolagem lateral**: O modal permite scroll horizontal quando o conteúdo é largo demais
+2. **Botão X não é fixo**: O X de fechar está `absolute` dentro do container com `overflow-y-auto`, então ele rola junto com o conteúdo
+3. **Clicar fora não fecha**: `onInteractOutside={(e) => e.preventDefault()}` está bloqueando o fechamento
 
-### Solução
-Mover os hooks de dados (regiões, tipos de uso, combustíveis, tipos de placa) para o componente pai `EligibilityRulesEditor` e passá-los como lookup maps ao `RuleCard`, que resolverá os valores para nomes.
+### Alterações
 
-### Alterações em `src/components/admin/planos/EligibilityRulesEditor.tsx`
+**1. `src/components/gestao-comercial/LinhasPlanos.tsx` (linha 848)**
+- Remover `onInteractOutside={(e) => e.preventDefault()}` do modal de edição (e do de elegibilidade, linha 875)
+- Adicionar `overflow-x-hidden` à classe do DialogContent
 
-**1. Buscar dados de lookup no `EligibilityRulesEditor` (nível pai)**
-- Adicionar chamadas a `useRegioes()`, `useConfiguracaoJson('tipos_uso')`, `useCombustiveis()`, `useConfiguracaoJson('tipos_placa')` no componente principal
-- Construir maps `Record<string, string>` (id/value → nome/label)
-- Passar o objeto de lookups como prop ao `RuleCard`
+**2. `src/components/ui/dialog.tsx` (linha 45)**
+- Mudar o botão X de `absolute` para `sticky` com `top-0` e `z-10`, para que ele permaneça visível ao rolar o conteúdo do modal
+- Ajustar o layout para que o botão sticky funcione corretamente (mover para antes do `{children}` e adicionar `float-right` ou wrap com flex)
 
-**2. Atualizar `RuleCard` para resolver nomes**
-- Receber prop `lookups` com os maps
-- `regiao`: mapear cada UUID via `lookups.regioes[id]` → nome completo
-- `tipo_uso`: mapear via `lookups.tiposUso[value]` → label
-- `combustivel`: mapear via `lookups.combustiveis[value]` → label
-- `tipo_placa`: adicionar case no switch, mapear via `lookups.tiposPlaca[value]` → label
+Abordagem alternativa mais segura para o X sticky (evita quebrar outros modals):
+- Manter `absolute` no dialog.tsx global
+- Nos dois modals específicos, trocar `overflow-y-auto` do DialogContent por uma estrutura com header fixo + body scrollável interno
 
-**3. Adicionar case `tipo_placa` no switch de descrição**
+**Estrutura proposta para os modals específicos:**
+```text
+DialogContent (overflow-hidden, sem scroll)
+  ├─ DialogHeader (sticky/fixo no topo)
+  ├─ div.overflow-y-auto.overflow-x-hidden (conteúdo scrollável)
+  │   └─ CoberturaInlineForm / BeneficioInlineForm / EligibilityRulesEditor
+  └─ X button permanece absolute no canto (visível pois o pai não scrolla)
+```
 
 ### Resultado
-- Região mostrará "Rio de Janeiro - Capital e Metropolitana" em vez do UUID
-- Combustível mostrará "Diesel" em vez de "diesel"
-- Tipo de Placa mostrará o nome configurado
-- Tipo de Uso mostrará o label correto
+- Sem rolagem horizontal
+- Botão X sempre visível
+- Clicar fora fecha o modal
 
