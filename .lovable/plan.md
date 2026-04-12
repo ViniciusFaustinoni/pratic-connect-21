@@ -1,30 +1,33 @@
 
+## Plano: Corrigir edição de regras de elegibilidade em benefícios
 
-## Plano: Padronizar ordem dos badges de elegibilidade
+### Problema raiz
+O `AddRuleDialog` usa chaves de config diferentes do que está salvo no banco:
+- **regiao**: dialog usa `config.regioes`, banco usa `config.values`
+- **tipo_uso**: dialog usa `config.tipos`, banco usa `config.values`
+- **combustivel**: dialog usa `config.combustiveis`, banco usa `config.values`
 
-### Problema
-Os badges de elegibilidade (Região, Tipo de Uso, Combustível, etc.) aparecem na ordem em que vêm do banco de dados, que pode variar entre coberturas e benefícios, causando inconsistência visual.
+Quando o dialog abre para edição, os checkboxes aparecem vazios porque as chaves não batem. E ao salvar, grava com chaves erradas.
 
 ### Solução
-Ordenar as regras visíveis no componente `RuleBadges` com uma ordem fixa antes de renderizar.
+Padronizar o `AddRuleDialog` para usar `values` como chave universal para todas as regras baseadas em array, alinhando com o formato do `EligibilityConfigSection`.
 
-### Alteração em `src/components/gestao-comercial/LinhasPlanos.tsx`
+### Alterações em `src/components/admin/planos/EligibilityRulesEditor.tsx`
 
-No `RuleBadges`, após filtrar as regras visíveis (linha 112), aplicar um sort baseado em uma ordem predefinida:
+**1. Seção Região (linhas 377-392)**
+- Trocar `config.regioes` → `config.values`
+- Usar `r.id` (UUID) ao invés de `r.codigo` para consistência com o formato novo
 
-```text
-Ordem fixa:
-1. regiao
-2. tipo_uso
-3. combustivel
-4. tipo_placa
-5. ano_range
-6. marca_modelo
-7. (qualquer outro tipo)
-```
+**2. Seção Tipo de Uso (linhas 404-419)**
+- Trocar `config.tipos` → `config.values`
 
-Isso é uma mudança de ~5 linhas — adicionar um array de prioridade e um `.sort()` no `visibleRules`.
+**3. Seção Combustível (linhas 421-436)**
+- Trocar `config.combustiveis` → `config.values`
+
+**4. RuleCard display (linhas 146-183)**
+- Atualizar resolução de texto descritivo para ler de `config.values` (com fallback para chaves legadas)
 
 ### Resultado
-Todos os badges de coberturas e benefícios seguirão sempre a mesma ordem: Região → Tipo de Uso → Combustível → demais regras.
-
+- Clicar em uma regra existente de benefício (ou cobertura/plano) abrirá o dialog com os valores preenchidos corretamente
+- Salvar gravará no formato correto (`values`)
+- Todas as regras ficam consistentes com o `EligibilityConfigSection`
