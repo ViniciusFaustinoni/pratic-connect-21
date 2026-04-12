@@ -90,7 +90,6 @@ const RULE_LABELS: Record<string, Record<string, string>> = {
   combustivel: { diesel: 'Diesel', flex: 'Flex', gasolina: 'Gasolina', etanol: 'Etanol', eletrico: 'Elétrico', hibrido: 'Híbrido' },
   tipo_placa: { mercosul: 'Mercosul', leilao: 'Leilão', chassi_remarcado: 'Chassi Remarcado', placa_vermelha: 'Placa Vermelha', taxi: 'Táxi', ex_taxi: 'Ex-Táxi', veiculo_que_ja_teve_ressarcimento_integral: 'Ressarc. Integral' },
   categoria_veiculo: { carro: 'Carro', moto: 'Moto', caminhao: 'Caminhão', van: 'Van' },
-  categoria_veiculo: { carro: 'Carro', moto: 'Moto', caminhao: 'Caminhão', van: 'Van' },
 };
 
 /** Extract the effective values array from rule_config regardless of key used */
