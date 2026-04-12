@@ -1,37 +1,40 @@
 
 
-## Plano: Corrigir modal de edição de cobertura/benefício
+## Plano: Atualizar carências em massa nos itens duplicados antigos
 
-### Problemas identificados
-1. **Rolagem lateral**: O modal permite scroll horizontal quando o conteúdo é largo demais
-2. **Botão X não é fixo**: O X de fechar está `absolute` dentro do container com `overflow-y-auto`, então ele rola junto com o conteúdo
-3. **Clicar fora não fecha**: `onInteractOutside={(e) => e.preventDefault()}` está bloqueando o fechamento
+### Contexto
+A duplicação de planos/linhas **já copia** os campos de carência corretamente (via spread `...bData` / `...cobData`). O problema é que muitos itens foram duplicados **antes** da carência ser configurada nos itens fonte. Resultado: ~261 coberturas e ~273 benefícios sem carência que deveriam tê-la.
 
-### Alterações
+### Itens que precisam de carência (todos com `120 dias / liberação / multiplicador 1`)
 
-**1. `src/components/gestao-comercial/LinhasPlanos.tsx` (linha 848)**
-- Remover `onInteractOutside={(e) => e.preventDefault()}` do modal de edição (e do de elegibilidade, linha 875)
-- Adicionar `overflow-x-hidden` à classe do DialogContent
+**Coberturas** (por nome base):
+- 100% FIPE, 75% FIPE, Alagamento, Chuva de Granizo, Colisão, Furto, Incêndio, Perda Total (PT), Roubo, Taxa Administrativa
 
-**2. `src/components/ui/dialog.tsx` (linha 45)**
-- Mudar o botão X de `absolute` para `sticky` com `top-0` e `z-10`, para que ele permaneça visível ao rolar o conteúdo do modal
-- Ajustar o layout para que o botão sticky funcione corretamente (mover para antes do `{children}` e adicionar `float-right` ou wrap com flex)
+**Benefícios** (por nome base):
+- Vidros e Faróis
 
-Abordagem alternativa mais segura para o X sticky (evita quebrar outros modals):
-- Manter `absolute` no dialog.tsx global
-- Nos dois modals específicos, trocar `overflow-y-auto` do DialogContent por uma estrutura com header fixo + body scrollável interno
+### Ação
+Executar dois UPDATEs via insert tool:
 
-**Estrutura proposta para os modals específicos:**
-```text
-DialogContent (overflow-hidden, sem scroll)
-  ├─ DialogHeader (sticky/fixo no topo)
-  ├─ div.overflow-y-auto.overflow-x-hidden (conteúdo scrollável)
-  │   └─ CoberturaInlineForm / BeneficioInlineForm / EligibilityRulesEditor
-  └─ X button permanece absolute no canto (visível pois o pai não scrolla)
+1. **Coberturas**: Atualizar todas as coberturas cujo nome começa com os base names acima e que têm `carencia_ativa = false` ou `NULL`:
+```sql
+UPDATE coberturas
+SET carencia_ativa = true, carencia_dias = 120, carencia_tipo = 'liberacao', carencia_multiplicador = 1
+WHERE (carencia_ativa = false OR carencia_ativa IS NULL)
+AND (nome LIKE '100\% FIPE%' OR nome LIKE '75\% FIPE%' OR nome LIKE 'Alagamento%' 
+     OR nome LIKE 'Chuva de Granizo%' OR nome LIKE 'Colisão%' OR nome LIKE 'Furto%'
+     OR nome LIKE 'Incêndio%' OR nome LIKE 'Perda Total%' OR nome LIKE 'Roubo%'
+     OR nome LIKE 'Taxa Administrativa%');
 ```
 
-### Resultado
-- Sem rolagem horizontal
-- Botão X sempre visível
-- Clicar fora fecha o modal
+2. **Benefícios**: Atualizar todos os benefícios "Vidros e Faróis" sem carência:
+```sql
+UPDATE benefits
+SET carencia_ativa = true, carencia_dias = 120, carencia_tipo = 'liberacao', carencia_multiplicador = 1
+WHERE (carencia_ativa = false OR carencia_ativa IS NULL)
+AND name LIKE 'Vidros e Faróis%';
+```
+
+### Nenhuma alteração de código necessária
+O mecanismo de duplicação já funciona corretamente para novas duplicações.
 
