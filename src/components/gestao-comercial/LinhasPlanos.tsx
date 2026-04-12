@@ -126,12 +126,16 @@ function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
     queryKey: ['regioes-names', regionIds],
     queryFn: async () => {
       if (regionIds.length === 0) return {} as Record<string, string>;
+      // Fetch all regions to handle both UUID and legacy string references
       const { data } = await supabase
         .from('regioes')
-        .select('id, nome')
-        .in('id', regionIds);
+        .select('id, nome, codigo');
       const map: Record<string, string> = {};
-      data?.forEach((r) => { map[r.id] = r.nome; });
+      data?.forEach((r) => {
+        map[r.id] = r.nome;
+        // Map legacy codes (e.g. "RJ", "SP") to full names as fallback
+        if (r.codigo) map[r.codigo.toUpperCase()] = r.nome;
+      });
       return map;
     },
     enabled: regionIds.length > 0,
