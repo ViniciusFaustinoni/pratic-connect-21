@@ -67,24 +67,18 @@ export function gerarSecaoCoberturasInjetavel(dados: TermoAfiliacaoData): string
 
   if (coberturas.length) {
     html += `<table class="plan-details" style="width:100%; border-collapse:collapse; margin-bottom:12pt;">
-      <thead><tr><th colspan="3" style="background:#1a1a6e;color:#fff;padding:6px;font-size:11px;">Coberturas</th></tr>
-      <tr><th style="padding:4px;border:1px solid #ddd;font-size:10px;">Nome</th><th style="padding:4px;border:1px solid #ddd;font-size:10px;">Descrição</th><th style="padding:4px;border:1px solid #ddd;font-size:10px;">Detalhes</th></tr></thead><tbody>`;
+      <thead><tr><th style="background:#1a1a6e;color:#fff;padding:6px;font-size:11px;">Coberturas</th></tr></thead><tbody>`;
     for (const c of coberturas) {
-      const detalhes: string[] = [];
-      if (c.valor_personalizado) detalhes.push(c.valor_personalizado);
-      if (c.carencia_dias) detalhes.push(`Carência: ${c.carencia_dias} dias`);
-      if (c.franquia_percentual) detalhes.push(`Franquia: ${c.franquia_percentual}%`);
-      html += `<tr><td style="padding:4px;border:1px solid #ddd;font-size:10px;">${c.nome}</td><td style="padding:4px;border:1px solid #ddd;font-size:10px;">${c.descricao || '—'}</td><td style="padding:4px;border:1px solid #ddd;font-size:10px;">${detalhes.join(' · ') || '—'}</td></tr>`;
+      html += `<tr><td style="padding:4px;border:1px solid #ddd;font-size:10px;">${c.nome}</td></tr>`;
     }
     html += '</tbody></table>';
   }
 
   if (beneficios.length) {
     html += `<table class="plan-details" style="width:100%; border-collapse:collapse; margin-bottom:12pt;">
-      <thead><tr><th colspan="3" style="background:#1a1a6e;color:#fff;padding:6px;font-size:11px;">Benefícios</th></tr>
-      <tr><th style="padding:4px;border:1px solid #ddd;font-size:10px;">Nome</th><th style="padding:4px;border:1px solid #ddd;font-size:10px;">Descrição</th><th style="padding:4px;border:1px solid #ddd;font-size:10px;">Valor</th></tr></thead><tbody>`;
+      <thead><tr><th style="background:#1a1a6e;color:#fff;padding:6px;font-size:11px;">Benefícios</th></tr></thead><tbody>`;
     for (const b of beneficios) {
-      html += `<tr><td style="padding:4px;border:1px solid #ddd;font-size:10px;">${b.nome}</td><td style="padding:4px;border:1px solid #ddd;font-size:10px;">${b.descricao || '—'}</td><td style="padding:4px;border:1px solid #ddd;font-size:10px;">${b.valor_personalizado || '—'}</td></tr>`;
+      html += `<tr><td style="padding:4px;border:1px solid #ddd;font-size:10px;">${b.nome}</td></tr>`;
     }
     html += '</tbody></table>';
   }
@@ -99,21 +93,17 @@ function gerarTabelaCompletaHTML(coberturas: CoberturaDetalhada[], beneficios: B
   let html = '<table class="plan-details">';
   
   if (coberturas.length) {
-    html += '<thead><tr><th colspan="3" style="background:#1a1a6e;color:#fff;">Coberturas</th></tr><tr><th>Nome</th><th>Descrição</th><th>Detalhes</th></tr></thead><tbody>';
+    html += '<thead><tr><th style="background:#1a1a6e;color:#fff;">Coberturas</th></tr></thead><tbody>';
     for (const c of coberturas) {
-      const detalhes: string[] = [];
-      if (c.valor_personalizado) detalhes.push(c.valor_personalizado);
-      if (c.carencia_dias) detalhes.push(`Carência: ${c.carencia_dias} dias`);
-      if (c.franquia_percentual) detalhes.push(`Franquia: ${c.franquia_percentual}%`);
-      html += `<tr><td>${c.nome}</td><td>${c.descricao || '—'}</td><td>${detalhes.join(' · ') || '—'}</td></tr>`;
+      html += `<tr><td>${c.nome}</td></tr>`;
     }
     html += '</tbody>';
   }
   
   if (beneficios.length) {
-    html += '<thead><tr><th colspan="3" style="background:#1a1a6e;color:#fff;">Benefícios</th></tr><tr><th>Nome</th><th>Descrição</th><th>Valor</th></tr></thead><tbody>';
+    html += '<thead><tr><th style="background:#1a1a6e;color:#fff;">Benefícios</th></tr></thead><tbody>';
     for (const b of beneficios) {
-      html += `<tr><td>${b.nome}</td><td>${b.descricao || '—'}</td><td>${b.valor_personalizado || '—'}</td></tr>`;
+      html += `<tr><td>${b.nome}</td></tr>`;
     }
     html += '</tbody>';
   }
