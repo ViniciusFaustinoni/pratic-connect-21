@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Trash2, Shield, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -216,16 +216,32 @@ function AddRuleDialog({
   entityType,
   entityId,
   onSave,
+  editingRule,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   entityType: EntityType;
   entityId: string;
   onSave: ReturnType<typeof useSaveRule>;
+  editingRule?: EligibilityRule | null;
 }) {
   const [ruleType, setRuleType] = useState<RuleType>('fipe_range');
   const [ruleMode, setRuleMode] = useState<RuleMode>('include');
   const [config, setConfig] = useState<Record<string, any>>({});
+
+  const isEditing = !!editingRule;
+
+  useEffect(() => {
+    if (editingRule) {
+      setRuleType(editingRule.rule_type);
+      setRuleMode(editingRule.rule_mode);
+      setConfig({ ...editingRule.rule_config });
+    } else {
+      setRuleType('fipe_range');
+      setRuleMode('include');
+      setConfig({});
+    }
+  }, [editingRule]);
 
   // Data from CRUD
   const { data: categoriasVeiculo = [] } = useCategoriasVeiculoPlano();
