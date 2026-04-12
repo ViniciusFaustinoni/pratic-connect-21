@@ -1,43 +1,34 @@
 
 
-## Plano: Log de Requisições com dados de APIs reais
+## Plano: Garantir coberturas e benefícios no documento Autentique
 
 ### Problema
-O tab "Requisições" mostra apenas `auth_logs` (login/logout). O usuário quer ver logs das APIs externas: Evolution (WhatsApp), Asaas (pagamentos), Softruck/Rede Veículos (rastreadores), SGA (sincronização), e API de Leads.
+O template "Proposta de Filiação" (AF1) armazenado no banco **não contém** as variáveis `{{plano.tabela_coberturas}}`, `{{plano.tabela_beneficios}}` ou `{{plano.tabela_completa}}`. O sistema já monta os dados (`coberturas_detalhadas`, `beneficios_detalhados`) e já tem as funções de renderização (`gerarTabelaCoberturasHTML`, `gerarTabelaBeneficiosHTML`), mas o template do banco simplesmente não usa essas variáveis — logo, coberturas e benefícios nunca aparecem no PDF enviado ao Autentique quando usa o template do banco.
 
-### Tabelas existentes no banco
+O template hardcoded (fallback) tem a seção 3 com coberturas e benefícios, mas esse só é usado quando não existe template no banco.
 
-| Tabela | Registros | API | Campos-chave |
-|--------|-----------|-----|--------------|
-| `whatsapp_logs` | 2.453 | Evolution / WhatsApp | tipo, evento, erro, instancia_id |
-| `sga_sync_logs` | 1.099 | SGA (Hinova) | action, status, error_message, duracao_ms |
-| `auth_logs` | 891 | Autenticação | acao, email, ip_address |
-| `asaas_webhooks_log` | 378 | Asaas | evento, processado, erro |
-| `rastreadores_logs` | 33 | Softruck / Rede Veículos | plataforma, operacao, status, tempo_resposta_ms |
-| `api_leads_logs` | 0 | API de Leads | origem, status, erro, tempo_resposta_ms |
+### Solução
+Injetar automaticamente a seção de coberturas e benefícios no HTML gerado, **após** a substituição de variáveis, quando o template do banco não contiver essas variáveis. Isso garante que SEMPRE apareçam, independentemente do conteúdo do template.
 
 ### Alterações
 
-**1. Reescrever `src/components/gestao-comercial/LogRequisicoesTab.tsx`**
+**1. `supabase/functions/_shared/template-utils.ts`**
+- Criar função `gerarSecaoCoberturasInjetavel(dados)` que gera um bloco HTML autossuficiente com:
+  - Título "COBERTURAS E BENEFÍCIOS DO PLANO"
+  - Lista de coberturas detalhadas (nome, descrição, valor personalizado)
+  - Lista de benefícios detalhados (nome, descrição, valor personalizado)
+  - Reutiliza o estilo existente (`.plan-details`, `.cobertura-item`)
+- Exportar essa função
 
-- Adicionar filtro de **Plataforma/API** (dropdown): Todas, WhatsApp/Evolution, Asaas, Softruck, Rede Veículos, SGA, Autenticação, API Leads
-- Cada plataforma consulta sua tabela específica
-- Normalizar os dados num formato unificado para exibição:
-  ```
-  { id, created_at, plataforma, operacao, status, erro, tempo_ms, detalhes }
-  ```
-- Manter filtro de busca (busca em operacao/evento/action)
-- Manter paginação existente
-- Badges coloridos por plataforma (verde=Evolution, azul=Asaas, laranja=Softruck, vermelho=Rede, roxo=SGA, cinza=Auth)
-- Badge de status: sucesso (verde), erro (vermelho), info (amarelo)
-- Mostrar tempo de resposta quando disponível
+**2. `supabase/functions/autentique-create/index.ts`** (~linha 500)
+- Após gerar `conteudoHTML` via `substituirVariaveis`, verificar se o conteúdo resultante contém coberturas renderizadas
+- Se `templateData.plano.coberturas_detalhadas` ou `beneficios_detalhados` existem e o HTML não contém a seção, injetar `gerarSecaoCoberturasInjetavel(templateData)` antes dos aditivos
 
-**2. Layout de cada item do log**
-- Avatar com iniciais da plataforma (EV, AS, ST, RV, SG, AU, LD)
-- Nome da plataforma + badge de operação
-- Mensagem de erro (se houver), truncada
-- Data/hora + status + tempo de resposta (ms)
+**3. `supabase/functions/autentique-create-by-token/index.ts`** (~linha 493)
+- Mesma lógica: injetar a seção de coberturas/benefícios após o `conteudoHTML` e antes dos `aditivosHTML`
 
-### Sem migração SQL necessária
-Todas as tabelas já existem e têm RLS configurado. Os tipos já estão no Supabase client.
+### Resultado
+- Coberturas e benefícios do plano escolhido aparecerão **sempre** no documento enviado ao Autentique
+- Se o usuário adicionar `{{plano.tabela_completa}}` manualmente no template do banco, a injeção automática não duplicará (verificação prévia)
+- O template hardcoded (fallback) continua funcionando normalmente com a seção 3 já existente
 
