@@ -1,43 +1,35 @@
 
 
-## Plano: Garantir geração do laudo ao finalizar instalação (sem exigir assinatura)
+## Plano: Exibir motivos nos logs de auditoria
 
-### Problema encontrado
-Há **dois bugs** na geração do laudo:
-
-1. **`useAprovarVeiculoServico`** (useServicos.ts, linha 1133): chama `gerar-laudo-vistoria` passando apenas `{ servicoId }`, mas a Edge Function espera `{ vistoriaId, associadoId, veiculoId }`. Resultado: **erro 400 silencioso** — o laudo nunca é gerado nesse fluxo.
-
-2. **`concluir-vistoria-prestador`** (Edge Function): não chama `gerar-laudo-vistoria` em momento algum. Quando um prestador externo finaliza, o laudo não é gerado.
-
-3. **`useAssinatura.ts`**: é o único lugar que chama corretamente com todos os parâmetros, mas depende de assinatura — que já não é mais obrigatória.
+### Problema
+Os diálogos de exclusão (cotação, sinistro, associado, chamado) coletam o motivo do usuário, mas:
+1. **Cotação**: o motivo nunca é enviado à Edge Function `delete-cotacao` — é descartado
+2. **Log display**: o componente `LogSistemaTab.tsx` não exibe os campos `dados_anteriores`/`dados_novos` onde o motivo poderia estar armazenado
+3. Mesmo nos fluxos que já enviam motivo (sinistro, chamado), ele fica "escondido" no JSON e não aparece na UI
 
 ### Solução
 
-**1. Corrigir `useAprovarVeiculoServico`** (`src/hooks/useServicos.ts` ~linha 1130-1144)
-- Antes de chamar `gerar-laudo-vistoria`, buscar a vistoria vinculada ao serviço (via `contrato_id`)
-- Passar `{ vistoriaId, associadoId, veiculoId, contratoId, placa }` corretamente
+**1. Passar motivo na exclusão de cotação**
+- `useExcluirCotacao` (useCotacoes.ts): aceitar `{ cotacaoId, motivo }` em vez de apenas `cotacaoId`
+- `delete-cotacao` Edge Function: ler `motivo` do body e incluir no log de auditoria (`dados_novos: { motivo }`)
+- `Cotacoes.tsx`: passar motivo ao chamar `excluirCotacao.mutateAsync`
 
-**2. Adicionar geração de laudo em `concluir-vistoria-prestador`** (Edge Function)
-- Após concluir a vistoria do prestador, buscar a vistoria vinculada à instalação
-- Chamar `gerar-laudo-vistoria` internamente (fetch para a própria Edge Function ou invocar `supabase.functions.invoke`)
-
-**3. Alternativa: aceitar `servicoId` na Edge Function** (`gerar-laudo-vistoria/index.ts`)
-- Adicionar lógica no início: se receber `servicoId` em vez de `vistoriaId`, buscar o serviço no banco e resolver `vistoriaId`, `associadoId`, `veiculoId` automaticamente
-- Isso torna a Edge Function mais resiliente a diferentes chamadores
-
-### Abordagem recomendada
-Combinar opções 1 e 3: corrigir o caller E tornar a Edge Function mais resiliente.
+**2. Exibir motivo no log do sistema**
+- `LogSistemaTab.tsx`: após a descrição, verificar se `log.dados_novos?.motivo` ou `log.dados_anteriores?.motivo` existe e exibi-lo com um ícone/label "Motivo:"
 
 ### Alterações
 
 | Arquivo | O que muda |
 |---------|-----------|
-| `supabase/functions/gerar-laudo-vistoria/index.ts` | Aceitar `servicoId` como parâmetro alternativo; resolver vistoria/associado/veículo automaticamente |
-| `src/hooks/useServicos.ts` | Passar parâmetros corretos (`vistoriaId`, `associadoId`, `veiculoId`, `contratoId`, `placa`) |
-| `supabase/functions/concluir-vistoria-prestador/index.ts` | Adicionar chamada a `gerar-laudo-vistoria` após conclusão |
+| `src/hooks/useCotacoes.ts` | `useExcluirCotacao` recebe `{ cotacaoId, motivo }` |
+| `src/pages/vendas/Cotacoes.tsx` | Passa motivo ao `mutateAsync` |
+| `src/pages/vendas/CotacaoDetalhe.tsx` | Passa motivo ao `mutate` |
+| `supabase/functions/delete-cotacao/index.ts` | Lê motivo do body, inclui em `dados_novos` do log |
+| `src/components/gestao-comercial/LogSistemaTab.tsx` | Exibe motivo quando presente nos dados do log |
 
 ### Escopo
-- 3 arquivos modificados
-- Redeploy de 2 Edge Functions (`gerar-laudo-vistoria`, `concluir-vistoria-prestador`)
+- 5 arquivos modificados
+- Redeploy de 1 Edge Function (`delete-cotacao`)
 - Sem migração SQL
 
