@@ -422,11 +422,11 @@ export function useExcluirCotacao() {
   const queryClient = useQueryClient();
   
   return useMutation({
-    mutationFn: async (cotacaoId: string) => {
+    mutationFn: async ({ cotacaoId, motivo }: { cotacaoId: string; motivo?: string }) => {
       console.log('[useExcluirCotacao] Iniciando exclusão:', cotacaoId);
       
       const { data, error } = await supabase.functions.invoke('delete-cotacao', {
-        body: { cotacaoId },
+        body: { cotacaoId, motivo },
       });
       
       if (error) {

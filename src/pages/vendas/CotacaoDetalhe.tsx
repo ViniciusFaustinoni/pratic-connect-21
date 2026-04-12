@@ -153,7 +153,7 @@ Ficou com alguma dúvida? Estou à disposição!
 
   const handleExcluir = () => {
     if (!id) return;
-    excluirMutation.mutate(id, {
+    excluirMutation.mutate({ cotacaoId: id }, {
       onSuccess: () => {
         toast.success('Cotação excluída');
         navigate('/vendas/cotacoes');

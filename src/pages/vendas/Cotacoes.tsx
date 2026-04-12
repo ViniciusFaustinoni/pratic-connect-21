@@ -281,7 +281,7 @@ export default function Cotacoes() {
     
     for (const id of ids) {
       try {
-        await excluirCotacao.mutateAsync(id);
+        await excluirCotacao.mutateAsync({ cotacaoId: id, motivo });
         sucesso++;
       } catch {
         erro++;

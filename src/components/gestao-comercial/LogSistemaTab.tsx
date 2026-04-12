@@ -140,6 +140,14 @@ export function LogSistemaTab() {
                     {log.descricao && (
                       <p className="text-sm text-muted-foreground mt-1 line-clamp-2">{log.descricao}</p>
                     )}
+                    {(() => {
+                      const motivo = (log.dados_novos as any)?.motivo || (log.dados_anteriores as any)?.motivo || (log.dados_novos as any)?.motivo_exclusao || (log.dados_anteriores as any)?.motivo_exclusao || (log.dados_novos as any)?.motivo_cancelamento || (log.dados_anteriores as any)?.motivo_cancelamento;
+                      return motivo ? (
+                        <p className="text-sm text-muted-foreground/80 mt-1 italic">
+                          📝 Motivo: {motivo}
+                        </p>
+                      ) : null;
+                    })()}
                     <div className="flex items-center gap-3 mt-2 text-xs text-muted-foreground">
                       <span>{log.created_at ? format(new Date(log.created_at), "dd/MM/yyyy 'às' HH:mm", { locale: ptBR }) : '-'}</span>
                       {log.tabela && <span className="text-muted-foreground/70">Tabela: {log.tabela}</span>}
