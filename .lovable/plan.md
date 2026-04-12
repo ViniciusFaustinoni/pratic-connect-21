@@ -1,29 +1,43 @@
 
 
-## Plano: Corrigir extração da categoria da CNH no OCR
+## Plano: Garantir geração do laudo ao finalizar instalação (sem exigir assinatura)
 
-### Problema
-A CNH-e (digital) tem um campo "9 CAT HAB" com a categoria real (ex: **B**), mas também possui uma **grade/tabela de categorias** (ACC, A, B, C, D, BE, CE, DE...) onde cada linha é um cabeçalho de categoria. O modelo de IA confunde os cabeçalhos da grade com a categoria real, extraindo "D" em vez de "B".
+### Problema encontrado
+Há **dois bugs** na geração do laudo:
+
+1. **`useAprovarVeiculoServico`** (useServicos.ts, linha 1133): chama `gerar-laudo-vistoria` passando apenas `{ servicoId }`, mas a Edge Function espera `{ vistoriaId, associadoId, veiculoId }`. Resultado: **erro 400 silencioso** — o laudo nunca é gerado nesse fluxo.
+
+2. **`concluir-vistoria-prestador`** (Edge Function): não chama `gerar-laudo-vistoria` em momento algum. Quando um prestador externo finaliza, o laudo não é gerado.
+
+3. **`useAssinatura.ts`**: é o único lugar que chama corretamente com todos os parâmetros, mas depende de assinatura — que já não é mais obrigatória.
 
 ### Solução
-Adicionar instrução explícita no prompt do OCR (`supabase/functions/document-ocr/index.ts`) para orientar o modelo a:
-1. Ler a categoria do campo **"9 CAT HAB"** (texto ao lado do CPF e nº registro), e **não** da grade/tabela de categorias
-2. A grade de categorias lista todas as categorias possíveis com datas de habilitação — ignorar como fonte da categoria principal
-3. Categorias válidas: A, B, C, D, E, AB, AC, AD, AE, ACC
 
-### Alteração
+**1. Corrigir `useAprovarVeiculoServico`** (`src/hooks/useServicos.ts` ~linha 1130-1144)
+- Antes de chamar `gerar-laudo-vistoria`, buscar a vistoria vinculada ao serviço (via `contrato_id`)
+- Passar `{ vistoriaId, associadoId, veiculoId, contratoId, placa }` corretamente
 
-**`supabase/functions/document-ocr/index.ts`** — linha 74, expandir a seção CNH do prompt:
+**2. Adicionar geração de laudo em `concluir-vistoria-prestador`** (Edge Function)
+- Após concluir a vistoria do prestador, buscar a vistoria vinculada à instalação
+- Chamar `gerar-laudo-vistoria` internamente (fetch para a própria Edge Function ou invocar `supabase.functions.invoke`)
 
-```
-categoria
-- CATEGORIA: leia do campo "9 CAT HAB" que fica ao lado do CPF e nº registro (frente da CNH).
-  NÃO extraia da grade/tabela de categorias (verso/rodapé) que lista ACC, A, B, C, D etc com datas.
-  A grade é apenas um detalhamento — a categoria principal está no campo "9 CAT HAB".
-- Categorias válidas: A, B, C, D, E, AB, AC, AD, AE, ACC
-```
+**3. Alternativa: aceitar `servicoId` na Edge Function** (`gerar-laudo-vistoria/index.ts`)
+- Adicionar lógica no início: se receber `servicoId` em vez de `vistoriaId`, buscar o serviço no banco e resolver `vistoriaId`, `associadoId`, `veiculoId` automaticamente
+- Isso torna a Edge Function mais resiliente a diferentes chamadores
+
+### Abordagem recomendada
+Combinar opções 1 e 3: corrigir o caller E tornar a Edge Function mais resiliente.
+
+### Alterações
+
+| Arquivo | O que muda |
+|---------|-----------|
+| `supabase/functions/gerar-laudo-vistoria/index.ts` | Aceitar `servicoId` como parâmetro alternativo; resolver vistoria/associado/veículo automaticamente |
+| `src/hooks/useServicos.ts` | Passar parâmetros corretos (`vistoriaId`, `associadoId`, `veiculoId`, `contratoId`, `placa`) |
+| `supabase/functions/concluir-vistoria-prestador/index.ts` | Adicionar chamada a `gerar-laudo-vistoria` após conclusão |
 
 ### Escopo
-- 1 arquivo: `supabase/functions/document-ocr/index.ts`
-- Redeploy da Edge Function `document-ocr`
+- 3 arquivos modificados
+- Redeploy de 2 Edge Functions (`gerar-laudo-vistoria`, `concluir-vistoria-prestador`)
+- Sem migração SQL
 
