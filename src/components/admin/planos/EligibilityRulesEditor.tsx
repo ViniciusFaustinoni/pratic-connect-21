@@ -37,7 +37,6 @@ const RULE_TYPE_LABELS: Record<RuleType, string> = {
   fipe_eligibility: 'Elegibilidade FIPE',
   ano_range: 'Faixa de Ano',
   categoria_veiculo: 'Categoria de Veículo',
-  categoria_especial: 'Categoria Especial',
   regiao: 'Região',
   marca_modelo: 'Marca / Modelo / Versão',
   tipo_uso: 'Tipo de Uso',
@@ -50,7 +49,6 @@ const RULE_TYPE_ICONS: Record<RuleType, string> = {
   fipe_eligibility: '🎯',
   ano_range: '📅',
   categoria_veiculo: '🚗',
-  categoria_especial: '⚠️',
   regiao: '📍',
   marca_modelo: '🏭',
   tipo_uso: '🔑',
@@ -175,7 +173,6 @@ function RuleCard({ rule, onDelete, onEdit, lookups }: { rule: EligibilityRule; 
       descParts.push(`${cfg.min || '?'} — ${cfg.max || '?'}`);
       break;
     case 'categoria_veiculo':
-    case 'categoria_especial':
       descParts.push((cfg.categorias || []).join(', '));
       break;
     case 'regiao':
@@ -371,23 +368,6 @@ function AddRuleDialog({
               <Label className="text-xs">Categorias de Veículo</Label>
               <div className="grid grid-cols-2 gap-2">
                 {categoriasVeiculo.map((cat) => (
-                  <label key={cat.value} className="flex items-center gap-2 text-sm cursor-pointer">
-                    <Checkbox
-                      checked={(config.categorias || []).includes(cat.value)}
-                      onCheckedChange={() => toggleArrayItem('categorias', cat.value)}
-                    />
-                    {cat.label}
-                  </label>
-                ))}
-              </div>
-            </div>
-          )}
-
-          {ruleType === 'categoria_especial' && (
-            <div className="space-y-2">
-              <Label className="text-xs">Categorias Especiais</Label>
-              <div className="grid grid-cols-2 gap-2">
-                {categoriasEspeciais.map((cat) => (
                   <label key={cat.value} className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
                       checked={(config.categorias || []).includes(cat.value)}
