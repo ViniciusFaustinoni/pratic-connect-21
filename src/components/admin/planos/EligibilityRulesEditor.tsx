@@ -70,6 +70,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
   const deleteRule = useDeleteRule();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<EligibilityRule | null>(null);
 
   if (!entityId) {
     return (
@@ -85,6 +86,16 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
     }
   };
 
+  const handleEdit = (rule: EligibilityRule) => {
+    setEditingRule(rule);
+    setDialogOpen(true);
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) setEditingRule(null);
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -92,7 +103,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
           <Shield className="h-4 w-4 text-muted-foreground" />
           <Label className="text-sm font-semibold">Regras de Elegibilidade</Label>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={() => setDialogOpen(true)}>
+        <Button type="button" size="sm" variant="outline" onClick={() => { setEditingRule(null); setDialogOpen(true); }}>
           <Plus className="h-3 w-3 mr-1" /> Adicionar
         </Button>
       </div>
@@ -106,17 +117,18 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (
-            <RuleCard key={rule.id} rule={rule} onDelete={handleDelete} />
+            <RuleCard key={rule.id} rule={rule} onDelete={handleDelete} onEdit={handleEdit} />
           ))}
         </div>
       )}
 
       <AddRuleDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogClose}
         entityType={entityType}
         entityId={entityId}
         onSave={saveRule}
+        editingRule={editingRule}
       />
     </div>
   );
