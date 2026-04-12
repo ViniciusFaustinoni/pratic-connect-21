@@ -142,46 +142,25 @@ export function LogRequisicoesTab() {
       for (const p of plataformas) {
         switch (p) {
           case 'whatsapp':
-            fetchers.push(
-              supabase.from('whatsapp_logs').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)
-                .then(r => (r.data || []).map(normalizeWhatsapp))
-            );
+            fetchers.push(wrap(supabase.from('whatsapp_logs').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeWhatsapp)));
             break;
           case 'asaas':
-            fetchers.push(
-              supabase.from('asaas_webhooks_log').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)
-                .then(r => (r.data || []).map(normalizeAsaas))
-            );
+            fetchers.push(wrap(supabase.from('asaas_webhooks_log').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeAsaas)));
             break;
           case 'softruck':
-            fetchers.push(
-              supabase.from('rastreadores_logs').select('*').ilike('plataforma', '%softruck%').order('created_at', { ascending: false }).limit(PAGE_SIZE)
-                .then(r => (r.data || []).map(normalizeRastreador))
-            );
+            fetchers.push(wrap(supabase.from('rastreadores_logs').select('*').ilike('plataforma', '%softruck%').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeRastreador)));
             break;
           case 'rede':
-            fetchers.push(
-              supabase.from('rastreadores_logs').select('*').not('plataforma', 'ilike', '%softruck%').order('created_at', { ascending: false }).limit(PAGE_SIZE)
-                .then(r => (r.data || []).map(normalizeRastreador))
-            );
+            fetchers.push(wrap(supabase.from('rastreadores_logs').select('*').not('plataforma', 'ilike', '%softruck%').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeRastreador)));
             break;
           case 'sga':
-            fetchers.push(
-              supabase.from('sga_sync_logs').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)
-                .then(r => (r.data || []).map(normalizeSga))
-            );
+            fetchers.push(wrap(supabase.from('sga_sync_logs').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeSga)));
             break;
           case 'auth':
-            fetchers.push(
-              supabase.from('auth_logs').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)
-                .then(r => (r.data || []).map(normalizeAuth))
-            );
+            fetchers.push(wrap(supabase.from('auth_logs').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeAuth)));
             break;
           case 'api_leads':
-            fetchers.push(
-              supabase.from('api_leads_logs').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)
-                .then(r => (r.data || []).map(normalizeApiLeads))
-            );
+            fetchers.push(wrap(supabase.from('api_leads_logs').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeApiLeads)));
             break;
         }
       }
