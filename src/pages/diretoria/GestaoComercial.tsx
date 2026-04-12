@@ -9,6 +9,8 @@ import { InstalacaoRotasConfig } from '@/components/gestao-comercial/InstalacaoR
 import RateioConfig from '@/pages/configuracoes/RateioConfig';
 import { CadastrosBase } from '@/components/gestao-comercial/CadastrosBase';
 import { MarcasModelosCombustiveis } from '@/components/gestao-comercial/MarcasModelosCombustiveis';
+import { LogSistemaTab } from '@/components/gestao-comercial/LogSistemaTab';
+import { LogRequisicoesTab } from '@/components/gestao-comercial/LogRequisicoesTab';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Info } from 'lucide-react';
 import { cn } from '@/lib/utils';
@@ -22,6 +24,8 @@ const sectionBanners: Record<number, { title: string; help: string }> = {
   5: { title: 'Vistorias', help: 'Configure parâmetros de vistorias, rotas e atribuição manual.' },
   6: { title: 'Tabelas de Apoio', help: 'Gerencie categorias de veículo, regiões, tipos de uso e tipos de placa.' },
   7: { title: 'Marcas e Modelos', help: 'Cadastre marcas e modelos de veículos com importação em lote.' },
+  8: { title: 'Log do Sistema', help: 'Histórico completo de ações: logins, criações, edições, exclusões e mais.' },
+  9: { title: 'Log de Requisições', help: 'Logs de autenticação e chamadas de APIs do sistema.' },
 };
 
 export default function GestaoComercial() {
@@ -71,6 +75,8 @@ export default function GestaoComercial() {
             {activeTab === 5 && <InstalacaoRotasConfig />}
             {activeTab === 6 && <CadastrosBase />}
             {activeTab === 7 && <MarcasModelosCombustiveis />}
+            {activeTab === 8 && <LogSistemaTab />}
+            {activeTab === 9 && <LogRequisicoesTab />}
           </div>
         </div>
       </div>

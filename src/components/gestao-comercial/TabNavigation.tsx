@@ -1,5 +1,5 @@
 import { useState, useEffect, useMemo } from 'react';
-import { Package, Shield, Calculator, ShieldCheck, Gavel, MapPin, Settings, Globe, LucideIcon, Store, Cog, Menu, ChevronDown, ChevronRight, ChevronLeft, Layers, Database, Car, Fuel, PanelLeftClose, PanelLeftOpen } from 'lucide-react';
+import { Package, Shield, Calculator, ShieldCheck, Gavel, MapPin, Settings, Globe, LucideIcon, Store, Cog, Menu, ChevronDown, ChevronRight, ChevronLeft, Layers, Database, Car, Fuel, PanelLeftClose, PanelLeftOpen, ScrollText, Activity } from 'lucide-react';
 import { cn } from '@/lib/utils';
 import { useIsMobile } from '@/hooks/use-mobile';
 import { Sheet, SheetContent, SheetHeader, SheetTitle, SheetTrigger } from '@/components/ui/sheet';
@@ -51,6 +51,14 @@ const tabGroups: TabGroup[] = [
     items: [
       { label: 'Tabelas de Apoio', shortLabel: 'Tabelas de Apoio', icon: Database, description: 'Categorias, regiões, tipos' },
       { label: 'Marcas e Modelos', shortLabel: 'Marcas & Modelos', icon: Car, description: 'Cadastro com importação em lote' },
+    ],
+  },
+  {
+    title: 'Logs',
+    icon: ScrollText,
+    items: [
+      { label: 'Log do Sistema', shortLabel: 'Sistema', icon: Activity, description: 'Ações de usuários no sistema' },
+      { label: 'Log de Requisições', shortLabel: 'Requisições', icon: Globe, description: 'Chamadas de APIs e funções' },
     ],
   },
 ];
