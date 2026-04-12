@@ -76,6 +76,7 @@ nome, cpf (XXX.XXX.XXX-XX - PRIORIDADE MÁXIMA), rg, numero_registro (11 dígito
 - NÃO confunda com RENACH (tem letras), registro CNH ou RG.
 - NUNCA retorne cpf:null. Se ilegível: cpf:"ilegivel"
 - LEIA CADA DÍGITO DO CPF INDIVIDUALMENTE, DA ESQUERDA PARA A DIREITA. O CPF possui dígitos verificadores matemáticos — se tiver dúvida em qualquer dígito, retorne cpf:"ilegivel" em vez de adivinhar.
+- CATEGORIA: leia EXCLUSIVAMENTE do campo "9 CAT HAB" que fica na frente da CNH, ao lado do CPF e nº registro. NÃO extraia da grade/tabela de categorias (verso ou rodapé) que lista ACC, A, B, C, D, BE, CE, DE etc com datas de habilitação. A grade é apenas um detalhamento — a categoria principal está no campo "9 CAT HAB". Categorias válidas: A, B, C, D, E, AB, AC, AD, AE, ACC.
 
 ### RG
 nome, rg, cpf (se presente), data_nascimento, data_expedicao
