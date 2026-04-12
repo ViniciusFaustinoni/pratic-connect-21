@@ -109,7 +109,12 @@ function extractRuleValues(rule: EligibilityRule): string[] {
 }
 
 function RuleBadges({ rules }: { rules: EligibilityRule[] }) {
-  const visibleRules = rules.filter((r) => r.rule_type !== 'fipe_range');
+  const rulePriority: Record<string, number> = {
+    regiao: 1, tipo_uso: 2, combustivel: 3, tipo_placa: 4, ano_range: 5, marca_modelo: 6
+  };
+  const visibleRules = rules
+    .filter((r) => r.rule_type !== 'fipe_range')
+    .sort((a, b) => (rulePriority[a.rule_type] || 99) - (rulePriority[b.rule_type] || 99));
 
   // Fetch region names for region rules
   const regionIds = useMemo(() => {
