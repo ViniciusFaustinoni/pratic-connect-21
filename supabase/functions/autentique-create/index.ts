@@ -127,7 +127,21 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
 
   // 5. Assinatura será feita via Autentique (rubrica + assinatura digital) — sem bloco visual
   
-  // 6. Montar HTML completo
+  // 6. Injetar coberturas/benefícios se o template não os continha
+  let coberturasInjetadasHTML = '';
+  const jaTemCoberturas = conteudoHTML.includes('COBERTURAS E BENEF') || 
+    conteudoHTML.includes('plan-details') ||
+    conteudoHTML.includes('tabela_coberturas') ||
+    conteudoHTML.includes('tabela_completa');
+  if (!jaTemCoberturas) {
+    const { gerarSecaoCoberturasInjetavel } = await import("../_shared/template-utils.ts");
+    coberturasInjetadasHTML = gerarSecaoCoberturasInjetavel(dados);
+    if (coberturasInjetadasHTML) {
+      console.log('[autentique-create] Seção de coberturas/benefícios injetada automaticamente');
+    }
+  }
+
+  // 7. Montar HTML completo
   return `
 <!DOCTYPE html>
 <html lang="pt-BR">
@@ -140,6 +154,7 @@ async function gerarHTMLDoTemplate(supabase: any, templateConteudo: string, dado
   <div class="page">
     ${generateHeader(dados)}
     ${conteudoHTML}
+    ${coberturasInjetadasHTML}
     ${aditivosHTML}
     ${rastreadorHTML}
     ${indicadorHTML}
