@@ -1,32 +1,37 @@
 
 
-## Plano: Botão "Gerar Link" em vez de bloquear a página
+## Plano: Adicionar submenu "Logs" na Gestão Comercial
 
-### Problema
-A abordagem anterior de manter a tela em loading até o link chegar faz com que a página não abra. O sistema fica preso no spinner de "Preparando assinatura digital...".
+### O que será feito
 
-### Nova abordagem
-Mostrar sempre a tela de `aguardando_assinatura` (com informações do contrato, instruções, etc.), mas:
-- **Sem link**: mostrar um botão "Gerar Link" no lugar dos botões "Assinar Contrato Agora" e "Copiar Link"
-- **Com link**: mostrar os botões normais de assinatura
+Adicionar um novo grupo **"Logs"** no menu lateral da Gestão Comercial com dois sub-itens:
+1. **Log do Sistema** — tudo que acontece no sistema (logins, criações, edições, exclusões, etc.) usando a tabela `logs_auditoria`
+2. **Log de Requisições** — logs de todas as APIs/edge functions do sistema usando a tabela `auth_logs` + Supabase analytics
 
-### Alteração em `EtapaAssinaturaContrato.tsx`
+### Alterações
 
-**1. Mudar estado `enviando_autentique` para ir direto a `aguardando_assinatura`**
-- Na função `enviarParaAutentique` (linha 258), quando o link não é retornado imediatamente, setar `setEtapaInterna('aguardando_assinatura')` em vez de ficar em `enviando_autentique`
-- O polling de 3s já existente (linha 342) continuará buscando o link em background
+**1. `src/components/gestao-comercial/TabNavigation.tsx`**
+- Adicionar grupo "Logs" com ícone `ScrollText` e dois itens:
+  - `{ label: 'Log do Sistema', shortLabel: 'Sistema', icon: Activity, description: 'Ações de usuários no sistema' }`
+  - `{ label: 'Log de Requisições', shortLabel: 'Requisições', icon: Globe, description: 'Chamadas de APIs e funções' }`
 
-**2. Ajustar o render do estado `aguardando_assinatura` (linhas 729-750)**
-- Envolver os botões "Assinar Contrato Agora" e "Copiar Link" em condição `{linkAssinatura ? (...botões...) : (...botão Gerar Link...)}`
-- O botão "Gerar Link" chamará a mesma lógica de polling manual (buscar `autentique_url` do contrato) e, se não encontrar, invocar `autentique-create` novamente
-- Mostrar spinner no botão enquanto busca
+**2. `src/pages/diretoria/GestaoComercial.tsx`**
+- Adicionar banners para index 8 e 9
+- Importar e renderizar os dois novos componentes nos índices correspondentes
 
-**3. Remover o bloco `enviando_autentique` do render de loading (linha 557)**
-- Manter apenas `verificando` e `gerando_contrato` como estados de loading (spinner fullscreen)
-- `enviando_autentique` não precisa mais de render próprio pois transiciona direto para `aguardando_assinatura`
+**3. Criar `src/components/gestao-comercial/LogSistemaTab.tsx`**
+- Consulta à tabela `logs_auditoria` com filtros por módulo, ação, usuário e período
+- Lista estilizada com avatar do usuário, badge de ação colorido, descrição, módulo, data/hora
+- Filtros: busca por nome/descrição, select de módulo, select de ação, date range
+- Paginação ou scroll infinito (limit 200)
+
+**4. Criar `src/components/gestao-comercial/LogRequisicoesTab.tsx`**
+- Consulta à tabela `auth_logs` (já usada no Logs.tsx existente em configurações)
+- Mostrar email, ação, IP, navegador, data/hora, metadata
+- Filtros: busca por email, tipo de ação
+- Reaproveitar a mesma estrutura visual do `Logs.tsx` existente, adaptada ao contexto
 
 ### Resultado
-- A página sempre abre mostrando as instruções e informações do contrato
-- Se o link não estiver pronto, aparece o botão "Gerar Link" para o usuário clicar
-- Quando o link chega (via polling automático ou clique manual), os botões de assinatura aparecem automaticamente
+- Menu Gestão Comercial terá 5 grupos: Produtos, Financeiro, Operação, Cadastros e Logs
+- Diretores terão visibilidade completa de auditoria e requisições direto na Gestão Comercial
 
