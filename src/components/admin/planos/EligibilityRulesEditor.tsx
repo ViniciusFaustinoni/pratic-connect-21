@@ -277,15 +277,15 @@ function AddRuleDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Adicionar Regra de Elegibilidade</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Regra de Elegibilidade' : 'Adicionar Regra de Elegibilidade'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Tipo de regra */}
           <div className="space-y-2">
             <Label>Tipo de Regra</Label>
-            <Select value={ruleType} onValueChange={(v) => { setRuleType(v as RuleType); setConfig({}); }}>
-              <SelectTrigger>
+            <Select value={ruleType} onValueChange={(v) => { setRuleType(v as RuleType); setConfig({}); }} disabled={isEditing}>
+              <SelectTrigger className={isEditing ? 'opacity-60' : ''}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
