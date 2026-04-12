@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import { Plus, Trash2, Shield, AlertTriangle } from 'lucide-react';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -70,6 +70,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
   const deleteRule = useDeleteRule();
 
   const [dialogOpen, setDialogOpen] = useState(false);
+  const [editingRule, setEditingRule] = useState<EligibilityRule | null>(null);
 
   if (!entityId) {
     return (
@@ -85,6 +86,16 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
     }
   };
 
+  const handleEdit = (rule: EligibilityRule) => {
+    setEditingRule(rule);
+    setDialogOpen(true);
+  };
+
+  const handleDialogClose = (open: boolean) => {
+    setDialogOpen(open);
+    if (!open) setEditingRule(null);
+  };
+
   return (
     <div className="space-y-3">
       <div className="flex items-center justify-between">
@@ -92,7 +103,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
           <Shield className="h-4 w-4 text-muted-foreground" />
           <Label className="text-sm font-semibold">Regras de Elegibilidade</Label>
         </div>
-        <Button type="button" size="sm" variant="outline" onClick={() => setDialogOpen(true)}>
+        <Button type="button" size="sm" variant="outline" onClick={() => { setEditingRule(null); setDialogOpen(true); }}>
           <Plus className="h-3 w-3 mr-1" /> Adicionar
         </Button>
       </div>
@@ -106,17 +117,18 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (
-            <RuleCard key={rule.id} rule={rule} onDelete={handleDelete} />
+            <RuleCard key={rule.id} rule={rule} onDelete={handleDelete} onEdit={handleEdit} />
           ))}
         </div>
       )}
 
       <AddRuleDialog
         open={dialogOpen}
-        onOpenChange={setDialogOpen}
+        onOpenChange={handleDialogClose}
         entityType={entityType}
         entityId={entityId}
         onSave={saveRule}
+        editingRule={editingRule}
       />
     </div>
   );
@@ -126,7 +138,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
 // Rule Card
 // ============================================
 
-function RuleCard({ rule, onDelete }: { rule: EligibilityRule; onDelete: (id: string) => void }) {
+function RuleCard({ rule, onDelete, onEdit }: { rule: EligibilityRule; onDelete: (id: string) => void; onEdit: (rule: EligibilityRule) => void }) {
   const cfg = rule.rule_config;
   const icon = RULE_TYPE_ICONS[rule.rule_type] || '📋';
   const label = RULE_TYPE_LABELS[rule.rule_type] || rule.rule_type;
@@ -171,7 +183,10 @@ function RuleCard({ rule, onDelete }: { rule: EligibilityRule; onDelete: (id: st
   }
 
   return (
-    <div className="flex items-center justify-between rounded-lg border p-2.5 text-sm">
+    <div
+      className="flex items-center justify-between rounded-lg border p-2.5 text-sm cursor-pointer hover:bg-muted/50 transition-colors"
+      onClick={() => onEdit(rule)}
+    >
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <span>{icon}</span>
         <div className="min-w-0">
@@ -184,7 +199,7 @@ function RuleCard({ rule, onDelete }: { rule: EligibilityRule; onDelete: (id: st
           )}
         </div>
       </div>
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => onDelete(rule.id)}>
+      <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); onDelete(rule.id); }}>
         <Trash2 className="h-3.5 w-3.5 text-destructive" />
       </Button>
     </div>
@@ -201,16 +216,32 @@ function AddRuleDialog({
   entityType,
   entityId,
   onSave,
+  editingRule,
 }: {
   open: boolean;
   onOpenChange: (o: boolean) => void;
   entityType: EntityType;
   entityId: string;
   onSave: ReturnType<typeof useSaveRule>;
+  editingRule?: EligibilityRule | null;
 }) {
   const [ruleType, setRuleType] = useState<RuleType>('fipe_range');
   const [ruleMode, setRuleMode] = useState<RuleMode>('include');
   const [config, setConfig] = useState<Record<string, any>>({});
+
+  const isEditing = !!editingRule;
+
+  useEffect(() => {
+    if (editingRule) {
+      setRuleType(editingRule.rule_type);
+      setRuleMode(editingRule.rule_mode);
+      setConfig({ ...editingRule.rule_config });
+    } else {
+      setRuleType('fipe_range');
+      setRuleMode('include');
+      setConfig({});
+    }
+  }, [editingRule]);
 
   // Data from CRUD
   const { data: categoriasVeiculo = [] } = useCategoriasVeiculoPlano();
@@ -246,15 +277,15 @@ function AddRuleDialog({
     <Dialog open={open} onOpenChange={onOpenChange}>
       <DialogContent className="max-w-lg">
         <DialogHeader>
-          <DialogTitle>Adicionar Regra de Elegibilidade</DialogTitle>
+          <DialogTitle>{isEditing ? 'Editar Regra de Elegibilidade' : 'Adicionar Regra de Elegibilidade'}</DialogTitle>
         </DialogHeader>
 
         <div className="space-y-4">
           {/* Tipo de regra */}
           <div className="space-y-2">
             <Label>Tipo de Regra</Label>
-            <Select value={ruleType} onValueChange={(v) => { setRuleType(v as RuleType); setConfig({}); }}>
-              <SelectTrigger>
+            <Select value={ruleType} onValueChange={(v) => { setRuleType(v as RuleType); setConfig({}); }} disabled={isEditing}>
+              <SelectTrigger className={isEditing ? 'opacity-60' : ''}>
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -424,7 +455,7 @@ function AddRuleDialog({
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="button" onClick={handleSave} disabled={onSave.isPending}>
-              Salvar Regra
+              {isEditing ? 'Salvar Alterações' : 'Salvar Regra'}
             </Button>
           </div>
         </div>
