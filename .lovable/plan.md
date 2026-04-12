@@ -1,44 +1,30 @@
 
 
-## Plano: Padronizar exibição de regiões nos badges de elegibilidade
+## Plano: Padronizar ordem dos badges de elegibilidade
 
 ### Problema
-Existem dois formatos de regras de região no banco:
-- **Novo** (809 regras): `rule_config.values: ["uuid"]` → resolve para "Rio de Janeiro - Capital e Metropolitana"
-- **Legado** (60 regras): `rule_config.regioes: ["RJ"]` → mostra "RJ" direto (não resolve nome)
+Os badges de elegibilidade (Região, Tipo de Uso, Combustível, etc.) aparecem na ordem em que vêm do banco de dados, que pode variar entre coberturas e benefícios, causando inconsistência visual.
 
-Isso causa inconsistência visual nos badges.
+### Solução
+Ordenar as regras visíveis no componente `RuleBadges` com uma ordem fixa antes de renderizar.
 
-### Solução: Migração de dados + fallback no código
+### Alteração em `src/components/gestao-comercial/LinhasPlanos.tsx`
 
-**1. Migração SQL** — converter as 60 regras legadas para o formato novo
-- Mapear `"RJ"` → UUID `6f99685d-52b6-43e4-9010-dfc03338886a` (Rio de Janeiro - Capital e Metropolitana)
-- Mapear `"SP"` → UUID `b507f9c7-d7c0-4613-8a94-4c1e1278b3f2` (São Paulo - Capital e Metropolitana)
-- Atualizar `rule_config` de `{"regioes": ["RJ"]}` para `{"values": ["6f99685d-..."]}`
-
-**2. Fallback no `RuleBadges`** (`LinhasPlanos.tsx`)
-- Na resolução de badges de região, se o valor não for UUID (não encontrado no `regioesMap`), tentar mapear strings conhecidas ("RJ" → buscar na tabela `regioes` por nome parcial)
-- Isso garante que mesmo se surgirem novas regras legadas, o badge exibirá o nome completo
-
-### Detalhes técnicos
+No `RuleBadges`, após filtrar as regras visíveis (linha 112), aplicar um sort baseado em uma ordem predefinida:
 
 ```text
--- Migração (60 registros)
-UPDATE entity_eligibility_rules
-SET rule_config = jsonb_build_object('values', ARRAY[
-  CASE 
-    WHEN rule_config->'regioes' @> '["RJ"]' THEN '6f99685d-52b6-43e4-9010-dfc03338886a'
-    WHEN rule_config->'regioes' @> '["SP"]' THEN 'b507f9c7-d7c0-4613-8a94-4c1e1278b3f2'
-  END
-])
-WHERE rule_type = 'regiao' 
-  AND rule_config ? 'regioes'
-  AND is_active = true;
+Ordem fixa:
+1. regiao
+2. tipo_uso
+3. combustivel
+4. tipo_placa
+5. ano_range
+6. marca_modelo
+7. (qualquer outro tipo)
 ```
 
-No `extractRuleValues`, a prioridade de `values` sobre `regioes` já existe — após migração, todos usarão `values`.
+Isso é uma mudança de ~5 linhas — adicionar um array de prioridade e um `.sort()` no `visibleRules`.
 
 ### Resultado
-- Todos os badges mostrarão "Rio de Janeiro - Capital e Metropolitana" ou "São Paulo - Capital e Metropolitana"
-- Sem mais inconsistência "RJ" vs nome completo
+Todos os badges de coberturas e benefícios seguirão sempre a mesma ordem: Região → Tipo de Uso → Combustível → demais regras.
 
