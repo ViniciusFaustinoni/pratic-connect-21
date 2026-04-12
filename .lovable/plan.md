@@ -1,34 +1,88 @@
 
 
-## Plano: Garantir coberturas e benefícios no documento Autentique
+## Plano: Preview completo do documento final no editor de template
 
 ### Problema
-O template "Proposta de Filiação" (AF1) armazenado no banco **não contém** as variáveis `{{plano.tabela_coberturas}}`, `{{plano.tabela_beneficios}}` ou `{{plano.tabela_completa}}`. O sistema já monta os dados (`coberturas_detalhadas`, `beneficios_detalhados`) e já tem as funções de renderização (`gerarTabelaCoberturasHTML`, `gerarTabelaBeneficiosHTML`), mas o template do banco simplesmente não usa essas variáveis — logo, coberturas e benefícios nunca aparecem no PDF enviado ao Autentique quando usa o template do banco.
+O editor de template mostra apenas o campo `conteudo` do template (~14k caracteres), mas o documento final enviado ao Autentique tem ~30 páginas porque a Edge Function monta dinamicamente:
+- Cabeçalho da empresa (`generateHeader`)
+- Conteúdo do template (o que o editor mostra)
+- Tabela de coberturas e benefícios (injetada automaticamente)
+- Aditivos dinâmicos (baseados no veículo)
+- Seção de rastreador (quando obrigatório)
+- Seção de indicador
+- Templates anexos (Regulamento, Manual 24h, etc.)
+- Rodapé
 
-O template hardcoded (fallback) tem a seção 3 com coberturas e benefícios, mas esse só é usado quando não existe template no banco.
+O usuário não consegue visualizar ou editar a estrutura completa do documento.
 
 ### Solução
-Injetar automaticamente a seção de coberturas e benefícios no HTML gerado, **após** a substituição de variáveis, quando o template do banco não contiver essas variáveis. Isso garante que SEMPRE apareçam, independentemente do conteúdo do template.
+Adicionar um botão **"Preview Completo"** no editor de template que simula a montagem completa do documento, mostrando todos os blocos que serão incluídos no PDF final.
 
 ### Alterações
 
-**1. `supabase/functions/_shared/template-utils.ts`**
-- Criar função `gerarSecaoCoberturasInjetavel(dados)` que gera um bloco HTML autossuficiente com:
-  - Título "COBERTURAS E BENEFÍCIOS DO PLANO"
-  - Lista de coberturas detalhadas (nome, descrição, valor personalizado)
-  - Lista de benefícios detalhados (nome, descrição, valor personalizado)
-  - Reutiliza o estilo existente (`.plan-details`, `.cobertura-item`)
-- Exportar essa função
+**1. Nova Edge Function `preview-termo-completo`**
+- Recebe o `template_id` (ou o HTML do template sendo editado)
+- Reutiliza a mesma lógica de montagem do `autentique-create`:
+  - `generateHeader`, `generateFooter`, `generateStyles`
+  - Dados fictícios/exemplo para substituição de variáveis
+  - Busca coberturas/benefícios de um plano exemplo
+  - Gera aditivos com veículo exemplo
+  - Busca templates anexos (regulamento, manual)
+- Retorna o HTML completo montado
+- Não envia ao Autentique — apenas retorna para preview
 
-**2. `supabase/functions/autentique-create/index.ts`** (~linha 500)
-- Após gerar `conteudoHTML` via `substituirVariaveis`, verificar se o conteúdo resultante contém coberturas renderizadas
-- Se `templateData.plano.coberturas_detalhadas` ou `beneficios_detalhados` existem e o HTML não contém a seção, injetar `gerarSecaoCoberturasInjetavel(templateData)` antes dos aditivos
+**2. Atualizar `src/components/documentos/TemplateEditor.tsx`**
+- Adicionar uma 3ª aba: **"Preview Completo"** (além de Editor e Preview)
+- Ao clicar, chama a Edge Function com o conteúdo atual do editor
+- Renderiza o HTML retornado num iframe ou div com estilo A4
+- Mostra indicadores visuais dos blocos injetados automaticamente (coberturas, aditivos, anexos)
+- Badge mostrando estimativa de páginas
 
-**3. `supabase/functions/autentique-create-by-token/index.ts`** (~linha 493)
-- Mesma lógica: injetar a seção de coberturas/benefícios após o `conteudoHTML` e antes dos `aditivosHTML`
+**3. Alternativa mais leve (recomendada)**
+Em vez de criar uma Edge Function, montar o preview no frontend:
+- Após o conteúdo do template, adicionar seções placeholder sinalizadas:
+  - `📋 COBERTURAS E BENEFÍCIOS DO PLANO` — com tabela exemplo
+  - `📎 ADITIVOS DINÂMICOS` — lista dos aditivos ativos no sistema
+  - `📄 TEMPLATES ANEXOS` — lista dos templates com `anexar_proposta=true`
+- Cada seção com borda tracejada e badge "Gerado automaticamente"
+- Buscar do banco: templates anexos ativos, aditivos ativos, coberturas/benefícios de exemplo
 
-### Resultado
-- Coberturas e benefícios do plano escolhido aparecerão **sempre** no documento enviado ao Autentique
-- Se o usuário adicionar `{{plano.tabela_completa}}` manualmente no template do banco, a injeção automática não duplicará (verificação prévia)
-- O template hardcoded (fallback) continua funcionando normalmente com a seção 3 já existente
+### Detalhes técnicos
+
+**Arquivo principal**: `src/components/documentos/TemplateEditor.tsx`
+- Nova aba "Documento Completo" no TabsList
+- Hook para buscar templates anexos: `supabase.from('documento_templates').select('nome, codigo').eq('anexar_proposta', true).eq('ativo', true)`
+- Hook para buscar aditivos ativos: similar query
+- Renderizar seções placeholder após o `previewConteudo`
+
+**Estrutura do preview completo**:
+```text
+┌──────────────────────────┐
+│    CABEÇALHO EMPRESA     │
+├──────────────────────────┤
+│                          │
+│  Conteúdo do Template    │
+│  (com variáveis dummy)   │
+│                          │
+├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+│ ⚡ COBERTURAS E BENEFÍCIOS│ ← "Injetado automaticamente"
+│  [tabela exemplo]        │
+├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+│ ⚡ ADITIVOS DINÂMICOS     │ ← "Baseado no veículo"
+│  • Aditivo Rastreador    │
+│  • Aditivo Vidros        │
+├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+│ 📎 REGULAMENTO GERAL     │ ← "Anexo automático"
+├─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ─ ┤
+│ 📎 MANUAL 24H            │ ← "Anexo automático"
+├──────────────────────────┤
+│      RODAPÉ              │
+└──────────────────────────┘
+```
+
+### Escopo
+- 1 arquivo modificado: `TemplateEditor.tsx`
+- Queries simples ao Supabase para listar anexos/aditivos ativos
+- Sem nova Edge Function (abordagem frontend)
+- Sem alteração na lógica de geração real do documento
 
