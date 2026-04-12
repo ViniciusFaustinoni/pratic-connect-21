@@ -69,6 +69,19 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
   const saveRule = useSaveRule();
   const deleteRule = useDeleteRule();
 
+  // Lookup data for resolving IDs to names in RuleCards
+  const { data: regioesData = [] } = useRegioes();
+  const { data: tiposUsoData = [] } = useConfiguracaoJson<{ value: string; label: string }[]>('tipos_uso', []);
+  const { data: combustiveisData = [] } = useCombustiveis();
+  const { data: tiposPlacaData = [] } = useConfiguracaoJson<{ value: string; label: string }[]>('tipos_placa', []);
+
+  const lookups = {
+    regioes: Object.fromEntries(regioesData.map(r => [r.id, r.nome])),
+    tiposUso: Object.fromEntries(tiposUsoData.map(t => [t.value, t.label])),
+    combustiveis: Object.fromEntries(combustiveisData.map(c => [c.value, c.label])),
+    tiposPlaca: Object.fromEntries(tiposPlacaData.map(p => [p.value, p.label])),
+  };
+
   const [dialogOpen, setDialogOpen] = useState(false);
   const [editingRule, setEditingRule] = useState<EligibilityRule | null>(null);
 
@@ -117,7 +130,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
       ) : (
         <div className="space-y-2">
           {rules.map((rule) => (
-            <RuleCard key={rule.id} rule={rule} onDelete={handleDelete} onEdit={handleEdit} />
+            <RuleCard key={rule.id} rule={rule} onDelete={handleDelete} onEdit={handleEdit} lookups={lookups} />
           ))}
         </div>
       )}
@@ -138,10 +151,20 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
 // Rule Card
 // ============================================
 
-function RuleCard({ rule, onDelete, onEdit }: { rule: EligibilityRule; onDelete: (id: string) => void; onEdit: (rule: EligibilityRule) => void }) {
+type Lookups = {
+  regioes: Record<string, string>;
+  tiposUso: Record<string, string>;
+  combustiveis: Record<string, string>;
+  tiposPlaca: Record<string, string>;
+};
+
+function RuleCard({ rule, onDelete, onEdit, lookups }: { rule: EligibilityRule; onDelete: (id: string) => void; onEdit: (rule: EligibilityRule) => void; lookups: Lookups }) {
   const cfg = rule.rule_config;
   const icon = RULE_TYPE_ICONS[rule.rule_type] || '📋';
   const label = RULE_TYPE_LABELS[rule.rule_type] || rule.rule_type;
+
+  const resolveNames = (values: string[], map: Record<string, string>) =>
+    values.map(v => map[v] || v).join(', ');
 
   const descParts: string[] = [];
   switch (rule.rule_type) {
@@ -156,7 +179,7 @@ function RuleCard({ rule, onDelete, onEdit }: { rule: EligibilityRule; onDelete:
       descParts.push((cfg.categorias || []).join(', '));
       break;
     case 'regiao':
-      descParts.push((cfg.values || cfg.regioes || []).join(', '));
+      descParts.push(resolveNames(cfg.values || cfg.regioes || [], lookups.regioes));
       break;
     case 'marca_modelo':
       if (cfg.marcas && Array.isArray(cfg.marcas)) {
@@ -175,10 +198,13 @@ function RuleCard({ rule, onDelete, onEdit }: { rule: EligibilityRule; onDelete:
       }
       break;
     case 'tipo_uso':
-      descParts.push((cfg.values || cfg.tipos || []).join(', '));
+      descParts.push(resolveNames(cfg.values || cfg.tipos || [], lookups.tiposUso));
       break;
     case 'combustivel':
-      descParts.push((cfg.values || cfg.combustiveis || []).join(', '));
+      descParts.push(resolveNames(cfg.values || cfg.combustiveis || [], lookups.combustiveis));
+      break;
+    case 'tipo_placa':
+      descParts.push(resolveNames(cfg.values || [], lookups.tiposPlaca));
       break;
   }
 
