@@ -574,7 +574,7 @@ export function LinhasPlanos() {
                     <div className="px-2 pb-2">
                       {linha.plans.length > 0 ? (
                         <div className="divide-y divide-border/60">
-                          {linha.plans.map((plano: any) => {
+                          {linha.plans.slice().sort((a: any, b: any) => a.nome.localeCompare(b.nome, 'pt-BR')).map((plano: any) => {
                             const badgeTone = plano.badge_color ? BADGE_TONES[plano.badge_color] : null;
                             const isExpanded = expandedPlanId === plano.id;
 
