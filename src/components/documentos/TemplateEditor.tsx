@@ -11,7 +11,7 @@ import Placeholder from '@tiptap/extension-placeholder';
 import { Tabs, TabsContent, TabsList, TabsTrigger } from '@/components/ui/tabs';
 import { ScrollArea } from '@/components/ui/scroll-area';
 import { Badge } from '@/components/ui/badge';
-import { Code, Eye, FileText, Info, PenTool } from 'lucide-react';
+import { Code, Eye, FileText, Info, PenTool, Layers, Zap, Paperclip, BookOpen } from 'lucide-react';
 import { Switch } from '@/components/ui/switch';
 import { Label } from '@/components/ui/label';
 import { EditorToolbar } from './tiptap/EditorToolbar';
@@ -78,6 +78,39 @@ function useEmpresaConfig() {
   });
 }
 
+// Fetch templates that are auto-annexed to proposals
+function useTemplatesAnexos() {
+  return useQuery({
+    queryKey: ['templates-anexos-preview'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('documento_templates')
+        .select('nome, codigo, conteudo')
+        .eq('anexar_proposta', true)
+        .eq('ativo', true)
+        .order('ordem_anexo', { ascending: true });
+      return (data || []) as { nome: string; codigo: string; conteudo: string }[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
+// Fetch active aditivos
+function useAditivosAtivos() {
+  return useQuery({
+    queryKey: ['aditivos-ativos-preview'],
+    queryFn: async () => {
+      const { data } = await supabase
+        .from('termos_aditivos')
+        .select('nome, descricao, conteudo_html')
+        .eq('ativo', true)
+        .order('ordem', { ascending: true });
+      return (data || []) as { nome: string; descricao: string | null; conteudo_html: string | null }[];
+    },
+    staleTime: 5 * 60 * 1000,
+  });
+}
+
 // Ref holder for external access to the editor instance
 let _globalEditorRef: Editor | null = null;
 
@@ -85,11 +118,36 @@ export function getTemplateEditor(): Editor | null {
   return _globalEditorRef;
 }
 
+// Auto-injected section wrapper component
+function SecaoInjetada({ icone, titulo, subtitulo, children }: {
+  icone: React.ReactNode;
+  titulo: string;
+  subtitulo: string;
+  children: React.ReactNode;
+}) {
+  return (
+    <div className="mx-12 my-6 border-2 border-dashed border-amber-400/60 rounded-lg overflow-hidden">
+      <div className="flex items-center gap-2 px-4 py-2 bg-amber-50 border-b border-amber-200">
+        {icone}
+        <span className="font-semibold text-amber-800 text-sm">{titulo}</span>
+        <Badge variant="outline" className="ml-auto text-[10px] bg-amber-100 text-amber-700 border-amber-300">
+          {subtitulo}
+        </Badge>
+      </div>
+      <div className="p-4 bg-amber-50/30">
+        {children}
+      </div>
+    </div>
+  );
+}
+
 export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, rodapeHtml }: TemplateEditorProps) {
   const [tab, setTab] = useState<string>('editor');
   const isExternalUpdate = useRef(false);
   const [showSignatureOverlay, setShowSignatureOverlay] = useState(false);
   const { data: empresaConfig } = useEmpresaConfig();
+  const { data: templatesAnexos } = useTemplatesAnexos();
+  const { data: aditivosAtivos } = useAditivosAtivos();
 
   const editor = useEditor({
     extensions: [
@@ -196,6 +254,58 @@ export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, ro
   const nomeEmpresa = empresaConfig?.nome_empresa || 'Empresa';
   const logoUrl = empresaConfig?.logo_url;
 
+  // Estimate total pages for full preview
+  const estimarPaginas = () => {
+    let totalChars = plainText.length;
+    if (aditivosAtivos?.length) totalChars += aditivosAtivos.length * 3000;
+    if (templatesAnexos?.length) {
+      templatesAnexos.forEach(t => { totalChars += (t.conteudo?.length || 5000); });
+    }
+    totalChars += 4000; // coberturas + cabeçalho/rodapé
+    return Math.max(1, Math.ceil(totalChars / 2000));
+  };
+
+  const renderCabecalho = () => (
+    <div
+      className="px-12 pt-10 pb-4 border-b-2"
+      style={{ borderBottomColor: corPrimaria }}
+    >
+      {cabecalhoHtml ? (
+        <div
+          className="prose prose-sm max-w-none"
+          dangerouslySetInnerHTML={{ __html: substituirVariaveisPreview(cabecalhoHtml) }}
+        />
+      ) : (
+        <div className="flex items-center gap-4">
+          {logoUrl ? (
+            <img src={logoUrl} alt={nomeEmpresa} className="h-14 w-auto object-contain" crossOrigin="anonymous" />
+          ) : (
+            <div className="h-14 w-14 rounded-lg flex items-center justify-center text-white font-bold text-xl" style={{ backgroundColor: corPrimaria }}>
+              {nomeEmpresa.charAt(0)}
+            </div>
+          )}
+          <div>
+            <h2 className="text-lg font-bold" style={{ color: corPrimaria }}>{nomeEmpresa}</h2>
+            <p className="text-xs text-gray-500">Documento gerado automaticamente</p>
+          </div>
+        </div>
+      )}
+    </div>
+  );
+
+  const renderRodape = () => (
+    <div className="px-12 pb-8 pt-4 mt-auto border-t text-xs text-gray-500" style={{ borderTopColor: corPrimaria + '40' }}>
+      {rodapeHtml ? (
+        <div className="prose prose-xs max-w-none" dangerouslySetInnerHTML={{ __html: substituirVariaveisPreview(rodapeHtml) }} />
+      ) : (
+        <div className="flex items-center justify-between">
+          <span>{nomeEmpresa}</span>
+          <span>Página 1 de {estimarPaginas()}</span>
+        </div>
+      )}
+    </div>
+  );
+
   return (
     <div className="border rounded-lg overflow-hidden">
       <Tabs value={tab} onValueChange={setTab} className="w-full">
@@ -208,6 +318,10 @@ export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, ro
             <TabsTrigger value="preview" className="gap-2 data-[state=active]:bg-background">
               <Eye className="h-4 w-4" />
               Preview
+            </TabsTrigger>
+            <TabsTrigger value="completo" className="gap-2 data-[state=active]:bg-background">
+              <Layers className="h-4 w-4" />
+              Documento Completo
             </TabsTrigger>
           </TabsList>
 
@@ -287,70 +401,147 @@ export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, ro
                     </div>
                   </div>
                 )}
-                {/* === Cabeçalho === */}
-                <div
-                  className="px-12 pt-10 pb-4 border-b-2"
-                  style={{ borderBottomColor: corPrimaria }}
-                >
-                  {cabecalhoHtml ? (
-                    <div
-                      className="prose prose-sm max-w-none"
-                      dangerouslySetInnerHTML={{ __html: substituirVariaveisPreview(cabecalhoHtml) }}
-                    />
-                  ) : (
-                    <div className="flex items-center gap-4">
-                      {logoUrl ? (
-                        <img
-                          src={logoUrl}
-                          alt={nomeEmpresa}
-                          className="h-14 w-auto object-contain"
-                          crossOrigin="anonymous"
-                        />
-                      ) : (
-                        <div
-                          className="h-14 w-14 rounded-lg flex items-center justify-center text-white font-bold text-xl"
-                          style={{ backgroundColor: corPrimaria }}
-                        >
-                          {nomeEmpresa.charAt(0)}
-                        </div>
-                      )}
-                      <div>
-                        <h2
-                          className="text-lg font-bold"
-                          style={{ color: corPrimaria }}
-                        >
-                          {nomeEmpresa}
-                        </h2>
-                        <p className="text-xs text-gray-500">Documento gerado automaticamente</p>
-                      </div>
-                    </div>
-                  )}
-                </div>
-
-                {/* === Conteúdo === */}
+                {renderCabecalho()}
                 <div
                   className="px-12 py-8 prose prose-sm max-w-none leading-relaxed"
                   style={{ fontSize: '12pt', lineHeight: '1.8' }}
                   dangerouslySetInnerHTML={{ __html: previewConteudo }}
                 />
+                {renderRodape()}
+              </div>
+            </div>
+          </ScrollArea>
+        </TabsContent>
 
-                {/* === Rodapé === */}
-                <div
-                  className="px-12 pb-8 pt-4 mt-auto border-t text-xs text-gray-500"
-                  style={{ borderTopColor: corPrimaria + '40' }}
-                >
-                  {rodapeHtml ? (
-                    <div
-                      className="prose prose-xs max-w-none"
-                      dangerouslySetInnerHTML={{ __html: substituirVariaveisPreview(rodapeHtml) }}
-                    />
-                  ) : (
-                    <div className="flex items-center justify-between">
-                      <span>{nomeEmpresa}</span>
-                      <span>Página 1 de 1</span>
-                    </div>
-                  )}
+        {/* === DOCUMENTO COMPLETO === */}
+        <TabsContent value="completo" className="m-0">
+          <ScrollArea className="h-[600px] bg-muted/30">
+            <div className="flex items-center justify-between gap-2 py-2 px-4 text-xs text-muted-foreground bg-muted/50 border-b">
+              <div className="flex items-center gap-2">
+                <Layers className="h-3.5 w-3.5" />
+                Estrutura completa do documento enviado ao Autentique
+              </div>
+              <div className="flex items-center gap-2">
+                <Badge variant="secondary" className="text-[10px]">
+                  ~{estimarPaginas()} páginas estimadas
+                </Badge>
+                <Badge variant="outline" className="text-[10px]">
+                  {1 + (aditivosAtivos?.length || 0) + (templatesAnexos?.length || 0) + 1} seções
+                </Badge>
+              </div>
+            </div>
+
+            <div className="flex justify-center py-6 px-4">
+              <div
+                className="bg-white text-black shadow-xl border rounded-sm w-full"
+                style={{ maxWidth: '210mm', minHeight: '297mm' }}
+              >
+                {/* Cabeçalho */}
+                {renderCabecalho()}
+
+                {/* Conteúdo do template editável */}
+                <div className="mx-12 my-4">
+                  <Badge variant="outline" className="text-[10px] mb-2 bg-blue-50 text-blue-700 border-blue-200">
+                    <Code className="h-3 w-3 mr-1" />
+                    Conteúdo editável do template
+                  </Badge>
                 </div>
+                <div
+                  className="px-12 py-4 prose prose-sm max-w-none leading-relaxed"
+                  style={{ fontSize: '12pt', lineHeight: '1.8' }}
+                  dangerouslySetInnerHTML={{ __html: previewConteudo }}
+                />
+
+                {/* Seção injetada: Coberturas e Benefícios */}
+                <SecaoInjetada
+                  icone={<Zap className="h-4 w-4 text-amber-600" />}
+                  titulo="COBERTURAS E BENEFÍCIOS DO PLANO"
+                  subtitulo="Injetado automaticamente"
+                >
+                  <div className="text-xs text-gray-600 space-y-2">
+                    <p className="font-medium text-gray-800">Esta seção é gerada automaticamente com base no plano escolhido pelo associado.</p>
+                    <div className="grid grid-cols-2 gap-4">
+                      <div>
+                        <p className="font-semibold text-gray-700 mb-1">Coberturas exemplo:</p>
+                        <ul className="list-disc list-inside space-y-0.5 text-gray-500">
+                          <li>Colisão — 100% FIPE</li>
+                          <li>Roubo/Furto — 100% FIPE</li>
+                          <li>Incêndio — 100% FIPE</li>
+                          <li>Fenômenos Naturais — 100% FIPE</li>
+                        </ul>
+                      </div>
+                      <div>
+                        <p className="font-semibold text-gray-700 mb-1">Benefícios exemplo:</p>
+                        <ul className="list-disc list-inside space-y-0.5 text-gray-500">
+                          <li>Assistência 24h</li>
+                          <li>Guincho até 200km</li>
+                          <li>Carro Reserva (7 dias)</li>
+                          <li>Vidros — R$ 2.000</li>
+                        </ul>
+                      </div>
+                    </div>
+                  </div>
+                </SecaoInjetada>
+
+                {/* Seção injetada: Aditivos Dinâmicos */}
+                <SecaoInjetada
+                  icone={<Zap className="h-4 w-4 text-amber-600" />}
+                  titulo="ADITIVOS DINÂMICOS"
+                  subtitulo="Baseado no veículo/plano"
+                >
+                  <div className="text-xs text-gray-600 space-y-2">
+                    <p className="font-medium text-gray-800">
+                      Aditivos são incluídos automaticamente conforme regras do veículo (0km, blindado, FIPE, rastreador, etc.)
+                    </p>
+                    {aditivosAtivos && aditivosAtivos.length > 0 ? (
+                      <div className="space-y-1.5">
+                        <p className="font-semibold text-gray-700">Aditivos ativos no sistema ({aditivosAtivos.length}):</p>
+                        {aditivosAtivos.map((a, i) => (
+                          <div key={i} className="flex items-start gap-2 pl-2 border-l-2 border-amber-300">
+                            <span className="font-medium text-gray-700">{a.nome}</span>
+                            {a.descricao && <span className="text-gray-400">— {a.descricao}</span>}
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 italic">Nenhum aditivo ativo cadastrado</p>
+                    )}
+                  </div>
+                </SecaoInjetada>
+
+                {/* Seção injetada: Templates Anexos */}
+                <SecaoInjetada
+                  icone={<Paperclip className="h-4 w-4 text-amber-600" />}
+                  titulo="TEMPLATES ANEXOS"
+                  subtitulo="Anexados automaticamente"
+                >
+                  <div className="text-xs text-gray-600 space-y-2">
+                    <p className="font-medium text-gray-800">
+                      Estes documentos são anexados ao final da proposta de filiação automaticamente.
+                    </p>
+                    {templatesAnexos && templatesAnexos.length > 0 ? (
+                      <div className="space-y-2">
+                        {templatesAnexos.map((t, i) => (
+                          <div key={i} className="flex items-center gap-2 p-2 rounded bg-white border border-amber-200">
+                            <BookOpen className="h-4 w-4 text-amber-500 shrink-0" />
+                            <div>
+                              <span className="font-medium text-gray-700">{t.nome}</span>
+                              <span className="text-gray-400 ml-2">({t.codigo})</span>
+                              <span className="text-gray-400 ml-2">
+                                ~{Math.ceil((t.conteudo?.length || 5000) / 2000)} pág.
+                              </span>
+                            </div>
+                          </div>
+                        ))}
+                      </div>
+                    ) : (
+                      <p className="text-gray-400 italic">Nenhum template anexo configurado</p>
+                    )}
+                  </div>
+                </SecaoInjetada>
+
+                {/* Rodapé */}
+                {renderRodape()}
               </div>
             </div>
           </ScrollArea>
@@ -359,7 +550,6 @@ export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, ro
     </div>
   );
 }
-
 // Export for external variable insertion (used by TemplateForm)
 export function useTemplateEditorInsert(_editorRef: any, _value: string, _onChange: (v: string) => void) {
   return (texto: string) => {
