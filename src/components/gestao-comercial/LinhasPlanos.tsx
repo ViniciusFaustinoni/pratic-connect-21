@@ -82,7 +82,6 @@ const RULE_BADGE_STYLES: Record<string, { bg: string; border: string; text: stri
   tipo_placa: { bg: '0 84% 60% / 0.14', border: '0 84% 60% / 0.32', text: '0 84% 72%' },
   categoria_veiculo: { bg: '142 71% 45% / 0.14', border: '142 71% 45% / 0.32', text: '142 71% 58%' },
   ano_range: { bg: '200 80% 50% / 0.14', border: '200 80% 50% / 0.32', text: '200 80% 65%' },
-  ano_range: { bg: '200 80% 50% / 0.14', border: '200 80% 50% / 0.32', text: '200 80% 65%' },
   marca_modelo: { bg: '330 70% 55% / 0.14', border: '330 70% 55% / 0.32', text: '330 70% 70%' },
 };
 
@@ -90,7 +89,7 @@ const RULE_LABELS: Record<string, Record<string, string>> = {
   tipo_uso: { particular: 'Passeio', aplicativo: 'APP', comercial: 'Comercial' },
   combustivel: { diesel: 'Diesel', flex: 'Flex', gasolina: 'Gasolina', etanol: 'Etanol', eletrico: 'Elétrico', hibrido: 'Híbrido' },
   tipo_placa: { mercosul: 'Mercosul', leilao: 'Leilão', chassi_remarcado: 'Chassi Remarcado', placa_vermelha: 'Placa Vermelha', taxi: 'Táxi', ex_taxi: 'Ex-Táxi', veiculo_que_ja_teve_ressarcimento_integral: 'Ressarc. Integral' },
-  categoria_especial: { taxi: 'Táxi', leilao: 'Leilão', chassi_remarcado: 'Chassi Remarcado' },
+  categoria_veiculo: { carro: 'Carro', moto: 'Moto', caminhao: 'Caminhão', van: 'Van' },
   categoria_veiculo: { carro: 'Carro', moto: 'Moto', caminhao: 'Caminhão', van: 'Van' },
 };
 
