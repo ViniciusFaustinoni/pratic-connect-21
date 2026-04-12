@@ -156,7 +156,7 @@ function RuleCard({ rule, onDelete, onEdit }: { rule: EligibilityRule; onDelete:
       descParts.push((cfg.categorias || []).join(', '));
       break;
     case 'regiao':
-      descParts.push((cfg.regioes || []).join(', '));
+      descParts.push((cfg.values || cfg.regioes || []).join(', '));
       break;
     case 'marca_modelo':
       if (cfg.marcas && Array.isArray(cfg.marcas)) {
@@ -175,10 +175,10 @@ function RuleCard({ rule, onDelete, onEdit }: { rule: EligibilityRule; onDelete:
       }
       break;
     case 'tipo_uso':
-      descParts.push((cfg.tipos || []).join(', '));
+      descParts.push((cfg.values || cfg.tipos || []).join(', '));
       break;
     case 'combustivel':
-      descParts.push((cfg.combustiveis || []).join(', '));
+      descParts.push((cfg.values || cfg.combustiveis || []).join(', '));
       break;
   }
 
@@ -381,8 +381,8 @@ function AddRuleDialog({
                 {regioes?.filter((r) => r.ativa).map((r) => (
                   <label key={r.id} className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
-                      checked={(config.regioes || []).includes(r.codigo)}
-                      onCheckedChange={() => toggleArrayItem('regioes', r.codigo)}
+                      checked={(config.values || []).includes(r.id)}
+                      onCheckedChange={() => toggleArrayItem('values', r.id)}
                     />
                     {r.nome}
                   </label>
@@ -408,8 +408,8 @@ function AddRuleDialog({
                 {tiposUso.map((t) => (
                   <label key={t.value} className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
-                      checked={(config.tipos || []).includes(t.value)}
-                      onCheckedChange={() => toggleArrayItem('tipos', t.value)}
+                      checked={(config.values || []).includes(t.value)}
+                      onCheckedChange={() => toggleArrayItem('values', t.value)}
                     />
                     {t.label}
                   </label>
@@ -425,8 +425,8 @@ function AddRuleDialog({
                 {combustiveis.map((c) => (
                   <label key={c.value} className="flex items-center gap-2 text-sm cursor-pointer">
                     <Checkbox
-                      checked={(config.combustiveis || []).includes(c.value)}
-                      onCheckedChange={() => toggleArrayItem('combustiveis', c.value)}
+                      checked={(config.values || []).includes(c.value)}
+                      onCheckedChange={() => toggleArrayItem('values', c.value)}
                     />
                     {c.label}
                   </label>
