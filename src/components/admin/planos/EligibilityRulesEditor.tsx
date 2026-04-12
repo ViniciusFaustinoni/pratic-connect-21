@@ -138,7 +138,7 @@ export function EligibilityRulesEditor({ entityType, entityId, compact }: Eligib
 // Rule Card
 // ============================================
 
-function RuleCard({ rule, onDelete }: { rule: EligibilityRule; onDelete: (id: string) => void }) {
+function RuleCard({ rule, onDelete, onEdit }: { rule: EligibilityRule; onDelete: (id: string) => void; onEdit: (rule: EligibilityRule) => void }) {
   const cfg = rule.rule_config;
   const icon = RULE_TYPE_ICONS[rule.rule_type] || '📋';
   const label = RULE_TYPE_LABELS[rule.rule_type] || rule.rule_type;
@@ -183,7 +183,10 @@ function RuleCard({ rule, onDelete }: { rule: EligibilityRule; onDelete: (id: st
   }
 
   return (
-    <div className="flex items-center justify-between rounded-lg border p-2.5 text-sm">
+    <div
+      className="flex items-center justify-between rounded-lg border p-2.5 text-sm cursor-pointer hover:bg-muted/50 transition-colors"
+      onClick={() => onEdit(rule)}
+    >
       <div className="flex items-center gap-2 flex-1 min-w-0">
         <span>{icon}</span>
         <div className="min-w-0">
@@ -196,7 +199,7 @@ function RuleCard({ rule, onDelete }: { rule: EligibilityRule; onDelete: (id: st
           )}
         </div>
       </div>
-      <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={() => onDelete(rule.id)}>
+      <Button type="button" size="icon" variant="ghost" className="h-7 w-7 shrink-0" onClick={(e) => { e.stopPropagation(); onDelete(rule.id); }}>
         <Trash2 className="h-3.5 w-3.5 text-destructive" />
       </Button>
     </div>
