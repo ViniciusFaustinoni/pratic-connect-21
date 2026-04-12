@@ -845,40 +845,44 @@ export function LinhasPlanos() {
         linha={duplicarLinhaModal.linha}
       />
       <Dialog open={editItemModal.open} onOpenChange={(open) => { if (!open) setEditItemModal({ open: false }); }}>
-        <DialogContent className="max-w-lg max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
-          <DialogHeader>
+        <DialogContent className="max-w-lg max-h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-4 sm:p-6 pb-2">
             <DialogTitle>
               {editItemModal.type === 'cobertura' ? `Editar Cobertura: ${editItemModal.item?.nome || ''}` : `Editar Benefício: ${editItemModal.item?.name || ''}`}
             </DialogTitle>
           </DialogHeader>
-          {editItemModal.type === 'cobertura' && editItemModal.item && (
-            <CoberturaInlineForm
-              cobertura={editItemModal.item}
-              onSaved={() => {
-                setEditItemModal({ open: false });
-                queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
-              }}
-            />
-          )}
-          {editItemModal.type === 'beneficio' && editItemModal.item && (
-            <BeneficioInlineForm
-              benefit={editItemModal.item}
-              onSaved={() => {
-                setEditItemModal({ open: false });
-                queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
-              }}
-            />
-          )}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pt-0">
+            {editItemModal.type === 'cobertura' && editItemModal.item && (
+              <CoberturaInlineForm
+                cobertura={editItemModal.item}
+                onSaved={() => {
+                  setEditItemModal({ open: false });
+                  queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+                }}
+              />
+            )}
+            {editItemModal.type === 'beneficio' && editItemModal.item && (
+              <BeneficioInlineForm
+                benefit={editItemModal.item}
+                onSaved={() => {
+                  setEditItemModal({ open: false });
+                  queryClient.invalidateQueries({ queryKey: ['linhas_com_planos_clean'] });
+                }}
+              />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
       <Dialog open={eligibilityModal.open} onOpenChange={(open) => { if (!open) setEligibilityModal({ open: false }); }}>
-        <DialogContent className="max-w-4xl max-h-[90vh] overflow-y-auto" onInteractOutside={(e) => e.preventDefault()}>
-          <DialogHeader>
+        <DialogContent className="max-w-4xl max-h-[90vh] overflow-hidden flex flex-col p-0">
+          <DialogHeader className="p-4 sm:p-6 pb-2">
             <DialogTitle>Elegibilidade: {eligibilityModal.planName}</DialogTitle>
           </DialogHeader>
-          {eligibilityModal.planId && (
-            <EligibilityRulesEditor entityType="plano" entityId={eligibilityModal.planId} />
-          )}
+          <div className="flex-1 overflow-y-auto overflow-x-hidden p-4 sm:p-6 pt-0">
+            {eligibilityModal.planId && (
+              <EligibilityRulesEditor entityType="plano" entityId={eligibilityModal.planId} />
+            )}
+          </div>
         </DialogContent>
       </Dialog>
     </>
