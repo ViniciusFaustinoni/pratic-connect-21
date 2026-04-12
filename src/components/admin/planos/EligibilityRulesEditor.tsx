@@ -455,7 +455,7 @@ function AddRuleDialog({
           <div className="flex justify-end gap-2 pt-2">
             <Button type="button" variant="outline" onClick={() => onOpenChange(false)}>Cancelar</Button>
             <Button type="button" onClick={handleSave} disabled={onSave.isPending}>
-              Salvar Regra
+              {isEditing ? 'Salvar Alterações' : 'Salvar Regra'}
             </Button>
           </div>
         </div>
