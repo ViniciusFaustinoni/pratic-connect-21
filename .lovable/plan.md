@@ -1,33 +1,32 @@
 
-## Plano: Corrigir edição de regras de elegibilidade em benefícios
 
-### Problema raiz
-O `AddRuleDialog` usa chaves de config diferentes do que está salvo no banco:
-- **regiao**: dialog usa `config.regioes`, banco usa `config.values`
-- **tipo_uso**: dialog usa `config.tipos`, banco usa `config.values`
-- **combustivel**: dialog usa `config.combustiveis`, banco usa `config.values`
+## Plano: Resolver nomes nos RuleCards do EligibilityRulesEditor
 
-Quando o dialog abre para edição, os checkboxes aparecem vazios porque as chaves não batem. E ao salvar, grava com chaves erradas.
+### Problema
+O `RuleCard` exibe valores brutos (UUIDs para regiões, IDs internos para tipo de uso/combustível/tipo de placa) em vez de nomes legíveis. Também falta o case `tipo_placa` no switch de descrição.
 
 ### Solução
-Padronizar o `AddRuleDialog` para usar `values` como chave universal para todas as regras baseadas em array, alinhando com o formato do `EligibilityConfigSection`.
+Mover os hooks de dados (regiões, tipos de uso, combustíveis, tipos de placa) para o componente pai `EligibilityRulesEditor` e passá-los como lookup maps ao `RuleCard`, que resolverá os valores para nomes.
 
 ### Alterações em `src/components/admin/planos/EligibilityRulesEditor.tsx`
 
-**1. Seção Região (linhas 377-392)**
-- Trocar `config.regioes` → `config.values`
-- Usar `r.id` (UUID) ao invés de `r.codigo` para consistência com o formato novo
+**1. Buscar dados de lookup no `EligibilityRulesEditor` (nível pai)**
+- Adicionar chamadas a `useRegioes()`, `useConfiguracaoJson('tipos_uso')`, `useCombustiveis()`, `useConfiguracaoJson('tipos_placa')` no componente principal
+- Construir maps `Record<string, string>` (id/value → nome/label)
+- Passar o objeto de lookups como prop ao `RuleCard`
 
-**2. Seção Tipo de Uso (linhas 404-419)**
-- Trocar `config.tipos` → `config.values`
+**2. Atualizar `RuleCard` para resolver nomes**
+- Receber prop `lookups` com os maps
+- `regiao`: mapear cada UUID via `lookups.regioes[id]` → nome completo
+- `tipo_uso`: mapear via `lookups.tiposUso[value]` → label
+- `combustivel`: mapear via `lookups.combustiveis[value]` → label
+- `tipo_placa`: adicionar case no switch, mapear via `lookups.tiposPlaca[value]` → label
 
-**3. Seção Combustível (linhas 421-436)**
-- Trocar `config.combustiveis` → `config.values`
-
-**4. RuleCard display (linhas 146-183)**
-- Atualizar resolução de texto descritivo para ler de `config.values` (com fallback para chaves legadas)
+**3. Adicionar case `tipo_placa` no switch de descrição**
 
 ### Resultado
-- Clicar em uma regra existente de benefício (ou cobertura/plano) abrirá o dialog com os valores preenchidos corretamente
-- Salvar gravará no formato correto (`values`)
-- Todas as regras ficam consistentes com o `EligibilityConfigSection`
+- Região mostrará "Rio de Janeiro - Capital e Metropolitana" em vez do UUID
+- Combustível mostrará "Diesel" em vez de "diesel"
+- Tipo de Placa mostrará o nome configurado
+- Tipo de Uso mostrará o label correto
+
