@@ -51,8 +51,8 @@ Deno.serve(async (req) => {
       _permission: 'canDeleteCotacao',
     })
 
-    // Obter cotacaoId do body
-    const { cotacaoId } = await req.json()
+    // Obter cotacaoId e motivo do body
+    const { cotacaoId, motivo } = await req.json()
     if (!cotacaoId) {
       return new Response(
         JSON.stringify({ success: false, error: 'ID da cotação é obrigatório' }),
@@ -316,7 +316,8 @@ Deno.serve(async (req) => {
         cotacao_numero: cotacao.numero,
         contratos_excluidos: contratoIds.length,
         associados_afetados: associadoIds.length
-      }
+      },
+      dados_novos: motivo ? { motivo } : null
     })
 
     return new Response(
