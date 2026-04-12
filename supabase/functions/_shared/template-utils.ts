@@ -356,6 +356,13 @@ export function substituirVariaveis(conteudo: string, dados: TermoAfiliacaoData)
     ''
   );
 
+  // Fallback: preencher célula vazia após "Consultor:" com o nome do consultor
+  const nomeConsultor = mapeamento['consultor.nome'] || '—';
+  resultado = resultado.replace(
+    /(<td[^>]*>\s*<p[^>]*>\s*<strong>\s*Consultor\s*:\s*<\/strong>\s*<\/p>\s*<\/td>\s*<td[^>]*>\s*)<p[^>]*>\s*(?:<br\s*\/?>|&nbsp;|\s)*<\/p>/gi,
+    `$1<p>${nomeConsultor}</p>`
+  );
+
   // Limpar variáveis residuais que não foram mapeadas
   resultado = limparVariaveisNaoSubstituidas(resultado);
   
