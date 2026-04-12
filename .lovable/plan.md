@@ -1,37 +1,44 @@
 
 
-## Plano: Permitir edição de regras de elegibilidade existentes
+## Plano: Padronizar exibição de regiões nos badges de elegibilidade
 
 ### Problema
-Atualmente, ao clicar em uma regra de elegibilidade em um benefício ou plano, só é possível excluí-la. Não há opção de editar os valores já configurados (regiões, tipos de uso, combustíveis, etc.).
+Existem dois formatos de regras de região no banco:
+- **Novo** (809 regras): `rule_config.values: ["uuid"]` → resolve para "Rio de Janeiro - Capital e Metropolitana"
+- **Legado** (60 regras): `rule_config.regioes: ["RJ"]` → mostra "RJ" direto (não resolve nome)
 
-### Solução
-Tornar cada `RuleCard` clicável para abrir o mesmo dialog de configuração (`AddRuleDialog`), pré-preenchido com os valores atuais da regra.
+Isso causa inconsistência visual nos badges.
 
-### Alterações em `src/components/admin/planos/EligibilityRulesEditor.tsx`
+### Solução: Migração de dados + fallback no código
 
-**1. Adicionar estado de edição no componente principal**
-- Novo state `editingRule: EligibilityRule | null`
-- Ao clicar no RuleCard (não no botão de delete), setar `editingRule` com a regra clicada
-- Passar `editingRule` para o dialog
+**1. Migração SQL** — converter as 60 regras legadas para o formato novo
+- Mapear `"RJ"` → UUID `6f99685d-52b6-43e4-9010-dfc03338886a` (Rio de Janeiro - Capital e Metropolitana)
+- Mapear `"SP"` → UUID `b507f9c7-d7c0-4613-8a94-4c1e1278b3f2` (São Paulo - Capital e Metropolitana)
+- Atualizar `rule_config` de `{"regioes": ["RJ"]}` para `{"values": ["6f99685d-..."]}`
 
-**2. Tornar RuleCard clicável**
-- Adicionar `onClick` no container do card (cursor-pointer)
-- Prop `onEdit: (rule) => void` no RuleCard
+**2. Fallback no `RuleBadges`** (`LinhasPlanos.tsx`)
+- Na resolução de badges de região, se o valor não for UUID (não encontrado no `regioesMap`), tentar mapear strings conhecidas ("RJ" → buscar na tabela `regioes` por nome parcial)
+- Isso garante que mesmo se surgirem novas regras legadas, o badge exibirá o nome completo
 
-**3. Refatorar `AddRuleDialog` para suportar edição**
-- Renomear para `RuleDialog` (ou manter nome, adicionar prop `editingRule?: EligibilityRule`)
-- Se `editingRule` presente: pré-popular `ruleType`, `ruleMode` e `config` com os valores da regra
-- Desabilitar o select de tipo de regra quando editando (não faz sentido trocar o tipo)
-- No `handleSave`, passar o `id` da regra existente para que `useSaveRule` faça update em vez de insert
-- Título do dialog: "Editar Regra" vs "Adicionar Regra"
+### Detalhes técnicos
 
-**4. Ajustar `useSaveRule` em `src/hooks/useEntityEligibilityRules.ts`**
-- Verificar se já suporta update (pelo memory, já faz upsert por entity_id + rule_type)
-- Se não suportar edição direta por ID, adicionar lógica para update quando `id` é passado
+```text
+-- Migração (60 registros)
+UPDATE entity_eligibility_rules
+SET rule_config = jsonb_build_object('values', ARRAY[
+  CASE 
+    WHEN rule_config->'regioes' @> '["RJ"]' THEN '6f99685d-52b6-43e4-9010-dfc03338886a'
+    WHEN rule_config->'regioes' @> '["SP"]' THEN 'b507f9c7-d7c0-4613-8a94-4c1e1278b3f2'
+  END
+])
+WHERE rule_type = 'regiao' 
+  AND rule_config ? 'regioes'
+  AND is_active = true;
+```
+
+No `extractRuleValues`, a prioridade de `values` sobre `regioes` já existe — após migração, todos usarão `values`.
 
 ### Resultado
-- Clicar em qualquer regra existente abre o dialog com valores preenchidos para edição
-- Salvar atualiza a regra no banco sem criar duplicata
-- Funciona em planos, benefícios e coberturas (todos usam o mesmo componente)
+- Todos os badges mostrarão "Rio de Janeiro - Capital e Metropolitana" ou "São Paulo - Capital e Metropolitana"
+- Sem mais inconsistência "RJ" vs nome completo
 
