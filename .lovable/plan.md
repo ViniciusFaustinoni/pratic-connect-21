@@ -1,39 +1,31 @@
 
 
-## Plano: Simplificar tabela de coberturas e benefícios no termo
+## Plano: Corrigir variavel do consultor no template AF1
 
 ### Problema
-A tabela "COBERTURAS E BENEFÍCIOS DO PLANO" gerada no documento mostra colunas de Descrição e Valor/Detalhes separadamente, mas na maioria dos casos estão vazias ("—"), poluindo o documento.
+O template AF1 no banco de dados tem uma célula "Consultor:" com conteúdo vazio (`<p><br></p>`) em vez de usar a variável `{{consultor.nome}}`. Como o sistema de substituição de variáveis só troca `{{...}}` por valores reais, essa célula fica sempre em branco.
 
-### Solução
-Alterar as funções de geração para exibir apenas uma lista simples com os nomes dos itens, sem colunas de valor, descrição ou detalhes individuais.
-
-### Alterações
-
-**`supabase/functions/_shared/template-utils.ts`** -- 2 funções:
-
-1. **`gerarSecaoCoberturasInjetavel`** (linha 60-93): Substituir tabelas de 3 colunas por uma tabela simples de 1 coluna (apenas nome do item), separada em seções Coberturas e Benefícios.
-
-2. **`gerarTabelaCompletaHTML`** (linha 96-123): Mesma simplificação -- remover colunas Descrição/Detalhes/Valor, manter apenas Nome.
-
-Formato final da tabela:
-```text
-┌──────────────────────────────────┐
-│         COBERTURAS               │  (header azul)
-├──────────────────────────────────┤
-│ Proteção 360º                   │
-│ Vidros e Faróis                 │
-│ Danos a Terceiros R$40.000      │
-├──────────────────────────────────┤
-│         BENEFÍCIOS               │  (header azul)
-├──────────────────────────────────┤
-│ Assistência 24h 1000km           │
-│ Carro Reserva 30 dias           │
-│ Kit Gás R$1.500,00              │
-└──────────────────────────────────┘
+### Trecho atual no template (posição ~7232)
+```html
+<tr>
+  <td><p><strong>Consultor:</strong></p></td>
+  <td><p><br></p></td>  <!-- ← vazio, sem variável -->
+</tr>
 ```
 
+### Solução
+Duas correções complementares:
+
+**1. Atualizar o template AF1 no banco** (migration SQL)
+- Substituir o `<p><br></p>` na célula do Consultor por `<p>{{consultor.nome}}</p>`
+- Isso garante que a variável seja processada pelo `substituirVariaveis`
+
+**2. Fallback no código** (`supabase/functions/_shared/template-utils.ts`)
+- Na função `substituirVariaveis`, após substituir todas as variáveis, fazer um replace adicional para garantir que qualquer célula "Consultor:" seguida de célula vazia receba o valor do consultor
+- Isso protege contra templates futuros que esqueçam a variável
+
 ### Escopo
-- 1 arquivo modificado + redeploy das Edge Functions que o importam
-- Sem migração SQL
+- 1 migration SQL (replace no conteúdo do template AF1)
+- 1 arquivo de código (template-utils.ts) — fallback opcional
+- Redeploy das Edge Functions que importam template-utils
 
