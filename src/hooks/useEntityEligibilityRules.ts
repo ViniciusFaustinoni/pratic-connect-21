@@ -3,7 +3,7 @@ import { supabase } from '@/integrations/supabase/client';
 import { toast } from 'sonner';
 
 export type EntityType = 'linha' | 'plano' | 'cobertura' | 'beneficio';
-export type RuleType = 'fipe_range' | 'fipe_eligibility' | 'ano_range' | 'categoria_veiculo' | 'categoria_especial' | 'regiao' | 'marca_modelo' | 'tipo_uso' | 'combustivel' | 'tipo_placa';
+export type RuleType = 'fipe_range' | 'fipe_eligibility' | 'ano_range' | 'categoria_veiculo' | 'regiao' | 'marca_modelo' | 'tipo_uso' | 'combustivel' | 'tipo_placa';
 export type RuleMode = 'include' | 'exclude';
 
 export interface EligibilityRule {
@@ -200,7 +200,6 @@ export interface VehicleContext {
   valorFipe: number;
   anoVeiculo: number;
   categoriaVeiculo?: string;
-  categoriaEspecial?: string;
   regiao?: string;
   regiaoId?: string; // UUID da região para comparação com rules
   marca?: string;
@@ -232,12 +231,6 @@ export function checkRuleAgainstVehicle(rule: EligibilityRule, ctx: VehicleConte
       const cats: string[] = cfg.categorias || cfg.values || [];
       if (cats.length === 0) return true;
       const match = !!ctx.categoriaVeiculo && cats.some(c => c.toLowerCase() === ctx.categoriaVeiculo!.toLowerCase());
-      return isInclude ? match : !match;
-    }
-    case 'categoria_especial': {
-      const cats: string[] = cfg.categorias || cfg.values || [];
-      if (cats.length === 0) return true;
-      const match = !!ctx.categoriaEspecial && cats.some(c => c.toLowerCase() === ctx.categoriaEspecial!.toLowerCase());
       return isInclude ? match : !match;
     }
     case 'regiao': {

@@ -232,7 +232,6 @@ export function usePlanosCotacao(params: CalcularPlanosParams) {
       valorFipe: p.valorFipe,
       anoVeiculo: p.anoVeiculo || new Date().getFullYear(),
       categoriaVeiculo: p.tipoVeiculo === 'moto' ? 'moto' : 'passeio',
-      categoriaEspecial: p.categoria,
       regiao: p.regiao,
       regiaoId: regiaoMatch?.id,
       marca: p.marca,
