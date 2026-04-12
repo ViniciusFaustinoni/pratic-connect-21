@@ -143,20 +143,77 @@ serve(async (req) => {
   }
 
   try {
-    const { vistoriaId, associadoId, veiculoId, contratoId, cotacaoId: inputCotacaoId, placa } = await req.json();
-
-    if (!vistoriaId || !associadoId || !veiculoId) {
-      return new Response(
-        JSON.stringify({ error: 'vistoriaId, associadoId e veiculoId são obrigatórios' }),
-        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
-      );
-    }
-
-    console.log(`[LAUDO] Iniciando geração para vistoria: ${vistoriaId}`);
+    const body = await req.json();
+    let { vistoriaId, associadoId, veiculoId, contratoId, cotacaoId: inputCotacaoId, placa, servicoId } = body;
 
     const supabaseUrl = Deno.env.get('SUPABASE_URL')!;
     const supabaseKey = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
     const supabase = createClient(supabaseUrl, supabaseKey);
+
+    // ── Fallback: resolver IDs a partir do servicoId ──
+    if (servicoId && (!vistoriaId || !associadoId || !veiculoId)) {
+      console.log(`[LAUDO] Resolvendo IDs a partir do servicoId: ${servicoId}`);
+      const { data: servico } = await supabase
+        .from('servicos')
+        .select('associado_id, veiculo_id, contrato_id, instalacao_origem_id')
+        .eq('id', servicoId)
+        .single();
+
+      if (servico) {
+        associadoId = associadoId || servico.associado_id;
+        veiculoId = veiculoId || servico.veiculo_id;
+        contratoId = contratoId || servico.contrato_id;
+
+        // Buscar a vistoria mais recente do veículo
+        if (!vistoriaId && veiculoId) {
+          const { data: vistoriaRecente } = await supabase
+            .from('vistorias')
+            .select('id')
+            .eq('veiculo_id', veiculoId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          vistoriaId = vistoriaRecente?.id || null;
+        }
+      }
+    }
+
+    // ── Fallback: resolver a partir de instalacao_id ──
+    if (body.instalacaoId && (!vistoriaId || !associadoId || !veiculoId)) {
+      console.log(`[LAUDO] Resolvendo IDs a partir de instalacaoId: ${body.instalacaoId}`);
+      const { data: instalacao } = await supabase
+        .from('instalacoes')
+        .select('associado_id, veiculo_id, contrato_id')
+        .eq('id', body.instalacaoId)
+        .single();
+
+      if (instalacao) {
+        associadoId = associadoId || instalacao.associado_id;
+        veiculoId = veiculoId || instalacao.veiculo_id;
+        contratoId = contratoId || instalacao.contrato_id;
+
+        if (!vistoriaId && veiculoId) {
+          const { data: vistoriaRecente } = await supabase
+            .from('vistorias')
+            .select('id')
+            .eq('veiculo_id', veiculoId)
+            .order('created_at', { ascending: false })
+            .limit(1)
+            .maybeSingle();
+          vistoriaId = vistoriaRecente?.id || null;
+        }
+      }
+    }
+
+    if (!vistoriaId || !associadoId || !veiculoId) {
+      console.error(`[LAUDO] Parâmetros insuficientes. vistoriaId=${vistoriaId}, associadoId=${associadoId}, veiculoId=${veiculoId}`);
+      return new Response(
+        JSON.stringify({ error: 'Não foi possível resolver vistoriaId, associadoId e veiculoId. Envie esses campos ou servicoId/instalacaoId.' }),
+        { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
+      );
+    }
+
+    console.log(`[LAUDO] Iniciando geração para vistoria: ${vistoriaId}, associado: ${associadoId}, veículo: ${veiculoId}`);
 
     let cotacaoId = inputCotacaoId || null;
     if (!cotacaoId && contratoId) {

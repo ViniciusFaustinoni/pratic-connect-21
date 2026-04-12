@@ -170,6 +170,23 @@ Deno.serve(async (req) => {
       console.error('Erro notificação (não bloqueante):', notifErr)
     }
 
+    // ── AÇÃO 7: Gerar Laudo PDF automaticamente ──
+    try {
+      console.log('[concluir-vistoria-prestador] Gerando laudo PDF...')
+      const { data: laudoResp, error: laudoErr2 } = await supabase.functions.invoke('gerar-laudo-vistoria', {
+        body: {
+          instalacaoId: link.instalacao_id,
+        },
+      })
+      if (laudoErr2) {
+        console.error('Erro ao gerar laudo (não bloqueante):', laudoErr2)
+      } else {
+        console.log('[concluir-vistoria-prestador] ✓ Laudo gerado:', laudoResp?.url || 'sem url')
+      }
+    } catch (laudoGenErr) {
+      console.error('Erro ao gerar laudo (não bloqueante):', laudoGenErr)
+    }
+
     // ── Auditoria ──
     try {
       await supabase.from('logs_auditoria').insert({
