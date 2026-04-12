@@ -1,40 +1,43 @@
 
 
-## Plano: Atualizar carências em massa nos itens duplicados antigos
+## Plano: Unificar "Categoria Especial" em "Tipo de Placa"
 
 ### Contexto
-A duplicação de planos/linhas **já copia** os campos de carência corretamente (via spread `...bData` / `...cobData`). O problema é que muitos itens foram duplicados **antes** da carência ser configurada nos itens fonte. Resultado: ~261 coberturas e ~273 benefícios sem carência que deveriam tê-la.
+"Categoria Especial" e "Tipo de Placa" representam o mesmo conceito (leilão, táxi, chassi remarcado, etc.). O sistema tem ambos como rule types separados, causando confusão. Vamos remover `categoria_especial` e manter apenas `tipo_placa`.
 
-### Itens que precisam de carência (todos com `120 dias / liberação / multiplicador 1`)
+### Alterações
 
-**Coberturas** (por nome base):
-- 100% FIPE, 75% FIPE, Alagamento, Chuva de Granizo, Colisão, Furto, Incêndio, Perda Total (PT), Roubo, Taxa Administrativa
+**1. `src/hooks/useEntityEligibilityRules.ts`**
+- Remover `categoria_especial` do type `RuleType`
+- No `checkRuleAgainstVehicle`, remover o case `categoria_especial` (linhas 237-242)
+- No case `tipo_placa`, adicionar fallback para ler `cfg.categorias` (compatibilidade com regras legadas salvas como `categoria_especial`)
 
-**Benefícios** (por nome base):
-- Vidros e Faróis
+**2. `src/components/admin/planos/EligibilityRulesEditor.tsx`**
+- Remover `categoria_especial` de `RULE_TYPE_LABELS` e `RULE_TYPE_ICONS`
+- Remover o bloco de UI `{ruleType === 'categoria_especial' && ...}` (linhas 386-401)
+- No `RuleCard`, remover `categoria_especial` do case de descrição (linha 178)
 
-### Ação
-Executar dois UPDATEs via insert tool:
+**3. `src/components/gestao-comercial/LinhasPlanos.tsx`**
+- Remover `categoria_especial` de `RULE_BADGE_STYLES` (linha 83) e `RULE_LABELS` (linha 93)
 
-1. **Coberturas**: Atualizar todas as coberturas cujo nome começa com os base names acima e que têm `carencia_ativa = false` ou `NULL`:
-```sql
-UPDATE coberturas
-SET carencia_ativa = true, carencia_dias = 120, carencia_tipo = 'liberacao', carencia_multiplicador = 1
-WHERE (carencia_ativa = false OR carencia_ativa IS NULL)
-AND (nome LIKE '100\% FIPE%' OR nome LIKE '75\% FIPE%' OR nome LIKE 'Alagamento%' 
-     OR nome LIKE 'Chuva de Granizo%' OR nome LIKE 'Colisão%' OR nome LIKE 'Furto%'
-     OR nome LIKE 'Incêndio%' OR nome LIKE 'Perda Total%' OR nome LIKE 'Roubo%'
-     OR nome LIKE 'Taxa Administrativa%');
-```
+**4. `src/components/gestao-comercial/CadastrosBase.tsx`**
+- Remover a tab "Categorias Especiais" (já coberta por "Tipos de Placa")
 
-2. **Benefícios**: Atualizar todos os benefícios "Vidros e Faróis" sem carência:
-```sql
-UPDATE benefits
-SET carencia_ativa = true, carencia_dias = 120, carencia_tipo = 'liberacao', carencia_multiplicador = 1
-WHERE (carencia_ativa = false OR carencia_ativa IS NULL)
-AND name LIKE 'Vidros e Faróis%';
-```
+**5. `src/components/gestao-comercial/cadastros/CategoriasEspeciaisTab.tsx`**
+- Pode ser removido (arquivo inteiro) já que "Tipos de Placa" cobre a mesma funcionalidade
 
-### Nenhuma alteração de código necessária
-O mecanismo de duplicação já funciona corretamente para novas duplicações.
+**6. `supabase/functions/_shared/eligibility-filter.ts`**
+- Sem alteração necessária (já não tem case `categoria_especial`)
+
+**7. Migração SQL**
+- Converter regras existentes: `UPDATE entity_eligibility_rules SET rule_type = 'tipo_placa', rule_config = jsonb_set(rule_config, '{values}', COALESCE(rule_config->'categorias', rule_config->'values', '[]')) WHERE rule_type = 'categoria_especial' AND is_active = true`
+- Desativar regras duplicadas que conflitem com `tipo_placa` já existente para a mesma entidade
+
+**8. `src/hooks/usePlanosCotacao.ts`** (linha 235)
+- Campo `categoriaEspecial` no VehicleContext já é mapeado de `p.categoria`, mesmo valor usado em `tipoPlaca` (linha 242). Remover `categoriaEspecial` do contexto.
+
+### Resultado
+- Dropdown de "Tipo de Regra" não mostrará mais "Categoria Especial"
+- Regras existentes serão migradas para `tipo_placa`
+- Tab de cadastro "Categorias Especiais" removida (valores já geridos em "Tipos de Placa")
 
