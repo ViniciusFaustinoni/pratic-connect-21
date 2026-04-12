@@ -1131,7 +1131,11 @@ export function useAprovarVeiculoServico() {
       try {
         console.log('[useAprovarVeiculoServico] Gerando laudo PDF...');
         const { data: laudoResult, error: laudoError } = await supabase.functions.invoke('gerar-laudo-vistoria', {
-          body: { servicoId: data.servicoId },
+          body: {
+            servicoId: data.servicoId,
+            associadoId: data.associadoId,
+            veiculoId: data.veiculoId,
+          },
         });
 
         if (laudoError) {
