@@ -44,10 +44,18 @@ const templateSchema = z.object({
 
 type TemplateFormData = z.infer<typeof templateSchema>;
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export default function TemplateForm() {
-  const { id } = useParams();
+  const { id: rawId } = useParams();
   const navigate = useNavigate();
+  const id = rawId && UUID_REGEX.test(rawId) ? rawId : undefined;
   const isEditing = !!id;
+
+  // Redirect if URL has invalid id
+  if (rawId && !id) {
+    return <Navigate to="/documentos/templates" replace />;
+  }
   
   
   const { podeCriarTemplate, podeEditarTemplate } = useDocumentoPermissoes();

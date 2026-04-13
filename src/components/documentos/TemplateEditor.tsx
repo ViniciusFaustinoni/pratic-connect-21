@@ -527,7 +527,7 @@ export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, ro
                           <div
                             key={i}
                             className="flex items-center gap-2 p-2 rounded bg-white border border-amber-200 cursor-pointer hover:bg-amber-50 hover:border-amber-300 transition-colors"
-                            onClick={() => navigate(`/documentos/templates/${t.id}`)}
+                            onClick={() => t.id && navigate(`/documentos/templates/${t.id}`)}
                             title={`Abrir edição de ${t.nome}`}
                           >
                             <BookOpen className="h-4 w-4 text-amber-500 shrink-0" />
