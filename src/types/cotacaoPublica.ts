@@ -45,6 +45,7 @@ export interface CotacaoPublicaData {
   veiculo_ano?: number;
   veiculo_placa?: string;
   veiculo_cor?: string;
+  veiculo_blindado?: boolean;
   valor_fipe?: number;
   
   // Escolhas
