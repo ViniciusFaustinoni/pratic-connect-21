@@ -1,29 +1,32 @@
 
 
-## Plano: Corrigir bloqueio de cotação quando dupla aprovação está desativada
+## Plano: Vincular aviso FIPE alto valor exclusivamente à regra de dupla aprovação da diretoria
 
 ### Problema
-A `EtapaAssinaturaContrato` verifica `fipe_diretoria_aprovado === false` para bloquear a assinatura, mas **não consulta a configuração** `dupla_aprovacao_fipe_diretoria_ativa`. Resultado: se uma cotação foi criada com o campo `false` enquanto a regra estava ativa, desativar a regra depois não desbloqueia a cotação.
+Atualmente existem dois sistemas separados de aprovação FIPE:
+1. **Aprovação do analista** (`aprovacoes_fipe_limite`) — sempre ativo, mostra aviso "aprovação final dependerá de autorização do analista"
+2. **Aprovação da diretoria** (`aprovacoes_fipe_diretoria`) — controlado pelo toggle `dupla_aprovacao_fipe_diretoria_ativa`
 
-Além disso, o banco mostra `dupla_aprovacao_fipe_diretoria_ativa = 'true'` mesmo que o screenshot do usuário mostre o toggle desligado — indicando que o save pode não ter sido acionado, ou que o valor não foi persistido.
+O usuário quer que **apenas a diretoria** participe desse fluxo. Quando a regra está desativada, nenhum aviso de FIPE alto valor deve aparecer. Quando ativada, o aviso deve aparecer mas mencionando apenas que depende de aprovação interna (sem mencionar analista nem diretores).
 
-### Correção
+Além disso, quando os diretores **recusam**, a área pública deve exibir aviso de recusa.
 
-**1. `EtapaAssinaturaContrato.tsx` — Verificar config antes de bloquear**
-- Buscar também a chave `dupla_aprovacao_fipe_diretoria_ativa` da tabela `configuracoes` no mesmo useEffect
-- Só bloquear se **ambos** forem verdadeiros: config ativa **E** `fipe_diretoria_aprovado === false`
-- Se a config estiver desativada, ignorar o campo `fipe_diretoria_aprovado` e deixar a cotação prosseguir
+### Alterações
 
-```typescript
-// Lógica corrigida:
-const configAtiva = configData?.valor === 'true';
-const pendente = cotacaoData?.fipe_diretoria_aprovado === false;
-setAguardandoAprovacaoFipe(configAtiva && pendente);
-```
+**1. `CotacaoFormDialog.tsx` — Condicionar aviso e solicitação ao toggle da diretoria**
+- No bloco de exibição do alerta FIPE (linhas ~1740-1800): só renderizar o alerta se `configDuplaAprovacao?.ativa === true`
+- No bloco de criação de solicitação ao salvar (linhas ~1263-1300): só criar `criarSolicitacaoFipeLimite` se `configDuplaAprovacao?.ativa === true`
+- Alterar texto do aviso de "autorização do analista" para "aprovação interna" (neutro)
 
-**2. `notificar-diretoria-fipe/index.ts` — Já verifica config (OK)**
-- A Edge Function já verifica a config antes de setar `fipe_diretoria_aprovado = false`, então novas cotações não serão bloqueadas se a regra estiver desativada.
+**2. `EtapaAssinaturaContrato.tsx` — Adicionar tratamento de recusa**
+- Além de verificar `fipe_diretoria_aprovado === false` (pendente), verificar se existem votos de recusa suficientes na tabela `aprovacoes_fipe_diretoria` (ou verificar campo de recusa na cotação)
+- Se recusado: exibir mensagem informando que a cotação não foi aprovada internamente, sem mencionar diretores
+- Manter o bloqueio atual para "pendente" e a liberação quando aprovado
+
+**3. `StepNovoVeiculo.tsx` (substituição)** — Condicionar aviso ao toggle
+- Mesmo padrão: só exibir o alerta FIPE se a regra de dupla aprovação estiver ativa
 
 ### Escopo
-- 1 arquivo editado (`EtapaAssinaturaContrato.tsx` — ~5 linhas alteradas no useEffect)
+- 3 arquivos editados (`CotacaoFormDialog.tsx`, `EtapaAssinaturaContrato.tsx`, `StepNovoVeiculo.tsx`)
+- Sem migrations, sem Edge Functions
 
