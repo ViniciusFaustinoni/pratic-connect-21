@@ -216,7 +216,7 @@ serve(async (req) => {
         const [{ data: coberturasData }, { data: beneficiosData }] = await Promise.all([
           supabase
             .from('planos_coberturas')
-            .select('cobertura_id, valor_personalizado, carencia_dias, franquia_percentual, coberturas:cobertura_id(id, nome, descricao)')
+            .select('cobertura_id, valor_limite, carencia_dias, franquia_percentual, coberturas:cobertura_id(id, nome, descricao)')
             .eq('plano_id', planoId),
           supabase
             .from('planos_beneficios')
@@ -250,7 +250,7 @@ serve(async (req) => {
           templateData.plano.coberturas_detalhadas = cobElegiveis.map((pc: any) => ({
             nome: pc.coberturas?.nome || '',
             descricao: pc.coberturas?.descricao || '',
-            valor_personalizado: pc.valor_personalizado || '',
+            valor_personalizado: pc.valor_limite ? `R$ ${Number(pc.valor_limite).toLocaleString('pt-BR')}` : '',
             carencia_dias: pc.carencia_dias,
             franquia_percentual: pc.franquia_percentual,
           }));
