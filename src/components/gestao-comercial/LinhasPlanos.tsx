@@ -669,9 +669,10 @@ export function LinhasPlanos() {
                                             if (hasFipe && fipeRule.rule_config?.faixas?.length > 0) {
                                               const activeFaixas = fipeRule.rule_config.faixas.filter((f: any) => f.ativo !== false);
                                               if (activeFaixas.length > 0) {
-                                                const minVal = Math.min(...activeFaixas.map((f: any) => f.valor));
-                                                const maxVal = Math.max(...activeFaixas.map((f: any) => f.valor));
-                                                fipeRange = `R$ ${minVal.toFixed(2).replace('.', ',')} ~ R$ ${maxVal.toFixed(2).replace('.', ',')}`;
+                                                const sorted = [...activeFaixas].sort((a: any, b: any) => (a.fipe_min ?? a.de ?? 0) - (b.fipe_min ?? b.de ?? 0));
+                                                const firstVal = sorted[0].valor;
+                                                const lastVal = sorted[sorted.length - 1].valor;
+                                                fipeRange = `R$ ${firstVal.toFixed(2).replace('.', ',')} ~ R$ ${lastVal.toFixed(2).replace('.', ',')}`;
                                               }
                                             }
                                             return (
@@ -714,9 +715,10 @@ export function LinhasPlanos() {
                                             if (hasFipe && fipeRule.rule_config?.faixas?.length > 0) {
                                               const activeFaixas = fipeRule.rule_config.faixas.filter((f: any) => f.ativo !== false);
                                               if (activeFaixas.length > 0) {
-                                                const minVal = Math.min(...activeFaixas.map((f: any) => f.valor));
-                                                const maxVal = Math.max(...activeFaixas.map((f: any) => f.valor));
-                                                fipeRange = `R$ ${minVal.toFixed(2).replace('.', ',')} ~ R$ ${maxVal.toFixed(2).replace('.', ',')}`;
+                                                const sorted = [...activeFaixas].sort((a: any, b: any) => (a.fipe_min ?? a.de ?? 0) - (b.fipe_min ?? b.de ?? 0));
+                                                const firstVal = sorted[0].valor;
+                                                const lastVal = sorted[sorted.length - 1].valor;
+                                                fipeRange = `R$ ${firstVal.toFixed(2).replace('.', ',')} ~ R$ ${lastVal.toFixed(2).replace('.', ',')}`;
                                               }
                                             }
                                             return (
