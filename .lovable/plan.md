@@ -1,32 +1,32 @@
 
+## Plano: Adicionar página "Aprovações" no menu Diretoria
 
-## Plano: Vincular aviso FIPE alto valor exclusivamente à regra de dupla aprovação da diretoria
-
-### Problema
-Atualmente existem dois sistemas separados de aprovação FIPE:
-1. **Aprovação do analista** (`aprovacoes_fipe_limite`) — sempre ativo, mostra aviso "aprovação final dependerá de autorização do analista"
-2. **Aprovação da diretoria** (`aprovacoes_fipe_diretoria`) — controlado pelo toggle `dupla_aprovacao_fipe_diretoria_ativa`
-
-O usuário quer que **apenas a diretoria** participe desse fluxo. Quando a regra está desativada, nenhum aviso de FIPE alto valor deve aparecer. Quando ativada, o aviso deve aparecer mas mencionando apenas que depende de aprovação interna (sem mencionar analista nem diretores).
-
-Além disso, quando os diretores **recusam**, a área pública deve exibir aviso de recusa.
+### Objetivo
+Criar uma nova rota `/diretoria/aprovacoes` que exibe o painel de aprovações da diretoria (`PainelAprovacoesDiretoria`), com um resumo visual de status e detalhamento de quais diretores já responderam por cotação. Adicionar o item no menu lateral da Diretoria.
 
 ### Alterações
 
-**1. `CotacaoFormDialog.tsx` — Condicionar aviso e solicitação ao toggle da diretoria**
-- No bloco de exibição do alerta FIPE (linhas ~1740-1800): só renderizar o alerta se `configDuplaAprovacao?.ativa === true`
-- No bloco de criação de solicitação ao salvar (linhas ~1263-1300): só criar `criarSolicitacaoFipeLimite` se `configDuplaAprovacao?.ativa === true`
-- Alterar texto do aviso de "autorização do analista" para "aprovação interna" (neutro)
+**1. Nova página `src/pages/diretoria/AprovacoesDiretoria.tsx`**
+- Página simples com título "Aprovações da Diretoria" e descrição
+- Renderiza o componente `PainelAprovacoesDiretoria` já existente
+- Adiciona um painel de resumo no topo com cards: total pendentes, total aprovados, total recusados
 
-**2. `EtapaAssinaturaContrato.tsx` — Adicionar tratamento de recusa**
-- Além de verificar `fipe_diretoria_aprovado === false` (pendente), verificar se existem votos de recusa suficientes na tabela `aprovacoes_fipe_diretoria` (ou verificar campo de recusa na cotação)
-- Se recusado: exibir mensagem informando que a cotação não foi aprovada internamente, sem mencionar diretores
-- Manter o bloqueio atual para "pendente" e a liberação quando aprovado
+**2. Melhorar `PainelAprovacoesDiretoria.tsx` — Agrupar por cotação e mostrar diretores**
+- Atualmente mostra um card por voto individual (1 card = 1 diretor + 1 cotação)
+- Agrupar os itens por `cotacao_id` para exibir um card por cotação
+- Dentro de cada card, listar todos os diretores envolvidos com seus respectivos status (pendente/aprovado/recusado) e data de resposta
+- Mostrar progresso visual: "2/3 diretores responderam"
 
-**3. `StepNovoVeiculo.tsx` (substituição)** — Condicionar aviso ao toggle
-- Mesmo padrão: só exibir o alerta FIPE se a regra de dupla aprovação estiver ativa
+**3. Atualizar hook `useAprovacoesDiretoria.ts`**
+- Retornar também a lista completa de votos por cotação (todos os diretores) para permitir o agrupamento no componente
+
+**4. Registrar rota em `App.tsx`**
+- Adicionar `<Route path="/diretoria/aprovacoes" element={<AprovacoesDiretoria />} />`
+
+**5. Adicionar item no menu em `AppSidebar.tsx`**
+- Inserir `{ title: 'Aprovações', url: '/diretoria/aprovacoes', icon: CheckCircle2 }` no grupo Diretoria
 
 ### Escopo
-- 3 arquivos editados (`CotacaoFormDialog.tsx`, `EtapaAssinaturaContrato.tsx`, `StepNovoVeiculo.tsx`)
-- Sem migrations, sem Edge Functions
-
+- 1 arquivo novo (página)
+- 3 arquivos editados (PainelAprovacoesDiretoria, App.tsx, AppSidebar.tsx)
+- 1 hook editado (useAprovacoesDiretoria)
