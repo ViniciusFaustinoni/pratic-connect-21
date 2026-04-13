@@ -1611,6 +1611,7 @@ export function RegrasVendaContent() {
           </CardContent>
         </Card>
 
+        <div className="flex justify-end">
           <Button onClick={handleSaveAutorizacoes} disabled={savingAutorizacoes} className="gap-2">
             {savingAutorizacoes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Salvar configurações
