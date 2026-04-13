@@ -102,6 +102,8 @@ interface AssociadoData {
     } | null;
   }[];
   servicoInstalacao?: ServicoInstalacao | null;
+  cotacaoTokenPublico?: string | null;
+  cotacaoStatusContratacao?: string | null;
 }
 
 function useAcompanhamentoProposta(token: string | undefined) {
