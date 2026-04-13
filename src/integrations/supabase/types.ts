@@ -9325,6 +9325,7 @@ export type Database = {
           valor_mensal_final: number | null
           valor_primeira_parcela: number | null
           veiculo_ano: number | null
+          veiculo_blindado: boolean | null
           veiculo_combustivel: string | null
           veiculo_cor: string | null
           veiculo_marca: string | null
@@ -9391,6 +9392,7 @@ export type Database = {
           valor_mensal_final?: number | null
           valor_primeira_parcela?: number | null
           veiculo_ano?: number | null
+          veiculo_blindado?: boolean | null
           veiculo_combustivel?: string | null
           veiculo_cor?: string | null
           veiculo_marca?: string | null
@@ -9457,6 +9459,7 @@ export type Database = {
           valor_mensal_final?: number | null
           valor_primeira_parcela?: number | null
           veiculo_ano?: number | null
+          veiculo_blindado?: boolean | null
           veiculo_combustivel?: string | null
           veiculo_cor?: string | null
           veiculo_marca?: string | null
