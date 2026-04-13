@@ -75,6 +75,7 @@ import {
   GraduationCap,
   UserSearch,
   ShoppingCart,
+  CheckCircle2,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
@@ -393,6 +394,7 @@ const menuConfig: {
         { title: 'Fechamento & Rateio', url: '/diretoria/fechamento', icon: PieChart },
         { title: 'Faixas & Cotas', url: '/diretoria/faixas-cotas', icon: Calculator },
         { title: 'Atuarial', url: '/diretoria/indicadores', icon: TrendingUp },
+        { title: 'Aprovações', url: '/diretoria/aprovacoes', icon: CheckCircle2 },
         { title: 'Blacklist', url: '/diretoria/blacklist', icon: Ban },
         { title: 'Configurações', url: '/diretoria/configuracoes', icon: Settings },
         { title: 'Perfis', url: '/diretoria/perfis', icon: Shield },

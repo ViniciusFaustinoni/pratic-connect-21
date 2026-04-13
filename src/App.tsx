@@ -284,6 +284,7 @@ const SolicitacoesIA = lazy(() => import("./pages/diretoria/SolicitacoesIA"));
 const CampanhasDesconto = lazy(() => import("./pages/diretoria/CampanhasDesconto"));
 const FechamentoMensal = lazy(() => import("./pages/diretoria/FechamentoMensal"));
 const Blacklist = lazy(() => import("./pages/diretoria/Blacklist"));
+const AprovacoesDiretoriaPage = lazy(() => import("./pages/diretoria/AprovacoesDiretoria"));
 
 // Auditoria
 const AuditoriaVendedores = lazy(() => import("./pages/auditoria/AuditoriaVendedores"));
@@ -669,6 +670,7 @@ const App = () => (
               <Route path="/diretoria/campanhas" element={<CampanhasDesconto />} />
               <Route path="/diretoria/fechamento" element={<FechamentoMensal />} />
               <Route path="/diretoria/blacklist" element={<Blacklist />} />
+              <Route path="/diretoria/aprovacoes" element={<AprovacoesDiretoriaPage />} />
               
               {/* Central de Relatórios */}
               <Route path="/relatorios" element={<RelatoriosCentral />} />
