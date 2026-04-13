@@ -445,6 +445,7 @@ export default function CotacaoContratacao() {
                     defaultValues={dadosPessoaisDefault}
                     isLoading={isPending}
                     readOnly={isEtapaConcluida(1)}
+                    placaEsperada={cotacao.veiculo_placa || undefined}
                   />
                   <NavegacaoEtapas
                     etapaAtual={etapaAtual}

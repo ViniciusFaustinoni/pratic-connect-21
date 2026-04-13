@@ -1102,6 +1102,7 @@ export function ContratoWizard({ open, onOpenChange, cotacaoId, onContratoCreate
                   onOcrDataExtracted={handleOcrDataExtracted}
                   cpfEsperado={form.getValues('cpf') || cotacao?.leads?.cpf || undefined}
                   nomeEsperado={form.getValues('nome') || cotacao?.leads?.nome || undefined}
+                  placaEsperada={form.getValues('placa') || cotacao?.veiculo_placa || cotacao?.leads?.veiculo_placa || undefined}
                 />
 
                 {/* Dados extraídos pela IA */}

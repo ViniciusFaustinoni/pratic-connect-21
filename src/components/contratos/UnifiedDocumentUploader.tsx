@@ -54,6 +54,7 @@ interface UnifiedDocumentUploaderProps {
   onOcrDataExtracted: (dados: Record<string, string>, tipoDocumento?: string) => void;
   cpfEsperado?: string;
   nomeEsperado?: string;
+  placaEsperada?: string; // Placa da cotação para validar CRLV
 }
 
 const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof FileText }> = {
@@ -93,6 +94,7 @@ export function UnifiedDocumentUploader({
   onOcrDataExtracted,
   cpfEsperado,
   nomeEsperado,
+  placaEsperada,
 }: UnifiedDocumentUploaderProps) {
   const [documents, setDocuments] = useState<DocumentoUnificado[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
@@ -193,6 +195,31 @@ export function UnifiedDocumentUploader({
       }
 
       const ocrResult = ocrData as OcrResultadoUnificado;
+
+      // Validar placa do CRLV contra a placa esperada da cotação
+      if (ocrResult.tipo_detectado === 'crlv' && placaEsperada && ocrResult.dados?.placa) {
+        const normalizePlaca = (p: string) => p.replace(/[-\s]/g, '').toUpperCase();
+        const placaExtraida = normalizePlaca(ocrResult.dados.placa);
+        const placaEsperadaNorm = normalizePlaca(placaEsperada);
+        
+        if (placaExtraida && placaEsperadaNorm && placaExtraida !== placaEsperadaNorm) {
+          const errorMsg = `A placa do CRLV (${ocrResult.dados.placa.toUpperCase()}) não corresponde à placa da cotação (${placaEsperada.toUpperCase()}). Envie o CRLV do veículo correto.`;
+          
+          setDocuments(prev => {
+            const updated = prev.map(d => 
+              d.id === tempId ? { ...d, status: 'error' as const, error: errorMsg, tipo_detectado: ocrResult.tipo_detectado } : d
+            );
+            onDocumentsChange(updated);
+            return updated;
+          });
+          
+          toast.error('Placa do CRLV divergente!', {
+            description: errorMsg,
+            duration: 8000,
+          });
+          return; // Bloqueia salvamento e extração de dados
+        }
+      }
 
       // 4. Inserir no banco com tipo detectado (usar cliente apropriado) — com retry
       // Mapear tipo detectado para valores aceitos pelo CHECK do banco
@@ -343,7 +370,7 @@ export function UnifiedDocumentUploader({
       });
       toast.error(error.message || 'Erro ao processar documento');
     }
-  }, [cotacaoId, contratoId, veiculoId, onDocumentsChange, onOcrDataExtracted, cpfEsperado, nomeEsperado]);
+  }, [cotacaoId, contratoId, veiculoId, onDocumentsChange, onOcrDataExtracted, cpfEsperado, nomeEsperado, placaEsperada]);
 
   const handleFileSelect = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;

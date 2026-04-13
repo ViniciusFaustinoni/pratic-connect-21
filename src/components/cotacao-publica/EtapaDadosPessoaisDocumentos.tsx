@@ -89,6 +89,7 @@ interface EtapaDadosPessoaisDocumentosProps {
   isLoading?: boolean;
   defaultValues?: Partial<DadosPessoaisForm>;
   readOnly?: boolean;
+  placaEsperada?: string;
 }
 
 export function EtapaDadosPessoaisDocumentos({
@@ -97,6 +98,7 @@ export function EtapaDadosPessoaisDocumentos({
   isLoading = false,
   defaultValues,
   readOnly = false,
+  placaEsperada,
 }: EtapaDadosPessoaisDocumentosProps) {
   const [documentos, setDocumentos] = useState<DocumentoUnificado[]>([]);
   const [dadosExtraidos, setDadosExtraidos] = useState<DadosExtraidos>({});
@@ -427,6 +429,7 @@ export function EtapaDadosPessoaisDocumentos({
         onOcrDataExtracted={handleOcrDataExtracted}
         cpfEsperado={defaultValues?.cpf}
         nomeEsperado={defaultValues?.nome}
+        placaEsperada={placaEsperada}
       />
 
       {/* Checklist de Documentos */}
