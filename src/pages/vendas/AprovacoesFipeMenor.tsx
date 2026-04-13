@@ -5,6 +5,7 @@ import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PainelAprovacoesElegibilidade } from '@/components/aprovacoes/PainelAprovacoesElegibilidade';
+import { PainelAprovacoesDiretoria } from '@/components/aprovacoes/PainelAprovacoesDiretoria';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
