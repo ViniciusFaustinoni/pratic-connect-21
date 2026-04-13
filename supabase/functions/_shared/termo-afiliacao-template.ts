@@ -977,12 +977,20 @@ const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
   const dataAssinatura = formatDateExtended(new Date().toISOString());
   
   return `
-<div class="section page-break" style="margin-top: 30pt; border: 2px solid #7c3aed; padding: 15pt; border-radius: 4pt;">
-  <h2 class="section-title" style="color: #7c3aed;">
-    TERMO DE RESPONSABILIDADE - EQUIPAMENTO RASTREADOR
-  </h2>
+<div class="section page-break" style="margin-top: 30pt; border: 2px solid #D4920B; padding: 0; border-radius: 4pt; overflow: hidden;">
+  <!-- Cabeçalho DT -->
+  <div style="background: linear-gradient(135deg, #D4920B 0%, #B8800A 100%); padding: 12pt 20pt; text-align: center;">
+    <img src="https://pratic-connect-21.lovable.app/logos/logo-dt.png" alt="DT Rastreadores" style="max-height: 45px; margin-bottom: 6pt;" />
+    <h2 style="color: #ffffff; font-size: 13pt; font-weight: 800; margin: 0; letter-spacing: 1px;">
+      TERMO DE RESPONSABILIDADE - EQUIPAMENTO RASTREADOR
+    </h2>
+    <p style="color: rgba(255,255,255,0.85); font-size: 8pt; margin: 4pt 0 0 0;">
+      (O preenchimento e a validade deste termo serão exclusivos para os veículos que possuam rastreador)
+    </p>
+  </div>
+  <div style="padding: 15pt;">
   <p style="text-align: center; font-size: 9pt; color: #666; margin-bottom: 15pt;">
-    (Anexo ao Termo de Afiliação Nº ${data.contrato.numero})
+    Anexo ao Termo de Afiliação Nº ${data.contrato.numero}
   </p>
   
   <p style="margin-bottom: 15pt; text-align: justify;">
@@ -1060,6 +1068,7 @@ const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
     </p>
   </div>
   
+  </div>
 </div>
 `;
 };
