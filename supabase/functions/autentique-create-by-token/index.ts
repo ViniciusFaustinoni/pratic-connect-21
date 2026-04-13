@@ -621,7 +621,7 @@ serve(async (req) => {
     const paginasEstimadas = estimarPaginasHTML(contratoHTML);
     posConfig.totalPaginas = paginasEstimadas;
     console.log(`[autentique-create-by-token] Usando ${paginasEstimadas} páginas estimadas para posições de assinatura`);
-    const signerObj: any = { name: clienteNome, email: clienteEmail, action: "SIGN", delivery_method: "DELIVERY_METHOD_LINK", positions: gerarPosicoesAssinatura(posConfig), security_verifications: [{ type: "LIVE" }] };
+    const signerObj: any = { name: clienteNome, email: clienteEmail, action: "SIGN", delivery_method: "DELIVERY_METHOD_LINK", positions: gerarPosicoesAssinatura(posConfig), security_verifications: [{ type: "PF_FACIAL" }] };
     if (cpfOk) signerObj.configs = { cpf: cpfRaw };
 
     // Preparar operations JSON
