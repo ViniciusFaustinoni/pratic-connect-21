@@ -325,6 +325,11 @@ export default function AprovacoesFipeMenor() {
         <TabsContent value="elegibilidade" className="space-y-4">
           <PainelAprovacoesElegibilidade />
         </TabsContent>
+
+        {/* ===== DIRETORIA ===== */}
+        <TabsContent value="diretoria" className="space-y-4">
+          <PainelAprovacoesDiretoria />
+        </TabsContent>
       </Tabs>
 
       {/* Dialog de confirmação */}
