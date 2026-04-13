@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { token, checklist_data, fotos_vistoria, assinatura_url } = await req.json()
+    const { token, checklist_data, fotos_vistoria } = await req.json()
 
     if (!token) {
       return new Response(
@@ -60,7 +60,6 @@ Deno.serve(async (req) => {
         concluida_em: agora,
         checklist_data,
         fotos_vistoria,
-        assinatura_url,
         updated_at: agora,
       })
       .eq('id', link.id)
@@ -79,7 +78,7 @@ Deno.serve(async (req) => {
       .select(`
         id, data_agendada, cidade, uf,
         veiculos:veiculo_id(marca, modelo, ano, placa),
-        associados:associado_id(nome)
+        associados:associado_id(nome, email)
       `)
       .eq('id', link.instalacao_id)
       .single()
@@ -170,7 +169,7 @@ Deno.serve(async (req) => {
       console.error('Erro notificação (não bloqueante):', notifErr)
     }
 
-    // ── AÇÃO 7: Gerar Laudo PDF automaticamente ──
+    // ── AÇÃO 7: Gerar Laudo PDF e enviar por email ao associado ──
     try {
       console.log('[concluir-vistoria-prestador] Gerando laudo PDF...')
       const { data: laudoResp, error: laudoErr2 } = await supabase.functions.invoke('gerar-laudo-vistoria', {
@@ -182,6 +181,29 @@ Deno.serve(async (req) => {
         console.error('Erro ao gerar laudo (não bloqueante):', laudoErr2)
       } else {
         console.log('[concluir-vistoria-prestador] ✓ Laudo gerado:', laudoResp?.url || 'sem url')
+        
+        // Enviar email ao associado com link do laudo
+        if (associado?.email && laudoResp?.url) {
+          try {
+            await supabase.functions.invoke('send-email', {
+              body: {
+                template: 'generico',
+                to: associado.email,
+                data: {
+                  nome: associado.nome || 'Associado',
+                  assunto: 'Laudo de Vistoria - PraticCar',
+                  titulo: 'Seu laudo de vistoria está disponível',
+                  mensagem: `Olá ${associado.nome || ''}!\n\nA vistoria do seu veículo ${veiculoDesc} (${placa}) foi concluída com sucesso.\n\nO laudo de vistoria foi gerado e está anexado aos seus documentos. Você pode acessá-lo pelo link abaixo:`,
+                  link_url: laudoResp.url,
+                  link_texto: 'Visualizar Laudo de Vistoria',
+                },
+              },
+            })
+            console.log('[concluir-vistoria-prestador] ✓ Email do laudo enviado para:', associado.email)
+          } catch (emailErr) {
+            console.error('Erro ao enviar email do laudo (não bloqueante):', emailErr)
+          }
+        }
       }
     } catch (laudoGenErr) {
       console.error('Erro ao gerar laudo (não bloqueante):', laudoGenErr)

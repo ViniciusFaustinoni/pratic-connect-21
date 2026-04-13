@@ -39,7 +39,7 @@ import { motion } from 'framer-motion';
 import { CriarContaAssociadoForm } from '@/components/public/CriarContaAssociadoForm';
 import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
 import { getOrientacoesRecusa } from '@/utils/orientacoesRecusa';
-import { SignaturePad } from '@/components/instalador/SignaturePad';
+
 import { toast } from 'sonner';
 
 interface ChecklistItemData {
@@ -516,39 +516,8 @@ export default function AcompanhamentoProposta() {
   const { token } = useParams<{ token: string }>();
   const queryClient = useQueryClient();
   const { data: associado, isLoading, error } = useAcompanhamentoProposta(token);
-  const [salvandoAssinatura, setSalvandoAssinatura] = useState(false);
-  const [assinaturaSalva, setAssinaturaSalva] = useState(false);
 
-  const handleSalvarAssinatura = async (signatureBlob: Blob) => {
-    if (!associado?.servicoInstalacao?.id) return;
-    setSalvandoAssinatura(true);
-    try {
-      const servicoId = associado.servicoInstalacao.id;
-      const fileName = `${servicoId}/assinatura_cliente_${Date.now()}.png`;
-      const { error: uploadError } = await supabase.storage
-        .from('assinaturas')
-        .upload(fileName, signatureBlob, { contentType: 'image/png', upsert: true });
-      if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from('assinaturas').getPublicUrl(fileName);
-      const publicUrl = urlData.publicUrl;
-
-      const { error: updateError } = await supabase
-        .from('servicos')
-        .update({ assinatura_cliente_url: publicUrl })
-        .eq('id', servicoId);
-      if (updateError) throw updateError;
-
-      setAssinaturaSalva(true);
-      toast.success('Assinatura salva com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
-    } catch (err) {
-      console.error('Erro ao salvar assinatura:', err);
-      toast.error('Erro ao salvar assinatura. Tente novamente.');
-    } finally {
-      setSalvandoAssinatura(false);
-    }
-  };
 
   // Checklist items parsed
   const checklistItems = useMemo<ChecklistItemData[]>(() => {
@@ -1021,78 +990,6 @@ export default function AcompanhamentoProposta() {
             </Card>
           )}
 
-          {/* Card de Assinatura da Instalação (SignaturePad) */}
-          {associado.servicoInstalacao && !assinaturaSalva && !(statusInfo as any).showChecklist && (
-            <motion.div initial={{ opacity: 0, y: 20 }} animate={{ opacity: 1, y: 0 }} transition={{ delay: 0.35 }}>
-              <Card className={`border-primary/30 bg-card/80 backdrop-blur-xl ${
-                associado.servicoInstalacao.assinatura_cliente_url ? 'border-success/30' : ''
-              }`}>
-                <CardContent className="py-6 space-y-4">
-                  <div className="flex items-center gap-3">
-                    <div className={`w-10 h-10 rounded-full flex items-center justify-center ${
-                      associado.servicoInstalacao.assinatura_cliente_url ? 'bg-success/20' : 'bg-primary/20'
-                    }`}>
-                      <PenTool className={`h-5 w-5 ${
-                        associado.servicoInstalacao.assinatura_cliente_url ? 'text-success' : 'text-primary'
-                      }`} />
-                    </div>
-                    <div>
-                      <h3 className="font-semibold text-foreground">Assinatura da Instalação</h3>
-                      <p className="text-sm text-muted-foreground">
-                        {associado.servicoInstalacao.assinatura_cliente_url 
-                          ? 'Assinatura registrada com sucesso' 
-                          : 'Assine para confirmar a instalação realizada'}
-                      </p>
-                    </div>
-                  </div>
-                  {associado.servicoInstalacao.assinatura_cliente_url ? (
-                    <div className="rounded-lg border border-success/30 bg-success/5 p-4">
-                      <div className="flex items-center gap-2 text-success mb-3">
-                        <CheckCircle2 className="h-5 w-5" />
-                        <span className="font-medium">✓ Assinatura concluída</span>
-                      </div>
-                      <img
-                        src={associado.servicoInstalacao.assinatura_cliente_url}
-                        alt="Assinatura"
-                        className="rounded-lg bg-white max-h-32 mx-auto"
-                      />
-                    </div>
-                  ) : (
-                    <div className="space-y-3">
-                      <p className="text-sm text-muted-foreground">
-                        O técnico finalizou a instalação do rastreador no seu veículo. 
-                        Por favor, assine abaixo para confirmar que a instalação foi realizada.
-                      </p>
-                      <SignaturePad onSave={handleSalvarAssinatura} disabled={salvandoAssinatura} />
-                      {salvandoAssinatura && (
-                        <div className="flex items-center justify-center gap-2 text-primary">
-                          <Loader2 className="h-4 w-4 animate-spin" />
-                          <span className="text-sm">Salvando assinatura...</span>
-                        </div>
-                      )}
-                    </div>
-                  )}
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
-
-          {/* Assinatura já salva nesta sessão */}
-          {assinaturaSalva && !(statusInfo as any).showChecklist && (
-            <motion.div initial={{ opacity: 0, scale: 0.95 }} animate={{ opacity: 1, scale: 1 }}>
-              <Card className="border-success/30 bg-card/80 backdrop-blur-xl">
-                <CardContent className="py-6 text-center space-y-3">
-                  <div className="w-12 h-12 mx-auto rounded-full bg-success/20 flex items-center justify-center">
-                    <CheckCircle2 className="h-6 w-6 text-success" />
-                  </div>
-                  <h3 className="font-semibold text-foreground">Assinatura Registrada!</h3>
-                  <p className="text-sm text-muted-foreground">
-                    Obrigado por confirmar a instalação. Seu processo está em andamento.
-                  </p>
-                </CardContent>
-              </Card>
-            </motion.div>
-          )}
 
           {/* ============================================ */}
           {/* SEÇÃO: Checklist + Avarias + Mídia + Laudo   */}
