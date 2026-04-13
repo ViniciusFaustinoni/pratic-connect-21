@@ -28,6 +28,7 @@ serve(async (req) => {
       veiculo_placa,
       nome_solicitante,
       categoria_placa,
+      motivo,
     } = body;
 
     if (!cotacao_id) {
@@ -137,17 +138,26 @@ serve(async (req) => {
         urlPainel,
       ];
 
-      // Mensagem fallback (texto livre) com URL do painel
-      const mensagemFallback = `🔔 *Autorização FIPE Necessária*\n\n` +
-        `Veículo: *${marcaModelo}* ${veiculo_ano || ""}\n` +
-        `Placa: *${veiculo_placa || "N/A"}*\n` +
-        `Tipo: ${tipo_veiculo || categoria_placa || "N/A"}\n` +
-        `Valor FIPE: *${fipeFormatado}*\n` +
-        `Limite configurado: ${limiteFormatado}\n` +
-        `Associado: *${nome_solicitante || "N/A"}*\n\n` +
-        `O valor FIPE está acima do limite. Sua autorização é necessária.\n\n` +
-        `Acesse o painel para aprovar ou recusar:\n${urlPainel}\n\n` +
-        `Ou responda *APROVAR* ou *RECUSAR*.`;
+      const isBlindado = motivo === 'veiculo_blindado';
+      const mensagemFallback = isBlindado
+        ? `🔔 *Autorização Necessária — Veículo Blindado*\n\n` +
+          `Veículo: *${marcaModelo}* ${veiculo_ano || ""}\n` +
+          `Placa: *${veiculo_placa || "N/A"}*\n` +
+          `Tipo: ${tipo_veiculo || categoria_placa || "N/A"}\n` +
+          `Associado: *${nome_solicitante || "N/A"}*\n\n` +
+          `O veículo é *BLINDADO*. Sua autorização é necessária para prosseguir.\n\n` +
+          `Acesse o painel para aprovar ou recusar:\n${urlPainel}\n\n` +
+          `Ou responda *APROVAR* ou *RECUSAR*.`
+        : `🔔 *Autorização FIPE Necessária*\n\n` +
+          `Veículo: *${marcaModelo}* ${veiculo_ano || ""}\n` +
+          `Placa: *${veiculo_placa || "N/A"}*\n` +
+          `Tipo: ${tipo_veiculo || categoria_placa || "N/A"}\n` +
+          `Valor FIPE: *${fipeFormatado}*\n` +
+          `Limite configurado: ${limiteFormatado}\n` +
+          `Associado: *${nome_solicitante || "N/A"}*\n\n` +
+          `O valor FIPE está acima do limite. Sua autorização é necessária.\n\n` +
+          `Acesse o painel para aprovar ou recusar:\n${urlPainel}\n\n` +
+          `Ou responda *APROVAR* ou *RECUSAR*.`;
 
       try {
         const sendPayload: any = {

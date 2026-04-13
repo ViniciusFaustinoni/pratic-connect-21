@@ -1,0 +1,1 @@
+ALTER TABLE public.cotacoes ADD COLUMN veiculo_blindado boolean DEFAULT false;

@@ -358,16 +358,66 @@ export default function CotacaoPublicaCompleta() {
           if (ocrData?.sucesso && ocrData?.tipo_detectado === 'crlv' && ocrData?.dados) {
             const dados = ocrData.dados;
             
-            // Atualizar cotação com dados extraídos (cor principalmente)
+            // Detectar blindado
+            const isBlindado = dados.blindado === 'true' || dados.blindado === true;
+            
+            // Atualizar cotação com dados extraídos (cor e blindado)
             await atualizarCotacao.mutateAsync({
               token,
               updates: {
                 veiculo_cor: dados.cor || undefined,
+                veiculo_blindado: isBlindado,
               },
             });
             
             if (dados.cor) {
               toast.success(`Cor do veículo detectada: ${dados.cor}`);
+            }
+            
+            // Se blindado detectado, disparar aprovação da diretoria (mesma regra de FIPE alta)
+            if (isBlindado && cotacao?.id) {
+              // Verificar se restricao_blindado_absoluta está ativa
+              const { data: configBlindado } = await (supabase as any)
+                .from('configuracoes')
+                .select('valor')
+                .eq('chave', 'restricao_blindado_absoluta')
+                .maybeSingle();
+              
+              const bloqueioAbsoluto = configBlindado?.valor === 'true';
+              
+              if (bloqueioAbsoluto) {
+                toast.error('Veículo blindado não é aceito para proteção.', {
+                  duration: 10000,
+                });
+              } else {
+                // Verificar se dupla aprovação está ativa
+                const { data: configDupla } = await (supabase as any)
+                  .from('configuracoes')
+                  .select('valor')
+                  .eq('chave', 'dupla_aprovacao_fipe_diretoria_ativa')
+                  .maybeSingle();
+                
+                if (configDupla?.valor === 'true') {
+                  // Disparar notificação para diretoria (mesmo mecanismo de FIPE alta)
+                  try {
+                    await supabase.functions.invoke('notificar-diretoria-fipe', {
+                      body: {
+                        cotacao_id: cotacao.id,
+                        motivo: 'veiculo_blindado',
+                        veiculo_marca: cotacao.veiculo_marca,
+                        veiculo_modelo: cotacao.veiculo_modelo,
+                        veiculo_ano: cotacao.veiculo_ano,
+                        veiculo_placa: cotacao.veiculo_placa,
+                      },
+                    });
+                    toast.warning('Veículo blindado detectado. Sua cotação será analisada internamente.', {
+                      duration: 8000,
+                    });
+                  } catch (e) {
+                    console.error('Erro ao notificar diretoria sobre blindado:', e);
+                  }
+                }
+              }
             }
           }
         } catch (ocrError) {

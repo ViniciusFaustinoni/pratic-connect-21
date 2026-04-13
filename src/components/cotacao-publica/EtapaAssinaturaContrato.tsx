@@ -63,10 +63,10 @@ export function EtapaAssinaturaContrato({
   useEffect(() => {
     const verificarAprovacao = async () => {
       try {
-        const [cotacaoRes, configRes] = await Promise.all([
+        const [cotacaoRes, configRes, configBlindadoRes] = await Promise.all([
           publicSupabase
             .from('cotacoes')
-            .select('fipe_diretoria_aprovado')
+            .select('fipe_diretoria_aprovado, veiculo_blindado, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa')
             .eq('id', cotacaoId)
             .maybeSingle(),
           publicSupabase
@@ -74,14 +74,58 @@ export function EtapaAssinaturaContrato({
             .select('valor')
             .eq('chave', 'dupla_aprovacao_fipe_diretoria_ativa')
             .maybeSingle(),
+          publicSupabase
+            .from('configuracoes')
+            .select('valor')
+            .eq('chave', 'restricao_blindado_absoluta')
+            .maybeSingle(),
         ]);
         const configAtiva = configRes.data?.valor === 'true';
         const fipeStatus = cotacaoRes.data?.fipe_diretoria_aprovado;
+        const isBlindado = cotacaoRes.data?.veiculo_blindado === true;
+        const bloqueioBlindadoAbsoluto = configBlindadoRes.data?.valor === 'true';
         const pendente = fipeStatus === false;
-        const recusado = fipeStatus === null && configAtiva;
+
+        // Se blindado com bloqueio absoluto, tratar como recusado
+        if (isBlindado && bloqueioBlindadoAbsoluto) {
+          setAguardandoAprovacaoFipe(false);
+          setCotacaoRecusada(true);
+          return;
+        }
+
+        // Se blindado e aprovação ainda não foi disparada (fipe_diretoria_aprovado é null/true),
+        // disparar notificação para diretoria
+        if (isBlindado && configAtiva && fipeStatus === null) {
+          // Verificar se já existem votos para esta cotação (evitar duplicar)
+          const { data: votosExistentes } = await (publicSupabase as any)
+            .from('aprovacoes_fipe_diretoria')
+            .select('id')
+            .eq('cotacao_id', cotacaoId)
+            .limit(1);
+          
+          if (!votosExistentes || votosExistentes.length === 0) {
+            // Disparar aprovação para blindado
+            try {
+              await publicSupabase.functions.invoke('notificar-diretoria-fipe', {
+                body: {
+                  cotacao_id: cotacaoId,
+                  motivo: 'veiculo_blindado',
+                  veiculo_marca: cotacaoRes.data?.veiculo_marca,
+                  veiculo_modelo: cotacaoRes.data?.veiculo_modelo,
+                  veiculo_ano: cotacaoRes.data?.veiculo_ano,
+                  veiculo_placa: cotacaoRes.data?.veiculo_placa,
+                },
+              });
+            } catch (e) {
+              console.error('Erro ao disparar aprovação blindado:', e);
+            }
+            setAguardandoAprovacaoFipe(true);
+            setCotacaoRecusada(false);
+            return;
+          }
+        }
 
         // Verificar se foi recusado (fipe_diretoria_aprovado voltou a null após ter sido false)
-        // Checamos se existem votos de recusa na tabela de aprovações
         let foiRecusado = false;
         if (configAtiva && fipeStatus === null) {
           const { data: votos } = await (publicSupabase as any)

@@ -1,0 +1,1 @@
+ALTER TABLE public.cotacoes_publicas ADD COLUMN IF NOT EXISTS veiculo_blindado boolean DEFAULT false;
