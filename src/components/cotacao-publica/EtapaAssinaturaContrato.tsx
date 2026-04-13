@@ -558,7 +558,32 @@ export function EtapaAssinaturaContrato({
     );
   }
 
-  // Tela de coleta de email
+  // Bloqueio: cotação recusada internamente
+  if (cotacaoRecusada) {
+    return (
+      <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
+        <CardContent className="py-12 text-center space-y-6">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-6"
+          >
+            <div className="w-16 h-16 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
+              <XCircle className="h-8 w-8 text-destructive" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Cotação não aprovada</h3>
+              <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                Infelizmente, esta cotação não foi aprovada na análise interna. Entre em contato com a associação para mais informações.
+              </p>
+            </div>
+          </motion.div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (etapaInterna === 'coletar_email') {
     return (
       <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
