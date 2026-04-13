@@ -54,6 +54,7 @@ interface UnifiedDocumentUploaderProps {
   onOcrDataExtracted: (dados: Record<string, string>, tipoDocumento?: string) => void;
   cpfEsperado?: string;
   nomeEsperado?: string;
+  placaEsperada?: string; // Placa da cotação para validar CRLV
 }
 
 const tipoLabels: Record<TipoDocumentoDetectado, { label: string; icon: typeof FileText }> = {
@@ -93,6 +94,7 @@ export function UnifiedDocumentUploader({
   onOcrDataExtracted,
   cpfEsperado,
   nomeEsperado,
+  placaEsperada,
 }: UnifiedDocumentUploaderProps) {
   const [documents, setDocuments] = useState<DocumentoUnificado[]>([]);
   const [isDragOver, setIsDragOver] = useState(false);
