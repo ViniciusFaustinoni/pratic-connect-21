@@ -10952,6 +10952,45 @@ export type Database = {
           },
         ]
       }
+      edge_functions_logs: {
+        Row: {
+          created_at: string | null
+          erro_mensagem: string | null
+          function_name: string
+          id: string
+          metadata: Json | null
+          operacao: string
+          plataforma: string
+          status: string
+          tempo_resposta_ms: number | null
+          user_id: string | null
+        }
+        Insert: {
+          created_at?: string | null
+          erro_mensagem?: string | null
+          function_name: string
+          id?: string
+          metadata?: Json | null
+          operacao: string
+          plataforma: string
+          status?: string
+          tempo_resposta_ms?: number | null
+          user_id?: string | null
+        }
+        Update: {
+          created_at?: string | null
+          erro_mensagem?: string | null
+          function_name?: string
+          id?: string
+          metadata?: Json | null
+          operacao?: string
+          plataforma?: string
+          status?: string
+          tempo_resposta_ms?: number | null
+          user_id?: string | null
+        }
+        Relationships: []
+      }
       empresas_sindicancia: {
         Row: {
           ativo: boolean | null
