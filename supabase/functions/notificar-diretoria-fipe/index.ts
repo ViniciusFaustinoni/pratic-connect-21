@@ -96,7 +96,7 @@ serve(async (req) => {
 
     const fipeFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor_fipe || 0);
     const limiteFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(limite_aplicado || 0);
-    const urlPainel = "https://app.praticcar.org/vendas/aprovacoes-fipe";
+    const urlPainel = "https://app.praticcar.org/diretoria/aprovacoes";
 
     let enviados = 0;
 
@@ -160,8 +160,10 @@ serve(async (req) => {
           sendPayload.template_params = templateParams;
           console.log(`[notificar-diretoria-fipe] Enviando template Meta para ${profile.nome}`);
         } else {
+          // Template Meta não aprovado → forçar Evolution API como fallback
+          sendPayload.force_provider = "evolution";
           sendPayload.allow_text = true;
-          console.log(`[notificar-diretoria-fipe] Template não aprovado (${templateMeta?.status}). Enviando texto livre para ${profile.nome}`);
+          console.log(`[notificar-diretoria-fipe] Template não aprovado (${templateMeta?.status}). Forçando Evolution API para ${profile.nome}`);
         }
 
         const res = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {

@@ -3194,6 +3194,99 @@ serve(async (req) => {
     }
 
     // ========================================
+    // VERIFICAR SE É RESPOSTA DE DIRETOR (APROVAR/RECUSAR FIPE)
+    // ========================================
+    if (tipoPrincipal === 'texto') {
+      const textoLower = mensagemTexto.trim().toLowerCase();
+      if (textoLower === 'aprovar' || textoLower === 'recusar') {
+        // Verificar se o remetente é um diretor
+        const { data: profileDiretor } = await supabase
+          .from("profiles")
+          .select("id, nome, telefone, whatsapp")
+          .or(`whatsapp.in.(${telefonesBusca.join(",")}),telefone.in.(${telefonesBusca.join(",")})`)
+          .maybeSingle();
+
+        if (profileDiretor) {
+          const { data: roleDiretor } = await supabase
+            .from("user_roles")
+            .select("role")
+            .eq("user_id", profileDiretor.id)
+            .eq("role", "diretor")
+            .maybeSingle();
+
+          if (roleDiretor) {
+            console.log(`[whatsapp-webhook] Diretor identificado: ${profileDiretor.nome} — voto: ${textoLower}`);
+            
+            // Buscar aprovação pendente mais recente deste diretor
+            const { data: aprovacaoPendente } = await supabase
+              .from("aprovacoes_fipe_diretoria")
+              .select("id, cotacao_id")
+              .eq("diretor_id", profileDiretor.id)
+              .eq("status", "pendente")
+              .order("created_at", { ascending: false })
+              .limit(1)
+              .maybeSingle();
+
+            if (aprovacaoPendente) {
+              const novoStatus = textoLower === 'aprovar' ? 'aprovado' : 'recusado';
+
+              // Atualizar voto do diretor
+              await supabase
+                .from("aprovacoes_fipe_diretoria")
+                .update({ status: novoStatus, respondido_em: new Date().toISOString() })
+                .eq("id", aprovacaoPendente.id);
+
+              // Buscar todos os votos desta cotação
+              const { data: todosVotos } = await supabase
+                .from("aprovacoes_fipe_diretoria")
+                .select("status")
+                .eq("cotacao_id", aprovacaoPendente.cotacao_id);
+
+              const totalVotos = todosVotos?.length || 0;
+              const pendentes = todosVotos?.filter((v: any) => v.status === 'pendente').length || 0;
+              const aprovados = todosVotos?.filter((v: any) => v.status === 'aprovado').length || 0;
+              const recusados = todosVotos?.filter((v: any) => v.status === 'recusado').length || 0;
+
+              // Buscar mínimo de votos configurado
+              const { data: configMinimo } = await supabase
+                .from("configuracoes")
+                .select("valor")
+                .eq("chave", "dupla_aprovacao_fipe_minimo_votos")
+                .maybeSingle();
+              const minimoVotos = parseInt(configMinimo?.valor || "2", 10);
+
+              // Se todos responderam ou maioria atingida, atualizar cotação
+              if (pendentes === 0 || aprovados >= minimoVotos || recusados > (totalVotos - minimoVotos)) {
+                const aprovadoFinal = aprovados >= minimoVotos;
+                await supabase
+                  .from("cotacoes")
+                  .update({ fipe_diretoria_aprovado: aprovadoFinal })
+                  .eq("id", aprovacaoPendente.cotacao_id);
+
+                console.log(`[whatsapp-webhook] Cotação ${aprovacaoPendente.cotacao_id} — resultado final: ${aprovadoFinal ? 'APROVADO' : 'RECUSADO'} (${aprovados}/${totalVotos})`);
+              }
+
+              // Confirmar ao diretor
+              const emoji = novoStatus === 'aprovado' ? '✅' : '❌';
+              const confirmMsg = `Voto registrado: *${novoStatus.toUpperCase()}* ${emoji}\n\nProgresso: ${aprovados} aprovação(ões), ${recusados} recusa(s), ${pendentes} pendente(s).`;
+              await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone, confirmMsg);
+              await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId, tipoPrincipal);
+
+              return new Response(JSON.stringify({ ok: true, diretor_voto: novoStatus }), { headers: corsHeaders });
+            } else {
+              // Diretor sem aprovação pendente
+              await sendWhatsAppMessage(apiUrl, instancia.instance_name, telefone,
+                `Olá *${profileDiretor.nome?.split(' ')[0]}*! Não encontrei nenhuma aprovação FIPE pendente para você no momento.`
+              );
+              await saveWhatsAppLog(supabase, instancia.id, telefone, mensagemTexto, "entrada", messageId, tipoPrincipal);
+              return new Response(JSON.stringify({ ok: true, diretor_sem_pendencia: true }), { headers: corsHeaders });
+            }
+          }
+        }
+      }
+    }
+
+    // ========================================
     // VERIFICAR SE É RESPOSTA DE CONFIRMAÇÃO
     // ========================================
     // Buscar confirmação pendente - incluindo status 'aguardando_confirmacao_manha' do disparo matinal
