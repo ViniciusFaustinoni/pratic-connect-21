@@ -123,11 +123,14 @@ export function useDocumentoTemplates() {
   });
 }
 
+const UUID_REGEX = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
 export function useDocumentoTemplate(id: string | undefined) {
+  const validId = id && UUID_REGEX.test(id) ? id : undefined;
   return useQuery({
-    queryKey: ['documento-template', id],
+    queryKey: ['documento-template', validId],
     queryFn: async () => {
-      if (!id) return null;
+      if (!validId) return null;
       
       const { data, error } = await supabase
         .from('documento_templates')
@@ -135,13 +138,13 @@ export function useDocumentoTemplate(id: string | undefined) {
           *,
           categoria:documento_categorias(*)
         `)
-        .eq('id', id)
+        .eq('id', validId)
         .single();
 
       if (error) throw error;
       return transformTemplate(data as any);
     },
-    enabled: !!id,
+    enabled: !!validId,
   });
 }
 
