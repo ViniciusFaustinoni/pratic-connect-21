@@ -233,6 +233,19 @@ function useAcompanhamentoProposta(token: string | undefined) {
         } as ServicoInstalacao;
       }
 
+      // Buscar dados da cotação para verificar se o fluxo está completo
+      let cotacaoTokenPublico: string | null = null;
+      let cotacaoStatusContratacao: string | null = null;
+      if (contrato.cotacao_id) {
+        const { data: cotacaoData } = await supabase
+          .from('cotacoes')
+          .select('token_publico, status_contratacao')
+          .eq('id', contrato.cotacao_id)
+          .maybeSingle();
+        cotacaoTokenPublico = (cotacaoData as any)?.token_publico || null;
+        cotacaoStatusContratacao = (cotacaoData as any)?.status_contratacao || null;
+      }
+
       return {
         ...associado,
         primeiro_acesso: primeiroAcesso,
@@ -244,6 +257,8 @@ function useAcompanhamentoProposta(token: string | undefined) {
         },
         instalacoes: (instalacoes || []).map(i => ({ ...i, confirmacao_whatsapp: confirmacaoWhatsapp })),
         servicoInstalacao,
+        cotacaoTokenPublico,
+        cotacaoStatusContratacao,
       };
     },
     enabled: !!token,
