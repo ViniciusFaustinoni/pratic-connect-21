@@ -56,6 +56,26 @@ export function EtapaAssinaturaContrato({
   const [emailLocal, setEmailLocal] = useState(clienteEmail || '');
   const [emailEfetivo, setEmailEfetivo] = useState(clienteEmail || '');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
+  const [aguardandoAprovacaoFipe, setAguardandoAprovacaoFipe] = useState(false);
+
+  // ═══ Verificar se cotação está pendente de aprovação FIPE diretoria ═══
+  useEffect(() => {
+    const verificarAprovacao = async () => {
+      try {
+        const { data } = await publicSupabase
+          .from('cotacoes')
+          .select('fipe_diretoria_aprovado')
+          .eq('id', cotacaoId)
+          .maybeSingle();
+        setAguardandoAprovacaoFipe(data?.fipe_diretoria_aprovado === false);
+      } catch {
+        // ignore
+      }
+    };
+    verificarAprovacao();
+    const interval = setInterval(verificarAprovacao, 15000);
+    return () => clearInterval(interval);
+  }, [cotacaoId]);
   
 
   // ═══ REFS DE TRAVA — impedir dupla execução ═══
