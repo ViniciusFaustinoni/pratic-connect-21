@@ -469,6 +469,8 @@ export function RegrasVendaContent() {
         restricao_mudanca_linha: String(autorizacoes.restricao_mudanca_linha),
         restricao_depreciacao_cobertura_100: String(autorizacoes.restricao_depreciacao_cobertura_100),
         restricao_blindado_absoluta: String(autorizacoes.restricao_blindado_absoluta),
+        dupla_aprovacao_fipe_diretoria_ativa: String(autorizacoes.dupla_aprovacao_fipe_diretoria_ativa),
+        dupla_aprovacao_fipe_minimo_votos: autorizacoes.dupla_aprovacao_fipe_minimo_votos,
       };
       for (const [chave, valor] of Object.entries(updates)) {
         await supabase
