@@ -1,42 +1,27 @@
 
-
-## Plano: Remover assinatura do associado na vistoria
+## Plano: Alterar biometria de LIVE para PF_FACIAL
 
 ### O que muda
-A coleta de assinatura digital (rabiscando a tela) será completamente removida do fluxo de vistoria. O laudo de vistoria será apenas gerado, anexado aos documentos do associado e enviado por email ao associado.
+O signatário precisará apenas tirar uma selfie, que será validada automaticamente via SERPRO (base federal) usando o CPF. Não será necessário fotografar nenhum documento físico.
 
-### Arquivos afetados
+### Alterações técnicas
 
-**1. `src/pages/public/VistoriaPrestador.tsx`**
-- Remover import do `SignaturePad`
-- Remover estado `assinaturaUrl` e `uploadingAssinatura`
-- Remover função `handleSignatureSave`
-- Remover seção "Assinatura do Associado" (Card inteiro, linhas ~506-541)
-- Remover `!!assinaturaUrl` da condição `canFinalize` (ficará apenas checklist + fotos)
-- Remover mensagem "Colete a assinatura" do texto de requisitos
-- Remover `assinatura_url` do body da mutation de conclusão
+**1. `supabase/functions/autentique-create/index.ts` (linha 738)**
+```typescript
+// De:
+security_verifications: [{ type: "LIVE" }],
+// Para:
+security_verifications: [{ type: "PF_FACIAL" }],
+```
 
-**2. `src/pages/public/AcompanhamentoProposta.tsx`**
-- Remover o card "Assinatura da Instalação" com SignaturePad (~linhas 1024-1078)
-- Remover handler `handleSalvarAssinatura` e estado `salvandoAssinatura` / `assinaturaSalva`
+**2. `supabase/functions/autentique-create-by-token/index.ts` (linha 624)**
+Mesma alteração no `signerObj`.
 
-**3. `src/hooks/useAssinatura.ts`**
-- Remover tipo `'vistoria'` do `AssinaturaTipo`
-- Remover lógica que salva assinatura em `vistoria_fotos` (linhas ~92-100)
-- Manter a geração do laudo (que já acontece automaticamente)
+**3. Redeploy** de ambas as Edge Functions.
 
-**4. `src/hooks/useAssinaturaVistoria.ts`**
-- Remover este hook inteiro (não será mais usado, era para assinatura Autentique de vistoria)
-
-**5. Edge Function `concluir-vistoria-prestador`**
-- Remover validação de `assinatura_url` obrigatória (se existir)
-- Garantir que o laudo é gerado e enviado por email ao concluir
-
-**6. Envio de email do laudo**
-- Ao concluir a vistoria, enviar email ao associado com link para download do laudo PDF (usando o hook/função de email existente ou `supabase.functions.invoke`)
+### Pré-requisito
+- O CPF do signatário deve ser enviado no campo `configs.cpf` do signer (isso já é feito em ambas as funções quando o CPF é válido).
+- A conta Autentique precisa ter créditos de verificação de identidade.
 
 ### Escopo
-- ~6 arquivos modificados (4 frontend + 1-2 Edge Functions)
-- Sem migrations necessárias
-- O laudo continua sendo gerado automaticamente como já funciona hoje
-
+- 2 Edge Functions modificadas + redeploy
