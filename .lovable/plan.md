@@ -1,24 +1,41 @@
 
 
-## Diagnóstico: "Erro ao processar contrato" — `_startTime is not defined`
+## Diagnóstico: "Sim" não reconhecido como confirmação no webhook Meta
 
 ### Causa raiz
 
-A Edge Function `autentique-create` crasha no final da execução (linhas 851 e 869) ao tentar fazer `Date.now() - _startTime` para logar o tempo de resposta. A variável `_startTime` existe apenas dentro da função auxiliar `buscarConfigRastreador` (linha 39), mas **não foi declarada** no escopo principal do handler `serve()`.
+A lógica de verificação de confirmação de agendamento (`confirmacoes_agendamento`) existe **apenas** na Edge Function `whatsapp-webhook` (Evolution API, linha 3290-3304). A Edge Function `whatsapp-meta-webhook` (Meta API oficial) **não possui essa verificação**. Quando o associado responde "Sim" via Meta, o fluxo vai direto para a fila da Maya IA, que gera uma saudação genérica ("Oi, Marcos! Como posso te ajudar hoje? 🚗").
 
-O contrato e o documento no Autentique **são criados com sucesso**, mas a resposta HTTP nunca chega ao frontend porque a função crasha antes de retornar. Por isso, ao recarregar, o contrato já existe e funciona normalmente.
+### Fluxo atual (Meta webhook)
 
-### Correção
-
-**`supabase/functions/autentique-create/index.ts`** — Adicionar `const _startTime = Date.now();` logo após a linha 176 (`try {`), no início do bloco try do handler principal.
-
-```typescript
-try {
-    const _startTime = Date.now();  // ← ADICIONAR ESTA LINHA
-    const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
+```text
+Mensagem recebida → Busca associado ativo → Insere na fila IA → Maya responde genérico
+                     (PULA confirmação!)
 ```
 
+### Fluxo corrigido
+
+```text
+Mensagem recebida → Busca confirmação pendente → Se encontrou: processar confirmação
+                                                → Se não: continuar fluxo normal (fila IA)
+```
+
+### Alterações
+
+**1. `supabase/functions/whatsapp-meta-webhook/index.ts`**
+- Na função `processarMensagemUsuario`, **antes** da busca de associado (linha 63), adicionar verificação de `confirmacoes_agendamento`:
+  - Buscar registro com telefone correspondente e status `['enviada', 'reagendando', 'aguardando_confirmacao_vespera']`
+  - Se encontrado e tipo da mensagem for texto, delegar para a função `processarRespostaConfirmacaoMeta` (nova)
+- Criar função `processarRespostaConfirmacaoMeta` que:
+  - Usa o mesmo regex fallback do webhook Evolution para inferir intenção (CONFIRMADO, REAGENDAR, CANCELAR, DUVIDA)
+  - Atualiza `confirmacoes_agendamento` com resposta e novo status
+  - Se CONFIRMADO: atualiza `servicos.confirmacao_whatsapp` e dispara atribuição automática
+  - Se REAGENDAR: inicia fluxo de reagendamento
+  - Envia resposta apropriada via `whatsapp-send-text`
+
+**2. Deploy da Edge Function `whatsapp-meta-webhook`**
+
 ### Escopo
-- 1 linha adicionada em 1 Edge Function
-- Deploy da função `autentique-create`
+- 1 Edge Function editada (~80 linhas adicionadas)
+- 1 deploy
 
