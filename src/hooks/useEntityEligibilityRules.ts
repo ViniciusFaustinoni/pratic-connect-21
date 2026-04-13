@@ -174,8 +174,14 @@ export function findModelEligibility(
   for (const entry of modelos) {
     if (typeof entry !== 'object' || !entry.status) continue;
 
-    const marcaOk = (ctx.marca || '').toUpperCase().includes(entry.marca?.toUpperCase() || '');
-    const modeloOk = (ctx.modelo || '').toUpperCase().includes(entry.modelo?.toUpperCase() || '');
+    const ctxMarca = (ctx.marca || '').toUpperCase();
+    const entryMarca = (entry.marca || '').toUpperCase();
+    const marcaOk = !entryMarca || ctxMarca.includes(entryMarca) || entryMarca.includes(ctxMarca);
+
+    const ctxModelo = (ctx.modelo || '').toUpperCase();
+    const entryModelo = (entry.modelo || '').toUpperCase();
+    const modeloWildcard = ['TODOS', 'QUALQUER', 'ALL', ''].includes(entryModelo);
+    const modeloOk = modeloWildcard || ctxModelo.includes(entryModelo) || entryModelo.includes(ctxModelo);
     if (!marcaOk || !modeloOk) continue;
 
     // Check year range if defined
