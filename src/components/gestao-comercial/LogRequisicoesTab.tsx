@@ -33,6 +33,9 @@ const plataformaConfig: Record<string, { label: string; sigla: string; color: st
   sga: { label: 'SGA (Hinova)', sigla: 'SG', color: 'text-purple-600', bg: 'bg-purple-500/10 border-purple-500/20' },
   auth: { label: 'Autenticação', sigla: 'AU', color: 'text-gray-600', bg: 'bg-gray-500/10 border-gray-500/20' },
   api_leads: { label: 'API Leads', sigla: 'LD', color: 'text-cyan-600', bg: 'bg-cyan-500/10 border-cyan-500/20' },
+  autentique: { label: 'Autentique', sigla: 'AT', color: 'text-amber-600', bg: 'bg-amber-500/10 border-amber-500/20' },
+  fipe: { label: 'FIPE', sigla: 'FP', color: 'text-emerald-700', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+  plate_lookup: { label: 'Consulta Placa', sigla: 'PL', color: 'text-indigo-600', bg: 'bg-indigo-500/10 border-indigo-500/20' },
 };
 
 const statusConfig: Record<string, { icon: any; color: string }> = {
