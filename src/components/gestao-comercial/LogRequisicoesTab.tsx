@@ -228,6 +228,9 @@ export function LogRequisicoesTab() {
             <SelectItem value="sga">SGA (Hinova)</SelectItem>
             <SelectItem value="auth">Autenticação</SelectItem>
             <SelectItem value="api_leads">API Leads</SelectItem>
+            <SelectItem value="autentique">Autentique</SelectItem>
+            <SelectItem value="fipe">FIPE</SelectItem>
+            <SelectItem value="plate_lookup">Consulta Placa</SelectItem>
           </SelectContent>
         </Select>
       </div>
