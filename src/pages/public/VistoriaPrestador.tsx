@@ -10,7 +10,7 @@ import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { ChecklistItem, type ChecklistStatus } from '@/components/instalador/ChecklistItem';
 import { VistoriaFotoSequencial } from '@/components/vistorias/VistoriaFotoSequencial';
-import { SignaturePad } from '@/components/instalador/SignaturePad';
+
 import { toast } from 'sonner';
 import {
   AlertDialog,
@@ -67,9 +67,6 @@ export default function VistoriaPrestador() {
     return Object.entries(fotosMap).map(([tipo, arquivo_url]) => ({ tipo, arquivo_url }));
   }, [fotosMap]);
 
-  // ── Assinatura state ──
-  const [assinaturaUrl, setAssinaturaUrl] = useState<string | null>(null);
-  const [uploadingAssinatura, setUploadingAssinatura] = useState(false);
 
   // ── Token validation query ──
   const { data: link, isLoading, error } = useQuery({
@@ -145,9 +142,6 @@ export default function VistoriaPrestador() {
     }
     if (link.fotos_vistoria && typeof link.fotos_vistoria === 'object') {
       setFotosMap(link.fotos_vistoria as Record<string, string>);
-    }
-    if (link.assinatura_url) {
-      setAssinaturaUrl(link.assinatura_url);
     }
   }, [link]);
 
@@ -239,30 +233,6 @@ export default function VistoriaPrestador() {
     });
   }, [autoSave]);
 
-  const handleSignatureSave = useCallback(async (blob: Blob) => {
-    if (!link) return;
-    setUploadingAssinatura(true);
-    try {
-      const path = `${link.id}/assinatura_${Date.now()}.png`;
-      const { error: uploadErr } = await publicSupabase.storage
-        .from('vistoria-prestador-fotos')
-        .upload(path, blob, { contentType: 'image/png', upsert: true });
-
-      if (uploadErr) throw uploadErr;
-
-      const { data: urlData } = publicSupabase.storage
-        .from('vistoria-prestador-fotos')
-        .getPublicUrl(path);
-
-      setAssinaturaUrl(urlData.publicUrl);
-      autoSave({ assinatura_url: urlData.publicUrl });
-      toast.success('Assinatura salva!');
-    } catch {
-      toast.error('Erro ao salvar assinatura.');
-    } finally {
-      setUploadingAssinatura(false);
-    }
-  }, [link, autoSave]);
 
   // ── Completion checks ──
   const checklistComplete = useMemo(() =>
@@ -277,7 +247,7 @@ export default function VistoriaPrestador() {
   );
   const fotosMinimoAtingido = fotosPreenchidas >= Math.min(fotosObrigatoriasCount, 10); // min 10 or all if fewer
 
-  const canFinalize = checklistComplete && fotosMinimoAtingido && !!assinaturaUrl;
+  const canFinalize = checklistComplete && fotosMinimoAtingido;
 
   // ── Conclude mutation ──
   const handleConfirmConcluir = useCallback(async () => {
@@ -289,7 +259,6 @@ export default function VistoriaPrestador() {
           token,
           checklist_data: checklist,
           fotos_vistoria: fotosMap,
-          assinatura_url: assinaturaUrl,
         },
       });
 
@@ -304,7 +273,7 @@ export default function VistoriaPrestador() {
       setConcluding(false);
       setShowConfirmDialog(false);
     }
-  }, [token, checklist, fotosMap, assinaturaUrl, queryClient]);
+  }, [token, checklist, fotosMap, queryClient]);
 
   // ════════════════════════════════════
   // RENDERING
@@ -503,42 +472,6 @@ export default function VistoriaPrestador() {
           </CardContent>
         </Card>
 
-        {/* ── Seção 5: Assinatura do associado ── */}
-        <Card className="border-slate-200 shadow-sm">
-          <CardHeader className="pb-3">
-            <div className="flex items-center justify-between">
-              <CardTitle className="text-base text-slate-800">Assinatura do Associado</CardTitle>
-              {assinaturaUrl && (
-                <Badge variant="outline" className="bg-green-50 text-green-700 border-green-200">
-                  <CheckCircle className="h-3 w-3 mr-1" />
-                  Coletada
-                </Badge>
-              )}
-            </div>
-          </CardHeader>
-          <CardContent>
-            {assinaturaUrl ? (
-              <div className="space-y-3">
-                <div className="rounded-lg border border-green-200 bg-green-50/50 p-2">
-                  <img src={assinaturaUrl} alt="Assinatura" className="w-full rounded" />
-                </div>
-                <Button
-                  variant="outline"
-                  size="sm"
-                  className="w-full"
-                  onClick={() => setAssinaturaUrl(null)}
-                >
-                  Refazer assinatura
-                </Button>
-              </div>
-            ) : (
-              <SignaturePad
-                onSave={handleSignatureSave}
-                disabled={uploadingAssinatura}
-              />
-            )}
-          </CardContent>
-        </Card>
       </div>
 
       {/* ── Botão fixo no rodapé ── */}
@@ -557,10 +490,9 @@ export default function VistoriaPrestador() {
             Finalizar Vistoria
           </Button>
           {!canFinalize && (
-            <p className="text-xs text-slate-400 text-center mt-2">
+             <p className="text-xs text-slate-400 text-center mt-2">
               {!checklistComplete && 'Complete o checklist • '}
-              {!fotosMinimoAtingido && `Envie ao menos ${Math.min(fotosObrigatoriasCount, 10)} fotos • `}
-              {!assinaturaUrl && 'Colete a assinatura'}
+              {!fotosMinimoAtingido && `Envie ao menos ${Math.min(fotosObrigatoriasCount, 10)} fotos`}
             </p>
           )}
         </div>
