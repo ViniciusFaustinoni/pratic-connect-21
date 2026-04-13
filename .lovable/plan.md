@@ -1,27 +1,27 @@
 
 
-## Plano: Validar placa do CRLV contra a placa da cotação
+## Plano: Adicionar logo DT no Termo de Responsabilidade do Rastreador
 
 ### O que muda
-Quando a IA reconhece um CRLV, a placa extraída será comparada com a placa da cotação. Se forem diferentes, o documento será **bloqueado** com status de erro, exibindo um aviso claro e permitindo reenvio.
+A seção "Termo de Responsabilidade - Equipamento Rastreador" ganhará um cabeçalho visual com a logo da DT (empresa do rastreador), usando uma barra dourada/amber similar ao design de referência enviado.
 
 ### Alterações técnicas
 
-**1. `src/components/contratos/UnifiedDocumentUploader.tsx`**
-- Adicionar prop `placaEsperada?: string` na interface
-- Após o OCR retornar `tipo_detectado === 'crlv'`, comparar `ocrResult.dados.placa` com `placaEsperada` (normalizando: sem traços, uppercase)
-- Se divergirem: marcar documento como `error` com mensagem "A placa do CRLV (XXX) não corresponde à placa da cotação (YYY). Envie o CRLV do veículo correto."
-- Não salvar no banco nem notificar dados extraídos quando a placa não bater
-- Exibir alerta visual (ícone + texto vermelho) com botão de reenvio
+**1. Copiar a logo DT para o projeto**
+- `lov-copy user-uploads://LOGO_DT.png public/logos/logo-dt.png`
+- A imagem ficará acessível em `https://pratic-connect-21.lovable.app/logos/logo-dt.png`
 
-**2. `src/components/cotacao-publica/EtapaDadosPessoaisDocumentos.tsx`**
-- Buscar a placa da cotação via query ao banco (já tem `cotacaoId`)
-- Passar `placaEsperada` ao `UnifiedDocumentUploader`
+**2. `supabase/functions/_shared/termo-afiliacao-template.ts`** (~linha 979-983)
+- Adicionar um cabeçalho visual antes do título, com barra amber (#D4920B) e a logo DT centralizada (seguindo o layout da imagem de referência)
+- Substituir o bloco atual por:
+  - Barra dourada com logo DT centralizada (usando `<img>` com URL pública)
+  - Título "TERMO DE RESPONSABILIDADE DO RASTREADOR" abaixo da barra
+  - Subtítulo "(O preenchimento e a validade deste termo, serão exclusivos para os veículos que possuam rastreador)"
 
-**3. `src/components/contratos/ContratoWizard.tsx`**
-- Passar `placaEsperada` da cotação ao `UnifiedDocumentUploader` (já tem acesso aos dados da cotação)
+**3. Redeploy** da Edge Function que usa este template (se necessário, pois é shared)
 
 ### Escopo
-- 3 arquivos frontend modificados
-- Sem alterações em Edge Functions ou migrations
+- 1 arquivo de imagem copiado para `public/logos/`
+- 1 arquivo de template modificado
+- Redeploy das Edge Functions que usam o template
 
