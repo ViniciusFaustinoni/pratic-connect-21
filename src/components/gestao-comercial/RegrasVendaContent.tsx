@@ -223,6 +223,8 @@ function useAutorizacoesConfiguracoes() {
         restricao_mudanca_linha: map.restricao_mudanca_linha !== 'false',
         restricao_depreciacao_cobertura_100: map.restricao_depreciacao_cobertura_100 !== 'false',
         restricao_blindado_absoluta: map.restricao_blindado_absoluta !== 'false',
+        dupla_aprovacao_fipe_diretoria_ativa: map.dupla_aprovacao_fipe_diretoria_ativa === 'true',
+        dupla_aprovacao_fipe_minimo_votos: map.dupla_aprovacao_fipe_minimo_votos ?? AUTORIZACOES_DEFAULTS.dupla_aprovacao_fipe_minimo_votos,
       } as AutorizacoesConfig;
     },
     staleTime: 1000 * 60 * 5,
