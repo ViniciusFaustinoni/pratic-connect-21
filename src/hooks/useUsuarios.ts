@@ -54,10 +54,32 @@ export function useUsuarios({
   const { data, isLoading, error, refetch } = useQuery({
     queryKey: ['usuarios', filters, pagination],
     queryFn: async () => {
+      // Se filtro de perfil ativo, buscar user_ids com esse role primeiro (server-side)
+      let perfilUserIds: string[] | null = null;
+      if (filters.perfil && filters.perfil !== 'todos') {
+        const { data: roleData, error: roleError } = await supabase
+          .from('user_roles')
+          .select('user_id')
+          .eq('role', filters.perfil as any);
+
+        if (roleError) throw roleError;
+        perfilUserIds = (roleData || []).map(r => r.user_id);
+
+        // Se nenhum user_id tem esse role, retornar vazio imediatamente
+        if (perfilUserIds.length === 0) {
+          return { usuarios: [], total: 0 };
+        }
+      }
+
       // Construir query base
       let query = supabase
         .from('profiles')
         .select('*', { count: 'exact' });
+
+      // Filtro server-side por perfil (via user_ids)
+      if (perfilUserIds) {
+        query = query.in('user_id', perfilUserIds);
+      }
 
       // Filtro por tipo
       if (filters.tipo && filters.tipo !== 'todos') {
@@ -113,17 +135,10 @@ export function useUsuarios({
       }
 
       // Montar dados com roles
-      let usuarios = (profiles || []).map(profile => ({
+      const usuarios = (profiles || []).map(profile => ({
         ...profile,
         roles: profile.user_id ? (rolesMap[profile.user_id] || []) : [],
       })) as ProfileWithRoles[];
-
-      // Filtrar por perfil (precisa ser feito após o fetch por causa do join)
-      if (filters.perfil && filters.perfil !== 'todos') {
-        usuarios = usuarios.filter(u => 
-          u.roles.includes(filters.perfil as PerfilAcesso)
-        );
-      }
 
       return {
         usuarios,
