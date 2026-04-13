@@ -1,36 +1,27 @@
 
 
-## Correção: OCR confundindo O com 0 na validação de placa do CRLV
+## Diagnóstico: Erro CORS na `autentique-create`
 
-### Problema
-A função `normalizePlaca` na linha 201 de `UnifiedDocumentUploader.tsx` apenas remove hífens e espaços, mas não trata a ambiguidade entre a letra "O" e o número "0". O OCR leu `Q005C17` enquanto a cotação tem `QOO5C17` — são a mesma placa, mas a comparação falha.
+### Causa raiz
+
+Existem **dois problemas**:
+
+1. **Bug no código (causa do CORS)**: A variável `_startTime` é declarada como `const` dentro do bloco `try` (linha 177), mas referenciada no bloco `catch` (linha 870). Em JavaScript, `const` é block-scoped — ela **não existe** no `catch`. Quando a API Autentique retorna erro, o `catch` tenta usar `_startTime`, causa um `ReferenceError` que crasheia o handler antes de retornar a Response com CORS headers. Resultado: o browser vê resposta sem headers CORS e bloqueia.
+
+2. **Erro da API Autentique (causa do 500)**: `unavailable_verifications_credits` — sua conta Autentique esgotou os créditos de verificação biométrica (PF_FACIAL). Este é um problema de billing na Autentique, não no código.
 
 ### Correção
 
-**`src/components/contratos/UnifiedDocumentUploader.tsx`** — linha 201
+**Arquivo**: `supabase/functions/autentique-create/index.ts`
 
-Alterar a função `normalizePlaca` para normalizar O↔0 conforme o padrão de placas brasileiras (3 letras + 1 número + 1 letra/número + 2 números no Mercosul, ou 3 letras + 4 números no antigo):
+- Mover `const _startTime = Date.now()` para **antes** do `try` (entre linhas 175-176), tornando-o acessível no `catch`
+- Deploy da edge function
 
-```typescript
-const normalizePlaca = (p: string) => {
-  // Remove caracteres especiais e uppercase
-  const clean = p.replace(/[-\s]/g, '').toUpperCase();
-  // Normaliza O↔0: nas posições que devem ser letras, converte 0→O; nas posições numéricas, converte O→0
-  if (clean.length === 7) {
-    return clean.split('').map((ch, i) => {
-      // Posições 0,1,2 = letras; posição 4 pode ser letra (Mercosul) ou número
-      const isLetterPos = i <= 2 || i === 4;
-      const isDigitPos = i === 3 || i === 5 || i === 6;
-      if (isLetterPos && ch === '0') return 'O';
-      if (isDigitPos && ch === 'O') return '0';
-      return ch;
-    }).join('');
-  }
-  return clean;
-};
-```
+### Sobre o erro "unavailable_verifications_credits"
+
+Mesmo após a correção do código, a criação de documentos com biometria facial continuará falhando até que os créditos de verificação sejam recarregados no painel da Autentique. A diferença é que após a correção, o erro será tratado corretamente (exibido como mensagem amigável em vez de erro CORS).
 
 ### Escopo
-- 1 função alterada em 1 arquivo
-- Nenhum deploy de Edge Function necessário
+- 1 linha movida em 1 arquivo
+- 1 deploy de Edge Function
 
