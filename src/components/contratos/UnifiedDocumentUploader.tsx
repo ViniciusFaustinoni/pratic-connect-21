@@ -349,6 +349,7 @@ export function UnifiedDocumentUploader({
           // Mapear campos do OCR para o veículo
           if (dadosLimpos.renavam) updateData.renavam = dadosLimpos.renavam;
           if (dadosLimpos.chassi) updateData.chassi = dadosLimpos.chassi;
+          if (dadosLimpos.blindado === 'true') (updateData as any).blindado = true;
           
           if (Object.keys(updateData).length > 0) {
             console.log('[OCR] Atualizando veículo com dados do CRLV:', updateData);

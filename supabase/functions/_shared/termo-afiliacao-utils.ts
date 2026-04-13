@@ -435,6 +435,7 @@ export function mapearDadosParaTemplate(
       flag_chassi_remarcado: veiculoDB?.flag_chassi_remarcado || false,
       flag_ex_ressarcido: veiculoDB?.flag_ex_ressarcido || false,
       flag_avarias_vistoria: veiculoDB?.flag_avarias_vistoria || false,
+      blindado: contrato.veiculo_blindado || veiculoDB?.blindado || false,
     },
     plano: {
       nome: plano?.nome || "Plano Padrão",
