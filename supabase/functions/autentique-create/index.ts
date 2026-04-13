@@ -174,6 +174,7 @@ serve(async (req) => {
   }
 
   try {
+    const _startTime = Date.now();
     const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
     if (!autentiqueApiKey) {
       throw new Error("AUTENTIQUE_API_KEY não configurada");
