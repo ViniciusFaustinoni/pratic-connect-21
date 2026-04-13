@@ -262,6 +262,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const criarSolicitacaoFipeLimite = useCriarSolicitacaoFipeLimite();
   const { data: aprovacaoFipeLimiteExistente } = useAprovacaoFipeLimitePorCotacao(cotacaoParaEditar?.id);
   const [fipeLimiteSolicitado, setFipeLimiteSolicitado] = useState(false);
+  const { data: configDuplaAprovacao } = useConfigDuplaAprovacao();
 
   // Função para calcular opções de vencimento baseado no dia atual
   const opcoesVencimento = useMemo((): [number, number] => {
