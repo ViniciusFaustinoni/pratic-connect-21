@@ -1,4 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
+import { useNavigate } from 'react-router-dom';
 import { useEditor, EditorContent } from '@tiptap/react';
 import StarterKit from '@tiptap/starter-kit';
 import UnderlineExt from '@tiptap/extension-underline';
@@ -522,7 +523,12 @@ export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, ro
                     {templatesAnexos && templatesAnexos.length > 0 ? (
                       <div className="space-y-2">
                         {templatesAnexos.map((t, i) => (
-                          <div key={i} className="flex items-center gap-2 p-2 rounded bg-white border border-amber-200">
+                          <div
+                            key={i}
+                            className="flex items-center gap-2 p-2 rounded bg-white border border-amber-200 cursor-pointer hover:bg-amber-50 hover:border-amber-300 transition-colors"
+                            onClick={() => navigate(`/documentos/templates/${t.id}`)}
+                            title={`Abrir edição de ${t.nome}`}
+                          >
                             <BookOpen className="h-4 w-4 text-amber-500 shrink-0" />
                             <div>
                               <span className="font-medium text-gray-700">{t.nome}</span>
