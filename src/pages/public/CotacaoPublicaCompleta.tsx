@@ -375,7 +375,7 @@ export default function CotacaoPublicaCompleta() {
             }
             
             // Se blindado detectado, disparar aprovação da diretoria (mesma regra de FIPE alta)
-            if (isBlindado && cotacao?.cotacao_id) {
+            if (isBlindado && cotacao?.id) {
               // Verificar se restricao_blindado_absoluta está ativa
               const { data: configBlindado } = await (supabase as any)
                 .from('configuracoes')
@@ -402,7 +402,7 @@ export default function CotacaoPublicaCompleta() {
                   try {
                     await supabase.functions.invoke('notificar-diretoria-fipe', {
                       body: {
-                        cotacao_id: cotacao.cotacao_id,
+                        cotacao_id: cotacao.id,
                         motivo: 'veiculo_blindado',
                         veiculo_marca: cotacao.veiculo_marca,
                         veiculo_modelo: cotacao.veiculo_modelo,
