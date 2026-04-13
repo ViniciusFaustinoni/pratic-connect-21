@@ -18,6 +18,7 @@ serve(async (req) => {
   try {
     const body = await req.json();
     const templateName = body.template_name || "aprovacao_fipe_diretoria_v2";
+    const forceRecreate = body.force_recreate === true;
 
     // Buscar template do banco
     const { data: template, error: tmplErr } = await supabase
@@ -50,8 +51,23 @@ serve(async (req) => {
       );
     }
 
+    // Se force_recreate, deletar o template existente na Meta primeiro
+    if (forceRecreate) {
+      console.log(`[whatsapp-submit-template] Deletando template '${templateName}' da Meta...`);
+      const delRes = await fetch(
+        `https://graph.facebook.com/v21.0/${wabaId}/message_templates?name=${templateName}`,
+        {
+          method: "DELETE",
+          headers: { Authorization: `Bearer ${accessToken}` },
+        }
+      );
+      const delResult = await delRes.json();
+      console.log(`[whatsapp-submit-template] Delete result:`, JSON.stringify(delResult));
+      // Aguardar um pouco para a Meta processar
+      await new Promise(r => setTimeout(r, 2000));
+    }
+
     // Montar corpo do template para a API da Meta
-    // Extrair variáveis do corpo para criar os exemplos
     const varMatches = (template.corpo || "").match(/\{\{\d+\}\}/g) || [];
     const varCount = new Set(varMatches).size;
     const exampleValues = [];
@@ -113,7 +129,6 @@ serve(async (req) => {
     if (!response.ok) {
       console.error(`[whatsapp-submit-template] Erro Meta:`, JSON.stringify(result));
 
-      // Atualizar status no banco como REJECTED se erro
       await supabase
         .from("whatsapp_meta_templates")
         .update({

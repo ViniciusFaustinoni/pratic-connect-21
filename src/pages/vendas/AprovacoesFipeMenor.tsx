@@ -1,10 +1,11 @@
 import { useState } from 'react';
 import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
-import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2, ShieldOff, Shield, ShieldCheck, HelpCircle } from 'lucide-react';
+import { CheckCircle2, XCircle, Clock, Car, TrendingDown, AlertTriangle, Loader2, ShieldOff, Shield, ShieldCheck, HelpCircle, Users } from 'lucide-react';
 import { Tooltip, TooltipContent, TooltipProvider, TooltipTrigger } from '@/components/ui/tooltip';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { PainelAprovacoesElegibilidade } from '@/components/aprovacoes/PainelAprovacoesElegibilidade';
+import { PainelAprovacoesDiretoria } from '@/components/aprovacoes/PainelAprovacoesDiretoria';
 import { Button } from '@/components/ui/button';
 import { Badge } from '@/components/ui/badge';
 import { Textarea } from '@/components/ui/textarea';
@@ -38,7 +39,7 @@ const STATUS_CONFIG = {
   recusado: { label: 'Recusado', color: 'bg-red-100 text-red-800', icon: XCircle },
 };
 
-type SectionTab = 'fipe_menor' | 'alto_valor' | 'elegibilidade';
+type SectionTab = 'fipe_menor' | 'alto_valor' | 'elegibilidade' | 'diretoria';
 
 export default function AprovacoesFipeMenor() {
   const [section, setSection] = useState<SectionTab>('fipe_menor');
@@ -147,6 +148,18 @@ export default function AprovacoesFipeMenor() {
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-xs text-xs">
                   Veículos fora da whitelist de aceitação do plano que necessitam aprovação manual para inclusão
+                </TooltipContent>
+              </Tooltip>
+            </TabsTrigger>
+            <TabsTrigger value="diretoria" className="gap-1.5">
+              <Users className="h-4 w-4" />
+              Diretoria
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Veículos com FIPE acima do limite que necessitam aprovação da diretoria (dupla aprovação)
                 </TooltipContent>
               </Tooltip>
             </TabsTrigger>
@@ -311,6 +324,11 @@ export default function AprovacoesFipeMenor() {
         {/* ===== ELEGIBILIDADE ===== */}
         <TabsContent value="elegibilidade" className="space-y-4">
           <PainelAprovacoesElegibilidade />
+        </TabsContent>
+
+        {/* ===== DIRETORIA ===== */}
+        <TabsContent value="diretoria" className="space-y-4">
+          <PainelAprovacoesDiretoria />
         </TabsContent>
       </Tabs>
 
