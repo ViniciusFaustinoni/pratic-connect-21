@@ -125,6 +125,19 @@ function normalizeApiLeads(row: any): LogUnificado {
   };
 }
 
+function normalizeEdgeFunction(row: any): LogUnificado {
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    plataforma: row.plataforma,
+    operacao: row.operacao || row.function_name || '-',
+    status: row.status === 'sucesso' ? 'sucesso' : 'erro',
+    erro: row.erro_mensagem,
+    tempo_ms: row.tempo_resposta_ms,
+    detalhes: row.function_name || '-',
+  };
+}
+
 export function LogRequisicoesTab() {
   const [search, setSearch] = useState('');
   const [filterPlataforma, setFilterPlataforma] = useState<Plataforma>('todas');
