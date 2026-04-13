@@ -288,7 +288,6 @@ export function EtapaAssinaturaContrato({
           if (newData.autentique_url && !linkAssinatura) {
             console.log('[EtapaAssinatura] ✅ Link recebido via realtime!');
             setLinkAssinatura(newData.autentique_url);
-            setLinkTimeout(false);
             setEtapaInterna((prev) => prev === 'enviando_autentique' ? 'aguardando_assinatura' : prev);
           }
 
@@ -339,7 +338,6 @@ export function EtapaAssinaturaContrato({
         
         if (data?.autentique_url) {
           setLinkAssinatura(data.autentique_url);
-          setLinkTimeout(false);
           setEtapaInterna('aguardando_assinatura');
         }
       } catch (e) {
@@ -367,7 +365,6 @@ export function EtapaAssinaturaContrato({
 
         if (syncResult?.autentique_url && !linkAssinatura) {
           setLinkAssinatura(syncResult.autentique_url);
-          setLinkTimeout(false);
         }
 
         if (syncResult?.status === 'assinado') {
@@ -390,7 +387,6 @@ export function EtapaAssinaturaContrato({
 
         if (data?.autentique_url && !linkAssinatura) {
           setLinkAssinatura(data.autentique_url);
-          setLinkTimeout(false);
         }
 
         if (data?.status === 'assinado' || data?.status === 'ativo') {
