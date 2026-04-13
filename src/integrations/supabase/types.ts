@@ -8787,6 +8787,7 @@ export type Database = {
           veiculo_alienado: boolean | null
           veiculo_ano: number | null
           veiculo_ano_fabricacao: number | null
+          veiculo_blindado: boolean | null
           veiculo_categoria: string | null
           veiculo_chassi: string | null
           veiculo_combustivel: string | null
@@ -8908,6 +8909,7 @@ export type Database = {
           veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
           veiculo_ano_fabricacao?: number | null
+          veiculo_blindado?: boolean | null
           veiculo_categoria?: string | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
@@ -9029,6 +9031,7 @@ export type Database = {
           veiculo_alienado?: boolean | null
           veiculo_ano?: number | null
           veiculo_ano_fabricacao?: number | null
+          veiculo_blindado?: boolean | null
           veiculo_categoria?: string | null
           veiculo_chassi?: string | null
           veiculo_combustivel?: string | null
