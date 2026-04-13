@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -230,6 +231,7 @@ serve(async (req) => {
   }
 
   try {
+    const _startTime = Date.now();
     const AUTENTIQUE_TOKEN = Deno.env.get('AUTENTIQUE_API_KEY');
     if (!AUTENTIQUE_TOKEN) {
       throw new Error('AUTENTIQUE_API_KEY não configurada');
@@ -355,6 +357,8 @@ serve(async (req) => {
 
     // WhatsApp template sending removed - link is now shown directly on the public page
 
+    logEdgeFunction({ functionName: "autentique-vistoria-create", plataforma: "autentique", operacao: "vistoria-create", status: "sucesso", tempoMs: Date.now() - _startTime });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -367,6 +371,8 @@ serve(async (req) => {
 
   } catch (error: unknown) {
     console.error('[autentique-vistoria-create] Erro:', error);
+
+    logEdgeFunction({ functionName: "autentique-vistoria-create", plataforma: "autentique", operacao: "vistoria-create", status: "erro", erroMensagem: (error instanceof Error ? error.message : "Erro desconhecido"), tempoMs: Date.now() - _startTime });
     const errorMessage = error instanceof Error ? error.message : 'Erro interno';
     return new Response(
       JSON.stringify({ 

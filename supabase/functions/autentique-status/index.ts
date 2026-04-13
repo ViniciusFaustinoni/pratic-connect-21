@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -15,6 +16,7 @@ serve(async (req) => {
   }
 
   try {
+    const _startTime = Date.now();
     // Autenticação opcional - permite chamadas públicas (verify_jwt = false no config.toml)
     const authHeader = req.headers.get("Authorization");
     let isAuthenticated = false;
@@ -180,6 +182,8 @@ serve(async (req) => {
       }
     }
 
+    logEdgeFunction({ functionName: "autentique-status", plataforma: "autentique", operacao: "status", status: "sucesso", tempoMs: Date.now() - _startTime });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -200,6 +204,8 @@ serve(async (req) => {
     );
   } catch (error: any) {
     console.error("Erro ao consultar status:", error);
+
+    logEdgeFunction({ functionName: "autentique-status", plataforma: "autentique", operacao: "status", status: "erro", erroMensagem: error.message, tempoMs: Date.now() - _startTime });
     return new Response(
       JSON.stringify({ 
         success: false, 

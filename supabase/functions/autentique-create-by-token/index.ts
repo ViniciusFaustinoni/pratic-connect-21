@@ -10,6 +10,7 @@ import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/term
 import { filterEligibleItems } from "../_shared/eligibility-filter.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa, buscarRegrasVenda, buscarRegrasDepreciacao } from "../_shared/termo-afiliacao-utils.ts";
 import { buscarEGerarAditivos, substituirVariaveis, limparVariaveisNaoSubstituidas, generateStyles, generateHeader, generateFooter, markdownParaHTML, sanitizeSignatureBlocks, exigeRastreador, extrairCodigosBeneficios } from "../_shared/template-utils.ts";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -23,6 +24,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 // ============= BUSCAR CONFIG RASTREADOR =============
 async function buscarConfigRastreador(supabase: any) {
   try {
+    const _startTime = Date.now();
     const { data, error } = await supabase
       .from('configuracoes')
       .select('chave, valor')
@@ -827,6 +829,8 @@ serve(async (req) => {
     console.log("[autentique-create-by-token] Sucesso! Documento criado:", document.id);
     console.log("[autentique-create-by-token] Timings (ms):", JSON.stringify(timings));
 
+    logEdgeFunction({ functionName: "autentique-create-by-token", plataforma: "autentique", operacao: "create-by-token", status: "sucesso", tempoMs: Date.now() - _startTime });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -842,6 +846,8 @@ serve(async (req) => {
     );
   } catch (error: any) {
     console.error("[autentique-create-by-token] Erro:", error);
+
+    logEdgeFunction({ functionName: "autentique-create-by-token", plataforma: "autentique", operacao: "create-by-token", status: "erro", erroMensagem: error.message, tempoMs: Date.now() - _startTime });
     return new Response(
       JSON.stringify({ 
         success: false, 

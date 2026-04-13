@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.49.4";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -18,6 +19,7 @@ async function anexarContratoAssinado(
   signerName: string = "Cliente"
 ): Promise<{ success: boolean; url?: string; error?: string }> {
   try {
+    const _startTime = Date.now();
     console.log("[autentique-sync-contrato] Baixando PDF assinado de:", signedFileUrl);
 
     const pdfResponse = await fetch(signedFileUrl);
@@ -119,6 +121,8 @@ async function anexarContratoAssinado(
     return { success: true, url: publicUrl };
   } catch (error: any) {
     console.error("[autentique-sync-contrato] Erro ao anexar contrato:", error.message);
+
+    logEdgeFunction({ functionName: "autentique-sync-contrato", plataforma: "autentique", operacao: "sync-contrato", status: "erro", erroMensagem: error.message, tempoMs: Date.now() - _startTime });
     return { success: false, error: error.message };
   }
 }
@@ -568,6 +572,7 @@ serve(async (req) => {
     }
 
     // Documento ainda não foi assinado
+    logEdgeFunction({ functionName: "autentique-sync-contrato", plataforma: "autentique", operacao: "sync-contrato", status: "sucesso", tempoMs: Date.now() - _startTime });
     return new Response(
       JSON.stringify({ 
         success: true, 
