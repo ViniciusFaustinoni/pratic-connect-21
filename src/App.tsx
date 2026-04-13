@@ -669,6 +669,7 @@ const App = () => (
               <Route path="/diretoria/campanhas" element={<CampanhasDesconto />} />
               <Route path="/diretoria/fechamento" element={<FechamentoMensal />} />
               <Route path="/diretoria/blacklist" element={<Blacklist />} />
+              <Route path="/diretoria/aprovacoes" element={<AprovacoesDiretoriaPage />} />
               
               {/* Central de Relatórios */}
               <Route path="/relatorios" element={<RelatoriosCentral />} />
