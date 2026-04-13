@@ -113,7 +113,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
       // Buscar contrato pelo link_token
       const { data: contrato, error: contratoError } = await supabase
         .from('contratos')
-        .select('id, associado_id, status, veiculo_id')
+        .select('id, associado_id, status, veiculo_id, cotacao_id')
         .eq('link_token', token)
         .maybeSingle();
 
