@@ -1,25 +1,24 @@
 
 
-## Plano: Adicionar variáveis do Indicador no seletor de Templates e Aditivos
+## Diagnóstico: "Erro ao processar contrato" — `_startTime is not defined`
 
-### Causa
-O grupo "indicador" não existe em `VARIAVEIS_DISPONIVEIS` nem em `DADOS_FICTICIOS`. Por isso as variáveis do associado indicador não aparecem no painel lateral do editor.
+### Causa raiz
 
-### Alterações
+A Edge Function `autentique-create` crasha no final da execução (linhas 851 e 869) ao tentar fazer `Date.now() - _startTime` para logar o tempo de resposta. A variável `_startTime` existe apenas dentro da função auxiliar `buscarConfigRastreador` (linha 39), mas **não foi declarada** no escopo principal do handler `serve()`.
 
-**1. `src/components/documentos/VariaveisSelector.tsx`**
-- Adicionar import `UserPlus` do lucide-react
-- Adicionar `indicador: UserPlus` no `iconesPorGrupo`
-- Adicionar grupo `indicador` no `VARIAVEIS_DISPONIVEIS` com: `indicador.nome`, `indicador.cpf`, `indicador.telefone`, `indicador.email`
-- Adicionar `indicador: false` no estado `expandido`
+O contrato e o documento no Autentique **são criados com sucesso**, mas a resposta HTTP nunca chega ao frontend porque a função crasha antes de retornar. Por isso, ao recarregar, o contrato já existe e funciona normalmente.
 
-**2. `src/components/documentos/templatePreviewData.ts`**
-- Adicionar dados fictícios:
-  - `indicador.nome` → "Carlos Alberto Pereira"
-  - `indicador.cpf` → "987.654.321-00"
-  - `indicador.telefone` → "(11) 91234-5678"
-  - `indicador.email` → "carlos.pereira@email.com"
+### Correção
+
+**`supabase/functions/autentique-create/index.ts`** — Adicionar `const _startTime = Date.now();` logo após a linha 176 (`try {`), no início do bloco try do handler principal.
+
+```typescript
+try {
+    const _startTime = Date.now();  // ← ADICIONAR ESTA LINHA
+    const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
+```
 
 ### Escopo
-- 2 arquivos editados, sem migrations
+- 1 linha adicionada em 1 Edge Function
+- Deploy da função `autentique-create`
 
