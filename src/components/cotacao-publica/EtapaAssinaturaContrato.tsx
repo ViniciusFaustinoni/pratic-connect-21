@@ -66,7 +66,7 @@ export function EtapaAssinaturaContrato({
         const [cotacaoRes, configRes, configBlindadoRes] = await Promise.all([
           publicSupabase
             .from('cotacoes')
-            .select('fipe_diretoria_aprovado, veiculo_blindado')
+            .select('fipe_diretoria_aprovado, veiculo_blindado, veiculo_marca, veiculo_modelo, veiculo_ano, veiculo_placa')
             .eq('id', cotacaoId)
             .maybeSingle(),
           publicSupabase
