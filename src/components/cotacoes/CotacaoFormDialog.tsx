@@ -70,6 +70,7 @@ import { useCriarSolicitacaoFipeMenor } from '@/hooks/useAprovacoesFipeMenor';
 import { useCriarSolicitacaoFipeLimite, useAprovacaoFipeLimitePorCotacao } from '@/hooks/useAprovacoesFipeLimite';
 import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
 import { useFipeMenorAtivo } from '@/hooks/useFipeMenorAtivo';
+import { useConfigDuplaAprovacao } from '@/hooks/useAprovacoesFipeDiretoria';
 import { useTabelasPreco } from '@/hooks/usePlanos';
 import { useLead } from '@/hooks/useLeads';
 import { useFipe, type PlateResult, type FipeMarca, type FipeModelo, type FipeAno } from '@/hooks/useFipe';
@@ -261,6 +262,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
   const criarSolicitacaoFipeLimite = useCriarSolicitacaoFipeLimite();
   const { data: aprovacaoFipeLimiteExistente } = useAprovacaoFipeLimitePorCotacao(cotacaoParaEditar?.id);
   const [fipeLimiteSolicitado, setFipeLimiteSolicitado] = useState(false);
+  const { data: configDuplaAprovacao } = useConfigDuplaAprovacao();
 
   // Função para calcular opções de vencimento baseado no dia atual
   const opcoesVencimento = useMemo((): [number, number] => {
@@ -1277,6 +1279,27 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 nome_solicitante: nomeAssociado || undefined,
               });
               toast.info('Solicitação de autorização FIPE alto valor enviada automaticamente.');
+
+              // Se dupla aprovação está ativa, notificar diretoria via WhatsApp
+              if (configDuplaAprovacao?.ativa) {
+                try {
+                  await supabase.functions.invoke('notificar-diretoria-fipe', {
+                    body: {
+                      cotacao_id: novaCotacao.id,
+                      valor_fipe: valorFipe,
+                      limite_aplicado: limiteAplicavel,
+                      tipo_veiculo: tipoVeiculoDetectado,
+                      veiculo_marca: veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || undefined,
+                      veiculo_modelo: veiculoEncontrado?.vehicleData?.modelo || modeloResolvido || undefined,
+                      veiculo_ano: anoNumerico,
+                      veiculo_placa: placa || undefined,
+                      nome_solicitante: nomeAssociado || undefined,
+                    },
+                  });
+                } catch (e) {
+                  console.error('Erro ao notificar diretoria FIPE:', e);
+                }
+              }
             } catch (e) {
               console.error('Erro ao criar solicitação FIPE limite:', e);
             }

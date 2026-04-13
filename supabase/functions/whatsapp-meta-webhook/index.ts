@@ -471,6 +471,114 @@ Seu aceite foi enviado ao analista de eventos. Aguarde a confirmação da atribu
   return false;
 }
 
+/**
+ * Processa resposta de diretor no fluxo de aprovação FIPE
+ */
+async function processarRespostaDiretorFipe(
+  supabase: ReturnType<typeof createClient>,
+  supabaseUrl: string,
+  serviceKey: string,
+  telefone: string,
+  texto: string,
+): Promise<boolean> {
+  const telLimpo = telefone.replace(/\D/g, "");
+  const textoNorm = texto.trim().toUpperCase();
+
+  // Verificar se é uma resposta de aprovação/recusa
+  const isAprovacao = ["APROVAR", "APROVADO", "SIM", "APROVADA"].includes(textoNorm);
+  const isRecusa = ["RECUSAR", "RECUSADO", "NAO", "NÃO", "NEGAR", "NEGADO", "RECUSADA"].includes(textoNorm);
+
+  if (!isAprovacao && !isRecusa) return false;
+
+  // Buscar aprovação pendente para este telefone
+  const { data: aprovacao } = await supabase
+    .from("aprovacoes_fipe_diretoria")
+    .select("id, cotacao_id, diretor_id")
+    .eq("telefone", telLimpo)
+    .eq("status", "pendente")
+    .order("created_at", { ascending: false })
+    .limit(1)
+    .maybeSingle();
+
+  if (!aprovacao) return false;
+
+  const novoStatus = isAprovacao ? "aprovado" : "recusado";
+
+  // Atualizar voto
+  await supabase
+    .from("aprovacoes_fipe_diretoria")
+    .update({ status: novoStatus, respondido_em: new Date().toISOString() })
+    .eq("id", aprovacao.id);
+
+  console.log(`[webhook] Diretor ${telefone} votou: ${novoStatus} para cotação ${aprovacao.cotacao_id}`);
+
+  // Contar aprovações totais para esta cotação
+  const { count: totalAprovacoes } = await supabase
+    .from("aprovacoes_fipe_diretoria")
+    .select("id", { count: "exact", head: true })
+    .eq("cotacao_id", aprovacao.cotacao_id)
+    .eq("status", "aprovado");
+
+  // Buscar mínimo configurado
+  const { data: configMin } = await supabase
+    .from("configuracoes")
+    .select("valor")
+    .eq("chave", "dupla_aprovacao_fipe_minimo_votos")
+    .maybeSingle();
+
+  const minimoVotos = parseInt(configMin?.valor || "2") || 2;
+
+  if (isAprovacao && (totalAprovacoes || 0) >= minimoVotos) {
+    // Aprovado! Liberar cotação
+    await supabase
+      .from("cotacoes")
+      .update({ fipe_diretoria_aprovado: true, fipe_limite_aprovado: true })
+      .eq("id", aprovacao.cotacao_id);
+
+    console.log(`[webhook] ✓ Cotação ${aprovacao.cotacao_id} APROVADA com ${totalAprovacoes} votos`);
+
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+      `✅ Seu voto de *APROVAÇÃO* foi registrado!\n\nO veículo atingiu o mínimo de aprovações e foi *liberado* para contratação.`
+    );
+  } else if (isAprovacao) {
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+      `✅ Seu voto de *APROVAÇÃO* foi registrado!\n\nAguardando demais aprovações (${totalAprovacoes}/${minimoVotos}).`
+    );
+  } else {
+    // Contar total de recusas
+    const { count: totalRecusas } = await supabase
+      .from("aprovacoes_fipe_diretoria")
+      .select("id", { count: "exact", head: true })
+      .eq("cotacao_id", aprovacao.cotacao_id)
+      .eq("status", "recusado");
+
+    const { count: totalDiretores } = await supabase
+      .from("aprovacoes_fipe_diretoria")
+      .select("id", { count: "exact", head: true })
+      .eq("cotacao_id", aprovacao.cotacao_id);
+
+    const pendentes = (totalDiretores || 0) - (totalAprovacoes || 0) - (totalRecusas || 0);
+
+    // Se não há mais como atingir o mínimo, marcar como recusado
+    if ((totalAprovacoes || 0) + pendentes < minimoVotos) {
+      await supabase
+        .from("cotacoes")
+        .update({ fipe_diretoria_aprovado: false })
+        .eq("id", aprovacao.cotacao_id);
+
+      await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+        `❌ Seu voto de *RECUSA* foi registrado.\n\nO veículo *não foi aprovado* — não é mais possível atingir o mínimo de aprovações.`
+      );
+    } else {
+      await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+        `❌ Seu voto de *RECUSA* foi registrado. Aguardando demais votos.`
+      );
+    }
+  }
+
+  return true;
+}
+
 serve(async (req) => {
   const supabaseUrl = Deno.env.get("SUPABASE_URL")!;
   const serviceKey = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
@@ -597,8 +705,14 @@ serve(async (req) => {
 
               console.log(`[whatsapp-meta-webhook] MSG from=${telefone} type=${msg.type} id=${msg.id} texto="${texto?.substring(0, 80)}"`);
 
+              // ---- VERIFICAR SE É RESPOSTA DE DIRETOR (APROVAÇÃO FIPE) ----
+              const foiDiretor = await processarRespostaDiretorFipe(
+                supabase, supabaseUrl, serviceKey,
+                telefone, texto || ""
+              );
+
               // ---- VERIFICAR SE É RESPOSTA DE PRESTADOR (DESPACHO REBOQUE) ----
-              const foiProcessado = await processarRespostaPrestador(
+              const foiProcessado = foiDiretor || await processarRespostaPrestador(
                 supabase, supabaseUrl, serviceKey,
                 telefone, texto || "", msg.type, latitude, longitude
               );

@@ -1315,6 +1315,44 @@ export type Database = {
           },
         ]
       }
+      aprovacoes_fipe_diretoria: {
+        Row: {
+          cotacao_id: string
+          created_at: string | null
+          diretor_id: string
+          id: string
+          respondido_em: string | null
+          status: string
+          telefone: string | null
+        }
+        Insert: {
+          cotacao_id: string
+          created_at?: string | null
+          diretor_id: string
+          id?: string
+          respondido_em?: string | null
+          status?: string
+          telefone?: string | null
+        }
+        Update: {
+          cotacao_id?: string
+          created_at?: string | null
+          diretor_id?: string
+          id?: string
+          respondido_em?: string | null
+          status?: string
+          telefone?: string | null
+        }
+        Relationships: [
+          {
+            foreignKeyName: "aprovacoes_fipe_diretoria_cotacao_id_fkey"
+            columns: ["cotacao_id"]
+            isOneToOne: false
+            referencedRelation: "cotacoes"
+            referencedColumns: ["id"]
+          },
+        ]
+      }
       aprovacoes_fipe_menor: {
         Row: {
           cotacao_id: string
@@ -8709,6 +8747,7 @@ export type Database = {
           doc_selfie: string | null
           email_enviado_em: string | null
           email_solicitante: string | null
+          fipe_diretoria_aprovado: boolean | null
           fipe_faixa_cobranca_max: number | null
           fipe_faixa_cobranca_min: number | null
           fipe_menor_aprovado: boolean | null
@@ -8829,6 +8868,7 @@ export type Database = {
           doc_selfie?: string | null
           email_enviado_em?: string | null
           email_solicitante?: string | null
+          fipe_diretoria_aprovado?: boolean | null
           fipe_faixa_cobranca_max?: number | null
           fipe_faixa_cobranca_min?: number | null
           fipe_menor_aprovado?: boolean | null
@@ -8949,6 +8989,7 @@ export type Database = {
           doc_selfie?: string | null
           email_enviado_em?: string | null
           email_solicitante?: string | null
+          fipe_diretoria_aprovado?: boolean | null
           fipe_faixa_cobranca_max?: number | null
           fipe_faixa_cobranca_min?: number | null
           fipe_menor_aprovado?: boolean | null

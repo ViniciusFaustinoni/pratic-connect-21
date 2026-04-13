@@ -10,6 +10,7 @@ import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { Separator } from '@/components/ui/separator';
 
+
 interface EtapaAssinaturaContratoProps {
   cotacaoId: string;
   tokenPublico: string;
@@ -55,6 +56,26 @@ export function EtapaAssinaturaContrato({
   const [emailLocal, setEmailLocal] = useState(clienteEmail || '');
   const [emailEfetivo, setEmailEfetivo] = useState(clienteEmail || '');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
+  const [aguardandoAprovacaoFipe, setAguardandoAprovacaoFipe] = useState(false);
+
+  // ═══ Verificar se cotação está pendente de aprovação FIPE diretoria ═══
+  useEffect(() => {
+    const verificarAprovacao = async () => {
+      try {
+        const { data } = await publicSupabase
+          .from('cotacoes')
+          .select('fipe_diretoria_aprovado')
+          .eq('id', cotacaoId)
+          .maybeSingle();
+        setAguardandoAprovacaoFipe(data?.fipe_diretoria_aprovado === false);
+      } catch {
+        // ignore
+      }
+    };
+    verificarAprovacao();
+    const interval = setInterval(verificarAprovacao, 15000);
+    return () => clearInterval(interval);
+  }, [cotacaoId]);
   
 
   // ═══ REFS DE TRAVA — impedir dupla execução ═══
@@ -478,6 +499,36 @@ export function EtapaAssinaturaContrato({
   // ═══════════════════════════════════════════════
   // RENDER
   // ═══════════════════════════════════════════════
+
+  // Bloqueio: aguardando aprovação interna
+  if (aguardandoAprovacaoFipe) {
+    return (
+      <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
+        <CardContent className="py-12 text-center space-y-6">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-6"
+          >
+            <div className="w-16 h-16 mx-auto rounded-full bg-amber-100 dark:bg-amber-900/30 flex items-center justify-center">
+              <Clock className="h-8 w-8 text-amber-600 dark:text-amber-400" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Aguardando aprovação interna</h3>
+              <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                Sua cotação está em análise. Você será notificado quando a avaliação for concluída e a assinatura for liberada.
+              </p>
+            </div>
+            <div className="flex items-center justify-center gap-2 text-xs text-muted-foreground">
+              <Loader2 className="h-3 w-3 animate-spin" />
+              Verificando status automaticamente...
+            </div>
+          </motion.div>
+        </CardContent>
+      </Card>
+    );
+  }
 
   // Tela de coleta de email
   if (etapaInterna === 'coletar_email') {
