@@ -9,7 +9,7 @@ import { publicSupabase } from '@/integrations/supabase/publicClient';
 import { toast } from 'sonner';
 import { motion } from 'framer-motion';
 import { Separator } from '@/components/ui/separator';
-import { useAprovacaoFipeDiretoriaPorCotacao } from '@/hooks/useAprovacoesFipeDiretoria';
+
 
 interface EtapaAssinaturaContratoProps {
   cotacaoId: string;
