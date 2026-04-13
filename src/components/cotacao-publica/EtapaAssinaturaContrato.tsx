@@ -63,16 +63,21 @@ export function EtapaAssinaturaContrato({
   useEffect(() => {
     const verificarAprovacao = async () => {
       try {
-        const [cotacaoRes, configRes] = await Promise.all([
+        const [cotacaoRes, configRes, configBlindadoRes] = await Promise.all([
           publicSupabase
             .from('cotacoes')
-            .select('fipe_diretoria_aprovado')
+            .select('fipe_diretoria_aprovado, veiculo_blindado')
             .eq('id', cotacaoId)
             .maybeSingle(),
           publicSupabase
             .from('configuracoes')
             .select('valor')
             .eq('chave', 'dupla_aprovacao_fipe_diretoria_ativa')
+            .maybeSingle(),
+          publicSupabase
+            .from('configuracoes')
+            .select('valor')
+            .eq('chave', 'restricao_blindado_absoluta')
             .maybeSingle(),
         ]);
         const configAtiva = configRes.data?.valor === 'true';
