@@ -60,6 +60,28 @@ async function processarMensagemUsuario(
     telefonesBusca.push("55" + telLimpo);
   }
 
+  // ---- 0. VERIFICAR CONFIRMAÇÃO DE AGENDAMENTO PENDENTE ----
+  if (tipoMsg === "text" || tipoMsg === "button") {
+    try {
+      const { data: confirmacao } = await supabase
+        .from("confirmacoes_agendamento")
+        .select("*")
+        .or(`telefone.in.(${telefonesBusca.join(",")}),telefone_formatado.in.(${telefonesBusca.join(",")})`)
+        .in("status", ["enviada", "reagendando", "aguardando_confirmacao_vespera", "aguardando_confirmacao_manha"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (confirmacao) {
+        console.log(`[whatsapp-meta-webhook] Confirmação pendente encontrada: ${confirmacao.id} status=${confirmacao.status}`);
+        await processarRespostaConfirmacaoMeta(supabase, supabaseUrl, serviceKey, confirmacao, texto, telefone);
+        return;
+      }
+    } catch (confErr) {
+      console.error(`[whatsapp-meta-webhook] Erro ao verificar confirmação:`, confErr);
+    }
+  }
+
   // ---- 1. BUSCAR ASSOCIADO ATIVO ----
   const { data: associado } = await supabase
     .from("associados")
