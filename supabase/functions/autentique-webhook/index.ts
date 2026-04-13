@@ -948,11 +948,12 @@ serve(async (req) => {
           await supabase
             .from("cotacoes")
             .update({ 
+              status: "aceita",
               status_contratacao: "contrato_assinado",
               contrato_gerado_id: contrato.id
             })
             .eq("id", contrato.cotacao_id);
-          console.log("[autentique-webhook] ✓ Cotação atualizada para contrato_assinado");
+          console.log("[autentique-webhook] ✓ Cotação atualizada para status=aceita, contrato_assinado");
         }
 
         // Registrar histórico do contrato
@@ -1073,11 +1074,12 @@ serve(async (req) => {
             await supabase
               .from("cotacoes")
               .update({ 
+                status: "aceita",
                 status_contratacao: "contrato_assinado",
                 contrato_gerado_id: contrato.id
               })
               .eq("id", contrato.cotacao_id);
-            console.log("[autentique-webhook] ✓ Cotação atualizada para contrato_assinado (via update)");
+            console.log("[autentique-webhook] ✓ Cotação atualizada para status=aceita, contrato_assinado (via update)");
           }
 
           await supabase.from("contratos_historico").insert({
