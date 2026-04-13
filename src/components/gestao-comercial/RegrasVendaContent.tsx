@@ -135,6 +135,8 @@ const AUTORIZACOES_CHAVES = [
   'restricao_mudanca_linha',
   'restricao_depreciacao_cobertura_100',
   'restricao_blindado_absoluta',
+  'dupla_aprovacao_fipe_diretoria_ativa',
+  'dupla_aprovacao_fipe_minimo_votos',
 ] as const;
 
 interface FaixaVenda {
@@ -153,6 +155,8 @@ interface AutorizacoesConfig {
   restricao_mudanca_linha: boolean;
   restricao_depreciacao_cobertura_100: boolean;
   restricao_blindado_absoluta: boolean;
+  dupla_aprovacao_fipe_diretoria_ativa: boolean;
+  dupla_aprovacao_fipe_minimo_votos: string;
 }
 
 const AUTORIZACOES_DEFAULTS: AutorizacoesConfig = {
@@ -170,6 +174,8 @@ const AUTORIZACOES_DEFAULTS: AutorizacoesConfig = {
   restricao_mudanca_linha: true,
   restricao_depreciacao_cobertura_100: true,
   restricao_blindado_absoluta: true,
+  dupla_aprovacao_fipe_diretoria_ativa: false,
+  dupla_aprovacao_fipe_minimo_votos: '2',
 };
 
 function useTaxasConfiguracoes() {
