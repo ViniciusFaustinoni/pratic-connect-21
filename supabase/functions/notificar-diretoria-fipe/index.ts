@@ -96,6 +96,7 @@ serve(async (req) => {
 
     const fipeFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor_fipe || 0);
     const limiteFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(limite_aplicado || 0);
+    const urlPainel = "https://app.praticcar.org/vendas/aprovacoes-fipe";
 
     let enviados = 0;
 
@@ -133,9 +134,10 @@ serve(async (req) => {
         limiteFormatado,
         tipo_veiculo || categoria_placa || "N/A",
         nome_solicitante || "N/A",
+        urlPainel,
       ];
 
-      // Mensagem fallback (texto livre) caso template não esteja aprovado
+      // Mensagem fallback (texto livre) com URL do painel
       const mensagemFallback = `🔔 *Autorização FIPE Necessária*\n\n` +
         `Veículo: *${marcaModelo}* ${veiculo_ano || ""}\n` +
         `Placa: *${veiculo_placa || "N/A"}*\n` +
@@ -144,7 +146,8 @@ serve(async (req) => {
         `Limite configurado: ${limiteFormatado}\n` +
         `Associado: *${nome_solicitante || "N/A"}*\n\n` +
         `O valor FIPE está acima do limite. Sua autorização é necessária.\n\n` +
-        `Responda *APROVAR* ou *RECUSAR*.`;
+        `Acesse o painel para aprovar ou recusar:\n${urlPainel}\n\n` +
+        `Ou responda *APROVAR* ou *RECUSAR*.`;
 
       try {
         const sendPayload: any = {
@@ -153,12 +156,10 @@ serve(async (req) => {
         };
 
         if (templateAprovado) {
-          // Enviar via template Meta estruturado
           sendPayload.template_name = "aprovacao_fipe_diretoria_v2";
           sendPayload.template_params = templateParams;
           console.log(`[notificar-diretoria-fipe] Enviando template Meta para ${profile.nome}`);
         } else {
-          // Fallback: texto livre
           sendPayload.allow_text = true;
           console.log(`[notificar-diretoria-fipe] Template não aprovado (${templateMeta?.status}). Enviando texto livre para ${profile.nome}`);
         }
