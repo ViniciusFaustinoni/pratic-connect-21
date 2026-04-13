@@ -198,7 +198,19 @@ export function UnifiedDocumentUploader({
 
       // Validar placa do CRLV contra a placa esperada da cotação
       if (ocrResult.tipo_detectado === 'crlv' && placaEsperada && ocrResult.dados?.placa) {
-        const normalizePlaca = (p: string) => p.replace(/[-\s]/g, '').toUpperCase();
+        const normalizePlaca = (p: string) => {
+          const clean = p.replace(/[-\s]/g, '').toUpperCase();
+          if (clean.length === 7) {
+            return clean.split('').map((ch, i) => {
+              const isLetterPos = i <= 2 || i === 4;
+              const isDigitPos = i === 3 || i === 5 || i === 6;
+              if (isLetterPos && ch === '0') return 'O';
+              if (isDigitPos && ch === 'O') return '0';
+              return ch;
+            }).join('');
+          }
+          return clean;
+        };
         const placaExtraida = normalizePlaca(ocrResult.dados.placa);
         const placaEsperadaNorm = normalizePlaca(placaEsperada);
         
