@@ -1,4 +1,4 @@
-import { useParams } from 'react-router-dom';
+import { useParams, useNavigate } from 'react-router-dom';
 import { useEffect, useState, useMemo } from 'react';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -102,6 +102,8 @@ interface AssociadoData {
     } | null;
   }[];
   servicoInstalacao?: ServicoInstalacao | null;
+  cotacaoTokenPublico?: string | null;
+  cotacaoStatusContratacao?: string | null;
 }
 
 function useAcompanhamentoProposta(token: string | undefined) {
@@ -113,7 +115,7 @@ function useAcompanhamentoProposta(token: string | undefined) {
       // Buscar contrato pelo link_token
       const { data: contrato, error: contratoError } = await supabase
         .from('contratos')
-        .select('id, associado_id, status, veiculo_id')
+        .select('id, associado_id, status, veiculo_id, cotacao_id')
         .eq('link_token', token)
         .maybeSingle();
 
@@ -233,6 +235,19 @@ function useAcompanhamentoProposta(token: string | undefined) {
         } as ServicoInstalacao;
       }
 
+      // Buscar dados da cotação para verificar se o fluxo está completo
+      let cotacaoTokenPublico: string | null = null;
+      let cotacaoStatusContratacao: string | null = null;
+      if (contrato.cotacao_id) {
+        const { data: cotacaoData } = await supabase
+          .from('cotacoes')
+          .select('token_publico, status_contratacao')
+          .eq('id', contrato.cotacao_id)
+          .maybeSingle();
+        cotacaoTokenPublico = (cotacaoData as any)?.token_publico || null;
+        cotacaoStatusContratacao = (cotacaoData as any)?.status_contratacao || null;
+      }
+
       return {
         ...associado,
         primeiro_acesso: primeiroAcesso,
@@ -244,6 +259,8 @@ function useAcompanhamentoProposta(token: string | undefined) {
         },
         instalacoes: (instalacoes || []).map(i => ({ ...i, confirmacao_whatsapp: confirmacaoWhatsapp })),
         servicoInstalacao,
+        cotacaoTokenPublico,
+        cotacaoStatusContratacao,
       };
     },
     enabled: !!token,
@@ -514,10 +531,22 @@ function formatTipoFoto(tipo: string): string {
 
 export default function AcompanhamentoProposta() {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: associado, isLoading, error } = useAcompanhamentoProposta(token);
 
-
+  // Se o fluxo de contratação ainda não foi concluído, redirecionar de volta para a cotação
+  const statusFluxoIncompleto = ['plano_escolhido', 'dados_preenchidos', 'documentos_ok', 'contrato_gerado'];
+  useEffect(() => {
+    if (
+      associado?.cotacaoStatusContratacao &&
+      statusFluxoIncompleto.includes(associado.cotacaoStatusContratacao) &&
+      associado.cotacaoTokenPublico
+    ) {
+      console.log('[AcompanhamentoProposta] Fluxo incompleto, redirecionando para cotação:', associado.cotacaoStatusContratacao);
+      navigate(`/cotacao/${associado.cotacaoTokenPublico}`, { replace: true });
+    }
+  }, [associado?.cotacaoStatusContratacao, associado?.cotacaoTokenPublico, navigate]);
 
   // Checklist items parsed
   const checklistItems = useMemo<ChecklistItemData[]>(() => {
