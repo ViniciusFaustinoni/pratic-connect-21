@@ -597,8 +597,14 @@ serve(async (req) => {
 
               console.log(`[whatsapp-meta-webhook] MSG from=${telefone} type=${msg.type} id=${msg.id} texto="${texto?.substring(0, 80)}"`);
 
+              // ---- VERIFICAR SE É RESPOSTA DE DIRETOR (APROVAÇÃO FIPE) ----
+              const foiDiretor = await processarRespostaDiretorFipe(
+                supabase, supabaseUrl, serviceKey,
+                telefone, texto || ""
+              );
+
               // ---- VERIFICAR SE É RESPOSTA DE PRESTADOR (DESPACHO REBOQUE) ----
-              const foiProcessado = await processarRespostaPrestador(
+              const foiProcessado = foiDiretor || await processarRespostaPrestador(
                 supabase, supabaseUrl, serviceKey,
                 telefone, texto || "", msg.type, latitude, longitude
               );
