@@ -6,6 +6,7 @@ import { Badge } from '@/components/ui/badge';
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from '@/components/ui/collapsible';
 import { 
   User, 
+  UserPlus,
   Car, 
   FileText, 
   Settings, 
@@ -22,6 +23,7 @@ import { toast } from 'sonner';
 // Ícones por grupo
 const iconesPorGrupo: Record<string, React.ComponentType<{ className?: string }>> = {
   associado: User,
+  indicador: UserPlus,
   veiculo: Car,
   contrato: FileText,
   plano: Shield,
@@ -58,6 +60,12 @@ const VARIAVEIS_DISPONIVEIS: Record<string, { codigo: string; descricao: string 
     { codigo: 'associado.cnh_validade', descricao: 'Validade da CNH' },
     { codigo: 'associado.cnh_categoria', descricao: 'Categoria da CNH (A, B, AB...)' },
     { codigo: 'associado.rg_orgao', descricao: 'Órgão emissor do RG' },
+  ],
+  indicador: [
+    { codigo: 'indicador.nome', descricao: 'Nome do associado indicador' },
+    { codigo: 'indicador.cpf', descricao: 'CPF do indicador' },
+    { codigo: 'indicador.telefone', descricao: 'Telefone do indicador' },
+    { codigo: 'indicador.email', descricao: 'E-mail do indicador' },
   ],
   veiculo: [
     { codigo: 'veiculo.marca', descricao: 'Marca do veículo' },
@@ -164,6 +172,7 @@ export function VariaveisSelector({ onSelect }: VariaveisSelectorProps) {
   const [copiado, setCopiado] = useState<string | null>(null);
   const [expandido, setExpandido] = useState<Record<string, boolean>>({
     associado: true,
+    indicador: false,
     veiculo: false,
     contrato: false,
     plano: false,
