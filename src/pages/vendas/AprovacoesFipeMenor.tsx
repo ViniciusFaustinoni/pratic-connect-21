@@ -39,7 +39,7 @@ const STATUS_CONFIG = {
   recusado: { label: 'Recusado', color: 'bg-red-100 text-red-800', icon: XCircle },
 };
 
-type SectionTab = 'fipe_menor' | 'alto_valor' | 'elegibilidade';
+type SectionTab = 'fipe_menor' | 'alto_valor' | 'elegibilidade' | 'diretoria';
 
 export default function AprovacoesFipeMenor() {
   const [section, setSection] = useState<SectionTab>('fipe_menor');
@@ -148,6 +148,18 @@ export default function AprovacoesFipeMenor() {
                 </TooltipTrigger>
                 <TooltipContent side="bottom" className="max-w-xs text-xs">
                   Veículos fora da whitelist de aceitação do plano que necessitam aprovação manual para inclusão
+                </TooltipContent>
+              </Tooltip>
+            </TabsTrigger>
+            <TabsTrigger value="diretoria" className="gap-1.5">
+              <Users className="h-4 w-4" />
+              Diretoria
+              <Tooltip>
+                <TooltipTrigger asChild>
+                  <HelpCircle className="h-3 w-3 text-muted-foreground" />
+                </TooltipTrigger>
+                <TooltipContent side="bottom" className="max-w-xs text-xs">
+                  Veículos com FIPE acima do limite que necessitam aprovação da diretoria (dupla aprovação)
                 </TooltipContent>
               </Tooltip>
             </TabsTrigger>
