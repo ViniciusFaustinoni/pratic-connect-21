@@ -459,11 +459,12 @@ serve(async (req) => {
         const { error: cotacaoUpdateError } = await supabase
           .from("cotacoes")
           .update({ 
+            status: "aceita",
             status_contratacao: "contrato_assinado",
             contrato_gerado_id: contrato.id
           })
           .eq("id", contrato.cotacao_id);
-        
+
         if (cotacaoUpdateError) {
           console.error("[autentique-sync-contrato] Erro ao atualizar cotação:", cotacaoUpdateError);
         } else {
