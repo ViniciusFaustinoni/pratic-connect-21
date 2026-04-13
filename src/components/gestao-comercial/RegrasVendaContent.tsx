@@ -1556,7 +1556,61 @@ export function RegrasVendaContent() {
           </CardContent>
         </Card>
 
-        <div className="flex justify-end">
+        <Card>
+          <CardHeader>
+            <CardTitle className="text-lg flex items-center gap-2">
+              <ShieldCheck className="h-5 w-5" />
+              Dupla aprovação da diretoria (FIPE alto valor)
+            </CardTitle>
+            <CardDescription>
+              Quando ativada, veículos com FIPE acima do limite configurado exigem aprovação de múltiplos gestores via WhatsApp antes da assinatura do termo de filiação.
+            </CardDescription>
+          </CardHeader>
+          <CardContent className="space-y-4">
+            <div className="flex items-center justify-between gap-4">
+              <div className="flex-1">
+                <Label htmlFor="dupla_aprovacao_toggle" className="text-sm font-medium">
+                  Exigir dupla aprovação para veículos acima do limite FIPE
+                </Label>
+                <p className="text-xs text-muted-foreground mt-0.5">
+                  Quando ativado, todos os gestores cadastrados serão notificados via WhatsApp e precisarão aprovar individualmente. A cotação ficará bloqueada na etapa de assinatura até atingir o mínimo de aprovações.
+                </p>
+              </div>
+              <Switch
+                id="dupla_aprovacao_toggle"
+                checked={autorizacoes.dupla_aprovacao_fipe_diretoria_ativa}
+                onCheckedChange={(checked) =>
+                  setAutorizacoes(prev => ({ ...prev, dupla_aprovacao_fipe_diretoria_ativa: checked }))
+                }
+              />
+            </div>
+            {autorizacoes.dupla_aprovacao_fipe_diretoria_ativa && (
+              <div className="flex items-center justify-between gap-4 ml-6">
+                <Label htmlFor="minimo_votos" className="flex-1 text-sm">
+                  Número mínimo de aprovações necessárias
+                </Label>
+                <Input
+                  id="minimo_votos"
+                  type="number"
+                  min="1"
+                  step="1"
+                  className="w-24 text-right"
+                  value={autorizacoes.dupla_aprovacao_fipe_minimo_votos}
+                  onChange={(e) =>
+                    setAutorizacoes(prev => ({ ...prev, dupla_aprovacao_fipe_minimo_votos: e.target.value }))
+                  }
+                />
+              </div>
+            )}
+            <Alert className="border-primary/30 bg-primary/5">
+              <Info className="h-4 w-4" />
+              <AlertDescription className="text-xs">
+                Os gestores receberão uma mensagem com todos os dados do veículo e do associado. Eles devem responder com <strong>APROVAR</strong> ou <strong>RECUSAR</strong>. A cotação será liberada automaticamente ao atingir o número mínimo de aprovações.
+              </AlertDescription>
+            </Alert>
+          </CardContent>
+        </Card>
+
           <Button onClick={handleSaveAutorizacoes} disabled={savingAutorizacoes} className="gap-2">
             {savingAutorizacoes ? <Loader2 className="h-4 w-4 animate-spin" /> : <Save className="h-4 w-4" />}
             Salvar configurações
