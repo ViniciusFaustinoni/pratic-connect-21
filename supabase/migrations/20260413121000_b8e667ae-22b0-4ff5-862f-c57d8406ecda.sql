@@ -1,0 +1,1 @@
+UPDATE cotacoes SET status = 'aceita', updated_at = now() WHERE status_contratacao = 'contrato_assinado' AND status = 'enviada';
