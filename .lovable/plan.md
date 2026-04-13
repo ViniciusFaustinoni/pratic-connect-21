@@ -1,38 +1,29 @@
 
-## Plano: Template com URL do sistema + Aprovação via painel
+
+## Plano: Corrigir bloqueio de cotação quando dupla aprovação está desativada
 
 ### Problema
-1. O template Meta `aprovacao_fipe_diretoria_v2` não inclui a URL do sistema para o diretor acessar o painel
-2. A página de Aprovações (`/vendas/aprovacoes-fipe`) não exibe as aprovações da diretoria (tabela `aprovacoes_fipe_diretoria`) -- só mostra as do analista (`aprovacoes_fipe_limite`)
-3. A aprovação/recusa via painel não está implementada
+A `EtapaAssinaturaContrato` verifica `fipe_diretoria_aprovado === false` para bloquear a assinatura, mas **não consulta a configuração** `dupla_aprovacao_fipe_diretoria_ativa`. Resultado: se uma cotação foi criada com o campo `false` enquanto a regra estava ativa, desativar a regra depois não desbloqueia a cotação.
 
-### Solução
+Além disso, o banco mostra `dupla_aprovacao_fipe_diretoria_ativa = 'true'` mesmo que o screenshot do usuário mostre o toggle desligado — indicando que o save pode não ter sido acionado, ou que o valor não foi persistido.
 
-**1. Atualizar template Meta e reenviar**
-- Alterar corpo do template para incluir a URL `https://app.praticcar.org/vendas/aprovacoes-fipe` como texto (não como botão URL, pois o botão já existe)
-- Atualizar fallback de texto livre no `notificar-diretoria-fipe` para incluir o link
-- Deletar o template antigo na Meta (via API DELETE) e recriar com o novo corpo via `whatsapp-submit-template`
-- Migration para atualizar o registro na tabela `whatsapp_meta_templates`
+### Correção
 
-**2. Adicionar aba "Diretoria" na página de Aprovações**
-- Novo `SectionTab`: `'diretoria'` ao lado de FIPE Menor / Alto Valor / Elegibilidade
-- Novo hook `useAprovacoesDiretoria(status?)` que busca da tabela `aprovacoes_fipe_diretoria` com join em `cotacoes` para dados do veículo/associado
-- Cards exibindo: dados do veículo, valor FIPE, limite, categoria, associado, votos já registrados
-- Botoes Aprovar/Recusar que atualizam `aprovacoes_fipe_diretoria` e verificam se atingiu o mínimo de votos
+**1. `EtapaAssinaturaContrato.tsx` — Verificar config antes de bloquear**
+- Buscar também a chave `dupla_aprovacao_fipe_diretoria_ativa` da tabela `configuracoes` no mesmo useEffect
+- Só bloquear se **ambos** forem verdadeiros: config ativa **E** `fipe_diretoria_aprovado === false`
+- Se a config estiver desativada, ignorar o campo `fipe_diretoria_aprovado` e deixar a cotação prosseguir
 
-**3. Hook `useAprovacoesDiretoria`**
-- Busca `aprovacoes_fipe_diretoria` filtrada por `diretor_id = auth.uid()` ou todos (se admin)
-- Join com `cotacoes` para pegar dados do veículo e associado
-- Mutations para aprovar/recusar que:
-  - Atualizam o registro individual (`status`, `respondido_em`)
-  - Contam total de aprovações para a cotação
-  - Se >= mínimo configurado: atualizam `cotacoes.fipe_diretoria_aprovado = true`
+```typescript
+// Lógica corrigida:
+const configAtiva = configData?.valor === 'true';
+const pendente = cotacaoData?.fipe_diretoria_aprovado === false;
+setAguardandoAprovacaoFipe(configAtiva && pendente);
+```
 
-**4. RLS: permitir diretores atualizarem seus próprios registros**
-- Adicionar policy UPDATE em `aprovacoes_fipe_diretoria` para `diretor_id = auth.uid()`
+**2. `notificar-diretoria-fipe/index.ts` — Já verifica config (OK)**
+- A Edge Function já verifica a config antes de setar `fipe_diretoria_aprovado = false`, então novas cotações não serão bloqueadas se a regra estiver desativada.
 
 ### Escopo
-- 1 migration (atualizar template + RLS policy)
-- 1 novo hook (`useAprovacoesDiretoria`)
-- 1 arquivo editado (`AprovacoesFipeMenor.tsx` - adicionar aba Diretoria)
-- 2 Edge Functions editadas (`notificar-diretoria-fipe` fallback com URL, `whatsapp-submit-template` resubmissão)
+- 1 arquivo editado (`EtapaAssinaturaContrato.tsx` — ~5 linhas alteradas no useEffect)
+
