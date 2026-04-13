@@ -39,7 +39,7 @@ import { motion } from 'framer-motion';
 import { CriarContaAssociadoForm } from '@/components/public/CriarContaAssociadoForm';
 import { DocumentosPendentes } from '@/components/associado/DocumentosPendentes';
 import { getOrientacoesRecusa } from '@/utils/orientacoesRecusa';
-import { SignaturePad } from '@/components/instalador/SignaturePad';
+
 import { toast } from 'sonner';
 
 interface ChecklistItemData {
@@ -516,39 +516,8 @@ export default function AcompanhamentoProposta() {
   const { token } = useParams<{ token: string }>();
   const queryClient = useQueryClient();
   const { data: associado, isLoading, error } = useAcompanhamentoProposta(token);
-  const [salvandoAssinatura, setSalvandoAssinatura] = useState(false);
-  const [assinaturaSalva, setAssinaturaSalva] = useState(false);
 
-  const handleSalvarAssinatura = async (signatureBlob: Blob) => {
-    if (!associado?.servicoInstalacao?.id) return;
-    setSalvandoAssinatura(true);
-    try {
-      const servicoId = associado.servicoInstalacao.id;
-      const fileName = `${servicoId}/assinatura_cliente_${Date.now()}.png`;
-      const { error: uploadError } = await supabase.storage
-        .from('assinaturas')
-        .upload(fileName, signatureBlob, { contentType: 'image/png', upsert: true });
-      if (uploadError) throw uploadError;
 
-      const { data: urlData } = supabase.storage.from('assinaturas').getPublicUrl(fileName);
-      const publicUrl = urlData.publicUrl;
-
-      const { error: updateError } = await supabase
-        .from('servicos')
-        .update({ assinatura_cliente_url: publicUrl })
-        .eq('id', servicoId);
-      if (updateError) throw updateError;
-
-      setAssinaturaSalva(true);
-      toast.success('Assinatura salva com sucesso!');
-      queryClient.invalidateQueries({ queryKey: ['acompanhamento-proposta', token] });
-    } catch (err) {
-      console.error('Erro ao salvar assinatura:', err);
-      toast.error('Erro ao salvar assinatura. Tente novamente.');
-    } finally {
-      setSalvandoAssinatura(false);
-    }
-  };
 
   // Checklist items parsed
   const checklistItems = useMemo<ChecklistItemData[]>(() => {

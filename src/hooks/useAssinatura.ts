@@ -1,7 +1,7 @@
 import { useMutation, useQueryClient } from '@tanstack/react-query';
 import { supabase } from '@/integrations/supabase/client';
 
-export type AssinaturaTipo = 'instalacao' | 'vistoria' | 'servico';
+export type AssinaturaTipo = 'instalacao' | 'servico';
 
 export function useSaveAssinatura() {
   const queryClient = useQueryClient();
@@ -42,18 +42,7 @@ export function useSaveAssinatura() {
       const publicUrl = urlData.publicUrl;
 
       // 3. Salvar na tabela correta baseado no tipo
-      if (tipo === 'vistoria') {
-        // Para vistorias: salvar como foto na tabela vistoria_fotos
-        const { error } = await supabase
-          .from('vistoria_fotos')
-          .insert({
-            vistoria_id: entityId,
-            tipo: 'assinatura_cliente',
-            arquivo_url: publicUrl,
-            visivel_cliente: true,
-          });
-        if (error) throw error;
-      } else if (tipo === 'servico') {
+      if (tipo === 'servico') {
         // Para serviços unificados: salvar na tabela servicos
         const { error } = await supabase
           .from('servicos')
