@@ -85,11 +85,11 @@ function useTemplatesAnexos() {
     queryFn: async () => {
       const { data } = await supabase
         .from('documento_templates')
-        .select('nome, codigo, conteudo')
+        .select('id, nome, codigo, conteudo')
         .eq('anexar_proposta', true)
         .eq('ativo', true)
         .order('ordem_anexo', { ascending: true });
-      return (data || []) as { nome: string; codigo: string; conteudo: string }[];
+      return (data || []) as { id: string; nome: string; codigo: string; conteudo: string }[];
     },
     staleTime: 5 * 60 * 1000,
   });
