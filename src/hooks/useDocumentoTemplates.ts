@@ -234,6 +234,7 @@ export function useCreateTemplate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documento-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['documento-template'] });
       toast.success('Template criado com sucesso!');
     },
     onError: (error: any) => {
@@ -320,6 +321,7 @@ export function useUpdateTemplate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documento-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['documento-template'] });
       toast.success('Template atualizado com sucesso!');
     },
     onError: (error: any) => {
@@ -348,6 +350,7 @@ export function useDeleteTemplate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documento-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['documento-template'] });
       toast.success('Template excluído com sucesso!');
     },
     onError: (error: Error) => {
@@ -394,6 +397,7 @@ export function useDuplicateTemplate() {
     },
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['documento-templates'] });
+      queryClient.invalidateQueries({ queryKey: ['documento-template'] });
       toast.success('Template duplicado com sucesso!');
     },
     onError: (error: Error) => {
