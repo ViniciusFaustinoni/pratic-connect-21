@@ -89,7 +89,7 @@ serve(async (req) => {
     const { data: templateMeta } = await supabase
       .from("whatsapp_meta_templates")
       .select("nome, status")
-      .eq("nome", "aprovacao_fipe_diretoria_v1")
+      .eq("nome", "aprovacao_fipe_diretoria_v2")
       .maybeSingle();
 
     const templateAprovado = templateMeta?.status === "APPROVED";
@@ -154,7 +154,7 @@ serve(async (req) => {
 
         if (templateAprovado) {
           // Enviar via template Meta estruturado
-          sendPayload.template_name = "aprovacao_fipe_diretoria_v1";
+          sendPayload.template_name = "aprovacao_fipe_diretoria_v2";
           sendPayload.template_params = templateParams;
           console.log(`[notificar-diretoria-fipe] Enviando template Meta para ${profile.nome}`);
         } else {

@@ -17,7 +17,7 @@ serve(async (req) => {
 
   try {
     const body = await req.json();
-    const templateName = body.template_name || "aprovacao_fipe_diretoria_v1";
+    const templateName = body.template_name || "aprovacao_fipe_diretoria_v2";
 
     // Buscar template do banco
     const { data: template, error: tmplErr } = await supabase
