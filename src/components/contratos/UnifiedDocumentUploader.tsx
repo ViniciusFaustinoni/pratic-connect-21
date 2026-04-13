@@ -370,7 +370,7 @@ export function UnifiedDocumentUploader({
       });
       toast.error(error.message || 'Erro ao processar documento');
     }
-  }, [cotacaoId, contratoId, veiculoId, onDocumentsChange, onOcrDataExtracted, cpfEsperado, nomeEsperado]);
+  }, [cotacaoId, contratoId, veiculoId, onDocumentsChange, onOcrDataExtracted, cpfEsperado, nomeEsperado, placaEsperada]);
 
   const handleFileSelect = useCallback(async (files: FileList | null) => {
     if (!files || files.length === 0) return;

@@ -427,6 +427,7 @@ export function EtapaDadosPessoaisDocumentos({
         onOcrDataExtracted={handleOcrDataExtracted}
         cpfEsperado={defaultValues?.cpf}
         nomeEsperado={defaultValues?.nome}
+        placaEsperada={defaultValues?.veiculo_placa}
       />
 
       {/* Checklist de Documentos */}
