@@ -1,32 +1,50 @@
 
 
-## Correção: Badge mostra min/max absoluto em vez do range sequencial das faixas FIPE
+## Correção: Motor de elegibilidade não reconhece "HONDA MOTOS" nem "TODOS" como wildcard
 
 ### Problema
 
-O badge calcula `Math.min` e `Math.max` de **todos** os valores das faixas FIPE ativas, resultando em `R$ 43,70 ~ R$ 278,70`. Porém, ao abrir o modal, a primeira faixa (0-3k) tem valor `68,70` e a faixa de `43,70` está no meio (9k-12k). O badge mostra um range que não corresponde à leitura natural da tabela (primeira → última faixa).
+Em `findModelEligibility` (linha 177-178 de `useEntityEligibilityRules.ts`), a comparação usa `.includes()` na direção errada:
+
+```typescript
+const marcaOk = ctx.marca.toUpperCase().includes(entry.marca?.toUpperCase() || '');
+// "HONDA".includes("HONDA MOTOS") → false ❌
+```
+
+E o modelo "TODOS" não é tratado como wildcard:
+```typescript
+const modeloOk = ctx.modelo.toUpperCase().includes(entry.modelo?.toUpperCase() || '');
+// "CG 160 TITAN".includes("TODOS") → false ❌
+```
+
+Resultado: `findModelEligibility` retorna `null`, e como a regra é `include`, o veículo é bloqueado (linha 252: `return !isInclude` → `false`).
 
 ### Correção
 
-**Arquivo**: `src/components/gestao-comercial/LinhasPlanos.tsx` — linhas 670-674 (coberturas) e 715-719 (benefícios)
+**Arquivo**: `src/hooks/useEntityEligibilityRules.ts` — linhas 177-178
 
-Trocar `Math.min/Math.max` por valor da **primeira** e **última** faixa ativa (ordenadas por `fipe_min`), que reflete o que o usuário vê ao abrir o modal:
+Duas mudanças na função `findModelEligibility`:
+
+1. **Marca**: Comparação bidirecional — aceitar match se qualquer um contém o outro (ex: "HONDA" match "HONDA MOTOS" e vice-versa)
+2. **Modelo**: Tratar "TODOS" (e variantes como "todos", "QUALQUER") como wildcard universal
 
 ```typescript
 // Antes:
-const minVal = Math.min(...activeFaixas.map((f: any) => f.valor));
-const maxVal = Math.max(...activeFaixas.map((f: any) => f.valor));
+const marcaOk = (ctx.marca || '').toUpperCase().includes(entry.marca?.toUpperCase() || '');
+const modeloOk = (ctx.modelo || '').toUpperCase().includes(entry.modelo?.toUpperCase() || '');
 
 // Depois:
-const sorted = [...activeFaixas].sort((a: any, b: any) => (a.fipe_min ?? a.de ?? 0) - (b.fipe_min ?? b.de ?? 0));
-const firstVal = sorted[0].valor;
-const lastVal = sorted[sorted.length - 1].valor;
-fipeRange = `R$ ${firstVal.toFixed(2).replace('.', ',')} ~ R$ ${lastVal.toFixed(2).replace('.', ',')}`;
+const ctxMarca = (ctx.marca || '').toUpperCase();
+const entryMarca = (entry.marca || '').toUpperCase();
+const marcaOk = !entryMarca || ctxMarca.includes(entryMarca) || entryMarca.includes(ctxMarca);
+
+const ctxModelo = (ctx.modelo || '').toUpperCase();
+const entryModelo = (entry.modelo || '').toUpperCase();
+const modeloWildcard = ['TODOS', 'QUALQUER', 'ALL', ''].includes(entryModelo);
+const modeloOk = modeloWildcard || ctxModelo.includes(entryModelo) || entryModelo.includes(ctxModelo);
 ```
 
-Isso fará o badge mostrar `R$ 68,70 ~ R$ 278,70` (primeiro tier → último tier), que é exatamente o que aparece ao abrir o modal.
-
 ### Escopo
-- 2 blocos alterados em 1 arquivo (coberturas + benefícios)
+- 2 linhas alteradas em 1 arquivo
 - Sem deploy de Edge Function
 
