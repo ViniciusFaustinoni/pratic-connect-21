@@ -28,6 +28,7 @@ serve(async (req) => {
       veiculo_placa,
       nome_solicitante,
       categoria_placa,
+      motivo,
     } = body;
 
     if (!cotacao_id) {
