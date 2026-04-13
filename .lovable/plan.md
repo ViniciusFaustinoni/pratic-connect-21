@@ -1,33 +1,26 @@
 
 
-## Plano: Ativar verificação biométrica LIVE na assinatura Autentique
+## Plano: Alterar biometria para FACE + LIVENESS (sem documento)
 
 ### O que muda
-O signatário, ao assinar o termo de filiação, será obrigado a tirar uma selfie, fotografar um documento com foto e realizar prova de vida por vídeo. A Autentique compara automaticamente as imagens. Isso consome créditos adicionais de verificação no Autentique.
+O signatário precisará apenas tirar uma selfie e fazer prova de vida por vídeo. Não será mais necessário fotografar documento (RG/CNH).
 
 ### Alterações técnicas
 
-**1. `supabase/functions/autentique-create/index.ts` (~linha 732-741)**
-Adicionar `security_verifications` ao `signerObj`:
+**1. `supabase/functions/autentique-create/index.ts`**
+Alterar de:
 ```typescript
-const signerObj: any = {
-  name: signerName || undefined,
-  email: signerEmail,
-  action: "SIGN",
-  delivery_method: "DELIVERY_METHOD_EMAIL",
-  positions: gerarPosicoesAssinatura(posConfig),
-  security_verifications: [{ type: "LIVE" }],
-};
+security_verifications: [{ type: "LIVE" }],
+```
+Para:
+```typescript
+security_verifications: [{ type: "FACE" }, { type: "LIVENESS" }],
 ```
 
-**2. `supabase/functions/autentique-create-by-token/index.ts` (~linha 624)**
-Mesma adição de `security_verifications: [{ type: "LIVE" }]` ao `signerObj`.
+**2. `supabase/functions/autentique-create-by-token/index.ts`**
+Mesma alteração.
 
 **3. Redeploy** de ambas as Edge Functions.
-
-### Importante
-- A verificação LIVE consome créditos adicionais no Autentique. Confirme que seu plano Autentique suporta esse tipo de verificação.
-- O fluxo do signatário será: selfie + foto de documento com foto + prova de vida por vídeo, tudo antes de poder assinar.
 
 ### Escopo
 - 2 Edge Functions modificadas + redeploy
