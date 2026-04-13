@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FileSignature, Loader2, AlertCircle, RefreshCw, CheckCircle2, Shield, Clock, Mail, ArrowRight } from 'lucide-react';
+import { FileSignature, Loader2, AlertCircle, RefreshCw, CheckCircle2, Shield, Clock, Mail, ArrowRight, XCircle } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -57,6 +57,7 @@ export function EtapaAssinaturaContrato({
   const [emailEfetivo, setEmailEfetivo] = useState(clienteEmail || '');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
   const [aguardandoAprovacaoFipe, setAguardandoAprovacaoFipe] = useState(false);
+  const [cotacaoRecusada, setCotacaoRecusada] = useState(false);
 
   // ═══ Verificar se cotação está pendente de aprovação FIPE diretoria ═══
   useEffect(() => {
@@ -75,8 +76,26 @@ export function EtapaAssinaturaContrato({
             .maybeSingle(),
         ]);
         const configAtiva = configRes.data?.valor === 'true';
-        const pendente = cotacaoRes.data?.fipe_diretoria_aprovado === false;
+        const fipeStatus = cotacaoRes.data?.fipe_diretoria_aprovado;
+        const pendente = fipeStatus === false;
+        const recusado = fipeStatus === null && configAtiva;
+
+        // Verificar se foi recusado (fipe_diretoria_aprovado voltou a null após ter sido false)
+        // Checamos se existem votos de recusa na tabela de aprovações
+        let foiRecusado = false;
+        if (configAtiva && fipeStatus === null) {
+          const { data: votos } = await (publicSupabase as any)
+            .from('aprovacoes_fipe_diretoria')
+            .select('status')
+            .eq('cotacao_id', cotacaoId);
+          const temVotos = votos && votos.length > 0;
+          const todosResponderam = temVotos && votos.every((v: any) => v.status !== 'pendente');
+          const aprovados = temVotos ? votos.filter((v: any) => v.status === 'aprovado').length : 0;
+          foiRecusado = todosResponderam && aprovados === 0 && temVotos;
+        }
+
         setAguardandoAprovacaoFipe(configAtiva && pendente);
+        setCotacaoRecusada(foiRecusado);
       } catch {
         // ignore
       }
@@ -539,7 +558,32 @@ export function EtapaAssinaturaContrato({
     );
   }
 
-  // Tela de coleta de email
+  // Bloqueio: cotação recusada internamente
+  if (cotacaoRecusada) {
+    return (
+      <Card className="border-border/50 bg-card/80 backdrop-blur-xl">
+        <CardContent className="py-12 text-center space-y-6">
+          <motion.div
+            initial={{ scale: 0.8, opacity: 0 }}
+            animate={{ scale: 1, opacity: 1 }}
+            transition={{ duration: 0.3 }}
+            className="space-y-6"
+          >
+            <div className="w-16 h-16 mx-auto rounded-full bg-destructive/10 flex items-center justify-center">
+              <XCircle className="h-8 w-8 text-destructive" />
+            </div>
+            <div>
+              <h3 className="text-lg font-semibold mb-1">Cotação não aprovada</h3>
+              <p className="text-muted-foreground text-sm max-w-sm mx-auto">
+                Infelizmente, esta cotação não foi aprovada na análise interna. Entre em contato com a associação para mais informações.
+              </p>
+            </div>
+          </motion.div>
+        </CardContent>
+      </Card>
+    );
+  }
+
   if (etapaInterna === 'coletar_email') {
     return (
       <Card className="border-border/50 bg-card/80 backdrop-blur-xl">

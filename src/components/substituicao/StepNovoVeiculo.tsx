@@ -1,5 +1,6 @@
 import { useState, useEffect, useCallback } from 'react';
 import { useConfigLimitesVeiculo } from '@/hooks/useConfigLimitesVeiculo';
+import { useConfigDuplaAprovacao } from '@/hooks/useAprovacoesFipeDiretoria';
 import { useRestricoesAbsolutas } from '@/hooks/useConteudosSistema';
 import { useDetectarTipoVeiculo } from '@/hooks/useDetectarTipoVeiculo';
 import { supabase } from '@/integrations/supabase/client';
@@ -52,6 +53,7 @@ export function StepNovoVeiculo({
 }: StepNovoVeiculoProps) {
   const fipe = useFipe();
   const { data: limites } = useConfigLimitesVeiculo();
+  const { data: configDuplaAprovacao } = useConfigDuplaAprovacao();
   const { data: restricoes } = useRestricoesAbsolutas();
   const { tipoVeiculo: tipoAntigo } = useDetectarTipoVeiculo(veiculoAntigo.marca, veiculoAntigo.modelo);
   const { tipoVeiculo: tipoNovo } = useDetectarTipoVeiculo(dadosNovoVeiculo.marca, dadosNovoVeiculo.modelo);
@@ -398,11 +400,11 @@ export function StepNovoVeiculo({
               </table>
             </div>
 
-            {(dados.valor_fipe || 0) > (limites?.fipeLimiteAutorizacao ?? 120000) && (
+            {configDuplaAprovacao?.ativa && (dados.valor_fipe || 0) > (limites?.fipeLimiteAutorizacao ?? 120000) && (
               <Alert className="mt-4 border-yellow-200 bg-yellow-50 dark:border-yellow-900 dark:bg-yellow-950/30">
                 <AlertTriangle className="h-4 w-4 text-yellow-600" />
                 <AlertDescription className="text-xs">
-                  Veículo acima de R$ {(limites?.fipeLimiteAutorizacao ?? 120000).toLocaleString('pt-BR')} requer autorização especial da diretoria por email.
+                  Veículo acima de R$ {(limites?.fipeLimiteAutorizacao ?? 120000).toLocaleString('pt-BR')} requer aprovação interna.
                 </AlertDescription>
               </Alert>
             )}
