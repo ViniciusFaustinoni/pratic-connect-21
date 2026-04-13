@@ -104,7 +104,18 @@ Deno.serve(async (req) => {
     );
 
     if (updateError) {
-      console.error("Erro ao atualizar email:", updateError);
+      console.error("Erro ao atualizar email:", JSON.stringify(updateError, null, 2));
+      console.error("Status:", updateError.status, "Code:", (updateError as any).code);
+      
+      // Verificar se é erro de email duplicado
+      const msg = updateError.message?.toLowerCase() || '';
+      if (msg.includes('duplicate') || msg.includes('already') || msg.includes('exists')) {
+        return new Response(
+          JSON.stringify({ error: "Este email já está em uso por outro usuário" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
       return new Response(
         JSON.stringify({ error: "Erro ao alterar email: " + updateError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
