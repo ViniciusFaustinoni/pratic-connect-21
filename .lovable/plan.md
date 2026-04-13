@@ -1,41 +1,36 @@
 
 
-## Diagnóstico: "Sim" não reconhecido como confirmação no webhook Meta
+## Correção: OCR confundindo O com 0 na validação de placa do CRLV
 
-### Causa raiz
+### Problema
+A função `normalizePlaca` na linha 201 de `UnifiedDocumentUploader.tsx` apenas remove hífens e espaços, mas não trata a ambiguidade entre a letra "O" e o número "0". O OCR leu `Q005C17` enquanto a cotação tem `QOO5C17` — são a mesma placa, mas a comparação falha.
 
-A lógica de verificação de confirmação de agendamento (`confirmacoes_agendamento`) existe **apenas** na Edge Function `whatsapp-webhook` (Evolution API, linha 3290-3304). A Edge Function `whatsapp-meta-webhook` (Meta API oficial) **não possui essa verificação**. Quando o associado responde "Sim" via Meta, o fluxo vai direto para a fila da Maya IA, que gera uma saudação genérica ("Oi, Marcos! Como posso te ajudar hoje? 🚗").
+### Correção
 
-### Fluxo atual (Meta webhook)
+**`src/components/contratos/UnifiedDocumentUploader.tsx`** — linha 201
 
-```text
-Mensagem recebida → Busca associado ativo → Insere na fila IA → Maya responde genérico
-                     (PULA confirmação!)
+Alterar a função `normalizePlaca` para normalizar O↔0 conforme o padrão de placas brasileiras (3 letras + 1 número + 1 letra/número + 2 números no Mercosul, ou 3 letras + 4 números no antigo):
+
+```typescript
+const normalizePlaca = (p: string) => {
+  // Remove caracteres especiais e uppercase
+  const clean = p.replace(/[-\s]/g, '').toUpperCase();
+  // Normaliza O↔0: nas posições que devem ser letras, converte 0→O; nas posições numéricas, converte O→0
+  if (clean.length === 7) {
+    return clean.split('').map((ch, i) => {
+      // Posições 0,1,2 = letras; posição 4 pode ser letra (Mercosul) ou número
+      const isLetterPos = i <= 2 || i === 4;
+      const isDigitPos = i === 3 || i === 5 || i === 6;
+      if (isLetterPos && ch === '0') return 'O';
+      if (isDigitPos && ch === 'O') return '0';
+      return ch;
+    }).join('');
+  }
+  return clean;
+};
 ```
-
-### Fluxo corrigido
-
-```text
-Mensagem recebida → Busca confirmação pendente → Se encontrou: processar confirmação
-                                                → Se não: continuar fluxo normal (fila IA)
-```
-
-### Alterações
-
-**1. `supabase/functions/whatsapp-meta-webhook/index.ts`**
-- Na função `processarMensagemUsuario`, **antes** da busca de associado (linha 63), adicionar verificação de `confirmacoes_agendamento`:
-  - Buscar registro com telefone correspondente e status `['enviada', 'reagendando', 'aguardando_confirmacao_vespera']`
-  - Se encontrado e tipo da mensagem for texto, delegar para a função `processarRespostaConfirmacaoMeta` (nova)
-- Criar função `processarRespostaConfirmacaoMeta` que:
-  - Usa o mesmo regex fallback do webhook Evolution para inferir intenção (CONFIRMADO, REAGENDAR, CANCELAR, DUVIDA)
-  - Atualiza `confirmacoes_agendamento` com resposta e novo status
-  - Se CONFIRMADO: atualiza `servicos.confirmacao_whatsapp` e dispara atribuição automática
-  - Se REAGENDAR: inicia fluxo de reagendamento
-  - Envia resposta apropriada via `whatsapp-send-text`
-
-**2. Deploy da Edge Function `whatsapp-meta-webhook`**
 
 ### Escopo
-- 1 Edge Function editada (~80 linhas adicionadas)
-- 1 deploy
+- 1 função alterada em 1 arquivo
+- Nenhum deploy de Edge Function necessário
 
