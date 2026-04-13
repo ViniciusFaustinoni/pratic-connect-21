@@ -1068,6 +1068,7 @@ const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
     </p>
   </div>
   
+  </div>
 </div>
 `;
 };
