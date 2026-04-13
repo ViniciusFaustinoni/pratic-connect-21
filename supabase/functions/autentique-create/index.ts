@@ -11,7 +11,6 @@ import { generateTermoAfiliacao, generateSecaoRastreador } from "../_shared/term
 import { filterEligibleItems } from "../_shared/eligibility-filter.ts";
 import { mapearDadosParaTemplate, buscarConfiguracoesEmpresa, buscarRegrasVenda, buscarRegrasDepreciacao } from "../_shared/termo-afiliacao-utils.ts";
 import { 
-import { logEdgeFunction } from "../_shared/log-edge-function.ts";
   substituirVariaveis, 
   limparVariaveisNaoSubstituidas,
   generateStyles, 
@@ -23,6 +22,7 @@ import { logEdgeFunction } from "../_shared/log-edge-function.ts";
   exigeRastreador,
   extrairCodigosBeneficios,
 } from "../_shared/template-utils.ts";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
