@@ -141,17 +141,8 @@ export default function CotacaoContratacao() {
     }
   }, [cotacao?.status_contratacao, cotacao?.plano_escolhido_id, cotacao?.tipo_vistoria]);
 
-  // Redirecionar para /acompanhar/:link_token quando associado está em_analise ou ativo
-  // Isso garante que o cliente veja a tela de acompanhamento após a vistoria ser concluída
-  useEffect(() => {
-    // Log para debug - ajuda a identificar problemas de redirecionamento
-    console.log('[CotacaoContratacao] Verificando redirecionamento - associadoStatus:', associadoStatus, 'contratoLinkToken:', contratoLinkToken);
-    
-    if (associadoStatus && ['em_analise', 'ativo'].includes(associadoStatus) && contratoLinkToken) {
-      console.log('[CotacaoContratacao] ✅ Redirecionando para /acompanhar:', contratoLinkToken, 'status:', associadoStatus);
-      navigate(`/acompanhar/${contratoLinkToken}`, { replace: true });
-    }
-  }, [associadoStatus, contratoLinkToken, navigate]);
+  // NÃO redirecionar automaticamente — manter o associado na página da cotação
+  // mesmo quando já está ativo, para que ele possa continuar o fluxo de contratação
 
   // Sincronizar etapa com status da cotação (apenas se não está em navegação manual)
   useEffect(() => {
