@@ -1,5 +1,6 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -15,6 +16,7 @@ serve(async (req) => {
   }
 
   try {
+    const _startTime = Date.now();
     const AUTENTIQUE_API_KEY = Deno.env.get('AUTENTIQUE_API_KEY');
     if (!AUTENTIQUE_API_KEY) {
       throw new Error('AUTENTIQUE_API_KEY não configurada');
@@ -56,6 +58,8 @@ serve(async (req) => {
 
     console.log('Email reenviado com sucesso:', result.data);
 
+    logEdgeFunction({ functionName: "autentique-resend", plataforma: "autentique", operacao: "resend", status: "sucesso", tempoMs: Date.now() - _startTime });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -70,6 +74,8 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('Erro ao reenviar email:', errorMessage);
+
+    logEdgeFunction({ functionName: "autentique-resend", plataforma: "autentique", operacao: "resend", status: "erro", erroMensagem: (error instanceof Error ? error.message : "Erro desconhecido"), tempoMs: Date.now() - _startTime });
     return new Response(
       JSON.stringify({
         success: false,

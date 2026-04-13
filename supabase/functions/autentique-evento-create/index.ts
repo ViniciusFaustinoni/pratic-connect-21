@@ -15,6 +15,7 @@ import {
   buscarEGerarAditivos,
 } from "../_shared/template-utils.ts";
 import { buscarConfiguracoesEmpresa, formatCPF, formatPhone, formatCEP, formatCurrency, formatDate, formatDateExtended } from "../_shared/termo-afiliacao-utils.ts";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -31,6 +32,7 @@ serve(async (req) => {
   }
 
   try {
+    const _startTime = Date.now();
     const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
     if (!autentiqueApiKey) {
       throw new Error("AUTENTIQUE_API_KEY não configurada");
@@ -465,6 +467,8 @@ serve(async (req) => {
 
     console.log("[autentique-evento-create] ✓ Documento criado e sinistro atualizado");
 
+    logEdgeFunction({ functionName: "autentique-evento-create", plataforma: "autentique", operacao: "evento-create", status: "sucesso", tempoMs: Date.now() - _startTime });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -476,6 +480,8 @@ serve(async (req) => {
     );
   } catch (error: any) {
     console.error("[autentique-evento-create] Erro:", error);
+
+    logEdgeFunction({ functionName: "autentique-evento-create", plataforma: "autentique", operacao: "evento-create", status: "erro", erroMensagem: error.message, tempoMs: Date.now() - _startTime });
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

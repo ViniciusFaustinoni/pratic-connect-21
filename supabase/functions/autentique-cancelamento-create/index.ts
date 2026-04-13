@@ -7,6 +7,7 @@ import {
   markdownParaHTML,
 } from "../_shared/template-utils.ts";
 import { buscarConfiguracoesEmpresa } from "../_shared/termo-afiliacao-utils.ts";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,6 +22,7 @@ serve(async (req) => {
   }
 
   try {
+    const _startTime = Date.now();
     const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
     if (!autentiqueApiKey) throw new Error("AUTENTIQUE_API_KEY não configurada");
 
@@ -266,6 +268,8 @@ ${conteudoHTML}
 
     console.log("[autentique-cancelamento-create] ✓ Termo criado:", document.id);
 
+    logEdgeFunction({ functionName: "autentique-cancelamento-create", plataforma: "autentique", operacao: "cancelamento-create", status: "sucesso", tempoMs: Date.now() - _startTime });
+
     return new Response(JSON.stringify({
       success: true,
       documentId: document.id,
@@ -275,6 +279,8 @@ ${conteudoHTML}
 
   } catch (error: any) {
     console.error("[autentique-cancelamento-create] Erro:", error);
+
+    logEdgeFunction({ functionName: "autentique-cancelamento-create", plataforma: "autentique", operacao: "cancelamento-create", status: "erro", erroMensagem: error.message, tempoMs: Date.now() - _startTime });
     return new Response(JSON.stringify({ success: false, error: error.message }), {
       status: 500,
       headers: { ...corsHeaders, "Content-Type": "application/json" },

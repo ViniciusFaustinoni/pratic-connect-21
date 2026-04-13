@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -11,6 +12,7 @@ serve(async (req) => {
   }
 
   try {
+    const _startTime = Date.now();
     const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
     if (!autentiqueApiKey) {
       throw new Error("AUTENTIQUE_API_KEY não configurada");
@@ -53,6 +55,8 @@ serve(async (req) => {
     });
   } catch (error: any) {
     console.error("Erro em autentique-download:", error);
+
+    logEdgeFunction({ functionName: "autentique-download", plataforma: "autentique", operacao: "download", status: "erro", erroMensagem: error.message, tempoMs: Date.now() - _startTime });
     return new Response(
       JSON.stringify({ error: error.message }),
       { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }

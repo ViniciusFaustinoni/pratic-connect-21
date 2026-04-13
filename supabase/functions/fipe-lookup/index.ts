@@ -1,5 +1,6 @@
 import "https://deno.land/x/xhr@0.1.0/mod.ts";
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -69,6 +70,7 @@ async function fetchWithRetry(path: string, maxRetries = 3): Promise<Response> {
       const timeout = setTimeout(() => controller.abort(), 8000);
 
       try {
+    const _startTime = Date.now();
         const response = await fetch(url, {
           signal: controller.signal,
           headers: {
@@ -103,6 +105,8 @@ async function fetchWithRetry(path: string, maxRetries = 3): Promise<Response> {
         const msg = error instanceof Error ? error.message : String(error);
         lastError = error instanceof Error ? error : new Error(msg);
         console.error(`Fetch error em ${apiUrl} (attempt ${attempt + 1}):`, msg);
+
+    logEdgeFunction({ functionName: "fipe-lookup", plataforma: "fipe", operacao: "lookup", status: "erro", erroMensagem: (error instanceof Error ? error.message : "Erro desconhecido"), tempoMs: Date.now() - _startTime });
         // tenta o próximo host
         continue;
       } finally {
@@ -331,6 +335,7 @@ serve(async (req) => {
 
         if (!modeloEncontrado) {
           console.log(`Modelo não encontrado: ${modelo}`);
+          logEdgeFunction({ functionName: "fipe-lookup", plataforma: "fipe", operacao: "lookup", status: "sucesso", tempoMs: Date.now() - _startTime });
           return new Response(
             JSON.stringify({ success: false, found: false, error: 'Modelo não encontrado' }),
             { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

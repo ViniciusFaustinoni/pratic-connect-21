@@ -1,6 +1,7 @@
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
 import { getConfiguracaoNumero } from "../_shared/config-helper.ts";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -76,6 +77,7 @@ async function anexarContratoAssinado(
   signerName: string
 ): Promise<{ success: boolean; url?: string; error?: string }> {
   try {
+    const _startTime = Date.now();
     const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
     if (!autentiqueApiKey) {
       console.log("[autentique-webhook] AUTENTIQUE_API_KEY não configurada, pulando anexo do PDF");
@@ -234,6 +236,8 @@ async function anexarContratoAssinado(
     return { success: true, url: publicUrl };
   } catch (error: any) {
     console.error("[autentique-webhook] Erro ao anexar contrato:", error.message);
+
+    logEdgeFunction({ functionName: "autentique-webhook", plataforma: "autentique", operacao: "webhook", status: "erro", erroMensagem: error.message, tempoMs: Date.now() - _startTime });
     return { success: false, error: error.message };
   }
 }

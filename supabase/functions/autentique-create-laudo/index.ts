@@ -5,6 +5,7 @@
 
 import { serve } from "https://deno.land/std@0.190.0/http/server.ts";
 import { createClient } from "https://esm.sh/@supabase/supabase-js@2.89.0";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -21,6 +22,7 @@ serve(async (req) => {
   }
 
   try {
+    const _startTime = Date.now();
     const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
     if (!autentiqueApiKey) {
       throw new Error("AUTENTIQUE_API_KEY não configurada");
@@ -211,6 +213,8 @@ serve(async (req) => {
       console.error("[autentique-create-laudo] Erro ao atualizar serviço:", updateError);
     }
 
+    logEdgeFunction({ functionName: "autentique-create-laudo", plataforma: "autentique", operacao: "create-laudo", status: "sucesso", tempoMs: Date.now() - _startTime });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -222,6 +226,8 @@ serve(async (req) => {
     );
   } catch (error: any) {
     console.error("[autentique-create-laudo] ERRO:", error.message);
+
+    logEdgeFunction({ functionName: "autentique-create-laudo", plataforma: "autentique", operacao: "create-laudo", status: "erro", erroMensagem: error.message, tempoMs: Date.now() - _startTime });
     return new Response(
       JSON.stringify({ success: false, error: error.message }),
       { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }

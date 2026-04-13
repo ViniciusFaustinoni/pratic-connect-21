@@ -1,5 +1,6 @@
 import { serve } from 'https://deno.land/std@0.190.0/http/server.ts';
 import { createClient } from 'https://esm.sh/@supabase/supabase-js@2.89.0';
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const AUTENTIQUE_API_URL = 'https://api.autentique.com.br/v2/graphql';
 const AUTENTIQUE_TOKEN = Deno.env.get('AUTENTIQUE_API_KEY');
@@ -160,6 +161,7 @@ serve(async (req) => {
   }
 
   try {
+    const _startTime = Date.now();
     const supabase = createClient(
       Deno.env.get('SUPABASE_URL') ?? '',
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY') ?? ''
@@ -344,6 +346,8 @@ serve(async (req) => {
           throw error;
         }
 
+        logEdgeFunction({ functionName: "autentique-documento", plataforma: "autentique", operacao: "documento", status: "sucesso", tempoMs: Date.now() - _startTime });
+
         return new Response(
           JSON.stringify({ success: true, message: 'Assinatura cancelada' }),
           { headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -356,6 +360,8 @@ serve(async (req) => {
   } catch (error) {
     const errorMessage = error instanceof Error ? error.message : 'Erro desconhecido';
     console.error('[autentique-documento] Erro:', errorMessage);
+
+    logEdgeFunction({ functionName: "autentique-documento", plataforma: "autentique", operacao: "documento", status: "erro", erroMensagem: (error instanceof Error ? error.message : "Erro desconhecido"), tempoMs: Date.now() - _startTime });
     return new Response(
       JSON.stringify({ success: false, error: errorMessage }),
       { status: 400, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }

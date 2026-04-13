@@ -22,6 +22,7 @@ import {
   exigeRastreador,
   extrairCodigosBeneficios,
 } from "../_shared/template-utils.ts";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   "Access-Control-Allow-Origin": "*",
@@ -35,6 +36,7 @@ const SUPABASE_SERVICE_ROLE_KEY = Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!;
 // ============= BUSCAR CONFIG RASTREADOR =============
 async function buscarConfigRastreador(supabase: any) {
   try {
+    const _startTime = Date.now();
     const { data, error } = await supabase
       .from('configuracoes')
       .select('chave, valor')
@@ -846,6 +848,8 @@ serve(async (req) => {
         .eq("id", contrato.lead_id);
     }
 
+    logEdgeFunction({ functionName: "autentique-create", plataforma: "autentique", operacao: "create", status: "sucesso", tempoMs: Date.now() - _startTime });
+
     return new Response(
       JSON.stringify({
         success: true,
@@ -861,6 +865,8 @@ serve(async (req) => {
     );
   } catch (error: any) {
     console.error("[autentique-create] Erro:", error);
+
+    logEdgeFunction({ functionName: "autentique-create", plataforma: "autentique", operacao: "create", status: "erro", erroMensagem: error.message, tempoMs: Date.now() - _startTime });
     return new Response(
       JSON.stringify({ 
         success: false, 

@@ -1,4 +1,5 @@
 import { serve } from "https://deno.land/std@0.168.0/http/server.ts";
+import { logEdgeFunction } from "../_shared/log-edge-function.ts";
 
 const corsHeaders = {
   'Access-Control-Allow-Origin': '*',
@@ -41,6 +42,7 @@ serve(async (req) => {
   }
 
   try {
+    const _startTime = Date.now();
     const body = await req.json();
     const placa = body.placa || body.plate;
     
@@ -123,6 +125,8 @@ serve(async (req) => {
       try { errorBody = await response.text(); } catch (_) {}
       console.error(`[plate-lookup] Corpo do erro: ${errorBody}`);
       
+      logEdgeFunction({ functionName: "plate-lookup", plataforma: "plate_lookup", operacao: "lookup", status: "sucesso", tempoMs: Date.now() - _startTime });
+      
       return new Response(
         JSON.stringify({ success: false, error: `Erro na consulta de placa (código ${response.status}). Tente novamente em instantes.`, rateLimited: false }),
         { status: 200, headers: { ...corsHeaders, 'Content-Type': 'application/json' } }
@@ -197,6 +201,8 @@ serve(async (req) => {
   } catch (error: unknown) {
     const errorMessage = error instanceof Error ? error.message : 'Erro interno';
     console.error('[plate-lookup] Erro:', errorMessage);
+
+    logEdgeFunction({ functionName: "plate-lookup", plataforma: "plate_lookup", operacao: "lookup", status: "erro", erroMensagem: (error instanceof Error ? error.message : "Erro desconhecido"), tempoMs: Date.now() - _startTime });
     return new Response(
       JSON.stringify({ 
         success: false, 

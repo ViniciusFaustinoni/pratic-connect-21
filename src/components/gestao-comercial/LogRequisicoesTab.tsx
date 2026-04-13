@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
-type Plataforma = 'todas' | 'whatsapp' | 'asaas' | 'softruck' | 'rede' | 'sga' | 'auth' | 'api_leads';
+type Plataforma = 'todas' | 'whatsapp' | 'asaas' | 'softruck' | 'rede' | 'sga' | 'auth' | 'api_leads' | 'autentique' | 'fipe' | 'plate_lookup';
 
 interface LogUnificado {
   id: string;
@@ -33,6 +33,9 @@ const plataformaConfig: Record<string, { label: string; sigla: string; color: st
   sga: { label: 'SGA (Hinova)', sigla: 'SG', color: 'text-purple-600', bg: 'bg-purple-500/10 border-purple-500/20' },
   auth: { label: 'Autenticação', sigla: 'AU', color: 'text-gray-600', bg: 'bg-gray-500/10 border-gray-500/20' },
   api_leads: { label: 'API Leads', sigla: 'LD', color: 'text-cyan-600', bg: 'bg-cyan-500/10 border-cyan-500/20' },
+  autentique: { label: 'Autentique', sigla: 'AT', color: 'text-amber-600', bg: 'bg-amber-500/10 border-amber-500/20' },
+  fipe: { label: 'FIPE', sigla: 'FP', color: 'text-emerald-700', bg: 'bg-emerald-500/10 border-emerald-500/20' },
+  plate_lookup: { label: 'Consulta Placa', sigla: 'PL', color: 'text-indigo-600', bg: 'bg-indigo-500/10 border-indigo-500/20' },
 };
 
 const statusConfig: Record<string, { icon: any; color: string }> = {
@@ -122,6 +125,19 @@ function normalizeApiLeads(row: any): LogUnificado {
   };
 }
 
+function normalizeEdgeFunction(row: any): LogUnificado {
+  return {
+    id: row.id,
+    created_at: row.created_at,
+    plataforma: row.plataforma,
+    operacao: row.operacao || row.function_name || '-',
+    status: row.status === 'sucesso' ? 'sucesso' : 'erro',
+    erro: row.erro_mensagem,
+    tempo_ms: row.tempo_resposta_ms,
+    detalhes: row.function_name || '-',
+  };
+}
+
 export function LogRequisicoesTab() {
   const [search, setSearch] = useState('');
   const [filterPlataforma, setFilterPlataforma] = useState<Plataforma>('todas');
@@ -131,7 +147,7 @@ export function LogRequisicoesTab() {
     queryKey: ['logs-requisicoes-unificado', search, filterPlataforma, page],
     queryFn: async () => {
       const plataformas: Plataforma[] = filterPlataforma === 'todas'
-        ? ['whatsapp', 'asaas', 'softruck', 'rede', 'sga', 'auth', 'api_leads']
+        ? ['whatsapp', 'asaas', 'softruck', 'rede', 'sga', 'auth', 'api_leads', 'autentique', 'fipe', 'plate_lookup']
         : [filterPlataforma];
 
       const fetchers: Promise<LogUnificado[]>[] = [];
@@ -161,6 +177,15 @@ export function LogRequisicoesTab() {
             break;
           case 'api_leads':
             fetchers.push(wrap(supabase.from('api_leads_logs').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeApiLeads)));
+            break;
+          case 'autentique':
+            fetchers.push(wrap(supabase.from('edge_functions_logs').select('*').eq('plataforma', 'autentique').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeEdgeFunction)));
+            break;
+          case 'fipe':
+            fetchers.push(wrap(supabase.from('edge_functions_logs').select('*').eq('plataforma', 'fipe').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeEdgeFunction)));
+            break;
+          case 'plate_lookup':
+            fetchers.push(wrap(supabase.from('edge_functions_logs').select('*').eq('plataforma', 'plate_lookup').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeEdgeFunction)));
             break;
         }
       }
@@ -203,6 +228,9 @@ export function LogRequisicoesTab() {
             <SelectItem value="sga">SGA (Hinova)</SelectItem>
             <SelectItem value="auth">Autenticação</SelectItem>
             <SelectItem value="api_leads">API Leads</SelectItem>
+            <SelectItem value="autentique">Autentique</SelectItem>
+            <SelectItem value="fipe">FIPE</SelectItem>
+            <SelectItem value="plate_lookup">Consulta Placa</SelectItem>
           </SelectContent>
         </Select>
       </div>
