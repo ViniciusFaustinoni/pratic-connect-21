@@ -147,7 +147,7 @@ export function LogRequisicoesTab() {
     queryKey: ['logs-requisicoes-unificado', search, filterPlataforma, page],
     queryFn: async () => {
       const plataformas: Plataforma[] = filterPlataforma === 'todas'
-        ? ['whatsapp', 'asaas', 'softruck', 'rede', 'sga', 'auth', 'api_leads']
+        ? ['whatsapp', 'asaas', 'softruck', 'rede', 'sga', 'auth', 'api_leads', 'autentique', 'fipe', 'plate_lookup']
         : [filterPlataforma];
 
       const fetchers: Promise<LogUnificado[]>[] = [];
@@ -177,6 +177,15 @@ export function LogRequisicoesTab() {
             break;
           case 'api_leads':
             fetchers.push(wrap(supabase.from('api_leads_logs').select('*').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeApiLeads)));
+            break;
+          case 'autentique':
+            fetchers.push(wrap(supabase.from('edge_functions_logs').select('*').eq('plataforma', 'autentique').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeEdgeFunction)));
+            break;
+          case 'fipe':
+            fetchers.push(wrap(supabase.from('edge_functions_logs').select('*').eq('plataforma', 'fipe').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeEdgeFunction)));
+            break;
+          case 'plate_lookup':
+            fetchers.push(wrap(supabase.from('edge_functions_logs').select('*').eq('plataforma', 'plate_lookup').order('created_at', { ascending: false }).limit(PAGE_SIZE)).then(d => d.map(normalizeEdgeFunction)));
             break;
         }
       }
