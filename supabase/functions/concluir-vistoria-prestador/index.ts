@@ -16,7 +16,7 @@ Deno.serve(async (req) => {
       Deno.env.get('SUPABASE_SERVICE_ROLE_KEY')!
     )
 
-    const { token, checklist_data, fotos_vistoria, assinatura_url } = await req.json()
+    const { token, checklist_data, fotos_vistoria } = await req.json()
 
     if (!token) {
       return new Response(
@@ -60,7 +60,6 @@ Deno.serve(async (req) => {
         concluida_em: agora,
         checklist_data,
         fotos_vistoria,
-        assinatura_url,
         updated_at: agora,
       })
       .eq('id', link.id)
