@@ -1,27 +1,32 @@
 
 
-## Diagnóstico: Erro CORS na `autentique-create`
+## Correção: Badge mostra min/max absoluto em vez do range sequencial das faixas FIPE
 
-### Causa raiz
+### Problema
 
-Existem **dois problemas**:
-
-1. **Bug no código (causa do CORS)**: A variável `_startTime` é declarada como `const` dentro do bloco `try` (linha 177), mas referenciada no bloco `catch` (linha 870). Em JavaScript, `const` é block-scoped — ela **não existe** no `catch`. Quando a API Autentique retorna erro, o `catch` tenta usar `_startTime`, causa um `ReferenceError` que crasheia o handler antes de retornar a Response com CORS headers. Resultado: o browser vê resposta sem headers CORS e bloqueia.
-
-2. **Erro da API Autentique (causa do 500)**: `unavailable_verifications_credits` — sua conta Autentique esgotou os créditos de verificação biométrica (PF_FACIAL). Este é um problema de billing na Autentique, não no código.
+O badge calcula `Math.min` e `Math.max` de **todos** os valores das faixas FIPE ativas, resultando em `R$ 43,70 ~ R$ 278,70`. Porém, ao abrir o modal, a primeira faixa (0-3k) tem valor `68,70` e a faixa de `43,70` está no meio (9k-12k). O badge mostra um range que não corresponde à leitura natural da tabela (primeira → última faixa).
 
 ### Correção
 
-**Arquivo**: `supabase/functions/autentique-create/index.ts`
+**Arquivo**: `src/components/gestao-comercial/LinhasPlanos.tsx` — linhas 670-674 (coberturas) e 715-719 (benefícios)
 
-- Mover `const _startTime = Date.now()` para **antes** do `try` (entre linhas 175-176), tornando-o acessível no `catch`
-- Deploy da edge function
+Trocar `Math.min/Math.max` por valor da **primeira** e **última** faixa ativa (ordenadas por `fipe_min`), que reflete o que o usuário vê ao abrir o modal:
 
-### Sobre o erro "unavailable_verifications_credits"
+```typescript
+// Antes:
+const minVal = Math.min(...activeFaixas.map((f: any) => f.valor));
+const maxVal = Math.max(...activeFaixas.map((f: any) => f.valor));
 
-Mesmo após a correção do código, a criação de documentos com biometria facial continuará falhando até que os créditos de verificação sejam recarregados no painel da Autentique. A diferença é que após a correção, o erro será tratado corretamente (exibido como mensagem amigável em vez de erro CORS).
+// Depois:
+const sorted = [...activeFaixas].sort((a: any, b: any) => (a.fipe_min ?? a.de ?? 0) - (b.fipe_min ?? b.de ?? 0));
+const firstVal = sorted[0].valor;
+const lastVal = sorted[sorted.length - 1].valor;
+fipeRange = `R$ ${firstVal.toFixed(2).replace('.', ',')} ~ R$ ${lastVal.toFixed(2).replace('.', ',')}`;
+```
+
+Isso fará o badge mostrar `R$ 68,70 ~ R$ 278,70` (primeiro tier → último tier), que é exatamente o que aparece ao abrir o modal.
 
 ### Escopo
-- 1 linha movida em 1 arquivo
-- 1 deploy de Edge Function
+- 2 blocos alterados em 1 arquivo (coberturas + benefícios)
+- Sem deploy de Edge Function
 
