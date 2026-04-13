@@ -1,32 +1,45 @@
 
-## Plano: Adicionar página "Aprovações" no menu Diretoria
 
-### Objetivo
-Criar uma nova rota `/diretoria/aprovacoes` que exibe o painel de aprovações da diretoria (`PainelAprovacoesDiretoria`), com um resumo visual de status e detalhamento de quais diretores já responderam por cotação. Adicionar o item no menu lateral da Diretoria.
+## Plano: Evolution API como fallback para aprovação da diretoria + reconhecimento de diretores pela IA
+
+### Contexto
+Atualmente, `notificar-diretoria-fipe` envia via `whatsapp-send-text` que roteia para Meta API (se ativa) ou Evolution. O fallback atual para template Meta não aprovado é enviar texto livre via Meta — mas texto livre proativo é bloqueado pela Meta fora da janela 24h. Além disso, a IA do webhook não reconhece diretores e não processa respostas como "APROVAR"/"RECUSAR".
 
 ### Alterações
 
-**1. Nova página `src/pages/diretoria/AprovacoesDiretoria.tsx`**
-- Página simples com título "Aprovações da Diretoria" e descrição
-- Renderiza o componente `PainelAprovacoesDiretoria` já existente
-- Adiciona um painel de resumo no topo com cards: total pendentes, total aprovados, total recusados
+**1. `notificar-diretoria-fipe/index.ts` — Forçar Evolution como fallback**
+- Quando o template Meta `autorizacao_fipe_diretoria` não está `APPROVED`: usar `force_provider: 'evolution'` no payload enviado a `whatsapp-send-text`
+- Atualizar a `urlPainel` de `https://app.praticcar.org/vendas/aprovacoes-fipe` para `https://app.praticcar.org/diretoria/aprovacoes`
+- Incluir o link completo no corpo da mensagem fallback com o domínio publicado
 
-**2. Melhorar `PainelAprovacoesDiretoria.tsx` — Agrupar por cotação e mostrar diretores**
-- Atualmente mostra um card por voto individual (1 card = 1 diretor + 1 cotação)
-- Agrupar os itens por `cotacao_id` para exibir um card por cotação
-- Dentro de cada card, listar todos os diretores envolvidos com seus respectivos status (pendente/aprovado/recusado) e data de resposta
-- Mostrar progresso visual: "2/3 diretores responderam"
+**2. `whatsapp-webhook/index.ts` — Reconhecer diretores e processar aprovações**
+- Antes de encaminhar mensagem para a IA (Maya), verificar se o remetente é um diretor (via `profiles` + `user_roles`)
+- Se o diretor responder "APROVAR" ou "RECUSAR" (case-insensitive), buscar a aprovação pendente mais recente desse diretor em `aprovacoes_fipe_diretoria`
+- Atualizar o status da aprovação (`aprovado`/`recusado`) e `respondido_em`
+- Verificar se todos os diretores já responderam; se sim, atualizar `cotacoes.fipe_diretoria_aprovado` (true se aprovado pela maioria, false se recusado)
+- Responder ao diretor com confirmação ("Voto registrado: APROVADO ✅" / "Voto registrado: RECUSADO ❌")
+- Se o diretor enviar outra mensagem qualquer, encaminhar normalmente para a IA
 
-**3. Atualizar hook `useAprovacoesDiretoria.ts`**
-- Retornar também a lista completa de votos por cotação (todos os diretores) para permitir o agrupamento no componente
-
-**4. Registrar rota em `App.tsx`**
-- Adicionar `<Route path="/diretoria/aprovacoes" element={<AprovacoesDiretoria />} />`
-
-**5. Adicionar item no menu em `AppSidebar.tsx`**
-- Inserir `{ title: 'Aprovações', url: '/diretoria/aprovacoes', icon: CheckCircle2 }` no grupo Diretoria
+**3. Mensagem de fallback com link correto**
+- URL: `https://app.praticcar.org/diretoria/aprovacoes`
+- Corpo: incluir link clicável no texto da mensagem Evolution
 
 ### Escopo
-- 1 arquivo novo (página)
-- 3 arquivos editados (PainelAprovacoesDiretoria, App.tsx, AppSidebar.tsx)
-- 1 hook editado (useAprovacoesDiretoria)
+- 2 Edge Functions editadas (`notificar-diretoria-fipe`, `whatsapp-webhook`)
+- Sem migrations, sem alterações no frontend
+
+### Detalhes Técnicos
+
+```text
+Fluxo de envio:
+  CotacaoFormDialog → notificar-diretoria-fipe → whatsapp-send-text
+                                                    ├─ Meta template APPROVED → Meta API
+                                                    └─ Meta template !APPROVED → Evolution API (force_provider)
+
+Fluxo de resposta:
+  Diretor responde via WhatsApp → whatsapp-webhook
+    ├─ Texto = "APROVAR"/"RECUSAR" → Processar voto em aprovacoes_fipe_diretoria
+    │   └─ Todos responderam? → Atualizar cotacoes.fipe_diretoria_aprovado
+    └─ Outro texto → IA (Maya) normal
+```
+
