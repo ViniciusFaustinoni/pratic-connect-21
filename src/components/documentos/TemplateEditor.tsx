@@ -143,6 +143,7 @@ function SecaoInjetada({ icone, titulo, subtitulo, children }: {
 }
 
 export function TemplateEditor({ value, onChange, placeholder, cabecalhoHtml, rodapeHtml }: TemplateEditorProps) {
+  const navigate = useNavigate();
   const [tab, setTab] = useState<string>('editor');
   const isExternalUpdate = useRef(false);
   const [showSignatureOverlay, setShowSignatureOverlay] = useState(false);
