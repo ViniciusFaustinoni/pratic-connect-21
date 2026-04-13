@@ -62,12 +62,21 @@ export function EtapaAssinaturaContrato({
   useEffect(() => {
     const verificarAprovacao = async () => {
       try {
-        const { data } = await publicSupabase
-          .from('cotacoes')
-          .select('fipe_diretoria_aprovado')
-          .eq('id', cotacaoId)
-          .maybeSingle();
-        setAguardandoAprovacaoFipe(data?.fipe_diretoria_aprovado === false);
+        const [cotacaoRes, configRes] = await Promise.all([
+          publicSupabase
+            .from('cotacoes')
+            .select('fipe_diretoria_aprovado')
+            .eq('id', cotacaoId)
+            .maybeSingle(),
+          publicSupabase
+            .from('configuracoes')
+            .select('valor')
+            .eq('chave', 'dupla_aprovacao_fipe_diretoria_ativa')
+            .maybeSingle(),
+        ]);
+        const configAtiva = configRes.data?.valor === 'true';
+        const pendente = cotacaoRes.data?.fipe_diretoria_aprovado === false;
+        setAguardandoAprovacaoFipe(configAtiva && pendente);
       } catch {
         // ignore
       }
