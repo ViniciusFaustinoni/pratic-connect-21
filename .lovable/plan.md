@@ -1,35 +1,34 @@
 
 
-## Plano: Corrigir exibição de coberturas no Termo de Filiação
+## Plano: Ativar verificação biométrica LIVE na assinatura Autentique
 
-### Problema
-As coberturas do plano **não aparecem** no documento gerado — apenas os benefícios são exibidos. O título "COBERTURAS E BENEFÍCIOS DO PLANO" aparece, mas a tabela de coberturas fica vazia.
+### O que muda
+O signatário, ao assinar o termo de filiação, será obrigado a tirar uma selfie, fotografar um documento com foto e realizar prova de vida por vídeo. A Autentique compara automaticamente as imagens. Isso consome créditos adicionais de verificação no Autentique.
 
-### Causa raiz
-A query Supabase em ambas as Edge Functions (`autentique-create` e `autentique-create-by-token`) solicita a coluna `valor_personalizado` da tabela `planos_coberturas`, mas **essa coluna não existe**. Isso causa erro silencioso no Supabase (retorna `null` em vez dos dados), resultando em array vazio de coberturas.
+### Alterações técnicas
 
-A tabela `planos_coberturas` tem estas colunas: `id, plano_id, cobertura_id, percentual_cobertura, valor_limite, franquia_percentual, franquia_valor, carencia_dias, obrigatoria, created_at`.
-
-### Correção
-
-**1. `supabase/functions/autentique-create/index.ts` (~linha 344)**
-Alterar o select de:
-```
-.select('cobertura_id, valor_personalizado, carencia_dias, franquia_percentual, coberturas:cobertura_id(id, nome, descricao)')
-```
-Para:
-```
-.select('cobertura_id, carencia_dias, franquia_percentual, valor_limite, coberturas:cobertura_id(id, nome, descricao)')
+**1. `supabase/functions/autentique-create/index.ts` (~linha 732-741)**
+Adicionar `security_verifications` ao `signerObj`:
+```typescript
+const signerObj: any = {
+  name: signerName || undefined,
+  email: signerEmail,
+  action: "SIGN",
+  delivery_method: "DELIVERY_METHOD_EMAIL",
+  positions: gerarPosicoesAssinatura(posConfig),
+  security_verifications: [{ type: "LIVE" }],
+};
 ```
 
-E ajustar o mapeamento (~linha 375) para usar `valor_limite` em vez de `valor_personalizado`.
-
-**2. `supabase/functions/autentique-create-by-token/index.ts` (~linha 219)**
-Mesma correção no select e no mapeamento (~linha 250).
+**2. `supabase/functions/autentique-create-by-token/index.ts` (~linha 624)**
+Mesma adição de `security_verifications: [{ type: "LIVE" }]` ao `signerObj`.
 
 **3. Redeploy** de ambas as Edge Functions.
 
+### Importante
+- A verificação LIVE consome créditos adicionais no Autentique. Confirme que seu plano Autentique suporta esse tipo de verificação.
+- O fluxo do signatário será: selfie + foto de documento com foto + prova de vida por vídeo, tudo antes de poder assinar.
+
 ### Escopo
 - 2 Edge Functions modificadas + redeploy
-- Sem migrations necessárias
 
