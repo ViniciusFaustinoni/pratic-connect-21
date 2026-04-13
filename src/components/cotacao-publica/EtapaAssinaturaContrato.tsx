@@ -57,6 +57,7 @@ export function EtapaAssinaturaContrato({
   const [emailEfetivo, setEmailEfetivo] = useState(clienteEmail || '');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
   const [aguardandoAprovacaoFipe, setAguardandoAprovacaoFipe] = useState(false);
+  const [cotacaoRecusada, setCotacaoRecusada] = useState(false);
 
   // ═══ Verificar se cotação está pendente de aprovação FIPE diretoria ═══
   useEffect(() => {
@@ -75,8 +76,26 @@ export function EtapaAssinaturaContrato({
             .maybeSingle(),
         ]);
         const configAtiva = configRes.data?.valor === 'true';
-        const pendente = cotacaoRes.data?.fipe_diretoria_aprovado === false;
+        const fipeStatus = cotacaoRes.data?.fipe_diretoria_aprovado;
+        const pendente = fipeStatus === false;
+        const recusado = fipeStatus === null && configAtiva;
+
+        // Verificar se foi recusado (fipe_diretoria_aprovado voltou a null após ter sido false)
+        // Checamos se existem votos de recusa na tabela de aprovações
+        let foiRecusado = false;
+        if (configAtiva && fipeStatus === null) {
+          const { data: votos } = await (publicSupabase as any)
+            .from('aprovacoes_fipe_diretoria')
+            .select('status')
+            .eq('cotacao_id', cotacaoId);
+          const temVotos = votos && votos.length > 0;
+          const todosResponderam = temVotos && votos.every((v: any) => v.status !== 'pendente');
+          const aprovados = temVotos ? votos.filter((v: any) => v.status === 'aprovado').length : 0;
+          foiRecusado = todosResponderam && aprovados === 0 && temVotos;
+        }
+
         setAguardandoAprovacaoFipe(configAtiva && pendente);
+        setCotacaoRecusada(foiRecusado);
       } catch {
         // ignore
       }

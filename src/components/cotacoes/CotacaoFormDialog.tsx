@@ -1260,8 +1260,8 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
           });
         }
         
-        // Se FIPE acima do limite, criar solicitação de autorização automaticamente
-        if (novaCotacao?.id && configLimites && valorFipe > 0) {
+        // Se FIPE acima do limite E dupla aprovação ativa, criar solicitação e notificar diretoria
+        if (novaCotacao?.id && configLimites && valorFipe > 0 && configDuplaAprovacao?.ativa) {
           const limiteAplicavel = tipoVeiculoDetectado === 'moto' 
             ? configLimites.fipeLimiteAutorizacaoMoto 
             : configLimites.fipeLimiteAutorizacao;
@@ -1278,27 +1278,25 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 veiculo_placa: placa || undefined,
                 nome_solicitante: nomeAssociado || undefined,
               });
-              toast.info('Solicitação de autorização FIPE alto valor enviada automaticamente.');
+              toast.info('Solicitação de aprovação interna FIPE alto valor enviada automaticamente.');
 
-              // Se dupla aprovação está ativa, notificar diretoria via WhatsApp
-              if (configDuplaAprovacao?.ativa) {
-                try {
-                  await supabase.functions.invoke('notificar-diretoria-fipe', {
-                    body: {
-                      cotacao_id: novaCotacao.id,
-                      valor_fipe: valorFipe,
-                      limite_aplicado: limiteAplicavel,
-                      tipo_veiculo: tipoVeiculoDetectado,
-                      veiculo_marca: veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || undefined,
-                      veiculo_modelo: veiculoEncontrado?.vehicleData?.modelo || modeloResolvido || undefined,
-                      veiculo_ano: anoNumerico,
-                      veiculo_placa: placa || undefined,
-                      nome_solicitante: nomeAssociado || undefined,
-                    },
-                  });
-                } catch (e) {
-                  console.error('Erro ao notificar diretoria FIPE:', e);
-                }
+              // Notificar diretoria via WhatsApp
+              try {
+                await supabase.functions.invoke('notificar-diretoria-fipe', {
+                  body: {
+                    cotacao_id: novaCotacao.id,
+                    valor_fipe: valorFipe,
+                    limite_aplicado: limiteAplicavel,
+                    tipo_veiculo: tipoVeiculoDetectado,
+                    veiculo_marca: veiculoEncontrado?.vehicleData?.marca || getMarcaNomeFromCodigo(marcaSelecionada) || undefined,
+                    veiculo_modelo: veiculoEncontrado?.vehicleData?.modelo || modeloResolvido || undefined,
+                    veiculo_ano: anoNumerico,
+                    veiculo_placa: placa || undefined,
+                    nome_solicitante: nomeAssociado || undefined,
+                  },
+                });
+              } catch (e) {
+                console.error('Erro ao notificar diretoria FIPE:', e);
               }
             } catch (e) {
               console.error('Erro ao criar solicitação FIPE limite:', e);
@@ -1737,8 +1735,9 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                 </p>
               )}
 
-              {/* Alerta FIPE acima do limite de autorização */}
+              {/* Alerta FIPE acima do limite de autorização — só exibe se dupla aprovação ativa */}
               {(() => {
+                if (!configDuplaAprovacao?.ativa) return null;
                 if (!valorFipe || valorFipe <= 0 || !configLimites) return null;
                 const limiteAplicavel = tipoVeiculoDetectado === 'moto'
                   ? configLimites.fipeLimiteAutorizacaoMoto
@@ -1759,7 +1758,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     <Alert className="border-green-500/50 bg-green-500/10 mt-2">
                       <CheckCircle2 className="h-4 w-4 text-green-600" />
                       <AlertDescription className="text-sm text-green-700 dark:text-green-400">
-                        Autorização FIPE alto valor <strong>aprovada</strong>. Você pode prosseguir.
+                        Aprovação interna FIPE alto valor <strong>aprovada</strong>. Você pode prosseguir.
                       </AlertDescription>
                     </Alert>
                   );
@@ -1770,7 +1769,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     <Alert className="border-destructive/50 bg-destructive/10 mt-2">
                       <XCircle className="h-4 w-4 text-destructive" />
                       <AlertDescription className="text-sm text-destructive">
-                        Autorização FIPE alto valor <strong>recusada</strong>. Não é possível prosseguir com este veículo.
+                        Aprovação interna FIPE alto valor <strong>recusada</strong>. Não é possível prosseguir com este veículo.
                       </AlertDescription>
                     </Alert>
                   );
@@ -1781,7 +1780,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                     <Alert className="border-amber-500/50 bg-amber-500/10 mt-2">
                       <Clock className="h-4 w-4 text-amber-600" />
                       <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
-                        Solicitação enviada. <strong>Aguarde a aprovação</strong> para prosseguir.
+                        Solicitação enviada. <strong>Aguarde a aprovação interna</strong> para prosseguir.
                       </AlertDescription>
                     </Alert>
                   );
@@ -1793,7 +1792,7 @@ export function CotacaoFormDialog({ open, onOpenChange, leadId, cotacaoBase, cot
                       <AlertTriangle className="h-4 w-4 text-amber-600" />
                       <AlertDescription className="text-sm text-amber-700 dark:text-amber-400">
                         FIPE ({formatCurrency(valorFipe)}) acima do limite de {formatCurrency(limiteAplicavel)} para {tipoVeiculoDetectado === 'moto' ? 'motos' : 'carros'}.
-                        Você pode criar a cotação normalmente, mas a <strong>aprovação final</strong> dependerá de autorização do analista.
+                        Você pode criar a cotação normalmente, mas a <strong>aprovação final</strong> dependerá de aprovação interna.
                       </AlertDescription>
                     </Alert>
                   </div>
