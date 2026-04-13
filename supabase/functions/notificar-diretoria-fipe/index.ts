@@ -27,6 +27,7 @@ serve(async (req) => {
       veiculo_ano,
       veiculo_placa,
       nome_solicitante,
+      categoria_placa,
     } = body;
 
     if (!cotacao_id) {
@@ -84,6 +85,15 @@ serve(async (req) => {
       .update({ fipe_diretoria_aprovado: false })
       .eq("id", cotacao_id);
 
+    // Verificar se template Meta está aprovado
+    const { data: templateMeta } = await supabase
+      .from("whatsapp_meta_templates")
+      .select("nome, status")
+      .eq("nome", "aprovacao_fipe_diretoria_v1")
+      .maybeSingle();
+
+    const templateAprovado = templateMeta?.status === "APPROVED";
+
     const fipeFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(valor_fipe || 0);
     const limiteFormatado = new Intl.NumberFormat("pt-BR", { style: "currency", currency: "BRL" }).format(limite_aplicado || 0);
 
@@ -109,16 +119,27 @@ serve(async (req) => {
         });
 
       if (insertErr) {
-        // Pode já existir (unique constraint)
         console.warn(`[notificar-diretoria-fipe] Erro ao inserir aprovação para ${profile.nome}:`, insertErr.message);
         continue;
       }
 
-      // Enviar mensagem via whatsapp-send-text
-      const mensagem = `🔔 *Autorização FIPE Necessária*\n\n` +
-        `Veículo: *${veiculo_marca || ""} ${veiculo_modelo || ""}* ${veiculo_ano || ""}\n` +
+      // Montar parâmetros do template
+      const marcaModelo = `${veiculo_marca || ""} ${veiculo_modelo || ""}`.trim();
+      const templateParams = [
+        marcaModelo || "N/A",
+        String(veiculo_ano || "N/A"),
+        veiculo_placa || "N/A",
+        fipeFormatado,
+        limiteFormatado,
+        tipo_veiculo || categoria_placa || "N/A",
+        nome_solicitante || "N/A",
+      ];
+
+      // Mensagem fallback (texto livre) caso template não esteja aprovado
+      const mensagemFallback = `🔔 *Autorização FIPE Necessária*\n\n` +
+        `Veículo: *${marcaModelo}* ${veiculo_ano || ""}\n` +
         `Placa: *${veiculo_placa || "N/A"}*\n` +
-        `Tipo: ${tipo_veiculo || "N/A"}\n` +
+        `Tipo: ${tipo_veiculo || categoria_placa || "N/A"}\n` +
         `Valor FIPE: *${fipeFormatado}*\n` +
         `Limite configurado: ${limiteFormatado}\n` +
         `Associado: *${nome_solicitante || "N/A"}*\n\n` +
@@ -126,14 +147,31 @@ serve(async (req) => {
         `Responda *APROVAR* ou *RECUSAR*.`;
 
       try {
+        const sendPayload: any = {
+          telefone: telLimpo,
+          mensagem: mensagemFallback,
+        };
+
+        if (templateAprovado) {
+          // Enviar via template Meta estruturado
+          sendPayload.template_name = "aprovacao_fipe_diretoria_v1";
+          sendPayload.template_params = templateParams;
+          console.log(`[notificar-diretoria-fipe] Enviando template Meta para ${profile.nome}`);
+        } else {
+          // Fallback: texto livre
+          sendPayload.allow_text = true;
+          console.log(`[notificar-diretoria-fipe] Template não aprovado (${templateMeta?.status}). Enviando texto livre para ${profile.nome}`);
+        }
+
         const res = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
           method: "POST",
           headers: {
             "Content-Type": "application/json",
             Authorization: `Bearer ${serviceKey}`,
           },
-          body: JSON.stringify({ telefone: telLimpo, mensagem, allow_text: true }),
+          body: JSON.stringify(sendPayload),
         });
+
         const result = await res.json();
         if (result.success) {
           enviados++;
@@ -147,7 +185,7 @@ serve(async (req) => {
     }
 
     return new Response(
-      JSON.stringify({ success: true, diretores_notificados: enviados }),
+      JSON.stringify({ success: true, diretores_notificados: enviados, template_usado: templateAprovado }),
       { status: 200, headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
