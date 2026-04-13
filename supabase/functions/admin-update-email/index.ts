@@ -19,8 +19,8 @@ Deno.serve(async (req) => {
       );
     }
 
-    const supabaseUrl = "https://iyxdgmukrrdkffraptsx.supabase.co";
-    const supabaseAnonKey = "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI";
+    const supabaseUrl = Deno.env.get("SUPABASE_URL") ?? "https://iyxdgmukrrdkffraptsx.supabase.co";
+    const supabaseAnonKey = Deno.env.get("SUPABASE_ANON_KEY") ?? "eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBhYmFzZSIsInJlZiI6Iml5eGRnbXVrcnJka2ZmcmFwdHN4Iiwicm9sZSI6ImFub24iLCJpYXQiOjE3NjczODA2MDIsImV4cCI6MjA4Mjk1NjYwMn0.ky2mnyV-zad5peCNb8Ss16LaVlCQ8hWk6kwaQHStDnI";
     
     const supabaseClient = createClient(supabaseUrl, supabaseAnonKey, {
       global: { headers: { Authorization: authHeader } },
@@ -84,30 +84,38 @@ Deno.serve(async (req) => {
     const { data: targetUser } = await supabaseAdmin.auth.admin.getUserById(userId);
     const emailAntigo = targetUser?.user?.email;
 
-    // Verificar se o email já está em uso
-    const { data: existingUsers } = await supabaseAdmin.auth.admin.listUsers();
-    const emailExists = existingUsers?.users?.some(
-      u => u.email?.toLowerCase() === novoEmail.toLowerCase() && u.id !== userId
-    );
-
-    if (emailExists) {
-      return new Response(
-        JSON.stringify({ error: "Este email já está em uso por outro usuário" }),
-        { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-      );
-    }
-
+    // Verificar se o email já está em uso - buscar por email específico
+    const { data: { users: existingUsers }, error: listError } = await supabaseAdmin.auth.admin.listUsers({
+      page: 1,
+      perPage: 1,
+    });
+    
+    // Tentar buscar usuário pelo email novo para verificar duplicidade
+    // Usamos uma abordagem diferente: tentar atualizar e tratar o erro
+    
     // Atualizar o email do usuário (sem confirmação - admin)
-    const { error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
+    console.log(`Tentando atualizar email do usuário ${userId} para ${novoEmail}`);
+    const { data: updateData, error: updateError } = await supabaseAdmin.auth.admin.updateUserById(
       userId,
       { 
         email: novoEmail,
-        email_confirm: true  // Confirma automaticamente
+        email_confirm: true
       }
     );
 
     if (updateError) {
-      console.error("Erro ao atualizar email:", updateError);
+      console.error("Erro ao atualizar email:", JSON.stringify(updateError, null, 2));
+      console.error("Status:", updateError.status, "Code:", (updateError as any).code);
+      
+      // Verificar se é erro de email duplicado
+      const msg = updateError.message?.toLowerCase() || '';
+      if (msg.includes('duplicate') || msg.includes('already') || msg.includes('exists')) {
+        return new Response(
+          JSON.stringify({ error: "Este email já está em uso por outro usuário" }),
+          { status: 400, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+        );
+      }
+      
       return new Response(
         JSON.stringify({ error: "Erro ao alterar email: " + updateError.message }),
         { status: 500, headers: { ...corsHeaders, "Content-Type": "application/json" } }
