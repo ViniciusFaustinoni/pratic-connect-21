@@ -284,6 +284,7 @@ const SolicitacoesIA = lazy(() => import("./pages/diretoria/SolicitacoesIA"));
 const CampanhasDesconto = lazy(() => import("./pages/diretoria/CampanhasDesconto"));
 const FechamentoMensal = lazy(() => import("./pages/diretoria/FechamentoMensal"));
 const Blacklist = lazy(() => import("./pages/diretoria/Blacklist"));
+const AprovacoesDiretoriaPage = lazy(() => import("./pages/diretoria/AprovacoesDiretoria"));
 
 // Auditoria
 const AuditoriaVendedores = lazy(() => import("./pages/auditoria/AuditoriaVendedores"));

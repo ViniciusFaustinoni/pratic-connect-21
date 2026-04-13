@@ -75,6 +75,7 @@ import {
   GraduationCap,
   UserSearch,
   ShoppingCart,
+  CheckCircle2,
 } from 'lucide-react';
 import { NavLink } from '@/components/NavLink';
 import {
