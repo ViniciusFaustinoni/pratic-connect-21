@@ -735,7 +735,7 @@ serve(async (req) => {
       action: "SIGN",
       delivery_method: "DELIVERY_METHOD_EMAIL",
       positions: gerarPosicoesAssinatura(posConfig),
-      security_verifications: [{ type: "FACE" }, { type: "LIVENESS" }],
+      security_verifications: [{ type: "LIVE" }],
     };
     if (cpfValido) {
       signerObj.configs = { cpf: cpfRaw };
