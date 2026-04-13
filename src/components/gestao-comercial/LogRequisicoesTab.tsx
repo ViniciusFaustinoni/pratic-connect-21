@@ -12,7 +12,7 @@ import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@
 import { Skeleton } from '@/components/ui/skeleton';
 import { Button } from '@/components/ui/button';
 
-type Plataforma = 'todas' | 'whatsapp' | 'asaas' | 'softruck' | 'rede' | 'sga' | 'auth' | 'api_leads';
+type Plataforma = 'todas' | 'whatsapp' | 'asaas' | 'softruck' | 'rede' | 'sga' | 'auth' | 'api_leads' | 'autentique' | 'fipe' | 'plate_lookup';
 
 interface LogUnificado {
   id: string;
