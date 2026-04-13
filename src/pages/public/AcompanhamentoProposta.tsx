@@ -531,10 +531,22 @@ function formatTipoFoto(tipo: string): string {
 
 export default function AcompanhamentoProposta() {
   const { token } = useParams<{ token: string }>();
+  const navigate = useNavigate();
   const queryClient = useQueryClient();
   const { data: associado, isLoading, error } = useAcompanhamentoProposta(token);
 
-
+  // Se o fluxo de contratação ainda não foi concluído, redirecionar de volta para a cotação
+  const statusFluxoIncompleto = ['plano_escolhido', 'dados_preenchidos', 'documentos_ok', 'contrato_gerado'];
+  useEffect(() => {
+    if (
+      associado?.cotacaoStatusContratacao &&
+      statusFluxoIncompleto.includes(associado.cotacaoStatusContratacao) &&
+      associado.cotacaoTokenPublico
+    ) {
+      console.log('[AcompanhamentoProposta] Fluxo incompleto, redirecionando para cotação:', associado.cotacaoStatusContratacao);
+      navigate(`/cotacao/${associado.cotacaoTokenPublico}`, { replace: true });
+    }
+  }, [associado?.cotacaoStatusContratacao, associado?.cotacaoTokenPublico, navigate]);
 
   // Checklist items parsed
   const checklistItems = useMemo<ChecklistItemData[]>(() => {
