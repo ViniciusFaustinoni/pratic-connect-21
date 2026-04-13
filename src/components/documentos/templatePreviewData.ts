@@ -30,6 +30,12 @@ const DADOS_FICTICIOS: Record<string, string> = {
   'associado.cnh_categoria': 'AB',
   'associado.rg_orgao': 'SSP/SP',
 
+  // Indicador
+  'indicador.nome': 'Carlos Alberto Pereira',
+  'indicador.cpf': '987.654.321-00',
+  'indicador.telefone': '(11) 91234-5678',
+  'indicador.email': 'carlos.pereira@email.com',
+
   // Veículo
   'veiculo.marca': 'Toyota',
   'veiculo.modelo': 'Corolla XEi 2.0',
