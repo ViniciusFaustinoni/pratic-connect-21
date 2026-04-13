@@ -1,5 +1,5 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
-import { FileSignature, Loader2, AlertCircle, ExternalLink, RefreshCw, CheckCircle2, Shield, Clock, Mail, MousePointer, PenTool, ArrowRight, Copy, Check } from 'lucide-react';
+import { FileSignature, Loader2, AlertCircle, RefreshCw, CheckCircle2, Shield, Clock, Mail, ArrowRight } from 'lucide-react';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardDescription, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -29,25 +29,6 @@ interface EtapaAssinaturaContratoProps {
 
 type EtapaInterna = 'coletar_email' | 'verificando' | 'gerando_contrato' | 'enviando_autentique' | 'aguardando_assinatura' | 'assinado' | 'erro';
 
-function CopyLinkButton({ link }: { link: string }) {
-  const [copied, setCopied] = useState(false);
-  const handleCopy = async () => {
-    try {
-      await navigator.clipboard.writeText(link);
-      setCopied(true);
-      toast.success('Link copiado!');
-      setTimeout(() => setCopied(false), 2000);
-    } catch {
-      toast.error('Erro ao copiar');
-    }
-  };
-  return (
-    <Button variant="outline" size="sm" className="w-full" onClick={handleCopy}>
-      {copied ? <Check className="h-4 w-4 mr-2" /> : <Copy className="h-4 w-4 mr-2" />}
-      {copied ? 'Link Copiado!' : 'Copiar Link de Assinatura'}
-    </Button>
-  );
-}
 
 export function EtapaAssinaturaContrato({
   cotacaoId,
@@ -61,6 +42,7 @@ export function EtapaAssinaturaContrato({
   // ═══ ESTADOS ATÔMICOS INDEPENDENTES ═══
   const [contratoId, setContratoId] = useState<string | null>(contratoInicial?.id || null);
   const [contratoNumero, setContratoNumero] = useState<string | null>(contratoInicial?.numero || null);
+  // linkAssinatura mantido internamente apenas para controle de polling, não exibido na UI
   const [linkAssinatura, setLinkAssinatura] = useState<string | null>(contratoInicial?.autentique_url || null);
   const [autentiqueDocId, setAutentiqueDocId] = useState<string | null>(contratoInicial?.autentique_documento_id || null);
   const [statusContrato, setStatusContrato] = useState<string | null>(contratoInicial?.status || null);
@@ -73,7 +55,7 @@ export function EtapaAssinaturaContrato({
   const [emailLocal, setEmailLocal] = useState(clienteEmail || '');
   const [emailEfetivo, setEmailEfetivo] = useState(clienteEmail || '');
   const [salvandoEmail, setSalvandoEmail] = useState(false);
-  const [linkTimeout, setLinkTimeout] = useState(false);
+  
 
   // ═══ REFS DE TRAVA — impedir dupla execução ═══
   const initRef = useRef(false);
@@ -370,15 +352,6 @@ export function EtapaAssinaturaContrato({
     return () => clearInterval(interval);
   }, [etapaInterna, contratoId, linkAssinatura]);
 
-  // ═══ 5b. Timeout para link ═══
-  useEffect(() => {
-    if (etapaInterna !== 'aguardando_assinatura' || linkAssinatura) {
-      setLinkTimeout(false);
-      return;
-    }
-    const timeout = setTimeout(() => setLinkTimeout(true), 90000);
-    return () => clearTimeout(timeout);
-  }, [etapaInterna, linkAssinatura]);
 
   // ═══ 6. Polling FALLBACK para status (15s) ═══
   useEffect(() => {
@@ -724,92 +697,6 @@ export function EtapaAssinaturaContrato({
           </div>
 
           <Separator className="my-2" />
-
-          {/* Botão de assinatura direta ou Gerar Link */}
-          <motion.div
-            initial={{ scale: 0.9, opacity: 0 }}
-            animate={{ scale: 1, opacity: 1 }}
-            transition={{ delay: 0.1 }}
-            className="space-y-3"
-          >
-            {linkAssinatura ? (
-              <>
-                <p className="text-xs text-center text-muted-foreground">
-                  Ou clique abaixo para assinar diretamente:
-                </p>
-                <Button 
-                  className="w-full h-14 text-lg gap-3" 
-                  asChild
-                >
-                  <a href={linkAssinatura} target="_blank" rel="noopener noreferrer">
-                    <FileSignature className="h-5 w-5" />
-                    Assinar Contrato Agora
-                    <ExternalLink className="h-4 w-4" />
-                  </a>
-                </Button>
-                <CopyLinkButton link={linkAssinatura} />
-              </>
-            ) : (
-              <>
-                <p className="text-xs text-center text-muted-foreground">
-                  O link de assinatura está sendo preparado. Clique abaixo para gerar:
-                </p>
-                <Button
-                  className="w-full h-14 text-lg gap-3"
-                  onClick={async () => {
-                    if (!contratoId) return;
-                    setVerificando(true);
-                    try {
-                      // Tentar buscar link existente primeiro
-                      const { data } = await publicSupabase
-                        .from('contratos')
-                        .select('autentique_url, autentique_documento_id')
-                        .eq('id', contratoId)
-                        .maybeSingle();
-                      
-                      if (data?.autentique_url) {
-                        setLinkAssinatura(data.autentique_url);
-                        if (data.autentique_documento_id) setAutentiqueDocId(data.autentique_documento_id);
-                        toast.success('Link gerado!');
-                        return;
-                      }
-
-                      // Se não tem, re-invocar autentique-create
-                      const { data: result, error } = await publicSupabase.functions.invoke('autentique-create', {
-                        body: { contrato_id: contratoId },
-                      });
-
-                      if (error) throw error;
-                      
-                      const linkResp = result?.signatureLink || result?.link_assinatura || result?.autentique_url;
-                      if (linkResp) {
-                        setLinkAssinatura(linkResp);
-                        toast.success('Link gerado!');
-                      } else {
-                        toast.info('Link está sendo gerado, aguarde alguns segundos...');
-                      }
-
-                      if (result?.documentId || result?.autentique_documento_id) {
-                        setAutentiqueDocId(result.documentId || result.autentique_documento_id);
-                      }
-                    } catch (e: any) {
-                      toast.error('Erro ao gerar link: ' + (e.message || 'Tente novamente'));
-                    } finally {
-                      setVerificando(false);
-                    }
-                  }}
-                  disabled={verificando}
-                >
-                  {verificando ? (
-                    <Loader2 className="h-5 w-5 animate-spin" />
-                  ) : (
-                    <RefreshCw className="h-5 w-5" />
-                  )}
-                  {verificando ? 'Gerando...' : 'Gerar Link'}
-                </Button>
-              </>
-            )}
-          </motion.div>
 
           {/* Alerta sobre segurança */}
           <Alert className="border-primary/30 bg-primary/5">

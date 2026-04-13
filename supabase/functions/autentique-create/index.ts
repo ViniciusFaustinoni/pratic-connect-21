@@ -212,61 +212,8 @@ serve(async (req) => {
       
       let signatureLink = contrato.autentique_url;
       
-      // Se não temos o link salvo, buscar na API do Autentique
-      if (!signatureLink) {
-        console.log('[autentique-create] autentique_url ausente, buscando na API do Autentique...');
-        try {
-          const autentiqueApiKey = Deno.env.get("AUTENTIQUE_API_KEY");
-          const query = `query { document(id: "${contrato.autentique_documento_id}") { signatures { public_id action { name } link { short_link } } } }`;
-          const resp = await fetch(AUTENTIQUE_API_URL, {
-            method: "POST",
-            headers: {
-              "Authorization": `Bearer ${autentiqueApiKey}`,
-              "Content-Type": "application/json",
-            },
-            body: JSON.stringify({ query }),
-          });
-          const result = await resp.json();
-          console.log('[autentique-create] Query doc result:', JSON.stringify(result, null, 2));
-          // Encontrar o signatário com action SIGN (não o observador)
-          const signatures = result?.data?.document?.signatures || [];
-          const signerWithAction = signatures.find((s: any) => s?.action?.name === 'SIGN') || signatures[0];
-          signatureLink = signerWithAction?.link?.short_link || null;
-          // Fallback: gerar link via mutation createLinkToSignature
-          if (!signatureLink && signerWithAction?.public_id) {
-            try {
-              const createLinkMutation = `mutation { createLinkToSignature(public_id: "${signerWithAction.public_id}") { short_link } }`;
-              const linkResp = await fetch(AUTENTIQUE_API_URL, {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${autentiqueApiKey}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ query: createLinkMutation }),
-              });
-              const linkResult = await linkResp.json();
-              console.log('[autentique-create] createLinkToSignature response:', JSON.stringify(linkResult, null, 2));
-              signatureLink = linkResult?.data?.createLinkToSignature?.short_link || null;
-              console.log('[autentique-create] Link gerado via createLinkToSignature:', signatureLink);
-            } catch (linkErr) {
-              console.warn('[autentique-create] Falha ao gerar link via mutation:', linkErr);
-            }
-          } else {
-            console.log('[autentique-create] Link obtido da API:', signatureLink);
-          }
-          
-          // Salvar no banco para próximas chamadas
-          if (signatureLink) {
-            await supabase
-              .from("contratos")
-              .update({ autentique_url: signatureLink })
-              .eq("id", contratoId);
-            console.log('[autentique-create] autentique_url salvo no banco');
-          }
-        } catch (err) {
-          console.warn('[autentique-create] Erro ao buscar link na API Autentique:', err);
-        }
-      }
+      // Delivery é por email — não precisamos buscar/gerar link público
+      console.log('[autentique-create] Documento existente, delivery por email — sem busca de link');
       
       return new Response(
         JSON.stringify({
@@ -786,6 +733,7 @@ serve(async (req) => {
       name: signerName || undefined,
       email: signerEmail,
       action: "SIGN",
+      delivery_method: "DELIVERY_METHOD_EMAIL",
       positions: gerarPosicoesAssinatura(posConfig),
     };
     if (cpfValido) {
@@ -847,50 +795,8 @@ serve(async (req) => {
     // Obter link de assinatura
     let signatureLink = document.signatures?.[0]?.link?.short_link;
 
-    // Se o link não veio na criação, buscar com retry após 2s
-    if (!signatureLink && document.id) {
-      console.log('[autentique-create] short_link não retornado na criação, tentando buscar...');
-      await new Promise(r => setTimeout(r, 2000));
-      try {
-        const query = `query { document(id: "${document.id}") { signatures { public_id link { short_link } } } }`;
-        const retryResp = await fetch(AUTENTIQUE_API_URL, {
-          method: "POST",
-          headers: {
-            "Authorization": `Bearer ${autentiqueApiKey}`,
-            "Content-Type": "application/json",
-          },
-          body: JSON.stringify({ query }),
-        });
-        const retryData = await retryResp.json();
-        signatureLink = retryData?.data?.document?.signatures?.[0]?.link?.short_link || null;
-        console.log('[autentique-create] Link obtido no retry:', signatureLink);
-        
-        // Se ainda não tem link, tentar gerar via mutation createLinkToSignature
-        if (!signatureLink) {
-          const publicId = retryData?.data?.document?.signatures?.[0]?.public_id;
-          if (publicId) {
-            try {
-              const createLinkMutation = `mutation { createLinkToSignature(public_id: "${publicId}") { short_link } }`;
-              const linkResp2 = await fetch(AUTENTIQUE_API_URL, {
-                method: "POST",
-                headers: {
-                  "Authorization": `Bearer ${autentiqueApiKey}`,
-                  "Content-Type": "application/json",
-                },
-                body: JSON.stringify({ query: createLinkMutation }),
-              });
-              const linkResult2 = await linkResp2.json();
-              signatureLink = linkResult2?.data?.createLinkToSignature?.short_link || null;
-              console.log('[autentique-create] Link gerado via createLinkToSignature (retry):', signatureLink);
-            } catch (linkErr) {
-              console.warn('[autentique-create] Falha createLinkToSignature no retry:', linkErr);
-            }
-          }
-        }
-      } catch (err) {
-        console.warn('[autentique-create] Retry falhou:', err);
-      }
-    }
+    // Delivery é por email — não tentamos buscar/gerar link público
+    console.log('[autentique-create] Delivery por email — link público não necessário');
 
     // Atualizar contrato com dados do Autentique
     const { error: updateError } = await supabase
