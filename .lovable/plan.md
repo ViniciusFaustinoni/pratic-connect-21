@@ -1,27 +1,26 @@
 
 
-## Plano: Adicionar logo DT no Termo de Responsabilidade do Rastreador
+## Plano: Corrigir filtro de perfil no hook useUsuarios
 
-### O que muda
-A seção "Termo de Responsabilidade - Equipamento Rastreador" ganhará um cabeçalho visual com a logo da DT (empresa do rastreador), usando uma barra dourada/amber similar ao design de referência enviado.
+### Problema
+O filtro por perfil (ex: "Diretor") é aplicado **client-side após a paginação**. O sistema busca 15 profiles, depois filtra por role — como diretores são raros entre 9756 usuários, a página retorna vazio. Os contadores de Ativos/Inativos também estão errados pois contam apenas da página atual.
+
+### Solução
+Mover o filtro de perfil para **server-side**: quando um perfil é selecionado, primeiro buscar os `user_id`s com aquele role em `user_roles`, depois filtrar `profiles` com `.in('user_id', userIds)`.
 
 ### Alterações técnicas
 
-**1. Copiar a logo DT para o projeto**
-- `lov-copy user-uploads://LOGO_DT.png public/logos/logo-dt.png`
-- A imagem ficará acessível em `https://pratic-connect-21.lovable.app/logos/logo-dt.png`
+**1. `src/hooks/useUsuarios.ts`** (queryFn, ~linhas 56-131)
+- Quando `filters.perfil` está definido e não é 'todos':
+  - Primeiro query: `supabase.from('user_roles').select('user_id').eq('role', perfil)` para obter lista de user_ids
+  - Adicionar `.in('user_id', userIds)` à query de profiles antes da paginação
+- Remover o filtro client-side das linhas 122-126
+- Isso garante que paginação e contagem (`count: 'exact'`) reflitam corretamente o filtro
 
-**2. `supabase/functions/_shared/termo-afiliacao-template.ts`** (~linha 979-983)
-- Adicionar um cabeçalho visual antes do título, com barra amber (#D4920B) e a logo DT centralizada (seguindo o layout da imagem de referência)
-- Substituir o bloco atual por:
-  - Barra dourada com logo DT centralizada (usando `<img>` com URL pública)
-  - Título "TERMO DE RESPONSABILIDADE DO RASTREADOR" abaixo da barra
-  - Subtítulo "(O preenchimento e a validade deste termo, serão exclusivos para os veículos que possuam rastreador)"
-
-**3. Redeploy** da Edge Function que usa este template (se necessário, pois é shared)
+**2. `src/pages/configuracoes/UsuariosAcessos.tsx`** (~linhas 189-193)
+- Ajustar stats de Ativos/Inativos para usar `pagination.total` ou buscar contagem separada do servidor, em vez de contar apenas os itens da página atual
 
 ### Escopo
-- 1 arquivo de imagem copiado para `public/logos/`
-- 1 arquivo de template modificado
-- Redeploy das Edge Functions que usam o template
+- 2 arquivos modificados
+- Sem migrations ou Edge Functions
 
