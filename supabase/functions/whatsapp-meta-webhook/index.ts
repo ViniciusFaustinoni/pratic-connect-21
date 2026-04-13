@@ -37,6 +37,117 @@ async function enviarWhatsApp(supabaseUrl: string, serviceKey: string, telefone:
 }
 
 /**
+ * Inferir intenção da resposta de confirmação via regex (fallback)
+ */
+function inferirIntencaoConfirmacao(texto: string): string {
+  const t = texto.trim().toLowerCase();
+  if (/^(sim|s|ok|blz|beleza|pode|confirmo|confirmado|confirmar|vou|irei|estarei|certo|positivo|bora|vamos|claro|com certeza|uhum|aham|sss+|isso|perfeito|tô|to lá|vou sim|pode sim|tudo certo|combinado|fechado|show)$/i.test(t)) return "CONFIRMADO";
+  if (/^(não|nao|n|cancelar|cancela|desisto|nope|nop|nada|nenhum|nenhuma)$/i.test(t)) return "CANCELAR";
+  if (/reagend|trocar|mudar|outro dia|outro horario|outro horário|remarcar|adiar|postergar/i.test(t)) return "REAGENDAR";
+  return "DUVIDA";
+}
+
+/**
+ * Processa resposta de confirmação de agendamento recebida via Meta API
+ */
+async function processarRespostaConfirmacaoMeta(
+  supabase: ReturnType<typeof createClient>,
+  supabaseUrl: string,
+  serviceKey: string,
+  confirmacao: any,
+  texto: string,
+  telefone: string,
+) {
+  const intencao = inferirIntencaoConfirmacao(texto);
+  console.log(`[whatsapp-meta-webhook] Intenção confirmação: "${texto}" -> ${intencao}`);
+
+  const agora = new Date().toISOString();
+
+  if (intencao === "CONFIRMADO") {
+    // Atualizar confirmação
+    await supabase
+      .from("confirmacoes_agendamento")
+      .update({
+        status: "sucesso",
+        resposta_associado: texto,
+        intencao_detectada: "CONFIRMADO",
+        respondido_em: agora,
+        updated_at: agora,
+      })
+      .eq("id", confirmacao.id);
+
+    // Atualizar serviço
+    if (confirmacao.servico_id) {
+      await supabase
+        .from("servicos")
+        .update({
+          confirmacao_whatsapp: true,
+          confirmacao_whatsapp_em: agora,
+          updated_at: agora,
+        })
+        .eq("id", confirmacao.servico_id);
+
+      // Disparar atribuição automática
+      try {
+        fetch(`${supabaseUrl}/functions/v1/atribuir-servico-automatico`, {
+          method: "POST",
+          headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+          body: JSON.stringify({ servico_id: confirmacao.servico_id }),
+        }).catch(() => {});
+      } catch (_) { /* fire-and-forget */ }
+    }
+
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+      `✅ Agendamento *confirmado* com sucesso!\n\nNosso técnico será designado e você receberá os detalhes em breve. Obrigado! 😊`
+    );
+  } else if (intencao === "REAGENDAR") {
+    await supabase
+      .from("confirmacoes_agendamento")
+      .update({
+        status: "reagendando",
+        resposta_associado: texto,
+        intencao_detectada: "REAGENDAR",
+        respondido_em: agora,
+        updated_at: agora,
+      })
+      .eq("id", confirmacao.id);
+
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+      `📅 Entendido! Vamos reagendar seu atendimento.\n\nPor favor, entre em contato com nossa central para escolher uma nova data e horário. 📞`
+    );
+  } else if (intencao === "CANCELAR") {
+    await supabase
+      .from("confirmacoes_agendamento")
+      .update({
+        status: "cancelado",
+        resposta_associado: texto,
+        intencao_detectada: "CANCELAR",
+        respondido_em: agora,
+        updated_at: agora,
+      })
+      .eq("id", confirmacao.id);
+
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+      `❌ Agendamento cancelado conforme solicitado.\n\nSe precisar reagendar, entre em contato conosco. Estamos à disposição! 😊`
+    );
+  } else {
+    // DUVIDA - inserir na fila IA para resposta contextualizada
+    await supabase
+      .from("confirmacoes_agendamento")
+      .update({
+        resposta_associado: texto,
+        intencao_detectada: "DUVIDA",
+        updated_at: agora,
+      })
+      .eq("id", confirmacao.id);
+
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefone,
+      `🤔 Não entendi sua resposta sobre o agendamento.\n\nPor favor, responda:\n✅ *SIM* para confirmar\n📅 *REAGENDAR* para trocar a data\n❌ *NÃO* para cancelar`
+    );
+  }
+}
+
+/**
  * Processa mensagem de usuário (associado, lead ou desconhecido) via IA
  */
 async function processarMensagemUsuario(
@@ -58,6 +169,28 @@ async function processarMensagemUsuario(
   }
   if (!telLimpo.startsWith("55")) {
     telefonesBusca.push("55" + telLimpo);
+  }
+
+  // ---- 0. VERIFICAR CONFIRMAÇÃO DE AGENDAMENTO PENDENTE ----
+  if (tipoMsg === "text" || tipoMsg === "button") {
+    try {
+      const { data: confirmacao } = await supabase
+        .from("confirmacoes_agendamento")
+        .select("*")
+        .or(`telefone.in.(${telefonesBusca.join(",")}),telefone_formatado.in.(${telefonesBusca.join(",")})`)
+        .in("status", ["enviada", "reagendando", "aguardando_confirmacao_vespera", "aguardando_confirmacao_manha"])
+        .order("created_at", { ascending: false })
+        .limit(1)
+        .maybeSingle();
+
+      if (confirmacao) {
+        console.log(`[whatsapp-meta-webhook] Confirmação pendente encontrada: ${confirmacao.id} status=${confirmacao.status}`);
+        await processarRespostaConfirmacaoMeta(supabase, supabaseUrl, serviceKey, confirmacao, texto, telefone);
+        return;
+      }
+    } catch (confErr) {
+      console.error(`[whatsapp-meta-webhook] Erro ao verificar confirmação:`, confErr);
+    }
   }
 
   // ---- 1. BUSCAR ASSOCIADO ATIVO ----
