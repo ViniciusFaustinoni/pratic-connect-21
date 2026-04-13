@@ -1,26 +1,25 @@
 
 
-## Diagnóstico: Alterações não persistem em Templates e Aditivos
+## Plano: Adicionar variáveis do Indicador no seletor de Templates e Aditivos
 
-### Causa raiz identificada
+### Causa
+O grupo "indicador" não existe em `VARIAVEIS_DISPONIVEIS` nem em `DADOS_FICTICIOS`. Por isso as variáveis do associado indicador não aparecem no painel lateral do editor.
 
-**Templates (`documento_templates`)**: O problema é um bug de cache. Após salvar, o `onSuccess` invalida apenas a query `['documento-templates']` (listagem), mas **não invalida** a query `['documento-template', id]` (individual). Quando você volta a editar o mesmo template, o React Query serve a versão em cache (antiga) sem buscar os dados atualizados do banco.
+### Alterações
 
-O dado **é salvo** no banco com sucesso (confirmado pelo PATCH 200 nos logs de rede), mas a tela de edição mostra dados obsoletos do cache.
+**1. `src/components/documentos/VariaveisSelector.tsx`**
+- Adicionar import `UserPlus` do lucide-react
+- Adicionar `indicador: UserPlus` no `iconesPorGrupo`
+- Adicionar grupo `indicador` no `VARIAVEIS_DISPONIVEIS` com: `indicador.nome`, `indicador.cpf`, `indicador.telefone`, `indicador.email`
+- Adicionar `indicador: false` no estado `expandido`
 
-**Aditivos (`termos_aditivos`)**: O mesmo padrão pode ocorrer — preciso verificar se o `invalidateQueries` com `['termos-aditivos']` está corretamente atingindo a query individual `['termos-aditivos', id]`.
-
-### Correções
-
-**1. `src/hooks/useDocumentoTemplates.ts` — Corrigir invalidação de cache no `useUpdateTemplate`**
-- Adicionar `queryClient.invalidateQueries({ queryKey: ['documento-template'] })` (singular) no `onSuccess`
-- Isso garante que ao reabrir o template, os dados frescos sejam buscados
-
-**2. `src/hooks/useAditivos.ts` — Verificar e corrigir invalidação de cache no `useUpdateAditivo`**
-- Confirmar que `invalidateQueries({ queryKey: ['termos-aditivos'] })` atinge tanto a listagem quanto a query individual
-- Se necessário, adicionar invalidação explícita
+**2. `src/components/documentos/templatePreviewData.ts`**
+- Adicionar dados fictícios:
+  - `indicador.nome` → "Carlos Alberto Pereira"
+  - `indicador.cpf` → "987.654.321-00"
+  - `indicador.telefone` → "(11) 91234-5678"
+  - `indicador.email` → "carlos.pereira@email.com"
 
 ### Escopo
-- 2 arquivos editados (hooks de templates e aditivos)
-- Correção simples de cache invalidation
+- 2 arquivos editados, sem migrations
 
