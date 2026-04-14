@@ -3,7 +3,7 @@
   "short_name": "PRATIC",
   "description": "Aplicativo de proteção veicular PRATIC. Acompanhe seus veículos, boletos e solicite assistência.",
   "start_url": "/app/home",
-  "scope": "/",
+  "scope": "/app/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#ffffff",
