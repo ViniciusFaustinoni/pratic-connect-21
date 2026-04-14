@@ -128,8 +128,89 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---- 5. VERIFICAR HORÁRIO COMERCIAL (apenas para leads) ----
+    // ---- 4B. DETECTAR ASSOCIADO ----
+    let isAssociado = false;
+    let associadoNome = "";
+    let associadoStatus = "";
+    let numeroAtendimento = "";
+
     if (!isDiretor) {
+      // Buscar na tabela associados pelo telefone/whatsapp
+      const orFilterAssociado = telVariantes.flatMap(t => [
+        `telefone.ilike.%${t}%`,
+        `whatsapp.ilike.%${t}%`,
+      ]).join(",");
+
+      const { data: associadoMatch } = await supabase
+        .from("associados")
+        .select("nome, status, telefone, whatsapp")
+        .or(orFilterAssociado)
+        .limit(1)
+        .maybeSingle();
+
+      if (associadoMatch) {
+        isAssociado = true;
+        associadoNome = associadoMatch.nome || "";
+        associadoStatus = associadoMatch.status || "";
+        console.log(`[agente-consultor-ia] Associado detectado: ${associadoNome} (status: ${associadoStatus})`);
+
+        // Buscar número de atendimento (instância principal Evolution)
+        try {
+          const { data: instancia } = await supabase
+            .from("whatsapp_instancias")
+            .select("telefone, instance_name")
+            .eq("ativa", true)
+            .limit(1)
+            .maybeSingle();
+
+          if (instancia?.telefone) {
+            const tel = instancia.telefone.replace(/\D/g, "");
+            // Formatar como (XX) XXXXX-XXXX
+            if (tel.length === 13) {
+              numeroAtendimento = `(${tel.substring(2, 4)}) ${tel.substring(4, 9)}-${tel.substring(9)}`;
+            } else if (tel.length === 11) {
+              numeroAtendimento = `(${tel.substring(0, 2)}) ${tel.substring(2, 7)}-${tel.substring(7)}`;
+            } else {
+              numeroAtendimento = tel;
+            }
+          }
+
+          // Fallback: buscar via whatsapp-get-sender
+          if (!numeroAtendimento) {
+            try {
+              const senderResp = await fetch(`${supabaseUrl}/functions/v1/whatsapp-get-sender`, {
+                method: "POST",
+                headers: {
+                  "Content-Type": "application/json",
+                  Authorization: `Bearer ${serviceKey}`,
+                },
+              });
+              const senderData = await senderResp.json();
+              if (senderData?.sender) {
+                const s = senderData.sender;
+                if (s.length === 13) {
+                  numeroAtendimento = `(${s.substring(2, 4)}) ${s.substring(4, 9)}-${s.substring(9)}`;
+                } else if (s.length >= 10) {
+                  numeroAtendimento = s;
+                }
+              }
+            } catch (e) {
+              console.error("[agente-consultor-ia] Erro ao buscar sender:", e);
+            }
+          }
+        } catch (e) {
+          console.error("[agente-consultor-ia] Erro ao buscar número atendimento:", e);
+        }
+
+        if (!numeroAtendimento) {
+          numeroAtendimento = "nosso número principal de atendimento";
+        }
+        console.log(`[agente-consultor-ia] Número de atendimento: ${numeroAtendimento}`);
+      }
+    }
+
+    // ---- 5. VERIFICAR HORÁRIO COMERCIAL (apenas para leads) ----
+    if (!isDiretor && !isAssociado) {
       let horarioConfig: { dias: string[]; inicio: string; fim: string } | null = null;
       try {
         horarioConfig = JSON.parse(config.horario_comercial || "null");
@@ -256,6 +337,41 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
           },
         },
       ];
+    } else if (isAssociado) {
+      // === PROMPT PARA ASSOCIADOS ===
+      systemPrompt = `Você é ${nomeAgente}, assistente virtual da PRATICCAR Proteção Veicular.
+
+## CONTEXTO
+Você está conversando com *${associadoNome}*, que já é associado(a) da PRATICCAR (status: ${associadoStatus}).
+
+## SUA FUNÇÃO
+Você deve reconhecer que esta pessoa já é associada e direcioná-la para o atendimento correto.
+
+## REGRAS ABSOLUTAS
+- NUNCA tente vender planos ou fazer cotação para associados
+- NUNCA ofereça produtos ou promoções
+- NUNCA execute ferramentas de cotação
+- Seja cordial e prestativo
+
+## O QUE FAZER
+1. Cumprimente pelo nome
+2. Informe que para atendimento, suporte, sinistros, dúvidas sobre cobranças ou qualquer assunto relacionado à associação, deve entrar em contato pelo número de atendimento principal
+3. O número de atendimento é: *${numeroAtendimento}*
+4. Pode responder dúvidas gerais simples sobre a PRATICCAR (horário de funcionamento, etc.)
+
+## SAUDAÇÃO INICIAL
+Se for a primeira mensagem: "Olá, ${associadoNome}! 👋 Sou o ${nomeAgente} da PRATICCAR. Vi que você já é nosso(a) associado(a)! Para atendimento, suporte ou qualquer dúvida sobre sua proteção, entre em contato pelo nosso número de atendimento: *${numeroAtendimento}*. Nossa equipe terá prazer em ajudá-lo(a)! 😊"
+
+## FORMATAÇÃO
+- Use formatação WhatsApp: *negrito*, _itálico_
+- NUNCA use Markdown: **duplo**, ## títulos
+- Respostas curtas e diretas
+
+## DATA E HORA ATUAL
+${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
+
+      tools = []; // Nenhuma ferramenta para associados
+
     } else {
       // === PROMPT PARA LEADS (vendas) ===
       // Carregar linhas de produto
