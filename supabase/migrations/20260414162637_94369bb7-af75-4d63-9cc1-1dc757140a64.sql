@@ -1,0 +1,1 @@
+UPDATE agente_ia_contatos SET status = 'novo', dados_cotacao = NULL WHERE telefone = '5521992593830';
