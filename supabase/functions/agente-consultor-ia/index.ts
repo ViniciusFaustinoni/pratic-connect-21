@@ -923,15 +923,31 @@ async function executarConsultaPlaca(supabaseUrl: string, serviceKey: string, pl
     };
   }
 
-  return {
+  // plate-lookup retorna: { success, vehicleData: { marca, modelo, ano, combustivel, cor, ... }, fipeData: { valor, codigo, mesReferencia } }
+  const vd = data.vehicleData || {};
+  const fd = data.fipeData || {};
+
+  // Extrair ano-modelo numérico (ex: "2013/2014" → 2014)
+  const anoTexto = vd.ano || data.ano || "";
+  const anoMatch = String(anoTexto).match(/(\d{4})$/);
+  const anoModelo = anoMatch ? parseInt(anoMatch[1]) : null;
+
+  const normalized = {
     success: true,
-    marca: data.marca || data.brand,
-    modelo: data.modelo || data.model,
-    ano: data.ano || data.year,
-    combustivel: data.combustivel || data.fuel || "gasolina",
-    valor_fipe: data.valor_fipe || data.fipeValue,
-    cor: data.cor || data.color,
+    placa: data.extractedPlate || placa,
+    marca: vd.marca || data.marca || null,
+    modelo: vd.modelo || data.modelo || null,
+    ano_modelo: anoModelo,
+    ano_texto: anoTexto,
+    combustivel: vd.combustivel || data.combustivel || "gasolina",
+    valor_fipe: fd.valor || data.valor_fipe || null,
+    cor: vd.cor || data.cor || null,
   };
+
+  console.log(`[tool:consultar_placa] Payload bruto resumido: vehicleData=${JSON.stringify(vd).substring(0, 200)}, fipeData=${JSON.stringify(fd).substring(0, 200)}`);
+  console.log(`[tool:consultar_placa] Objeto normalizado enviado ao modelo:`, JSON.stringify(normalized));
+
+  return normalized;
 }
 
 // ============================================================
