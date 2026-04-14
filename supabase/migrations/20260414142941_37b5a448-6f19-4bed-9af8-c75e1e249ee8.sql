@@ -1,0 +1,1 @@
+ALTER TABLE agente_ia_contatos ADD COLUMN IF NOT EXISTS dados_cotacao JSONB DEFAULT NULL;
