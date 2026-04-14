@@ -28,9 +28,9 @@ function AbaLinhas() {
   const { data: linhas, isLoading } = useQuery({
     queryKey: ['linhas-agente-ia'],
     queryFn: async () => {
-      const { data, error } = await (supabase as any)
+      const { data, error } = await supabase
         .from('product_lines')
-        .select('id, name, slug, description, icon, color, is_active, disponivel_agente, agente_descricao')
+        .select('id, name, slug, icon, color, is_active, disponivel_agente, agente_descricao')
         .eq('is_active', true)
         .order('sort_priority');
       if (error) throw error;
@@ -40,7 +40,7 @@ function AbaLinhas() {
 
   const updateLinha = useMutation({
     mutationFn: async ({ id, field, value }: { id: string; field: string; value: any }) => {
-      const { error } = await (supabase as any)
+      const { error } = await supabase
         .from('product_lines')
         .update({ [field]: value })
         .eq('id', id);
@@ -79,8 +79,8 @@ function AbaLinhas() {
                 />
               </div>
             </div>
-            {linha.description && (
-              <CardDescription className="text-xs">{linha.description}</CardDescription>
+            {linha.slug && (
+              <CardDescription className="text-xs">{linha.slug}</CardDescription>
             )}
           </CardHeader>
           <CardContent className="space-y-3">
