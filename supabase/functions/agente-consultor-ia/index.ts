@@ -154,48 +154,33 @@ Deno.serve(async (req) => {
         associadoStatus = associadoMatch.status || "";
         console.log(`[agente-consultor-ia] Associado detectado: ${associadoNome} (status: ${associadoStatus})`);
 
-        // Buscar número de atendimento (instância principal Evolution)
+        // Buscar número de atendimento via Meta API (número do suporte)
         try {
-          const { data: instancia } = await supabase
-            .from("whatsapp_instancias")
-            .select("telefone, instance_name")
-            .eq("ativa", true)
-            .limit(1)
+          const { data: metaCfg } = await supabase
+            .from("whatsapp_meta_config")
+            .select("phone_number_id, access_token")
+            .eq("ativo", true)
             .maybeSingle();
 
-          if (instancia?.telefone) {
-            const tel = instancia.telefone.replace(/\D/g, "");
-            // Formatar como (XX) XXXXX-XXXX
-            if (tel.length === 13) {
-              numeroAtendimento = `(${tel.substring(2, 4)}) ${tel.substring(4, 9)}-${tel.substring(9)}`;
-            } else if (tel.length === 11) {
-              numeroAtendimento = `(${tel.substring(0, 2)}) ${tel.substring(2, 7)}-${tel.substring(7)}`;
-            } else {
-              numeroAtendimento = tel;
-            }
-          }
-
-          // Fallback: buscar via whatsapp-get-sender
-          if (!numeroAtendimento) {
+          if (metaCfg?.phone_number_id && metaCfg?.access_token) {
             try {
-              const senderResp = await fetch(`${supabaseUrl}/functions/v1/whatsapp-get-sender`, {
-                method: "POST",
-                headers: {
-                  "Content-Type": "application/json",
-                  Authorization: `Bearer ${serviceKey}`,
-                },
-              });
-              const senderData = await senderResp.json();
-              if (senderData?.sender) {
-                const s = senderData.sender;
-                if (s.length === 13) {
-                  numeroAtendimento = `(${s.substring(2, 4)}) ${s.substring(4, 9)}-${s.substring(9)}`;
-                } else if (s.length >= 10) {
-                  numeroAtendimento = s;
+              const metaResp = await fetch(
+                `https://graph.facebook.com/v21.0/${metaCfg.phone_number_id}?fields=display_phone_number`,
+                { headers: { Authorization: `Bearer ${metaCfg.access_token}` } }
+              );
+              const metaData = await metaResp.json();
+              if (metaData?.display_phone_number) {
+                const tel = metaData.display_phone_number.replace(/\D/g, "");
+                if (tel.length === 13) {
+                  numeroAtendimento = `(${tel.substring(2, 4)}) ${tel.substring(4, 9)}-${tel.substring(9)}`;
+                } else if (tel.length === 11) {
+                  numeroAtendimento = `(${tel.substring(0, 2)}) ${tel.substring(2, 7)}-${tel.substring(7)}`;
+                } else {
+                  numeroAtendimento = metaData.display_phone_number;
                 }
               }
             } catch (e) {
-              console.error("[agente-consultor-ia] Erro ao buscar sender:", e);
+              console.error("[agente-consultor-ia] Erro ao buscar display_phone_number da Meta:", e);
             }
           }
         } catch (e) {
@@ -1268,7 +1253,7 @@ async function enviarWhatsApp(supabaseUrl: string, serviceKey: string, telefone:
     const res = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
       method: "POST",
       headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
-      body: JSON.stringify({ telefone, mensagem, allow_text: true }),
+      body: JSON.stringify({ telefone, mensagem, allow_text: true, force_provider: "evolution" }),
     });
     const result = await res.json();
     if (!result.success) {
