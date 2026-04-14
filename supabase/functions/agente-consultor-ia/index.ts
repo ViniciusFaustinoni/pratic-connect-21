@@ -203,9 +203,7 @@ Deno.serve(async (req) => {
 
       if (horarioConfig) {
         const agora = new Date();
-        const brasiliaOffset = -3 * 60;
-        const localOffset = agora.getTimezoneOffset();
-        const brasilia = new Date(agora.getTime() + (localOffset - brasiliaOffset) * 60 * 1000);
+        const brasilia = new Date(agora.getTime() - 3 * 60 * 60 * 1000);
 
         const diasSemana = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
         const diaAtual = diasSemana[brasilia.getDay()];
