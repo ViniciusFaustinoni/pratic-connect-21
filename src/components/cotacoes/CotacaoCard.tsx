@@ -188,8 +188,8 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
   
   if (cotacao.status === 'rascunho' && !temContratacaoAtiva && !cotacao.contrato) return null;
   
-  // PRIORIDADE 0: Se contrato pendente de assinatura, mostrar etapa de assinatura
-  if (contratoStatus === 'pendente_assinatura') return 'assinando_contrato';
+  // PRIORIDADE 0: Se contrato em fase de assinatura (pendente, enviado ou visualizado)
+  if (contratoStatus && ['pendente_assinatura', 'enviado', 'visualizado'].includes(contratoStatus)) return 'assinando_contrato';
   
   // PRIORIDADE 1: Status do associado APENAS para etapas finais (pós-vistoria)
   if (associadoStatus === 'ativo' && contratoStatus && ['assinado', 'ativo'].includes(contratoStatus)) return 'associado_ativo';
