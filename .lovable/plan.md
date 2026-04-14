@@ -1,22 +1,37 @@
 
 
-## Plano: Permitir que Evolution processe mensagens para o Agente Vinicius mesmo com Meta ativa
+## Plano: Corrigir nome do agente e confiabilidade da consulta de placa
 
-### Problema
-O webhook ignora TODAS as mensagens da Evolution quando `whatsapp_meta_config.ativo = true` (linha 2865). Isso impede o agente Vinicius de funcionar, pois ele opera exclusivamente pela Evolution.
+### Problemas identificados
+
+**1. Nome "Pratic" em vez de "Vinicius"**
+A tabela `agente_ia_config` tem `nome_agente = "Pratic"` e `apresentacao_inicial` diz "Sou a Pratic, consultora virtual". O codigo usa esses valores do banco como fonte primaria. Precisa atualizar os registros no banco.
+
+**2. Veiculo errado (MARCOPOLO em vez de Toyota Corolla)**
+O `plate-lookup` retornou dados corretos (Toyota Corolla XEi 2014, R$ 72.122), mas o modelo de IA ignorou o resultado da tool e alucinounos dados do veiculo. Causa provavel: o system prompt nao enfatiza suficientemente que o agente DEVE usar exclusivamente os dados retornados pela ferramenta, sem inventar.
 
 ### Solucao
 
-**Arquivo: `supabase/functions/whatsapp-webhook/index.ts`**
+**1. Atualizar `agente_ia_config` no banco (migration)**
+```sql
+UPDATE agente_ia_config SET valor = 'Vinicius' WHERE chave = 'nome_agente';
+UPDATE agente_ia_config SET valor = 'Olá! Sou o Vinicius, consultor virtual da Praticcar Proteção Veicular. Estou aqui para te ajudar a encontrar a melhor proteção para o seu veículo. Posso começar fazendo uma cotação gratuita para você? Para isso, por favor, me informe a *placa* do seu veículo. 😊' WHERE chave = 'apresentacao_inicial';
+```
 
-Remover o bloqueio total na linha 2858-2868 e substituir por logica que permite o processamento de mensagens Evolution para o agente consultor:
+**2. Reforcar no system prompt (leads) anti-alucinacao**
+No prompt de vendas em `agente-consultor-ia/index.ts`, adicionar regra mais enfatica:
 
-1. **Remover o bloqueio**: eliminar o `if (metaConfig?.ativo === true) { return... }` que descarta todas as mensagens Evolution
-2. **Manter separacao de responsabilidades**: quando Meta esta ativa e a mensagem vem da Evolution, o webhook deve encaminhar para o `agente-consultor-ia` normalmente (fluxo de vendas/diretor/associado)
-3. **A Maya (IA de suporte) continua operando apenas via Meta** — esse bloqueio so fazia sentido para a Maya, nao para o Vinicius
+```
+## REGRA CRITICA SOBRE DADOS DO VEICULO
+- NUNCA invente ou adivinhe dados do veiculo (marca, modelo, ano, valor FIPE)
+- SOMENTE use os dados retornados pela ferramenta consultar_placa
+- Se a ferramenta retornar erro, peca os dados manualmente ao cliente
+- NUNCA "chute" baseado na placa — SEMPRE aguarde o resultado da ferramenta
+```
 
-A alteracao e pontual: substituir o return precoce por um log informativo e deixar o fluxo continuar para o agente consultor.
+Tambem adicionar instrucao no tool result para reforcar: quando o tool result vier, incluir uma nota explicita tipo "DADOS OFICIAIS - USE APENAS ESTES DADOS".
 
-### Arquivo editado
-- `supabase/functions/whatsapp-webhook/index.ts` — remover bloqueio de mensagens Evolution quando Meta ativa
+### Arquivos alterados
+- Migration SQL para `agente_ia_config`
+- `supabase/functions/agente-consultor-ia/index.ts` — reforco anti-alucinacao no prompt e no retorno do tool
 
