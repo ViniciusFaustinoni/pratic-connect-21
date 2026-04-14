@@ -1131,6 +1131,9 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     // Adicional mensal do plano
     valorMensal += Number(plano.adicional_mensal || 0);
 
+    // Valor adicional fixo (R$ 5,50)
+    valorMensal += 5.50;
+
     // Adicional app
     if (uso_app) {
       const regiaoTemAdicional = regioesComAdicional.includes(regiaoSlug);
