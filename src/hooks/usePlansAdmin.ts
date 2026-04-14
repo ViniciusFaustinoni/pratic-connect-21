@@ -1185,8 +1185,8 @@ export function useDuplicateProductLine() {
         return {
           ...planData,
           nome: sufixo ? `${planData.nome}${sufixo}` : planData.nome,
-          codigo: `${planData.codigo}-c-${uid()}`,
-          slug: `${planData.slug || planData.codigo}-c-${uid()}`,
+          codigo: `${(planData.codigo || '').slice(0, 70)}-c-${uid()}`,
+          slug: `${(planData.slug || planData.codigo || '').slice(0, 70)}-c-${uid()}`,
           product_line_id: createdLine.id,
           ativo: true,
           categoria: tipoVeiculo === 'motorcycle' ? 'moto' : tipoVeiculo === 'car' ? 'carro' : planData.categoria,
@@ -1324,7 +1324,7 @@ export function useDuplicateProductLine() {
         const { id: cobId, created_at: cobCreated, ...cobData } = origCob;
         cobsToInsert.push({
           ...cobData,
-          nome: sufixo ? `${cobData.nome}${sufixo}` : cobData.nome,
+          nome: (sufixo ? `${cobData.nome}${sufixo}` : cobData.nome).slice(0, 100),
           codigo: (cobData.codigo || '').slice(0, 80) + `-${uid()}`,
           valor: applyDiscount(cobData.valor, desconto),
           valor_limite: applyDiscount(cobData.valor_limite, desconto),
