@@ -712,7 +712,11 @@ ${contato?.nome || "Não informado ainda"}`;
                 if (!mergedArgs.regiao && dadosCotacao.regiao) mergedArgs.regiao = dadosCotacao.regiao;
                 if (!mergedArgs.nome_cliente && dadosCotacao.nome) mergedArgs.nome_cliente = dadosCotacao.nome;
                 if (!mergedArgs.email_cliente && dadosCotacao.email) mergedArgs.email_cliente = dadosCotacao.email;
-                if (!mergedArgs.planos_calculados && dadosCotacao.planos_calculados) mergedArgs.planos_calculados = dadosCotacao.planos_calculados;
+                // CRITICAL FIX: empty array [] is truthy in JS, so check length too
+                if ((!mergedArgs.planos_calculados || mergedArgs.planos_calculados.length === 0) && dadosCotacao.planos_calculados?.length > 0) {
+                  mergedArgs.planos_calculados = dadosCotacao.planos_calculados;
+                  console.log(`[agente-consultor-ia] Planos restaurados do estado: ${dadosCotacao.planos_calculados.length} planos`);
+                }
               }
               toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, mergedArgs, telLimpo, contato);
               if (toolResult.success) {
