@@ -195,7 +195,7 @@ serve(async (req) => {
           if (bTipo === "url") {
             const btn: any = { type: "URL", text: bTexto, url: bUrl };
             if (bUrl?.includes("{{")) {
-              btn.example = ["https://pratic-connect-21.lovable.app/primeiro-acesso?id=exemplo-id-123"];
+              btn.example = ["https://app.praticcar.org/primeiro-acesso?id=exemplo-id-123"];
             }
             return btn;
           } else if (bTipo === "telefone" || bTipo === "phone_number") {
@@ -467,7 +467,7 @@ serve(async (req) => {
               if (bTipo === "url") {
                 const btn: any = { type: "URL", text: bTexto, url: bUrl };
                 if (bUrl?.includes("{{")) {
-                  btn.example = ["https://pratic-connect-21.lovable.app/primeiro-acesso?id=exemplo-id-123"];
+                  btn.example = ["https://app.praticcar.org/primeiro-acesso?id=exemplo-id-123"];
                 }
                 return btn;
               }

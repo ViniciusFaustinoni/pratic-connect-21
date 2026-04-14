@@ -204,7 +204,7 @@ serve(async (req) => {
         if (telefoneAssociado) {
           const baseUrl = Deno.env.get("PUBLIC_SITE_URL") || `https://iyxdgmukrrdkffraptsx.supabase.co`;
           // Use the app domain for the link
-          const linkAcompanhamento = `https://pratic-connect-21.lovable.app/acompanhar/reboque/${acompToken}`;
+          const linkAcompanhamento = `https://app.praticcar.org/acompanhar/reboque/${acompToken}`;
 
           const distanciaKm = vencedor.distancia_km ? `${vencedor.distancia_km} km` : "calculando";
           const tempoEstimado = vencedor.distancia_km

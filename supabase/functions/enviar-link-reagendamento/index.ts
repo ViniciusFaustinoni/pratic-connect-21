@@ -55,7 +55,7 @@ Deno.serve(async (req) => {
     if (!telefone) throw new Error("Associado sem telefone");
 
     // Gerar URL de reagendamento
-    const appUrl = Deno.env.get("APP_URL") || "https://pratic-connect-21.lovable.app";
+    const appUrl = Deno.env.get("APP_URL") || "https://app.praticcar.org";
     const linkReagendamento = `${appUrl}/reagendar/${servico.reagendamento_token}`;
     const primeiroNome = associado.nome?.split(" ")[0] || "Associado";
 

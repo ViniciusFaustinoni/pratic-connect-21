@@ -141,7 +141,7 @@ serve(async (req) => {
         const telefoneAssociado = associado?.whatsapp || associado?.telefone;
 
         if (telefoneAssociado && acompToken?.token) {
-          const link = `https://pratic-connect-21.lovable.app/acompanhar/reboque/${acompToken.token}`;
+          const link = `https://app.praticcar.org/acompanhar/reboque/${acompToken.token}`;
           const destino = chamado?.destino_logradouro || chamado?.destino_endereco || "";
           const mensagem = mensagemFn(chamado?.prestador_nome || "Reboquista", destino, link);
 

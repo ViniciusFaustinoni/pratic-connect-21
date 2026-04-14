@@ -980,7 +980,7 @@ const generateSecaoRastreador = (data: TermoAfiliacaoData): string => {
 <div class="section page-break" style="margin-top: 30pt; border: 2px solid #D4920B; padding: 0; border-radius: 4pt; overflow: hidden;">
   <!-- Cabeçalho DT -->
   <div style="background: linear-gradient(135deg, #D4920B 0%, #B8800A 100%); padding: 12pt 20pt; text-align: center;">
-    <img src="https://pratic-connect-21.lovable.app/logos/logo-dt.png" alt="DT Rastreadores" style="max-height: 45px; margin-bottom: 6pt;" />
+    <img src="https://app.praticcar.org/logos/logo-dt.png" alt="DT Rastreadores" style="max-height: 45px; margin-bottom: 6pt;" />
     <h2 style="color: #ffffff; font-size: 13pt; font-weight: 800; margin: 0; letter-spacing: 1px;">
       TERMO DE RESPONSABILIDADE - EQUIPAMENTO RASTREADOR
     </h2>

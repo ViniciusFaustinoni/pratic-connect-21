@@ -193,7 +193,7 @@ serve(async (req) => {
     }
 
     // URL base para avaliação
-    const baseUrl = Deno.env.get("APP_URL") || "https://pratic-connect-21.lovable.app";
+    const baseUrl = Deno.env.get("APP_URL") || "https://app.praticcar.org";
     const linkAvaliacao = `${baseUrl}/avaliar/assistencia/${chamado_id}`;
 
     // Preparar dados para template

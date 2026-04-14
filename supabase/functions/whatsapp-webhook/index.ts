@@ -1140,7 +1140,7 @@ async function executeTool(supabase: any, associadoId: string, toolName: string,
         }
       }
 
-      const siteUrl = Deno.env.get("SITE_URL") || "https://pratic-connect-21.lovable.app";
+      const siteUrl = Deno.env.get("SITE_URL") || "https://app.praticcar.org";
       const linkEvento = linkToken ? `${siteUrl}/evento/${linkToken}` : "";
 
       return JSON.stringify({

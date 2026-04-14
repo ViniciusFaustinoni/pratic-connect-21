@@ -163,7 +163,7 @@ serve(async (req) => {
 
           const categoriaVeiculo = veiculo.uso_aplicativo ? "Aplicativo" : "Passeio";
           const token = (ag.link as any)?.token || "";
-          const siteUrl = Deno.env.get("SITE_URL") || "https://pratic-connect-21.lovable.app";
+          const siteUrl = Deno.env.get("SITE_URL") || "https://app.praticcar.org";
 
           const tipoLabel = TIPO_LABELS[sinistro.tipo] || sinistro.tipo;
           const mensagem = `Olá, ${associado.nome}! Aqui é a Pratic Car.

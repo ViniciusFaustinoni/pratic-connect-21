@@ -244,7 +244,7 @@ Tem interesse neste serviço? Responda *SIM* ou *NÃO*.`;
 
       try {
         const horaAtual = new Date().toLocaleTimeString('pt-BR', { hour: '2-digit', minute: '2-digit' });
-        const siteUrl = Deno.env.get("APP_URL") || "https://pratic-connect-21.lovable.app";
+        const siteUrl = Deno.env.get("APP_URL") || "https://app.praticcar.org";
         const sendRes = await fetch(`${supabaseUrl}/functions/v1/whatsapp-send-text`, {
           method: "POST",
           headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
