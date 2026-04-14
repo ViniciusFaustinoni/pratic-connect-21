@@ -298,14 +298,27 @@ Deno.serve(async (req) => {
 
     console.log(`[delete-cotacao] Cotação ${cotacao.numero} excluída com sucesso`)
 
-    // 10.1 Resetar contato da IA se houver telefone
+    // 10.1 Resetar contato da IA se houver telefone (com marco de corte de contexto)
     if (cotacao.telefone1_solicitante) {
       const telefoneNormalizado = cotacao.telefone1_solicitante.replace(/\D/g, '');
+      const agora = new Date().toISOString();
       await adminClient
         .from('agente_ia_contatos')
-        .update({ status: 'novo', dados_cotacao: null })
+        .update({ status: 'novo', dados_cotacao: null, resetado_em: agora })
         .eq('telefone', telefoneNormalizado);
-      console.log(`[delete-cotacao] Contato IA resetado para telefone ${telefoneNormalizado}`);
+      console.log(`[delete-cotacao] Contato IA resetado com marco de corte: ${agora}`);
+
+      // 10.2 Cancelar itens pendentes na fila de IA para este telefone
+      const { data: filaItems } = await adminClient
+        .from('whatsapp_fila_ia')
+        .update({ status: 'cancelado', erro: 'Cotação excluída, fila invalidada', processed_at: agora })
+        .in('status', ['pendente', 'erro', 'processando'])
+        .eq('telefone', telefoneNormalizado)
+        .select('id');
+      
+      if (filaItems?.length) {
+        console.log(`[delete-cotacao] ${filaItems.length} itens da fila IA cancelados para ${telefoneNormalizado}`);
+      }
     }
 
     // 11. Registrar log de auditoria

@@ -197,30 +197,35 @@ Deno.serve(async (req) => {
     // ---- 5. HORÁRIO COMERCIAL DESATIVADO - Agente funciona 24h ----
 
     // ---- 6. BUSCAR HISTÓRICO DE CONVERSA ----
-    const duasHorasAtras = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
+    const resetTimestamp = contato?.resetado_em || null;
+    const foiResetado = contatoExistente && contato?.status === 'novo' && !contato?.dados_cotacao;
+    const isPrimeiraMensagem = !contatoExistente || foiResetado;
+
+    // Usar o marco de reset como limite inferior do histórico (se existir)
+    const limiteHistorico = resetTimestamp 
+      ? new Date(resetTimestamp).toISOString()
+      : new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
     const telefonesBusca = telVariantes;
 
     const { data: historico } = await supabase
       .from("whatsapp_mensagens")
       .select("mensagem, direcao, created_at")
       .or(telefonesBusca.map(t => `telefone.eq.${t}`).join(","))
-      .gte("created_at", duasHorasAtras)
+      .gte("created_at", limiteHistorico)
       .order("created_at", { ascending: true })
       .limit(20);
 
-    const historicoFormatado = (historico || [])
+    let historicoFormatado = (historico || [])
       .filter((m: any) => m.mensagem && m.mensagem.trim())
       .map((m: any) => ({
         role: m.direcao === "entrada" ? "user" : "assistant",
         content: m.mensagem,
       }));
 
-    const foiResetado = contatoExistente && contato?.status === 'novo' && !contato?.dados_cotacao;
-    const isPrimeiraMensagem = !contatoExistente || foiResetado;
-
+    // Se foi resetado, limpar todo o histórico para começar do zero
     if (foiResetado) {
-      historicoFormatado.length = 0;
-      console.log(`[agente-consultor-ia] Contato resetado detectado, limpando histórico de mensagens`);
+      historicoFormatado = [];
+      console.log(`[agente-consultor-ia] Contato resetado detectado (resetado_em: ${resetTimestamp}), limpando histórico`);
     }
 
     // ---- 6B. CARREGAR ESTADO DO FLUXO (dados_cotacao) ----
