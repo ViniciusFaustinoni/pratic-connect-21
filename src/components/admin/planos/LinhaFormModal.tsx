@@ -128,7 +128,7 @@ export function LinhaFormModal({
 
   return (
     <Dialog open={open} onOpenChange={onOpenChange}>
-      <DialogContent className="max-w-2xl max-h-[85vh] p-0">
+      <DialogContent className="max-w-4xl max-h-[85vh] p-0">
         <DialogHeader className="px-6 pt-6 pb-0">
           <DialogTitle>
             {isEditing ? 'Editar Linha de Produto' : 'Nova Linha de Produto'}
