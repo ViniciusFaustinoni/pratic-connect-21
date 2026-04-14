@@ -7,8 +7,13 @@ const corsHeaders = {
 
 /**
  * Edge function: Agente Consultor IA (Maya)
- * Processa mensagens de números desconhecidos (não-associados, não-leads)
- * usando configurações da tabela agente_ia_config.
+ * Fluxo reformulado com tool calling:
+ * 1. Perguntar placa
+ * 2. Consultar placa → obter dados do veículo
+ * 3. Coletar: uso (particular/app), combustível, região
+ * 4. Calcular preços de planos elegíveis
+ * 5. Apresentar planos com valores mensais (nunca por cobertura)
+ * 6. Registrar cotação + enviar WhatsApp
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -42,7 +47,6 @@ Deno.serve(async (req) => {
 
     if (contatoExistente) {
       contato = contatoExistente;
-      // Atualizar última interação
       await supabase
         .from("agente_ia_contatos")
         .update({ ultima_interacao: new Date().toISOString() })
@@ -94,7 +98,6 @@ Deno.serve(async (req) => {
 
     if (horarioConfig) {
       const agora = new Date();
-      // Converter para Brasília (UTC-3)
       const brasiliaOffset = -3 * 60;
       const localOffset = agora.getTimezoneOffset();
       const brasilia = new Date(agora.getTime() + (localOffset - brasiliaOffset) * 60 * 1000);
@@ -113,9 +116,6 @@ Deno.serve(async (req) => {
       if (!dentroHorario) {
         if (responderFora && msgForaHorario) {
           await enviarWhatsApp(supabaseUrl, serviceKey, telefone, msgForaHorario);
-          console.log(`[agente-consultor-ia] Fora do horário, enviou msg padrão para ${telLimpo}`);
-        } else {
-          console.log(`[agente-consultor-ia] Fora do horário, sem resposta para ${telLimpo}`);
         }
         return new Response(
           JSON.stringify({ success: true, fora_horario: true }),
@@ -124,19 +124,20 @@ Deno.serve(async (req) => {
       }
     }
 
-    // ---- 5. CARREGAR PLANOS DISPONÍVEIS ----
-    const { data: planos } = await supabase
-      .from("planos")
-      .select("id, nome, descricao, valor_mensal, valor_adesao, cobertura_total, cobertura_roubo_furto, agente_descricao, disponivel_agente")
+    // ---- 5. CARREGAR LINHAS DE PRODUTO DISPONÍVEIS ----
+    const { data: linhas } = await supabase
+      .from("product_lines")
+      .select("id, name, slug, description, icon, color, vehicle_type, disponivel_agente, agente_descricao")
       .eq("disponivel_agente", true)
-      .eq("ativo", true);
+      .eq("is_active", true)
+      .order("sort_priority");
 
-    const planosTexto = planos?.length
-      ? planos.map((p: any) => {
-          const desc = p.agente_descricao || p.descricao || "";
-          return `- *${p.nome}*: ${desc}${p.valor_mensal ? ` | A partir de R$ ${p.valor_mensal.toFixed(2)}/mês` : ""}`;
+    const linhasTexto = linhas?.length
+      ? linhas.map((l: any) => {
+          const desc = l.agente_descricao || l.description || "";
+          return `- *${l.name}*: ${desc}`;
         }).join("\n")
-      : "Nenhum plano disponível no momento.";
+      : "Nenhuma linha de produto disponível no momento.";
 
     // ---- 6. BUSCAR HISTÓRICO DE CONVERSA ----
     const duasHorasAtras = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
@@ -163,20 +164,9 @@ Deno.serve(async (req) => {
         content: m.mensagem,
       }));
 
-    // ---- 7. VERIFICAR SE É PRIMEIRA MENSAGEM ----
     const isPrimeiraMensagem = !contatoExistente || historico?.length === 0;
 
-    // ---- 8. DADOS OPCIONAIS DE COTAÇÃO ----
-    let dadosOpcionais: { cpf: boolean; uso_veiculo: boolean; cor_veiculo: boolean } = {
-      cpf: false,
-      uso_veiculo: true,
-      cor_veiculo: false,
-    };
-    try {
-      dadosOpcionais = JSON.parse(config.dados_cotacao_opcionais || "{}");
-    } catch { /* ignore */ }
-
-    // ---- 9. MONTAR SYSTEM PROMPT DINÂMICO ----
+    // ---- 7. MONTAR SYSTEM PROMPT ----
     const systemPrompt = `Você é ${nomeAgente}, consultora virtual de vendas da PRATICCAR Proteção Veicular.
 
 ## SUA PERSONALIDADE
@@ -186,27 +176,29 @@ ${instrucoes}
 Quando for a primeira mensagem do contato, use esta apresentação como base (adapte naturalmente):
 "${apresentacao}"
 
-## PLANOS DISPONÍVEIS PARA OFERECER
-${planosTexto}
+## LINHAS DE PROTEÇÃO DISPONÍVEIS
+${linhasTexto}
 
-## PLANOS INDISPONÍVEIS
-NÃO mencione nenhum plano que não esteja listado acima. Se o contato perguntar por um plano que não está na lista, diga que não está disponível no momento.
+## REGRA ABSOLUTA SOBRE PREÇOS
+- NUNCA informe valor de cobertura individual. Sempre informe o VALOR TOTAL DO PLANO por mês.
+- NUNCA invente preços. Se não calculou via ferramenta, diga que precisa dos dados do veículo.
+- Os preços variam conforme o veículo, região e uso. Sempre use a ferramenta calcular_cotacao para obter o preço real.
 
-## FLUXO DE COTAÇÃO
-Colete os seguintes dados para fazer uma cotação:
-1. Nome completo do interessado
-2. Marca, modelo e ano do veículo (os 3 são obrigatórios)
-3. CEP ou cidade/estado
-${dadosOpcionais.cpf ? "4. CPF do interessado" : ""}
-${dadosOpcionais.uso_veiculo ? "- Uso do veículo (particular, comercial, app)" : ""}
+## FLUXO DE COTAÇÃO (OBRIGATÓRIO)
+Siga exatamente esta sequência:
+1. Cumprimente e pergunte a PLACA do veículo
+2. Use a ferramenta consultar_placa para obter os dados automaticamente
+3. Confirme os dados do veículo com o cliente
+4. Pergunte: "O veículo é usado para aplicativo (Uber, 99, etc.)?"
+5. Pergunte a REGIÃO (estado/cidade)
+6. Use a ferramenta calcular_cotacao com todos os dados coletados
+7. Apresente os planos disponíveis com seus valores mensais
+8. Se o cliente se interessar, pergunte nome completo e ofereça registrar a cotação
 
-### Dados faltando
-Se o contato fornecer dados incompletos (ex: marca sem modelo), continue pedindo especificamente o dado que falta. Seja educado e claro.
-
-### Dados inválidos
-Se o contato informar um dado claramente inválido (ex: ano 1800 para veículo), peça novamente de forma educada.
-
-${!dadosOpcionais.cpf ? "## IMPORTANTE: NÃO peça CPF ao contato em nenhum momento da conversa." : ""}
+## DADOS OBRIGATÓRIOS PARA COTAÇÃO
+- Placa do veículo (para busca automática)
+- Tipo de uso (particular ou aplicativo)
+- Região (estado)
 
 ## REGRAS DE COMPORTAMENTO
 - Seja cordial e profissional
@@ -215,7 +207,7 @@ ${!dadosOpcionais.cpf ? "## IMPORTANTE: NÃO peça CPF ao contato em nenhum mome
 - Use formatação WhatsApp: *negrito* (um asterisco), _itálico_ (underline)
 - NUNCA use Markdown: **duplo asterisco**, ## títulos, [links](url)
 - Respostas curtas (máximo 3 parágrafos)
-- NUNCA invente dados, preços ou informações que não foram fornecidos acima
+- NUNCA invente dados, preços ou informações
 
 ## FORA DO ESCOPO
 Se o contato fizer perguntas políticas, irrelevantes ou fora do tema de proteção veicular:
@@ -236,20 +228,90 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
 ## NOME DO CONTATO
 ${contato?.nome || "Não informado ainda"}`;
 
-    // ---- 10. CHAMAR LOVABLE AI ----
+    // ---- 8. DEFINIR FERRAMENTAS (TOOLS) ----
+    const tools = [
+      {
+        type: "function",
+        function: {
+          name: "consultar_placa",
+          description: "Consulta os dados de um veículo pela placa. Retorna marca, modelo, ano, combustível e valor FIPE.",
+          parameters: {
+            type: "object",
+            properties: {
+              placa: { type: "string", description: "Placa do veículo (formato ABC1D23 ou ABC-1234)" },
+            },
+            required: ["placa"],
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "calcular_cotacao",
+          description: "Calcula os preços dos planos disponíveis para o veículo. Retorna uma lista de planos com valores mensais.",
+          parameters: {
+            type: "object",
+            properties: {
+              valor_fipe: { type: "number", description: "Valor FIPE do veículo em reais" },
+              marca: { type: "string", description: "Marca do veículo" },
+              modelo: { type: "string", description: "Modelo do veículo" },
+              ano: { type: "number", description: "Ano do veículo" },
+              combustivel: { type: "string", description: "Tipo de combustível (gasolina, flex, diesel, eletrico)" },
+              regiao: { type: "string", description: "Código da região (ex: rj, sp, mg)" },
+              uso_app: { type: "boolean", description: "Se o veículo é usado para aplicativo (Uber, 99, etc.)" },
+              placa: { type: "string", description: "Placa do veículo" },
+            },
+            required: ["valor_fipe", "regiao"],
+          },
+        },
+      },
+      {
+        type: "function",
+        function: {
+          name: "registrar_cotacao",
+          description: "Registra a cotação no sistema e gera um link público para o cliente. Também pode enviar por WhatsApp.",
+          parameters: {
+            type: "object",
+            properties: {
+              nome_cliente: { type: "string", description: "Nome completo do cliente" },
+              telefone_cliente: { type: "string", description: "Telefone do cliente" },
+              placa: { type: "string", description: "Placa do veículo" },
+              marca: { type: "string", description: "Marca do veículo" },
+              modelo: { type: "string", description: "Modelo do veículo" },
+              ano: { type: "number", description: "Ano do veículo" },
+              combustivel: { type: "string", description: "Combustível do veículo" },
+              valor_fipe: { type: "number", description: "Valor FIPE" },
+              regiao: { type: "string", description: "Região" },
+              planos_calculados: {
+                type: "array",
+                items: {
+                  type: "object",
+                  properties: {
+                    nome: { type: "string" },
+                    valor_mensal: { type: "number" },
+                  },
+                },
+                description: "Lista de planos com valores calculados",
+              },
+              enviar_whatsapp: { type: "boolean", description: "Se deve enviar a cotação por WhatsApp" },
+            },
+            required: ["nome_cliente", "telefone_cliente", "valor_fipe"],
+          },
+        },
+      },
+    ];
+
+    // ---- 9. CHAMAR LOVABLE AI COM TOOL CALLING ----
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY não configurada");
     }
 
     const messages: any[] = [];
-
-    // Incluir histórico
     if (historicoFormatado.length > 0 && !isPrimeiraMensagem) {
       messages.push(...historicoFormatado);
     }
 
-    // Adicionar mensagem atual
     if (texto) {
       messages.push({ role: "user", content: texto });
     } else if (tipo_msg === "location" && latitude && longitude) {
@@ -258,64 +320,114 @@ ${contato?.nome || "Não informado ainda"}`;
       messages.push({ role: "user", content: "[Mensagem recebida]" });
     }
 
-    const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
-      method: "POST",
-      headers: {
-        "Content-Type": "application/json",
-        Authorization: `Bearer ${LOVABLE_API_KEY}`,
-      },
-      body: JSON.stringify({
-        model: "google/gemini-3-flash-preview",
-        messages: [
-          { role: "system", content: systemPrompt },
-          ...messages,
-        ],
-        max_tokens: 2048,
-      }),
-      signal: AbortSignal.timeout(55000),
-    });
+    // Loop de tool calling (máximo 5 iterações para evitar loops infinitos)
+    let resposta = "";
+    let currentMessages = [
+      { role: "system", content: systemPrompt },
+      ...messages,
+    ];
 
-    if (!aiResponse.ok) {
-      const errText = await aiResponse.text();
-      console.error(`[agente-consultor-ia] AI Error ${aiResponse.status}: ${errText.substring(0, 200)}`);
+    for (let iteration = 0; iteration < 5; iteration++) {
+      const aiResponse = await fetch("https://ai.gateway.lovable.dev/v1/chat/completions", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${LOVABLE_API_KEY}`,
+        },
+        body: JSON.stringify({
+          model: "google/gemini-3-flash-preview",
+          messages: currentMessages,
+          tools,
+          max_tokens: 2048,
+        }),
+        signal: AbortSignal.timeout(55000),
+      });
 
-      if (aiResponse.status === 429) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Rate limit excedido. Tente novamente em instantes." }),
-          { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (!aiResponse.ok) {
+        const errText = await aiResponse.text();
+        console.error(`[agente-consultor-ia] AI Error ${aiResponse.status}: ${errText.substring(0, 200)}`);
+
+        if (aiResponse.status === 429) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Rate limit excedido." }),
+            { status: 429, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        if (aiResponse.status === 402) {
+          return new Response(
+            JSON.stringify({ success: false, error: "Créditos de IA esgotados." }),
+            { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+        throw new Error(`AI Error: ${aiResponse.status}`);
       }
-      if (aiResponse.status === 402) {
-        return new Response(
-          JSON.stringify({ success: false, error: "Créditos de IA esgotados." }),
-          { status: 402, headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+
+      const aiData = await aiResponse.json();
+      const choice = aiData.choices?.[0];
+      const message = choice?.message;
+
+      if (!message) {
+        resposta = "Desculpe, não consegui processar sua mensagem. Tente novamente.";
+        break;
       }
-      throw new Error(`AI Error: ${aiResponse.status}`);
+
+      // Se tem tool calls, executar e continuar
+      if (message.tool_calls && message.tool_calls.length > 0) {
+        currentMessages.push(message);
+
+        for (const toolCall of message.tool_calls) {
+          const fnName = toolCall.function.name;
+          let args: any = {};
+          try { args = JSON.parse(toolCall.function.arguments); } catch { /* ignore */ }
+
+          console.log(`[agente-consultor-ia] Tool call: ${fnName}`, JSON.stringify(args).substring(0, 200));
+
+          let toolResult: any;
+          try {
+            if (fnName === "consultar_placa") {
+              toolResult = await executarConsultaPlaca(supabaseUrl, serviceKey, args.placa);
+            } else if (fnName === "calcular_cotacao") {
+              toolResult = await executarCalculoCotacao(supabase, args);
+            } else if (fnName === "registrar_cotacao") {
+              toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, args, telLimpo, contato);
+            } else {
+              toolResult = { error: `Ferramenta desconhecida: ${fnName}` };
+            }
+          } catch (err: any) {
+            console.error(`[agente-consultor-ia] Tool error ${fnName}:`, err);
+            toolResult = { error: err.message || "Erro ao executar ferramenta" };
+          }
+
+          currentMessages.push({
+            role: "tool",
+            tool_call_id: toolCall.id,
+            content: JSON.stringify(toolResult),
+          });
+        }
+
+        continue; // Volta pro loop pra a IA processar os resultados
+      }
+
+      // Se não tem tool calls, temos a resposta final
+      resposta = message.content || "Desculpe, não consegui processar sua mensagem.";
+      break;
     }
 
-    const aiData = await aiResponse.json();
-    let resposta = aiData.choices?.[0]?.message?.content || "Desculpe, não consegui processar sua mensagem. Tente novamente.";
+    console.log(`[agente-consultor-ia] Resposta final (${resposta.length} chars) para ${telLimpo}`);
 
-    console.log(`[agente-consultor-ia] Resposta IA (${resposta.length} chars) para ${telLimpo}`);
-
-    // ---- 11. DETECTAR INTENÇÕES ESPECIAIS ----
-    const respostaLower = resposta.toLowerCase();
+    // ---- 10. DETECTAR INTENÇÕES ESPECIAIS ----
     const textoLower = (texto || "").toLowerCase();
 
-    // Detectar pedido de humano
     const pedidoHumano = textoLower.match(/falar com (uma |um )?(pessoa|atendente|humano|gente|algu[eé]m)/i) ||
       textoLower.match(/quero (um |uma )?(atendente|pessoa|humano)/i) ||
       textoLower.match(/atendimento humano/i);
 
     if (pedidoHumano) {
-      // Marcar contato como atendimento humano
       await supabase
         .from("agente_ia_contatos")
         .update({ status: "atendimento_humano" })
         .eq("id", contato.id);
 
-      // Notificar equipe
       try {
         const { data: diretores } = await supabase
           .from("user_roles")
@@ -335,14 +447,10 @@ ${contato?.nome || "Não informado ainda"}`;
       } catch (notifErr) {
         console.error("[agente-consultor-ia] Erro notificação:", notifErr);
       }
-
-      console.log(`[agente-consultor-ia] Contato ${telLimpo} transferido para humano`);
     }
 
-    // Detectar sinistro/emergência
     const pedidoSinistro = textoLower.match(/sinistro|acidente|batid[oa]|colisão|roubaram|furtaram|incêndio|pegou fogo/i);
     if (pedidoSinistro) {
-      // Marcar contato para atendimento humano também
       await supabase
         .from("agente_ia_contatos")
         .update({ status: "atendimento_humano" })
@@ -369,19 +477,17 @@ ${contato?.nome || "Não informado ainda"}`;
       }
     }
 
-    // ---- 12. DIVIDIR RESPOSTA LONGA (>1000 chars) ----
+    // ---- 11. DIVIDIR E ENVIAR RESPOSTA ----
     const partes = dividirMensagem(resposta, 1000);
 
-    // ---- 13. ENVIAR RESPOSTA(S) ----
     for (let i = 0; i < partes.length; i++) {
       await enviarWhatsApp(supabaseUrl, serviceKey, telefone, partes[i]);
       if (i < partes.length - 1) {
-        // Pequeno delay entre partes
         await new Promise(r => setTimeout(r, 1500));
       }
     }
 
-    // ---- 14. ATUALIZAR STATUS DO CONTATO ----
+    // ---- 12. ATUALIZAR STATUS DO CONTATO ----
     if (contato.status === "novo") {
       await supabase
         .from("agente_ia_contatos")
@@ -389,7 +495,6 @@ ${contato?.nome || "Não informado ainda"}`;
         .eq("id", contato.id);
     }
 
-    // Extrair nome se contato ainda não tem
     if (!contato.nome && texto) {
       const nomeMatch = texto.match(/(?:me chamo|meu nome [eé]|sou o|sou a)\s+([A-ZÀ-ÚÇ][a-zà-úç]+(?:\s+[A-ZÀ-ÚÇ][a-zà-úç]+)*)/i);
       if (nomeMatch) {
@@ -397,7 +502,6 @@ ${contato?.nome || "Não informado ainda"}`;
           .from("agente_ia_contatos")
           .update({ nome: nomeMatch[1].trim() })
           .eq("id", contato.id);
-        console.log(`[agente-consultor-ia] Nome detectado: ${nomeMatch[1]}`);
       }
     }
 
@@ -416,7 +520,384 @@ ${contato?.nome || "Não informado ainda"}`;
   }
 });
 
-// ---- HELPERS ----
+// ============================================================
+// TOOL: consultar_placa
+// ============================================================
+async function executarConsultaPlaca(supabaseUrl: string, serviceKey: string, placa: string) {
+  console.log(`[tool:consultar_placa] Consultando placa: ${placa}`);
+  
+  const res = await fetch(`${supabaseUrl}/functions/v1/plate-lookup`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json", Authorization: `Bearer ${serviceKey}` },
+    body: JSON.stringify({ placa }),
+  });
+
+  const data = await res.json();
+
+  if (!data.success) {
+    return {
+      success: false,
+      error: data.error || "Não foi possível consultar a placa",
+      mensagem: "Não consegui encontrar dados para essa placa. Por favor, informe manualmente: marca, modelo, ano e tipo de combustível do veículo.",
+    };
+  }
+
+  return {
+    success: true,
+    marca: data.marca || data.brand,
+    modelo: data.modelo || data.model,
+    ano: data.ano || data.year,
+    combustivel: data.combustivel || data.fuel || "gasolina",
+    valor_fipe: data.valor_fipe || data.fipeValue,
+    cor: data.cor || data.color,
+  };
+}
+
+// ============================================================
+// TOOL: calcular_cotacao
+// ============================================================
+async function executarCalculoCotacao(supabase: any, args: any) {
+  const { valor_fipe, marca, modelo, ano, combustivel = "gasolina", regiao = "rj", uso_app = false } = args;
+
+  console.log(`[tool:calcular_cotacao] FIPE=${valor_fipe} regiao=${regiao} app=${uso_app} combustivel=${combustivel}`);
+
+  // Buscar planos ativos com product_lines
+  const { data: planos, error: planosErr } = await supabase
+    .from("planos")
+    .select(`
+      id, nome, codigo, descricao, adicional_mensal, valor_adesao, desconto_percentual,
+      cobertura_fipe, cota_participacao, cota_minima, cota_desagio, cota_minima_desagio,
+      destaque, badge_text, ativo, visivel_gestao, ordem, product_line_id, linha, nivel,
+      product_lines:product_line_id (id, slug, name, vehicle_type, disponivel_agente, is_active)
+    `)
+    .eq("ativo", true)
+    .eq("visivel_gestao", true)
+    .order("ordem");
+
+  if (planosErr) throw new Error("Erro ao buscar planos: " + planosErr.message);
+
+  // Filtrar apenas planos de linhas disponíveis para o agente
+  const planosDisponiveis = (planos || []).filter((p: any) =>
+    p.product_lines?.disponivel_agente === true && p.product_lines?.is_active === true
+  );
+
+  // Buscar coberturas vinculadas
+  const planoIds = planosDisponiveis.map((p: any) => p.id);
+  const { data: planosCoberturas } = await supabase
+    .from("planos_coberturas")
+    .select("plano_id, cobertura_id, coberturas:cobertura_id (nome, valor)")
+    .in("plano_id", planoIds);
+
+  // Buscar benefícios vinculados
+  const { data: planosBeneficios } = await supabase
+    .from("planos_beneficios")
+    .select("plano_id, benefit_id, benefits:benefit_id (name, preco_sugerido)")
+    .in("plano_id", planoIds);
+
+  // Buscar regras de elegibilidade
+  const { data: allRules } = await supabase
+    .from("entity_eligibility_rules")
+    .select("*")
+    .eq("is_active", true);
+
+  // Buscar regiões para resolver ID
+  const { data: regioes } = await supabase.from("regioes").select("id, codigo, nome").eq("ativa", true);
+  const regiaoSlug = regiao.toLowerCase();
+  const regiaoMatch = (regioes || []).find((r: any) =>
+    r.codigo?.toLowerCase() === regiaoSlug || r.nome?.toLowerCase().includes(regiaoSlug)
+  );
+
+  // Buscar configs de decomposição e adicional app
+  const { data: configDecomposicao } = await supabase
+    .from("configuracoes")
+    .select("chave, valor")
+    .in("chave", ["decomposicao_mensalidade", "adicional_app"]);
+
+  let adicionalAppValor = 35.90;
+  for (const c of configDecomposicao || []) {
+    if (c.chave === "adicional_app") adicionalAppValor = parseFloat(c.valor) || 35.90;
+  }
+
+  // Buscar regiões com adicional app
+  const { data: regioesAppConfig } = await supabase
+    .from("configuracoes")
+    .select("valor")
+    .eq("chave", "regioes_com_adicional_app")
+    .maybeSingle();
+
+  let regioesComAdicional: string[] = [];
+  try { regioesComAdicional = JSON.parse(regioesAppConfig?.valor || "[]"); } catch { /* */ }
+
+  // Buscar categorias de deságio
+  const { data: categoriasDesagioConfig } = await supabase
+    .from("configuracoes")
+    .select("valor")
+    .eq("chave", "categorias_que_sobrepoe_app")
+    .maybeSingle();
+
+  let categoriasQueSobrepoe: string[] = [];
+  try { categoriasQueSobrepoe = JSON.parse(categoriasDesagioConfig?.valor || "[]"); } catch { /* */ }
+
+  // Build vehicle context
+  const vehicleCtx = {
+    valorFipe: valor_fipe,
+    anoVeiculo: ano || new Date().getFullYear(),
+    categoriaVeiculo: "passeio",
+    regiao: regiao,
+    regiaoId: regiaoMatch?.id,
+    marca: marca,
+    modelo: modelo,
+    tipoUso: uso_app ? "aplicativo" : "particular",
+    combustivel: combustivel,
+  };
+
+  const resultados: any[] = [];
+
+  for (const plano of planosDisponiveis) {
+    const productLineId = plano.product_line_id;
+    const rules = allRules || [];
+
+    // Check eligibility rules for this plan
+    const planoRules = rules.filter((r: any) => r.entity_type === "plano" && r.entity_id === plano.id && r.is_active);
+    const linhaRules = productLineId
+      ? rules.filter((r: any) => r.entity_type === "linha" && r.entity_id === productLineId && r.is_active)
+      : [];
+
+    // Simple rule check (tipo_uso, regiao, combustivel, fipe_range, ano_range)
+    if (!checkRulesSimple(linhaRules, vehicleCtx) || !checkRulesSimple(planoRules, vehicleCtx)) {
+      continue;
+    }
+
+    // Calculate price from coverages + benefits
+    const coberturasDoPlano = (planosCoberturas || []).filter((pc: any) => pc.plano_id === plano.id);
+    const beneficiosDoPlano = (planosBeneficios || []).filter((pb: any) => pb.plano_id === plano.id);
+
+    let somaCoberturas = 0;
+    for (const pc of coberturasDoPlano) {
+      const cobId = pc.cobertura_id;
+      // Check fipe_range rule for this coverage
+      const fipeRule = rules.find((r: any) => r.entity_type === "cobertura" && r.entity_id === cobId && r.rule_type === "fipe_range" && r.is_active);
+      if (fipeRule) {
+        const faixas = (fipeRule.rule_config as any)?.faixas || [];
+        const faixa = faixas.find((f: any) => valor_fipe >= f.de && valor_fipe < f.ate);
+        somaCoberturas += faixa ? Number(faixa.valor) : 0;
+      } else {
+        somaCoberturas += Number((pc as any).coberturas?.valor || 0);
+      }
+    }
+
+    let somaBeneficios = 0;
+    for (const pb of beneficiosDoPlano) {
+      const fipeRule = rules.find((r: any) => r.entity_type === "beneficio" && r.entity_id === pb.benefit_id && r.rule_type === "fipe_range" && r.is_active);
+      if (fipeRule) {
+        const faixas = (fipeRule.rule_config as any)?.faixas || [];
+        const faixa = faixas.find((f: any) => valor_fipe >= f.de && valor_fipe < f.ate);
+        somaBeneficios += faixa ? Number(faixa.valor) : 0;
+      } else {
+        somaBeneficios += Number((pb as any).benefits?.preco_sugerido || 0);
+      }
+    }
+
+    let valorMensal = somaCoberturas + somaBeneficios;
+    if (valorMensal === 0) continue; // Plano sem preço
+
+    // Adicional mensal do plano
+    valorMensal += Number(plano.adicional_mensal || 0);
+
+    // Adicional app
+    if (uso_app) {
+      const regiaoTemAdicional = regioesComAdicional.includes(regiaoSlug);
+      if (regiaoTemAdicional) {
+        valorMensal += adicionalAppValor;
+      }
+    }
+
+    // Desconto percentual
+    const desconto = Number(plano.desconto_percentual || 0);
+    if (desconto > 0) {
+      valorMensal *= (1 - desconto / 100);
+    }
+
+    valorMensal = Math.round(valorMensal * 100) / 100;
+    const valorAdesao = Number(plano.valor_adesao || 0);
+
+    resultados.push({
+      plano_id: plano.id,
+      nome: plano.nome,
+      linha: plano.product_lines?.name || plano.linha,
+      valor_mensal: valorMensal,
+      valor_adesao: valorAdesao,
+      cobertura_fipe: plano.cobertura_fipe || 100,
+      destaque: plano.destaque || false,
+    });
+  }
+
+  // Ordenar por valor mensal
+  resultados.sort((a: any, b: any) => a.valor_mensal - b.valor_mensal);
+
+  if (resultados.length === 0) {
+    return {
+      success: false,
+      mensagem: "Não encontramos planos disponíveis para este veículo na região informada. Pode ser que o veículo não se enquadre nos critérios de elegibilidade.",
+    };
+  }
+
+  return {
+    success: true,
+    planos: resultados,
+    mensagem_formatada: resultados.map((p: any) =>
+      `*${p.nome}* (${p.linha})\n💰 R$ ${p.valor_mensal.toFixed(2)}/mês\n🏷️ Adesão: R$ ${p.valor_adesao.toFixed(2)}`
+    ).join("\n\n"),
+  };
+}
+
+// ============================================================
+// TOOL: registrar_cotacao
+// ============================================================
+async function executarRegistroCotacao(supabase: any, supabaseUrl: string, serviceKey: string, args: any, telLimpo: string, contato: any) {
+  const { nome_cliente, telefone_cliente, placa, marca, modelo, ano, combustivel, valor_fipe, regiao, planos_calculados, enviar_whatsapp } = args;
+
+  console.log(`[tool:registrar_cotacao] Registrando cotação para ${nome_cliente} - ${placa}`);
+
+  // Criar ou buscar lead
+  const telefoneLead = (telefone_cliente || telLimpo).replace(/\D/g, "");
+  let leadId: string | null = null;
+
+  const { data: leadExistente } = await supabase
+    .from("leads")
+    .select("id")
+    .eq("telefone", telefoneLead)
+    .maybeSingle();
+
+  if (leadExistente) {
+    leadId = leadExistente.id;
+  } else {
+    const { data: novoLead } = await supabase
+      .from("leads")
+      .insert({
+        nome: nome_cliente || "Lead via Agente IA",
+        telefone: telefoneLead,
+        origem: "agente_ia",
+        status: "novo",
+      })
+      .select("id")
+      .single();
+    leadId = novoLead?.id;
+  }
+
+  if (!leadId) {
+    return { success: false, error: "Erro ao criar lead" };
+  }
+
+  // Criar cotação pública
+  const { data: cotacao, error: cotacaoErr } = await supabase
+    .from("cotacoes_publicas")
+    .insert({
+      lead_id: leadId,
+      veiculo_marca: marca,
+      veiculo_modelo: modelo,
+      veiculo_ano: ano,
+      veiculo_placa: placa,
+      veiculo_combustivel: combustivel,
+      valor_fipe: valor_fipe,
+      regiao: regiao || "rj",
+      status: "aguardando",
+      dados_cotacao: { planos: planos_calculados, origem: "agente_ia" },
+    })
+    .select("id, token")
+    .single();
+
+  if (cotacaoErr) {
+    console.error("[tool:registrar_cotacao] Erro:", cotacaoErr);
+    return { success: false, error: "Erro ao registrar cotação" };
+  }
+
+  // Atualizar contato
+  await supabase
+    .from("agente_ia_contatos")
+    .update({ status: "cotacao_enviada", nome: nome_cliente || contato?.nome })
+    .eq("telefone", telLimpo);
+
+  const linkCotacao = `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/cotacao/${cotacao.token}`;
+
+  // Enviar por WhatsApp se solicitado
+  if (enviar_whatsapp && planos_calculados?.length > 0) {
+    const mensagemCotacao = `Olá ${nome_cliente || ""}! 😊\n\nSegue sua cotação de proteção veicular para o *${marca} ${modelo} ${ano}*:\n\n` +
+      planos_calculados.map((p: any) =>
+        `✅ *${p.nome}*: R$ ${p.valor_mensal?.toFixed(2)}/mês`
+      ).join("\n") +
+      `\n\nAcesse o link para mais detalhes:\n${linkCotacao}\n\n_PRATICCAR Proteção Veicular - Proteção 360_ 🛡️`;
+
+    await enviarWhatsApp(supabaseUrl, serviceKey, telefoneLead, mensagemCotacao);
+  }
+
+  return {
+    success: true,
+    cotacao_id: cotacao.id,
+    token: cotacao.token,
+    link: linkCotacao,
+    mensagem: `Cotação registrada com sucesso! Link: ${linkCotacao}`,
+  };
+}
+
+// ============================================================
+// HELPERS
+// ============================================================
+
+/**
+ * Verificação simplificada de regras de elegibilidade.
+ * Replica a lógica essencial de checkAllRules do frontend.
+ */
+function checkRulesSimple(rules: any[], ctx: any): boolean {
+  for (const rule of rules) {
+    if (!rule.is_active) continue;
+    const config = rule.rule_config || {};
+
+    switch (rule.rule_type) {
+      case "tipo_uso": {
+        const tipos = config.tipos_permitidos || [];
+        if (tipos.length > 0 && !tipos.includes(ctx.tipoUso)) return false;
+        break;
+      }
+      case "regiao": {
+        const regioes = config.regioes_permitidas || [];
+        if (regioes.length > 0 && ctx.regiaoId && !regioes.includes(ctx.regiaoId)) return false;
+        break;
+      }
+      case "combustivel": {
+        const combustiveis = config.combustiveis_permitidos || [];
+        const ctxComb = (ctx.combustivel || "").toLowerCase();
+        // Normalizar
+        const normMap: Record<string, string> = {
+          "flex": "gasolina",
+          "álcool": "gasolina",
+          "gasolina/álcool": "gasolina",
+          "flex/gasolina": "gasolina",
+        };
+        const ctxNorm = normMap[ctxComb] || ctxComb;
+        if (combustiveis.length > 0 && !combustiveis.includes(ctxNorm)) return false;
+        break;
+      }
+      case "fipe_range": {
+        const fipeMin = config.fipe_min || 0;
+        const fipeMax = config.fipe_max || Infinity;
+        if (ctx.valorFipe < fipeMin || ctx.valorFipe > fipeMax) return false;
+        break;
+      }
+      case "ano_range": {
+        const anoMin = config.ano_min || 0;
+        const anoMax = config.ano_max || 9999;
+        if (ctx.anoVeiculo < anoMin || ctx.anoVeiculo > anoMax) return false;
+        break;
+      }
+      case "marca_modelo": {
+        // Skip complex marca_modelo checks — allow by default at this level
+        break;
+      }
+    }
+  }
+  return true;
+}
 
 async function enviarWhatsApp(supabaseUrl: string, serviceKey: string, telefone: string, mensagem: string) {
   try {
@@ -443,14 +924,11 @@ function dividirMensagem(texto: string, maxLength: number): string[] {
   let restante = texto;
 
   while (restante.length > maxLength) {
-    // Tentar quebrar em parágrafo
     let corte = restante.lastIndexOf("\n\n", maxLength);
     if (corte < maxLength * 0.3) {
-      // Tentar quebrar em linha
       corte = restante.lastIndexOf("\n", maxLength);
     }
     if (corte < maxLength * 0.3) {
-      // Tentar quebrar em espaço
       corte = restante.lastIndexOf(" ", maxLength);
     }
     if (corte < maxLength * 0.3) {

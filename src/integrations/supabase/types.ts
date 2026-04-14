@@ -20013,10 +20013,12 @@ export type Database = {
       }
       product_lines: {
         Row: {
+          agente_descricao: string | null
           blocked_categories: string[] | null
           color: string | null
           created_at: string | null
           display_order: number | null
+          disponivel_agente: boolean
           gradient_class: string | null
           icon: string | null
           id: string
@@ -20030,10 +20032,12 @@ export type Database = {
           vehicle_type: string | null
         }
         Insert: {
+          agente_descricao?: string | null
           blocked_categories?: string[] | null
           color?: string | null
           created_at?: string | null
           display_order?: number | null
+          disponivel_agente?: boolean
           gradient_class?: string | null
           icon?: string | null
           id?: string
@@ -20047,10 +20051,12 @@ export type Database = {
           vehicle_type?: string | null
         }
         Update: {
+          agente_descricao?: string | null
           blocked_categories?: string[] | null
           color?: string | null
           created_at?: string | null
           display_order?: number | null
+          disponivel_agente?: boolean
           gradient_class?: string | null
           icon?: string | null
           id?: string
