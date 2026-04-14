@@ -1,26 +1,46 @@
 
 
-## Plano: Permitir Coordenador de Monitoramento gerir Locais de Instalação
+## Plano: Corrigir overflow de varchar na duplicação de linhas
 
-### Problema
-A variável `canManagePlataformas` na linha 92 de `Rastreadores.tsx` controla a visibilidade das abas "Plataformas" e "Locais Instalação", mas só inclui `isDiretor || isDesenvolvedor`. O Coordenador de Monitoramento não tem acesso.
+### Problema encontrado
+Ao duplicar a linha ADVANCED com sufixo "SP", região "São Paulo" e desconto 10%, o sistema retorna:
+**"Erro ao duplicar linha: value too long for type character varying(100)"**
+
+### Causa raiz
+O código de duplicação de linha (`usePlansAdmin.ts`, linhas 1188-1189) **não trunca** os campos `codigo` e `slug` dos planos antes de concatenar o uid:
+
+```typescript
+codigo: `${planData.codigo}-c-${uid()}`,   // sem truncação
+slug: `${planData.slug || planData.codigo}-c-${uid()}`,  // sem truncação
+```
+
+Planos que já são cópias de cópias possuem slugs/codigos de 79-99 caracteres. Ao adicionar `-c-1776189000000-xxxx` (22 chars), o total excede o limite de `varchar(100)`.
+
+Os campos `benefits.slug` e `coberturas.codigo` já possuem `.slice(0, 80)` (linhas 1251, 1328), mas os campos de **planos** não têm essa proteção.
 
 ### Correção
 
-**Arquivo: `src/pages/monitoramento/Rastreadores.tsx`**
+**Arquivo: `src/hooks/usePlansAdmin.ts`**
 
-1. Linha 90 — adicionar `isCoordenadorMonitoramento` ao destructuring:
+Linha 1188-1189 — truncar `codigo` e `slug` antes de concatenar:
+
 ```typescript
-const { isDiretor, isDesenvolvedor, isCoordenadorMonitoramento, canManageEquipeEstoque } = usePermissions();
+codigo: `${(planData.codigo || '').slice(0, 70)}-c-${uid()}`,
+slug: `${(planData.slug || planData.codigo || '').slice(0, 70)}-c-${uid()}`,
 ```
 
-2. Linha 92 — incluir na condição:
-```typescript
-const canManagePlataformas = isDiretor || isDesenvolvedor || isCoordenadorMonitoramento;
-```
+O uid gera ~18 chars + prefixo `-c-` = ~22 chars. Com base de 70 chars, total máximo = 92, seguro dentro do limite de 100.
 
-Isso dará acesso às abas "Plataformas" e "Locais Instalação" para o coordenador de monitoramento, permitindo o CRUD completo (criar, ativar/desativar) que já existe no componente `GerenciarLocaisInstalacao`.
+Além disso, aplicar a mesma proteção nos nomes de planos (linha 1187) e benefícios (linha 1250) que recebem sufixo, garantindo que não excedam os limites das colunas:
+- `planos.nome`: sem limite de varchar definido (text), ok
+- `coberturas.nome`: varchar(100) — truncar se nome + sufixo > 100
 
-### Nota sobre RLS
-O componente `GerenciarLocaisInstalacao` usa `supabase.from('locais_instalacao').insert(...)` e `.update(...)`. As policies RLS dessa tabela precisam permitir INSERT/UPDATE para o role `coordenador_monitoramento`. Se já houver policies permissivas para `authenticated` ou para esse role, nenhuma migration é necessária. Caso contrário, será criada uma migration adicionando as policies adequadas. Verificarei isso durante a implementação.
+Linha 1327: `nome: sufixo ? \`${cobData.nome}${sufixo}\` : cobData.nome` — adicionar `.slice(0, 100)` ao resultado.
+
+### Teste após correção
+Repetir a duplicação da linha ADVANCED com os mesmos parâmetros (SP, 10%, São Paulo) e verificar:
+1. Criação sem erro
+2. Valores com 10% de desconto aplicado corretamente
+3. Regras de região sobrescritas para São Paulo (UUID `b507f9c7-d7c0-4613-8a94-4c1e1278b3f2`)
+4. Excluir a linha duplicada após verificação
 
