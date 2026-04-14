@@ -65,7 +65,7 @@ Deno.serve(async (req) => {
     // Buscar dados da cotação para log e verificação de ownership
     const { data: cotacao, error: cotacaoError } = await adminClient
       .from('cotacoes')
-      .select('numero, lead_id, vistoria_id, vendedor_id')
+      .select('numero, lead_id, vistoria_id, vendedor_id, telefone1_solicitante')
       .eq('id', cotacaoId)
       .maybeSingle()
 
@@ -297,6 +297,16 @@ Deno.serve(async (req) => {
     }
 
     console.log(`[delete-cotacao] Cotação ${cotacao.numero} excluída com sucesso`)
+
+    // 10.1 Resetar contato da IA se houver telefone
+    if (cotacao.telefone1_solicitante) {
+      const telefoneNormalizado = cotacao.telefone1_solicitante.replace(/\D/g, '');
+      await adminClient
+        .from('agente_ia_contatos')
+        .update({ status: 'novo', dados_cotacao: null })
+        .eq('telefone', telefoneNormalizado);
+      console.log(`[delete-cotacao] Contato IA resetado para telefone ${telefoneNormalizado}`);
+    }
 
     // 11. Registrar log de auditoria
     const { data: profile } = await adminClient
