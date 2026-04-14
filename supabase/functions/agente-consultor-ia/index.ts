@@ -1183,15 +1183,40 @@ async function executarCalculoCotacao(supabase: any, args: any) {
       ? rules.filter((r: any) => r.entity_type === "linha" && r.entity_id === productLineId && r.is_active)
       : [];
 
-    if (!checkRulesSimple(linhaRules, vehicleCtx) || !checkRulesSimple(planoRules, vehicleCtx)) {
+    if (!checkAllRulesServer(linhaRules, vehicleCtx) || !checkAllRulesServer(planoRules, vehicleCtx)) {
       continue;
     }
 
     const coberturasDoPlano = (planosCoberturas || []).filter((pc: any) => pc.plano_id === plano.id);
     const beneficiosDoPlano = (planosBeneficios || []).filter((pb: any) => pb.plano_id === plano.id);
 
+    // Determine which rule_types the plan overrides (plan-level rules take precedence over component rules of same type)
+    const planoRuleTypes = new Set(planoRules.map((r: any) => r.rule_type));
+
+    // Filter ineligible coverages individually
+    const coberturasElegiveis = coberturasDoPlano.filter((pc: any) => {
+      const cobId = pc.cobertura_id;
+      const cobRules = rules.filter((r: any) => r.entity_type === "cobertura" && r.entity_id === cobId && r.is_active);
+      // Remove rules whose type is already overridden by the plan
+      const filteredCobRules = cobRules.filter((r: any) => !planoRuleTypes.has(r.rule_type));
+      return checkAllRulesServer(filteredCobRules, vehicleCtx);
+    });
+
+    // Filter ineligible benefits individually
+    const beneficiosElegiveis = beneficiosDoPlano.filter((pb: any) => {
+      const benId = pb.benefit_id;
+      const benRules = rules.filter((r: any) => r.entity_type === "beneficio" && r.entity_id === benId && r.is_active);
+      const filteredBenRules = benRules.filter((r: any) => !planoRuleTypes.has(r.rule_type));
+      return checkAllRulesServer(filteredBenRules, vehicleCtx);
+    });
+
+    // If all coverages were removed, skip plan
+    if (coberturasElegiveis.length === 0 && coberturasDoPlano.length > 0) {
+      continue;
+    }
+
     let somaCoberturas = 0;
-    for (const pc of coberturasDoPlano) {
+    for (const pc of coberturasElegiveis) {
       const cobId = pc.cobertura_id;
       const fipeRule = rules.find((r: any) => r.entity_type === "cobertura" && r.entity_id === cobId && r.rule_type === "fipe_range" && r.is_active);
       if (fipeRule) {
@@ -1204,7 +1229,7 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     }
 
     let somaBeneficios = 0;
-    for (const pb of beneficiosDoPlano) {
+    for (const pb of beneficiosElegiveis) {
       const fipeRule = rules.find((r: any) => r.entity_type === "beneficio" && r.entity_id === pb.benefit_id && r.rule_type === "fipe_range" && r.is_active);
       if (fipeRule) {
         const faixas = (fipeRule.rule_config as any)?.faixas || [];
@@ -1235,11 +1260,11 @@ async function executarCalculoCotacao(supabase: any, args: any) {
 
     valorMensal = Math.round(valorMensal * 100) / 100;
 
-    // Montar lista de nomes de coberturas e benefícios para exibição pública
-    const coberturasNomes = coberturasDoPlano
+    // Build names from eligible items only
+    const coberturasNomes = coberturasElegiveis
       .map((pc: any) => pc.coberturas?.nome)
       .filter(Boolean);
-    const beneficiosNomes = beneficiosDoPlano
+    const beneficiosNomes = beneficiosElegiveis
       .map((pb: any) => pb.benefits?.name)
       .filter(Boolean);
 
