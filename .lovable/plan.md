@@ -1,27 +1,30 @@
 
 
-## Plano: Adicionar mensagem destacada na etapa de assinatura
+## Plano: Corrigir badge "Associado Ativo" exibida prematuramente
 
-### O que muda
-Adicionar uma mensagem grande e chamativa logo após o cabeçalho do card, antes das informações do signatário, com o texto "Seu contrato está no seu e-mail para assinatura!" em fonte grande e destaque visual.
+### Problema
+A função `getEtapaVenda` verifica o status do associado (`ativo`) com prioridade alta, sem considerar o status do contrato **desta cotação específica**. Se o associado já é ativo por outro motivo (plano anterior, migração), toda nova cotação mostra "Associado Ativo" mesmo sem assinatura do termo.
 
-### Implementacao
+### Solução
 
-**Arquivo: `src/components/cotacao-publica/EtapaAssinaturaContrato.tsx`**
+**Arquivo: `src/components/cotacoes/CotacoesTable.tsx`** (e lógica espelhada em `CotacaoCard.tsx`)
 
-Inserir entre a linha 770 (`</CardHeader>`) e a linha 772 (`<CardContent>`), dentro do `CardContent`, antes do bloco de informações do signatário:
+Alterar a condição na linha 194 para só mostrar "Associado Ativo" quando o contrato **desta cotação** também estiver em status final (assinado ou ativo):
 
-```tsx
-{/* Mensagem destaque */}
-<div className="text-center py-4 px-3">
-  <div className="inline-flex items-center gap-2 mb-2">
-    <Mail className="h-6 w-6 text-primary animate-bounce" />
-  </div>
-  <p className="text-2xl md:text-3xl font-bold text-primary leading-tight">
-    Seu contrato está no seu e-mail para assinatura!
-  </p>
-</div>
+```typescript
+// ANTES
+if (associadoStatus === 'ativo') return 'associado_ativo';
+
+// DEPOIS — só mostra se o contrato desta cotação foi assinado/ativo
+if (associadoStatus === 'ativo' && contratoStatus && ['assinado', 'ativo'].includes(contratoStatus)) {
+  return 'associado_ativo';
+}
 ```
 
-Isso aparecera como uma mensagem grande e visualmente destacada no topo do conteudo, antes do passo-a-passo.
+Isso garante que a badge só aparece quando o fluxo contratual desta cotação foi concluído, não apenas porque o associado já era ativo.
+
+### Arquivos alterados
+- `src/components/cotacoes/CotacoesTable.tsx`
+- `src/components/cotacoes/CotacaoCard.tsx` (mesma lógica duplicada)
+- `src/components/cotacoes/CotacaoDetalhesModal.tsx` (se tiver lógica similar)
 
