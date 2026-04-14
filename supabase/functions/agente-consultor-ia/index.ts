@@ -251,6 +251,9 @@ Deno.serve(async (req) => {
 
     const isPrimeiraMensagem = !contatoExistente;
 
+    // ---- 6B. CARREGAR ESTADO DO FLUXO (dados_cotacao) ----
+    const dadosCotacao = contato?.dados_cotacao || null;
+
     // ---- 7. MONTAR SYSTEM PROMPT + TOOLS (condicional) ----
     let systemPrompt: string;
     let tools: any[];
@@ -428,7 +431,7 @@ Siga exatamente esta sequência:
 5. Pergunte a REGIÃO (estado/cidade)
 6. Use a ferramenta calcular_cotacao (internamente — NÃO mostre valores ao cliente)
 7. Diga algo como: "Vou preparar sua cotação personalizada com as melhores opções! E lembrando: a adesão sai GRATUITA pra você! 🎉"
-8. Use a ferramenta obter_opcoes_vencimento e pergunte a melhor DATA DE VENCIMENTO oferecendo as opções
+8. Use a ferramenta obter_opcoes_vencimento e ofereça APENAS as duas datas retornadas pela ferramenta. NÃO invente datas. NÃO ofereça outras opções além das retornadas.
 9. Pergunte o EMAIL do cliente (para receber a cotação)
 10. Pergunte o NOME COMPLETO do cliente
 11. Registre a cotação com a ferramenta registrar_cotacao e envie o link
@@ -476,6 +479,39 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
 
 ## NOME DO CONTATO
 ${contato?.nome || "Não informado ainda"}`;
+
+      // ---- INJETAR ESTADO DO FLUXO NO PROMPT ----
+      if (dadosCotacao && dadosCotacao.etapa) {
+        let estadoTexto = `\n\n## ESTADO ATUAL DO FLUXO — MUITO IMPORTANTE\nVocê JÁ está no meio de uma cotação com este cliente. NÃO reinicie a conversa. NÃO cumprimente novamente. Continue de onde parou.\n\nDados coletados até agora:\n`;
+        
+        if (dadosCotacao.placa) estadoTexto += `- Placa: ${dadosCotacao.placa}\n`;
+        if (dadosCotacao.marca) estadoTexto += `- Veículo: ${dadosCotacao.marca} ${dadosCotacao.modelo || ""} ${dadosCotacao.ano || ""} ${dadosCotacao.combustivel || ""}\n`;
+        if (dadosCotacao.valor_fipe) estadoTexto += `- Valor FIPE: R$ ${Number(dadosCotacao.valor_fipe).toLocaleString("pt-BR")}\n`;
+        if (dadosCotacao.regiao) estadoTexto += `- Região: ${dadosCotacao.regiao}\n`;
+        if (dadosCotacao.uso_app !== undefined) estadoTexto += `- Uso aplicativo: ${dadosCotacao.uso_app ? "Sim" : "Não"}\n`;
+        if (dadosCotacao.planos_calculados) estadoTexto += `- Planos calculados: ${dadosCotacao.planos_calculados.length} opções (JÁ CALCULADOS, não precisa calcular novamente)\n`;
+        if (dadosCotacao.opcoes_vencimento) estadoTexto += `- Opções de vencimento disponíveis: dia ${dadosCotacao.opcoes_vencimento[0]} ou dia ${dadosCotacao.opcoes_vencimento[1]} (APENAS ESTAS DUAS)\n`;
+        if (dadosCotacao.dia_vencimento) estadoTexto += `- Dia vencimento escolhido: ${dadosCotacao.dia_vencimento}\n`;
+        if (dadosCotacao.email) estadoTexto += `- Email: ${dadosCotacao.email}\n`;
+        if (dadosCotacao.nome) estadoTexto += `- Nome: ${dadosCotacao.nome}\n`;
+        
+        estadoTexto += `\nETAPA ATUAL: *${dadosCotacao.etapa}*\n`;
+        
+        // Instruções específicas por etapa
+        const etapaInstrucoes: Record<string, string> = {
+          "aguardando_confirmacao": "PRÓXIMO PASSO: Confirme os dados do veículo com o cliente e depois pergunte se usa para aplicativo.",
+          "aguardando_regiao": "PRÓXIMO PASSO: Pergunte a região (estado) do cliente.",
+          "aguardando_vencimento": `PRÓXIMO PASSO: Pergunte a data de vencimento. Ofereça APENAS dia ${dadosCotacao.opcoes_vencimento?.[0] || "?"} ou dia ${dadosCotacao.opcoes_vencimento?.[1] || "?"}. NÃO ofereça outras datas.`,
+          "aguardando_email": "PRÓXIMO PASSO: Pergunte o email do cliente.",
+          "aguardando_nome": "PRÓXIMO PASSO: Pergunte o nome completo do cliente.",
+          "cotacao_enviada": "A cotação JÁ foi enviada. Esteja disponível para dúvidas.",
+        };
+        
+        estadoTexto += etapaInstrucoes[dadosCotacao.etapa] || "";
+        systemPrompt += estadoTexto;
+        
+        console.log(`[agente-consultor-ia] Estado do fluxo injetado: etapa=${dadosCotacao.etapa}`);
+      }
 
       tools = [
         {
@@ -648,12 +684,62 @@ ${contato?.nome || "Não informado ainda"}`;
           try {
             if (fnName === "consultar_placa") {
               toolResult = await executarConsultaPlaca(supabaseUrl, serviceKey, args.placa);
+              // Persistir estado após consultar_placa
+              if (toolResult.success) {
+                const novoEstado = {
+                  ...(dadosCotacao || {}),
+                  etapa: "aguardando_confirmacao",
+                  placa: toolResult.placa,
+                  marca: toolResult.marca,
+                  modelo: toolResult.modelo,
+                  ano: toolResult.ano_modelo,
+                  combustivel: toolResult.combustivel,
+                  valor_fipe: toolResult.valor_fipe,
+                };
+                await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
+                console.log(`[agente-consultor-ia] Estado salvo: aguardando_confirmacao`);
+              }
             } else if (fnName === "calcular_cotacao") {
               toolResult = await executarCalculoCotacao(supabase, args);
+              // Persistir estado após calcular_cotacao
+              if (toolResult.success) {
+                const novoEstado = {
+                  ...(dadosCotacao || {}),
+                  etapa: "aguardando_vencimento",
+                  regiao: args.regiao,
+                  uso_app: args.uso_app || false,
+                  planos_calculados: toolResult.planos,
+                };
+                await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
+                console.log(`[agente-consultor-ia] Estado salvo: aguardando_vencimento`);
+              }
             } else if (fnName === "obter_opcoes_vencimento") {
               toolResult = executarObterOpcoesVencimento();
+              // Persistir opções de vencimento
+              if (toolResult.success) {
+                const novoEstado = {
+                  ...(dadosCotacao || {}),
+                  etapa: "aguardando_vencimento",
+                  opcoes_vencimento: toolResult.opcoes,
+                };
+                await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
+                console.log(`[agente-consultor-ia] Estado salvo: opcoes_vencimento=${toolResult.opcoes}`);
+              }
             } else if (fnName === "registrar_cotacao") {
               toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, args, telLimpo, contato);
+              // Persistir estado final
+              if (toolResult.success) {
+                const novoEstado = {
+                  ...(dadosCotacao || {}),
+                  etapa: "cotacao_enviada",
+                  dia_vencimento: args.dia_vencimento,
+                  email: args.email_cliente,
+                  nome: args.nome_cliente,
+                  cotacao_id: toolResult.cotacao_id,
+                };
+                await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
+                console.log(`[agente-consultor-ia] Estado salvo: cotacao_enviada`);
+              }
             } else if (fnName === "gerar_relatorio") {
               toolResult = await executarGerarRelatorio(supabase, args);
             } else {
@@ -807,7 +893,6 @@ async function executarGerarRelatorio(supabase: any, args: any) {
 
   try {
     if (tipo === "geral" || tipo === "associados") {
-      // Totais de associados por status
       const { data: assocAtivos } = await supabase
         .from("associados")
         .select("id", { count: "exact", head: true })
@@ -825,7 +910,6 @@ async function executarGerarRelatorio(supabase: any, args: any) {
         .select("id", { count: "exact", head: true })
         .eq("status", "bloqueado");
 
-      // Novos no período
       const { count: novosNoPeríodo } = await supabase
         .from("associados")
         .select("id", { count: "exact", head: true })
@@ -841,7 +925,6 @@ async function executarGerarRelatorio(supabase: any, args: any) {
     }
 
     if (tipo === "geral" || tipo === "financeiro") {
-      // Receita do período (cobranças pagas)
       const { data: cobrancasPagas } = await supabase
         .from("cobrancas")
         .select("valor_pago")
@@ -850,7 +933,6 @@ async function executarGerarRelatorio(supabase: any, args: any) {
 
       const totalReceita = (cobrancasPagas || []).reduce((s: number, c: any) => s + (c.valor_pago || 0), 0);
 
-      // Inadimplentes
       const { count: inadimplentes } = await supabase
         .from("cobrancas")
         .select("id", { count: "exact", head: true })
@@ -902,7 +984,6 @@ async function executarGerarRelatorio(supabase: any, args: any) {
         .select("origem")
         .gte("created_at", dataInicio);
 
-      // Agrupar por origem
       const origemMap: Record<string, number> = {};
       for (const l of leadsPorOrigem || []) {
         const o = l.origem || "desconhecida";
@@ -972,11 +1053,9 @@ async function executarConsultaPlaca(supabaseUrl: string, serviceKey: string, pl
     };
   }
 
-  // plate-lookup retorna: { success, vehicleData: { marca, modelo, ano, combustivel, cor, ... }, fipeData: { valor, codigo, mesReferencia } }
   const vd = data.vehicleData || {};
   const fd = data.fipeData || {};
 
-  // Extrair ano-modelo numérico (ex: "2013/2014" → 2014)
   const anoTexto = vd.ano || data.ano || "";
   const anoMatch = String(anoTexto).match(/(\d{4})$/);
   const anoModelo = anoMatch ? parseInt(anoMatch[1]) : null;
@@ -1007,7 +1086,6 @@ async function executarCalculoCotacao(supabase: any, args: any) {
 
   console.log(`[tool:calcular_cotacao] FIPE=${valor_fipe} regiao=${regiao} app=${uso_app} combustivel=${combustivel}`);
 
-  // Buscar planos ativos com product_lines
   const { data: planos, error: planosErr } = await supabase
     .from("planos")
     .select(`
@@ -1022,38 +1100,32 @@ async function executarCalculoCotacao(supabase: any, args: any) {
 
   if (planosErr) throw new Error("Erro ao buscar planos: " + planosErr.message);
 
-  // Filtrar apenas planos de linhas disponíveis para o agente
   const planosDisponiveis = (planos || []).filter((p: any) =>
     p.product_lines?.disponivel_agente === true && p.product_lines?.is_active === true
   );
 
-  // Buscar coberturas vinculadas
   const planoIds = planosDisponiveis.map((p: any) => p.id);
   const { data: planosCoberturas } = await supabase
     .from("planos_coberturas")
     .select("plano_id, cobertura_id, coberturas:cobertura_id (nome, valor)")
     .in("plano_id", planoIds);
 
-  // Buscar benefícios vinculados
   const { data: planosBeneficios } = await supabase
     .from("planos_beneficios")
     .select("plano_id, benefit_id, benefits:benefit_id (name, preco_sugerido)")
     .in("plano_id", planoIds);
 
-  // Buscar regras de elegibilidade
   const { data: allRules } = await supabase
     .from("entity_eligibility_rules")
     .select("*")
     .eq("is_active", true);
 
-  // Buscar regiões para resolver ID
   const { data: regioes } = await supabase.from("regioes").select("id, codigo, nome").eq("ativa", true);
   const regiaoSlug = regiao.toLowerCase();
   const regiaoMatch = (regioes || []).find((r: any) =>
     r.codigo?.toLowerCase() === regiaoSlug || r.nome?.toLowerCase().includes(regiaoSlug)
   );
 
-  // Buscar configs de decomposição e adicional app
   const { data: configDecomposicao } = await supabase
     .from("configuracoes")
     .select("chave, valor")
@@ -1064,7 +1136,6 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     if (c.chave === "adicional_app") adicionalAppValor = parseFloat(c.valor) || 35.90;
   }
 
-  // Buscar regiões com adicional app
   const { data: regioesAppConfig } = await supabase
     .from("configuracoes")
     .select("valor")
@@ -1074,7 +1145,6 @@ async function executarCalculoCotacao(supabase: any, args: any) {
   let regioesComAdicional: string[] = [];
   try { regioesComAdicional = JSON.parse(regioesAppConfig?.valor || "[]"); } catch { /* */ }
 
-  // Build vehicle context
   const vehicleCtx = {
     valorFipe: valor_fipe,
     anoVeiculo: ano || new Date().getFullYear(),
@@ -1093,7 +1163,6 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     const productLineId = plano.product_line_id;
     const rules = allRules || [];
 
-    // Check eligibility rules for this plan
     const planoRules = rules.filter((r: any) => r.entity_type === "plano" && r.entity_id === plano.id && r.is_active);
     const linhaRules = productLineId
       ? rules.filter((r: any) => r.entity_type === "linha" && r.entity_id === productLineId && r.is_active)
@@ -1103,7 +1172,6 @@ async function executarCalculoCotacao(supabase: any, args: any) {
       continue;
     }
 
-    // Calculate price from coverages + benefits
     const coberturasDoPlano = (planosCoberturas || []).filter((pc: any) => pc.plano_id === plano.id);
     const beneficiosDoPlano = (planosBeneficios || []).filter((pb: any) => pb.plano_id === plano.id);
 
@@ -1135,13 +1203,9 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     let valorMensal = somaCoberturas + somaBeneficios;
     if (valorMensal === 0) continue;
 
-    // Adicional mensal do plano
     valorMensal += Number(plano.adicional_mensal || 0);
-
-    // Valor adicional fixo (R$ 5,50)
     valorMensal += 5.50;
 
-    // Adicional app
     if (uso_app) {
       const regiaoTemAdicional = regioesComAdicional.includes(regiaoSlug);
       if (regiaoTemAdicional) {
@@ -1149,7 +1213,6 @@ async function executarCalculoCotacao(supabase: any, args: any) {
       }
     }
 
-    // Desconto percentual
     const desconto = Number(plano.desconto_percentual || 0);
     if (desconto > 0) {
       valorMensal *= (1 - desconto / 100);
@@ -1162,13 +1225,12 @@ async function executarCalculoCotacao(supabase: any, args: any) {
       nome: plano.nome,
       linha: plano.product_lines?.name || plano.linha,
       valor_mensal: valorMensal,
-      valor_adesao: 0, // Adesão sempre isenta
+      valor_adesao: 0,
       cobertura_fipe: plano.cobertura_fipe || 100,
       destaque: plano.destaque || false,
     });
   }
 
-  // Ordenar por valor mensal
   resultados.sort((a: any, b: any) => a.valor_mensal - b.valor_mensal);
 
   if (resultados.length === 0) {
@@ -1178,12 +1240,11 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     };
   }
 
-  // NÃO retornar valores formatados — o agente NÃO deve mostrar preços na conversa
   return {
     success: true,
     quantidade_planos: resultados.length,
     planos: resultados,
-    instrucao: "IMPORTANTE: NÃO mostre valores ao cliente. Informe apenas a quantidade de planos encontrados e prossiga pedindo dia de vencimento, tipo de instalação, email e nome.",
+    instrucao: "IMPORTANTE: NÃO mostre valores ao cliente. Prossiga pedindo dia de vencimento, email e nome.",
   };
 }
 
@@ -1200,18 +1261,22 @@ function executarObterOpcoesVencimento() {
   else if (diaHoje <= 24) opcoes = [25, 30];
   else opcoes = [30, 5];
   console.log(`[tool:obter_opcoes_vencimento] diaHoje=${diaHoje} opcoes=${opcoes}`);
-  return { success: true, opcoes, mensagem: `Dia ${opcoes[0]} ou dia ${opcoes[1]}` };
+  return {
+    success: true,
+    opcoes,
+    mensagem: `Dia ${opcoes[0]} ou dia ${opcoes[1]}`,
+    instrucao: `Ofereça APENAS estas duas opções ao cliente: dia ${opcoes[0]} ou dia ${opcoes[1]}. NÃO ofereça nenhuma outra data. NÃO invente outras opções.`,
+  };
 }
 
 // ============================================================
 // TOOL: registrar_cotacao
 // ============================================================
 async function executarRegistroCotacao(supabase: any, supabaseUrl: string, serviceKey: string, args: any, telLimpo: string, contato: any) {
-  const { nome_cliente, email_cliente, placa, marca, modelo, ano, combustivel, valor_fipe, regiao, dia_vencimento, tipo_instalacao, planos_calculados } = args;
+  const { nome_cliente, email_cliente, placa, marca, modelo, ano, combustivel, valor_fipe, regiao, dia_vencimento, planos_calculados } = args;
 
-  console.log(`[tool:registrar_cotacao] Registrando cotação para ${nome_cliente} - ${placa} - email=${email_cliente} venc=${dia_vencimento} inst=${tipo_instalacao}`);
+  console.log(`[tool:registrar_cotacao] Registrando cotação para ${nome_cliente} - ${placa} - email=${email_cliente} venc=${dia_vencimento}`);
 
-  // Usar telefone da conversa (não pedir ao lead)
   const telefoneLead = telLimpo;
   let leadId: string | null = null;
 
@@ -1223,7 +1288,6 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
 
   if (leadExistente) {
     leadId = leadExistente.id;
-    // Atualizar email se disponível
     if (email_cliente) {
       await supabase.from("leads").update({ email: email_cliente }).eq("id", leadId);
     }
@@ -1246,7 +1310,6 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
     return { success: false, error: "Erro ao criar lead" };
   }
 
-  // Criar cotação pública — adesão sempre isenta, valor adicional fixo 5.50
   const { data: cotacao, error: cotacaoErr } = await supabase
     .from("cotacoes_publicas")
     .insert({
@@ -1260,7 +1323,7 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
       regiao: regiao || "rj",
       status: "aguardando",
       dia_vencimento: dia_vencimento || 10,
-      tipo_instalacao: tipo_instalacao || "rota",
+      tipo_instalacao: "rota",
       valor_adicional: 5.50,
       valor_adesao: 0,
       email_solicitante: email_cliente || null,
@@ -1274,7 +1337,6 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
     return { success: false, error: "Erro ao registrar cotação" };
   }
 
-  // Atualizar contato
   await supabase
     .from("agente_ia_contatos")
     .update({ status: "cotacao_enviada", nome: nome_cliente || contato?.nome })
@@ -1282,11 +1344,9 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
 
   const linkCotacao = `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/cotacao/${cotacao.token}`;
 
-  // Enviar link da cotação por WhatsApp
   const mensagemLink = `Olá ${nome_cliente || ""}! 😊\n\nSua cotação personalizada de proteção veicular está pronta!\n\n🔗 Acesse aqui: ${linkCotacao}\n\n_PRATICCAR Proteção Veicular - Proteção 360_ 🛡️`;
   await enviarWhatsApp(supabaseUrl, serviceKey, telefoneLead, mensagemLink);
 
-  // Aguardar 10 segundos e enviar resumo
   await new Promise(r => setTimeout(r, 10000));
 
   const qtdPlanos = planos_calculados?.length || 0;
@@ -1295,8 +1355,7 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
     `📍 Região: *${regiao || ""}*\n` +
     `📦 ${qtdPlanos} opção(ões) de plano disponíveis\n` +
     `🎉 Adesão: *ISENTA*\n` +
-    `📅 Vencimento: dia *${dia_vencimento || ""}*\n` +
-    `🔧 Instalação: *${tipo_instalacao === "base" ? "Na base" : "Rota (vamos até você)"}*\n\n` +
+    `📅 Vencimento: dia *${dia_vencimento || ""}*\n\n` +
     `Estou à disposição para qualquer dúvida! 😊`;
   await enviarWhatsApp(supabaseUrl, serviceKey, telefoneLead, mensagemResumo);
 

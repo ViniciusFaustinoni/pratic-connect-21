@@ -911,6 +911,7 @@ export type Database = {
       agente_ia_contatos: {
         Row: {
           created_at: string | null
+          dados_cotacao: Json | null
           id: string
           nome: string | null
           status: string | null
@@ -919,6 +920,7 @@ export type Database = {
         }
         Insert: {
           created_at?: string | null
+          dados_cotacao?: Json | null
           id?: string
           nome?: string | null
           status?: string | null
@@ -927,6 +929,7 @@ export type Database = {
         }
         Update: {
           created_at?: string | null
+          dados_cotacao?: Json | null
           id?: string
           nome?: string | null
           status?: string | null
