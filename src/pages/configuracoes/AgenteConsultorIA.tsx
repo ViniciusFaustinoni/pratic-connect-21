@@ -21,54 +21,36 @@ import {
   Users, Phone, Clock, Send, UserCheck, Loader2, Image as ImageIcon, RefreshCw
 } from 'lucide-react';
 
-// ─── Tab 1: Planos do Agente ──────────────────────────────────────────────
-function AbaPlanos() {
+// ─── Tab 1: Linhas de Produto do Agente ───────────────────────────────────
+function AbaLinhas() {
   const queryClient = useQueryClient();
-  const [generatingImageId, setGeneratingImageId] = useState<string | null>(null);
 
-  const handleRegenerarImagem = async (plano: any) => {
-    setGeneratingImageId(plano.id);
-    try {
-      const { data, error } = await supabase.functions.invoke('gerar-imagem-plano', {
-        body: { plano_id: plano.id, nome: plano.nome, descricao: plano.agente_descricao },
-      });
-      if (error) throw error;
-      if (data?.error) throw new Error(data.error);
-      queryClient.invalidateQueries({ queryKey: ['planos-agente-ia'] });
-      toast.success('Imagem gerada com sucesso!');
-    } catch (err: any) {
-      toast.error(err?.message || 'Erro ao gerar imagem');
-    } finally {
-      setGeneratingImageId(null);
-    }
-  };
-
-  const { data: planos, isLoading } = useQuery({
-    queryKey: ['planos-agente-ia'],
+  const { data: linhas, isLoading } = useQuery({
+    queryKey: ['linhas-agente-ia'],
     queryFn: async () => {
       const { data, error } = await (supabase as any)
-        .from('planos')
-        .select('id, nome, ativo, visivel_landing, disponivel_agente, agente_descricao, imagem_landing_url')
-        .eq('ativo', true)
-        .order('nome');
+        .from('product_lines')
+        .select('id, name, slug, description, icon, color, is_active, disponivel_agente, agente_descricao')
+        .eq('is_active', true)
+        .order('sort_priority');
       if (error) throw error;
       return data;
     },
   });
 
-  const updatePlano = useMutation({
+  const updateLinha = useMutation({
     mutationFn: async ({ id, field, value }: { id: string; field: string; value: any }) => {
       const { error } = await (supabase as any)
-        .from('planos')
+        .from('product_lines')
         .update({ [field]: value })
         .eq('id', id);
       if (error) throw error;
     },
     onSuccess: () => {
-      queryClient.invalidateQueries({ queryKey: ['planos-agente-ia'] });
-      toast.success('Plano atualizado');
+      queryClient.invalidateQueries({ queryKey: ['linhas-agente-ia'] });
+      toast.success('Linha atualizada');
     },
-    onError: () => toast.error('Erro ao atualizar plano'),
+    onError: () => toast.error('Erro ao atualizar linha'),
   });
 
   if (isLoading) {
@@ -77,74 +59,58 @@ function AbaPlanos() {
 
   return (
     <div className="space-y-4">
-      {planos?.map((plano) => (
-        <Card key={plano.id}>
+      <p className="text-sm text-muted-foreground">
+        Ative as linhas de produto que o agente IA pode oferecer no WhatsApp. O agente apresentará os planos de cada linha com valores calculados automaticamente.
+      </p>
+      {linhas?.map((linha: any) => (
+        <Card key={linha.id}>
           <CardHeader className="pb-3">
             <div className="flex items-center justify-between">
-              <CardTitle className="text-base">{plano.nome}</CardTitle>
-              <div className="flex items-center gap-4">
-                <div className="flex items-center gap-2">
-                  <Label htmlFor={`lp-${plano.id}`} className="text-xs text-muted-foreground">Landing Page</Label>
-                  <Switch
-                    id={`lp-${plano.id}`}
-                    checked={plano.visivel_landing ?? false}
-                    onCheckedChange={(v) => updatePlano.mutate({ id: plano.id, field: 'visivel_landing', value: v })}
-                  />
-                </div>
-                <div className="flex items-center gap-2">
-                  <Label htmlFor={`ag-${plano.id}`} className="text-xs text-muted-foreground">Agente IA</Label>
-                  <Switch
-                    id={`ag-${plano.id}`}
-                    checked={plano.disponivel_agente ?? false}
-                    onCheckedChange={(v) => updatePlano.mutate({ id: plano.id, field: 'disponivel_agente', value: v })}
-                  />
-                </div>
+              <CardTitle className="text-base flex items-center gap-2">
+                {linha.icon && <span className="text-lg">{linha.icon}</span>}
+                {linha.name}
+              </CardTitle>
+              <div className="flex items-center gap-2">
+                <Label htmlFor={`ag-${linha.id}`} className="text-xs text-muted-foreground">Disponível para Agente IA</Label>
+                <Switch
+                  id={`ag-${linha.id}`}
+                  checked={linha.disponivel_agente ?? false}
+                  onCheckedChange={(v) => updateLinha.mutate({ id: linha.id, field: 'disponivel_agente', value: v })}
+                />
               </div>
             </div>
+            {linha.description && (
+              <CardDescription className="text-xs">{linha.description}</CardDescription>
+            )}
           </CardHeader>
           <CardContent className="space-y-3">
             <div>
-              <Label className="text-xs text-muted-foreground">Descrição para o Agente</Label>
+              <Label className="text-xs text-muted-foreground">Descrição para o Agente IA</Label>
               <Textarea
-                placeholder="Instruções de como o agente deve apresentar este plano..."
-                defaultValue={plano.agente_descricao ?? ''}
+                placeholder="Como o agente deve descrever esta linha de proteção ao cliente..."
+                defaultValue={linha.agente_descricao ?? ''}
                 onBlur={(e) => {
-                  if (e.target.value !== (plano.agente_descricao ?? '')) {
-                    updatePlano.mutate({ id: plano.id, field: 'agente_descricao', value: e.target.value });
+                  if (e.target.value !== (linha.agente_descricao ?? '')) {
+                    updateLinha.mutate({ id: linha.id, field: 'agente_descricao', value: e.target.value });
                   }
                 }}
                 className="mt-1 text-sm"
                 rows={2}
               />
             </div>
-            <div className="flex items-center gap-2 flex-wrap">
-              {plano.imagem_landing_url && (
-                <>
-                  <ImageIcon className="h-4 w-4 text-muted-foreground" />
-                  <a href={plano.imagem_landing_url} target="_blank" rel="noopener noreferrer" className="text-xs text-primary hover:underline">
-                    Ver imagem atual
-                  </a>
-                </>
-              )}
-              <Button
-                variant="outline"
-                size="sm"
-                className="h-7 text-xs gap-1.5"
-                disabled={generatingImageId === plano.id}
-                onClick={() => handleRegenerarImagem(plano)}
-              >
-                {generatingImageId === plano.id ? (
-                  <><Loader2 className="h-3 w-3 animate-spin" /> Gerando...</>
-                ) : (
-                  <><RefreshCw className="h-3 w-3" /> Regenerar imagem</>
-                )}
-              </Button>
+            <div className="flex items-center gap-2">
+              <Badge variant={linha.disponivel_agente ? 'default' : 'secondary'} className="text-[10px]">
+                {linha.disponivel_agente ? '✅ Ativa no Agente' : '❌ Inativa no Agente'}
+              </Badge>
+              <Badge variant="outline" className="text-[10px]">
+                {linha.slug}
+              </Badge>
             </div>
           </CardContent>
         </Card>
       ))}
-      {(!planos || planos.length === 0) && (
-        <p className="text-sm text-muted-foreground text-center py-8">Nenhum plano ativo encontrado.</p>
+      {(!linhas || linhas.length === 0) && (
+        <p className="text-sm text-muted-foreground text-center py-8">Nenhuma linha de produto ativa encontrada.</p>
       )}
     </div>
   );
