@@ -394,10 +394,20 @@ ${linhasTexto}
 - Se o resultado da ferramenta disser marca "Toyota" e modelo "Corolla", use EXATAMENTE esses dados
 - IGNORAR qualquer "conhecimento prévio" sobre placas — confie APENAS no resultado da ferramenta
 
-## REGRA ABSOLUTA SOBRE PREÇOS
-- NUNCA informe valor de cobertura individual. Sempre informe o VALOR TOTAL DO PLANO por mês.
-- NUNCA invente preços. Se não calculou via ferramenta, diga que precisa dos dados do veículo.
-- Os preços variam conforme o veículo, região e uso. Sempre use a ferramenta calcular_cotacao para obter o preço real.
+## REGRAS ABSOLUTAS SOBRE PREÇOS
+- NUNCA informe valores de planos na conversa
+- NUNCA liste planos com preços — os detalhes estarão no link da cotação
+- NUNCA invente preços ou valores
+- Após calcular, diga apenas: "Encontrei X opções de plano para o seu veículo! Vou preparar sua cotação personalizada."
+
+## SOBRE O TELEFONE
+- Você JÁ TEM o telefone do cliente (é o número pelo qual está conversando)
+- NUNCA peça o telefone — use o número da conversa automaticamente
+
+## SOBRE ADESÃO E INSTALAÇÃO
+- A adesão é sempre ISENTA (R$ 0,00)
+- A instalação do rastreador fica à escolha do cliente (rota ou base)
+- Pergunte: "Para a instalação do rastreador, prefere que vá até você (rota) ou prefere ir até uma de nossas bases?"
 
 ## FLUXO DE COTAÇÃO (OBRIGATÓRIO)
 Siga exatamente esta sequência:
@@ -406,14 +416,30 @@ Siga exatamente esta sequência:
 3. Confirme os dados do veículo com o cliente (USE EXATAMENTE os dados retornados pela ferramenta)
 4. Pergunte: "O veículo é usado para aplicativo (Uber, 99, etc.)?"
 5. Pergunte a REGIÃO (estado/cidade)
-6. Use a ferramenta calcular_cotacao com todos os dados coletados
-7. Apresente os planos disponíveis com seus valores mensais
-8. Se o cliente se interessar, pergunte nome completo e ofereça registrar a cotação
+6. Use a ferramenta calcular_cotacao (internamente — NÃO mostre valores ao cliente)
+7. Informe quantos planos foram encontrados SEM mostrar valores
+8. Use a ferramenta obter_opcoes_vencimento e pergunte a melhor DATA DE VENCIMENTO oferecendo as opções
+9. Pergunte sobre a instalação do rastreador (rota ou base)
+10. Pergunte o EMAIL do cliente (para receber a cotação)
+11. Pergunte o NOME COMPLETO do cliente
+12. Registre a cotação com a ferramenta registrar_cotacao e envie o link
+
+## APÓS ENVIO DO LINK
+- Após enviar o link da cotação, aguarde e envie um resumo contendo:
+  - Veículo (marca, modelo, ano)
+  - Região
+  - Quantidade de planos disponíveis
+  - Informação de que a adesão é isenta
+- Finalize com: "Estou à disposição para qualquer dúvida! 😊"
 
 ## DADOS OBRIGATÓRIOS PARA COTAÇÃO
 - Placa do veículo (para busca automática)
 - Tipo de uso (particular ou aplicativo)
 - Região (estado)
+- Dia de vencimento (obtido via ferramenta)
+- Email do cliente
+- Nome completo do cliente
+- Tipo de instalação (rota ou base)
 
 ## REGRAS DE COMPORTAMENTO
 - Seja cordial e profissional
@@ -462,7 +488,7 @@ ${contato?.nome || "Não informado ainda"}`;
           type: "function",
           function: {
             name: "calcular_cotacao",
-            description: "Calcula os preços dos planos disponíveis para o veículo. Retorna uma lista de planos com valores mensais.",
+            description: "Calcula os planos disponíveis para o veículo. Retorna a QUANTIDADE de planos elegíveis. NÃO mostre valores ao cliente.",
             parameters: {
               type: "object",
               properties: {
@@ -482,13 +508,25 @@ ${contato?.nome || "Não informado ainda"}`;
         {
           type: "function",
           function: {
+            name: "obter_opcoes_vencimento",
+            description: "Retorna as opções de dia de vencimento disponíveis para o cliente escolher. Chame ANTES de registrar a cotação.",
+            parameters: {
+              type: "object",
+              properties: {},
+              required: [],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
             name: "registrar_cotacao",
-            description: "Registra a cotação no sistema e gera um link público para o cliente. Também pode enviar por WhatsApp.",
+            description: "Registra a cotação no sistema e gera um link público para o cliente acessar os planos e valores.",
             parameters: {
               type: "object",
               properties: {
                 nome_cliente: { type: "string", description: "Nome completo do cliente" },
-                telefone_cliente: { type: "string", description: "Telefone do cliente" },
+                email_cliente: { type: "string", description: "Email do cliente para receber a cotação" },
                 placa: { type: "string", description: "Placa do veículo" },
                 marca: { type: "string", description: "Marca do veículo" },
                 modelo: { type: "string", description: "Modelo do veículo" },
@@ -496,20 +534,22 @@ ${contato?.nome || "Não informado ainda"}`;
                 combustivel: { type: "string", description: "Combustível do veículo" },
                 valor_fipe: { type: "number", description: "Valor FIPE" },
                 regiao: { type: "string", description: "Região" },
+                dia_vencimento: { type: "number", description: "Dia do mês para vencimento das mensalidades" },
+                tipo_instalacao: { type: "string", description: "Tipo de instalação do rastreador: rota ou base" },
                 planos_calculados: {
                   type: "array",
                   items: {
                     type: "object",
                     properties: {
+                      plano_id: { type: "string" },
                       nome: { type: "string" },
                       valor_mensal: { type: "number" },
                     },
                   },
-                  description: "Lista de planos com valores calculados",
+                  description: "Lista de planos com valores calculados (uso interno)",
                 },
-                enviar_whatsapp: { type: "boolean", description: "Se deve enviar a cotação por WhatsApp" },
               },
-              required: ["nome_cliente", "telefone_cliente", "valor_fipe"],
+              required: ["nome_cliente", "email_cliente", "valor_fipe", "dia_vencimento"],
             },
           },
         },
@@ -603,6 +643,8 @@ ${contato?.nome || "Não informado ainda"}`;
               toolResult = await executarConsultaPlaca(supabaseUrl, serviceKey, args.placa);
             } else if (fnName === "calcular_cotacao") {
               toolResult = await executarCalculoCotacao(supabase, args);
+            } else if (fnName === "obter_opcoes_vencimento") {
+              toolResult = executarObterOpcoesVencimento();
             } else if (fnName === "registrar_cotacao") {
               toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, args, telLimpo, contato);
             } else if (fnName === "gerar_relatorio") {
@@ -1089,6 +1131,9 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     // Adicional mensal do plano
     valorMensal += Number(plano.adicional_mensal || 0);
 
+    // Valor adicional fixo (R$ 5,50)
+    valorMensal += 5.50;
+
     // Adicional app
     if (uso_app) {
       const regiaoTemAdicional = regioesComAdicional.includes(regiaoSlug);
@@ -1104,14 +1149,13 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     }
 
     valorMensal = Math.round(valorMensal * 100) / 100;
-    const valorAdesao = Number(plano.valor_adesao || 0);
 
     resultados.push({
       plano_id: plano.id,
       nome: plano.nome,
       linha: plano.product_lines?.name || plano.linha,
       valor_mensal: valorMensal,
-      valor_adesao: valorAdesao,
+      valor_adesao: 0, // Adesão sempre isenta
       cobertura_fipe: plano.cobertura_fipe || 100,
       destaque: plano.destaque || false,
     });
@@ -1127,25 +1171,41 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     };
   }
 
+  // NÃO retornar valores formatados — o agente NÃO deve mostrar preços na conversa
   return {
     success: true,
+    quantidade_planos: resultados.length,
     planos: resultados,
-    mensagem_formatada: resultados.map((p: any) =>
-      `*${p.nome}* (${p.linha})\n💰 R$ ${p.valor_mensal.toFixed(2)}/mês\n🏷️ Adesão: R$ ${p.valor_adesao.toFixed(2)}`
-    ).join("\n\n"),
+    instrucao: "IMPORTANTE: NÃO mostre valores ao cliente. Informe apenas a quantidade de planos encontrados e prossiga pedindo dia de vencimento, tipo de instalação, email e nome.",
   };
+}
+
+// ============================================================
+// TOOL: obter_opcoes_vencimento
+// ============================================================
+function executarObterOpcoesVencimento() {
+  const diaHoje = new Date(new Date().toLocaleString("en-US", { timeZone: "America/Sao_Paulo" })).getDate();
+  let opcoes: [number, number];
+  if (diaHoje >= 30 || diaHoje <= 4) opcoes = [5, 10];
+  else if (diaHoje <= 9) opcoes = [10, 15];
+  else if (diaHoje <= 14) opcoes = [15, 20];
+  else if (diaHoje <= 19) opcoes = [20, 25];
+  else if (diaHoje <= 24) opcoes = [25, 30];
+  else opcoes = [30, 5];
+  console.log(`[tool:obter_opcoes_vencimento] diaHoje=${diaHoje} opcoes=${opcoes}`);
+  return { success: true, opcoes, mensagem: `Dia ${opcoes[0]} ou dia ${opcoes[1]}` };
 }
 
 // ============================================================
 // TOOL: registrar_cotacao
 // ============================================================
 async function executarRegistroCotacao(supabase: any, supabaseUrl: string, serviceKey: string, args: any, telLimpo: string, contato: any) {
-  const { nome_cliente, telefone_cliente, placa, marca, modelo, ano, combustivel, valor_fipe, regiao, planos_calculados, enviar_whatsapp } = args;
+  const { nome_cliente, email_cliente, placa, marca, modelo, ano, combustivel, valor_fipe, regiao, dia_vencimento, tipo_instalacao, planos_calculados } = args;
 
-  console.log(`[tool:registrar_cotacao] Registrando cotação para ${nome_cliente} - ${placa}`);
+  console.log(`[tool:registrar_cotacao] Registrando cotação para ${nome_cliente} - ${placa} - email=${email_cliente} venc=${dia_vencimento} inst=${tipo_instalacao}`);
 
-  // Criar ou buscar lead
-  const telefoneLead = (telefone_cliente || telLimpo).replace(/\D/g, "");
+  // Usar telefone da conversa (não pedir ao lead)
+  const telefoneLead = telLimpo;
   let leadId: string | null = null;
 
   const { data: leadExistente } = await supabase
@@ -1156,12 +1216,17 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
 
   if (leadExistente) {
     leadId = leadExistente.id;
+    // Atualizar email se disponível
+    if (email_cliente) {
+      await supabase.from("leads").update({ email: email_cliente }).eq("id", leadId);
+    }
   } else {
     const { data: novoLead } = await supabase
       .from("leads")
       .insert({
         nome: nome_cliente || "Lead via Agente IA",
         telefone: telefoneLead,
+        email: email_cliente || null,
         origem: "agente_ia",
         status: "novo",
       })
@@ -1174,7 +1239,7 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
     return { success: false, error: "Erro ao criar lead" };
   }
 
-  // Criar cotação pública
+  // Criar cotação pública — adesão sempre isenta, valor adicional fixo 5.50
   const { data: cotacao, error: cotacaoErr } = await supabase
     .from("cotacoes_publicas")
     .insert({
@@ -1187,7 +1252,12 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
       valor_fipe: valor_fipe,
       regiao: regiao || "rj",
       status: "aguardando",
-      dados_cotacao: { planos: planos_calculados, origem: "agente_ia" },
+      dia_vencimento: dia_vencimento || 10,
+      tipo_instalacao: tipo_instalacao || "rota",
+      valor_adicional: 5.50,
+      valor_adesao: 0,
+      email_solicitante: email_cliente || null,
+      dados_cotacao: { planos: planos_calculados, origem: "agente_ia", adesao_isenta: true, valor_adicional: 5.50 },
     })
     .select("id, token")
     .single();
@@ -1205,23 +1275,31 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
 
   const linkCotacao = `${supabaseUrl.replace('.supabase.co', '.lovable.app')}/cotacao/${cotacao.token}`;
 
-  // Enviar por WhatsApp se solicitado
-  if (enviar_whatsapp && planos_calculados?.length > 0) {
-    const mensagemCotacao = `Olá ${nome_cliente || ""}! 😊\n\nSegue sua cotação de proteção veicular para o *${marca} ${modelo} ${ano}*:\n\n` +
-      planos_calculados.map((p: any) =>
-        `✅ *${p.nome}*: R$ ${p.valor_mensal?.toFixed(2)}/mês`
-      ).join("\n") +
-      `\n\nAcesse o link para mais detalhes:\n${linkCotacao}\n\n_PRATICCAR Proteção Veicular - Proteção 360_ 🛡️`;
+  // Enviar link da cotação por WhatsApp
+  const mensagemLink = `Olá ${nome_cliente || ""}! 😊\n\nSua cotação personalizada de proteção veicular está pronta!\n\n🔗 Acesse aqui: ${linkCotacao}\n\n_PRATICCAR Proteção Veicular - Proteção 360_ 🛡️`;
+  await enviarWhatsApp(supabaseUrl, serviceKey, telefoneLead, mensagemLink);
 
-    await enviarWhatsApp(supabaseUrl, serviceKey, telefoneLead, mensagemCotacao);
-  }
+  // Aguardar 10 segundos e enviar resumo
+  await new Promise(r => setTimeout(r, 10000));
+
+  const qtdPlanos = planos_calculados?.length || 0;
+  const mensagemResumo = `📋 *Resumo da sua cotação:*\n\n` +
+    `🚗 Veículo: *${marca || ""} ${modelo || ""} ${ano || ""}*\n` +
+    `📍 Região: *${regiao || ""}*\n` +
+    `📦 ${qtdPlanos} opção(ões) de plano disponíveis\n` +
+    `🎉 Adesão: *ISENTA*\n` +
+    `📅 Vencimento: dia *${dia_vencimento || ""}*\n` +
+    `🔧 Instalação: *${tipo_instalacao === "base" ? "Na base" : "Rota (vamos até você)"}*\n\n` +
+    `Estou à disposição para qualquer dúvida! 😊`;
+  await enviarWhatsApp(supabaseUrl, serviceKey, telefoneLead, mensagemResumo);
 
   return {
     success: true,
     cotacao_id: cotacao.id,
     token: cotacao.token,
     link: linkCotacao,
-    mensagem: `Cotação registrada com sucesso! Link: ${linkCotacao}`,
+    mensagem: `Cotação registrada e enviada com sucesso! Link: ${linkCotacao}`,
+    resumo_enviado: true,
   };
 }
 
