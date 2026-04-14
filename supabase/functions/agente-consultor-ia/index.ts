@@ -6,14 +6,10 @@ const corsHeaders = {
 };
 
 /**
- * Edge function: Agente Consultor IA (Maya)
+ * Edge function: Agente Consultor IA (Vinicius)
  * Fluxo reformulado com tool calling:
- * 1. Perguntar placa
- * 2. Consultar placa → obter dados do veículo
- * 3. Coletar: uso (particular/app), combustível, região
- * 4. Calcular preços de planos elegíveis
- * 5. Apresentar planos com valores mensais (nunca por cobertura)
- * 6. Registrar cotação + enviar WhatsApp
+ * - Para leads: fluxo de cotação (placa → dados → calcular → registrar)
+ * - Para diretores: relatórios do sistema (KPIs, cotações, leads, sinistros)
  */
 Deno.serve(async (req) => {
   if (req.method === "OPTIONS") {
@@ -84,70 +80,93 @@ Deno.serve(async (req) => {
       config[row.chave] = row.valor;
     }
 
-    const nomeAgente = config.nome_agente || "Maya";
+    const nomeAgente = config.nome_agente || "Vinicius";
     const apresentacao = config.apresentacao_inicial || "";
     const instrucoes = config.instrucoes_comportamento || "";
     const msgForaHorario = config.mensagem_fora_horario || "";
     const responderFora = config.responder_fora_horario === "true";
 
-    // ---- 4. VERIFICAR HORÁRIO COMERCIAL ----
-    let horarioConfig: { dias: string[]; inicio: string; fim: string } | null = null;
-    try {
-      horarioConfig = JSON.parse(config.horario_comercial || "null");
-    } catch { /* ignore */ }
+    // ---- 4. DETECTAR DIRETOR ----
+    let isDiretor = false;
+    let diretorNome = "";
+    let diretorUserId = "";
 
-    if (horarioConfig) {
-      const agora = new Date();
-      const brasiliaOffset = -3 * 60;
-      const localOffset = agora.getTimezoneOffset();
-      const brasilia = new Date(agora.getTime() + (localOffset - brasiliaOffset) * 60 * 1000);
+    // Buscar em profiles pelo telefone
+    const telVariantes = [telLimpo];
+    if (telLimpo.startsWith("55") && telLimpo.length >= 12) {
+      telVariantes.push(telLimpo.substring(2));
+    }
+    if (!telLimpo.startsWith("55")) {
+      telVariantes.push("55" + telLimpo);
+    }
 
-      const diasSemana = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
-      const diaAtual = diasSemana[brasilia.getDay()];
-      const horaAtual = brasilia.getHours() * 100 + brasilia.getMinutes();
+    const orFilter = telVariantes.flatMap(t => [
+      `telefone.eq.${t}`,
+      `whatsapp.eq.${t}`,
+    ]).join(",");
 
-      const [inicioH, inicioM] = (horarioConfig.inicio || "08:00").split(":").map(Number);
-      const [fimH, fimM] = (horarioConfig.fim || "18:00").split(":").map(Number);
-      const inicioNum = inicioH * 100 + inicioM;
-      const fimNum = fimH * 100 + fimM;
+    const { data: profileMatch } = await supabase
+      .from("profiles")
+      .select("id, nome, user_id, telefone, whatsapp")
+      .or(orFilter)
+      .limit(1)
+      .maybeSingle();
 
-      const dentroHorario = horarioConfig.dias.includes(diaAtual) && horaAtual >= inicioNum && horaAtual < fimNum;
+    if (profileMatch?.user_id) {
+      const { data: roleData } = await supabase
+        .from("user_roles")
+        .select("role")
+        .eq("user_id", profileMatch.user_id)
+        .eq("role", "diretor")
+        .maybeSingle();
 
-      if (!dentroHorario) {
-        if (responderFora && msgForaHorario) {
-          await enviarWhatsApp(supabaseUrl, serviceKey, telefone, msgForaHorario);
-        }
-        return new Response(
-          JSON.stringify({ success: true, fora_horario: true }),
-          { headers: { ...corsHeaders, "Content-Type": "application/json" } }
-        );
+      if (roleData) {
+        isDiretor = true;
+        diretorNome = profileMatch.nome || "";
+        diretorUserId = profileMatch.user_id;
+        console.log(`[agente-consultor-ia] Diretor detectado: ${diretorNome} (${profileMatch.user_id})`);
       }
     }
 
-    // ---- 5. CARREGAR LINHAS DE PRODUTO DISPONÍVEIS ----
-    const { data: linhas } = await supabase
-      .from("product_lines")
-      .select("id, name, slug, description, icon, color, vehicle_type, disponivel_agente, agente_descricao")
-      .eq("disponivel_agente", true)
-      .eq("is_active", true)
-      .order("sort_priority");
+    // ---- 5. VERIFICAR HORÁRIO COMERCIAL (apenas para leads) ----
+    if (!isDiretor) {
+      let horarioConfig: { dias: string[]; inicio: string; fim: string } | null = null;
+      try {
+        horarioConfig = JSON.parse(config.horario_comercial || "null");
+      } catch { /* ignore */ }
 
-    const linhasTexto = linhas?.length
-      ? linhas.map((l: any) => {
-          const desc = l.agente_descricao || l.description || "";
-          return `- *${l.name}*: ${desc}`;
-        }).join("\n")
-      : "Nenhuma linha de produto disponível no momento.";
+      if (horarioConfig) {
+        const agora = new Date();
+        const brasiliaOffset = -3 * 60;
+        const localOffset = agora.getTimezoneOffset();
+        const brasilia = new Date(agora.getTime() + (localOffset - brasiliaOffset) * 60 * 1000);
+
+        const diasSemana = ["dom", "seg", "ter", "qua", "qui", "sex", "sab"];
+        const diaAtual = diasSemana[brasilia.getDay()];
+        const horaAtual = brasilia.getHours() * 100 + brasilia.getMinutes();
+
+        const [inicioH, inicioM] = (horarioConfig.inicio || "08:00").split(":").map(Number);
+        const [fimH, fimM] = (horarioConfig.fim || "18:00").split(":").map(Number);
+        const inicioNum = inicioH * 100 + inicioM;
+        const fimNum = fimH * 100 + fimM;
+
+        const dentroHorario = horarioConfig.dias.includes(diaAtual) && horaAtual >= inicioNum && horaAtual < fimNum;
+
+        if (!dentroHorario) {
+          if (responderFora && msgForaHorario) {
+            await enviarWhatsApp(supabaseUrl, serviceKey, telefone, msgForaHorario);
+          }
+          return new Response(
+            JSON.stringify({ success: true, fora_horario: true }),
+            { headers: { ...corsHeaders, "Content-Type": "application/json" } }
+          );
+        }
+      }
+    }
 
     // ---- 6. BUSCAR HISTÓRICO DE CONVERSA ----
     const duasHorasAtras = new Date(Date.now() - 2 * 60 * 60 * 1000).toISOString();
-    const telefonesBusca = [telLimpo];
-    if (telLimpo.startsWith("55") && telLimpo.length >= 12) {
-      telefonesBusca.push(telLimpo.substring(2));
-    }
-    if (!telLimpo.startsWith("55")) {
-      telefonesBusca.push("55" + telLimpo);
-    }
+    const telefonesBusca = telVariantes;
 
     const { data: historico } = await supabase
       .from("whatsapp_mensagens")
@@ -166,8 +185,95 @@ Deno.serve(async (req) => {
 
     const isPrimeiraMensagem = !contatoExistente || historico?.length === 0;
 
-    // ---- 7. MONTAR SYSTEM PROMPT ----
-    const systemPrompt = `Você é ${nomeAgente}, consultora virtual de vendas da PRATICCAR Proteção Veicular.
+    // ---- 7. MONTAR SYSTEM PROMPT + TOOLS (condicional) ----
+    let systemPrompt: string;
+    let tools: any[];
+
+    if (isDiretor) {
+      // === PROMPT PARA DIRETORES ===
+      systemPrompt = `Você é ${nomeAgente}, assistente executivo da PRATICCAR Proteção Veicular.
+
+## CONTEXTO
+Você está conversando com o diretor *${diretorNome}*. Você deve tratá-lo pelo nome.
+
+## SUA FUNÇÃO
+Você é o braço direito da diretoria. Seu papel é fornecer relatórios, dados e insights sobre o sistema da PRATICCAR.
+
+## O QUE VOCÊ PODE FAZER
+- Gerar relatórios com KPIs do sistema (associados ativos, receita, sinistros, leads)
+- Informar cotações pendentes
+- Apresentar métricas de vendas e conversão
+- Resumos financeiros do mês
+- Responder perguntas sobre dados operacionais
+
+## FERRAMENTAS DISPONÍVEIS
+Use a ferramenta *gerar_relatorio* para buscar dados reais do sistema. NUNCA invente números.
+
+## TIPOS DE RELATÓRIO
+Quando o diretor pedir dados, use a ferramenta com o tipo adequado:
+- "geral" — Resumo completo com todos os KPIs
+- "cotacoes" — Cotações pendentes e recentes
+- "leads" — Leads do mês, origens e conversão
+- "financeiro" — Receita, inadimplência, cobranças
+- "sinistros" — Sinistros abertos e status
+- "associados" — Totais por status
+
+## REGRAS
+- NUNCA execute o fluxo de vendas/cotação para diretores
+- NUNCA invente dados — sempre use a ferramenta
+- Seja direto e profissional
+- Use formatação WhatsApp: *negrito*, _itálico_
+- NUNCA use Markdown: **duplo**, ## títulos
+- Respostas objetivas e com números reais
+
+## SAUDAÇÃO INICIAL
+Se for a primeira mensagem, cumprimente: "Olá, ${diretorNome}! 👋 Sou o ${nomeAgente}, seu assistente executivo. Como posso ajudar? Posso gerar relatórios, KPIs ou qualquer dado do sistema."
+
+## DATA E HORA ATUAL
+${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "long", year: "numeric", month: "long", day: "numeric", hour: "2-digit", minute: "2-digit" })}`;
+
+      tools = [
+        {
+          type: "function",
+          function: {
+            name: "gerar_relatorio",
+            description: "Busca dados reais do sistema para gerar relatórios. Retorna KPIs, métricas e dados operacionais.",
+            parameters: {
+              type: "object",
+              properties: {
+                tipo: {
+                  type: "string",
+                  enum: ["geral", "cotacoes", "leads", "financeiro", "sinistros", "associados"],
+                  description: "Tipo do relatório solicitado",
+                },
+                periodo_dias: {
+                  type: "number",
+                  description: "Período em dias para filtrar (padrão: 30 = mês atual)",
+                },
+              },
+              required: ["tipo"],
+            },
+          },
+        },
+      ];
+    } else {
+      // === PROMPT PARA LEADS (vendas) ===
+      // Carregar linhas de produto
+      const { data: linhas } = await supabase
+        .from("product_lines")
+        .select("id, name, slug, description, icon, color, vehicle_type, disponivel_agente, agente_descricao")
+        .eq("disponivel_agente", true)
+        .eq("is_active", true)
+        .order("sort_priority");
+
+      const linhasTexto = linhas?.length
+        ? linhas.map((l: any) => {
+            const desc = l.agente_descricao || l.description || "";
+            return `- *${l.name}*: ${desc}`;
+          }).join("\n")
+        : "Nenhuma linha de produto disponível no momento.";
+
+      systemPrompt = `Você é ${nomeAgente}, consultor virtual de vendas da PRATICCAR Proteção Veicular.
 
 ## SUA PERSONALIDADE
 ${instrucoes}
@@ -211,7 +317,7 @@ Siga exatamente esta sequência:
 
 ## FORA DO ESCOPO
 Se o contato fizer perguntas políticas, irrelevantes ou fora do tema de proteção veicular:
-- Redirecione educadamente: "Sou especializada em proteção veicular! Posso te ajudar a encontrar o melhor plano para o seu veículo. 😊"
+- Redirecione educadamente: "Sou especializado em proteção veicular! Posso te ajudar a encontrar o melhor plano para o seu veículo. 😊"
 
 ## SINISTRO / EMERGÊNCIA
 Se o contato relatar sinistro, acidente ou emergência:
@@ -228,80 +334,80 @@ ${new Date().toLocaleString("pt-BR", { timeZone: "America/Sao_Paulo", weekday: "
 ## NOME DO CONTATO
 ${contato?.nome || "Não informado ainda"}`;
 
-    // ---- 8. DEFINIR FERRAMENTAS (TOOLS) ----
-    const tools = [
-      {
-        type: "function",
-        function: {
-          name: "consultar_placa",
-          description: "Consulta os dados de um veículo pela placa. Retorna marca, modelo, ano, combustível e valor FIPE.",
-          parameters: {
-            type: "object",
-            properties: {
-              placa: { type: "string", description: "Placa do veículo (formato ABC1D23 ou ABC-1234)" },
-            },
-            required: ["placa"],
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "calcular_cotacao",
-          description: "Calcula os preços dos planos disponíveis para o veículo. Retorna uma lista de planos com valores mensais.",
-          parameters: {
-            type: "object",
-            properties: {
-              valor_fipe: { type: "number", description: "Valor FIPE do veículo em reais" },
-              marca: { type: "string", description: "Marca do veículo" },
-              modelo: { type: "string", description: "Modelo do veículo" },
-              ano: { type: "number", description: "Ano do veículo" },
-              combustivel: { type: "string", description: "Tipo de combustível (gasolina, flex, diesel, eletrico)" },
-              regiao: { type: "string", description: "Código da região (ex: rj, sp, mg)" },
-              uso_app: { type: "boolean", description: "Se o veículo é usado para aplicativo (Uber, 99, etc.)" },
-              placa: { type: "string", description: "Placa do veículo" },
-            },
-            required: ["valor_fipe", "regiao"],
-          },
-        },
-      },
-      {
-        type: "function",
-        function: {
-          name: "registrar_cotacao",
-          description: "Registra a cotação no sistema e gera um link público para o cliente. Também pode enviar por WhatsApp.",
-          parameters: {
-            type: "object",
-            properties: {
-              nome_cliente: { type: "string", description: "Nome completo do cliente" },
-              telefone_cliente: { type: "string", description: "Telefone do cliente" },
-              placa: { type: "string", description: "Placa do veículo" },
-              marca: { type: "string", description: "Marca do veículo" },
-              modelo: { type: "string", description: "Modelo do veículo" },
-              ano: { type: "number", description: "Ano do veículo" },
-              combustivel: { type: "string", description: "Combustível do veículo" },
-              valor_fipe: { type: "number", description: "Valor FIPE" },
-              regiao: { type: "string", description: "Região" },
-              planos_calculados: {
-                type: "array",
-                items: {
-                  type: "object",
-                  properties: {
-                    nome: { type: "string" },
-                    valor_mensal: { type: "number" },
-                  },
-                },
-                description: "Lista de planos com valores calculados",
+      tools = [
+        {
+          type: "function",
+          function: {
+            name: "consultar_placa",
+            description: "Consulta os dados de um veículo pela placa. Retorna marca, modelo, ano, combustível e valor FIPE.",
+            parameters: {
+              type: "object",
+              properties: {
+                placa: { type: "string", description: "Placa do veículo (formato ABC1D23 ou ABC-1234)" },
               },
-              enviar_whatsapp: { type: "boolean", description: "Se deve enviar a cotação por WhatsApp" },
+              required: ["placa"],
             },
-            required: ["nome_cliente", "telefone_cliente", "valor_fipe"],
           },
         },
-      },
-    ];
+        {
+          type: "function",
+          function: {
+            name: "calcular_cotacao",
+            description: "Calcula os preços dos planos disponíveis para o veículo. Retorna uma lista de planos com valores mensais.",
+            parameters: {
+              type: "object",
+              properties: {
+                valor_fipe: { type: "number", description: "Valor FIPE do veículo em reais" },
+                marca: { type: "string", description: "Marca do veículo" },
+                modelo: { type: "string", description: "Modelo do veículo" },
+                ano: { type: "number", description: "Ano do veículo" },
+                combustivel: { type: "string", description: "Tipo de combustível (gasolina, flex, diesel, eletrico)" },
+                regiao: { type: "string", description: "Código da região (ex: rj, sp, mg)" },
+                uso_app: { type: "boolean", description: "Se o veículo é usado para aplicativo (Uber, 99, etc.)" },
+                placa: { type: "string", description: "Placa do veículo" },
+              },
+              required: ["valor_fipe", "regiao"],
+            },
+          },
+        },
+        {
+          type: "function",
+          function: {
+            name: "registrar_cotacao",
+            description: "Registra a cotação no sistema e gera um link público para o cliente. Também pode enviar por WhatsApp.",
+            parameters: {
+              type: "object",
+              properties: {
+                nome_cliente: { type: "string", description: "Nome completo do cliente" },
+                telefone_cliente: { type: "string", description: "Telefone do cliente" },
+                placa: { type: "string", description: "Placa do veículo" },
+                marca: { type: "string", description: "Marca do veículo" },
+                modelo: { type: "string", description: "Modelo do veículo" },
+                ano: { type: "number", description: "Ano do veículo" },
+                combustivel: { type: "string", description: "Combustível do veículo" },
+                valor_fipe: { type: "number", description: "Valor FIPE" },
+                regiao: { type: "string", description: "Região" },
+                planos_calculados: {
+                  type: "array",
+                  items: {
+                    type: "object",
+                    properties: {
+                      nome: { type: "string" },
+                      valor_mensal: { type: "number" },
+                    },
+                  },
+                  description: "Lista de planos com valores calculados",
+                },
+                enviar_whatsapp: { type: "boolean", description: "Se deve enviar a cotação por WhatsApp" },
+              },
+              required: ["nome_cliente", "telefone_cliente", "valor_fipe"],
+            },
+          },
+        },
+      ];
+    }
 
-    // ---- 9. CHAMAR LOVABLE AI COM TOOL CALLING ----
+    // ---- 8. CHAMAR LOVABLE AI COM TOOL CALLING ----
     const LOVABLE_API_KEY = Deno.env.get("LOVABLE_API_KEY");
     if (!LOVABLE_API_KEY) {
       throw new Error("LOVABLE_API_KEY não configurada");
@@ -390,6 +496,8 @@ ${contato?.nome || "Não informado ainda"}`;
               toolResult = await executarCalculoCotacao(supabase, args);
             } else if (fnName === "registrar_cotacao") {
               toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, args, telLimpo, contato);
+            } else if (fnName === "gerar_relatorio") {
+              toolResult = await executarGerarRelatorio(supabase, args);
             } else {
               toolResult = { error: `Ferramenta desconhecida: ${fnName}` };
             }
@@ -405,7 +513,7 @@ ${contato?.nome || "Não informado ainda"}`;
           });
         }
 
-        continue; // Volta pro loop pra a IA processar os resultados
+        continue;
       }
 
       // Se não tem tool calls, temos a resposta final
@@ -413,71 +521,73 @@ ${contato?.nome || "Não informado ainda"}`;
       break;
     }
 
-    console.log(`[agente-consultor-ia] Resposta final (${resposta.length} chars) para ${telLimpo}`);
+    console.log(`[agente-consultor-ia] Resposta final (${resposta.length} chars) para ${telLimpo} (diretor=${isDiretor})`);
 
-    // ---- 10. DETECTAR INTENÇÕES ESPECIAIS ----
-    const textoLower = (texto || "").toLowerCase();
+    // ---- 9. DETECTAR INTENÇÕES ESPECIAIS (apenas leads) ----
+    if (!isDiretor) {
+      const textoLower = (texto || "").toLowerCase();
 
-    const pedidoHumano = textoLower.match(/falar com (uma |um )?(pessoa|atendente|humano|gente|algu[eé]m)/i) ||
-      textoLower.match(/quero (um |uma )?(atendente|pessoa|humano)/i) ||
-      textoLower.match(/atendimento humano/i);
+      const pedidoHumano = textoLower.match(/falar com (uma |um )?(pessoa|atendente|humano|gente|algu[eé]m)/i) ||
+        textoLower.match(/quero (um |uma )?(atendente|pessoa|humano)/i) ||
+        textoLower.match(/atendimento humano/i);
 
-    if (pedidoHumano) {
-      await supabase
-        .from("agente_ia_contatos")
-        .update({ status: "atendimento_humano" })
-        .eq("id", contato.id);
+      if (pedidoHumano) {
+        await supabase
+          .from("agente_ia_contatos")
+          .update({ status: "atendimento_humano" })
+          .eq("id", contato.id);
 
-      try {
-        const { data: diretores } = await supabase
-          .from("user_roles")
-          .select("user_id")
-          .in("role", ["diretor", "vendedor", "supervisor_vendas"]);
+        try {
+          const { data: diretores } = await supabase
+            .from("user_roles")
+            .select("user_id")
+            .in("role", ["diretor", "vendedor", "supervisor_vendas"]);
 
-        for (const dest of diretores || []) {
-          await supabase.from("notificacoes").insert({
-            user_id: dest.user_id,
-            titulo: "👤 Lead solicitou atendimento humano",
-            mensagem: `Telefone: ${telLimpo} | Nome: ${contato?.nome || "Não informado"} | Última mensagem: "${texto?.substring(0, 100)}"`,
-            tipo: "alerta",
-            categoria: "vendas",
-            lida: false,
-          });
+          for (const dest of diretores || []) {
+            await supabase.from("notificacoes").insert({
+              user_id: dest.user_id,
+              titulo: "👤 Lead solicitou atendimento humano",
+              mensagem: `Telefone: ${telLimpo} | Nome: ${contato?.nome || "Não informado"} | Última mensagem: "${texto?.substring(0, 100)}"`,
+              tipo: "alerta",
+              categoria: "vendas",
+              lida: false,
+            });
+          }
+        } catch (notifErr) {
+          console.error("[agente-consultor-ia] Erro notificação:", notifErr);
         }
-      } catch (notifErr) {
-        console.error("[agente-consultor-ia] Erro notificação:", notifErr);
+      }
+
+      const pedidoSinistro = textoLower.match(/sinistro|acidente|batid[oa]|colisão|roubaram|furtaram|incêndio|pegou fogo/i);
+      if (pedidoSinistro) {
+        await supabase
+          .from("agente_ia_contatos")
+          .update({ status: "atendimento_humano" })
+          .eq("id", contato.id);
+
+        try {
+          const { data: analistas } = await supabase
+            .from("user_roles")
+            .select("user_id")
+            .in("role", ["diretor", "analista_sinistros"]);
+
+          for (const dest of analistas || []) {
+            await supabase.from("notificacoes").insert({
+              user_id: dest.user_id,
+              titulo: "🚨 Lead reportou sinistro/emergência",
+              mensagem: `Telefone: ${telLimpo} | Mensagem: "${texto?.substring(0, 150)}"`,
+              tipo: "alerta",
+              categoria: "sinistros",
+              lida: false,
+            });
+          }
+        } catch (notifErr) {
+          console.error("[agente-consultor-ia] Erro notificação sinistro:", notifErr);
+        }
       }
     }
 
-    const pedidoSinistro = textoLower.match(/sinistro|acidente|batid[oa]|colisão|roubaram|furtaram|incêndio|pegou fogo/i);
-    if (pedidoSinistro) {
-      await supabase
-        .from("agente_ia_contatos")
-        .update({ status: "atendimento_humano" })
-        .eq("id", contato.id);
-
-      try {
-        const { data: analistas } = await supabase
-          .from("user_roles")
-          .select("user_id")
-          .in("role", ["diretor", "analista_sinistros"]);
-
-        for (const dest of analistas || []) {
-          await supabase.from("notificacoes").insert({
-            user_id: dest.user_id,
-            titulo: "🚨 Lead reportou sinistro/emergência",
-            mensagem: `Telefone: ${telLimpo} | Mensagem: "${texto?.substring(0, 150)}"`,
-            tipo: "alerta",
-            categoria: "sinistros",
-            lida: false,
-          });
-        }
-      } catch (notifErr) {
-        console.error("[agente-consultor-ia] Erro notificação sinistro:", notifErr);
-      }
-    }
-
-    // ---- 11. DIVIDIR E ENVIAR RESPOSTA ----
+    // ---- 10. DIVIDIR E ENVIAR RESPOSTA ----
     const partes = dividirMensagem(resposta, 1000);
 
     for (let i = 0; i < partes.length; i++) {
@@ -487,15 +597,15 @@ ${contato?.nome || "Não informado ainda"}`;
       }
     }
 
-    // ---- 12. ATUALIZAR STATUS DO CONTATO ----
-    if (contato.status === "novo") {
+    // ---- 11. ATUALIZAR STATUS DO CONTATO ----
+    if (contato.status === "novo" && !isDiretor) {
       await supabase
         .from("agente_ia_contatos")
         .update({ status: "em_conversa" })
         .eq("id", contato.id);
     }
 
-    if (!contato.nome && texto) {
+    if (!contato.nome && texto && !isDiretor) {
       const nomeMatch = texto.match(/(?:me chamo|meu nome [eé]|sou o|sou a)\s+([A-ZÀ-ÚÇ][a-zà-úç]+(?:\s+[A-ZÀ-ÚÇ][a-zà-úç]+)*)/i);
       if (nomeMatch) {
         await supabase
@@ -508,7 +618,7 @@ ${contato?.nome || "Não informado ainda"}`;
     console.log(`[agente-consultor-ia] ✓ Resposta enviada para ${telLimpo} (${partes.length} parte(s))`);
 
     return new Response(
-      JSON.stringify({ success: true, partes: partes.length }),
+      JSON.stringify({ success: true, partes: partes.length, is_diretor: isDiretor }),
       { headers: { ...corsHeaders, "Content-Type": "application/json" } }
     );
   } catch (error: any) {
@@ -519,6 +629,162 @@ ${contato?.nome || "Não informado ainda"}`;
     );
   }
 });
+
+// ============================================================
+// TOOL: gerar_relatorio (DIRETORES)
+// ============================================================
+async function executarGerarRelatorio(supabase: any, args: any) {
+  const { tipo = "geral", periodo_dias = 30 } = args;
+  const dataInicio = new Date(Date.now() - periodo_dias * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+
+  console.log(`[tool:gerar_relatorio] tipo=${tipo} periodo=${periodo_dias}d desde=${dataInicio}`);
+
+  const relatorio: any = { tipo, periodo_dias, data_inicio: dataInicio };
+
+  try {
+    if (tipo === "geral" || tipo === "associados") {
+      // Totais de associados por status
+      const { data: assocAtivos } = await supabase
+        .from("associados")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "ativo");
+      const { data: assocPendentes } = await supabase
+        .from("associados")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "pendente");
+      const { data: assocCancelados } = await supabase
+        .from("associados")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "cancelado");
+      const { data: assocBloqueados } = await supabase
+        .from("associados")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "bloqueado");
+
+      // Novos no período
+      const { count: novosNoPeríodo } = await supabase
+        .from("associados")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", dataInicio);
+
+      relatorio.associados = {
+        ativos: assocAtivos,
+        pendentes: assocPendentes,
+        cancelados: assocCancelados,
+        bloqueados: assocBloqueados,
+        novos_periodo: novosNoPeríodo || 0,
+      };
+    }
+
+    if (tipo === "geral" || tipo === "financeiro") {
+      // Receita do período (cobranças pagas)
+      const { data: cobrancasPagas } = await supabase
+        .from("cobrancas")
+        .select("valor_pago")
+        .eq("status", "pago")
+        .gte("data_pagamento", dataInicio);
+
+      const totalReceita = (cobrancasPagas || []).reduce((s: number, c: any) => s + (c.valor_pago || 0), 0);
+
+      // Inadimplentes
+      const { count: inadimplentes } = await supabase
+        .from("cobrancas")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "vencido");
+
+      relatorio.financeiro = {
+        receita_periodo: totalReceita,
+        inadimplentes_total: inadimplentes || 0,
+      };
+    }
+
+    if (tipo === "geral" || tipo === "cotacoes") {
+      const { data: cotPendentes, count: qtdPendentes } = await supabase
+        .from("cotacoes_publicas")
+        .select("id, veiculo_marca, veiculo_modelo, veiculo_ano, created_at, status", { count: "exact" })
+        .eq("status", "aguardando")
+        .order("created_at", { ascending: false })
+        .limit(10);
+
+      const { count: totalCotacoes } = await supabase
+        .from("cotacoes_publicas")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", dataInicio);
+
+      relatorio.cotacoes = {
+        pendentes: qtdPendentes || 0,
+        total_periodo: totalCotacoes || 0,
+        ultimas_pendentes: (cotPendentes || []).map((c: any) => ({
+          veiculo: `${c.veiculo_marca} ${c.veiculo_modelo} ${c.veiculo_ano}`,
+          data: c.created_at,
+        })),
+      };
+    }
+
+    if (tipo === "geral" || tipo === "leads") {
+      const { count: totalLeads } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", dataInicio);
+
+      const { count: leadsConvertidos } = await supabase
+        .from("leads")
+        .select("id", { count: "exact", head: true })
+        .eq("status", "convertido")
+        .gte("created_at", dataInicio);
+
+      const { data: leadsPorOrigem } = await supabase
+        .from("leads")
+        .select("origem")
+        .gte("created_at", dataInicio);
+
+      // Agrupar por origem
+      const origemMap: Record<string, number> = {};
+      for (const l of leadsPorOrigem || []) {
+        const o = l.origem || "desconhecida";
+        origemMap[o] = (origemMap[o] || 0) + 1;
+      }
+
+      relatorio.leads = {
+        total_periodo: totalLeads || 0,
+        convertidos: leadsConvertidos || 0,
+        taxa_conversao: totalLeads ? Math.round(((leadsConvertidos || 0) / totalLeads) * 100) : 0,
+        por_origem: origemMap,
+      };
+    }
+
+    if (tipo === "geral" || tipo === "sinistros") {
+      const { count: sinistrosAbertos } = await supabase
+        .from("sinistros")
+        .select("id", { count: "exact", head: true })
+        .in("status", ["aberto", "em_analise", "aprovado"]);
+
+      const { count: sinistrosPeriodo } = await supabase
+        .from("sinistros")
+        .select("id", { count: "exact", head: true })
+        .gte("created_at", dataInicio);
+
+      const { data: sinistrosValor } = await supabase
+        .from("sinistros")
+        .select("valor_indenizacao")
+        .in("status", ["aprovado", "pago", "encerrado"])
+        .gte("data_ocorrencia", dataInicio);
+
+      const totalIndenizado = (sinistrosValor || []).reduce((s: number, si: any) => s + (si.valor_indenizacao || 0), 0);
+
+      relatorio.sinistros = {
+        abertos: sinistrosAbertos || 0,
+        total_periodo: sinistrosPeriodo || 0,
+        valor_indenizado_periodo: totalIndenizado,
+      };
+    }
+
+    return { success: true, relatorio };
+  } catch (err: any) {
+    console.error("[tool:gerar_relatorio] Erro:", err);
+    return { success: false, error: err.message || "Erro ao gerar relatório" };
+  }
+}
 
 // ============================================================
 // TOOL: consultar_placa
@@ -628,16 +894,6 @@ async function executarCalculoCotacao(supabase: any, args: any) {
   let regioesComAdicional: string[] = [];
   try { regioesComAdicional = JSON.parse(regioesAppConfig?.valor || "[]"); } catch { /* */ }
 
-  // Buscar categorias de deságio
-  const { data: categoriasDesagioConfig } = await supabase
-    .from("configuracoes")
-    .select("valor")
-    .eq("chave", "categorias_que_sobrepoe_app")
-    .maybeSingle();
-
-  let categoriasQueSobrepoe: string[] = [];
-  try { categoriasQueSobrepoe = JSON.parse(categoriasDesagioConfig?.valor || "[]"); } catch { /* */ }
-
   // Build vehicle context
   const vehicleCtx = {
     valorFipe: valor_fipe,
@@ -663,7 +919,6 @@ async function executarCalculoCotacao(supabase: any, args: any) {
       ? rules.filter((r: any) => r.entity_type === "linha" && r.entity_id === productLineId && r.is_active)
       : [];
 
-    // Simple rule check (tipo_uso, regiao, combustivel, fipe_range, ano_range)
     if (!checkRulesSimple(linhaRules, vehicleCtx) || !checkRulesSimple(planoRules, vehicleCtx)) {
       continue;
     }
@@ -675,7 +930,6 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     let somaCoberturas = 0;
     for (const pc of coberturasDoPlano) {
       const cobId = pc.cobertura_id;
-      // Check fipe_range rule for this coverage
       const fipeRule = rules.find((r: any) => r.entity_type === "cobertura" && r.entity_id === cobId && r.rule_type === "fipe_range" && r.is_active);
       if (fipeRule) {
         const faixas = (fipeRule.rule_config as any)?.faixas || [];
@@ -699,7 +953,7 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     }
 
     let valorMensal = somaCoberturas + somaBeneficios;
-    if (valorMensal === 0) continue; // Plano sem preço
+    if (valorMensal === 0) continue;
 
     // Adicional mensal do plano
     valorMensal += Number(plano.adicional_mensal || 0);
@@ -844,10 +1098,6 @@ async function executarRegistroCotacao(supabase: any, supabaseUrl: string, servi
 // HELPERS
 // ============================================================
 
-/**
- * Verificação simplificada de regras de elegibilidade.
- * Replica a lógica essencial de checkAllRules do frontend.
- */
 function checkRulesSimple(rules: any[], ctx: any): boolean {
   for (const rule of rules) {
     if (!rule.is_active) continue;
@@ -867,7 +1117,6 @@ function checkRulesSimple(rules: any[], ctx: any): boolean {
       case "combustivel": {
         const combustiveis = config.combustiveis_permitidos || [];
         const ctxComb = (ctx.combustivel || "").toLowerCase();
-        // Normalizar
         const normMap: Record<string, string> = {
           "flex": "gasolina",
           "álcool": "gasolina",
@@ -891,7 +1140,6 @@ function checkRulesSimple(rules: any[], ctx: any): boolean {
         break;
       }
       case "marca_modelo": {
-        // Skip complex marca_modelo checks — allow by default at this level
         break;
       }
     }
