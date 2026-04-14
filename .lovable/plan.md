@@ -1,49 +1,42 @@
 
 
-## Plano: Corrigir 3 problemas no fluxo do Agente Consultor IA
+## Plano: Reforçar adesão gratuita como argumento de venda no Agente Consultor IA
 
-### Problemas
-1. A IA diz "Encontrei 74 opções de plano" — não deveria informar quantidade
-2. Pergunta sobre instalação (rota/base) na conversa — o cliente escolhe isso no link público
-3. Ao enviar a data de vencimento, a conversa reiniciou com saudação inicial
+### Problema
+A IA menciona a adesão isenta apenas no resumo final. Deveria usar isso como argumento de venda ativo durante a conversa, enfatizando que o lead consegue adesão gratuita ao contratar pelo atendimento.
 
 ### Solução
 
 **Arquivo: `supabase/functions/agente-consultor-ia/index.ts`**
 
-#### 1. Remover menção à quantidade de planos (linhas 397-401)
-Substituir a instrução de dizer "Encontrei X opções" por algo genérico:
+#### 1. Adicionar seção de técnica de vendas no system prompt (após linha 411)
+Adicionar bloco de instrução de vendas:
+
 ```
-## REGRAS ABSOLUTAS SOBRE PREÇOS
-- NUNCA informe valores de planos na conversa
-- NUNCA liste planos com preços
-- NUNCA informe a QUANTIDADE de planos encontrados
-- Após calcular, diga apenas: "Vou preparar sua cotação personalizada com as melhores opções!"
-```
-
-#### 2. Remover pergunta sobre instalação do fluxo (linhas 407-410, 422, 442)
-- Remover a seção "SOBRE ADESÃO E INSTALAÇÃO" que manda perguntar rota/base
-- Remover o passo 9 do fluxo ("Pergunte sobre a instalação")
-- Remover `tipo_instalacao` dos dados obrigatórios
-- Remover `tipo_instalacao` do tool `registrar_cotacao`
-- O fluxo passa a ser: placa → confirmar → uso/região → calcular → vencimento → email → nome → registrar
-
-#### 3. Corrigir reinício de conversa (linhas 245-252, 566)
-O problema: quando a IA envia a resposta com as opções de vencimento, essa mensagem é salva. Quando o usuário responde "15", o webhook é acionado novamente. Se o histórico não inclui as mensagens anteriores corretamente (ex: mensagens de tool calls não são salvas), a IA perde o contexto.
-
-Investigar e corrigir: a condição `isPrimeiraMensagem` (linha 252) considera primeira mensagem quando `historico?.length === 0`. Se o histórico de 2h está vazio por algum motivo (ex: as mensagens foram salvas com telefone em formato diferente), a IA reinicia. A correção é garantir que `isPrimeiraMensagem` seja `false` quando há um contato existente com interações recentes, independente do histórico de mensagens:
-
-```typescript
-const isPrimeiraMensagem = !contatoExistente;
+## ARGUMENTO DE VENDA — ADESÃO GRATUITA
+- A adesão gratuita é seu PRINCIPAL argumento de venda
+- Mencione a adesão gratuita LOGO NO INÍCIO da conversa, junto com a apresentação
+- Enfatize que essa condição especial é exclusiva para quem contratar por este atendimento
+- Use frases como: "E tenho uma ótima notícia: consigo liberar a adesão TOTALMENTE GRATUITA pra você! 🎉"
+- Reforce o benefício ao longo da conversa quando apropriado (ex: antes de pedir email, ao enviar link)
+- Deixe claro que normalmente a adesão é cobrada e que essa é uma condição especial
 ```
 
-E manter o histórico formatado sendo enviado sempre que disponível (remover a condição `!isPrimeiraMensagem` da linha 566):
+#### 2. Ajustar apresentação inicial (linha 383-384)
+Adicionar instrução para incluir o argumento na saudação:
 
-```typescript
-const messages: any[] = [];
-if (historicoFormatado.length > 0) {
-  messages.push(...historicoFormatado);
-}
+```
+## APRESENTAÇÃO INICIAL
+Quando for a primeira mensagem do contato, use esta apresentação como base (adapte naturalmente):
+"${apresentacao}"
+IMPORTANTE: Na apresentação, já mencione que consegue oferecer ADESÃO GRATUITA como condição especial.
+```
+
+#### 3. Ajustar passo 7 do fluxo (linha 421)
+Após calcular a cotação, reforçar o benefício:
+
+```
+7. Diga algo como: "Vou preparar sua cotação personalizada com as melhores opções! E lembrando: a adesão sai GRATUITA pra você! 🎉"
 ```
 
 ### Arquivos alterados
