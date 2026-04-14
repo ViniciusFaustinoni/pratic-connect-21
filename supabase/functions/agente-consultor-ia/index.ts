@@ -1096,9 +1096,10 @@ async function executarConsultaPlaca(supabaseUrl: string, serviceKey: string, pl
 // TOOL: calcular_cotacao
 // ============================================================
 async function executarCalculoCotacao(supabase: any, args: any) {
-  const { valor_fipe, marca, modelo, ano, combustivel = "gasolina", regiao = "rj", uso_app = false } = args;
+  const { valor_fipe, marca, modelo, ano, regiao = "rj", uso_app = false } = args;
+  const combustivel = normalizeCombustivel(args.combustivel);
 
-  console.log(`[tool:calcular_cotacao] FIPE=${valor_fipe} regiao=${regiao} app=${uso_app} combustivel=${combustivel}`);
+  console.log(`[tool:calcular_cotacao] FIPE=${valor_fipe} regiao=${regiao} app=${uso_app} combustivel=${combustivel} (raw=${args.combustivel})`);
 
   const { data: planos, error: planosErr } = await supabase
     .from("planos")
