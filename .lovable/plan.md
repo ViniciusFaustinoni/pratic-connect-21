@@ -1,51 +1,22 @@
 
 
-## Plano: Vinicius responde pela Evolution, associado recebe numero Meta
+## Plano: Permitir que Evolution processe mensagens para o Agente Vinicius mesmo com Meta ativa
 
 ### Problema
-O agente Vinicius envia respostas via Meta API (porque `whatsapp_meta_config.ativo = true` e nao ha `force_provider`). O correto e:
-- **Vinicius (agente vendedor)** → responde pela **Evolution**
-- **Numero de atendimento para associados** → numero conectado na **Meta API** (suporte)
+O webhook ignora TODAS as mensagens da Evolution quando `whatsapp_meta_config.ativo = true` (linha 2865). Isso impede o agente Vinicius de funcionar, pois ele opera exclusivamente pela Evolution.
 
-### Alteracoes em `supabase/functions/agente-consultor-ia/index.ts`
+### Solucao
 
-**1. Forcar envio via Evolution**
+**Arquivo: `supabase/functions/whatsapp-webhook/index.ts`**
 
-Na funcao `enviarWhatsApp` (linha 1271), adicionar `force_provider: "evolution"`:
-```typescript
-body: JSON.stringify({ telefone, mensagem, allow_text: true, force_provider: "evolution" }),
-```
+Remover o bloqueio total na linha 2858-2868 e substituir por logica que permite o processamento de mensagens Evolution para o agente consultor:
 
-**2. Numero de atendimento = numero Meta API**
+1. **Remover o bloqueio**: eliminar o `if (metaConfig?.ativo === true) { return... }` que descarta todas as mensagens Evolution
+2. **Manter separacao de responsabilidades**: quando Meta esta ativa e a mensagem vem da Evolution, o webhook deve encaminhar para o `agente-consultor-ia` normalmente (fluxo de vendas/diretor/associado)
+3. **A Maya (IA de suporte) continua operando apenas via Meta** — esse bloqueio so fazia sentido para a Maya, nao para o Vinicius
 
-Alterar a busca do numero de atendimento (linhas 158-200). Em vez de buscar `whatsapp_instancias.telefone` (Evolution), buscar o `phone_number_id` da `whatsapp_meta_config` e fazer lookup via Graph API para obter o numero real, ou buscar diretamente na tabela se houver campo. Como nao ha `display_phone_number` na tabela, faremos lookup via Graph API:
-
-```typescript
-// Buscar numero de atendimento via Meta API (phone_number_id → display_phone_number)
-const { data: metaCfg } = await supabase
-  .from("whatsapp_meta_config")
-  .select("phone_number_id, access_token")
-  .eq("ativo", true)
-  .maybeSingle();
-
-if (metaCfg?.phone_number_id && metaCfg?.access_token) {
-  const resp = await fetch(
-    `https://graph.facebook.com/v21.0/${metaCfg.phone_number_id}?fields=display_phone_number`,
-    { headers: { Authorization: `Bearer ${metaCfg.access_token}` } }
-  );
-  const data = await resp.json();
-  if (data?.display_phone_number) {
-    numeroAtendimento = data.display_phone_number;
-  }
-}
-```
-
-Fallback mantido: se nao conseguir, usa "nosso numero principal de atendimento".
-
-### Resumo
-- `enviarWhatsApp` → `force_provider: "evolution"` (Vinicius responde pela Evolution)
-- Numero de atendimento para associados → busca via Meta Graph API (numero do suporte)
+A alteracao e pontual: substituir o return precoce por um log informativo e deixar o fluxo continuar para o agente consultor.
 
 ### Arquivo editado
-- `supabase/functions/agente-consultor-ia/index.ts`
+- `supabase/functions/whatsapp-webhook/index.ts` — remover bloqueio de mensagens Evolution quando Meta ativa
 
