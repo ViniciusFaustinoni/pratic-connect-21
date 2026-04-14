@@ -18,7 +18,7 @@ import { format } from 'date-fns';
 import { ptBR } from 'date-fns/locale';
 import {
   Bot, Settings, MessageSquare, Globe, Save, Eye, ExternalLink, Copy,
-  Users, Phone, Clock, Send, UserCheck, Loader2, Image as ImageIcon, RefreshCw
+  Users, Phone, Clock, Send, UserCheck, Loader2, Image as ImageIcon, RefreshCw, Sparkles
 } from 'lucide-react';
 
 // ─── Tab 1: Linhas de Produto do Agente ───────────────────────────────────
