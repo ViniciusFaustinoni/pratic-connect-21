@@ -1081,7 +1081,7 @@ async function executarConsultaPlaca(supabaseUrl: string, serviceKey: string, pl
     modelo: vd.modelo || data.modelo || null,
     ano_modelo: anoModelo,
     ano_texto: anoTexto,
-    combustivel: vd.combustivel || data.combustivel || "gasolina",
+    combustivel: normalizeCombustivel(vd.combustivel || data.combustivel),
     valor_fipe: fd.valor || data.valor_fipe || null,
     cor: vd.cor || data.cor || null,
   };
