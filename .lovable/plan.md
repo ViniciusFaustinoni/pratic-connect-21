@@ -1,16 +1,45 @@
 
 
-## Plano: Aumentar largura do modal e dropdowns de Edição de Linha de Produto
+## Plano: Corrigir datas de vencimento divergentes entre IA e Painel
 
-### Alterações
+### Causa raiz
 
-**1. `src/components/admin/planos/LinhaFormModal.tsx`** (linha 131)
-- Mudar `max-w-2xl` para `max-w-4xl` no `DialogContent`, dando mais espaço ao modal.
+O tool `obter_opcoes_vencimento` está **registrado no schema de ferramentas** (linha 537) e a função `executarObterOpcoesVencimento()` existe (linha 1324), mas **nunca é chamada no dispatch de ferramentas** (linhas 682-761). Quando a IA invoca a ferramenta, ela cai no `else` (linha 759-760) que retorna `"Ferramenta desconhecida"`. A IA então **inventa datas** em vez de usar as corretas.
 
-**2. `src/components/admin/planos/VeiculosAceitosEditor.tsx`** (linha 178)
-- Mudar o grid de `grid-cols-6` para um layout que dê mais espaço a Marca e Modelo. Usar `grid-cols-[2fr_2fr_1fr_1fr_1fr_auto]` para que Marca e Modelo ocupem o dobro de largura dos campos de ano/status.
-- Aumentar a altura dos SearchableSelect de `h-8` para `h-9` para melhor legibilidade.
+Resultado: WhatsApp mostra [10, 20] (alucinação) enquanto o painel mostra [15, 20] (correto para dia 14).
 
-### Resultado
-O modal ficará significativamente mais largo (~896px → ~1024px) e os campos Marca/Modelo terão proporcionalmente mais espaço, eliminando o texto truncado ("Sel...").
+### Correção
+
+**Arquivo: `supabase/functions/agente-consultor-ia/index.ts`**
+
+Adicionar o case `obter_opcoes_vencimento` no dispatch, entre `salvar_dados_cliente` e `gerar_relatorio` (após linha 756):
+
+```typescript
+} else if (fnName === "obter_opcoes_vencimento") {
+  toolResult = executarObterOpcoesVencimento();
+  if (toolResult.success) {
+    const novoEstado = {
+      ...(dadosCotacao || {}),
+      etapa: "aguardando_vencimento_resposta",
+      opcoes_vencimento: toolResult.opcoes,
+    };
+    await supabase.from("agente_ia_contatos")
+      .update({ dados_cotacao: novoEstado })
+      .eq("id", contato.id);
+    dadosCotacao = novoEstado;
+  }
+```
+
+Adicionar reforço no `toolContent` (após linha 770) para impedir alucinação:
+
+```typescript
+if (fnName === "obter_opcoes_vencimento" && toolResult?.success) {
+  toolContent = `⚠️ DATAS OFICIAIS DE VENCIMENTO - USE APENAS ESTAS, NÃO INVENTE:\n${toolContent}`;
+}
+```
+
+### Resultado esperado
+- A IA usará as datas calculadas corretamente (mesma lógica do painel)
+- As opções ficam persistidas em `dadosCotacao.opcoes_vencimento` para reforço no system prompt
+- A etapa muda para `aguardando_vencimento_resposta`, exibindo as datas corretas no próximo passo
 
