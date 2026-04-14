@@ -1169,6 +1169,7 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     modelo: modelo,
     tipoUso: uso_app ? "aplicativo" : "particular",
     combustivel: combustivel,
+    tipoPlaca: undefined as string | undefined, // normal vehicles have no special plate
   };
 
   const resultados: any[] = [];
