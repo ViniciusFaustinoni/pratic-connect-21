@@ -1,43 +1,30 @@
 
 
-## Plano: Atualizar domínio dos links para `app.praticcar.org`
+## Plano: Limpar historico de mensagens ao resetar contato IA
 
 ### Problema
-O link de cotação enviado pela IA usa `https://pratic-connect-21.lovable.app` em vez do domínio publicado `https://app.praticcar.org`. Isso acontece em **23 arquivos** de edge functions com URLs hardcoded.
+Quando a cotacao e excluida, o `delete-cotacao` reseta `status` e `dados_cotacao` em `agente_ia_contatos`. Porem, o agente carrega as ultimas 2h de mensagens da tabela `whatsapp_mensagens` (linha 200-209) como historico de conversa. O LLM ve toda a conversa anterior e continua de onde parou, ignorando o reset.
 
-### Correção
+### Correcao
 
-**Abordagem centralizada:**
+**Arquivo: `supabase/functions/agente-consultor-ia/index.ts`**
 
-1. **Criar uma constante compartilhada** em `supabase/functions/_shared/constants.ts`:
-   ```typescript
-   export const APP_BASE_URL = "https://app.praticcar.org";
-   ```
+Apos carregar o estado do contato (linha 220-221), verificar se `status === "novo"` e `dados_cotacao` e null. Se sim, ignorar o historico de mensagens carregado -- tratar como primeira mensagem, enviando array vazio ao LLM.
 
-2. **Atualizar os arquivos que usam o domínio hardcoded** — os principais:
+```typescript
+// Linha ~218, após historicoFormatado
+const foiResetado = contatoExistente && contato?.status === 'novo' && !contato?.dados_cotacao;
+const isPrimeiraMensagem = !contatoExistente || foiResetado;
 
-| Arquivo | Linha | Contexto |
-|---------|-------|----------|
-| `agente-consultor-ia/index.ts` | 1420 | Link da cotação enviada pela IA |
-| `analisar-evento/index.ts` | 176 | Link de evento |
-| `gerar-link-retirada/index.ts` | 56 | Link de retirada |
-| `gerar-link-vistoriador-prestador/index.ts` | 88 | Link vistoria prestador |
-| `aprovar-solicitacao-ia/index.ts` | 321 | Link de evento/sinistro |
-| `despacho-reboque-atribuir/index.ts` | 207 | Link acompanhamento reboque |
-| `despacho-reboque-disparar/index.ts` | 247 | Link app |
-| `cron-followup-reagendamento/index.ts` | 76 | Link reagendamento |
-| `autentique-webhook/index.ts` | 732 | Link pagamento |
-| `_shared/template-utils.ts` | 769 | Logo em templates HTML |
-| `autentique-os-saida-create/index.ts` | 222, 258 | Logo em templates |
-| `autentique-evento-create/index.ts` | 236, 272 | Logo em templates |
+// Se foi resetado, limpar histórico para o LLM não ter contexto antigo
+if (foiResetado) {
+  historicoFormatado.length = 0;
+  console.log(`[agente-consultor-ia] Contato resetado detectado, limpando histórico`);
+}
+```
 
-3. **Substituir** todas as ocorrências de `pratic-connect-21.lovable.app` por importação da constante ou diretamente por `app.praticcar.org`.
+Isso garante que, ao excluir uma cotacao e o lead enviar nova mensagem, o agente comeca do zero sem memoria da conversa anterior.
 
-4. **Deploy** de todas as edge functions afetadas.
-
-### Nota sobre logos
-Os templates HTML de documentos Autentique referenciam `https://pratic-connect-21.lovable.app/logos/logo-full-light.png`. Esses também serão atualizados para `https://app.praticcar.org/logos/logo-full-light.png` — desde que o logo exista no domínio customizado (que aponta para o mesmo deploy, então deve funcionar).
-
-### Prioridade imediata
-Se preferir uma correção rápida apenas no agente IA, posso alterar somente a linha 1420 do `agente-consultor-ia/index.ts` e fazer deploy. Os demais arquivos seriam atualizados em seguida.
+### Deploy
+Redeployar `agente-consultor-ia`.
 
