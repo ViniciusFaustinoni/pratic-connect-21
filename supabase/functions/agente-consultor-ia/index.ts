@@ -670,7 +670,6 @@ ${contato?.nome || "Não informado ainda"}`;
           try {
             if (fnName === "consultar_placa") {
               toolResult = await executarConsultaPlaca(supabaseUrl, serviceKey, args.placa);
-              // Persistir estado após consultar_placa
               if (toolResult.success) {
                 const novoEstado = {
                   ...(dadosCotacao || {}),
@@ -683,11 +682,11 @@ ${contato?.nome || "Não informado ainda"}`;
                   valor_fipe: toolResult.valor_fipe,
                 };
                 await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
-                console.log(`[agente-consultor-ia] Estado salvo: aguardando_confirmacao`);
+                dadosCotacao = novoEstado;
+                console.log(`[agente-consultor-ia] Estado salvo+sync: aguardando_confirmacao`);
               }
             } else if (fnName === "calcular_cotacao") {
               toolResult = await executarCalculoCotacao(supabase, args);
-              // Persistir estado após calcular_cotacao
               if (toolResult.success) {
                 const novoEstado = {
                   ...(dadosCotacao || {}),
@@ -697,35 +696,37 @@ ${contato?.nome || "Não informado ainda"}`;
                   planos_calculados: toolResult.planos,
                 };
                 await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
-                console.log(`[agente-consultor-ia] Estado salvo: aguardando_vencimento`);
-              }
-            } else if (fnName === "obter_opcoes_vencimento") {
-              toolResult = executarObterOpcoesVencimento();
-              // Persistir opções de vencimento
-              if (toolResult.success) {
-                const novoEstado = {
-                  ...(dadosCotacao || {}),
-                  etapa: "aguardando_vencimento_resposta",
-                  opcoes_vencimento: toolResult.opcoes,
-                };
-                await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
                 dadosCotacao = novoEstado;
-                console.log(`[agente-consultor-ia] Estado salvo: aguardando_vencimento_resposta, opcoes=${toolResult.opcoes}`);
+                console.log(`[agente-consultor-ia] Estado salvo+sync: aguardando_vencimento`);
               }
             } else if (fnName === "registrar_cotacao") {
-              toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, args, telLimpo, contato);
-              // Persistir estado final
+              // Merge args da IA com dadosCotacao persistido para não perder dados
+              const mergedArgs = { ...args };
+              if (dadosCotacao) {
+                if (!mergedArgs.placa && dadosCotacao.placa) mergedArgs.placa = dadosCotacao.placa;
+                if (!mergedArgs.marca && dadosCotacao.marca) mergedArgs.marca = dadosCotacao.marca;
+                if (!mergedArgs.modelo && dadosCotacao.modelo) mergedArgs.modelo = dadosCotacao.modelo;
+                if (!mergedArgs.ano && dadosCotacao.ano) mergedArgs.ano = dadosCotacao.ano;
+                if (!mergedArgs.combustivel && dadosCotacao.combustivel) mergedArgs.combustivel = dadosCotacao.combustivel;
+                if (!mergedArgs.valor_fipe && dadosCotacao.valor_fipe) mergedArgs.valor_fipe = dadosCotacao.valor_fipe;
+                if (!mergedArgs.regiao && dadosCotacao.regiao) mergedArgs.regiao = dadosCotacao.regiao;
+                if (!mergedArgs.nome_cliente && dadosCotacao.nome) mergedArgs.nome_cliente = dadosCotacao.nome;
+                if (!mergedArgs.email_cliente && dadosCotacao.email) mergedArgs.email_cliente = dadosCotacao.email;
+                if (!mergedArgs.planos_calculados && dadosCotacao.planos_calculados) mergedArgs.planos_calculados = dadosCotacao.planos_calculados;
+              }
+              toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, mergedArgs, telLimpo, contato);
               if (toolResult.success) {
                 const novoEstado = {
                   ...(dadosCotacao || {}),
                   etapa: "cotacao_enviada",
-                  dia_vencimento: args.dia_vencimento,
-                  email: args.email_cliente,
-                  nome: args.nome_cliente,
+                  dia_vencimento: mergedArgs.dia_vencimento,
+                  email: mergedArgs.email_cliente,
+                  nome: mergedArgs.nome_cliente,
                   cotacao_id: toolResult.cotacao_id,
                 };
-                await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
-                console.log(`[agente-consultor-ia] Estado salvo: cotacao_enviada`);
+                await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado, status: "cotacao_enviada" }).eq("id", contato.id);
+                dadosCotacao = novoEstado;
+                console.log(`[agente-consultor-ia] Estado salvo+sync: cotacao_enviada`);
               }
             } else if (fnName === "salvar_dados_cliente") {
               const novoEstado = {
