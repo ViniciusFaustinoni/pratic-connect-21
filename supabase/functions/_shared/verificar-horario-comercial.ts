@@ -8,10 +8,7 @@
  */
 export function getHoraBrasilia(): Date {
   const agora = new Date();
-  // UTC-3 para Brasília
-  const brasiliaOffset = -3 * 60;
-  const localOffset = agora.getTimezoneOffset();
-  return new Date(agora.getTime() + (localOffset - brasiliaOffset) * 60 * 1000);
+  return new Date(agora.getTime() - 3 * 60 * 60 * 1000);
 }
 
 /**
