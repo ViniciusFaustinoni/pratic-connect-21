@@ -1149,14 +1149,13 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     }
 
     valorMensal = Math.round(valorMensal * 100) / 100;
-    const valorAdesao = Number(plano.valor_adesao || 0);
 
     resultados.push({
       plano_id: plano.id,
       nome: plano.nome,
       linha: plano.product_lines?.name || plano.linha,
       valor_mensal: valorMensal,
-      valor_adesao: valorAdesao,
+      valor_adesao: 0, // Adesão sempre isenta
       cobertura_fipe: plano.cobertura_fipe || 100,
       destaque: plano.destaque || false,
     });
@@ -1172,12 +1171,12 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     };
   }
 
+  // NÃO retornar valores formatados — o agente NÃO deve mostrar preços na conversa
   return {
     success: true,
+    quantidade_planos: resultados.length,
     planos: resultados,
-    mensagem_formatada: resultados.map((p: any) =>
-      `*${p.nome}* (${p.linha})\n💰 R$ ${p.valor_mensal.toFixed(2)}/mês\n🏷️ Adesão: R$ ${p.valor_adesao.toFixed(2)}`
-    ).join("\n\n"),
+    instrucao: "IMPORTANTE: NÃO mostre valores ao cliente. Informe apenas a quantidade de planos encontrados e prossiga pedindo dia de vencimento, tipo de instalação, email e nome.",
   };
 }
 
