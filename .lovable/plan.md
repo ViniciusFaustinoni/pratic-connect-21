@@ -1,37 +1,83 @@
 
+Objetivo: corrigir a causa real da alucinação observada nos logs, para que a IA use os dados corretos da placa/FIPE.
 
-## Plano: Corrigir nome do agente e confiabilidade da consulta de placa
+Diagnóstico confirmado pelos últimos logs:
+- `whatsapp-webhook` recebeu `Ltb4j74` e encaminhou corretamente para o agente.
+- `agente-consultor-ia` chamou a tool `consultar_placa`.
+- `plate-lookup` retornou com sucesso os dados corretos:
+  - Marca: `Toyota`
+  - Modelo: `corolla Xei Flex`
+  - Ano: `2013/2014`
+  - FIPE: `72122`
+- Portanto, o problema não está na consulta da FIPE API.
+- O bug está no mapeamento dentro de `supabase/functions/agente-consultor-ia/index.ts`: a função `executarConsultaPlaca` espera campos no topo do JSON (`data.marca`, `data.modelo`, `data.valor_fipe`), mas a `plate-lookup` devolve os dados em:
+  - `data.vehicleData`
+  - `data.fipeData`
 
-### Problemas identificados
+Impacto do bug:
+- O tool result enviado ao modelo fica sem `marca`, `modelo`, `ano` e `valor_fipe` corretos.
+- Com o resultado incompleto, o modelo “preenche” sozinho e alucina veículo/FIPE.
 
-**1. Nome "Pratic" em vez de "Vinicius"**
-A tabela `agente_ia_config` tem `nome_agente = "Pratic"` e `apresentacao_inicial` diz "Sou a Pratic, consultora virtual". O codigo usa esses valores do banco como fonte primaria. Precisa atualizar os registros no banco.
+Implementação proposta:
+1. Corrigir `executarConsultaPlaca` para ler a resposta real da `plate-lookup`
+   - `marca` ← `data.vehicleData?.marca`
+   - `modelo` ← `data.vehicleData?.modelo`
+   - `ano` ← extrair ano-modelo numérico de `data.vehicleData?.ano`
+   - `combustivel` ← `data.vehicleData?.combustivel`
+   - `valor_fipe` ← `data.fipeData?.valor`
+   - `cor` ← `data.vehicleData?.cor`
+   - opcionalmente incluir `placa_consultada`, `marca_modelo`, `tipo_veiculo`
 
-**2. Veiculo errado (MARCOPOLO em vez de Toyota Corolla)**
-O `plate-lookup` retornou dados corretos (Toyota Corolla XEi 2014, R$ 72.122), mas o modelo de IA ignorou o resultado da tool e alucinounos dados do veiculo. Causa provavel: o system prompt nao enfatiza suficientemente que o agente DEVE usar exclusivamente os dados retornados pela ferramenta, sem inventar.
+2. Normalizar o retorno da tool para o modelo
+   - Entregar um objeto simples e explícito, por exemplo:
+     ```json
+     {
+       "success": true,
+       "placa": "LTB4J74",
+       "marca": "Toyota",
+       "modelo": "Corolla XEi Flex",
+       "ano_modelo": 2014,
+       "ano_texto": "2013/2014",
+       "combustivel": "Alcool / Gasolina",
+       "valor_fipe": 72122,
+       "cor": "Azul"
+     }
+     ```
+   - Isso reduz ambiguidade e diminui muito a chance de alucinação.
 
-### Solucao
+3. Reforçar a resposta da tool no prompt contextual
+   - Manter o aviso “DADOS OFICIAIS”.
+   - Complementar dizendo que, se algum campo vier ausente, a IA deve dizer que precisa confirmar manualmente, e não completar por conta própria.
 
-**1. Atualizar `agente_ia_config` no banco (migration)**
-```sql
-UPDATE agente_ia_config SET valor = 'Vinicius' WHERE chave = 'nome_agente';
-UPDATE agente_ia_config SET valor = 'Olá! Sou o Vinicius, consultor virtual da Praticcar Proteção Veicular. Estou aqui para te ajudar a encontrar a melhor proteção para o seu veículo. Posso começar fazendo uma cotação gratuita para você? Para isso, por favor, me informe a *placa* do seu veículo. 😊' WHERE chave = 'apresentacao_inicial';
-```
+4. Adicionar logs defensivos no `agente-consultor-ia`
+   - Logar o payload bruto resumido retornado por `plate-lookup`
+   - Logar o objeto normalizado final enviado ao modelo
+   - Isso permitirá validar rapidamente se o problema foi resolvido em produção.
 
-**2. Reforcar no system prompt (leads) anti-alucinacao**
-No prompt de vendas em `agente-consultor-ia/index.ts`, adicionar regra mais enfatica:
+5. Validar o cenário com a mesma placa do incidente
+   - Reexecutar o fluxo com `LTB4J74`
+   - Confirmar que a resposta menciona Toyota Corolla/FIPE correta e não outro veículo
 
-```
-## REGRA CRITICA SOBRE DADOS DO VEICULO
-- NUNCA invente ou adivinhe dados do veiculo (marca, modelo, ano, valor FIPE)
-- SOMENTE use os dados retornados pela ferramenta consultar_placa
-- Se a ferramenta retornar erro, peca os dados manualmente ao cliente
-- NUNCA "chute" baseado na placa — SEMPRE aguarde o resultado da ferramenta
-```
+Arquivos a ajustar:
+- `supabase/functions/agente-consultor-ia/index.ts`
 
-Tambem adicionar instrucao no tool result para reforcar: quando o tool result vier, incluir uma nota explicita tipo "DADOS OFICIAIS - USE APENAS ESTES DADOS".
+Detalhe técnico importante:
+- Hoje a `plate-lookup` retorna neste formato:
+  ```text
+  {
+    success: true,
+    extractedPlate,
+    vehicleData: { marca, modelo, ano, combustivel, cor, ... },
+    fipeData: { codigo, valor, mesReferencia }
+  }
+  ```
+- Mas `executarConsultaPlaca` está lendo como se fosse:
+  ```text
+  { marca, modelo, ano, combustivel, valor_fipe, cor }
+  ```
+- Essa incompatibilidade é a causa direta do erro visto no print e nos logs.
 
-### Arquivos alterados
-- Migration SQL para `agente_ia_config`
-- `supabase/functions/agente-consultor-ia/index.ts` — reforco anti-alucinacao no prompt e no retorno do tool
-
+Critério de sucesso:
+- Ao informar uma placa válida, a IA deve sempre responder usando exatamente os dados retornados por `plate-lookup`.
+- Se a consulta falhar, a IA deve pedir os dados manualmente.
+- A IA não deve mais citar veículo ou FIPE diferentes dos retornados pela API.
