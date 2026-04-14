@@ -1,43 +1,51 @@
 
 
-## Plano: Agente reconhecer associados e informar numero de atendimento
+## Plano: Vinicius responde pela Evolution, associado recebe numero Meta
 
 ### Problema
-Quando um associado (ativo, base antiga ou novo) entra em contato via WhatsApp, o agente "Vinicius" tenta iniciar fluxo de venda/cotacao. Deveria reconhecer que ja e associado e informar o numero correto de atendimento (conectado na Meta API).
+O agente Vinicius envia respostas via Meta API (porque `whatsapp_meta_config.ativo = true` e nao ha `force_provider`). O correto e:
+- **Vinicius (agente vendedor)** → responde pela **Evolution**
+- **Numero de atendimento para associados** → numero conectado na **Meta API** (suporte)
 
-### Alteracoes
+### Alteracoes em `supabase/functions/agente-consultor-ia/index.ts`
 
-**Edge Function `agente-consultor-ia/index.ts`**
+**1. Forcar envio via Evolution**
 
-Apos a deteccao de diretor (secao 4), adicionar deteccao de associado:
-
-1. **Buscar na tabela `associados`** usando `telLimpo` e variantes contra `telefone` e `whatsapp`
-2. Se encontrar, marcar `isAssociado = true` e guardar nome e status
-3. **Buscar numero de atendimento Meta**: consultar `whatsapp_meta_config` (ativo = true) para obter o `phone_number_id`, e complementar buscando o numero real do sender via `whatsapp-get-sender` (ownerJid da Evolution) ou formatar o phone_number_id da Meta
-4. **System prompt condicional para associados**: nao vender, nao fazer cotacao. Apenas:
-   - Reconhecer pelo nome: "Ola, [nome]! Sou o Vinicius da PRATICCAR"
-   - Informar que para atendimento, deve entrar em contato pelo numero conectado na Meta (numero de atendimento principal)
-   - Pode tirar duvidas simples sobre a associacao
-
-### Prioridade de deteccao
-```text
-telefone recebido
-  └─ e diretor? → fluxo diretoria
-  └─ e associado? → informar numero de atendimento (NAO vender)
-  └─ lead → fluxo de vendas/cotacao
+Na funcao `enviarWhatsApp` (linha 1271), adicionar `force_provider: "evolution"`:
+```typescript
+body: JSON.stringify({ telefone, mensagem, allow_text: true, force_provider: "evolution" }),
 ```
 
-### Detalhes tecnicos
+**2. Numero de atendimento = numero Meta API**
 
-A busca de associado usa:
-```sql
-SELECT nome, status, telefone, whatsapp FROM associados
-WHERE telefone IN (variantes) OR whatsapp IN (variantes)
-LIMIT 1
+Alterar a busca do numero de atendimento (linhas 158-200). Em vez de buscar `whatsapp_instancias.telefone` (Evolution), buscar o `phone_number_id` da `whatsapp_meta_config` e fazer lookup via Graph API para obter o numero real, ou buscar diretamente na tabela se houver campo. Como nao ha `display_phone_number` na tabela, faremos lookup via Graph API:
+
+```typescript
+// Buscar numero de atendimento via Meta API (phone_number_id → display_phone_number)
+const { data: metaCfg } = await supabase
+  .from("whatsapp_meta_config")
+  .select("phone_number_id, access_token")
+  .eq("ativo", true)
+  .maybeSingle();
+
+if (metaCfg?.phone_number_id && metaCfg?.access_token) {
+  const resp = await fetch(
+    `https://graph.facebook.com/v21.0/${metaCfg.phone_number_id}?fields=display_phone_number`,
+    { headers: { Authorization: `Bearer ${metaCfg.access_token}` } }
+  );
+  const data = await resp.json();
+  if (data?.display_phone_number) {
+    numeroAtendimento = data.display_phone_number;
+  }
+}
 ```
 
-Para obter o numero de atendimento, buscar na `whatsapp_meta_config` o `phone_number_id` e fazer lookup via Graph API (`GET /v21.0/{phone_number_id}`) para obter o `display_phone_number`, ou usar o numero da instancia Evolution (`whatsapp_instancias.telefone`). Fallback: buscar via `whatsapp-get-sender`.
+Fallback mantido: se nao conseguir, usa "nosso numero principal de atendimento".
 
-### Arquivos editados
-- `supabase/functions/agente-consultor-ia/index.ts` — adicionar deteccao de associado entre diretor e lead, system prompt especifico, busca do numero de atendimento
+### Resumo
+- `enviarWhatsApp` → `force_provider: "evolution"` (Vinicius responde pela Evolution)
+- Numero de atendimento para associados → busca via Meta Graph API (numero do suporte)
+
+### Arquivo editado
+- `supabase/functions/agente-consultor-ia/index.ts`
 
