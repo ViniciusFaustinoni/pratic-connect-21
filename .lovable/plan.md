@@ -1,58 +1,45 @@
 
 
-## Plano: Reformular Agente Consultor IA com Linhas de Produto, Cotacao por Placa e Registro de Cotacoes
+## Plano: Agente "Vinicius" com reconhecimento de diretores e envio de relatórios
 
 ### Contexto
-O agente consultor IA atualmente lista planos individuais com valores por cobertura. Precisa ser reformulado para:
-1. Trabalhar com **linhas de produto** (Select, Especial, Advanced, etc.) em vez de planos individuais
-2. Mostrar **valor do plano** (nao por cobertura)
-3. Perguntar a **placa** do veiculo para obter dados automaticamente (marca, modelo, ano, FIPE)
-4. Coletar dados adicionais (tipo uso, combustivel, regiao) para calcular o preco correto
-5. Gerar cotacao e registrar em `cotacoes_publicas` (visivel no painel do diretor)
-6. Enviar cotacao via WhatsApp
+O agente consultor IA precisa:
+1. Ter o nome padrão **"Vinicius"** (em vez de "Maya")
+2. **Reconhecer diretores** pelo telefone (cruzando com `profiles.telefone`/`profiles.whatsapp` + `user_roles.role = 'diretor'`)
+3. Quando um diretor entrar em contato, mudar o comportamento: em vez de fluxo de vendas, oferecer **relatórios do sistema** (dados da `view_dashboard_diretoria`, totais de cotações, leads, sinistros, associados, etc.)
 
-### Alteracoes
+### Alterações
 
-**1. Edge Function `agente-consultor-ia/index.ts` — Reformulacao completa**
+**1. Edge Function `agente-consultor-ia/index.ts`**
 
-- **Carregar linhas de produto** em vez de planos: buscar `product_lines` ativas com seus planos associados
-- **Adicionar tool calling** para que a IA execute acoes estruturadas:
-  - `consultar_placa`: chama `plate-lookup` internamente para obter marca, modelo, ano, FIPE
-  - `calcular_cotacao`: com os dados coletados (placa/FIPE, regiao, combustivel, tipo_uso), buscar `tabelas_preco_mensalidade` + `plano_preco_map` para calcular precos reais por plano (reutilizando a logica de `useCalcularCotacao`)
-  - `registrar_cotacao`: salvar em `cotacoes_publicas` e gerar link publico
-  - `enviar_cotacao_whatsapp`: envia mensagem formatada com os planos e precos via WhatsApp
-- **System prompt atualizado**: instruir a IA a perguntar placa primeiro, depois tipo de uso (particular/app), combustivel, regiao; nunca revelar valor por cobertura individual, apenas valor total do plano
-- **Fluxo conversacional**:
-  1. Saudacao + perguntar placa
-  2. Consultar placa → obter dados do veiculo
-  3. Perguntar: e app? combustivel? regiao?
-  4. Calcular precos de todos os planos disponiveis
-  5. Apresentar planos com valores mensais
-  6. Se interessado → registrar cotacao + enviar link
+- **Nome padrão**: alterar fallback de `"Maya"` para `"Vinicius"` (linha 87)
+- **Detectar diretor**: após buscar/criar contato, cruzar `telLimpo` contra `profiles.telefone` e `profiles.whatsapp` → buscar `user_roles` para verificar se é `diretor`
+- **System prompt condicional**: se for diretor, usar um prompt diferente que oferece relatórios do sistema em vez do fluxo de cotação
+- **Nova tool `gerar_relatorio`**: consulta `view_dashboard_diretoria` e tabelas relevantes (contagem de associados, cotações pendentes, sinistros abertos, leads do mês) e retorna texto formatado
+- **Fluxo para diretores**:
+  1. Reconhecer pelo nome do perfil: "Olá, [nome]! Sou o Vinicius. Como posso ajudar?"
+  2. Oferecer opções: relatório geral, cotações pendentes, status de sinistros, leads do mês
+  3. Usar tool `gerar_relatorio` para buscar dados reais e formatar resposta
 
-**2. Pagina de configuracao `AgenteConsultorIA.tsx` — Aba Planos → Aba Linhas**
+**2. Tool `gerar_relatorio` — dados disponíveis**
 
-- Alterar aba "Planos" para "Linhas de Produto"
-- Buscar `product_lines` em vez de `planos` individuais
-- Toggle `disponivel_agente` movido para nivel de linha (novo campo na tabela ou config)
-- Campo descricao para o agente por linha
+Consultas que o relatório pode fazer:
+- `view_dashboard_diretoria` → KPIs gerais (associados ativos, inadimplentes, receita, despesas, sinistros, leads, conversões)
+- `cotacoes_publicas` com status pendente → cotações aguardando
+- `associados` com filtros → totais por status
+- `leads` do mês → conversão e origem
 
-**3. Migracao SQL**
-
-- Adicionar campo `disponivel_agente` e `agente_descricao` na tabela `product_lines` (se nao existir)
-- Ou criar tabela `agente_ia_linhas_config` com `product_line_id`, `ativo`, `descricao`
+O diretor pode pedir relatórios específicos como "quantos leads tivemos este mês?" ou "me dê um resumo geral".
 
 ### Arquivos editados
-- `supabase/functions/agente-consultor-ia/index.ts` — reformulacao com tool calling, consulta de placa, calculo de preco, registro de cotacao
-- `src/pages/configuracoes/AgenteConsultorIA.tsx` — aba Linhas em vez de Planos
-- Migracao SQL para campos de configuracao do agente nas linhas de produto
+- `supabase/functions/agente-consultor-ia/index.ts` — nome Vinicius, detecção de diretor, tool `gerar_relatorio`, system prompt condicional
 
-### Detalhes tecnicos
+### Detalhes técnicos
 
-O calculo de preco no edge function replica a logica de `useCalcularCotacao.ts`:
-- Busca `tabelas_preco_mensalidade` filtrada por `linha_slug`, `regiao`, `tipo_uso`, `combustivel_tipo`, e faixa FIPE
-- Aplica `adicional_mensal` do plano e `adicional_app` quando aplicavel
-- Calcula adesao como percentual da FIPE (config `taxa_adesao_percentual_fipe`)
+A detecção de diretor usa:
+```sql
+profiles (telefone ou whatsapp = telLimpo) → user_id → user_roles (role = 'diretor')
+```
 
-A cotacao e salva em `cotacoes_publicas` com `origem = 'agente_ia'` para rastreabilidade no painel do diretor.
+O system prompt para diretores instrui o agente a nunca executar fluxo de vendas e a oferecer proativamente dados do sistema. As tools de cotação continuam disponíveis apenas no prompt de vendas (leads normais).
 
