@@ -249,7 +249,7 @@ Deno.serve(async (req) => {
         content: m.mensagem,
       }));
 
-    const isPrimeiraMensagem = !contatoExistente || historico?.length === 0;
+    const isPrimeiraMensagem = !contatoExistente;
 
     // ---- 7. MONTAR SYSTEM PROMPT + TOOLS (condicional) ----
     let systemPrompt: string;
@@ -398,7 +398,8 @@ ${linhasTexto}
 - NUNCA informe valores de planos na conversa
 - NUNCA liste planos com preços — os detalhes estarão no link da cotação
 - NUNCA invente preços ou valores
-- Após calcular, diga apenas: "Encontrei X opções de plano para o seu veículo! Vou preparar sua cotação personalizada."
+- NUNCA informe a QUANTIDADE de planos encontrados
+- Após calcular, diga apenas: "Vou preparar sua cotação personalizada com as melhores opções!"
 
 ## SOBRE O TELEFONE
 - Você JÁ TEM o telefone do cliente (é o número pelo qual está conversando)
@@ -406,8 +407,8 @@ ${linhasTexto}
 
 ## SOBRE ADESÃO E INSTALAÇÃO
 - A adesão é sempre ISENTA (R$ 0,00)
-- A instalação do rastreador fica à escolha do cliente (rota ou base)
-- Pergunte: "Para a instalação do rastreador, prefere que vá até você (rota) ou prefere ir até uma de nossas bases?"
+- A instalação do rastreador será escolhida pelo cliente no link da cotação
+- NÃO pergunte sobre tipo de instalação (rota/base) na conversa
 
 ## FLUXO DE COTAÇÃO (OBRIGATÓRIO)
 Siga exatamente esta sequência:
@@ -417,12 +418,11 @@ Siga exatamente esta sequência:
 4. Pergunte: "O veículo é usado para aplicativo (Uber, 99, etc.)?"
 5. Pergunte a REGIÃO (estado/cidade)
 6. Use a ferramenta calcular_cotacao (internamente — NÃO mostre valores ao cliente)
-7. Informe quantos planos foram encontrados SEM mostrar valores
+7. Diga apenas: "Vou preparar sua cotação personalizada com as melhores opções!"
 8. Use a ferramenta obter_opcoes_vencimento e pergunte a melhor DATA DE VENCIMENTO oferecendo as opções
-9. Pergunte sobre a instalação do rastreador (rota ou base)
-10. Pergunte o EMAIL do cliente (para receber a cotação)
-11. Pergunte o NOME COMPLETO do cliente
-12. Registre a cotação com a ferramenta registrar_cotacao e envie o link
+9. Pergunte o EMAIL do cliente (para receber a cotação)
+10. Pergunte o NOME COMPLETO do cliente
+11. Registre a cotação com a ferramenta registrar_cotacao e envie o link
 
 ## APÓS ENVIO DO LINK
 - Após enviar o link da cotação, aguarde e envie um resumo contendo:
@@ -439,7 +439,6 @@ Siga exatamente esta sequência:
 - Dia de vencimento (obtido via ferramenta)
 - Email do cliente
 - Nome completo do cliente
-- Tipo de instalação (rota ou base)
 
 ## REGRAS DE COMPORTAMENTO
 - Seja cordial e profissional
@@ -535,7 +534,6 @@ ${contato?.nome || "Não informado ainda"}`;
                 valor_fipe: { type: "number", description: "Valor FIPE" },
                 regiao: { type: "string", description: "Região" },
                 dia_vencimento: { type: "number", description: "Dia do mês para vencimento das mensalidades" },
-                tipo_instalacao: { type: "string", description: "Tipo de instalação do rastreador: rota ou base" },
                 planos_calculados: {
                   type: "array",
                   items: {
@@ -563,7 +561,7 @@ ${contato?.nome || "Não informado ainda"}`;
     }
 
     const messages: any[] = [];
-    if (historicoFormatado.length > 0 && !isPrimeiraMensagem) {
+    if (historicoFormatado.length > 0) {
       messages.push(...historicoFormatado);
     }
 
