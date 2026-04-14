@@ -188,6 +188,9 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
   
   if (cotacao.status === 'rascunho' && !temContratacaoAtiva && !cotacao.contrato) return null;
   
+  // PRIORIDADE 0: Se contrato pendente de assinatura, mostrar etapa de assinatura
+  if (contratoStatus === 'pendente_assinatura') return 'assinando_contrato';
+  
   // PRIORIDADE 1: Status do associado APENAS para etapas finais (pós-vistoria)
   if (associadoStatus === 'ativo' && contratoStatus && ['assinado', 'ativo'].includes(contratoStatus)) return 'associado_ativo';
   if (associadoStatus === 'em_analise') return 'em_analise';
@@ -237,7 +240,12 @@ const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null => {
     return 'realizando_pagamento';
   }
   
-  if (statusContratacao === 'contrato_assinado' || statusContratacao === 'contrato_gerado') {
+  if (statusContratacao === 'contrato_gerado') {
+    if (!contratoStatus || contratoStatus === 'pendente_assinatura') return 'assinando_contrato';
+    if (adesaoPaga === false) return 'realizando_pagamento';
+    return 'vistoria_agendada';
+  }
+  if (statusContratacao === 'contrato_assinado') {
     if (adesaoPaga === false) return 'realizando_pagamento';
     return 'vistoria_agendada';
   }
