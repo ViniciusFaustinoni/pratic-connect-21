@@ -643,6 +643,8 @@ ${contato?.nome || "Não informado ainda"}`;
               toolResult = await executarConsultaPlaca(supabaseUrl, serviceKey, args.placa);
             } else if (fnName === "calcular_cotacao") {
               toolResult = await executarCalculoCotacao(supabase, args);
+            } else if (fnName === "obter_opcoes_vencimento") {
+              toolResult = executarObterOpcoesVencimento();
             } else if (fnName === "registrar_cotacao") {
               toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, args, telLimpo, contato);
             } else if (fnName === "gerar_relatorio") {
