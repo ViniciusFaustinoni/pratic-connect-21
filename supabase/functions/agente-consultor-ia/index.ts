@@ -1219,14 +1219,25 @@ async function executarCalculoCotacao(supabase: any, args: any) {
 
     valorMensal = Math.round(valorMensal * 100) / 100;
 
+    // Montar lista de nomes de coberturas e benefícios para exibição pública
+    const coberturasNomes = coberturasDoPlano
+      .map((pc: any) => pc.coberturas?.nome)
+      .filter(Boolean);
+    const beneficiosNomes = beneficiosDoPlano
+      .map((pb: any) => pb.benefits?.name)
+      .filter(Boolean);
+
     resultados.push({
       plano_id: plano.id,
       nome: plano.nome,
+      codigo: plano.codigo || null,
       linha: plano.product_lines?.name || plano.linha,
+      nivel: plano.nivel || null,
       valor_mensal: valorMensal,
       valor_adesao: 0,
       cobertura_fipe: plano.cobertura_fipe || 100,
       destaque: plano.destaque || false,
+      coberturas: [...coberturasNomes, ...beneficiosNomes],
     });
   }
 
