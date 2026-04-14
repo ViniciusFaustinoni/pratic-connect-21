@@ -191,7 +191,7 @@ export const getEtapaVenda = (cotacao: CotacaoWithRelations): EtapaVenda | null 
   if (cotacao.status === 'rascunho' && !temContratacaoAtiva && !cotacao.contrato) return null;
   
   // PRIORIDADE 1: Status do associado APENAS para etapas finais (pós-vistoria)
-  if (associadoStatus === 'ativo') return 'associado_ativo';
+  if (associadoStatus === 'ativo' && contratoStatus && ['assinado', 'ativo'].includes(contratoStatus)) return 'associado_ativo';
   if (associadoStatus === 'em_analise') return 'em_analise';
   
   // PRIORIDADE 2: Verificar vistoria em andamento/concluída
