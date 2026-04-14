@@ -1,44 +1,31 @@
 
 
-## Plano: Reforçar adesão gratuita como argumento de venda no Agente Consultor IA
+## Plano: Sincronizar badges com etapas reais do fluxo de contratação
 
 ### Problema
-A IA menciona a adesão isenta apenas no resumo final. Deveria usar isso como argumento de venda ativo durante a conversa, enfatizando que o lead consegue adesão gratuita ao contratar pelo atendimento.
+A cotação de Adriano Rodrigues Fernandes está na etapa de assinatura (contrato existe com status `visualizado`), mas o badge mostra "Escolha de Vistoria". Isso acontece porque:
+
+1. O contrato foi criado com status `pendente_assinatura`
+2. Quando o cliente abriu o documento no Autentique, o webhook atualizou o status para `visualizado`
+3. A lógica de badge só reconhece `pendente_assinatura` como etapa de assinatura (linha 194), ignorando `visualizado` e `enviado`
+4. Como `contratoStatus === 'visualizado'` não é capturado, o fluxo cai no `status_contratacao === 'documentos_ok'` (linha 254), que retorna `'escolha_vistoria'`
 
 ### Solução
 
-**Arquivo: `supabase/functions/agente-consultor-ia/index.ts`**
+**Arquivos: `src/components/cotacoes/CotacoesTable.tsx` e `src/components/cotacoes/CotacaoCard.tsx`**
 
-#### 1. Adicionar seção de técnica de vendas no system prompt (após linha 411)
-Adicionar bloco de instrução de vendas:
+Na função `getEtapaVenda`, expandir a verificação da PRIORIDADE 0 (linha 194 em ambos os arquivos):
 
-```
-## ARGUMENTO DE VENDA — ADESÃO GRATUITA
-- A adesão gratuita é seu PRINCIPAL argumento de venda
-- Mencione a adesão gratuita LOGO NO INÍCIO da conversa, junto com a apresentação
-- Enfatize que essa condição especial é exclusiva para quem contratar por este atendimento
-- Use frases como: "E tenho uma ótima notícia: consigo liberar a adesão TOTALMENTE GRATUITA pra você! 🎉"
-- Reforce o benefício ao longo da conversa quando apropriado (ex: antes de pedir email, ao enviar link)
-- Deixe claro que normalmente a adesão é cobrada e que essa é uma condição especial
+```typescript
+// PRIORIDADE 0: Se contrato em fase de assinatura (pendente, enviado ou visualizado)
+if (contratoStatus && ['pendente_assinatura', 'enviado', 'visualizado'].includes(contratoStatus)) {
+  return 'assinando_contrato';
+}
 ```
 
-#### 2. Ajustar apresentação inicial (linha 383-384)
-Adicionar instrução para incluir o argumento na saudação:
-
-```
-## APRESENTAÇÃO INICIAL
-Quando for a primeira mensagem do contato, use esta apresentação como base (adapte naturalmente):
-"${apresentacao}"
-IMPORTANTE: Na apresentação, já mencione que consegue oferecer ADESÃO GRATUITA como condição especial.
-```
-
-#### 3. Ajustar passo 7 do fluxo (linha 421)
-Após calcular a cotação, reforçar o benefício:
-
-```
-7. Diga algo como: "Vou preparar sua cotação personalizada com as melhores opções! E lembrando: a adesão sai GRATUITA pra você! 🎉"
-```
+Isso garante que qualquer contrato que ainda não foi assinado (independente de ter sido enviado, visualizado ou estar pendente) mostre o badge correto "Assinando Contrato".
 
 ### Arquivos alterados
-- `supabase/functions/agente-consultor-ia/index.ts` (deploy necessário)
+- `src/components/cotacoes/CotacoesTable.tsx` (linha 194)
+- `src/components/cotacoes/CotacaoCard.tsx` (linha 192)
 
