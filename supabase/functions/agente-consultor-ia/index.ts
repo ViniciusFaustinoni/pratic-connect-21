@@ -754,6 +754,18 @@ ${contato?.nome || "Não informado ainda"}`;
               dadosCotacao = novoEstado;
               console.log(`[agente-consultor-ia] Estado salvo: dados_cliente_coletados (nome=${args.nome_cliente}, email=${args.email_cliente})`);
               toolResult = { success: true, instrucao: "Dados do cliente salvos com sucesso. Agora CHAME obter_opcoes_vencimento para oferecer as datas de vencimento disponíveis." };
+            } else if (fnName === "obter_opcoes_vencimento") {
+              toolResult = executarObterOpcoesVencimento();
+              if (toolResult.success) {
+                const novoEstado = {
+                  ...(dadosCotacao || {}),
+                  etapa: "aguardando_vencimento_resposta",
+                  opcoes_vencimento: toolResult.opcoes,
+                };
+                await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
+                dadosCotacao = novoEstado;
+                console.log(`[agente-consultor-ia] Estado salvo: aguardando_vencimento_resposta, opcoes=${JSON.stringify(toolResult.opcoes)}`);
+              }
             } else if (fnName === "gerar_relatorio") {
               toolResult = await executarGerarRelatorio(supabase, args);
             } else {
@@ -768,6 +780,9 @@ ${contato?.nome || "Não informado ainda"}`;
           let toolContent = JSON.stringify(toolResult);
           if (fnName === "consultar_placa" && toolResult && !toolResult.error) {
             toolContent = `⚠️ DADOS OFICIAIS DA CONSULTA DE PLACA - USE APENAS ESTES DADOS, NÃO INVENTE:\n${toolContent}`;
+          }
+          if (fnName === "obter_opcoes_vencimento" && toolResult?.success) {
+            toolContent = `⚠️ DATAS OFICIAIS DE VENCIMENTO - USE APENAS ESTAS, NÃO INVENTE:\n${toolContent}`;
           }
 
           currentMessages.push({
