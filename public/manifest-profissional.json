@@ -3,7 +3,7 @@
   "short_name": "PRATIC Pro",
   "description": "App para instaladores e vistoriadores PRATIC. Gerencie suas tarefas, rotas e instalações.",
   "start_url": "/instalador",
-  "scope": "/",
+  "scope": "/instalador/",
   "display": "standalone",
   "orientation": "portrait",
   "background_color": "#1e293b",

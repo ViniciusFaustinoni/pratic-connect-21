@@ -36,7 +36,7 @@ export default defineConfig(({ mode }) => ({
         skipWaiting: true,
         clientsClaim: true,
         navigateFallback: '/index.html',
-        navigateFallbackAllowlist: [/^\/instalador/, /^\/app/],
+        navigateFallbackAllowlist: [/^\/instalador/, /^\/app/, /^\/cotacao/, /^\/acompanhar/],
         // Importar handler de push notifications
         importScripts: ['/sw-push.js'],
         runtimeCaching: [
