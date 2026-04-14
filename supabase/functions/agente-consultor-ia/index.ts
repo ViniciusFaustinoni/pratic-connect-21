@@ -739,11 +739,12 @@ ${contato?.nome || "Não informado ainda"}`;
               if (toolResult.success) {
                 const novoEstado = {
                   ...(dadosCotacao || {}),
-                  etapa: "aguardando_vencimento",
+                  etapa: "aguardando_vencimento_resposta",
                   opcoes_vencimento: toolResult.opcoes,
                 };
                 await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
-                console.log(`[agente-consultor-ia] Estado salvo: opcoes_vencimento=${toolResult.opcoes}`);
+                dadosCotacao = novoEstado;
+                console.log(`[agente-consultor-ia] Estado salvo: aguardando_vencimento_resposta, opcoes=${toolResult.opcoes}`);
               }
             } else if (fnName === "registrar_cotacao") {
               toolResult = await executarRegistroCotacao(supabase, supabaseUrl, serviceKey, args, telLimpo, contato);
