@@ -1129,10 +1129,28 @@ async function executarCalculoCotacao(supabase: any, args: any) {
     .select("plano_id, benefit_id, benefits:benefit_id (name, preco_sugerido)")
     .in("plano_id", planoIds);
 
-  const { data: allRules } = await supabase
-    .from("entity_eligibility_rules")
-    .select("*")
-    .eq("is_active", true);
+  // Paginated fetch to handle 7000+ rules (Supabase default limit = 1000)
+  let allRules: any[] = [];
+  {
+    const PAGE_SIZE = 1000;
+    let offset = 0;
+    let hasMore = true;
+    while (hasMore) {
+      const { data: page, error: pageErr } = await supabase
+        .from("entity_eligibility_rules")
+        .select("*")
+        .eq("is_active", true)
+        .range(offset, offset + PAGE_SIZE - 1);
+      if (pageErr || !page || page.length === 0) {
+        hasMore = false;
+      } else {
+        allRules = allRules.concat(page);
+        offset += PAGE_SIZE;
+        if (page.length < PAGE_SIZE) hasMore = false;
+      }
+    }
+    console.log(`[tool:calcular_cotacao] Total regras de elegibilidade carregadas: ${allRules.length}`);
+  }
 
   const { data: regioes } = await supabase.from("regioes").select("id, codigo, nome").eq("ativa", true);
   const regiaoSlug = regiao.toLowerCase();
