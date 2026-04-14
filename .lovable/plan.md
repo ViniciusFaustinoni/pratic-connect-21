@@ -1,102 +1,84 @@
 
 
-## Plano: Corrigir fluxo de cotação do Agente Consultor IA — datas e perda de contexto
+## Plano: Corrigir loop de perguntas e garantir geração da cotação
 
-### Diagnóstico raiz
+### Problema
+A IA entra em loop pedindo email, nome e vencimento repetidamente ao invés de chamar `registrar_cotacao`. Causas:
+1. Quando o cliente fornece email/nome em texto, não há tool call, então o estado NÃO é atualizado — a IA "esquece" que já coletou
+2. A ordem do fluxo no prompt (vencimento → email → nome) conflita com o que a IA faz naturalmente
+3. Não há instrução forte para chamar `registrar_cotacao` quando todos os dados estão disponíveis
 
-O histórico de conversa é carregado da tabela `whatsapp_mensagens` (linhas 237-243), que contém apenas texto das mensagens. **As tool calls (consultar_placa, calcular_cotacao, obter_opcoes_vencimento) e seus resultados NÃO são persistidos.** Quando o lead envia a próxima mensagem (ex: "15" para vencimento), a IA vê o texto da conversa mas não sabe que já calculou a cotação, quais planos foram encontrados, nem em qual passo do fluxo está. Resultado: a IA reinicia a conversa.
-
-Para as datas: a ferramenta `obter_opcoes_vencimento` retorna corretamente 2 opções, mas a IA pode ignorá-la e oferecer todas as datas por conta própria, pois não há reforço suficiente no prompt.
-
-Além disso, a `instrucao` retornada por `calcular_cotacao` (linha 1186) ainda menciona "tipo de instalação".
-
-### Solução: Persistir estado do fluxo no contato
+### Solução
 
 **Arquivo: `supabase/functions/agente-consultor-ia/index.ts`**
 
-#### 1. Migração: adicionar campo `dados_cotacao` na tabela `agente_ia_contatos`
+#### 1. Adicionar tool `salvar_dados_cliente` para persistir email/nome
 
-```sql
-ALTER TABLE agente_ia_contatos 
-ADD COLUMN IF NOT EXISTS dados_cotacao JSONB DEFAULT NULL;
-```
+Nova ferramenta que a IA chama assim que o cliente informa email e nome:
 
-Esse campo armazenará o estado acumulado do fluxo:
-```json
+```typescript
 {
-  "etapa": "aguardando_vencimento",
-  "placa": "ABC1D23",
-  "marca": "Toyota",
-  "modelo": "Corolla",
-  "ano": 2014,
-  "combustivel": "flex",
-  "valor_fipe": 65000,
-  "regiao": "rj",
-  "uso_app": false,
-  "planos_calculados": [...],
-  "dia_vencimento": null,
-  "email": null,
-  "nome": null
+  name: "salvar_dados_cliente",
+  description: "Salva o nome e email do cliente. CHAME IMEDIATAMENTE após o cliente informar email e nome.",
+  parameters: {
+    properties: {
+      nome_cliente: { type: "string" },
+      email_cliente: { type: "string" },
+    },
+    required: ["nome_cliente", "email_cliente"],
+  },
 }
 ```
 
-#### 2. Persistir estado após cada tool call
+Ao executar, atualiza `dados_cotacao` com email, nome e etapa `"aguardando_vencimento"`.
 
-Cada ferramenta salva os dados coletados no campo `dados_cotacao`:
+#### 2. Reordenar o fluxo no prompt (linhas 426-437)
 
-- **consultar_placa** → salva placa, marca, modelo, ano, combustível, valor_fipe + etapa `"aguardando_confirmacao"`
-- **calcular_cotacao** → salva região, uso_app, planos_calculados + etapa `"aguardando_vencimento"`
-- **obter_opcoes_vencimento** → salva opcoes + etapa `"aguardando_vencimento_resposta"`
-- **registrar_cotacao** → salva tudo + etapa `"cotacao_enviada"`
-
-#### 3. Injetar estado no system prompt
-
-Após carregar o contato e antes de montar o prompt, ler `contato.dados_cotacao` e adicionar uma seção ao system prompt:
-
+Nova ordem alinhada com o que o usuário pediu:
 ```
-## ESTADO ATUAL DO FLUXO
-Você JÁ está no meio de uma cotação. Dados coletados até agora:
-- Placa: ABC1D23
-- Veículo: Toyota Corolla 2014 Flex
-- Valor FIPE: R$ 65.000
-- Região: RJ
-- Planos calculados: 4 opções
-- ETAPA ATUAL: aguardando_vencimento
-- PRÓXIMO PASSO: Pergunte a data de vencimento (opções: dia 20 ou dia 25)
-NÃO reinicie a conversa. Continue de onde parou.
+7. Peça o EMAIL e o NOME COMPLETO do cliente
+8. CHAME a ferramenta salvar_dados_cliente com os dados informados
+9. Use obter_opcoes_vencimento e ofereça APENAS as duas datas retornadas
+10. Após o cliente escolher, CHAME registrar_cotacao IMEDIATAMENTE e envie o link
 ```
 
-#### 4. Reforçar uso da ferramenta de vencimento
+#### 3. Reforçar chamada de `registrar_cotacao` no prompt
 
-No prompt (linha 431), adicionar:
+Adicionar regra explícita:
 ```
-8. Use a ferramenta obter_opcoes_vencimento e ofereça APENAS as duas datas retornadas pela ferramenta. 
-   NÃO invente datas. NÃO ofereça outras opções além das retornadas.
-```
-
-Na resposta da tool `obter_opcoes_vencimento`, reforçar:
-```
-"instrucao": "Ofereça APENAS estas duas opções ao cliente: dia X ou dia Y. NÃO ofereça nenhuma outra data."
+## REGRA CRÍTICA — GERAR COTAÇÃO
+Quando você JÁ tem: placa, veículo, região, uso_app, email, nome e dia de vencimento, 
+CHAME registrar_cotacao IMEDIATAMENTE. NÃO faça mais perguntas. NÃO repita dados já coletados.
 ```
 
-#### 5. Corrigir instrução residual em `calcular_cotacao`
+#### 4. Atualizar instruções por etapa (linhas 501-508)
 
-Linha 1186 — remover menção a "tipo de instalação":
+Ajustar para a nova ordem e adicionar a etapa `"aguardando_vencimento_resposta"`:
 ```typescript
-instrucao: "IMPORTANTE: NÃO mostre valores ao cliente. Prossiga pedindo dia de vencimento, email e nome."
+"aguardando_vencimento": "Pergunte o vencimento. Ofereça APENAS as 2 datas das opcoes_vencimento.",
+"aguardando_vencimento_resposta": "O cliente deve escolher uma data. Após escolher, CHAME registrar_cotacao IMEDIATAMENTE.",
+"dados_cliente_coletados": "Pergunte a data de vencimento usando obter_opcoes_vencimento.",
+"cotacao_enviada": "A cotação JÁ foi enviada. Esteja disponível para dúvidas.",
 ```
 
-#### 6. Corrigir mensagem de resumo em `registrar_cotacao`
+#### 5. Handler da nova tool `salvar_dados_cliente`
 
-Linhas 1293-1300 — remover a linha de "Instalação" do resumo, já que não é mais perguntado na conversa.
+```typescript
+} else if (fnName === "salvar_dados_cliente") {
+  const novoEstado = {
+    ...(dadosCotacao || {}),
+    etapa: "dados_cliente_coletados",
+    email: args.email_cliente,
+    nome: args.nome_cliente,
+  };
+  await supabase.from("agente_ia_contatos").update({ dados_cotacao: novoEstado }).eq("id", contato.id);
+  toolResult = { success: true, mensagem: "Dados salvos. Agora pergunte o dia de vencimento usando obter_opcoes_vencimento." };
+}
+```
 
-### Resumo das alterações
-
-1. **Migração SQL**: Adicionar coluna `dados_cotacao JSONB` em `agente_ia_contatos`
-2. **Edge Function** (`agente-consultor-ia/index.ts`):
-   - Persistir estado do fluxo após cada tool call
-   - Injetar estado no system prompt para manter contexto
-   - Reforçar uso exclusivo das 2 datas da ferramenta
-   - Remover menções residuais a "tipo de instalação"
-   - Remover linha de instalação do resumo
+### Resumo
+1. Nova tool `salvar_dados_cliente` para persistir email/nome
+2. Reordenar fluxo: email+nome → vencimento → registrar_cotacao
+3. Regra explícita para chamar `registrar_cotacao` sem hesitar
+4. Deploy da Edge Function
 
