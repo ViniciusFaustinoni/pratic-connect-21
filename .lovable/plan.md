@@ -1,45 +1,60 @@
 
 
-## Plano: Corrigir datas de vencimento divergentes entre IA e Painel
+## Plano: Corrigir reset do contato IA após exclusão de cotação
+
+### Problema
+Ao excluir uma cotação, a IA continua a conversa anterior em vez de reiniciar o fluxo. O screenshot mostra a IA retomando de onde parou (perguntando dia 10 ou 20 com datas erradas).
 
 ### Causa raiz
+O `delete-cotacao` (linha 302-308) faz reset do contato usando `.eq('telefone', telefoneNormalizado)`, mas há um **mismatch de formato de telefone**:
 
-O tool `obter_opcoes_vencimento` está **registrado no schema de ferramentas** (linha 537) e a função `executarObterOpcoesVencimento()` existe (linha 1324), mas **nunca é chamada no dispatch de ferramentas** (linhas 682-761). Quando a IA invoca a ferramenta, ela cai no `else` (linha 759-760) que retorna `"Ferramenta desconhecida"`. A IA então **inventa datas** em vez de usar as corretas.
+- `agente_ia_contatos.telefone` armazena `telLimpo` que pode ser `"21999999999"` (sem DDI) ou `"5521999999999"` (com DDI)
+- `cotacao.telefone1_solicitante` pode estar em formato diferente
+- Se os formatos não coincidem, o `UPDATE` não encontra o registro e o reset **falha silenciosamente**
 
-Resultado: WhatsApp mostra [10, 20] (alucinação) enquanto o painel mostra [15, 20] (correto para dia 14).
+Além disso, mesmo quando o telefone coincide, o histórico de mensagens WhatsApp anterior ao reset pode "vazar" se o `limiteHistorico` (linha 205-207) não filtrar corretamente as mensagens enviadas pela própria IA segundos antes da exclusão.
 
-### Correção
+### Correções
 
-**Arquivo: `supabase/functions/agente-consultor-ia/index.ts`**
-
-Adicionar o case `obter_opcoes_vencimento` no dispatch, entre `salvar_dados_cliente` e `gerar_relatorio` (após linha 756):
-
-```typescript
-} else if (fnName === "obter_opcoes_vencimento") {
-  toolResult = executarObterOpcoesVencimento();
-  if (toolResult.success) {
-    const novoEstado = {
-      ...(dadosCotacao || {}),
-      etapa: "aguardando_vencimento_resposta",
-      opcoes_vencimento: toolResult.opcoes,
-    };
-    await supabase.from("agente_ia_contatos")
-      .update({ dados_cotacao: novoEstado })
-      .eq("id", contato.id);
-    dadosCotacao = novoEstado;
-  }
-```
-
-Adicionar reforço no `toolContent` (após linha 770) para impedir alucinação:
+**1. `supabase/functions/delete-cotacao/index.ts` (linhas 302-309)**
+Buscar o contato usando TODAS as variantes do telefone (com e sem DDI 55), garantindo o match:
 
 ```typescript
-if (fnName === "obter_opcoes_vencimento" && toolResult?.success) {
-  toolContent = `⚠️ DATAS OFICIAIS DE VENCIMENTO - USE APENAS ESTAS, NÃO INVENTE:\n${toolContent}`;
+const telefoneNormalizado = cotacao.telefone1_solicitante.replace(/\D/g, '');
+const agora = new Date().toISOString();
+
+// Tentar ambas as variantes: com e sem DDI
+const variantes = [telefoneNormalizado];
+if (telefoneNormalizado.startsWith('55') && telefoneNormalizado.length >= 12) {
+  variantes.push(telefoneNormalizado.substring(2));
+} else {
+  variantes.push('55' + telefoneNormalizado);
 }
+
+await adminClient
+  .from('agente_ia_contatos')
+  .update({ status: 'novo', dados_cotacao: null, resetado_em: agora })
+  .in('telefone', variantes);
 ```
+
+Aplicar a mesma lógica de variantes ao cancelamento da fila IA (linhas 312-317).
+
+**2. `supabase/functions/agente-consultor-ia/index.ts` (linhas 200-229)**
+Reforçar o reset: além de checar `status === 'novo' && !dados_cotacao`, verificar também se `resetado_em` existe e é recente (< 24h). Isso cobre edge cases onde o status pode ter mudado entre o reset e a próxima mensagem:
+
+```typescript
+const foiResetado = contatoExistente && (
+  (contato?.status === 'novo' && !contato?.dados_cotacao) ||
+  (contato?.resetado_em && !contato?.dados_cotacao)
+);
+```
+
+**3. Redeploy das duas Edge Functions**
+- `delete-cotacao`
+- `agente-consultor-ia`
 
 ### Resultado esperado
-- A IA usará as datas calculadas corretamente (mesma lógica do painel)
-- As opções ficam persistidas em `dadosCotacao.opcoes_vencimento` para reforço no system prompt
-- A etapa muda para `aguardando_vencimento_resposta`, exibindo as datas corretas no próximo passo
+- Ao excluir uma cotação, o contato IA será sempre encontrado independentemente do formato do telefone
+- A IA reiniciará do zero na próxima mensagem, sem contexto da conversa anterior
+- As datas de vencimento serão as corretas (correção anterior já deployada)
 
